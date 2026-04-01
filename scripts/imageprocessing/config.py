@@ -13,7 +13,7 @@ OLLAMA_HOST = "http://localhost:11436"
 MAX_RETRIES = 4
 
 # Timeout in seconds for a single Ollama vision request (client-side).
-OLLAMA_TIMEOUT = 180  # 5 minutes per attempt
+OLLAMA_TIMEOUT = 300  # 5 minutes per attempt
 
 # Inference options passed to ollama.chat(options=…).
 OLLAMA_OPTIONS = {

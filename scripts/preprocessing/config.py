@@ -143,7 +143,7 @@ SURROGATES = compile(r"[\uD800-\uDFFF]")
 
 OLLAMA_MODEL = "gpt-oss:120b"
 OLLAMA_HOST = "http://localhost:11435"
-OLLAMA_TIMEOUT = 180
+OLLAMA_TIMEOUT = 300
 OLLAMA_NUM_PARALLEL = 2
 MAX_RETRIES = 4
 WINDOW_SIZE = 3  # sections processed per LLM call
