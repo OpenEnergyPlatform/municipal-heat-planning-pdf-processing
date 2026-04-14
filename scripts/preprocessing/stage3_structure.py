@@ -43,10 +43,6 @@ from .models import Block, FigureRef, PageData, Section, TableRef
 log = logging.getLogger(__name__)
 
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
 def _block_is_title(block: Block) -> bool:
     """True when the block represents a section-title heading."""
     return block.layout_label in SECTION_TITLE_CLASSES
@@ -61,10 +57,6 @@ def _resolve_title_text(block: Block) -> Optional[str]:
     text = (block.content or "").strip()
     return text if text else None
 
-
-# ---------------------------------------------------------------------------
-# Core assembly
-# ---------------------------------------------------------------------------
 
 def build_sections(pages: list[PageData]) -> list[Section]:
     """

@@ -22,6 +22,7 @@ import copy
 import json
 import logging
 import sys
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Optional
 
@@ -31,6 +32,7 @@ from .config import (
     FINAL_OUTPUT_JSON,
     STRUCTURED_OUTPUT_JSON,
     ENRICHED_OUTPUT_JSON,
+    NUM_PARALLEL,
 )
 from .models import ProcessingStats
 from .vision import create_client, check_model_available
@@ -38,10 +40,6 @@ from .process import process_table, process_figure
 
 log = logging.getLogger(__name__)
 
-
-# ---------------------------------------------------------------------------
-# Input resolution
-# ---------------------------------------------------------------------------
 
 def _resolve_input(output_dir: Path) -> Optional[Path]:
     """
@@ -57,10 +55,6 @@ def _resolve_input(output_dir: Path) -> Optional[Path]:
             return p
     return None
 
-
-# ---------------------------------------------------------------------------
-# Single-directory processing
-# ---------------------------------------------------------------------------
 
 def run_single(
     output_dir: Path,
@@ -188,58 +182,60 @@ def run_single(
         )
         return None
 
-    # ── Process sections ─────────────────────────────────────────────────
+    # ── Process sections (parallel) ─────────────────────────────────────
     enriched = copy.deepcopy(data)
     total_sections = len(enriched["sections"])
+
+    # Collect all pending items across all sections into a flat work list.
+    # Each work item is (section_index, item_type, list_index, item_dict).
+    work_items: list[tuple[int, str, int, dict]] = []
 
     for i, section in enumerate(enriched["sections"]):
         tables = section.get("tables", [])
         figures = section.get("figures", [])
 
-        if not tables and not figures:
-            continue
+        # Merge cached items into the section eagerly
+        for j, t in enumerate(tables):
+            if t["id"] in cached_items:
+                section["tables"][j] = cached_items[t["id"]]
+            else:
+                work_items.append((i, "table", j, t))
 
-        # Check if this section has any pending items
-        section_pending = (
-            any(t["id"] not in cached_items for t in tables)
-            or any(f["id"] not in cached_items for f in figures)
-        )
+        for j, f in enumerate(figures):
+            if f["id"] in cached_items:
+                section["figures"][j] = cached_items[f["id"]]
+            else:
+                work_items.append((i, "figure", j, f))
 
-        if not section_pending:
-            # All items in this section are cached – merge and skip
-            section["tables"] = [
-                cached_items.get(t["id"], t) for t in tables
-            ]
-            section["figures"] = [
-                cached_items.get(f["id"], f) for f in figures
-            ]
-            log.debug(
-                "[%d/%d] '%s' – all items cached, skipping",
-                i + 1, total_sections, section.get("title", "N/A"),
-            )
-            continue
+    log.info("Processing %d pending items with %d parallel workers", len(work_items), NUM_PARALLEL)
 
-        log.info(
-            "[%d/%d] '%s' (p. %s) – %d tables, %d figures",
-            i + 1, total_sections,
-            section.get("title", "N/A"),
-            section.get("page_number", "?"),
-            len(tables), len(figures),
-        )
+    def _process_item(item_tuple):
+        """Worker function for a single table or figure."""
+        sec_idx, item_type, list_idx, item_dict = item_tuple
+        section = enriched["sections"][sec_idx]
+        if item_type == "table":
+            return process_table(item_dict, section, output_dir, client, stats, model=model)
+        else:
+            return process_figure(item_dict, section, output_dir, client, stats, model=model)
 
-        # Process tables: use cache or call vision model
-        section["tables"] = [
-            cached_items[t["id"]] if t["id"] in cached_items
-            else process_table(t, section, output_dir, client, stats, model=model)
-            for t in tables
-        ]
+    with ThreadPoolExecutor(max_workers=NUM_PARALLEL) as pool:
+        future_to_item = {
+            pool.submit(_process_item, item): item
+            for item in work_items
+        }
 
-        # Process figures: use cache or call vision model
-        section["figures"] = [
-            cached_items[f["id"]] if f["id"] in cached_items
-            else process_figure(f, section, output_dir, client, stats, model=model)
-            for f in figures
-        ]
+        for future in as_completed(future_to_item):
+            item_tuple = future_to_item[future]
+            sec_idx, item_type, list_idx, _ = item_tuple
+            try:
+                result = future.result()
+                if item_type == "table":
+                    enriched["sections"][sec_idx]["tables"][list_idx] = result
+                else:
+                    enriched["sections"][sec_idx]["figures"][list_idx] = result
+            except Exception as e:
+                item_id = item_tuple[3].get("id", "?")
+                log.error("  ✗ %s %s raised exception: %s", item_type, item_id, e)
 
     # ── Write output (always, to persist partial progress) ───────────────
     out_path.parent.mkdir(parents=True, exist_ok=True)

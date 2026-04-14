@@ -6,14 +6,8 @@ Author: Felix Vossel
 from pathlib import Path
 from re import compile
 
-# ---------------------------------------------------------------------------
-# Rendering
-# ---------------------------------------------------------------------------
 PAGE_RENDER_DPI = 300
 
-# ---------------------------------------------------------------------------
-# Stage 1 – Text extraction
-# ---------------------------------------------------------------------------
 TEXT_BLOCK_MIN_CHARS = 3
 
 HYPHEN_EXCEPTIONS = (
@@ -24,29 +18,19 @@ HYPHEN_EXCEPTIONS = (
     "ohne", "gegen", "bis", "durch", "trotz", "wegen", "während",
 )
 
-# ---------------------------------------------------------------------------
-# Stage 2 – Layout detection (PP-DocLayoutV3)
-# ---------------------------------------------------------------------------
 PP_DOCLAYOUT_MODEL_ID = "PaddlePaddle/PP-DocLayoutV3_safetensors"
 LAYOUT_BATCH_SIZE = 30
 
-# Per-class confidence thresholds from config.json of the model.
-# OPTIMIZED: Lowered thresholds for tables (4, 21) and images (3, 14) to improve recall.
 PP_CLASS_THRESHOLDS: dict[int, float] = {
-    0: 0.50, 1: 0.50, 2: 0.50, 3: 0.45,  # chart: 0.50 → 0.45
-    4: 0.55, 5: 0.40, 6: 0.40, 7: 0.50, 8: 0.50, 9: 0.50,  # content: 0.65 → 0.55
-    10: 0.50, 11: 0.50, 12: 0.50, 13: 0.50, 14: 0.85,  # image: 0.90 → 0.85
+    0: 0.50, 1: 0.50, 2: 0.50, 3: 0.45,
+    4: 0.55, 5: 0.40, 6: 0.40, 7: 0.50, 8: 0.50, 9: 0.50,
+    10: 0.50, 11: 0.50, 12: 0.50, 13: 0.50, 14: 0.85,
     15: 0.40, 16: 0.50, 17: 0.55, 18: 0.50, 19: 0.50,
-    20: 0.45, 21: 0.85, 22: 0.65, 23: 0.65, 24: 0.50,  # table: 0.90 → 0.85
+    20: 0.45, 21: 0.85, 22: 0.65, 23: 0.65, 24: 0.50,
 }
 
-# Global minimum confidence – boxes below this are discarded before
-# per-class thresholds are applied.
-PP_GLOBAL_MIN_CONF = 0.4  # Lowered from 0.5 to catch more candidates
+PP_GLOBAL_MIN_CONF = 0.4
 
-# Exact id2label mapping from config.json (25 classes, ids 0-24).
-# IDs 8/9 both map to "footer", 12/13 both map to "header" – as defined in
-# the upstream model config.
 PP_ID2LABEL: dict[int, str] = {
     0:  "abstract",
     1:  "algorithm",
@@ -75,42 +59,24 @@ PP_ID2LABEL: dict[int, str] = {
     24: "vision_footnote",
 }
 
-# Classes whose text blocks are removed from page content entirely.
 SUPPRESS_CLASSES = {"header", "footer", "number", "footnote"}
 
-# Classes that identify tables and images/figures.
-TABLE_CLASSES  = {"table"}
-IMAGE_CLASSES  = {"image", "chart"}
+TABLE_CLASSES = {"table"}
+IMAGE_CLASSES = {"image", "chart"}
 
-# Classes that can serve as a caption for a figure or table.
-# Evaluated in priority order: figure_title > vision_footnote > nearest text.
 CAPTION_CLASSES = {"figure_title", "vision_footnote"}
 
-# Classes used as section titles (trigger a new section boundary).
 SECTION_TITLE_CLASSES = {"doc_title", "paragraph_title"}
 
-# How much horizontal overlap (fraction of the narrower box) is tolerated
-# before a paragraph_title on the same vertical level is NOT treated as a
-# title but as inline text.
-TITLE_SAME_ROW_OVERLAP_FRACTION = 0.2  # 40 % vertical overlap → skip as title
+TITLE_SAME_ROW_OVERLAP_FRACTION = 0.2
 
-# Maximum distance in points for "nearest text block" caption search.
 CAPTION_MAX_DIST_PT = 60.0
 
-# Fraction of a text-block's area that must lie inside a layout region
-# before the text block is suppressed.
-TEXT_SUPPRESS_OVERLAP = 0.9
+TEXT_SUPPRESS_OVERLAP = 0.5
 
-# ─── BOX EXPANSION (NEW) ───────────────────────────────────────────────────
-# Expand detected table and image boxes by these margins (in points) to ensure
-# full content capture, especially captions and padding.
-# Format: (margin_left_pt, margin_top_pt, margin_right_pt, margin_bottom_pt)
-TABLE_BOX_MARGIN_PT = (5.0, 5.0, 5.0, 8.0)   # Extra space, more below for caption
-IMAGE_BOX_MARGIN_PT = (5.0, 5.0, 5.0, 10.0)  # Extra space, more below for caption
+TABLE_BOX_MARGIN_PT = (5.0, 5.0, 5.0, 8.0)
+IMAGE_BOX_MARGIN_PT = (5.0, 5.0, 5.0, 10.0)
 
-# Non-maximum suppression: remove overlapping detections of the same class.
-# If two boxes of the same class overlap by more than this fraction, keep only
-# the one with higher confidence. Set to 1.0 to disable NMS.
 NMS_OVERLAP_THRESHOLD = 0.5
 
 
@@ -121,34 +87,22 @@ TITLE_EXCLUDE_PREFIXES = (
     "tab.",
 )
 
-# ---------------------------------------------------------------------------
-# Output directories / filenames
-# ---------------------------------------------------------------------------
-DIR_IMAGES  = "images"
+DIR_IMAGES = "images"
 DIR_RESULTS = "results"
 
-CACHE_PAGES_JSON       = "results/pages_extracted.json"
-STRUCTURED_OUTPUT_JSON = "results/structured_output.json"       # Stage 3 output
-FINAL_OUTPUT_JSON      = "results/structured_output_final.json"  # Stage 4 output
+CACHE_PAGES_JSON = "results/pages_extracted.json"
+STRUCTURED_OUTPUT_JSON = "results/structured_output.json"
+FINAL_OUTPUT_JSON = "results/structured_output_final.json"
 
-# ---------------------------------------------------------------------------
-# Misc
-# ---------------------------------------------------------------------------
 SURROGATES = compile(r"[\uD800-\uDFFF]")
-
-
-# ---------------------------------------------------------------------------
-# Configuration for Ollama (Stage 4)
-# ---------------------------------------------------------------------------
 
 OLLAMA_MODEL = "gpt-oss:120b"
 OLLAMA_HOST = "http://localhost:11435"
 OLLAMA_TIMEOUT = 180
 OLLAMA_NUM_PARALLEL = 2
 MAX_RETRIES = 4
-WINDOW_SIZE = 3  # sections processed per LLM call
+WINDOW_SIZE = 3
 
-# Ollama inference options.
 OLLAMA_OPTIONS = {
     "temperature": 0.1,
 }

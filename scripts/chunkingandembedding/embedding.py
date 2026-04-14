@@ -1,0 +1,177 @@
+"""
+embedding.py – Step 3: Create embeddings and build FAISS index.
+
+Uses Qwen3-VL-Embedding-8B via the project's Qwen3VLEmbedder wrapper
+to create text and vision-language embeddings.  All embeddings are stored
+in a single FAISS IDMap(IndexFlatIP) with globally unique IDs.
+
+The database is the single source of truth for which items have been
+embedded.  On --force, old FAISS IDs are removed from both the DB and
+the index before re-embedding.
+
+Author: Felix Vossel
+"""
+from __future__ import annotations
+
+import logging
+from pathlib import Path
+from typing import Optional
+
+import faiss
+import torch
+import numpy as np
+
+from .config import EMBEDDING_MODEL, EMBEDDING_DIM, EMBEDDING_BATCH_SIZE, MAX_TOKEN_LENGTH
+from .chunking import EmbeddingInput
+from .database import write_embedding_ids_batch
+
+log = logging.getLogger(__name__)
+
+
+def load_or_create_index(index_path: Path) -> tuple[faiss.Index, int]:
+    """
+    Load an existing FAISS index or create a new IDMap(IndexFlatIP).
+
+    Returns:
+        Tuple of (index, next_id) where next_id is the next available
+        FAISS vector ID.
+    """
+    if index_path.exists():
+        log.info("Loading existing FAISS index: %s", index_path)
+        index = faiss.read_index(str(index_path))
+        next_id = index.ntotal
+        log.info("Index contains %d vectors, next ID: %d", index.ntotal, next_id)
+        return index, next_id
+
+    log.info("Creating new FAISS IDMap(IndexFlatIP) with dim=%d", EMBEDDING_DIM)
+    base_index = faiss.IndexFlatIP(EMBEDDING_DIM)
+    index = faiss.IndexIDMap(base_index)
+    return index, 0
+
+
+def save_index(index: faiss.Index, index_path: Path) -> None:
+    """Save the FAISS index to disk."""
+    index_path.parent.mkdir(parents=True, exist_ok=True)
+    faiss.write_index(index, str(index_path))
+    log.info("FAISS index saved: %s (%d vectors)", index_path, index.ntotal)
+
+
+def remove_ids_from_index(index: faiss.Index, ids: list[int]) -> int:
+    """
+    Remove vectors by their IDs from a FAISS IDMap index.
+
+    Args:
+        index: The FAISS IDMap index.
+        ids:   List of vector IDs to remove.
+
+    Returns:
+        Number of vectors actually removed.
+    """
+    if not ids:
+        return 0
+    id_array = np.array(ids, dtype=np.int64)
+    removed = index.remove_ids(id_array)
+    log.info("Removed %d vectors from FAISS index", removed)
+    return removed
+
+
+def load_embedder(model_name: str = EMBEDDING_MODEL):
+    """Load the Qwen3VLEmbedder model."""
+    from scripts.qwen3_vl_embedding import Qwen3VLEmbedder
+    log.info("Loading embedding model: %s", model_name)
+    model = Qwen3VLEmbedder(model_name_or_path=model_name, max_length=MAX_TOKEN_LENGTH)
+    log.info("Embedding model loaded.")
+    return model
+
+
+def create_embeddings(
+    inputs: list[EmbeddingInput],
+    index: faiss.Index,
+    next_id: int,
+    db_path: Path,
+    pdf_name: str,
+    embedder=None,
+    *,
+    model_name: str = EMBEDDING_MODEL,
+    batch_size: int = EMBEDDING_BATCH_SIZE,
+) -> int:
+    """
+    Create embeddings for a list of inputs, add them to the FAISS index,
+    and write the IDs to the database in batched transactions.
+
+    Text-only and VL inputs are processed in separate groups to avoid
+    unnecessary padding overhead from mixing short text with large images.
+
+    Args:
+        inputs:      List of EmbeddingInput objects.
+        index:       FAISS IDMap index to add vectors to.
+        next_id:     Next available FAISS ID.
+        db_path:     Path to the SQLite database for ID writeback.
+        pdf_name:    PDF directory name for DB lookups.
+        embedder:    Pre-loaded Qwen3VLEmbedder (loaded lazily if None).
+        model_name:  Model name/path for lazy loading.
+        batch_size:  Number of items per embedding batch.
+
+    Returns:
+        Updated next_id after all embeddings have been added.
+    """
+    if not inputs:
+        return next_id
+
+    if embedder is None:
+        embedder = load_embedder(model_name)
+
+    text_inputs = [inp for inp in inputs if inp.image is None]
+    vl_inputs = [inp for inp in inputs if inp.image is not None]
+
+    start_id = next_id
+
+    for group_label, group in [("text", text_inputs), ("vl", vl_inputs)]:
+        if not group:
+            continue
+
+        total_batches = (len(group) + batch_size - 1) // batch_size
+        log.info("Processing %d %s inputs in %d batches", len(group), group_label, total_batches)
+
+        for batch_idx, batch_start in enumerate(range(0, len(group), batch_size)):
+            batch = group[batch_start : batch_start + batch_size]
+
+            model_inputs = []
+            for inp in batch:
+                item: dict = {"text": inp.text}
+                if inp.image:
+                    item["image"] = inp.image
+                model_inputs.append(item)
+
+            try:
+                embeddings = embedder.process(model_inputs)
+            except Exception as e:
+                log.error(
+                    "[%s] Batch %d/%d failed (items %d-%d): %s",
+                    group_label, batch_idx + 1, total_batches,
+                    batch_start, batch_start + len(batch), e,
+                )
+                continue
+
+            vectors = embeddings.detach().to(torch.float32).cpu().numpy()
+
+            ids = np.arange(next_id, next_id + len(vectors), dtype=np.int64)
+            index.add_with_ids(vectors, ids)
+
+            db_records = [
+                (inp.embedding_type, inp.section_index, inp.item_id, int(ids[i]))
+                for i, inp in enumerate(batch)
+            ]
+            write_embedding_ids_batch(db_path, pdf_name, db_records)
+
+            next_id += len(vectors)
+
+            log.info(
+                "[%s] Batch %d/%d done – %d items (ids %d-%d)",
+                group_label, batch_idx + 1, total_batches,
+                len(batch), int(ids[0]), int(ids[-1]),
+            )
+
+    created = next_id - start_id
+    log.info("Created %d/%d embeddings, index now has %d vectors", created, len(inputs), index.ntotal)
+    return next_id

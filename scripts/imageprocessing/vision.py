@@ -31,10 +31,6 @@ log = logging.getLogger(__name__)
 _executor = ThreadPoolExecutor(max_workers=1)
 
 
-# ---------------------------------------------------------------------------
-# Client management
-# ---------------------------------------------------------------------------
-
 def create_client(host: str | None = None, timeout: float | None = None) -> ollama.Client:
     """Creates an Ollama client with an httpx timeout."""
     t = timeout or OLLAMA_TIMEOUT
@@ -65,10 +61,6 @@ def check_model_available(
         log.error("Ollama not reachable: %s", e)
         return False
 
-
-# ---------------------------------------------------------------------------
-# Vision chat call
-# ---------------------------------------------------------------------------
 
 def call_vision(
     client: ollama.Client,

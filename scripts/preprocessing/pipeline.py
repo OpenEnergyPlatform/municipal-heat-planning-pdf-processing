@@ -326,22 +326,24 @@ def run(
         raise ValueError(f"Input is neither a PDF nor a folder: {input_path}")
 
 
-# ---------------------------------------------------------------------------
-# CLI
-# ---------------------------------------------------------------------------
-
 def _build_parser() -> argparse.ArgumentParser:
+    """Build and return the command-line argument parser.
+    
+    Returns:
+        An ArgumentParser configured with all required and optional arguments
+        for the preprocessing CLI.
+    """
     p = argparse.ArgumentParser(
-        prog="python -m scripts.preprocessing.pipeline",
+        prog="python -m scripts.preprocessing",
         description="Municipal Heat Planning – PDF Processing Pipeline",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  python -m scripts.preprocessing.pipeline doc.pdf ./out
-  python -m scripts.preprocessing.pipeline ./pdfs/ ./out
-  python -m scripts.preprocessing.pipeline doc.pdf ./out --pages 0 20
-  python -m scripts.preprocessing.pipeline ./pdfs/ ./out --glob "*.pdf"
-  python -m scripts.preprocessing.pipeline doc.pdf ./out --force-reextract
+  python -m scripts.preprocessing doc.pdf ./out
+  python -m scripts.preprocessing ./pdfs/ ./out
+  python -m scripts.preprocessing doc.pdf ./out --pages 0 20
+  python -m scripts.preprocessing ./pdfs/ ./out --glob "*.pdf"
+  python -m scripts.preprocessing doc.pdf ./out --force-reextract
         """,
     )
     p.add_argument("input",  help="PDF file or folder containing PDFs")
@@ -360,7 +362,11 @@ Examples:
 
 
 def main() -> None:
-    """CLI entry point."""
+    """Entry point for the command-line interface.
+    
+    Parses command-line arguments, configures logging, and executes the
+    preprocessing pipeline.
+    """
     parser = _build_parser()
     args   = parser.parse_args()
 

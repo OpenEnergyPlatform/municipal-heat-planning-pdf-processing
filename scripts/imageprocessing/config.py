@@ -4,48 +4,28 @@ config.py – Central configuration for the imageprocessing module.
 Author: Felix Vossel
 """
 
-# ---------------------------------------------------------------------------
-# Ollama connection
-# ---------------------------------------------------------------------------
-
 OLLAMA_MODEL = "qwen3-vl:32b-instruct-q8_0"
-OLLAMA_HOST = "http://localhost:11436"
+OLLAMA_HOST = "http://localhost:5446"
 MAX_RETRIES = 4
+NUM_PARALLEL = 1
 
 # Timeout in seconds for a single Ollama vision request (client-side).
-OLLAMA_TIMEOUT = 180  # 5 minutes per attempt
+OLLAMA_TIMEOUT = 180
 
-# Inference options passed to ollama.chat(options=…).
 OLLAMA_OPTIONS = {
     "temperature": 0.6,
     "num_predict": 8192,
 }
 
-# ---------------------------------------------------------------------------
-# Input / output file paths (relative to a preprocessing output_dir)
-# ---------------------------------------------------------------------------
-
-# Preferred input: Stage 4 output from the preprocessing pipeline.
-# Falls back to STRUCTURED_OUTPUT_JSON if the final version doesn't exist.
-FINAL_OUTPUT_JSON      = "results/structured_output_final.json"
+FINAL_OUTPUT_JSON = "results/structured_output_final.json"
 STRUCTURED_OUTPUT_JSON = "results/structured_output.json"
 
-# Output produced by this module.
-ENRICHED_OUTPUT_JSON   = "results/structured_output_images.json"
+ENRICHED_OUTPUT_JSON = "results/structured_output_images.json"
 
-# Directory containing cropped table/figure PNGs (relative to output_dir).
 DIR_IMAGES = "images"
 
-# ---------------------------------------------------------------------------
-# Prompts
-# ---------------------------------------------------------------------------
-# All prompts are written in English for optimal model performance.
-# The model is instructed to produce German-language output where
-# appropriate (captions, descriptions) since the source documents are
-# German municipal heat plans ("Kommunale Wärmepläne").
-# ---------------------------------------------------------------------------
-
 TABLE_SYSTEM_PROMPT = """\
+/no_think
 You are a highly accurate table-extraction specialist. Your sole task is to \
 convert table images into structured Markdown and to provide a German-language \
 caption.
@@ -157,6 +137,7 @@ section context. Do NOT invent information. Do NOT include an \
 """
 
 FIGURE_SYSTEM_PROMPT = """\
+/no_think
 You are a highly accurate image-description specialist. Your sole task is \
 to produce a detailed German-language textual description of figures and \
 charts, plus a German-language caption.

@@ -52,12 +52,6 @@ from .config import (
 log = logging.getLogger(__name__)
 
 
-
-# ---------------------------------------------------------------------------
-# Ollama API wrapper (host-aware)
-# ---------------------------------------------------------------------------
-
-
 def _call_ollama(sections_window: list[dict]) -> Optional[list[dict]]:
     """
     Sends a window of sections to the Ollama instance via the chat API
@@ -117,7 +111,6 @@ def _call_ollama(sections_window: list[dict]) -> Optional[list[dict]]:
 
             raw_text = response.message.content.strip()
 
-            # Strip markdown fences if present despite instructions
             raw_text = re.sub(r"^```(?:json)?\s*", "", raw_text)
             raw_text = re.sub(r"\s*```$", "", raw_text)
 
@@ -227,11 +220,6 @@ def _apply_actions(
 
     last_kept = result[-1] if result else previous_kept
     return result, last_kept
-
-
-# ---------------------------------------------------------------------------
-# Rule-based helpers
-# ---------------------------------------------------------------------------
 
 
 def _is_empty_section(sec: dict) -> bool:

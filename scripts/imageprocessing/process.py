@@ -26,10 +26,6 @@ from .vision import call_vision
 log = logging.getLogger(__name__)
 
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
 def _truncate(text: str, max_len: int = 800) -> str:
     """Truncates text with an ellipsis if it exceeds max_len."""
     if len(text) <= max_len:
@@ -46,10 +42,6 @@ def _caption_instruction(existing: str, kind: str) -> str:
     return CAPTION_GENERATE_FIGURE_INSTRUCTION
 
 
-# ---------------------------------------------------------------------------
-# Table processing
-# ---------------------------------------------------------------------------
-
 def process_table(
     table: dict,
     section: dict,
@@ -65,7 +57,7 @@ def process_table(
 
     if not image_path.exists():
         log.warning("  Image not found: %s", image_path)
-        stats.skipped_missing += 1
+        stats.inc("skipped_missing")
         return result
 
     existing_caption = table.get("caption") or ""
@@ -88,11 +80,11 @@ def process_table(
         new_caption = response.get("caption", "")
         if not existing_caption and new_caption:
             result["caption"] = new_caption
-            stats.captions_generated += 1
-        stats.processed_tables += 1
+            stats.inc("captions_generated")
+        stats.inc("processed_tables")
         log.info("  ✓ Table %s", table["id"])
     else:
-        stats.failed_tables += 1
+        stats.inc("failed_tables")
         log.error("  ✗ Table %s failed", table["id"])
 
     return result
@@ -117,7 +109,7 @@ def process_figure(
 
     if not image_path.exists():
         log.warning("  Image not found: %s", image_path)
-        stats.skipped_missing += 1
+        stats.inc("skipped_missing")
         return result
 
     existing_caption = figure.get("caption") or ""
@@ -140,11 +132,11 @@ def process_figure(
         new_caption = response.get("caption", "")
         if not existing_caption and new_caption:
             result["caption"] = new_caption
-            stats.captions_generated += 1
-        stats.processed_figures += 1
+            stats.inc("captions_generated")
+        stats.inc("processed_figures")
         log.info("  ✓ Figure %s", figure["id"])
     else:
-        stats.failed_figures += 1
+        stats.inc("failed_figures")
         log.error("  ✗ Figure %s failed", figure["id"])
 
     return result

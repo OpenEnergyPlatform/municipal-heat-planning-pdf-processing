@@ -5,13 +5,9 @@ Author: Felix Vossel
 """
 from __future__ import annotations
 
+import threading
 from dataclasses import dataclass, field
 from typing import Optional
-
-
-# ---------------------------------------------------------------------------
-# Enriched references (extend the preprocessing TableRef / FigureRef)
-# ---------------------------------------------------------------------------
 
 @dataclass
 class EnrichedTable:
@@ -44,7 +40,7 @@ class EnrichedTable:
 
 
 @dataclass
-class EnrichedFigure:
+class EnrichedFigure: 
     """A figure reference enriched with a textual description."""
     id: str
     path: str
@@ -73,13 +69,9 @@ class EnrichedFigure:
         )
 
 
-# ---------------------------------------------------------------------------
-# Processing statistics
-# ---------------------------------------------------------------------------
-
 @dataclass
 class ProcessingStats:
-    """Tracks progress and outcomes of the enrichment run."""
+    """Tracks progress and outcomes of the enrichment run (thread-safe)."""
     total_tables: int = 0
     total_figures: int = 0
     processed_tables: int = 0
@@ -88,6 +80,12 @@ class ProcessingStats:
     failed_figures: int = 0
     skipped_missing: int = 0
     captions_generated: int = 0
+    _lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
+
+    def inc(self, field_name: str, value: int = 1) -> None:
+        """Thread-safe increment of a counter field."""
+        with self._lock:
+            setattr(self, field_name, getattr(self, field_name) + value)
 
     def summary(self) -> str:
         sep = "=" * 60
