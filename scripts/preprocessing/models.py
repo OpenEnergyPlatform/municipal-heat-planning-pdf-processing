@@ -132,12 +132,21 @@ class Section:
     page_number: Optional[int] = None
     tables: list[TableRef] = field(default_factory=list)
     figures: list[FigureRef] = field(default_factory=list)
+    # Fine-grained page provenance: ordered content segments, each tagged with
+    # the source page. A segment is either a run of text or a table/figure
+    # reference: {"page": int, "kind": "text"|"table"|"figure",
+    #             "text": str (text only), "ref": block_id (table/figure only)}.
+    segments: list[dict] = field(default_factory=list)
+    # Sorted distinct page numbers this section spans (derived from segments).
+    pages: list[int] = field(default_factory=list)
 
     def to_dict(self) -> dict:
         return {
             "title":       self.title,
             "page_number": self.page_number,
+            "pages":       self.pages,
             "content":     self.content,
+            "segments":    self.segments,
             "tables":      [t.to_dict() for t in self.tables],
             "figures":     [f.to_dict() for f in self.figures],
         }

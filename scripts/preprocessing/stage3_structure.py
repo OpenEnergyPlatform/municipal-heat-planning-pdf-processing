@@ -71,20 +71,42 @@ def build_sections(pages: list[PageData]) -> list[Section]:
     """
     sections:        list[Section]  = []
     current_section: Optional[Section] = None
-    # Text fragments accumulated for the current section before being flushed.
-    pending_text: list[str] = []
+    # (text, page) fragments accumulated for the current section before flushing.
+    pending: list[tuple[str, int]] = []
 
     def _flush_text() -> None:
-        """Appends all accumulated text fragments to the current section."""
-        nonlocal pending_text
-        if current_section is None or not pending_text:
-            pending_text = []
+        """
+        Flush accumulated text fragments into the current section's content and
+        its page-tagged segments (consecutive same-page fragments are merged
+        into one text segment).
+        """
+        nonlocal pending
+        if current_section is None or not pending:
+            pending = []
             return
-        joined = " ".join(t.strip() for t in pending_text if t.strip())
+        joined = " ".join(t.strip() for (t, _p) in pending if t.strip())
         if joined:
             sep = " " if current_section.content else ""
             current_section.content += sep + joined
-        pending_text = []
+        group_page: Optional[int] = None
+        group_parts: list[str] = []
+        for (t, p) in pending:
+            ts = t.strip()
+            if not ts:
+                continue
+            if group_parts and p != group_page:
+                current_section.segments.append(
+                    {"page": group_page, "kind": "text",
+                     "text": " ".join(group_parts)}
+                )
+                group_parts = []
+            group_page = p
+            group_parts.append(ts)
+        if group_parts:
+            current_section.segments.append(
+                {"page": group_page, "kind": "text", "text": " ".join(group_parts)}
+            )
+        pending = []
 
     def _open_section(title: str, page_number: Optional[int] = None) -> None:
         nonlocal current_section
@@ -108,7 +130,7 @@ def build_sections(pages: list[PageData]) -> list[Section]:
                         f"{block.layout_label}) has no text → treated as text"
                     )
                     if block.content:
-                        pending_text.append(block.content)
+                        pending.append((block.content, pg.page_number))
                     continue
                 log.debug(
                     f"  Page {pg.page_number}: new section '{title_text}' "
@@ -129,6 +151,9 @@ def build_sections(pages: list[PageData]) -> list[Section]:
                     current_section.tables.append(ref)
                     sep = " " if current_section.content else ""
                     current_section.content += sep + f"[{block.id}]"
+                    current_section.segments.append(
+                        {"page": pg.page_number, "kind": "table", "ref": block.id}
+                    )
                 continue
 
             if block.type == "image":
@@ -143,10 +168,13 @@ def build_sections(pages: list[PageData]) -> list[Section]:
                     current_section.figures.append(ref)
                     sep = " " if current_section.content else ""
                     current_section.content += sep + f"[{block.id}]"
+                    current_section.segments.append(
+                        {"page": pg.page_number, "kind": "figure", "ref": block.id}
+                    )
                 continue
 
             if block.type == "text" and block.content:
-                pending_text.append(block.content)
+                pending.append((block.content, pg.page_number))
 
     # Flush any remaining text after the last page.
     _flush_text()
@@ -163,6 +191,14 @@ def build_sections(pages: list[PageData]) -> list[Section]:
         and not sections[0].figures
     ):
         sections.pop(0)
+
+    # Derive each section's page span from its segments.
+    for s in sections:
+        s.pages = sorted({
+            seg["page"] for seg in s.segments if seg.get("page") is not None
+        })
+        if s.page_number is None and s.pages:
+            s.page_number = s.pages[0]
 
     log.info(f"Stage 3: {len(sections)} sections assembled")
     for s in sections:
