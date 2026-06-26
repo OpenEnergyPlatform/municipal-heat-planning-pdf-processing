@@ -19,6 +19,7 @@ from __future__ import annotations
 import json
 import logging
 import sqlite3
+from contextlib import closing
 from pathlib import Path
 from typing import Optional
 
@@ -38,6 +39,27 @@ log = logging.getLogger(__name__)
 _SECTION_TYPES = {EMBEDDING_TYPE_SECTION_TEXT, EMBEDDING_TYPE_SECTION_TITLE}
 _TABLE_TYPES = {EMBEDDING_TYPE_TABLE_TEXT, EMBEDDING_TYPE_TABLE_VL}
 _FIGURE_TYPES = {EMBEDDING_TYPE_FIGURE_TEXT, EMBEDDING_TYPE_FIGURE_VL}
+
+# All FAISS ids mapped to one document's items (section + table + figure owners).
+_DOCUMENT_FAISS_IDS_SQL = (
+    "SELECT e.faiss_id FROM Embeddings e JOIN Sections s "
+    "  ON e.owner_kind = 'section' AND e.owner_id = s.id WHERE s.document = ? "
+    "UNION ALL "
+    "SELECT e.faiss_id FROM Embeddings e JOIN Tables t "
+    "  ON e.owner_kind = 'table' AND e.owner_id = t.id "
+    "JOIN Sections s ON t.section = s.id WHERE s.document = ? "
+    "UNION ALL "
+    "SELECT e.faiss_id FROM Embeddings e JOIN Images i "
+    "  ON e.owner_kind = 'figure' AND e.owner_id = i.id "
+    "JOIN Sections s ON i.section = s.id WHERE s.document = ?"
+)
+
+
+def _document_faiss_ids(doc_id: int, connection: sqlite3.Connection) -> list[int]:
+    """Every FAISS id currently mapped to this document's items."""
+    return [r[0] for r in connection.execute(
+        _DOCUMENT_FAISS_IDS_SQL, (doc_id, doc_id, doc_id)
+    ).fetchall()]
 
 
 def connect(db_path: Path) -> sqlite3.Connection:
@@ -341,27 +363,45 @@ def clear_embedding_ids(db_path: Path, pdf_name: str) -> list[int]:
         if doc_id is None:
             return old_ids
 
-        rows = conn.execute(
-            "SELECT e.faiss_id FROM Embeddings e JOIN Sections s "
-            "  ON e.owner_kind = 'section' AND e.owner_id = s.id "
-            "WHERE s.document = ? "
-            "UNION ALL "
-            "SELECT e.faiss_id FROM Embeddings e JOIN Tables t "
-            "  ON e.owner_kind = 'table' AND e.owner_id = t.id "
-            "JOIN Sections s ON t.section = s.id WHERE s.document = ? "
-            "UNION ALL "
-            "SELECT e.faiss_id FROM Embeddings e JOIN Images i "
-            "  ON e.owner_kind = 'figure' AND e.owner_id = i.id "
-            "JOIN Sections s ON i.section = s.id WHERE s.document = ?",
-            (doc_id, doc_id, doc_id),
-        ).fetchall()
-        old_ids = [r[0] for r in rows]
-
+        old_ids = _document_faiss_ids(doc_id, conn)
         _delete_document_embeddings(doc_id, conn)
         conn.commit()
 
     log.info("Cleared %d embedding IDs for '%s'", len(old_ids), pdf_name)
     return old_ids
+
+
+def get_document_faiss_ids(db_path: Path, pdf_name: str) -> list[int]:
+    """
+    Read-only snapshot of every FAISS id currently mapped to a document.
+
+    The pipeline snapshots these BEFORE Step 2 deletes the Embeddings rows so
+    Step 3 can still evict the now-stale vectors from the shared index — a full
+    --force run would otherwise orphan them (the DB delete races ahead of the
+    index cleanup).
+    """
+    with closing(connect(db_path)) as conn:
+        doc_id = _resolve_document_id(pdf_name, conn)
+        if doc_id is None:
+            return []
+        return _document_faiss_ids(doc_id, conn)
+
+
+def next_faiss_id(db_path: Path) -> int:
+    """
+    Smallest FAISS id not currently claimed by any Embeddings row.
+
+    The DB is the source of truth for id allocation. Seeding the next id from
+    here (rather than from index.ntotal, a live vector *count*) prevents reusing
+    an id still held by another document after a --force pass removed some
+    vectors — which, with the v2 `faiss_id` PRIMARY KEY, would otherwise raise an
+    IntegrityError and abort the run.
+    """
+    with closing(connect(db_path)) as conn:
+        row = conn.execute(
+            "SELECT COALESCE(MAX(faiss_id), -1) + 1 FROM Embeddings"
+        ).fetchone()
+    return int(row[0])
 
 
 def write_embedding_ids_batch(

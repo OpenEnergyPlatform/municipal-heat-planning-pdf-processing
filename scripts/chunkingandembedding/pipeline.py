@@ -24,7 +24,13 @@ from typing import Optional
 
 from .config import MERGED_JSON, EMBEDDING_MODEL
 from .merge import merge_batch
-from .database import update_database, get_existing_embeddings, clear_embedding_ids
+from .database import (
+    update_database,
+    get_existing_embeddings,
+    clear_embedding_ids,
+    get_document_faiss_ids,
+    next_faiss_id,
+)
 from .chunking import build_embedding_inputs
 from .embedding import (
     load_or_create_index,
@@ -68,6 +74,18 @@ def run(
         log.info(sep)
         merge_batch(data_dir, force=force)
 
+    # Snapshot the FAISS ids of each document BEFORE Step 2's forced delete
+    # removes the Embeddings rows, so Step 3 can still evict the stale vectors
+    # from the shared index. (Only needed when both steps run under --force; an
+    # embed-only --force still finds the rows via clear_embedding_ids.)
+    evict_ids: dict[str, list[int]] = {}
+    if force and "db" in steps and "embed" in steps:
+        for d in sorted(p for p in data_dir.iterdir()
+                        if p.is_dir() and (p / MERGED_JSON).exists()):
+            ids = get_document_faiss_ids(db_path, d.name)
+            if ids:
+                evict_ids[d.name] = ids
+
     if "db" in steps:
         sep = "=" * 60
         log.info(sep)
@@ -82,6 +100,10 @@ def run(
         log.info(sep)
 
         index, next_id = load_or_create_index(index_path)
+        # The DB is the id source of truth: never reuse an id still held by a
+        # row (index.ntotal is a live count and can dip below the high-water
+        # mark after a --force eviction, which the faiss_id PK would reject).
+        next_id = max(next_id, next_faiss_id(db_path))
         embedder = load_embedder(EMBEDDING_MODEL)
 
         candidates = sorted(
@@ -96,7 +118,12 @@ def run(
             log.info("[%d/%d] Embedding: %s", i + 1, len(candidates), pdf_name)
 
             if force:
-                old_ids = clear_embedding_ids(db_path, pdf_name)
+                # Prefer the pre-Step-2 snapshot (rows may already be deleted);
+                # fall back to a live read when db step did not run this time.
+                old_ids = evict_ids.get(pdf_name)
+                stragglers = clear_embedding_ids(db_path, pdf_name)
+                if old_ids is None:
+                    old_ids = stragglers
                 if old_ids:
                     remove_ids_from_index(index, old_ids)
 

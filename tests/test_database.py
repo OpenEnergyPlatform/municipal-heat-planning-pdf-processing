@@ -76,3 +76,39 @@ def test_force_delete_cascades(kwp_db):
     con.commit()
     for t in ("Sections", "Pages", "SectionPages", "Segments", "Tables", "Images"):
         assert con.execute(f"SELECT count(*) FROM {t}").fetchone()[0] == 0
+
+
+def test_next_faiss_id_advances_past_max(kwp_db):
+    db, con = kwp_db
+    assert DB.next_faiss_id(db) == 0          # empty Embeddings → start at 0
+    DB._insert_sections(1, _MERGED, con)
+    con.commit()
+    DB.write_embedding_ids_batch(db, "doc", [
+        (C.EMBEDDING_TYPE_SECTION_TEXT, 0, None, 100),
+        (C.EMBEDDING_TYPE_TABLE_TEXT, 0, "p5_tbl0", 101),
+        (C.EMBEDDING_TYPE_FIGURE_TEXT, 1, "p8_img0", 102),
+    ])
+    # Must be MAX+1 (not the live count) so a --force eviction never reuses a
+    # live id and trips the faiss_id PRIMARY KEY.
+    assert DB.next_faiss_id(db) == 103
+
+
+def test_faiss_id_snapshot_survives_forced_content_delete(kwp_db):
+    db, con = kwp_db
+    DB._insert_sections(1, _MERGED, con)
+    con.commit()
+    DB.write_embedding_ids_batch(db, "doc", [
+        (C.EMBEDDING_TYPE_SECTION_TEXT, 0, None, 100),
+        (C.EMBEDDING_TYPE_TABLE_TEXT, 0, "p5_tbl0", 101),
+    ])
+    snapshot = DB.get_document_faiss_ids(db, "doc")
+    assert sorted(snapshot) == [100, 101]
+
+    # Step 2 --force deletes content + embeddings before Step 3 could read them.
+    DB._delete_document_content(1, con)
+    con.commit()
+
+    # A post-delete read finds nothing (the orphan-vector trap), but the
+    # pre-delete snapshot still holds the ids to evict from the index.
+    assert DB.get_document_faiss_ids(db, "doc") == []
+    assert sorted(snapshot) == [100, 101]
