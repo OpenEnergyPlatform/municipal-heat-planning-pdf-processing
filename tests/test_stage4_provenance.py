@@ -11,11 +11,63 @@ def test_thread_provenance_keep_is_one_to_one():
     assert out[1]["pages"] == [2]
 
 
-def test_thread_provenance_split_children_reuse_last_input():
-    inp = [{"title": "X", "segments": [{"page": 5, "kind": "text", "text": "x"}], "pages": [5]}]
-    out = [{"title": "X1", "_action": "keep"}, {"title": "X2", "_action": "keep"}]
+def test_thread_provenance_split_distributes_pages_by_content_and_markers():
+    # One parent spanning pages 5-6 is split at the page boundary. Each child
+    # must end up with *only* its own page(s), matched via the table marker
+    # (exact) and text containment.
+    inp = [{
+        "title": "P",
+        "content": "Intro [p5_tbl0] Folgeabsatz",
+        "tables": [{"id": "p5_tbl0", "page_number": 5}], "figures": [],
+        "segments": [{"page": 5, "kind": "text", "text": "Intro"},
+                     {"page": 5, "kind": "table", "ref": "p5_tbl0"},
+                     {"page": 6, "kind": "text", "text": "Folgeabsatz"}],
+        "pages": [5, 6],
+    }]
+    out = [
+        {"title": "Erster", "content": "Intro [p5_tbl0]",
+         "tables": [{"id": "p5_tbl0", "page_number": 5}], "figures": [], "_action": "keep"},
+        {"title": "Zweiter", "content": "Folgeabsatz",
+         "tables": [], "figures": [], "_action": "keep"},
+    ]
     s4._thread_provenance(inp, out)
-    assert out[0]["pages"] == [5] and out[1]["pages"] == [5]
+    assert out[0]["pages"] == [5]
+    assert out[1]["pages"] == [6]
+    assert [s["kind"] for s in out[0]["segments"]] == ["text", "table"]
+    assert out[1]["segments"][0]["text"] == "Folgeabsatz"
+
+
+def test_thread_provenance_split_in_middle_of_window_keeps_siblings_exact():
+    # Regression: a split in the *middle* of a 3-section window used to shift
+    # positional alignment, giving the trailing sibling the wrong page. Each of
+    # A, B(->B1,B2), C must now carry exactly its own page.
+    inp = [
+        {"title": "A", "content": "Alpha [p1_tbl0]",
+         "tables": [{"id": "p1_tbl0", "page_number": 1}], "figures": [],
+         "segments": [{"page": 1, "kind": "text", "text": "Alpha"},
+                      {"page": 1, "kind": "table", "ref": "p1_tbl0"}], "pages": [1]},
+        {"title": "B", "content": "Beta [p2_img0] Gamma",
+         "tables": [], "figures": [{"id": "p2_img0", "page_number": 2}],
+         "segments": [{"page": 2, "kind": "text", "text": "Beta"},
+                      {"page": 2, "kind": "figure", "ref": "p2_img0"},
+                      {"page": 3, "kind": "text", "text": "Gamma"}], "pages": [2, 3]},
+        {"title": "C", "content": "Delta [p4_tbl0]",
+         "tables": [{"id": "p4_tbl0", "page_number": 4}], "figures": [],
+         "segments": [{"page": 4, "kind": "text", "text": "Delta"},
+                      {"page": 4, "kind": "table", "ref": "p4_tbl0"}], "pages": [4]},
+    ]
+    out = [
+        {"title": "A", "content": "Alpha [p1_tbl0]",
+         "tables": [{"id": "p1_tbl0", "page_number": 1}], "figures": [], "_action": "keep"},
+        {"title": "B1", "content": "Beta [p2_img0]",
+         "tables": [], "figures": [{"id": "p2_img0", "page_number": 2}], "_action": "keep"},
+        {"title": "B2", "content": "Gamma",
+         "tables": [], "figures": [], "_action": "keep"},
+        {"title": "C", "content": "Delta [p4_tbl0]",
+         "tables": [{"id": "p4_tbl0", "page_number": 4}], "figures": [], "_action": "keep"},
+    ]
+    s4._thread_provenance(inp, out)
+    assert [o["pages"] for o in out] == [[1], [2], [3], [4]]
 
 
 def test_merge_concatenates_segments():

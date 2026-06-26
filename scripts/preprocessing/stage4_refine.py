@@ -178,38 +178,170 @@ def _call_ollama(sections_window: list[dict]) -> Optional[list[dict]]:
 # ---------------------------------------------------------------------------
 
 
+# Placeholder markers the LLM is instructed to preserve verbatim, e.g.
+# "[p5_tbl0]" / "[p3_img2]". They are the exact anchor between an input
+# segment and the output section that ends up owning it.
+_REF_RE = re.compile(r"\[([A-Za-z0-9_]+)\]")
+_TOKEN_RE = re.compile(r"\w+", re.UNICODE)
+
+
+def _content_str(section: dict) -> str:
+    """Section content as a single string (literature content is a list)."""
+    c = section.get("content", "")
+    if isinstance(c, list):
+        c = " ".join(str(x) for x in c)
+    return c or ""
+
+
+def _tokens(text: str) -> list[str]:
+    return [w.lower() for w in _TOKEN_RE.findall(text or "")]
+
+
+def _block_ids_of_output(section: dict) -> set[str]:
+    """Block ids an LLM output section claims: markers in its content plus the
+    ids in its (LLM-distributed) tables/figures arrays."""
+    ids = set(_REF_RE.findall(_content_str(section)))
+    for item in (section.get("tables") or []) + (section.get("figures") or []):
+        if isinstance(item, dict) and item.get("id"):
+            ids.add(item["id"])
+    return ids
+
+
+def _block_ids_of_input(section: dict) -> set[str]:
+    """Block ids an input section owns (from its segment refs + tables/figures)."""
+    ids = set()
+    for seg in section.get("segments") or []:
+        if isinstance(seg, dict) and seg.get("ref"):
+            ids.add(seg["ref"])
+    for item in (section.get("tables") or []) + (section.get("figures") or []):
+        if isinstance(item, dict) and item.get("id"):
+            ids.add(item["id"])
+    return ids
+
+
+def _text_containment(seg_text: str, out_token_set: set[str]) -> float:
+    """Fraction of a text segment's tokens present in an output's content.
+    Robust to the LLM's cleaning (de-hyphenation, whitespace) because cleaning
+    preserves most tokens; used only to pick the best-matching child."""
+    toks = _tokens(seg_text)
+    if not toks:
+        return 0.0
+    return sum(1 for t in toks if t in out_token_set) / len(toks)
+
+
+def _pick_monotone(cands: list[int], cursor: int) -> int:
+    """Pick an output index for a segment, preferring not to move backwards in
+    reading order (keeps a split's segments in order)."""
+    forward = [c for c in cands if c >= cursor]
+    return min(forward) if forward else max(cands)
+
+
+def _positional_consistent(inputs: list[dict], outputs: list[dict]) -> bool:
+    """A 1:1 positional reattach is trustworthy only if no block marker moved
+    across positions, i.e. each output's block ids are a subset of its
+    positional input's. This guards the fast path against a same-length window
+    that nonetheless rearranged content (e.g. a split paired with a drop)."""
+    for inp, out in zip(inputs, outputs):
+        if not _block_ids_of_output(out).issubset(_block_ids_of_input(inp)):
+            return False
+    return True
+
+
+def _redistribute_segments(inputs: list[dict], outputs: list[dict]) -> None:
+    """
+    Re-home every input segment onto the output section that actually contains
+    it. Used when the section count changed (a split): positional alignment no
+    longer holds, but the content does.
+
+      * table/figure segments → matched exactly by their globally-unique block
+        id (the LLM distributes the placeholders into the children verbatim);
+      * text segments → the child with the highest token containment.
+
+    A monotone cursor keeps the assignment in reading order. Because Stage-3
+    text segments never span a page boundary, a split that changes page
+    attribution always falls between segments, so this yields per-child pages
+    that are exact (not merely coarser).
+    """
+    pool = [seg for inp in inputs for seg in (inp.get("segments") or [])
+            if isinstance(seg, dict)]
+    out_block_ids = [_block_ids_of_output(o) for o in outputs]
+    out_tokens = [set(_tokens(_content_str(o))) for o in outputs]
+    assigned: list[list[dict]] = [[] for _ in outputs]
+    cursor = 0
+
+    for seg in pool:
+        target: Optional[int] = None
+        if seg.get("kind") in ("table", "figure") and seg.get("ref"):
+            cands = [j for j, bids in enumerate(out_block_ids)
+                     if seg["ref"] in bids]
+            if cands:
+                target = _pick_monotone(cands, cursor)
+        else:
+            scores = [_text_containment(seg.get("text", ""), out_tokens[j])
+                      for j in range(len(outputs))]
+            best = max(scores) if scores else 0.0
+            if best > 0:
+                cands = [j for j, s in enumerate(scores) if s == best]
+                target = _pick_monotone(cands, cursor)
+        if target is None:  # no anchor and no textual overlap → keep in order
+            if not outputs:
+                continue
+            target = min(cursor, len(outputs) - 1)
+        assigned[target].append(seg)
+        cursor = max(cursor, target)
+
+    for out, segs in zip(outputs, assigned):
+        out["segments"] = segs
+
+
 def _thread_provenance(inputs: list[dict], outputs: list[dict]) -> None:
     """
-    Reattach page provenance (segments/pages) from the input window sections
-    onto the LLM's cleaned output sections, by positional alignment.
+    Reattach fine-grained page provenance (segments → pages) from the input
+    window onto the LLM's cleaned output sections.
 
-    Exact for keep / remove / merge (output count == input count). For a split
-    (the LLM emits more sections than it received) the surplus children reuse
-    the last input's provenance; pages are finalised later so each still carries
-    a correct (if coarser) page span.
+    The LLM never sees segments/pages (they are stripped from its payload) and
+    it preserves the [block_id] placeholders verbatim while keeping reading
+    order. We exploit that:
+
+      * keep / remove / merge preserve the section count → exact 1:1 positional
+        reattach (guarded by `_positional_consistent`);
+      * a split emits more sections than it received → `_redistribute_segments`
+        re-homes each input segment onto the child that actually contains it,
+        so every split child ends up with precisely its own pages.
+
+    Pages are finalised per output afterwards, so the result is always
+    self-consistent regardless of which path ran.
     """
     if not inputs:
         for out in outputs:
-            out.setdefault("segments", [])
-            out.setdefault("pages", [])
+            out["segments"] = list(out.get("segments") or [])
+            _finalize_pages(out)
         return
-    for j, out in enumerate(outputs):
-        src = inputs[j] if j < len(inputs) else inputs[-1]
-        out["segments"] = list(src.get("segments", []))
-        out["pages"] = list(src.get("pages", []))
+
+    if len(outputs) == len(inputs) and _positional_consistent(inputs, outputs):
+        for inp, out in zip(inputs, outputs):
+            out["segments"] = list(inp.get("segments") or [])
+    else:
+        _redistribute_segments(inputs, outputs)
+
+    for out in outputs:
+        _finalize_pages(out)
 
 
 def _finalize_pages(section: dict) -> None:
     """Recompute a section's `pages` (and page_number) from its segments and
     its tables'/figures' page numbers, keeping them self-consistent after
-    merges/splits."""
+    merges/splits. Falls back to the section's own page_number when it carries
+    no page-bearing segments or media (e.g. a within-page split child)."""
     pages: set[int] = set()
-    for seg in section.get("segments", []):
+    for seg in section.get("segments") or []:
         if isinstance(seg, dict) and seg.get("page") is not None:
             pages.add(seg["page"])
-    for item in list(section.get("tables", [])) + list(section.get("figures", [])):
+    for item in (section.get("tables") or []) + (section.get("figures") or []):
         if isinstance(item, dict) and item.get("page_number") is not None:
             pages.add(item["page_number"])
+    if not pages and section.get("page_number") is not None:
+        pages.add(section["page_number"])
     section["pages"] = sorted(pages)
     if section.get("page_number") is None and section["pages"]:
         section["page_number"] = section["pages"][0]
