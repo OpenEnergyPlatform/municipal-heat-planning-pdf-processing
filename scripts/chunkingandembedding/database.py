@@ -258,7 +258,7 @@ def update_database(
 
     log.info("Step 2: Inserting sections for %d documents", len(candidates))
 
-    with connect(db_path) as conn:
+    with closing(connect(db_path)) as conn:
         for i, pdf_dir in enumerate(candidates):
             pdf_name = pdf_dir.name
             doc_id = _resolve_document_id(pdf_name, conn)
@@ -311,7 +311,7 @@ def get_existing_embeddings(
     """
     existing: set[tuple[str, int, Optional[str]]] = set()
 
-    with connect(db_path) as conn:
+    with closing(connect(db_path)) as conn:
         doc_id = _resolve_document_id(pdf_name, conn)
         if doc_id is None:
             return existing
@@ -358,7 +358,7 @@ def clear_embedding_ids(db_path: Path, pdf_name: str) -> list[int]:
     """
     old_ids: list[int] = []
 
-    with connect(db_path) as conn:
+    with closing(connect(db_path)) as conn:
         doc_id = _resolve_document_id(pdf_name, conn)
         if doc_id is None:
             return old_ids
@@ -419,7 +419,7 @@ def write_embedding_ids_batch(
     if not records:
         return
 
-    with connect(db_path) as conn:
+    with closing(connect(db_path)) as conn:
         doc_id = _resolve_document_id(pdf_name, conn)
         if doc_id is None:
             return
