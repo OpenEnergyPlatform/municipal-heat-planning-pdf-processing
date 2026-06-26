@@ -34,3 +34,25 @@ def test_consecutive_same_page_text_merges_into_one_segment():
     assert len(text_segs) == 1
     assert text_segs[0]["text"] == "A B"
     assert s.pages == [1]
+
+
+def test_text_run_splits_into_per_page_segments():
+    # Two text blocks on consecutive pages with no heading between → one section
+    # with two page-tagged text segments (the per-page-segment invariant that
+    # Stage 4 redistribution relies on for exact split attribution).
+    p1 = [Block(id="p1_t0", type="text", bbox=[0, 0, 10, 6], content="Seite eins Text.")]
+    p2 = [Block(id="p2_t0", type="text", bbox=[0, 0, 10, 6], content="Seite zwei Text.")]
+    s = s3.build_sections([_page(1, p1), _page(2, p2)])[0]
+    text_segs = [seg for seg in s.segments if seg["kind"] == "text"]
+    assert [seg["page"] for seg in text_segs] == [1, 2]
+    assert s.pages == [1, 2]
+
+
+def test_dokument_page_number_derived_from_first_content_page():
+    # A leading blank/cover page emits no blocks; first prose is on page 2. The
+    # synthetic "Dokument" section's primary page must be 2, not a hardcoded 1.
+    p2 = [Block(id="p2_t0", type="text", bbox=[0, 0, 10, 6], content="Erster echter Absatz.")]
+    s = s3.build_sections([_page(1, []), _page(2, p2)])[0]
+    assert s.title == "Dokument"
+    assert s.pages == [2]
+    assert s.page_number == 2

@@ -236,6 +236,18 @@ def _pick_monotone(cands: list[int], cursor: int) -> int:
     return min(forward) if forward else max(cands)
 
 
+def _pick_target(cands: list[int], cursor: int, page, out_pages: list[set]) -> int:
+    """Among equally-scoring text candidates, prefer one that already holds this
+    segment's own page (keeps same-page content together), then reading order.
+    Guards against shared German boilerplate routing a page onto the wrong
+    child."""
+    if page is not None:
+        same_page = [c for c in cands if page in out_pages[c]]
+        if same_page:
+            return _pick_monotone(same_page, cursor)
+    return _pick_monotone(cands, cursor)
+
+
 def _positional_consistent(inputs: list[dict], outputs: list[dict]) -> bool:
     """A 1:1 positional reattach is trustworthy only if no block marker moved
     across positions, i.e. each output's block ids are a subset of its
@@ -247,31 +259,43 @@ def _positional_consistent(inputs: list[dict], outputs: list[dict]) -> bool:
     return True
 
 
-def _redistribute_segments(inputs: list[dict], outputs: list[dict]) -> None:
+def _redistribute_segments(
+    inputs: list[dict], outputs: list[dict], *, shrink: bool
+) -> None:
     """
     Re-home every input segment onto the output section that actually contains
-    it. Used when the section count changed (a split): positional alignment no
-    longer holds, but the content does.
+    it. Used when the section count changed (a split, or — defensively — an LLM
+    that dropped a section by omission instead of marking it _action:"remove").
 
       * table/figure segments → matched exactly by their globally-unique block
         id (the LLM distributes the placeholders into the children verbatim);
-      * text segments → the child with the highest token containment.
+      * text segments → the child with the highest token containment, ties
+        broken toward the child that already holds the segment's own page, then
+        reading order.
 
-    A monotone cursor keeps the assignment in reading order. Because Stage-3
-    text segments never span a page boundary, a split that changes page
-    attribution always falls between segments, so this yields per-child pages
-    that are exact (not merely coarser).
+    Anchorless orphans are NOT force-attached to an arbitrary survivor: doing so
+    would phantom-cite a page the child does not hold (e.g. a removed directory
+    section leaking its page onto a neighbour). A text run that matches no child
+    is dropped from provenance; a table/figure whose marker the LLM dropped keeps
+    a best-effort home only on a split (never on a shrink, where the owning
+    section was removed). Because Stage-3 text segments never span a page
+    boundary, a split that changes page attribution falls between segments, so
+    per-child pages stay correct; only total token annihilation of a run (rare —
+    the prompt forbids paraphrase) costs a page, and dropping it beats a
+    confident mis-citation.
     """
     pool = [seg for inp in inputs for seg in (inp.get("segments") or [])
             if isinstance(seg, dict)]
     out_block_ids = [_block_ids_of_output(o) for o in outputs]
     out_tokens = [set(_tokens(_content_str(o))) for o in outputs]
     assigned: list[list[dict]] = [[] for _ in outputs]
+    out_pages: list[set] = [set() for _ in outputs]
     cursor = 0
 
     for seg in pool:
         target: Optional[int] = None
-        if seg.get("kind") in ("table", "figure") and seg.get("ref"):
+        is_media = seg.get("kind") in ("table", "figure") and bool(seg.get("ref"))
+        if is_media:
             cands = [j for j, bids in enumerate(out_block_ids)
                      if seg["ref"] in bids]
             if cands:
@@ -282,12 +306,25 @@ def _redistribute_segments(inputs: list[dict], outputs: list[dict]) -> None:
             best = max(scores) if scores else 0.0
             if best > 0:
                 cands = [j for j, s in enumerate(scores) if s == best]
-                target = _pick_monotone(cands, cursor)
-        if target is None:  # no anchor and no textual overlap → keep in order
-            if not outputs:
+                target = _pick_target(cands, cursor, seg.get("page"), out_pages)
+
+        if target is None:
+            # No anchor / no overlap. Keep a real media page on a split (the LLM
+            # merely dropped the marker), but never force anchorless text — or
+            # anything on a shrink — onto an arbitrary survivor; drop it instead.
+            if is_media and not shrink and outputs:
+                target = min(cursor, len(outputs) - 1)
+            else:
+                log.warning(
+                    "Stage 4: dropping unanchored %s segment (page %s) from "
+                    "provenance — it matched no output section",
+                    seg.get("kind"), seg.get("page"),
+                )
                 continue
-            target = min(cursor, len(outputs) - 1)
+
         assigned[target].append(seg)
+        if seg.get("page") is not None:
+            out_pages[target].add(seg["page"])
         cursor = max(cursor, target)
 
     for out, segs in zip(outputs, assigned):
@@ -322,7 +359,7 @@ def _thread_provenance(inputs: list[dict], outputs: list[dict]) -> None:
         for inp, out in zip(inputs, outputs):
             out["segments"] = list(inp.get("segments") or [])
     else:
-        _redistribute_segments(inputs, outputs)
+        _redistribute_segments(inputs, outputs, shrink=len(outputs) < len(inputs))
 
     for out in outputs:
         _finalize_pages(out)
@@ -345,6 +382,37 @@ def _finalize_pages(section: dict) -> None:
     section["pages"] = sorted(pages)
     if section.get("page_number") is None and section["pages"]:
         section["page_number"] = section["pages"][0]
+
+
+def _backfill_empty_pages(sections: list[dict]) -> None:
+    """
+    Best-effort: a kept, content-bearing section that finalised with no pages
+    (e.g. a within-page split child that won no segment and whose page_number
+    the LLM omitted) inherits a page from its nearest neighbour, so it ingests
+    as a citable chunk instead of an un-citable NULL-page row. A neighbour page
+    is an approximation, but strictly better than no citation.
+    """
+    for i, sec in enumerate(sections):
+        if sec.get("pages") or _is_empty_section(sec):
+            continue
+        page = None
+        for j in range(i - 1, -1, -1):
+            if sections[j].get("pages"):
+                page = sections[j]["pages"][-1]
+                break
+        if page is None:
+            for j in range(i + 1, len(sections)):
+                if sections[j].get("pages"):
+                    page = sections[j]["pages"][0]
+                    break
+        if page is not None:
+            sec["pages"] = [page]
+            if sec.get("page_number") is None:
+                sec["page_number"] = page
+            log.warning(
+                "Stage 4: section %r had no page provenance; inherited page %d "
+                "from a neighbour", sec.get("title", "?"), page,
+            )
 
 
 def _apply_actions(
@@ -501,6 +569,8 @@ def refine_sections(sections: list[dict]) -> list[dict]:
     # Keep each section's page span self-consistent after merges/splits.
     for s in refined:
         _finalize_pages(s)
+    # Rescue any kept content-bearing section left without a page citation.
+    _backfill_empty_pages(refined)
 
     log.info(f"Stage 4: {len(refined)} sections final")
     return refined

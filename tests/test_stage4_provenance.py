@@ -70,6 +70,82 @@ def test_thread_provenance_split_in_middle_of_window_keeps_siblings_exact():
     assert [o["pages"] for o in out] == [[1], [2], [3], [4]]
 
 
+def test_redistribute_drops_unanchored_text_orphan_no_phantom_page():
+    # A cross-page split where the page-2 run is annihilated (no surviving token
+    # in any child). The orphan must be DROPPED, not pinned onto a sibling — so
+    # no child phantom-cites page 2.
+    inp = [{
+        "title": "P", "content": "Alpha Beta", "tables": [], "figures": [],
+        "segments": [{"page": 1, "kind": "text", "text": "Alpha Beta"},
+                     {"page": 2, "kind": "text", "text": "ZZZ QQQ"}],
+        "pages": [1, 2],
+    }]
+    out = [{"title": "A", "content": "Alpha", "tables": [], "figures": [], "_action": "keep"},
+           {"title": "B", "content": "Beta", "tables": [], "figures": [], "_action": "keep"}]
+    s4._thread_provenance(inp, out)
+    assert out[0]["pages"] == [1]
+    assert 2 not in out[0]["pages"] and 2 not in out[1]["pages"]
+
+
+def test_omission_shrink_does_not_leak_removed_section_pages():
+    # The LLM drops a directory section by omission (count shrinks) instead of
+    # _action:"remove". Its page must NOT leak onto the survivor.
+    inp = [
+        {"title": "Intro", "content": "Willkommen Buerger", "tables": [], "figures": [],
+         "segments": [{"page": 1, "kind": "text", "text": "Willkommen Buerger"}], "pages": [1]},
+        {"title": "Inhaltsverzeichnis", "content": "Einleitung Bestandsanalyse Anhang",
+         "tables": [], "figures": [],
+         "segments": [{"page": 2, "kind": "text", "text": "Einleitung Bestandsanalyse Anhang"}],
+         "pages": [2]},
+    ]
+    out = [{"title": "Intro", "content": "Willkommen Buerger",
+            "tables": [], "figures": [], "_action": "keep"}]
+    s4._thread_provenance(inp, out)
+    assert out[0]["pages"] == [1]
+
+
+def test_literature_replace_keeps_own_page_through_redistribution():
+    # A split forces redistribution in a window that also converts a
+    # bibliography to [LITERATURE] (list content, BibTeX tokens diverging from
+    # the prose). The literature section must retain its own page, not leak it
+    # to the split siblings.
+    inp = [
+        {"title": "Big", "content": "Alpha [p1_tbl0] Beta",
+         "tables": [{"id": "p1_tbl0", "page_number": 1}], "figures": [],
+         "segments": [{"page": 1, "kind": "text", "text": "Alpha"},
+                      {"page": 1, "kind": "table", "ref": "p1_tbl0"},
+                      {"page": 1, "kind": "text", "text": "Beta"}], "pages": [1]},
+        {"title": "Literaturverzeichnis", "content": "Mueller 2023 Kommunale Waermeplanung",
+         "tables": [], "figures": [],
+         "segments": [{"page": 2, "kind": "text", "text": "Mueller 2023 Kommunale Waermeplanung"}],
+         "pages": [2]},
+    ]
+    out = [
+        {"title": "Alpha", "content": "Alpha [p1_tbl0]",
+         "tables": [{"id": "p1_tbl0", "page_number": 1}], "figures": [], "_action": "keep"},
+        {"title": "Beta", "content": "Beta", "tables": [], "figures": [], "_action": "keep"},
+        {"title": "[LITERATURE]",
+         "content": ["@misc{mueller2023, author={Mueller}, year={2023}}"],
+         "tables": [], "figures": [], "_action": "replace"},
+    ]
+    s4._thread_provenance(inp, out)
+    assert out[2]["pages"] == [2]
+    assert out[0]["pages"] == [1] and out[1]["pages"] == [1]
+    assert 2 not in out[0]["pages"] and 2 not in out[1]["pages"]
+
+
+def test_backfill_gives_uncited_child_a_neighbour_page():
+    refined = [
+        {"title": "A", "content": "Alpha", "tables": [], "figures": [],
+         "segments": [{"page": 5, "kind": "text", "text": "Alpha"}], "pages": [5], "page_number": 5},
+        {"title": "B", "content": "Beta", "tables": [], "figures": [],
+         "segments": [], "pages": [], "page_number": None},
+    ]
+    s4._backfill_empty_pages(refined)
+    assert refined[1]["pages"] == [5]
+    assert refined[1]["page_number"] == 5
+
+
 def test_merge_concatenates_segments():
     secs = [{"title": "A", "content": "a", "tables": [], "figures": [],
              "segments": [{"page": 1, "kind": "text", "text": "a"}], "_action": "keep"},

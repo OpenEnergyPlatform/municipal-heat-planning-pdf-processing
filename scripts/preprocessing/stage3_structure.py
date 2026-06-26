@@ -117,7 +117,10 @@ def build_sections(pages: list[PageData]) -> list[Section]:
         sections.append(new_section)
         current_section = new_section
 
-    _open_section("Dokument", page_number=1)
+    # Open with page_number=None so the derivation step below sets it from the
+    # first real content page (a leading cover/blank page may push real content
+    # to page 2+); hardcoding 1 would mis-attribute the primary page.
+    _open_section("Dokument", page_number=None)
 
     for pg in pages:
         for block in pg.blocks:
