@@ -157,6 +157,31 @@ def test_merge_concatenates_segments():
     assert [seg["page"] for seg in res[0]["segments"]] == [1, 2]
 
 
+def test_cross_window_merge_spans_both_windows(monkeypatch):
+    # The most fragile provenance path: a section in window 2 merged into the
+    # last-kept section of window 1 (the aliased previous_kept, re-finalised by
+    # the trailing loop). The survivor must span both pages.
+    monkeypatch.setattr(s4, "WINDOW_SIZE", 1)
+    sections = [
+        {"title": "A", "content": "Alpha", "page_number": 1, "tables": [], "figures": [],
+         "segments": [{"page": 1, "kind": "text", "text": "Alpha"}], "pages": [1]},
+        {"title": "B", "content": "Beta", "page_number": 2, "tables": [], "figures": [],
+         "segments": [{"page": 2, "kind": "text", "text": "Beta"}], "pages": [2]},
+    ]
+
+    def fake(window):
+        s = window[0]
+        o = {k: v for k, v in s.items() if k not in ("segments", "pages")}
+        o["_action"] = "merge_into_previous" if s["title"] == "B" else "keep"
+        return [o]
+
+    monkeypatch.setattr(s4, "_call_ollama", fake)
+    res = s4.refine_sections(sections)
+    assert len(res) == 1
+    assert res[0]["pages"] == [1, 2]
+    assert [g["text"] for g in res[0]["segments"]] == ["Alpha", "Beta"]
+
+
 def test_finalize_pages_unions_segments_and_media():
     sec = {"segments": [{"page": 3, "kind": "text"}],
            "tables": [{"page_number": 4}], "figures": [{"page_number": 3}],
