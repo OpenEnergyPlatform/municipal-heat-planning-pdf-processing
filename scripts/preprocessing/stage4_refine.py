@@ -83,8 +83,15 @@ def _call_ollama(sections_window: list[dict]) -> Optional[list[dict]]:
 
     client = Client(host=OLLAMA_HOST, timeout=OLLAMA_TIMEOUT)
 
+    # Strip page-provenance fields (segments/pages) from the LLM payload; the
+    # model must not see or rewrite them. They are reattached to the cleaned
+    # output afterwards (see _thread_provenance).
+    stripped = [
+        {k: v for k, v in s.items() if k not in ("segments", "pages")}
+        for s in sections_window
+    ]
     user_payload = json.dumps(
-        {"sections": sections_window},
+        {"sections": stripped},
         ensure_ascii=False,
         indent=2,
     )
@@ -171,6 +178,43 @@ def _call_ollama(sections_window: list[dict]) -> Optional[list[dict]]:
 # ---------------------------------------------------------------------------
 
 
+def _thread_provenance(inputs: list[dict], outputs: list[dict]) -> None:
+    """
+    Reattach page provenance (segments/pages) from the input window sections
+    onto the LLM's cleaned output sections, by positional alignment.
+
+    Exact for keep / remove / merge (output count == input count). For a split
+    (the LLM emits more sections than it received) the surplus children reuse
+    the last input's provenance; pages are finalised later so each still carries
+    a correct (if coarser) page span.
+    """
+    if not inputs:
+        for out in outputs:
+            out.setdefault("segments", [])
+            out.setdefault("pages", [])
+        return
+    for j, out in enumerate(outputs):
+        src = inputs[j] if j < len(inputs) else inputs[-1]
+        out["segments"] = list(src.get("segments", []))
+        out["pages"] = list(src.get("pages", []))
+
+
+def _finalize_pages(section: dict) -> None:
+    """Recompute a section's `pages` (and page_number) from its segments and
+    its tables'/figures' page numbers, keeping them self-consistent after
+    merges/splits."""
+    pages: set[int] = set()
+    for seg in section.get("segments", []):
+        if isinstance(seg, dict) and seg.get("page") is not None:
+            pages.add(seg["page"])
+    for item in list(section.get("tables", [])) + list(section.get("figures", [])):
+        if isinstance(item, dict) and item.get("page_number") is not None:
+            pages.add(item["page_number"])
+    section["pages"] = sorted(pages)
+    if section.get("page_number") is None and section["pages"]:
+        section["page_number"] = section["pages"][0]
+
+
 def _apply_actions(
     processed_sections: list[dict],
     previous_kept: Optional[dict],
@@ -204,6 +248,7 @@ def _apply_actions(
                 target["content"] = (existing + " " + merge_content).strip()
                 target.setdefault("tables", []).extend(sec.get("tables", []))
                 target.setdefault("figures", []).extend(sec.get("figures", []))
+                target.setdefault("segments", []).extend(sec.get("segments", []))
                 log.debug(
                     f"  Merged '{sec.get('title', '?')}' into "
                     f"'{target.get('title', '?')}'"
@@ -308,6 +353,7 @@ def refine_sections(sections: list[dict]) -> list[dict]:
             refined.extend(window)
             previous_kept = window[-1] if window else previous_kept
         else:
+            _thread_provenance(window, llm_result)
             applied, previous_kept = _apply_actions(llm_result, previous_kept)
             refined.extend(applied)
 
@@ -319,6 +365,10 @@ def refine_sections(sections: list[dict]) -> list[dict]:
     removed = before - len(refined)
     if removed:
         log.info(f"Stage 4: removed {removed} empty section(s)")
+
+    # Keep each section's page span self-consistent after merges/splits.
+    for s in refined:
+        _finalize_pages(s)
 
     log.info(f"Stage 4: {len(refined)} sections final")
     return refined
