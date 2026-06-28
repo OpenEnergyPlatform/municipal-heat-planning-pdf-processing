@@ -5,15 +5,23 @@ Author: Felix Vossel
 """
 from __future__ import annotations
 
-import copy
 import logging
+import threading
+from contextlib import nullcontext
 from pathlib import Path
 
-import ollama
+import openai
 
+from . import qa
 from .config import (
     TABLE_SYSTEM_PROMPT,
     TABLE_USER_PROMPT,
+    TABLE_VLM_TEMPERATURE,
+    TABLE_QA_MIN_COVERAGE,
+    TABLE_QA_MAX_DUPLICATION,
+    TABLE_QA_MIN_SOURCE_TOKENS,
+    TABLE_QA_RETRY_TEMPERATURE,
+    TABLE_QA_RETRY_PENALTY,
     FIGURE_SYSTEM_PROMPT,
     FIGURE_USER_PROMPT,
     CAPTION_KEEP_INSTRUCTION,
@@ -25,6 +33,26 @@ from .vision import call_vision
 
 log = logging.getLogger(__name__)
 
+# Appended to the user prompt on a QA-failure retry.
+_QA_RETRY_HINT = (
+    "\n\nIMPORTANT: A previous attempt was incomplete or repeated rows. Read "
+    "the table again carefully, row by row, and reproduce EVERY row exactly "
+    "once — do not omit any row and do not repeat any row."
+)
+
+
+def _assess_table(markdown: str, source_text: str) -> tuple[bool, dict]:
+    return qa.assess(
+        markdown, source_text,
+        min_coverage=TABLE_QA_MIN_COVERAGE,
+        max_duplication=TABLE_QA_MAX_DUPLICATION,
+        min_source_tokens=TABLE_QA_MIN_SOURCE_TOKENS,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
 
 def _truncate(text: str, max_len: int = 800) -> str:
     """Truncates text with an ellipsis if it exceeds max_len."""
@@ -42,22 +70,44 @@ def _caption_instruction(existing: str, kind: str) -> str:
     return CAPTION_GENERATE_FIGURE_INSTRUCTION
 
 
+# ---------------------------------------------------------------------------
+# Table processing
+# ---------------------------------------------------------------------------
+
 def process_table(
     table: dict,
     section: dict,
     base_path: Path,
-    client: ollama.Client,
+    client: openai.OpenAI,
     stats: ProcessingStats,
     *,
     model: str | None = None,
+    lock: threading.Lock | None = None,
+    source_text: str = "",
 ) -> dict:
-    """Enriches a single table entry with a ``markdown`` key."""
-    result = copy.deepcopy(table)
+    """
+    Enriches a single table entry with a ``markdown`` key.
+
+    After extraction a QA gate checks the markdown for coverage (against the
+    table's PyMuPDF *source_text*) and row duplication. On failure it retries
+    once with higher entropy + a repetition penalty and keeps the better
+    attempt; a still-failing result is kept (best effort) but flagged via a
+    ``qa_warning`` field and the ``qa_failed_tables`` stat.
+
+    *lock* guards the shared ProcessingStats so this is safe to call from
+    several worker threads at once.
+    """
+    guard = lock or nullcontext()
+    # Shallow copy is enough: the caller already deep-copied the whole document
+    # and we only set top-level keys (markdown/caption) on the result.
+    result = dict(table)
+    result.pop("source_text", None)  # internal QA aid, never part of the output
     image_path = base_path / table["path"]
 
     if not image_path.exists():
         log.warning("  Image not found: %s", image_path)
-        stats.inc("skipped_missing")
+        with guard:
+            stats.skipped_missing += 1
         return result
 
     existing_caption = table.get("caption") or ""
@@ -72,20 +122,58 @@ def process_table(
 
     kwargs = {"model": model} if model else {}
     response = call_vision(
-        client, TABLE_SYSTEM_PROMPT, user_prompt, image_path, **kwargs
+        client, TABLE_SYSTEM_PROMPT, user_prompt, image_path,
+        temperature=TABLE_VLM_TEMPERATURE, **kwargs
     )
 
-    if response:
-        result["markdown"] = response.get("markdown", "")
-        new_caption = response.get("caption", "")
-        if not existing_caption and new_caption:
-            result["caption"] = new_caption
-            stats.inc("captions_generated")
-        stats.inc("processed_tables")
+    if not response:
+        with guard:
+            stats.failed_tables += 1
+        log.error("  ✗ Table %s failed", table["id"])
+        return result
+
+    raw_md = response.get("markdown", "")
+    passed, metrics = _assess_table(raw_md, source_text)
+
+    if not passed:
+        # Adaptive fallback: one retry to break stutter loops / recover rows.
+        retry = call_vision(
+            client, TABLE_SYSTEM_PROMPT, user_prompt + _QA_RETRY_HINT, image_path,
+            temperature=TABLE_QA_RETRY_TEMPERATURE,
+            repetition_penalty=TABLE_QA_RETRY_PENALTY, **kwargs,
+        )
+        if retry:
+            retry_md = retry.get("markdown", "")
+            passed2, metrics2 = _assess_table(retry_md, source_text)
+            # Keep the better attempt: prefer one that passes, else higher coverage.
+            if (passed2 and not passed) or metrics2["coverage"] > metrics["coverage"]:
+                response, raw_md, passed, metrics = retry, retry_md, passed2, metrics2
+
+    # Only collapse stutter rows on the failure path: a passing table may
+    # legitimately contain identical adjacent rows, so don't touch it.
+    result["markdown"] = raw_md if passed else qa.dedup_consecutive_rows(raw_md)
+    if not passed:
+        result["qa_warning"] = metrics
+
+    new_caption = response.get("caption", "")
+    generated = bool(not existing_caption and new_caption)
+    if generated:
+        result["caption"] = new_caption
+
+    with guard:
+        if generated:
+            stats.captions_generated += 1
+        if not passed:
+            stats.qa_failed_tables += 1
+        stats.processed_tables += 1
+
+    if passed:
         log.info("  ✓ Table %s", table["id"])
     else:
-        stats.inc("failed_tables")
-        log.error("  ✗ Table %s failed", table["id"])
+        log.warning(
+            "  ⚠ Table %s low QA (coverage=%.2f duplication=%.2f)",
+            table["id"], metrics["coverage"], metrics["duplication"],
+        )
 
     return result
 
@@ -98,18 +186,27 @@ def process_figure(
     figure: dict,
     section: dict,
     base_path: Path,
-    client: ollama.Client,
+    client: openai.OpenAI,
     stats: ProcessingStats,
     *,
     model: str | None = None,
+    lock: threading.Lock | None = None,
 ) -> dict:
-    """Enriches a single figure entry with a ``description`` key."""
-    result = copy.deepcopy(figure)
+    """
+    Enriches a single figure entry with a ``description`` key.
+
+    *lock* guards the shared ProcessingStats so this is safe to call from
+    several worker threads at once.
+    """
+    guard = lock or nullcontext()
+    # Shallow copy is enough (see process_table).
+    result = dict(figure)
     image_path = base_path / figure["path"]
 
     if not image_path.exists():
         log.warning("  Image not found: %s", image_path)
-        stats.inc("skipped_missing")
+        with guard:
+            stats.skipped_missing += 1
         return result
 
     existing_caption = figure.get("caption") or ""
@@ -130,13 +227,17 @@ def process_figure(
     if response:
         result["description"] = response.get("description", "")
         new_caption = response.get("caption", "")
-        if not existing_caption and new_caption:
+        generated = bool(not existing_caption and new_caption)
+        if generated:
             result["caption"] = new_caption
-            stats.inc("captions_generated")
-        stats.inc("processed_figures")
+        with guard:
+            if generated:
+                stats.captions_generated += 1
+            stats.processed_figures += 1
         log.info("  ✓ Figure %s", figure["id"])
     else:
-        stats.inc("failed_figures")
+        with guard:
+            stats.failed_figures += 1
         log.error("  ✗ Figure %s failed", figure["id"])
 
     return result

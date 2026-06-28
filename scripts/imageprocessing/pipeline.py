@@ -22,17 +22,19 @@ import copy
 import json
 import logging
 import sys
-from concurrent.futures import ThreadPoolExecutor, as_completed
+import threading
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Optional
 
 from .config import (
-    OLLAMA_MODEL,
-    OLLAMA_HOST,
+    VLM_MODEL,
+    VLM_BASE_URL,
+    VLM_NUM_PARALLEL,
     FINAL_OUTPUT_JSON,
     STRUCTURED_OUTPUT_JSON,
     ENRICHED_OUTPUT_JSON,
-    NUM_PARALLEL,
+    dump_json_atomic,
 )
 from .models import ProcessingStats
 from .vision import create_client, check_model_available
@@ -40,6 +42,10 @@ from .process import process_table, process_figure
 
 log = logging.getLogger(__name__)
 
+
+# ---------------------------------------------------------------------------
+# Input resolution
+# ---------------------------------------------------------------------------
 
 def _resolve_input(output_dir: Path) -> Optional[Path]:
     """
@@ -56,13 +62,42 @@ def _resolve_input(output_dir: Path) -> Optional[Path]:
     return None
 
 
+def _load_source_texts(output_dir: Path) -> dict[str, str]:
+    """
+    Maps table id → PyMuPDF source text from the Stage 3 structured output.
+
+    This is read straight from structured_output.json (not the chosen input)
+    because the Stage 4 LLM refinement does not preserve the source_text field;
+    it is used by the table QA gate to measure extraction coverage.
+    """
+    p = output_dir / STRUCTURED_OUTPUT_JSON
+    if not p.exists():
+        return {}
+    try:
+        with open(p, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except (json.JSONDecodeError, OSError) as e:
+        log.warning("Could not read source texts (%s)", e)
+        return {}
+    out: dict[str, str] = {}
+    for section in data.get("sections", []):
+        for t in section.get("tables", []):
+            if t.get("source_text"):
+                out[t["id"]] = t["source_text"]
+    return out
+
+
+# ---------------------------------------------------------------------------
+# Single-directory processing
+# ---------------------------------------------------------------------------
+
 def run_single(
     output_dir: Path,
     *,
     input_json: Optional[str] = None,
     dry_run: bool = False,
     force: bool = False,
-    ollama_host: Optional[str] = None,
+    base_url: Optional[str] = None,
     model: Optional[str] = None,
 ) -> Optional[dict]:
     """
@@ -80,16 +115,16 @@ def run_single(
     Args:
         output_dir:   Preprocessing output dir (contains results/ and images/).
         input_json:   Override: path to input JSON (relative to output_dir).
-        dry_run:      Only report statistics, skip Ollama calls.
+        dry_run:      Only report statistics, skip vLLM calls.
         force:        Re-process even if enriched output already exists.
-        ollama_host:  Override Ollama host URL.
+        base_url:     Override the vLLM base URL (…/v1).
         model:        Override vision model name.
 
     Returns:
         Enriched data dict, or None on failure.
     """
     output_dir = Path(output_dir)
-    model = model or OLLAMA_MODEL
+    model = model or VLM_MODEL
     out_path = output_dir / ENRICHED_OUTPUT_JSON
 
     # ── Load previous cache for item-level reuse ─────────────────────────
@@ -162,89 +197,95 @@ def run_single(
         log.info(stats.summary())
         return data
 
-    # If everything is cached, skip Ollama entirely
+    # If everything is cached, skip the vLLM server entirely
     if pending_tables == 0 and pending_figures == 0:
         log.info("All items cached – nothing to process.")
         log.info(stats.summary())
         # Still need to merge cache into data and write
         enriched = _merge_cache(data, cached_items)
-        out_path.parent.mkdir(parents=True, exist_ok=True)
-        with open(out_path, "w", encoding="utf-8") as f:
-            json.dump(enriched, f, ensure_ascii=False, indent=2)
+        _strip_source_text(enriched)
+        dump_json_atomic(enriched, out_path)
         return enriched
 
-    # ── Ollama client ────────────────────────────────────────────────────
-    client = create_client(host=ollama_host)
+    # ── vLLM client ──────────────────────────────────────────────────────
+    client = create_client(base_url=base_url)
     if not check_model_available(client, model):
         log.error(
-            "Model '%s' not available. Please run: ollama pull %s",
+            "Model '%s' not available at the vLLM endpoint. Serve it with: "
+            "vllm serve <model> --served-model-name %s",
             model, model,
         )
         return None
 
-    # ── Process sections (parallel) ─────────────────────────────────────
+    # ── Build the worklist: fill cached items in place, collect pending ───
     enriched = copy.deepcopy(data)
-    total_sections = len(enriched["sections"])
+    # (kind, section_index, item_index, item, section)
+    tasks: list[tuple[str, int, int, dict, dict]] = []
 
-    # Collect all pending items across all sections into a flat work list.
-    # Each work item is (section_index, item_type, list_index, item_dict).
-    work_items: list[tuple[int, str, int, dict]] = []
-
-    for i, section in enumerate(enriched["sections"]):
-        tables = section.get("tables", [])
-        figures = section.get("figures", [])
-
-        # Merge cached items into the section eagerly
-        for j, t in enumerate(tables):
+    for si, section in enumerate(enriched["sections"]):
+        for ti, t in enumerate(section.get("tables", [])):
             if t["id"] in cached_items:
-                section["tables"][j] = cached_items[t["id"]]
+                section["tables"][ti] = cached_items[t["id"]]
             else:
-                work_items.append((i, "table", j, t))
-
-        for j, f in enumerate(figures):
+                tasks.append(("table", si, ti, t, section))
+        for fi, f in enumerate(section.get("figures", [])):
             if f["id"] in cached_items:
-                section["figures"][j] = cached_items[f["id"]]
+                section["figures"][fi] = cached_items[f["id"]]
             else:
-                work_items.append((i, "figure", j, f))
+                tasks.append(("figure", si, fi, f, section))
 
-    log.info("Processing %d pending items with %d parallel workers", len(work_items), NUM_PARALLEL)
+    # ── Dispatch all pending items concurrently; vLLM batches them ────────
+    log.info(
+        "Processing %d pending items with %d parallel slots",
+        len(tasks), VLM_NUM_PARALLEL,
+    )
+    lock = threading.Lock()
+    source_texts = _load_source_texts(output_dir)
 
-    def _process_item(item_tuple):
-        """Worker function for a single table or figure."""
-        sec_idx, item_type, list_idx, item_dict = item_tuple
-        section = enriched["sections"][sec_idx]
-        if item_type == "table":
-            return process_table(item_dict, section, output_dir, client, stats, model=model)
-        else:
-            return process_figure(item_dict, section, output_dir, client, stats, model=model)
+    def _enrich(task: tuple) -> tuple:
+        kind, si, ti, item, section = task
+        try:
+            if kind == "table":
+                res = process_table(
+                    item, section, output_dir, client, stats,
+                    model=model, lock=lock,
+                    source_text=source_texts.get(item["id"], ""),
+                )
+            else:
+                res = process_figure(
+                    item, section, output_dir, client, stats,
+                    model=model, lock=lock,
+                )
+        except Exception as e:  # never let one item kill the whole run
+            log.error("  ✗ %s %s crashed: %s", kind, item.get("id", "?"), e)
+            res = item
+        return kind, si, ti, res
 
-    with ThreadPoolExecutor(max_workers=NUM_PARALLEL) as pool:
-        future_to_item = {
-            pool.submit(_process_item, item): item
-            for item in work_items
-        }
-
-        for future in as_completed(future_to_item):
-            item_tuple = future_to_item[future]
-            sec_idx, item_type, list_idx, _ = item_tuple
-            try:
-                result = future.result()
-                if item_type == "table":
-                    enriched["sections"][sec_idx]["tables"][list_idx] = result
-                else:
-                    enriched["sections"][sec_idx]["figures"][list_idx] = result
-            except Exception as e:
-                item_id = item_tuple[3].get("id", "?")
-                log.error("  ✗ %s %s raised exception: %s", item_type, item_id, e)
+    if tasks:
+        with ThreadPoolExecutor(max_workers=VLM_NUM_PARALLEL) as ex:
+            for kind, si, ti, res in ex.map(_enrich, tasks):
+                key = "tables" if kind == "table" else "figures"
+                enriched["sections"][si][key][ti] = res
 
     # ── Write output (always, to persist partial progress) ───────────────
-    out_path.parent.mkdir(parents=True, exist_ok=True)
+    _strip_source_text(enriched)  # also covers any crash-fallback (res = item)
     log.info("Writing: %s", out_path)
-    with open(out_path, "w", encoding="utf-8") as f:
-        json.dump(enriched, f, ensure_ascii=False, indent=2)
+    dump_json_atomic(enriched, out_path)
 
     log.info(stats.summary())
     return enriched
+
+
+def _strip_source_text(enriched: dict) -> None:
+    """Drop the QA-only source_text from every table before writing the output.
+
+    process_table already strips it on the normal path; this is a belt-and-
+    suspenders pass that also covers the crash-fallback branch (res = item).
+    """
+    for section in enriched.get("sections", []):
+        for t in section.get("tables", []):
+            if isinstance(t, dict):
+                t.pop("source_text", None)
 
 
 def _merge_cache(data: dict, cached_items: dict[str, dict]) -> dict:
@@ -360,9 +401,9 @@ Examples:
   # Force re-processing (ignore cache)
   python -m scripts.imageprocessing ./output/my_pdf --force
 
-  # Custom model / host
+  # Custom model / vLLM endpoint
   python -m scripts.imageprocessing ./output/my_pdf \\
-      --model qwen3-vl:32b --ollama-host http://gpu-server:11434
+      --model Qwen/Qwen3-VL-32B-Instruct --base-url http://gpu-server:8001/v1
         """,
     )
     p.add_argument(
@@ -375,7 +416,7 @@ Examples:
     )
     p.add_argument(
         "--dry-run", action="store_true",
-        help="Only report statistics, do not call Ollama",
+        help="Only report statistics, do not call the vLLM server",
     )
     p.add_argument(
         "--force", action="store_true",
@@ -387,11 +428,11 @@ Examples:
     )
     p.add_argument(
         "--model", default=None,
-        help="Ollama vision model (default: %s)" % OLLAMA_MODEL,
+        help="vLLM vision model / served-model-name (default: %s)" % VLM_MODEL,
     )
     p.add_argument(
-        "--ollama-host", default=None,
-        help="Ollama server URL (default: %s)" % OLLAMA_HOST,
+        "--base-url", default=None,
+        help="vLLM OpenAI-compatible base URL (default: %s)" % VLM_BASE_URL,
     )
     p.add_argument(
         "--log-level", default="INFO",
@@ -414,7 +455,7 @@ def main() -> None:
     common = dict(
         dry_run=args.dry_run,
         force=args.force,
-        ollama_host=args.ollama_host,
+        base_url=args.base_url,
         model=args.model,
     )
 
