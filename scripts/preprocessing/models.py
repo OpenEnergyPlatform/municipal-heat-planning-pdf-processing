@@ -5,13 +5,14 @@ Author: Felix Vossel
 """
 from __future__ import annotations
 
-import numpy as np
-import fitz
 from dataclasses import dataclass, field
 from typing import Optional
-from PIL import Image
-from pathlib import Path
 
+
+
+# ---------------------------------------------------------------------------
+# Low-level block (unchanged from original)
+# ---------------------------------------------------------------------------
 
 @dataclass
 class Block:
@@ -34,6 +35,12 @@ class Block:
     caption: Optional[str] = None     # resolved caption for tables/images
     confidence: Optional[float] = None
     layout_label: Optional[str] = None  # raw PP-DocLayout class
+    source_text: Optional[str] = None   # native PDF text inside a table bbox (QA reference)
+    # Dominant font signature of a Stage-1 text block (size in pt, bold flag).
+    # Transient: used for font-based heading promotion in Stage 2 before the
+    # pages cache is written, so it is intentionally NOT serialised.
+    font_size: Optional[float] = None
+    font_bold: Optional[bool] = None
 
     def to_dict(self) -> dict:
         d: dict = {"id": self.id, "type": self.type, "bbox": self.bbox}
@@ -42,6 +49,7 @@ class Block:
         if self.caption     is not None: d["caption"]      = self.caption
         if self.confidence  is not None: d["confidence"]   = round(self.confidence, 3)
         if self.layout_label is not None: d["layout_label"] = self.layout_label
+        if self.source_text is not None: d["source_text"]  = self.source_text
         return d
 
     @classmethod
@@ -55,9 +63,13 @@ class Block:
             caption=d.get("caption"),
             confidence=d.get("confidence"),
             layout_label=d.get("layout_label"),
+            source_text=d.get("source_text"),
         )
 
 
+# ---------------------------------------------------------------------------
+# Per-page container
+# ---------------------------------------------------------------------------
 
 @dataclass
 class PageData:
@@ -115,6 +127,7 @@ class TableRef:
     path: str
     caption: Optional[str] = None
     page_number: Optional[int] = None
+    source_text: Optional[str] = None   # native PDF text inside the table bbox (QA reference)
 
     def to_dict(self) -> dict:
         d: dict = {"id": self.id, "path": self.path}
@@ -122,6 +135,8 @@ class TableRef:
             d["caption"] = self.caption
         if self.page_number is not None:
             d["page_number"] = self.page_number
+        if self.source_text is not None:
+            d["source_text"] = self.source_text
         return d
 
 
@@ -150,28 +165,3 @@ class Section:
             "tables":      [t.to_dict() for t in self.tables],
             "figures":     [f.to_dict() for f in self.figures],
         }
-
-
-@dataclass
-class PageImage:
-    """Pairs a PageData record with its PIL image and the originating fitz page."""
-    page_data: PageData
-    pil_image: Image.Image
-    fitz_page: fitz.Page
-
-
-@dataclass
-class CropJob:
-    """Everything needed to encode and write one detected region as PNG."""
-    block_id: str
-    out_path: Path
-    crop_rgb: np.ndarray
-
-
-@dataclass
-class Detection:
-    """A single post-processed detection box for one page."""
-    label: str
-    label_id: int
-    score: float
-    bbox_px: list[float]

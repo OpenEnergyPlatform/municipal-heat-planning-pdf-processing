@@ -169,13 +169,13 @@ def test_cross_window_merge_spans_both_windows(monkeypatch):
          "segments": [{"page": 2, "kind": "text", "text": "Beta"}], "pages": [2]},
     ]
 
-    def fake(window):
+    def fake(window, client=None, prev_ctx=None):
         s = window[0]
         o = {k: v for k, v in s.items() if k not in ("segments", "pages")}
         o["_action"] = "merge_into_previous" if s["title"] == "B" else "keep"
         return [o]
 
-    monkeypatch.setattr(s4, "_call_ollama", fake)
+    monkeypatch.setattr(s4, "_call_llm", fake)
     res = s4.refine_sections(sections)
     assert len(res) == 1
     assert res[0]["pages"] == [1, 2]
@@ -191,7 +191,7 @@ def test_finalize_pages_unions_segments_and_media():
     assert sec["page_number"] == 3
 
 
-def test_call_ollama_strips_provenance_from_payload():
+def test_call_llm_strips_provenance_from_payload():
     # the projection used to build the LLM payload must drop segments/pages
     win = [{"title": "A", "content": "c", "tables": [], "figures": [],
             "segments": [{"page": 1}], "pages": [1]}]

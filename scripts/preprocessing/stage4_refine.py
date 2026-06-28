@@ -1,8 +1,8 @@
 """
-stage4_refine.py – LLM-based section refinement via Ollama (gpt-oss:120b).
+stage4_refine.py – LLM-based section refinement via vLLM (gpt-oss:120b).
 
 After Stage 3 has produced a deterministic section assembly, Stage 4 uses a
-local LLM to:
+local LLM (served by vLLM, reached through its OpenAI-compatible API) to:
 
   1. Clean extraction artefacts (broken words, orphaned fragments, OCR noise,
      garbled Unicode, misplaced line breaks, etc.).
@@ -15,14 +15,14 @@ local LLM to:
   6. Split sections that contain embedded sub-headings into separate sections.
 
 Processing strategy:
-  - Uses gpt-oss:120b (~66 GB VRAM in Q4), one instance per A100/H100.
-  - Ollama's native structured output (format= parameter) enforces valid JSON.
-  - All section windows are dispatched in parallel via ThreadPoolExecutor
-    across 2 Ollama instances (one per GPU).
+  - Uses gpt-oss:120b served by a single vLLM server (config.LLM_BASE_URL).
+  - response_format=json_object plus the system prompt constrain output to
+    valid JSON.
+  - Section windows are dispatched concurrently, up to LLM_NUM_PARALLEL
+    in-flight requests; vLLM batches them server-side (continuous batching).
   - Results are collected in original order and assembled sequentially
     (merge/split actions require ordering).
   - Empty sections are removed as a post-processing step.
-  - Hosts configurable via OLLAMA_HOSTS env var (comma-separated URLs).
 
 Author: Felix Vossel
 """
@@ -31,58 +31,103 @@ from __future__ import annotations
 import json
 import logging
 import re
-from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
+import time
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Optional
 
 from .config import (
     STRUCTURED_OUTPUT_JSON,
     FINAL_OUTPUT_JSON,
-    OLLAMA_MODEL,
-    OLLAMA_HOST,
-    OLLAMA_TIMEOUT,
-    OLLAMA_NUM_PARALLEL,
-    OLLAMA_OPTIONS,
+    LLM_MODEL,
+    LLM_BASE_URL,
+    LLM_API_KEY,
+    LLM_TIMEOUT,
+    LLM_NUM_PARALLEL,
+    LLM_TEMPERATURE,
+    LLM_MAX_TOKENS,
     MAX_RETRIES,
     WINDOW_SIZE,
     SYSTEM_PROMPT,
     clean_data,
+    dump_json_atomic,
 )
 
 log = logging.getLogger(__name__)
 
 
-def _call_ollama(sections_window: list[dict]) -> Optional[list[dict]]:
+def _loads_json_object(text: str) -> dict:
     """
-    Sends a window of sections to the Ollama instance via the chat API
-    and parses the JSON response.
+    Parse a JSON object from model output, tolerating a non-JSON wrapper.
 
-    Uses format="json" to ensure the model outputs valid JSON, while the
-    exact structure is enforced by the system prompt.
+    Tries a direct parse first; on failure falls back to the outermost
+    {...} block. Raises json.JSONDecodeError if nothing parses, so the
+    caller's retry / self-correction path still triggers.
+    """
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        m = re.search(r"\{.*\}", text, re.DOTALL)
+        if m:
+            return json.loads(m.group(0))
+        raise
 
-    On parse failures, the conversation is extended with the failed output
-    and error message so the model can self-correct on retry.
 
-    Each request is guarded by two timeout layers:
-      1. httpx client timeout (OLLAMA_TIMEOUT) – covers network-level hangs
-      2. ThreadPoolExecutor timeout (OLLAMA_TIMEOUT) – covers cases where
-         the client itself blocks (e.g. streaming hang)
 
-    Retries up to MAX_RETRIES times on failures.
+# ---------------------------------------------------------------------------
+# vLLM (OpenAI-compatible) API wrapper
+# ---------------------------------------------------------------------------
+
+
+def _backoff(attempt: int) -> None:
+    """Sleep between retries (skipped after the final attempt)."""
+    if attempt < MAX_RETRIES:
+        time.sleep(min(2 * attempt, 10))
+
+
+def _strip_table_source_text(sections: list) -> None:
+    """Remove the QA-only ``source_text`` field from every table, in place."""
+    for sec in sections:
+        if isinstance(sec, dict):
+            for t in sec.get("tables", []):
+                if isinstance(t, dict):
+                    t.pop("source_text", None)
+
+
+def _tail_text(content, n: int) -> str:
+    """Returns the last *n* characters of a section's content (str or list)."""
+    if isinstance(content, list):
+        content = " ".join(str(x) for x in content)
+    content = str(content)
+    return content[-n:] if len(content) > n else content
+
+
+def _call_llm(
+    sections_window: list[dict],
+    client,
+    prev_context: Optional[dict] = None,
+) -> Optional[list[dict]]:
+    """
+    Sends a window of sections to the vLLM chat-completions API and parses the
+    JSON response.
+
+    response_format=json_object plus the system prompt constrain the model to a
+    valid JSON object. On a content failure (empty / missing "sections" / unparseable),
+    the failed turn is fed back so the model can self-correct on the next
+    attempt; the conversation is rebuilt from the original two messages each
+    time so it cannot grow unboundedly. Transport errors and timeouts reset
+    the conversation and back off. The wall-clock bound per request is the
+    httpx client timeout configured on *client*.
+
+    *prev_context* (the previous window's last section) is included read-only
+    so the model can judge whether the first section is a continuation that
+    should be merged across the window boundary.
+
+    Retries up to MAX_RETRIES times.
 
     Returns:
         Parsed list of section dicts with "_action" fields, or None on failure.
     """
-    try:
-        from ollama import Client
-    except ImportError:
-        raise ImportError(
-            "ollama Python package not installed.\n"
-            "  pip install ollama"
-        )
-
-    client = Client(host=OLLAMA_HOST, timeout=OLLAMA_TIMEOUT)
-
     # Strip page-provenance fields (segments/pages) from the LLM payload; the
     # model must not see or rewrite them. They are reattached to the cleaned
     # output afterwards (see _thread_provenance).
@@ -96,79 +141,102 @@ def _call_ollama(sections_window: list[dict]) -> Optional[list[dict]]:
         indent=2,
     )
 
-    messages = [
-        {"role": "system", "content": SYSTEM_PROMPT},
-        {"role": "user", "content": user_payload},
-    ]
-
-    def _chat():
-        return client.chat(
-            model=OLLAMA_MODEL,
-            messages=messages,
-            format="json",
-            options=OLLAMA_OPTIONS,
+    if prev_context:
+        ctx = {
+            "title": prev_context.get("title", ""),
+            "content_tail": _tail_text(prev_context.get("content", ""), 600),
+        }
+        user_content = (
+            "CONTEXT (read-only — do NOT include this in your output): the "
+            "section immediately before the first section below ended as "
+            "shown. Use it ONLY to decide whether the first section is a "
+            "broken continuation of it (then set that first section's "
+            '_action to "merge_into_previous").\n'
+            + json.dumps(ctx, ensure_ascii=False, indent=2)
+            + "\n\nSECTIONS TO PROCESS:\n"
+            + user_payload
         )
+    else:
+        user_content = user_payload
+
+    base_messages = [
+        {"role": "system", "content": SYSTEM_PROMPT},
+        {"role": "user", "content": user_content},
+    ]
+    messages = list(base_messages)
 
     for attempt in range(1, MAX_RETRIES + 1):
+        raw_text = ""
         try:
-            # Thread-level timeout as a safety net
-            with ThreadPoolExecutor(max_workers=1) as executor:
-                future = executor.submit(_chat)
-                response = future.result(timeout=OLLAMA_TIMEOUT)
+            response = client.chat.completions.create(
+                model=LLM_MODEL,
+                messages=messages,
+                response_format={"type": "json_object"},
+                temperature=LLM_TEMPERATURE,
+                max_tokens=LLM_MAX_TOKENS,
+            )
 
-            raw_text = response.message.content.strip()
+            raw_text = response.choices[0].message.content or ""
 
+            # gpt-oss is a reasoning model: strip <think>…</think> blocks and
+            # any stray markdown fences before parsing. Without this, leaked
+            # reasoning makes json.loads fail, burns the retry budget, and the
+            # whole window silently falls back to the unrefined originals.
+            raw_text = re.sub(
+                r"<think>.*?</think>", "", raw_text, flags=re.DOTALL
+            ).strip()
             raw_text = re.sub(r"^```(?:json)?\s*", "", raw_text)
-            raw_text = re.sub(r"\s*```$", "", raw_text)
+            raw_text = re.sub(r"\s*```$", "", raw_text).strip()
 
             if not raw_text:
-                log.warning(
-                    f"   Attempt {attempt}/{MAX_RETRIES}: empty response"
-                )
-                messages.append({"role": "assistant", "content": ""})
-                messages.append({"role": "user", "content":
-                    "Your response was empty. Please process the sections "
-                    "and respond with valid JSON containing a 'sections' array."
-                })
+                log.warning(f"   Attempt {attempt}/{MAX_RETRIES}: empty response")
+                messages = base_messages + [
+                    {"role": "assistant", "content": ""},
+                    {"role": "user", "content":
+                        "Your response was empty. Please process the sections "
+                        "and respond with valid JSON containing a 'sections' array."},
+                ]
+                _backoff(attempt)
                 continue
 
-            parsed = json.loads(raw_text)
+            parsed = _loads_json_object(raw_text)
 
             if "sections" not in parsed:
                 log.warning(
-                    f"   Attempt {attempt}/{MAX_RETRIES}: response "
-                    f"missing 'sections' key"
+                    f"   Attempt {attempt}/{MAX_RETRIES}: response missing "
+                    f"'sections' key"
                 )
-                messages.append({"role": "assistant", "content": raw_text})
-                messages.append({"role": "user", "content":
-                    "Your JSON is valid but missing the required 'sections' "
-                    "key. Please respond with a JSON object that has a "
-                    "'sections' array at the top level."
-                })
+                messages = base_messages + [
+                    {"role": "assistant", "content": raw_text},
+                    {"role": "user", "content":
+                        "Your JSON is valid but missing the required 'sections' "
+                        "key. Please respond with a JSON object that has a "
+                        "'sections' array at the top level."},
+                ]
+                _backoff(attempt)
                 continue
 
             return parsed["sections"]
 
-        except FuturesTimeoutError:
-            log.warning(
-                f"   Attempt {attempt}/{MAX_RETRIES}: "
-                f"timed out after {OLLAMA_TIMEOUT}s"
-            )
         except json.JSONDecodeError as e:
             log.warning(
                 f"   Attempt {attempt}/{MAX_RETRIES}: JSON parse error: {e}"
             )
-            messages.append({"role": "assistant", "content": raw_text})
-            messages.append({"role": "user", "content":
-                f"Your response was not valid JSON. The parse error was: {e}\n"
-                f"Please fix and respond with only valid JSON."
-            })
+            messages = base_messages + [
+                {"role": "assistant", "content": raw_text},
+                {"role": "user", "content":
+                    f"Your response was not valid JSON. The parse error was: {e}\n"
+                    f"Please fix and respond with only valid JSON."},
+            ]
+            _backoff(attempt)
         except Exception as e:
+            # Covers connection errors and the httpx request timeout. Reset the
+            # conversation (drop the failed turn) and back off before retrying.
             log.error(
-                f"   Attempt {attempt}/{MAX_RETRIES}: Ollama error: {e}"
+                f"   Attempt {attempt}/{MAX_RETRIES}: LLM request failed: {e}"
             )
-            if attempt >= MAX_RETRIES:
-                return None
+            messages = list(base_messages)
+            _backoff(attempt)
 
     return None
 
@@ -177,6 +245,87 @@ def _call_ollama(sections_window: list[dict]) -> Optional[list[dict]]:
 # Post-processing: apply LLM actions (sequential, order-dependent)
 # ---------------------------------------------------------------------------
 
+
+def _coerce_section(sec: dict) -> dict:
+    """
+    Defensively normalise an LLM-returned section to the expected shape.
+
+    format="json" guarantees valid JSON but not a schema, so a misbehaving
+    model could return wrong types (content as a dict, tables missing, …)
+    that crash downstream consumers. This coerces title to str, content to
+    str|list, and tables/figures to lists, dropping nothing that is usable.
+    """
+    if not isinstance(sec, dict):
+        return {"title": "", "content": "", "tables": [], "figures": [],
+                "_action": "keep"}
+    out = dict(sec)
+    title = out.get("title", "")
+    out["title"] = title if isinstance(title, str) else str(title)
+    content = out.get("content", "")
+    out["content"] = content if isinstance(content, (str, list)) else ""
+    tables = out.get("tables", [])
+    out["tables"] = tables if isinstance(tables, list) else []
+    figures = out.get("figures", [])
+    out["figures"] = figures if isinstance(figures, list) else []
+    return out
+
+
+def _apply_actions(
+    processed_sections: list[dict],
+    previous_kept: Optional[dict],
+) -> tuple[list[dict], Optional[dict]]:
+    """
+    Applies the _action directives returned by the LLM.
+
+    Returns:
+        (result_sections, last_kept_section)
+        where last_kept_section is a reference to the last kept/merged section
+        so the next window can merge into it if needed.
+    """
+    result: list[dict] = []
+
+    for sec in processed_sections:
+        sec = _coerce_section(sec)
+        action = sec.pop("_action", "keep")
+
+        if action == "remove":
+            log.debug(f"  Removing section: {sec.get('title', '?')}")
+            continue
+
+        if action == "merge_into_previous":
+            target = result[-1] if result else previous_kept
+            if target is not None:
+                merge_content = sec.get("content", "")
+                if isinstance(merge_content, list):
+                    merge_content = " ".join(merge_content)
+                existing = target.get("content", "")
+                if isinstance(existing, list):
+                    existing = " ".join(existing)
+                target["content"] = (existing + " " + merge_content).strip()
+                target.setdefault("tables", []).extend(sec.get("tables", []))
+                target.setdefault("figures", []).extend(sec.get("figures", []))
+                target.setdefault("segments", []).extend(sec.get("segments", []))
+                log.debug(
+                    f"  Merged '{sec.get('title', '?')}' into "
+                    f"'{target.get('title', '?')}'"
+                )
+                continue
+            else:
+                log.debug(
+                    f"  Cannot merge '{sec.get('title', '?')}' "
+                    f"(no previous section) – keeping"
+                )
+
+        # "keep" or "replace" → include in output
+        result.append(sec)
+
+    last_kept = result[-1] if result else previous_kept
+    return result, last_kept
+
+
+# ---------------------------------------------------------------------------
+# Page provenance: carry per-segment page info through the LLM rewrite
+# ---------------------------------------------------------------------------
 
 # Placeholder markers the LLM is instructed to preserve verbatim, e.g.
 # "[p5_tbl0]" / "[p3_img2]". They are the exact anchor between an input
@@ -368,8 +517,8 @@ def _thread_provenance(inputs: list[dict], outputs: list[dict]) -> None:
 def _finalize_pages(section: dict) -> None:
     """Recompute a section's `pages` (and page_number) from its segments and
     its tables'/figures' page numbers, keeping them self-consistent after
-    merges/splits. Falls back to the section's own page_number when it carries
-    no page-bearing segments or media (e.g. a within-page split child)."""
+    merges/splits. Falls back to the section's own page_number for a within-page
+    split child that carries no page-bearing segments or media."""
     pages: set[int] = set()
     for seg in section.get("segments") or []:
         if isinstance(seg, dict) and seg.get("page") is not None:
@@ -415,56 +564,9 @@ def _backfill_empty_pages(sections: list[dict]) -> None:
             )
 
 
-def _apply_actions(
-    processed_sections: list[dict],
-    previous_kept: Optional[dict],
-) -> tuple[list[dict], Optional[dict]]:
-    """
-    Applies the _action directives returned by the LLM.
-
-    Returns:
-        (result_sections, last_kept_section)
-        where last_kept_section is a reference to the last kept/merged section
-        so the next window can merge into it if needed.
-    """
-    result: list[dict] = []
-
-    for sec in processed_sections:
-        action = sec.pop("_action", "keep")
-
-        if action == "remove":
-            log.debug(f"  Removing section: {sec.get('title', '?')}")
-            continue
-
-        if action == "merge_into_previous":
-            target = result[-1] if result else previous_kept
-            if target is not None:
-                merge_content = sec.get("content", "")
-                if isinstance(merge_content, list):
-                    merge_content = " ".join(merge_content)
-                existing = target.get("content", "")
-                if isinstance(existing, list):
-                    existing = " ".join(existing)
-                target["content"] = (existing + " " + merge_content).strip()
-                target.setdefault("tables", []).extend(sec.get("tables", []))
-                target.setdefault("figures", []).extend(sec.get("figures", []))
-                target.setdefault("segments", []).extend(sec.get("segments", []))
-                log.debug(
-                    f"  Merged '{sec.get('title', '?')}' into "
-                    f"'{target.get('title', '?')}'"
-                )
-                continue
-            else:
-                log.debug(
-                    f"  Cannot merge '{sec.get('title', '?')}' "
-                    f"(no previous section) – keeping"
-                )
-
-        # "keep" or "replace" → include in output
-        result.append(sec)
-
-    last_kept = result[-1] if result else previous_kept
-    return result, last_kept
+# ---------------------------------------------------------------------------
+# Rule-based helpers
+# ---------------------------------------------------------------------------
 
 
 def _is_empty_section(sec: dict) -> bool:
@@ -487,9 +589,9 @@ def refine_sections(sections: list[dict]) -> list[dict]:
     """
     Processes all sections through the LLM in windows of WINDOW_SIZE.
 
-    Windows are dispatched in parallel (up to OLLAMA_NUM_PARALLEL concurrent
-    requests to the same Ollama instance). Results are collected in order and
-    assembled sequentially to preserve merge/split semantics.
+    Windows are dispatched in parallel (up to LLM_NUM_PARALLEL concurrent
+    requests to the vLLM server, which batches them). Results are collected in
+    order and assembled sequentially to preserve merge/split semantics.
 
     Returns:
         Refined list of section dicts.
@@ -497,9 +599,14 @@ def refine_sections(sections: list[dict]) -> list[dict]:
     if not sections:
         return sections
 
+    # source_text is a QA reference for the downstream image processing, not
+    # something the refinement LLM should see or echo back — drop it from the
+    # payload (it stays in structured_output.json, which imageprocessing reads).
+    _strip_table_source_text(sections)
+
     log.info(
         f"Stage 4: {len(sections)} sections, window size {WINDOW_SIZE}, "
-        f"parallel slots {OLLAMA_NUM_PARALLEL}"
+        f"parallel slots {LLM_NUM_PARALLEL}"
     )
 
     # ── Build all windows ────────────────────────────────────────────────
@@ -512,13 +619,33 @@ def refine_sections(sections: list[dict]) -> list[dict]:
     total_windows = len(windows)
     log.info(f"Stage 4: {total_windows} windows to process")
 
+    # ── One shared OpenAI client pointed at the vLLM server, reused across all
+    #    windows (thread-safe, so LLM_NUM_PARALLEL workers can share it; vLLM
+    #    batches the concurrent requests server-side). max_retries=0 leaves
+    #    retry control to our own loop. ─────────────────────────────────────
+    try:
+        from openai import OpenAI
+    except ImportError:
+        raise ImportError(
+            "openai package not installed.\n  pip install openai"
+        )
+    client = OpenAI(
+        base_url=LLM_BASE_URL,
+        api_key=LLM_API_KEY,
+        timeout=LLM_TIMEOUT,
+        max_retries=0,
+    )
+
     # ── Parallel dispatch ────────────────────────────────────────────────
     ordered_results: dict[int, tuple[Optional[list[dict]], list[dict]]] = {}
 
-    with ThreadPoolExecutor(max_workers=OLLAMA_NUM_PARALLEL) as executor:
+    with ThreadPoolExecutor(max_workers=LLM_NUM_PARALLEL) as executor:
         futures = {}
         for win_idx, window in enumerate(windows):
-            future = executor.submit(_call_ollama, window)
+            # Give each window (except the first) the previous window's last
+            # original section as read-only context for boundary merges.
+            prev_ctx = windows[win_idx - 1][-1] if win_idx > 0 else None
+            future = executor.submit(_call_llm, window, client, prev_ctx)
             futures[future] = (win_idx, window)
 
         for future in futures:  # iterate in submission order
@@ -581,16 +708,20 @@ def refine_sections(sections: list[dict]) -> list[dict]:
 # ---------------------------------------------------------------------------
 
 
-def run_stage4(output_dir: Path) -> Optional[dict]:
+def run_stage4(output_dir: Path, data: Optional[dict] = None) -> Optional[dict]:
     """
-    Reads structured_output.json (Stage 3), refines sections via LLM,
-    and writes structured_output_final.json (Stage 4).
+    Refines the Stage 3 sections via the LLM and writes
+    structured_output_final.json (Stage 4).
 
     If structured_output_final.json already exists, it is loaded from cache
     and returned without re-running the LLM.
 
     Args:
-        output_dir: The output directory containing structured_output.json.
+        output_dir: The output directory; the final output is written here.
+        data:       The Stage 3 result dict to refine. When None (e.g. a
+                    standalone Stage 4 run), structured_output.json is read
+                    from output_dir instead. Passing it in keeps a single
+                    source of truth between Stage 3 and Stage 4.
 
     Returns:
         The refined output dict, or None on failure.
@@ -603,15 +734,15 @@ def run_stage4(output_dir: Path) -> Optional[dict]:
         with open(final_path, encoding="utf-8") as f:
             return json.load(f)
 
-    # ── Load Stage 3 input ───────────────────────────────────────────────
-    input_path = output_dir / STRUCTURED_OUTPUT_JSON
-    if not input_path.exists():
-        log.error(f"Stage 4: {input_path} not found")
-        return None
-
-    log.info(f"Stage 4: loading {input_path}")
-    with open(input_path, encoding="utf-8") as f:
-        data = json.load(f)
+    # ── Resolve Stage 3 input (passed in, or read from disk) ─────────────
+    if data is None:
+        input_path = output_dir / STRUCTURED_OUTPUT_JSON
+        if not input_path.exists():
+            log.error(f"Stage 4: {input_path} not found")
+            return None
+        log.info(f"Stage 4: loading {input_path}")
+        with open(input_path, encoding="utf-8") as f:
+            data = json.load(f)
 
     sections = data.get("sections", [])
     log.info(f"Stage 4: {len(sections)} sections loaded")
@@ -621,10 +752,8 @@ def run_stage4(output_dir: Path) -> Optional[dict]:
     result = {"sections": refined}
     result = clean_data(result)
 
-    # Write refined output
-    final_path.parent.mkdir(parents=True, exist_ok=True)
-    with open(final_path, "w", encoding="utf-8") as f:
-        json.dump(result, f, ensure_ascii=False, indent=2)
+    # Write refined output (atomic: temp file + os.replace)
+    dump_json_atomic(result, final_path)
     log.info(f"Stage 4: refined output written → {final_path}")
 
     return result

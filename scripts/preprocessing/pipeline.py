@@ -6,7 +6,7 @@ Stages:
   2. PP-DocLayoutV3 → Table / image crops + layout labels + caption resolution
   3. Section assembly → Deterministic JSON output (no LLM required)
   4. LLM refinement → Clean artefacts, remove directory pages, convert
-     bibliography to BibTeX (Ollama gpt-oss:120b)
+     bibliography to BibTeX (vLLM gpt-oss:120b)
 
 CLI:
   python -m scripts.preprocessing.pipeline input.pdf ./output
@@ -21,7 +21,6 @@ import gc
 import json
 import logging
 import sys
-import unicodedata
 from pathlib import Path
 from typing import Optional
 
@@ -30,20 +29,15 @@ from .config import (
     STRUCTURED_OUTPUT_JSON,
     FINAL_OUTPUT_JSON,
     clean_data,
+    dump_json_atomic,
 )
 from .models import PageData
 from .stage1_extract import extract_all_pages
 from .stage2_layout import detect_layout_all_pages, load_model
-from PIL import Image
 from .stage3_structure import build_sections, save_output, sections_to_dict
 from .stage4_refine import run_stage4
 
 log = logging.getLogger(__name__)
-
-
-# ---------------------------------------------------------------------------
-# Unicode cleaning (unchanged from original)
-# ---------------------------------------------------------------------------
 
 
 # ---------------------------------------------------------------------------
@@ -52,10 +46,8 @@ log = logging.getLogger(__name__)
 
 def _save_pages_cache(pages: list[PageData], output_dir: Path) -> None:
     cache_path = output_dir / CACHE_PAGES_JSON
-    cache_path.parent.mkdir(parents=True, exist_ok=True)
     cleaned = [clean_data(pg.to_dict()) for pg in pages]
-    with open(cache_path, "w", encoding="utf-8") as f:
-        json.dump(cleaned, f, ensure_ascii=False, indent=2)
+    dump_json_atomic(cleaned, cache_path)
     log.info(f"Pages cached: {cache_path}")
 
 
@@ -64,8 +56,12 @@ def _load_pages_cache(output_dir: Path) -> Optional[list[PageData]]:
     if not cache_path.exists():
         return None
     log.info(f"Loading pages from cache: {cache_path}")
-    with open(cache_path, encoding="utf-8") as f:
-        data = json.load(f)
+    try:
+        with open(cache_path, encoding="utf-8") as f:
+            data = json.load(f)
+    except (json.JSONDecodeError, OSError) as e:
+        log.warning(f"Pages cache unreadable ({e}); re-extracting from PDF")
+        return None
     return [PageData.from_dict(d) for d in data]
 
 
@@ -112,19 +108,18 @@ def run_single(
         if model_tuple is None:
             model_tuple = load_model()
 
-        pages, pil_images, fitz_pages, fitz_doc = extract_all_pages(
+        pages, fitz_pages, fitz_doc, n_failed = extract_all_pages(
             pdf_path,
             page_range=page_range,
         )
         try:
             pages = detect_layout_all_pages(
-                pages, pil_images, fitz_pages, output_dir, model_tuple
+                pages, fitz_pages, output_dir, model_tuple
             )
         finally:
             fitz_doc.close()
-        del pil_images
 
-        # Free layout model from GPU to reclaim VRAM for Stage 4 (Ollama)
+        # Free layout model from GPU to reclaim VRAM for Stage 4 (vLLM)
         if not skip_refine:
             del model_tuple
             model_tuple = None
@@ -136,7 +131,16 @@ def run_single(
             except ImportError:
                 pass
 
-        _save_pages_cache(pages, output_dir)
+        # Do not cache an incomplete extraction: a partial cache would be
+        # silently reused as if complete on the next run. Skipping the write
+        # forces a re-extraction (which retries the failed pages) next time.
+        if n_failed:
+            log.warning(
+                f"{pdf_path.name}: {n_failed} page(s) failed extraction – "
+                f"not caching the partial result (re-run to retry)"
+            )
+        else:
+            _save_pages_cache(pages, output_dir)
     else:
         log.info(f"Stages 1+2: cache loaded ({len(pages)} pages)")
 
@@ -156,14 +160,21 @@ def run_single(
 
     # ── Stage 3: section assembly (with cache) ─────────────────────────────
     stage3_path = output_dir / STRUCTURED_OUTPUT_JSON
+    result: Optional[dict] = None
     if stage3_path.exists() and not force_reextract:
-        log.info(f"Stage 3: cache hit → {stage3_path}")
-        with open(stage3_path, encoding="utf-8") as f:
-            result = json.load(f)
-    else:
+        try:
+            with open(stage3_path, encoding="utf-8") as f:
+                result = json.load(f)
+            log.info(f"Stage 3: cache hit → {stage3_path}")
+        except (json.JSONDecodeError, OSError) as e:
+            log.warning(f"Stage 3 cache unreadable ({e}); rebuilding")
+            result = None
+    if result is None:
         sections = build_sections(pages)
         save_output(sections, output_dir)
-        result = sections_to_dict(sections)
+        # Match what save_output wrote to disk (cleaned) so the in-memory
+        # result is a single source of truth shared with Stage 4.
+        result = clean_data(sections_to_dict(sections))
 
     log.info(
         f"Stage 3: {len(result['sections'])} sections | "
@@ -173,7 +184,7 @@ def run_single(
 
     # ── Stage 4: LLM refinement ──────────────────────────────────────────
     if not skip_refine:
-        refined = run_stage4(output_dir)
+        refined = run_stage4(output_dir, data=result)
         if refined is not None:
             result = refined
             log.info(
@@ -232,13 +243,20 @@ def run_folder(
         log.info("All PDFs have cached extractions – skipping layout model load")
         model_tuple = None
 
+    # Keyed by the path relative to input_dir (not just the file name) so two
+    # same-named PDFs in different subdirectories under a recursive glob do not
+    # collide and overwrite each other in the results dict and _index.json.
     results: dict[str, Optional[dict]] = {}
+    stage4_status: dict[str, str] = {}
+    output_dirs: dict[str, str] = {}
 
     for i, pdf_path in enumerate(pdf_files):
-        pdf_name   = pdf_path.name
-        pdf_output = output_dir / pdf_path.relative_to(input_dir).with_suffix("")
+        rel        = pdf_path.relative_to(input_dir)
+        pdf_key    = str(rel)
+        pdf_output = output_dir / rel.with_suffix("")
+        output_dirs[pdf_key] = str(pdf_output)
 
-        log.info(f"[{i + 1}/{len(pdf_files)}] Processing: {pdf_name}")
+        log.info(f"[{i + 1}/{len(pdf_files)}] Processing: {pdf_key}")
 
         try:
             result = run_single(
@@ -248,16 +266,28 @@ def run_folder(
                 force_reextract=force_reextract,
                 skip_refine=skip_refine,
             )
-            results[pdf_name] = result
+            results[pdf_key] = result
             status = "ok" if result is not None else "error"
             gc.collect()
         except Exception as e:
-            log.error(f"Error processing '{pdf_name}': {e}", exc_info=True)
-            results[pdf_name] = None
+            log.error(f"Error processing '{pdf_key}': {e}", exc_info=True)
+            results[pdf_key] = None
             status = "error"
 
-        log.info(f"  [{i + 1}/{len(pdf_files)}] {pdf_name} → {status}")
-        _write_index(results, output_dir)
+        # Refinement (Stage 4) can fail while the PDF still produces valid
+        # Stage 3 output, so track it separately from the overall status.
+        # run_stage4 only writes FINAL_OUTPUT_JSON when it succeeds.
+        if status == "error":
+            stage4_status[pdf_key] = "error"
+        elif skip_refine:
+            stage4_status[pdf_key] = "skipped"
+        elif (pdf_output / FINAL_OUTPUT_JSON).exists():
+            stage4_status[pdf_key] = "ok"
+        else:
+            stage4_status[pdf_key] = "failed"
+
+        log.info(f"  [{i + 1}/{len(pdf_files)}] {pdf_key} → {status}")
+        _write_index(results, output_dir, stage4_status, output_dirs)
 
     ok_count = sum(1 for r in results.values() if r is not None)
     log.info(f"\n{'=' * 60}")
@@ -271,18 +301,22 @@ def run_folder(
 def _write_index(
     results: dict[str, Optional[dict]],
     output_dir: Path,
+    stage4_status: Optional[dict[str, str]] = None,
+    output_dirs: Optional[dict[str, str]] = None,
 ) -> None:
     """Writes _index.json with status and key metrics for all processed PDFs."""
+    stage4_status = stage4_status or {}
+    output_dirs = output_dirs or {}
     index = {}
     for name, r in results.items():
         status = "ok" if r is not None else "error"
         index[name] = {
             "status":    status,
-            "output_dir": str(output_dir / Path(name).stem),
+            "stage4":    stage4_status.get(name, "unknown"),
+            "output_dir": output_dirs.get(name, str(output_dir / Path(name).stem)),
             "sections":  len(r.get("sections", [])) if r else 0,
         }
-    with open(output_dir / "_index.json", "w", encoding="utf-8") as f:
-        json.dump(index, f, ensure_ascii=False, indent=2)
+    dump_json_atomic(index, output_dir / "_index.json")
 
 
 # ---------------------------------------------------------------------------
@@ -307,6 +341,8 @@ def run(
     output_dir = Path(output_dir)
 
     if input_path.is_dir():
+        if page_range is not None:
+            log.warning("--pages is ignored in folder mode (single-PDF only)")
         return run_folder(
             input_dir=input_path,
             output_dir=output_dir,
@@ -326,24 +362,22 @@ def run(
         raise ValueError(f"Input is neither a PDF nor a folder: {input_path}")
 
 
+# ---------------------------------------------------------------------------
+# CLI
+# ---------------------------------------------------------------------------
+
 def _build_parser() -> argparse.ArgumentParser:
-    """Build and return the command-line argument parser.
-    
-    Returns:
-        An ArgumentParser configured with all required and optional arguments
-        for the preprocessing CLI.
-    """
     p = argparse.ArgumentParser(
-        prog="python -m scripts.preprocessing",
+        prog="python -m scripts.preprocessing.pipeline",
         description="Municipal Heat Planning – PDF Processing Pipeline",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  python -m scripts.preprocessing doc.pdf ./out
-  python -m scripts.preprocessing ./pdfs/ ./out
-  python -m scripts.preprocessing doc.pdf ./out --pages 0 20
-  python -m scripts.preprocessing ./pdfs/ ./out --glob "*.pdf"
-  python -m scripts.preprocessing doc.pdf ./out --force-reextract
+  python -m scripts.preprocessing.pipeline doc.pdf ./out
+  python -m scripts.preprocessing.pipeline ./pdfs/ ./out
+  python -m scripts.preprocessing.pipeline doc.pdf ./out --pages 0 20
+  python -m scripts.preprocessing.pipeline ./pdfs/ ./out --glob "*.pdf"
+  python -m scripts.preprocessing.pipeline doc.pdf ./out --force-reextract
         """,
     )
     p.add_argument("input",  help="PDF file or folder containing PDFs")
@@ -362,11 +396,7 @@ Examples:
 
 
 def main() -> None:
-    """Entry point for the command-line interface.
-    
-    Parses command-line arguments, configures logging, and executes the
-    preprocessing pipeline.
-    """
+    """CLI entry point."""
     parser = _build_parser()
     args   = parser.parse_args()
 

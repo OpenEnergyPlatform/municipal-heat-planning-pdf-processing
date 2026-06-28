@@ -8,9 +8,9 @@ work correctly against model-predicted bounding boxes.
 
 Image blocks (type=1) are ignored – they are detected in Stage 2.
 
-Each page is also rendered to a PIL RGB image in memory so that Stage 2
-(PP-DocLayoutV3) can run inference without any intermediate files on disk.
-No PNGs are written to disk.
+Pages are NOT rendered here. Stage 2 renders them per batch from the open
+fitz pages so the whole document's page images are never resident at once.
+The `_render_page_to_pil` helper lives here and is imported by Stage 2.
 
 Coordinate system: PyMuPDF provides BBoxes as fitz.Rect with the origin at the
 top-left in points (pt). [x0, y0, x1, y1] is stored without coordinate flipping.
@@ -25,11 +25,9 @@ from pathlib import Path
 from typing import Optional
 
 import fitz
-import numpy as np
 from PIL import Image
 
 from .config import (
-    PAGE_RENDER_DPI,
     TEXT_BLOCK_MIN_CHARS,
     HYPHEN_EXCEPTIONS,
 )
@@ -93,6 +91,32 @@ def _spans_to_text(block: dict) -> str:
     return "".join(result)
 
 
+def _dominant_font(block: dict) -> tuple[Optional[float], bool]:
+    """
+    Returns the (char-weighted) dominant font size and a bold-majority flag for
+    a rawdict text block, used downstream for font-based heading promotion.
+    """
+    sizes: dict[float, int] = {}
+    bold_chars = 0
+    total_chars = 0
+    for line in block.get("lines", []):
+        for span in line.get("spans", []):
+            n = len(span.get("chars", []))
+            if n == 0:
+                continue
+            size = round(float(span.get("size", 0.0)), 1)
+            sizes[size] = sizes.get(size, 0) + n
+            flags = int(span.get("flags", 0))
+            font = str(span.get("font", ""))
+            if (flags & 16) or "bold" in font.lower():  # bit 4 = bold
+                bold_chars += n
+            total_chars += n
+    if total_chars == 0:
+        return None, False
+    dominant_size = max(sizes, key=sizes.get)
+    return dominant_size, bold_chars >= total_chars / 2
+
+
 def _is_valid_text_block(text: str) -> bool:
     """Returns True if the text block contains enough content to be useful."""
     stripped = text.strip()
@@ -128,9 +152,11 @@ def _extract_page_text(page: fitz.Page, page_index: int) -> PageData:
         if not _is_valid_text_block(text):
             continue
 
+        font_size, font_bold = _dominant_font(block)
         block_id = f"{prefix}_t{text_counter}"
         page_data.blocks.append(
-            Block(id=block_id, type="text", bbox=bbox, content=text)
+            Block(id=block_id, type="text", bbox=bbox, content=text,
+                  font_size=font_size, font_bold=font_bold)
         )
         text_counter += 1
 
@@ -145,19 +171,19 @@ def _render_page_to_pil(page: fitz.Page, dpi: int) -> Image.Image:
     zoom = dpi / 72.0
     mat  = fitz.Matrix(zoom, zoom)
     pix  = page.get_pixmap(matrix=mat, alpha=False)
-    img  = np.frombuffer(pix.samples, dtype=np.uint8).reshape(pix.h, pix.w, 3)
-    return Image.fromarray(img)
+    return Image.frombytes("RGB", (pix.w, pix.h), pix.samples)
 
 
 def extract_all_pages(
     pdf_path: str | Path,
     page_range: Optional[tuple[int, int]] = None,
-) -> tuple[list[PageData], list[Image.Image], list[fitz.Page], fitz.Document]:
+) -> tuple[list[PageData], list[fitz.Page], fitz.Document, int]:
     """
-    Extracts text, renders pages, and returns open fitz pages for Stage 2.
+    Extracts text and returns the open fitz pages for Stage 2.
 
-    Both operations share one fitz.Document open/close pair so the file is
-    read exactly once. Everything stays in memory – no files are written.
+    Pages are NOT rendered here: Stage 2 renders them per batch (see
+    detect_layout_all_pages) so the whole document's page images are never
+    resident in memory at once.
 
     The returned fitz.Document must be closed by the caller after Stage 2
     has finished, since fitz.Page objects are only valid while their parent
@@ -169,11 +195,12 @@ def extract_all_pages(
                     Defaults to the full document.
 
     Returns:
-        A tuple (pages, pil_images, fitz_pages, fitz_doc) where:
-          pages:      list[PageData]    – one entry per processed page.
-          pil_images: list[Image.Image] – one RGB PIL image per page.
-          fitz_pages: list[fitz.Page]   – open fitz pages for Stage 2 text extraction.
-          fitz_doc:   fitz.Document     – must be closed by the caller.
+        A tuple (pages, fitz_pages, fitz_doc, n_failed) where:
+          pages:      list[PageData]  – one entry per successfully processed page.
+          fitz_pages: list[fitz.Page] – open fitz pages, index-aligned with pages.
+          fitz_doc:   fitz.Document   – must be closed by the caller.
+          n_failed:   int             – number of pages that failed and were
+                                        skipped; the two lists stay aligned.
     """
     pdf_path = Path(pdf_path)
     doc      = fitz.open(str(pdf_path))
@@ -188,26 +215,33 @@ def extract_all_pages(
     page_indices = list(range(start, end))
 
     log.info(
-        f"Stage 1: '{pdf_path.name}' – {len(page_indices)} pages "
-        f"(text + render in-memory, DPI={PAGE_RENDER_DPI})"
+        f"Stage 1: '{pdf_path.name}' – {len(page_indices)} pages (text extraction)"
     )
 
-    pages:      list[PageData]    = []
-    pil_images: list[Image.Image] = []
-    fitz_pages: list[fitz.Page]   = []
+    pages:      list[PageData]  = []
+    fitz_pages: list[fitz.Page] = []
+    n_failed = 0
 
     for i, page_index in enumerate(page_indices):
         try:
             fitz_page = doc[page_index]
-            pages.append(_extract_page_text(fitz_page, page_index))
-            pil_images.append(_render_page_to_pil(fitz_page, PAGE_RENDER_DPI))
+            # Build then append together so a failure can never leave the two
+            # lists at mismatched lengths.
+            page_data = _extract_page_text(fitz_page, page_index)
+            pages.append(page_data)
             fitz_pages.append(fitz_page)
         except Exception as e:
+            n_failed += 1
             log.error(f"Page {page_index + 1} failed: {e}")
 
         done = i + 1
         if done % 20 == 0 or done == len(page_indices):
             log.info(f"Stage 1: {done}/{len(page_indices)} pages done")
 
+    if n_failed:
+        log.warning(
+            f"Stage 1: {n_failed}/{len(page_indices)} page(s) FAILED – "
+            f"extraction is incomplete"
+        )
     log.info(f"Stage 1: done – {len(pages)}/{len(page_indices)} pages")
-    return pages, pil_images, fitz_pages, doc
+    return pages, fitz_pages, doc, n_failed

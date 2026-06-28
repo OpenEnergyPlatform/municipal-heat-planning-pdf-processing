@@ -26,6 +26,14 @@ def _stub_if_missing(name, attrs=None):
 for _m in ("fitz", "cv2", "torch", "faiss", "ollama"):
     _stub_if_missing(_m)
 _stub_if_missing("numpy", {"ndarray": object})
+
+
+class _DummyOpenAI:  # vLLM client stand-in; constructed but never called under test.
+    def __init__(self, *args, **kwargs):
+        pass
+
+
+_stub_if_missing("openai", {"OpenAI": _DummyOpenAI})
 if "PIL" not in sys.modules:
     try:
         import PIL  # noqa: F401

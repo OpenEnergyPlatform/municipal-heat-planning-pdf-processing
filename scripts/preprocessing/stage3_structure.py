@@ -28,7 +28,6 @@ Author: Felix Vossel
 """
 from __future__ import annotations
 
-import json
 import logging
 from pathlib import Path
 from typing import Optional
@@ -36,12 +35,17 @@ from typing import Optional
 from .config import (
     STRUCTURED_OUTPUT_JSON,
     SECTION_TITLE_CLASSES,
-    clean_data
+    clean_data,
+    dump_json_atomic,
 )
 from .models import Block, FigureRef, PageData, Section, TableRef
 
 log = logging.getLogger(__name__)
 
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
 
 def _block_is_title(block: Block) -> bool:
     """True when the block represents a section-title heading."""
@@ -57,6 +61,10 @@ def _resolve_title_text(block: Block) -> Optional[str]:
     text = (block.content or "").strip()
     return text if text else None
 
+
+# ---------------------------------------------------------------------------
+# Core assembly
+# ---------------------------------------------------------------------------
 
 def build_sections(pages: list[PageData]) -> list[Section]:
     """
@@ -150,6 +158,7 @@ def build_sections(pages: list[PageData]) -> list[Section]:
                         path=block.path or "",
                         caption=block.caption,
                         page_number=pg.page_number,
+                        source_text=block.source_text,
                     )
                     current_section.tables.append(ref)
                     sep = " " if current_section.content else ""
@@ -229,9 +238,7 @@ def save_output(sections: list[Section], output_dir: Path) -> Path:
     returns the path.
     """
     out_path = output_dir / STRUCTURED_OUTPUT_JSON
-    out_path.parent.mkdir(parents=True, exist_ok=True)
     data     = clean_data(sections_to_dict(sections))
-    with open(out_path, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
+    dump_json_atomic(data, out_path)
     log.info(f"Stage 3: output written → {out_path}")
     return out_path
