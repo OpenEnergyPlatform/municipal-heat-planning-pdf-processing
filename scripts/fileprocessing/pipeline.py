@@ -1,6 +1,8 @@
 import argparse
 import logging
+import os
 import sqlite3
+import tempfile
 import fitz
 import requests
 import pandas as pd
@@ -57,16 +59,32 @@ def download_pdf(url: str, data_dir: Path) -> str:
     """
     filename = Path(urlparse(url).path).name.lower()
     file_path = data_dir / filename
-    
+
     if file_path.exists():
         return file_path.name
-    
+
     response = requests.get(url, timeout=30)
     response.raise_for_status()
+    content = response.content
+    if not content.startswith(b"%PDF"):
+        raise IOError(f"Downloaded file is not a PDF (no %PDF header): {url}")
 
-    with open(file_path, "wb") as f:
-        f.write(response.content)
-    
+    # Atomic write (temp + os.replace) so a killed job never leaves a partial /
+    # poisoned .pdf that a later run reuses and feeds to PyMuPDF (which can
+    # segfault on a truncated file).
+    data_dir.mkdir(parents=True, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(dir=str(data_dir), prefix=filename + ".", suffix=".part")
+    try:
+        with os.fdopen(fd, "wb") as f:
+            f.write(content)
+        os.replace(tmp, file_path)
+    except BaseException:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
+
     return file_path.name
 
 def get_num_pages(filename: str, data_dir: Path) -> int:
@@ -87,6 +105,11 @@ def get_num_pages(filename: str, data_dir: Path) -> int:
         The PDF file is opened and closed within this function to retrieve metadata.
     """
     file_path = data_dir / filename
+    # Guard PyMuPDF against a non-PDF / truncated file (it can segfault rather
+    # than raise) — turn that into a clean, skippable error.
+    with open(file_path, "rb") as f:
+        if not f.read(5).startswith(b"%PDF"):
+            raise IOError(f"Not a valid PDF (missing %PDF header): {file_path}")
     document = fitz.open(str(file_path))
     num_pages = len(document)
     document.close()
@@ -123,11 +146,12 @@ def process_entry(row: Any, connection: sqlite3.Connection, data_dir: Path) -> N
     if database.document_exists(Path(urlparse(link.lower()).path).name.lower(), connection):
         database.add_municipality(municipality_name, municipality_ags, orga_id, connection)
     else:
-        if not (Path(data_dir) / Path(urlparse(link.lower()).path)).exists():
+        # urlparse(link).path is absolute, so joining it with data_dir would
+        # discard data_dir — check the actual local filename instead.
+        filename = Path(urlparse(link.lower()).path).name.lower()
+        if not (data_dir / filename).exists():
             filename = download_pdf(link, data_dir)
-        else:
-            filename = Path(urlparse(link.lower()).path).name.lower()
-            
+
         num_pages = get_num_pages(filename, data_dir)
         database.add_document(filename, orga_id, published, num_pages, added, connection)
         database.add_municipality(municipality_name, municipality_ags, orga_id, connection)
@@ -145,10 +169,18 @@ def run(excel_file: Path, db_file: Path, data_dir: Path) -> None:
         data_dir: Directory where PDF files will be stored.
     """
     kww_data = _load_and_filter_excel(excel_file)
+    data_dir.mkdir(parents=True, exist_ok=True)
     if not db_file.exists():
+        # Prefer the relational v2 schema (e.g. data/KWP.db.sql) when it sits
+        # next to the DB, so a fresh build has foreign keys + the page-provenance
+        # tables; fall back to the bundled DATABASE_SCHEMA otherwise.
+        schema_path = db_file.with_name(db_file.name + ".sql")
         with sqlite3.connect(db_file) as connection:
-            connection.executescript(DATABASE_SCHEMA)
-    
+            if schema_path.exists():
+                connection.executescript(schema_path.read_text(encoding="utf-8"))
+            else:
+                connection.executescript(DATABASE_SCHEMA)
+
     with sqlite3.connect(db_file) as connection:
         for row in tqdm(kww_data.itertuples(), desc="Processing municipality", total=kww_data.shape[0]):
             process_entry(row, connection, data_dir)

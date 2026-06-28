@@ -74,14 +74,17 @@ def add_municipality(name: str, ags: str, orga_id: int, connection: sqlite3.Conn
         connection: Active SQLite database connection.
     
     Note:
-        If a municipality with the same name and organization ID already exists,
-        the operation is ignored (ON CONFLICT DO NOTHING).
+        ags is the municipality's unique key; on a re-run the existing row is
+        refreshed (ON CONFLICT(ags) DO UPDATE), so name / organisation_unit
+        follow the latest Excel without tripping the UNIQUE(ags) constraint.
     """
     connection.execute(
         """
         INSERT INTO Municipalities (name, ags, organisation_unit)
         VALUES (?, ?, ?)
-        ON CONFLICT(name, ags, organisation_unit) DO NOTHING;
+        ON CONFLICT(ags) DO UPDATE SET
+            name = excluded.name,
+            organisation_unit = excluded.organisation_unit
         """,
         (name, ags, orga_id)
     )
