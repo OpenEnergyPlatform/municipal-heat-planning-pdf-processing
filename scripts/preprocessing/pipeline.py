@@ -1,12 +1,14 @@
 """
-pipeline.py – Orchestration of the PDF processing pipeline.
+pipeline.py – Orchestration of the PDF preprocessing pipeline (Stages 1-3).
 
 Stages:
   1. PyMuPDF        → Text blocks (rawdict) + page PNGs
   2. PP-DocLayoutV3 → Table / image crops + layout labels + caption resolution
-  3. Section assembly → Deterministic JSON output (no LLM required)
-  4. LLM refinement → Clean artefacts, remove directory pages, convert
-     bibliography to BibTeX (vLLM gpt-oss:120b)
+  3. Section assembly → Deterministic JSON output (structured_output.json)
+
+LLM-based section refinement is a separate concern handled by the
+``scripts.textrefinement`` module (which reads structured_output.json and
+writes structured_output_final.json).
 
 CLI:
   python -m scripts.preprocessing.pipeline input.pdf ./output
@@ -20,16 +22,13 @@ import argparse
 import gc
 import json
 import logging
-import os
 import sys
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Optional
 
 from .config import (
     CACHE_PAGES_JSON,
     STRUCTURED_OUTPUT_JSON,
-    FINAL_OUTPUT_JSON,
     clean_data,
     dump_json_atomic,
 )
@@ -37,17 +36,8 @@ from .models import PageData
 from .stage1_extract import extract_all_pages
 from .stage2_layout import detect_layout_all_pages, load_model
 from .stage3_structure import build_sections, save_output, sections_to_dict
-from .stage4_refine import run_stage4
 
 log = logging.getLogger(__name__)
-
-# Number of documents processed concurrently in the Stage-4 run. Stages 1-2 are
-# cache hits there, so run_single is pure CPU + LLM-API with no shared GPU state;
-# processing several docs at once overlaps their Stage-4 window calls and keeps
-# the vLLM server saturated across doc boundaries (small docs no longer starve
-# it). Total in-flight requests ≈ DOC_PARALLEL × LLM_NUM_PARALLEL. Falls back to
-# sequential automatically when the (non-thread-safe) PP-DocLayout model is loaded.
-DOC_PARALLEL = int(os.environ.get("DOC_PARALLEL", "8"))
 
 
 # ---------------------------------------------------------------------------
@@ -85,21 +75,20 @@ def run_single(
     model_tuple=None,
     force_reextract: bool = False,
     page_range: Optional[tuple[int, int]] = None,
-    skip_refine: bool = False,
 ) -> Optional[dict]:
     """
-    Processes a single PDF through all four stages.
+    Processes a single PDF through Stages 1-3.
 
     Stage 1 + 2 results are cached in *pages_extracted.json*.  If the cache
     exists and *force_reextract* is False, Stages 1 and 2 are skipped.
 
     Output structure in output_dir:
-        pages_extracted.json  – Stage 1+2 cache
-        pages/                – Page PNGs
-        images/               – Table and image crops
-        final_output.json     – Structured JSON (after Stage 3 + 4)
+        pages_extracted.json   – Stage 1+2 cache
+        pages/                 – Page PNGs
+        images/                – Table and image crops
+        structured_output.json – Structured JSON (Stage 3)
 
-    Returns the final dict or None on failure.
+    Returns the Stage-3 dict or None on failure.
     """
     output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -128,18 +117,6 @@ def run_single(
             )
         finally:
             fitz_doc.close()
-
-        # Free layout model from GPU to reclaim VRAM for Stage 4 (vLLM)
-        if not skip_refine:
-            del model_tuple
-            model_tuple = None
-            gc.collect()
-            try:
-                import torch
-                torch.cuda.empty_cache()
-                log.info("Layout model unloaded, CUDA cache cleared")
-            except ImportError:
-                pass
 
         # Do not cache an incomplete extraction: a partial cache would be
         # silently reused as if complete on the next run. Skipping the write
@@ -182,8 +159,6 @@ def run_single(
     if result is None:
         sections = build_sections(pages)
         save_output(sections, output_dir)
-        # Match what save_output wrote to disk (cleaned) so the in-memory
-        # result is a single source of truth shared with Stage 4.
         result = clean_data(sections_to_dict(sections))
 
     log.info(
@@ -191,21 +166,6 @@ def run_single(
         f"{sum(len(s['tables']) for s in result['sections'])} tables | "
         f"{sum(len(s['figures']) for s in result['sections'])} figures"
     )
-
-    # ── Stage 4: LLM refinement ──────────────────────────────────────────
-    if not skip_refine:
-        refined = run_stage4(output_dir, data=result)
-        if refined is not None:
-            result = refined
-            log.info(
-                f"Stage 4 done: {len(result['sections'])} sections | "
-                f"{sum(len(s.get('tables', [])) for s in result['sections'])} tables | "
-                f"{sum(len(s.get('figures', [])) for s in result['sections'])} figures"
-            )
-        else:
-            log.warning("Stage 4 failed – keeping Stage 3 output")
-    else:
-        log.info("Stage 4: skipped (--skip-refine)")
 
     return result
 
@@ -219,15 +179,14 @@ def run_folder(
     output_dir: Path,
     force_reextract: bool = False,
     glob: str = "*.pdf",
-    skip_refine: bool = False,
 ) -> dict[str, Optional[dict]]:
     """
     Processes all PDFs in *input_dir* sequentially.
 
-    The PP-DocLayoutV3 model is loaded once and reused for every PDF.
-    Each PDF gets its own subdirectory named after its stem.
-    *_index.json* is written after each PDF so partial results are
-    preserved on interruption.
+    The PP-DocLayoutV3 model is loaded once and reused for every PDF (it is
+    GPU-bound and not thread-safe, so processing is sequential). Each PDF gets
+    its own subdirectory named after its stem. *_index.json* is written after
+    each PDF so partial results are preserved on interruption.
     """
     pdf_files = sorted(input_dir.glob(glob))
     if not pdf_files:
@@ -257,68 +216,31 @@ def run_folder(
     # same-named PDFs in different subdirectories under a recursive glob do not
     # collide and overwrite each other in the results dict and _index.json.
     results: dict[str, Optional[dict]] = {}
-    stage4_status: dict[str, str] = {}
     output_dirs: dict[str, str] = {}
 
-    def _classify_stage4(status: str, pdf_output: Path) -> str:
-        # Stage 4 can fail while the PDF still produces valid Stage 3 output, so
-        # track it separately. run_stage4 only writes FINAL_OUTPUT_JSON on success.
-        if status == "error":
-            return "error"
-        if skip_refine:
-            return "skipped"
-        return "ok" if (pdf_output / FINAL_OUTPUT_JSON).exists() else "failed"
-
-    def _process_one(pdf_path: Path) -> tuple[str, str, Optional[dict], str]:
+    total = len(pdf_files)
+    for i, pdf_path in enumerate(pdf_files):
         rel        = pdf_path.relative_to(input_dir)
         pdf_key    = str(rel)
         pdf_output = output_dir / rel.with_suffix("")
+        log.info(f"[{i + 1}/{total}] Processing: {rel}")
         try:
             result = run_single(
                 pdf_path=pdf_path,
                 output_dir=pdf_output,
                 model_tuple=model_tuple,
                 force_reextract=force_reextract,
-                skip_refine=skip_refine,
             )
             status = "ok" if result is not None else "error"
         except Exception as e:
             log.error(f"Error processing '{pdf_key}': {e}", exc_info=True)
             result, status = None, "error"
-        return pdf_key, str(pdf_output), result, status
 
-    total = len(pdf_files)
-    # Concurrency is safe only when no GPU layout model is loaded (Stage 1-2 all
-    # cached): then run_single is CPU + LLM-API, so many docs' Stage-4 calls can
-    # overlap. With the model loaded (uncached extraction) PP-DocLayout is not
-    # thread-safe → stay sequential.
-    doc_workers = DOC_PARALLEL if (model_tuple is None and DOC_PARALLEL > 1) else 1
-
-    if doc_workers > 1:
-        log.info(f"Processing {total} docs with {doc_workers} concurrent workers "
-                 f"(Stages 1-2 cached; overlapping Stage-4 calls)")
-        done = 0
-        with ThreadPoolExecutor(max_workers=doc_workers) as executor:
-            futures = [executor.submit(_process_one, p) for p in pdf_files]
-            for future in as_completed(futures):
-                pdf_key, pdf_out, result, status = future.result()
-                results[pdf_key] = result
-                output_dirs[pdf_key] = pdf_out
-                stage4_status[pdf_key] = _classify_stage4(status, Path(pdf_out))
-                done += 1
-                log.info(f"  [{done}/{total}] {pdf_key} → {status}")
-                _write_index(results, output_dir, stage4_status, output_dirs)
-                gc.collect()
-    else:
-        for i, pdf_path in enumerate(pdf_files):
-            log.info(f"[{i + 1}/{total}] Processing: {pdf_path.relative_to(input_dir)}")
-            pdf_key, pdf_out, result, status = _process_one(pdf_path)
-            results[pdf_key] = result
-            output_dirs[pdf_key] = pdf_out
-            stage4_status[pdf_key] = _classify_stage4(status, Path(pdf_out))
-            log.info(f"  [{i + 1}/{total}] {pdf_key} → {status}")
-            _write_index(results, output_dir, stage4_status, output_dirs)
-            gc.collect()
+        results[pdf_key] = result
+        output_dirs[pdf_key] = str(pdf_output)
+        log.info(f"  [{i + 1}/{total}] {pdf_key} → {status}")
+        _write_index(results, output_dir, output_dirs)
+        gc.collect()
 
     ok_count = sum(1 for r in results.values() if r is not None)
     log.info(f"\n{'=' * 60}")
@@ -332,20 +254,17 @@ def run_folder(
 def _write_index(
     results: dict[str, Optional[dict]],
     output_dir: Path,
-    stage4_status: Optional[dict[str, str]] = None,
     output_dirs: Optional[dict[str, str]] = None,
 ) -> None:
     """Writes _index.json with status and key metrics for all processed PDFs."""
-    stage4_status = stage4_status or {}
     output_dirs = output_dirs or {}
     index = {}
     for name, r in results.items():
         status = "ok" if r is not None else "error"
         index[name] = {
-            "status":    status,
-            "stage4":    stage4_status.get(name, "unknown"),
+            "status":     status,
             "output_dir": output_dirs.get(name, str(output_dir / Path(name).stem)),
-            "sections":  len(r.get("sections", [])) if r else 0,
+            "sections":   len(r.get("sections", [])) if r else 0,
         }
     dump_json_atomic(index, output_dir / "_index.json")
 
@@ -360,10 +279,9 @@ def run(
     force_reextract: bool = False,
     page_range: Optional[tuple[int, int]] = None,
     glob: str = "*.pdf",
-    skip_refine: bool = False,
 ) -> Optional[dict] | dict[str, Optional[dict]]:
     """
-    Entry point of the pipeline.
+    Entry point of the preprocessing pipeline.
 
     Automatically detects whether input_path is a file or folder and
     delegates to run_single() or run_folder().
@@ -379,7 +297,6 @@ def run(
             output_dir=output_dir,
             force_reextract=force_reextract,
             glob=glob,
-            skip_refine=skip_refine,
         )
     elif input_path.is_file() and input_path.suffix.lower() == ".pdf":
         return run_single(
@@ -387,7 +304,6 @@ def run(
             output_dir=output_dir,
             force_reextract=force_reextract,
             page_range=page_range,
-            skip_refine=skip_refine,
         )
     else:
         raise ValueError(f"Input is neither a PDF nor a folder: {input_path}")
@@ -400,7 +316,7 @@ def run(
 def _build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="python -m scripts.preprocessing.pipeline",
-        description="Municipal Heat Planning – PDF Processing Pipeline",
+        description="Municipal Heat Planning – PDF Preprocessing Pipeline (Stages 1-3)",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
@@ -421,8 +337,6 @@ Examples:
                    help="Glob pattern for PDF search in folder (default: *.pdf)")
     p.add_argument("--log-level", default="INFO",
                    choices=["DEBUG", "INFO", "WARNING", "ERROR"])
-    p.add_argument("--skip-refine", action="store_true",
-                   help="Skip Stage 4 (LLM-based section refinement)")
     return p
 
 
@@ -446,7 +360,6 @@ def main() -> None:
             force_reextract=args.force_reextract,
             page_range=page_range,
             glob=args.glob,
-            skip_refine=args.skip_refine,
         )
         sys.exit(0)
     except ValueError as e:

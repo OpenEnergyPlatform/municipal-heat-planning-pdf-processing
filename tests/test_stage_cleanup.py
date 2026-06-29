@@ -3,7 +3,7 @@ running header/footer stripping + directory removal (Stage 3) and the
 title-cleanup guarantee (Stage 4)."""
 from scripts.preprocessing.models import Block, PageData, Section
 from scripts.preprocessing import stage3_structure as s3
-from scripts.preprocessing import stage4_refine as s4
+from scripts.textrefinement import refine as s4
 
 
 def _page(n, blocks, h=842.0):

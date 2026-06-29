@@ -1,8 +1,9 @@
 """
-stage4_refine.py – LLM-based section refinement via vLLM (gpt-oss:120b).
+refine.py – LLM-based section refinement via vLLM (text-refinement module).
 
-After Stage 3 has produced a deterministic section assembly, Stage 4 uses a
-local LLM (served by vLLM, reached through its OpenAI-compatible API) to:
+After preprocessing (Stages 1-3) has produced a deterministic section
+assembly, this module uses a local LLM (served by vLLM, reached through its
+OpenAI-compatible API) to:
 
   1. Clean extraction artefacts (broken words, orphaned fragments, OCR noise,
      garbled Unicode, misplaced line breaks, etc.).
@@ -761,10 +762,10 @@ def refine_sections(sections: list[dict]) -> list[dict]:
 # ---------------------------------------------------------------------------
 
 
-def run_stage4(output_dir: Path, data: Optional[dict] = None) -> Optional[dict]:
+def run_refine(output_dir: Path, data: Optional[dict] = None) -> Optional[dict]:
     """
-    Refines the Stage 3 sections via the LLM and writes
-    structured_output_final.json (Stage 4).
+    Refines the Stage-3 sections via the LLM and writes
+    structured_output_final.json.
 
     If structured_output_final.json already exists, it is loaded from cache
     and returned without re-running the LLM.
