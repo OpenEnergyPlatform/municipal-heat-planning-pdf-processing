@@ -29,12 +29,26 @@ Author: Felix Vossel
 from __future__ import annotations
 
 import logging
+import re
+from collections import defaultdict
 from pathlib import Path
 from typing import Optional
 
 from .config import (
     STRUCTURED_OUTPUT_JSON,
     SECTION_TITLE_CLASSES,
+    HEADER_FOOTER_STRIP_ENABLE,
+    HEADER_FOOTER_ZONE_FRAC,
+    HEADER_FOOTER_MAX_LEN,
+    HEADER_FOOTER_MIN_NORM_LEN,
+    HEADER_FOOTER_MIN_PAGE_FRAC,
+    DIRECTORY_STRIP_ENABLE,
+    DIRECTORY_MIN_ENTRIES,
+    DIRECTORY_SCORE_THRESHOLD,
+    DIRECTORY_TITLE_SCORE_THRESHOLD,
+    DIRECTORY_HEAD_LEN,
+    DIRECTORY_HEAD_SCORE_THRESHOLD,
+    DIRECTORY_MAX_RESIDUAL_CHARS,
     clean_data,
     dump_json_atomic,
 )
@@ -63,6 +77,158 @@ def _resolve_title_text(block: Block) -> Optional[str]:
 
 
 # ---------------------------------------------------------------------------
+# Deterministic running-header / footer stripping
+# ---------------------------------------------------------------------------
+
+# Standalone numbers (page numbers) are normalised out so a header that only
+# varies by its page number collapses to one key across pages.
+_HDR_NUM_RE = re.compile(r"\b\d{1,4}\b")
+
+
+def _norm_header(text: str) -> str:
+    """Page-number-normalized, punctuation-stripped, lower-cased header key."""
+    t = re.sub(r"\s+", " ", text).strip()
+    t = _HDR_NUM_RE.sub("", t)
+    return re.sub(r"\s+", " ", t).strip(" |-–—•·.").lower()
+
+
+def _header_zone(block: Block, height: float) -> Optional[str]:
+    """'H' if the block sits in the header band, 'F' for the footer band, else None."""
+    bbox = block.bbox
+    if not bbox or len(bbox) < 4 or not height:
+        return None
+    y_center = (bbox[1] + bbox[3]) / 2.0
+    if y_center < HEADER_FOOTER_ZONE_FRAC * height:
+        return "H"
+    if y_center > (1.0 - HEADER_FOOTER_ZONE_FRAC) * height:
+        return "F"
+    return None
+
+
+def _header_candidate(block: Block) -> bool:
+    """A short, non-title text block can be a running header/footer."""
+    if block.type != "text" or _block_is_title(block):
+        return False
+    txt = (block.content or "").strip()
+    return bool(txt) and len(txt) <= HEADER_FOOTER_MAX_LEN
+
+
+def strip_running_headers(pages: list[PageData]) -> int:
+    """
+    Drop running-header/footer text blocks that PP-DocLayout mislabelled as
+    plain text (so SUPPRESS_CLASSES missed them). A block is removed when its
+    page-number-normalized text recurs in the same (header/footer) zone on at
+    least HEADER_FOOTER_MIN_PAGE_FRAC of the pages. Section-title blocks are
+    never considered. Mutates *pages* in place; returns the number of blocks
+    dropped.
+    """
+    if not HEADER_FOOTER_STRIP_ENABLE or len(pages) < 4:
+        return 0
+
+    zone_pages: dict[tuple[str, str], set[int]] = defaultdict(set)
+    for pg in pages:
+        for b in pg.blocks:
+            if not _header_candidate(b):
+                continue
+            zone = _header_zone(b, pg.height_pt)
+            if zone is None:
+                continue
+            key = _norm_header(b.content or "")
+            if len(key) < HEADER_FOOTER_MIN_NORM_LEN:
+                continue
+            zone_pages[(zone, key)].add(pg.page_number)
+
+    threshold = max(3, int(HEADER_FOOTER_MIN_PAGE_FRAC * len(pages)))
+    headers = {k for k, pgs in zone_pages.items() if len(pgs) >= threshold}
+    if not headers:
+        return 0
+
+    dropped = 0
+    for pg in pages:
+        kept: list[Block] = []
+        for b in pg.blocks:
+            if _header_candidate(b):
+                zone = _header_zone(b, pg.height_pt)
+                if zone and (zone, _norm_header(b.content or "")) in headers:
+                    dropped += 1
+                    continue
+            kept.append(b)
+        pg.blocks = kept
+    return dropped
+
+
+# ---------------------------------------------------------------------------
+# Deterministic directory / index section removal
+# ---------------------------------------------------------------------------
+
+# A figure/table list entry ("Abbildung 3: … 27") ending in a page number.
+_DIR_FIGTAB_RE = re.compile(
+    r"(?:Abbildung|Tabelle|Abb\.|Tab\.)\s*\d+\s*[:.]?\s*.{2,90}?\s\d{1,4}(?=\s|$)",
+    re.IGNORECASE,
+)
+# A dot-leader entry ("Einleitung ............ 10").
+_DIR_LEADER_RE = re.compile(r".{2,90}?\.{2,}\s*\d{1,4}(?=\s|$)")
+# Real media placeholders — their presence means the section references actual
+# tables/figures (e.g. an appendix of maps), so it is NOT a directory listing.
+_DIR_PLACEHOLDER_RE = re.compile(r"\[p\d+_(?:img|tbl)\d+\]")
+# Bibliography titles → routed to the Stage-4 [LITERATURE] BibTeX path, not dropped.
+_DIR_LIT_TITLE_RE = re.compile(r"literatur|quellen|referenz|bibliograf", re.IGNORECASE)
+# Titles that are themselves directory headings → drop at a lower score bar.
+_DIR_TITLE_RE = re.compile(r"inhalt|verzeichnis|contents|directory", re.IGNORECASE)
+
+
+def _directory_metrics(content: str) -> tuple[float, int, int]:
+    """
+    (listing_fraction, entry_count, non_listing_chars) for *content*. The
+    fraction is the share of characters covered by directory-listing entries
+    (overlaps counted once via a covered-char map); non_listing_chars is the
+    remainder (a proxy for how much real prose is left).
+    """
+    if not content or len(content) < 40:
+        return 0.0, 0, len(content or "")
+    matches = list(_DIR_FIGTAB_RE.finditer(content)) + list(_DIR_LEADER_RE.finditer(content))
+    if not matches:
+        return 0.0, 0, len(content)
+    covered = bytearray(len(content))
+    for m in matches:
+        covered[m.start():m.end()] = b"\x01" * (m.end() - m.start())
+    cov = sum(covered)
+    return cov / len(content), len(matches), len(content) - cov
+
+
+def _is_directory_section(section: Section) -> bool:
+    """True when a section is a table-of-contents / list-of-figures / index."""
+    content = section.content or ""
+    if _DIR_PLACEHOLDER_RE.search(content):        # references real media → keep
+        return False
+    if _DIR_LIT_TITLE_RE.search(section.title or ""):   # bibliography → Stage-4 BibTeX
+        return False
+    score, entries, residual = _directory_metrics(content)
+    if entries < DIRECTORY_MIN_ENTRIES:
+        return False
+    # Explicit directory title (Inhaltsverzeichnis, Abbildungsverzeichnis, …).
+    if _DIR_TITLE_RE.search(section.title or "") and score >= DIRECTORY_TITLE_SCORE_THRESHOLD:
+        return True
+    # Otherwise drop only a section that is a listing FROM THE START and has
+    # almost no prose left over — this protects real content sections that
+    # merely reference a few figures or carry a short trailing list, and ones
+    # that open with a prose sentence before a measure/figure listing.
+    if score >= DIRECTORY_SCORE_THRESHOLD and residual <= DIRECTORY_MAX_RESIDUAL_CHARS:
+        head_score, _, _ = _directory_metrics(content[:DIRECTORY_HEAD_LEN])
+        if head_score >= DIRECTORY_HEAD_SCORE_THRESHOLD:
+            return True
+    return False
+
+
+def drop_directory_sections(sections: list[Section]) -> tuple[list[Section], int]:
+    """Remove directory/index sections; returns (kept_sections, dropped_count)."""
+    if not DIRECTORY_STRIP_ENABLE:
+        return sections, 0
+    kept = [s for s in sections if not _is_directory_section(s)]
+    return kept, len(sections) - len(kept)
+
+
+# ---------------------------------------------------------------------------
 # Core assembly
 # ---------------------------------------------------------------------------
 
@@ -77,6 +243,12 @@ def build_sections(pages: list[PageData]) -> list[Section]:
     The content field of each section uses [block_id] markers at the
     positions where a table or figure appears in the reading order.
     """
+    # Drop running headers/footers PP-DocLayout mislabelled as text, before they
+    # get merged into section segments.
+    n_hdr = strip_running_headers(pages)
+    if n_hdr:
+        log.info(f"Stage 3: stripped {n_hdr} running header/footer block(s)")
+
     sections:        list[Section]  = []
     current_section: Optional[Section] = None
     # (text, page) fragments accumulated for the current section before flushing.
@@ -203,6 +375,12 @@ def build_sections(pages: list[PageData]) -> list[Section]:
         and not sections[0].figures
     ):
         sections.pop(0)
+
+    # Drop table-of-contents / list-of-figures / index sections (low-value
+    # listing noise). Literature and real-media sections are guarded.
+    sections, n_dir = drop_directory_sections(sections)
+    if n_dir:
+        log.info(f"Stage 3: dropped {n_dir} directory/index section(s)")
 
     # Derive each section's page span from its segments.
     for s in sections:

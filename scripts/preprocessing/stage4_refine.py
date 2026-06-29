@@ -49,6 +49,7 @@ from .config import (
     MAX_RETRIES,
     WINDOW_SIZE,
     SYSTEM_PROMPT,
+    TITLE_CLEANUP_ENABLE,
     clean_data,
     dump_json_atomic,
 )
@@ -174,6 +175,10 @@ def _call_llm(
                 response_format={"type": "json_object"},
                 temperature=LLM_TEMPERATURE,
                 max_tokens=LLM_MAX_TOKENS,
+                # Qwen3.5 is a reasoning model; disable thinking so the full
+                # token budget goes to the JSON answer (not a <think> block that
+                # truncates/empties content → JSON parse failures).
+                extra_body={"chat_template_kwargs": {"enable_thinking": False}},
             )
 
             raw_text = response.choices[0].message.content or ""
@@ -580,6 +585,48 @@ def _is_empty_section(sec: dict) -> bool:
     return not has_content and not has_tables and not has_figures
 
 
+# Leading numbering prefix: hierarchical (3.3.3 / 4-1), short single number
+# (6, 11, with optional trailing . or )), appendix letter (A. / B)), or roman
+# numeral (IV.). A 1–2 digit bare number is stripped; 4-digit years are not.
+_TITLE_NUM_PREFIX_RE = re.compile(
+    r"^\s*(?:"
+    r"\d+(?:[.\-]\d+)+[.\)]?"   # 3.3.3  / 4-1
+    r"|\d{1,2}[.\)]?"           # 6  / 11.  / 7)
+    r"|[A-Z][.\)]"             # A.  / B)
+    r"|[IVXLCDM]{1,6}[.\)]"     # IV.  / VII)
+    r")\s+"
+)
+
+
+def _normalize_title(title: str) -> str:
+    """
+    Deterministic guarantee on top of the LLM's title cleaning: strip leading
+    numbering prefixes and de-shout ALL-CAPS titles (preserving short acronyms
+    like KWP / CO2). The "[LITERATURE]" sentinel is left untouched.
+    """
+    if not isinstance(title, str):
+        return title
+    t = title.strip()
+    if not t or t == "[LITERATURE]":
+        return title
+    # Strip possibly-stacked numbering prefixes ("Anhang 6.1" → handled by LLM;
+    # "6.1 Foo" → "Foo").
+    prev = None
+    while prev != t:
+        prev = t
+        t = _TITLE_NUM_PREFIX_RE.sub("", t).strip()
+    # De-shout an ALL-CAPS title word-by-word, keeping short acronyms intact.
+    alpha = [c for c in t if c.isalpha()]
+    if len(alpha) > 5 and all(c.isupper() for c in alpha):
+        def _fix(w: str) -> str:
+            core = [c for c in w if c.isalpha()]
+            if core and len(core) <= 4 and all(c.isupper() for c in core):
+                return w  # acronym (KWP, CO2, …)
+            return w[:1] + w[1:].lower()
+        t = " ".join(_fix(w) for w in t.split())
+    return t or title
+
+
 # ---------------------------------------------------------------------------
 # Core: parallel window processing + sequential assembly
 # ---------------------------------------------------------------------------
@@ -698,6 +745,12 @@ def refine_sections(sections: list[dict]) -> list[dict]:
         _finalize_pages(s)
     # Rescue any kept content-bearing section left without a page citation.
     _backfill_empty_pages(refined)
+
+    # Deterministic title-cleanup guarantee (numbering prefixes + ALL-CAPS) on
+    # top of the LLM's semantic pass.
+    if TITLE_CLEANUP_ENABLE:
+        for s in refined:
+            s["title"] = _normalize_title(s.get("title", ""))
 
     log.info(f"Stage 4: {len(refined)} sections final")
     return refined
