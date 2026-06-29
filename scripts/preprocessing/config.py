@@ -91,6 +91,48 @@ PP_ID2LABEL: dict[int, str] = {
 # Classes whose text blocks are removed from page content entirely.
 SUPPRESS_CLASSES = {"header", "footer", "number", "footnote"}
 
+# ─── RUNNING HEADER / FOOTER STRIPPING (Stage 3, deterministic) ────────────
+# SUPPRESS_CLASSES drops blocks PP-DocLayout *labels* "header"/"footer", but the
+# layout model mislabels the running header as plain "text" on ~1 in 5 documents,
+# so it leaks into the section content. This deterministic pass removes text
+# blocks whose page-number-normalized text recurs in the top/bottom page zone
+# across many pages — catching what the layout model misses, BEFORE Stage 3
+# merges consecutive blocks into segments. Section-title blocks are never
+# touched (layout_label guard). Set False to A/B compare.
+HEADER_FOOTER_STRIP_ENABLE   = True
+HEADER_FOOTER_ZONE_FRAC      = 0.12   # top/bottom page-height fraction = header/footer band
+HEADER_FOOTER_MAX_LEN        = 90     # running headers are short single lines
+HEADER_FOOTER_MIN_NORM_LEN   = 4      # ignore near-empty normalized text
+HEADER_FOOTER_MIN_PAGE_FRAC  = 0.30   # must recur on >= this fraction of pages (and >= 3)
+
+# ─── DIRECTORY / INDEX SECTION REMOVAL (Stage 3, deterministic) ────────────
+# Tables of contents, lists of figures/tables, indexes etc. are low-value
+# listing noise that would otherwise be embedded. Drop assembled sections whose
+# content is dominated by directory-listing lines (dot leaders, or
+# "Abbildung N: … <page>"). A section is dropped when EITHER its title is itself
+# a directory heading (Inhalt/…verzeichnis), OR its content is a listing from
+# the very start AND has almost no prose left over. The last two conditions
+# protect real content sections that merely reference a few figures or end with
+# a short list (e.g. a "Maßnahmen" chapter with a prose intro). GUARDS: a
+# section that contains a real media placeholder ([pN_imgM]/[pN_tblM]) or whose
+# title names a bibliography (Literatur/Quellen/Referenzen) is NEVER dropped —
+# the latter goes to the Stage-4 [LITERATURE] BibTeX path instead. Set False to
+# A/B compare.
+DIRECTORY_STRIP_ENABLE          = True
+DIRECTORY_MIN_ENTRIES           = 4      # need >= this many listing entries
+DIRECTORY_SCORE_THRESHOLD       = 0.55   # listing-char fraction for a non-titled drop
+DIRECTORY_TITLE_SCORE_THRESHOLD = 0.35   # lower bar when the title is itself a directory title
+DIRECTORY_HEAD_LEN              = 120    # chars at the section start checked for "listing from the start"
+DIRECTORY_HEAD_SCORE_THRESHOLD  = 0.5    # the opening must be this listing-dense (protects prose intros)
+DIRECTORY_MAX_RESIDUAL_CHARS    = 350    # drop only if <= this many non-listing chars remain (protects prose bodies)
+
+# ─── DETERMINISTIC TITLE CLEANUP (Stage 4 post-pass, guarantee) ────────────
+# The Stage-4 LLM strips numbering prefixes and de-shouts ALL-CAPS titles for
+# ~99 % of sections; this code pass guarantees the residual so no numbered or
+# SHOUTING title ever reaches the database. The "[LITERATURE]" sentinel is
+# left untouched. Set False to disable.
+TITLE_CLEANUP_ENABLE = True
+
 # Classes that identify tables and images/figures.
 TABLE_CLASSES  = {"table"}
 IMAGE_CLASSES  = {"image", "chart"}
@@ -244,14 +286,20 @@ text beyond the directory listings, split it: remove the directory part and \
 keep the substantive content as a separate section.
 
 4. CONVERT BIBLIOGRAPHY SECTIONS
-   If a section contains bibliography or reference entries (indicated by titles \
-like Literaturverzeichnis, Quellenverzeichnis, Quellen, or Referenzen), \
-convert it into a literature section. Set the title to "[LITERATURE]", the \
-_action to "replace", and the content to a JSON array of BibTeX strings. Use \
-the most appropriate entry type (@article, @book, @inproceedings, @techreport, \
-@misc, etc.). Derive citation keys from the first author's last name and the \
-year, e.g. "mueller2023". If information for a BibTeX field is missing, omit \
-that field rather than guessing.
+   A bibliography/reference section is indicated EITHER by a title like \
+Literaturverzeichnis, Quellenverzeichnis, Quellen, Quellenangaben, Referenzen, \
+or Literatur, OR by its content being a list of reference entries even when the \
+title is generic, numbered, or missing — for example numbered entries \
+"[1] …", "[2] …", or lines of the form "Author, Initials (Year): Title. \
+Source/Publisher". Convert such a section into a literature section: set the \
+title to "[LITERATURE]", the _action to "replace", and the content to a JSON \
+array of BibTeX strings. Convert EVERY entry you can identify into its own \
+BibTeX string — never truncate, summarize, collapse multiple references into \
+one, or stop early, even for long lists spanning many entries. Use the most \
+appropriate entry type (@article, @book, @inproceedings, @techreport, @misc, \
+etc.). Derive citation keys from the first author's last name and the year, \
+e.g. "mueller2023". If information for a BibTeX field is missing, omit that \
+field rather than guessing.
 
 5. MERGE FRAGMENTS
    If a section has no real heading and is clearly just a broken continuation \
