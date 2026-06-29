@@ -21,7 +21,6 @@ def test_clean_data_recurses_into_collections():
 def test_result_paths_use_dir_results_prefix():
     assert config.CACHE_PAGES_JSON == "results/pages_extracted.json"
     assert config.STRUCTURED_OUTPUT_JSON == "results/structured_output.json"
-    assert config.FINAL_OUTPUT_JSON == "results/structured_output_final.json"
 
 
 def test_dump_json_atomic_writes_and_leaves_no_temp(tmp_path):

@@ -121,7 +121,7 @@ def seq_responder():
 @pytest.fixture(autouse=True)
 def _no_real_sleep(monkeypatch):
     """Never actually sleep during retry/backoff tests."""
-    import scripts.preprocessing.stage4_refine as s4
+    import scripts.textrefinement.refine as s4
     import scripts.imageprocessing.vision as vis
     monkeypatch.setattr(s4.time, "sleep", lambda *a, **k: None)
     monkeypatch.setattr(vis.time, "sleep", lambda *a, **k: None)

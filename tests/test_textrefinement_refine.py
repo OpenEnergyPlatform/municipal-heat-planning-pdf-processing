@@ -3,7 +3,7 @@ import json
 
 import pytest
 
-from scripts.preprocessing import stage4_refine as s4
+from scripts.textrefinement import refine as s4
 
 
 def test_loads_json_object_direct_and_fallback():
@@ -106,11 +106,11 @@ def test_strip_table_source_text():
     assert secs[0]["tables"][1] == {"id": "u"}
 
 
-def test_run_stage4_uses_provided_data(tmp_path):
-    out = s4.run_stage4(tmp_path, data={"sections": []})
+def test_run_refine_uses_provided_data(tmp_path):
+    out = s4.run_refine(tmp_path, data={"sections": []})
     assert out == {"sections": []}
     assert (tmp_path / "results" / "structured_output_final.json").exists()
 
 
-def test_run_stage4_missing_input_returns_none(tmp_path):
-    assert s4.run_stage4(tmp_path, data=None) is None
+def test_run_refine_missing_input_returns_none(tmp_path):
+    assert s4.run_refine(tmp_path, data=None) is None
