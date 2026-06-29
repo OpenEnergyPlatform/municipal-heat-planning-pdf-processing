@@ -104,7 +104,9 @@ def call_vision(
     # First attempt: none (preserve table quality); after a timeout the model
     # is likely stuck repeating, so raise the penalty to break out of it.
     timeout_penalties = [None, 1.1, 1.3]
-    extra_body: dict = {}
+    # Qwen3.5 is a reasoning model; disable thinking so the full token budget
+    # goes to the JSON answer instead of a <think> block that truncates content.
+    extra_body: dict = {"chat_template_kwargs": {"enable_thinking": False}}
     if repetition_penalty is not None:
         extra_body["repetition_penalty"] = repetition_penalty
 
