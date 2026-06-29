@@ -21,9 +21,10 @@ import argparse
 import copy
 import json
 import logging
+import os
 import sys
 import threading
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Optional
 
@@ -41,6 +42,12 @@ from .vision import create_client, check_model_available
 from .process import process_table, process_figure
 
 log = logging.getLogger(__name__)
+
+# Documents (PDF output dirs) enriched concurrently. Each doc's vision calls are
+# pure VLM-API (no shared GPU model), so processing several docs at once overlaps
+# their image-enrichment requests and keeps the vLLM server saturated across doc
+# boundaries (small docs no longer starve it). In-flight ≈ DOC_PARALLEL × VLM_NUM_PARALLEL.
+DOC_PARALLEL = int(os.environ.get("DOC_PARALLEL", "8"))
 
 
 # ---------------------------------------------------------------------------
@@ -337,14 +344,35 @@ def run_batch(
         log.info("  - %s", d.name)
     log.info(sep)
 
-    for i, d in enumerate(candidates):
-        log.info("[%d/%d] %s", i + 1, len(candidates), d.name)
+    def _process(d: Path) -> tuple[str, bool]:
         try:
             result = run_single(d, **kwargs)
-            results[d.name] = result is not None
+            return d.name, result is not None
         except Exception as e:
             log.error("Error processing '%s': %s", d.name, e, exc_info=True)
-            results[d.name] = False
+            return d.name, False
+
+    total = len(candidates)
+    # Process several docs concurrently so their vision-enrichment calls overlap
+    # and keep the vLLM server saturated (pure VLM-API per doc, no shared GPU
+    # state). Results are collected in the main thread (no dict races).
+    doc_workers = DOC_PARALLEL if DOC_PARALLEL > 1 else 1
+    if doc_workers > 1:
+        log.info("Processing %d dirs with %d concurrent workers", total, doc_workers)
+        done = 0
+        with ThreadPoolExecutor(max_workers=doc_workers) as ex:
+            futures = [ex.submit(_process, d) for d in candidates]
+            for fut in as_completed(futures):
+                name, ok_flag = fut.result()
+                results[name] = ok_flag
+                done += 1
+                log.info("[%d/%d] %s → %s", done, total, name,
+                         "ok" if ok_flag else "FAILED")
+    else:
+        for i, d in enumerate(candidates):
+            log.info("[%d/%d] %s", i + 1, total, d.name)
+            name, ok_flag = _process(d)
+            results[name] = ok_flag
 
     ok = sum(1 for v in results.values() if v)
     log.info("%s", sep)

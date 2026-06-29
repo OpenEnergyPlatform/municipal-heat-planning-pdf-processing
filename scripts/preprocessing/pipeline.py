@@ -20,7 +20,9 @@ import argparse
 import gc
 import json
 import logging
+import os
 import sys
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Optional
 
@@ -38,6 +40,14 @@ from .stage3_structure import build_sections, save_output, sections_to_dict
 from .stage4_refine import run_stage4
 
 log = logging.getLogger(__name__)
+
+# Number of documents processed concurrently in the Stage-4 run. Stages 1-2 are
+# cache hits there, so run_single is pure CPU + LLM-API with no shared GPU state;
+# processing several docs at once overlaps their Stage-4 window calls and keeps
+# the vLLM server saturated across doc boundaries (small docs no longer starve
+# it). Total in-flight requests ≈ DOC_PARALLEL × LLM_NUM_PARALLEL. Falls back to
+# sequential automatically when the (non-thread-safe) PP-DocLayout model is loaded.
+DOC_PARALLEL = int(os.environ.get("DOC_PARALLEL", "8"))
 
 
 # ---------------------------------------------------------------------------
@@ -250,14 +260,19 @@ def run_folder(
     stage4_status: dict[str, str] = {}
     output_dirs: dict[str, str] = {}
 
-    for i, pdf_path in enumerate(pdf_files):
+    def _classify_stage4(status: str, pdf_output: Path) -> str:
+        # Stage 4 can fail while the PDF still produces valid Stage 3 output, so
+        # track it separately. run_stage4 only writes FINAL_OUTPUT_JSON on success.
+        if status == "error":
+            return "error"
+        if skip_refine:
+            return "skipped"
+        return "ok" if (pdf_output / FINAL_OUTPUT_JSON).exists() else "failed"
+
+    def _process_one(pdf_path: Path) -> tuple[str, str, Optional[dict], str]:
         rel        = pdf_path.relative_to(input_dir)
         pdf_key    = str(rel)
         pdf_output = output_dir / rel.with_suffix("")
-        output_dirs[pdf_key] = str(pdf_output)
-
-        log.info(f"[{i + 1}/{len(pdf_files)}] Processing: {pdf_key}")
-
         try:
             result = run_single(
                 pdf_path=pdf_path,
@@ -266,28 +281,44 @@ def run_folder(
                 force_reextract=force_reextract,
                 skip_refine=skip_refine,
             )
-            results[pdf_key] = result
             status = "ok" if result is not None else "error"
-            gc.collect()
         except Exception as e:
             log.error(f"Error processing '{pdf_key}': {e}", exc_info=True)
-            results[pdf_key] = None
-            status = "error"
+            result, status = None, "error"
+        return pdf_key, str(pdf_output), result, status
 
-        # Refinement (Stage 4) can fail while the PDF still produces valid
-        # Stage 3 output, so track it separately from the overall status.
-        # run_stage4 only writes FINAL_OUTPUT_JSON when it succeeds.
-        if status == "error":
-            stage4_status[pdf_key] = "error"
-        elif skip_refine:
-            stage4_status[pdf_key] = "skipped"
-        elif (pdf_output / FINAL_OUTPUT_JSON).exists():
-            stage4_status[pdf_key] = "ok"
-        else:
-            stage4_status[pdf_key] = "failed"
+    total = len(pdf_files)
+    # Concurrency is safe only when no GPU layout model is loaded (Stage 1-2 all
+    # cached): then run_single is CPU + LLM-API, so many docs' Stage-4 calls can
+    # overlap. With the model loaded (uncached extraction) PP-DocLayout is not
+    # thread-safe → stay sequential.
+    doc_workers = DOC_PARALLEL if (model_tuple is None and DOC_PARALLEL > 1) else 1
 
-        log.info(f"  [{i + 1}/{len(pdf_files)}] {pdf_key} → {status}")
-        _write_index(results, output_dir, stage4_status, output_dirs)
+    if doc_workers > 1:
+        log.info(f"Processing {total} docs with {doc_workers} concurrent workers "
+                 f"(Stages 1-2 cached; overlapping Stage-4 calls)")
+        done = 0
+        with ThreadPoolExecutor(max_workers=doc_workers) as executor:
+            futures = [executor.submit(_process_one, p) for p in pdf_files]
+            for future in as_completed(futures):
+                pdf_key, pdf_out, result, status = future.result()
+                results[pdf_key] = result
+                output_dirs[pdf_key] = pdf_out
+                stage4_status[pdf_key] = _classify_stage4(status, Path(pdf_out))
+                done += 1
+                log.info(f"  [{done}/{total}] {pdf_key} → {status}")
+                _write_index(results, output_dir, stage4_status, output_dirs)
+                gc.collect()
+    else:
+        for i, pdf_path in enumerate(pdf_files):
+            log.info(f"[{i + 1}/{total}] Processing: {pdf_path.relative_to(input_dir)}")
+            pdf_key, pdf_out, result, status = _process_one(pdf_path)
+            results[pdf_key] = result
+            output_dirs[pdf_key] = pdf_out
+            stage4_status[pdf_key] = _classify_stage4(status, Path(pdf_out))
+            log.info(f"  [{i + 1}/{total}] {pdf_key} → {status}")
+            _write_index(results, output_dir, stage4_status, output_dirs)
+            gc.collect()
 
     ok_count = sum(1 for r in results.values() if r is not None)
     log.info(f"\n{'=' * 60}")
