@@ -61,6 +61,14 @@ def test_apply_actions_tolerates_non_dict_section():
     assert [s["title"] for s in result] == ["K", ""]
 
 
+def test_block_ids_of_output_tolerates_non_dict():
+    # The LLM occasionally emits a bare string where a section object belongs;
+    # provenance threading (_redistribute_segments) must not crash on it.
+    assert s4._block_ids_of_output("a bogus string section") == set()
+    assert s4._block_ids_of_output({"content": "[p1_tbl0] text",
+                                    "tables": [{"id": "p1_tbl0"}]}) == {"p1_tbl0"}
+
+
 def test_call_llm_happy_path(make_client, seq_responder):
     client = make_client(seq_responder(['{"sections": [{"_action": "keep", "title": "A"}]}']))
     assert s4._call_llm([{"title": "A", "content": "x"}], client) == [
