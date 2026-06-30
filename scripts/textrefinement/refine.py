@@ -355,6 +355,8 @@ def _tokens(text: str) -> list[str]:
 def _block_ids_of_output(section: dict) -> set[str]:
     """Block ids an LLM output section claims: markers in its content plus the
     ids in its (LLM-distributed) tables/figures arrays."""
+    if not isinstance(section, dict):
+        return set()
     ids = set(_REF_RE.findall(_content_str(section)))
     for item in (section.get("tables") or []) + (section.get("figures") or []):
         if isinstance(item, dict) and item.get("id"):
@@ -728,9 +730,24 @@ def refine_sections(sections: list[dict]) -> list[dict]:
             refined.extend(window)
             previous_kept = window[-1] if window else previous_kept
         else:
-            _thread_provenance(window, llm_result)
-            applied, previous_kept = _apply_actions(llm_result, previous_kept)
-            refined.extend(applied)
+            # Defensive: the LLM very occasionally emits a bare string where a
+            # section object belongs. Drop those before provenance threading
+            # (_block_ids_of_output would call .get() on the string and crash the
+            # whole document); if nothing usable remains, keep the originals.
+            llm_result = [s for s in llm_result if isinstance(s, dict)]
+            if not llm_result:
+                log.warning(
+                    f"  Stage 4: window {win_idx + 1}/{total_windows} returned "
+                    f"no usable sections, keeping originals"
+                )
+                for sec in window:
+                    sec.pop("_action", None)
+                refined.extend(window)
+                previous_kept = window[-1] if window else previous_kept
+            else:
+                _thread_provenance(window, llm_result)
+                applied, previous_kept = _apply_actions(llm_result, previous_kept)
+                refined.extend(applied)
 
     log.info(f"Stage 4: {len(refined)} sections after LLM refinement")
 
