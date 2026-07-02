@@ -21,9 +21,6 @@ Als Ausgangspunkt dient die Excel-Tabelle der KWW  mit den Metadaten zu allen ve
 
 Jede PDF-Seite wird als hochauflösendes PNG gerendert und anschließend von **PP-DocLayoutV3** (PaddlePaddle, via HuggingFace Transformers) analysiert. Das Modell erkennt und klassifiziert die Struktur jeder Seite: Tabellen, Abbildungen, Überschriften, Textblöcke, Kopf-/Fußzeilen, Seitenzahlen und Bildunterschriften. Jedes erkannte Element erhält eine Bounding Box mit Pixelkoordinaten und einen Confidence Score. Diese räumlichen Informationen sind essenziell, um visuelle Inhalte sauber vom Fließtext zu trennen und Bildunterschriften korrekt zuzuordnen.
 
-**Bsp.:**
-![](bilder/layout.png)
-
 ### Stufe 3 – Textextraktion und Strukturaufbau (`preprocessing`)
 
 Mit PyMuPDF wird Text auf Zeichenebene aus jeder PDF-Seite extrahiert. Der Rohtext wird dann mit den Layout-Erkennungsergebnissen aus Stufe 2 abgeglichen, um eine strukturierte JSON-Repräsentation des gesamten Dokuments aufzubauen.
@@ -40,24 +37,15 @@ Das Modell normalisiert Abschnittstitel, korrigiert oder ergänzt fehlende Bildu
 
 Ausgabe: `structured_output_final.json`.
 
-**Beispielliteratursection:**
-![](bilder/literatur.png)
-
 ### Stufe 5 – Bildverarbeitung (`imageprocessing`)
 
-Die in Stufe 2–3 erkannten Tabellen und Abbildungen enthalten zu diesem Zeitpunkt nur ihre ausgeschnittenen Bilder und eventuell aus dem Text extrahierte Bildunterschriften. In dieser Stufe reichert **dasselbe Qwen3.5-122B-A10B-FP8-Modell** wie in Stufe 4 jedes visuelle Element über seine Vision-Language-Fähigkeiten an (ein vLLM-Server bedient beide Stufen). Diese Stufe kann parallel zu Stufe 4 durchgeführt werden, muss aber vor Stufe 6 abgeschlossen sein.
+Die in Stufe 2–3 erkannten Tabellen und Abbildungen enthalten zu diesem Zeitpunkt nur ihre ausgeschnittenen Bilder und eventuell aus dem Text extrahierte Bildunterschriften. In dieser Stufe reichert **dasselbe Qwen3.5-122B-A10B-FP8-Modell** wie in Stufe 4 jedes visuelle Element über seine Vision-Language-Fähigkeiten an — allerdings über eine **eigene** vLLM-Serverinstanz (Port 8001 statt 8000, eigene 4-GPU-Allocation, ebenfalls TP=4). Diese Stufe läuft parallel zu Stufe 4 als eigener Job, muss aber vor Stufe 6 abgeschlossen sein.
 
 Für **Tabellen** erzeugt das Modell eine strukturierte Markdown-Transkription des Tabelleninhalts. Für **Abbildungen** wird eine detaillierte textuelle Beschreibung des visuellen Inhalts generiert. Wo Bildunterschriften fehlen, werden sie auf Basis des Bildinhalts und des umgebenden Kontexts ebenfalls erzeugt.
 
 Die Verarbeitung läuft lokal über vLLM mit vielen parallelen Anfragen (Continuous Batching). Ein Retry-Mechanismus mit Konversations-Feedback behandelt JSON-Parse-Fehler, und ein QA-Gate (Coverage-/Dedup-Check mit gezieltem Retry) sichert die Tabellenextraktion ab. Im aktuellen Lauf blieben nur **5 von 17.879 Tabellen** ohne Markdown (≈0,03 %) und **0 Abbildungen** ohne Beschreibung; solche Restfälle behalten weiterhin ihr Vision-Language-Embedding (siehe Stufe 6) und verlieren lediglich das Text-Embedding.
 
 Ausgabe: `structured_output_images.json`.
-
-**Beispielgrafik:**
-![](bilder/p42_img0.png)
-**Textuelle Beschreibung**
-![](bilder/p42_img0_des.png)
-
 
 ### Stufe 6 – Chunking, Embedding und Datenbankpopulation (`chunkingandembedding`)
 
