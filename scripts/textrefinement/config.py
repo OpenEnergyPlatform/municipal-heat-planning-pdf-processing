@@ -26,11 +26,11 @@ FINAL_OUTPUT_JSON      = f"{DIR_RESULTS}/structured_output_final.json"  # output
 # vLLM (OpenAI-compatible API)
 # ---------------------------------------------------------------------------
 # Serve the model with vLLM, e.g.:
-#   vllm serve openai/gpt-oss-120b --port 8000
+#   vllm serve Qwen/Qwen3.5-122B-A10B-FP8 --port 8000
 # LLM_MODEL must match the server's --served-model-name (defaults to the HF id).
 # All values are overridable via environment variables for deployment.
 LLM_BASE_URL = os.environ.get("LLM_BASE_URL", "http://localhost:8000/v1")
-LLM_MODEL    = os.environ.get("LLM_MODEL", "openai/gpt-oss-120b")
+LLM_MODEL    = os.environ.get("LLM_MODEL", "Qwen/Qwen3.5-122B-A10B-FP8")
 LLM_API_KEY  = os.environ.get("LLM_API_KEY", "EMPTY")  # vLLM ignores the value
 LLM_TIMEOUT  = float(os.environ.get("LLM_TIMEOUT", "180"))
 

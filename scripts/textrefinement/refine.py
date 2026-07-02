@@ -16,7 +16,7 @@ OpenAI-compatible API) to:
   6. Split sections that contain embedded sub-headings into separate sections.
 
 Processing strategy:
-  - Uses gpt-oss:120b served by a single vLLM server (config.LLM_BASE_URL).
+  - Uses Qwen3.5-122B-A10B-FP8 served by a single vLLM server (config.LLM_BASE_URL).
   - response_format=json_object plus the system prompt constrain output to
     valid JSON.
   - Section windows are dispatched concurrently, up to LLM_NUM_PARALLEL
@@ -184,10 +184,11 @@ def _call_llm(
 
             raw_text = response.choices[0].message.content or ""
 
-            # gpt-oss is a reasoning model: strip <think>…</think> blocks and
-            # any stray markdown fences before parsing. Without this, leaked
-            # reasoning makes json.loads fail, burns the retry budget, and the
-            # whole window silently falls back to the unrefined originals.
+            # Belt-and-suspenders: enable_thinking=False above should prevent a
+            # <think> block, but strip one (plus stray markdown fences) anyway
+            # before parsing. Without this, leaked reasoning makes json.loads
+            # fail, burns the retry budget, and the whole window silently
+            # falls back to the unrefined originals.
             raw_text = re.sub(
                 r"<think>.*?</think>", "", raw_text, flags=re.DOTALL
             ).strip()
