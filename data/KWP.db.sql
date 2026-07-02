@@ -37,7 +37,14 @@ CREATE TABLE IF NOT EXISTS "Documents" (
     "filename"          TEXT NOT NULL UNIQUE,
     "published"         TEXT,
     "num_pages"         INTEGER,
-    "added"             TEXT
+    "added"             TEXT,
+    -- Versioning: a plan can be re-published. Documents sharing a municipality
+    -- (`municipality_ags`) are versions of the same plan; the newest published
+    -- is the current one (`is_current=1`), older ones point to the version they
+    -- replace via `supersedes`.
+    "municipality_ags"  INTEGER,
+    "is_current"        INTEGER NOT NULL DEFAULT 1,
+    "supersedes"        INTEGER REFERENCES "Documents"("id") ON DELETE SET NULL
 );
 
 -- One row per physical page of a document; referenced by the provenance tables.

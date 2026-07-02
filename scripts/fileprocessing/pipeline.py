@@ -153,7 +153,7 @@ def process_entry(row: Any, connection: sqlite3.Connection, data_dir: Path) -> N
             filename = download_pdf(link, data_dir)
 
         num_pages = get_num_pages(filename, data_dir)
-        database.add_document(filename, orga_id, published, num_pages, added, connection)
+        database.add_document(filename, orga_id, published, num_pages, added, municipality_ags, connection)
         database.add_municipality(municipality_name, municipality_ags, orga_id, connection)
 
 def run(excel_file: Path, db_file: Path, data_dir: Path) -> None:
@@ -184,6 +184,9 @@ def run(excel_file: Path, db_file: Path, data_dir: Path) -> None:
     with sqlite3.connect(db_file) as connection:
         for row in tqdm(kww_data.itertuples(), desc="Processing municipality", total=kww_data.shape[0]):
             process_entry(row, connection, data_dir)
+        # Link re-published plans: newest per municipality = current, older ones
+        # superseded. Runs over the full table so it is correct on every re-run.
+        database.link_document_versions(connection)
     
 
 def _build_parser() -> argparse.ArgumentParser:

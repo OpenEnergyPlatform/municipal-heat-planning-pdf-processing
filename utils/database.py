@@ -89,22 +89,58 @@ def add_municipality(name: str, ags: str, orga_id: int, connection: sqlite3.Conn
         (name, ags, orga_id)
     )
 
-def add_document(filename: str, orga_id: int, published: str, num_pages: int, added: str, connection: sqlite3.Connection) -> None:
+def add_document(filename: str, orga_id: int, published: str, num_pages: int, added: str, ags: int, connection: sqlite3.Connection) -> None:
     """
     Add a document to the database with its metadata.
-    
+
     Args:
         filename: The name of the PDF file.
         orga_id: The ID of the organizational unit associated with the document.
         published: The publication date of the document.
         num_pages: The number of pages in the PDF document.
         added: The date when the document was added to the database.
+        ags: The municipality key (Gemeindeschlüssel) this plan belongs to —
+             used to group re-published versions of the same plan.
         connection: Active SQLite database connection.
     """
     connection.execute(
         """
-        INSERT INTO Documents (filename, organisation_unit, published, num_pages, added)
-        VALUES (?, ?, ?, ?, ?)
+        INSERT INTO Documents (filename, organisation_unit, published, num_pages, added, municipality_ags)
+        VALUES (?, ?, ?, ?, ?, ?)
         """,
-        (filename, orga_id, published, num_pages, added)
+        (filename, orga_id, published, num_pages, added, ags)
     )
+
+
+def link_document_versions(connection: sqlite3.Connection) -> None:
+    """
+    Mark current vs. superseded document versions.
+
+    Documents that share a municipality (`municipality_ags`) are versions of the
+    same plan. Within each group the newest `published` date is the current
+    version (`is_current=1`); every older one is marked `is_current=0` and points
+    at the next-older version via `supersedes` (NULL for the oldest). Documents
+    with no ags, or the only one for their ags, stay current with no predecessor.
+
+    Idempotent: recomputes the whole grouping on every call.
+    """
+    from itertools import groupby
+
+    rows = connection.execute(
+        """
+        SELECT id, municipality_ags, COALESCE(published, '')
+        FROM Documents
+        WHERE municipality_ags IS NOT NULL
+        ORDER BY municipality_ags, COALESCE(published, ''), id
+        """
+    ).fetchall()
+
+    for _ags, grp in groupby(rows, key=lambda r: r[1]):
+        docs = list(grp)  # already oldest -> newest
+        for i, (doc_id, _, _) in enumerate(docs):
+            is_current = 1 if i == len(docs) - 1 else 0
+            supersedes = docs[i - 1][0] if i > 0 else None
+            connection.execute(
+                "UPDATE Documents SET is_current = ?, supersedes = ? WHERE id = ?",
+                (is_current, supersedes, doc_id),
+            )
