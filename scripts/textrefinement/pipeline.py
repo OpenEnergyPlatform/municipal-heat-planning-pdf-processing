@@ -10,8 +10,8 @@ Modes:
   - Batch:  refine every document subdirectory under a processed root.
 
 CLI:
-  python -m scripts.textrefinement data/pdf/processed2 --batch
-  python -m scripts.textrefinement data/pdf/processed2/<doc>
+  python -m scripts.textrefinement data/pdf/processed --batch
+  python -m scripts.textrefinement data/pdf/processed/<doc>
 
 Author: Felix Vossel
 """
@@ -159,13 +159,13 @@ def _build_parser() -> argparse.ArgumentParser:
         epilog="""\
 Examples:
   # Batch: every document subdir under the processed root
-  python -m scripts.textrefinement data/pdf/processed2 --batch
+  python -m scripts.textrefinement data/pdf/processed --batch
 
   # Single document directory
-  python -m scripts.textrefinement data/pdf/processed2/my_doc
+  python -m scripts.textrefinement data/pdf/processed/my_doc
 
   # Re-refine, ignoring a cached final output
-  python -m scripts.textrefinement data/pdf/processed2 --batch --force
+  python -m scripts.textrefinement data/pdf/processed --batch --force
         """,
     )
     p.add_argument(
