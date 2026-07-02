@@ -14,6 +14,7 @@ import logging
 
 from PIL import Image
 from dataclasses import dataclass
+from threading import Thread
 from typing import Optional, List, Union, Dict, Any
 from transformers.models.qwen3_vl.modeling_qwen3_vl import Qwen3VLPreTrainedModel, Qwen3VLModel, Qwen3VLConfig
 from transformers.models.qwen3_vl.processing_qwen3_vl import Qwen3VLProcessor
@@ -100,10 +101,18 @@ class Qwen3VLForEmbedding(Qwen3VLPreTrainedModel):
         pixel_values_videos: Optional[torch.FloatTensor] = None,
         image_grid_thw: Optional[torch.LongTensor] = None,
         video_grid_thw: Optional[torch.LongTensor] = None,
+        mm_token_type_ids: Optional[torch.Tensor] = None,
         cache_position: Optional[torch.LongTensor] = None,
         logits_to_keep: Union[int, torch.Tensor] = 0,
         **kwargs: Unpack[TransformersKwargs],
     ) -> Union[tuple, Qwen3VLForEmbeddingOutput]:
+        # Newer Qwen3-VL requires mm_token_type_ids (returned by the processor)
+        # to compute multimodal RoPE (M-RoPE); pass it through when present, but
+        # stay compatible with text-only batches / older processors that omit it.
+        extra = {}
+        if mm_token_type_ids is not None:
+            extra["mm_token_type_ids"] = mm_token_type_ids
+
         outputs = self.model(
             input_ids=input_ids,
             pixel_values=pixel_values,
@@ -116,6 +125,7 @@ class Qwen3VLForEmbedding(Qwen3VLPreTrainedModel):
             inputs_embeds=inputs_embeds,
             cache_position=None,
             use_cache=False,
+            **extra,
         )
         return Qwen3VLForEmbeddingOutput(
             last_hidden_state=outputs.last_hidden_state,
@@ -155,9 +165,15 @@ class Qwen3VLEmbedder:
         num_frames: int = MAX_FRAMES,
         max_frames: int = MAX_FRAMES,
         default_instruction: str = "Represent the user's input.",
+        device: Optional[Union[str, torch.device]] = None,
+        torch_dtype: Optional[torch.dtype] = None,
         **kwargs
     ):
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        if device is None:
+            device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        else:
+            device = torch.device(device)
+        self.device = device
 
         self.max_length = max_length
         self.min_pixels = min_pixels
@@ -168,9 +184,19 @@ class Qwen3VLEmbedder:
         self.max_frames = max_frames
         self.default_instruction = default_instruction
 
+        # Default to bf16 on GPU (≈2× throughput + ~½ the VRAM of the implicit
+        # fp32 load, at no measurable retrieval-quality cost); fp32 on CPU where
+        # bf16 matmuls are slow/unsupported.
+        if torch_dtype is None:
+            torch_dtype = torch.bfloat16 if device.type == "cuda" else torch.float32
+
         self.model = Qwen3VLForEmbedding.from_pretrained(
-            model_name_or_path, trust_remote_code=True, **kwargs
+            model_name_or_path, trust_remote_code=True, torch_dtype=torch_dtype, **kwargs
         ).to(device)
+        # The actual loaded parameter dtype (from_pretrained may coerce); used to
+        # cast floating-point inputs (e.g. pixel_values) so the visual tower does
+        # not hit a float32-vs-bf16 matmul type error.
+        self.param_dtype = next(self.model.parameters()).dtype
         self.processor = Qwen3VLProcessor.from_pretrained(
             model_name_or_path, padding_side='right'
         )
@@ -355,7 +381,11 @@ class Qwen3VLEmbedder:
         ) for ele in inputs]
 
         processed_inputs = self._preprocess_inputs(conversations)
-        processed_inputs = {k: v.to(self.model.device) for k, v in processed_inputs.items()}
+        processed_inputs = {
+            k: (v.to(device=self.model.device, dtype=self.param_dtype)
+                if torch.is_floating_point(v) else v.to(self.model.device))
+            for k, v in processed_inputs.items()
+        }
 
         outputs = self.forward(processed_inputs)
         embeddings = self._pooling_last(outputs['last_hidden_state'], outputs['attention_mask'])
@@ -364,3 +394,91 @@ class Qwen3VLEmbedder:
             embeddings = F.normalize(embeddings, p=2, dim=-1)
 
         return embeddings
+
+
+class MultiGPUEmbedder:
+    """Data-parallel wrapper: one Qwen3VLEmbedder replica per visible GPU.
+
+    The 8B model fits comfortably on a single 80 GB H100, so the right way to
+    use four cards is *replication* (data parallelism), not ``device_map="auto"``
+    sharding — sharding would split the layers across GPUs and leave all but one
+    idle during each forward pass. Here every ``.process()`` call:
+
+      1. round-robin-splits the input list across the replicas (so shards stay
+         balanced even when items differ in cost),
+      2. runs each replica's forward concurrently in its own thread — the heavy
+         CUDA work releases the GIL, so the per-device forwards genuinely
+         overlap (the CPU-side tokenisation/vision preprocessing still
+         serialises under the GIL, so the speed-up is real but sub-linear),
+      3. re-interleaves the per-replica embeddings back into the original input
+         order on the CPU.
+
+    Exposes the same ``process(inputs, normalize=True) -> Tensor`` interface as
+    :class:`Qwen3VLEmbedder`, so callers are unchanged. With a single GPU (or
+    CPU) it degenerates to one replica and just forwards the call.
+    """
+
+    def __init__(
+        self,
+        model_name_or_path: str,
+        max_length: int = MAX_LENGTH,
+        dtype: torch.dtype = torch.bfloat16,
+        devices: Optional[List[str]] = None,
+        **kwargs,
+    ):
+        if devices is None:
+            n = torch.cuda.device_count()
+            devices = [f"cuda:{i}" for i in range(n)] if n > 0 else ["cpu"]
+        if not devices:
+            devices = ["cpu"]
+
+        logger.info("Loading %d embedder replica(s) on %s (dtype=%s)",
+                    len(devices), devices, dtype)
+        self.replicas: List[Qwen3VLEmbedder] = []
+        for dev in devices:
+            self.replicas.append(
+                Qwen3VLEmbedder(
+                    model_name_or_path, max_length=max_length,
+                    device=dev, torch_dtype=dtype, **kwargs,
+                )
+            )
+        self.devices = devices
+
+    def process(self, inputs: List[Dict[str, Any]], normalize: bool = True) -> torch.Tensor:
+        """Embed ``inputs`` across all replicas, returned on the CPU in order."""
+        n = len(self.replicas)
+        if n == 1 or len(inputs) <= 1:
+            return self.replicas[0].process(inputs, normalize).to("cpu")
+
+        # Replica r handles inputs[r], inputs[r+n], inputs[r+2n], ...
+        shards = [inputs[r::n] for r in range(n)]
+        outs: List[Optional[torch.Tensor]] = [None] * n
+        errs: List[Optional[BaseException]] = [None] * n
+
+        def _work(r: int) -> None:
+            try:
+                if shards[r]:
+                    outs[r] = self.replicas[r].process(shards[r], normalize).to("cpu")
+            except BaseException as exc:  # re-raised on the main thread below
+                errs[r] = exc
+
+        threads = [Thread(target=_work, args=(r,)) for r in range(n)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+        for exc in errs:
+            if exc is not None:
+                raise exc
+
+        # Re-interleave: shard r, row k -> original position r + k * n.
+        sample = next(o for o in outs if o is not None)
+        total = len(inputs)
+        result = torch.empty((total, sample.shape[1]), dtype=sample.dtype)
+        for r in range(n):
+            out = outs[r]
+            if out is None:
+                continue
+            for k in range(out.shape[0]):
+                result[r + k * n] = out[k]
+        return result

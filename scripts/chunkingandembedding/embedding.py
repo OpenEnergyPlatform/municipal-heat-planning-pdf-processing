@@ -14,6 +14,7 @@ Author: Felix Vossel
 from __future__ import annotations
 
 import logging
+from collections import defaultdict
 from pathlib import Path
 from typing import Optional
 
@@ -76,11 +77,21 @@ def remove_ids_from_index(index: faiss.Index, ids: list[int]) -> int:
 
 
 def load_embedder(model_name: str = EMBEDDING_MODEL):
-    """Load the Qwen3VLEmbedder model."""
-    from scripts.qwen3_vl_embedding import Qwen3VLEmbedder
+    """Load the embedding model, data-parallel across all visible GPUs in bf16.
+
+    Returns a MultiGPUEmbedder (one replica per GPU); it exposes the same
+    ``process()`` interface as a single Qwen3VLEmbedder and degenerates to one
+    replica when only a single device is visible.
+    """
+    from scripts.qwen3_vl_embedding import MultiGPUEmbedder
     log.info("Loading embedding model: %s", model_name)
-    model = Qwen3VLEmbedder(model_name_or_path=model_name, max_length=MAX_TOKEN_LENGTH)
-    log.info("Embedding model loaded.")
+    model = MultiGPUEmbedder(
+        model_name_or_path=model_name,
+        max_length=MAX_TOKEN_LENGTH,
+        dtype=torch.bfloat16,
+    )
+    log.info("Embedding model loaded on %d device(s): %s",
+             len(model.replicas), model.devices)
     return model
 
 
@@ -89,28 +100,42 @@ def create_embeddings(
     index: faiss.Index,
     next_id: int,
     db_path: Path,
-    pdf_name: str,
     embedder=None,
     *,
     model_name: str = EMBEDDING_MODEL,
     batch_size: int = EMBEDDING_BATCH_SIZE,
+    index_path: Optional[Path] = None,
+    save_every: int = 1000,
 ) -> int:
     """
-    Create embeddings for a list of inputs, add them to the FAISS index,
-    and write the IDs to the database in batched transactions.
+    Create embeddings for a list of inputs (which may span many documents),
+    add them to the FAISS index, and write the IDs to the database in batched
+    transactions.
 
-    Text-only and VL inputs are processed in separate groups to avoid
-    unnecessary padding overhead from mixing short text with large images.
+    Inputs are pooled *across documents* and split into two global groups —
+    text-only and VL — each then packed into full ``batch_size`` batches. This
+    keeps the GPU saturated regardless of how few items any single document
+    contributes (a per-document caller would otherwise fire many tiny,
+    half-empty batches). Each ``EmbeddingInput`` carries its own ``pdf_name``,
+    so DB writeback is grouped per document within every batch.
+
+    The FAISS index is persisted every ``save_every`` batches (and once at the
+    end) when ``index_path`` is given, so a long run survives interruption.
 
     Args:
-        inputs:      List of EmbeddingInput objects.
+        inputs:      List of EmbeddingInput objects (may mix pdf_names).
         index:       FAISS IDMap index to add vectors to.
         next_id:     Next available FAISS ID.
         db_path:     Path to the SQLite database for ID writeback.
-        pdf_name:    PDF directory name for DB lookups.
-        embedder:    Pre-loaded Qwen3VLEmbedder (loaded lazily if None).
+        embedder:    Pre-loaded embedder (loaded lazily if None).
         model_name:  Model name/path for lazy loading.
         batch_size:  Number of items per embedding batch.
+        index_path:  If given, the index is checkpointed here periodically.
+        save_every:  Persist the index every N successful batches. The whole
+                     index is rewritten each time (FAISS has no incremental
+                     flush) and it grows to multiple GB, so this is deliberately
+                     coarse — it is crash insurance, not a per-batch durability
+                     guarantee. The final save always happens regardless.
 
     Returns:
         Updated next_id after all embeddings have been added.
@@ -125,6 +150,7 @@ def create_embeddings(
     vl_inputs = [inp for inp in inputs if inp.image is not None]
 
     start_id = next_id
+    saved_batches = 0
 
     for group_label, group in [("text", text_inputs), ("vl", vl_inputs)]:
         if not group:
@@ -158,19 +184,30 @@ def create_embeddings(
             ids = np.arange(next_id, next_id + len(vectors), dtype=np.int64)
             index.add_with_ids(vectors, ids)
 
-            db_records = [
-                (inp.embedding_type, inp.section_index, inp.item_id, int(ids[i]))
-                for i, inp in enumerate(batch)
-            ]
-            write_embedding_ids_batch(db_path, pdf_name, db_records)
+            # The batch may straddle several documents — write each doc's ids
+            # into its own row group.
+            records_by_doc: dict[str, list[tuple]] = defaultdict(list)
+            for i, inp in enumerate(batch):
+                records_by_doc[inp.pdf_name].append(
+                    (inp.embedding_type, inp.section_index, inp.item_id, int(ids[i]))
+                )
+            for doc_name, db_records in records_by_doc.items():
+                write_embedding_ids_batch(db_path, doc_name, db_records)
 
             next_id += len(vectors)
+            saved_batches += 1
+
+            if index_path is not None and save_every and saved_batches % save_every == 0:
+                save_index(index, index_path)
 
             log.info(
-                "[%s] Batch %d/%d done – %d items (ids %d-%d)",
+                "[%s] Batch %d/%d done – %d items, %d doc(s) (ids %d-%d)",
                 group_label, batch_idx + 1, total_batches,
-                len(batch), int(ids[0]), int(ids[-1]),
+                len(batch), len(records_by_doc), int(ids[0]), int(ids[-1]),
             )
+
+    if index_path is not None:
+        save_index(index, index_path)
 
     created = next_id - start_id
     log.info("Created %d/%d embeddings, index now has %d vectors", created, len(inputs), index.ntotal)

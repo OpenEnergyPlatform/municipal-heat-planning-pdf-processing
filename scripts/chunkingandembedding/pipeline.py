@@ -113,9 +113,13 @@ def run(
 
         log.info("Found %d PDFs with merged output", len(candidates))
 
+        # Gather every document's new inputs into one pool, then embed them in
+        # full cross-document batches (see create_embeddings). Each input keeps
+        # its pdf_name, so DB writeback stays correct. Building the inputs is
+        # cheap (text + image *paths*, not pixel data), so pooling is light.
+        all_inputs: list = []
         for i, pdf_dir in enumerate(candidates):
             pdf_name = pdf_dir.name
-            log.info("[%d/%d] Embedding: %s", i + 1, len(candidates), pdf_name)
 
             if force:
                 # Prefer the pre-Step-2 snapshot (rows may already be deleted);
@@ -140,18 +144,21 @@ def run(
                 not in existing
             ]
 
-            if not inputs:
-                log.info("  All items already embedded, skipping.")
-                continue
+            if inputs:
+                all_inputs.extend(inputs)
 
-            log.info("  %d new items to embed", len(inputs))
+        log.info(
+            "Pooled %d new items to embed across %d/%d docs",
+            len(all_inputs), sum(1 for _ in candidates), len(candidates),
+        )
 
+        if all_inputs:
             next_id = create_embeddings(
-                inputs, index, next_id, db_path, pdf_name, embedder=embedder,
+                all_inputs, index, next_id, db_path, embedder=embedder,
+                index_path=index_path,
             )
 
-            save_index(index, index_path)
-
+        save_index(index, index_path)
         log.info("Embedding complete: %d total vectors in index", index.ntotal)
 
 

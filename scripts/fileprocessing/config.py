@@ -16,6 +16,9 @@ CREATE TABLE IF NOT EXISTS "Documents" (
 	"published" TEXT,
 	"num_pages" INTEGER,
 	"added" TEXT,
+	"municipality_ags" INTEGER,
+	"is_current" INTEGER NOT NULL DEFAULT 1,
+	"supersedes" INTEGER,
 	PRIMARY KEY("id" AUTOINCREMENT)
 );
 CREATE TABLE IF NOT EXISTS "Images" (
