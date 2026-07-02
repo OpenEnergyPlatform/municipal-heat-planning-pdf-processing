@@ -21,9 +21,6 @@ Als Ausgangspunkt dient die Excel-Tabelle der KWW  mit den Metadaten zu allen ve
 
 Jede PDF-Seite wird als hochauflösendes PNG gerendert und anschließend von **PP-DocLayoutV3** (PaddlePaddle, via HuggingFace Transformers) analysiert. Das Modell erkennt und klassifiziert die Struktur jeder Seite: Tabellen, Abbildungen, Überschriften, Textblöcke, Kopf-/Fußzeilen, Seitenzahlen und Bildunterschriften. Jedes erkannte Element erhält eine Bounding Box mit Pixelkoordinaten und einen Confidence Score. Diese räumlichen Informationen sind essenziell, um visuelle Inhalte sauber vom Fließtext zu trennen und Bildunterschriften korrekt zuzuordnen.
 
-**Bsp.:**
-![](bilder/layout.png)
-
 ### Stufe 3 – Textextraktion und Strukturaufbau (`preprocessing`)
 
 Mit PyMuPDF wird Text auf Zeichenebene aus jeder PDF-Seite extrahiert. Der Rohtext wird dann mit den Layout-Erkennungsergebnissen aus Stufe 2 abgeglichen, um eine strukturierte JSON-Repräsentation des gesamten Dokuments aufzubauen.
@@ -40,24 +37,15 @@ Das Modell normalisiert Abschnittstitel, korrigiert oder ergänzt fehlende Bildu
 
 Ausgabe: `structured_output_final.json`.
 
-**Beispielliteratursection:**
-![](bilder/literatur.png)
-
 ### Stufe 5 – Bildverarbeitung (`imageprocessing`)
 
-Die in Stufe 2–3 erkannten Tabellen und Abbildungen enthalten zu diesem Zeitpunkt nur ihre ausgeschnittenen Bilder und eventuell aus dem Text extrahierte Bildunterschriften. In dieser Stufe reichert **dasselbe Qwen3.5-122B-A10B-FP8-Modell** wie in Stufe 4 jedes visuelle Element über seine Vision-Language-Fähigkeiten an (ein vLLM-Server bedient beide Stufen). Diese Stufe kann parallel zu Stufe 4 durchgeführt werden, muss aber vor Stufe 6 abgeschlossen sein.
+Die in Stufe 2–3 erkannten Tabellen und Abbildungen enthalten zu diesem Zeitpunkt nur ihre ausgeschnittenen Bilder und eventuell aus dem Text extrahierte Bildunterschriften. In dieser Stufe reichert **dasselbe Qwen3.5-122B-A10B-FP8-Modell** wie in Stufe 4 jedes visuelle Element über seine Vision-Language-Fähigkeiten an — allerdings über eine **eigene** vLLM-Serverinstanz (Port 8001 statt 8000, eigene 4-GPU-SLURM-Allocation, ebenfalls TP=4). Diese Stufe läuft parallel zu Stufe 4 als eigener Job, muss aber vor Stufe 6 abgeschlossen sein.
 
 Für **Tabellen** erzeugt das Modell eine strukturierte Markdown-Transkription des Tabelleninhalts. Für **Abbildungen** wird eine detaillierte textuelle Beschreibung des visuellen Inhalts generiert. Wo Bildunterschriften fehlen, werden sie auf Basis des Bildinhalts und des umgebenden Kontexts ebenfalls erzeugt.
 
 Die Verarbeitung läuft lokal über vLLM mit vielen parallelen Anfragen (Continuous Batching). Ein Retry-Mechanismus mit Konversations-Feedback behandelt JSON-Parse-Fehler, und ein QA-Gate (Coverage-/Dedup-Check mit gezieltem Retry) sichert die Tabellenextraktion ab. Im aktuellen Lauf blieben nur **5 von 17.879 Tabellen** ohne Markdown (≈0,03 %) und **0 Abbildungen** ohne Beschreibung; solche Restfälle behalten weiterhin ihr Vision-Language-Embedding (siehe Stufe 6) und verlieren lediglich das Text-Embedding.
 
 Ausgabe: `structured_output_images.json`.
-
-**Beispielgrafik:**
-![](bilder/p42_img0.png)
-**Textuelle Beschreibung**
-![](bilder/p42_img0_des.png)
-
 
 ### Stufe 6 – Chunking, Embedding und Datenbankpopulation (`chunkingandembedding`)
 
@@ -86,7 +74,7 @@ Die Datenbank dient als Single Source of Truth dafür, welche Elemente bereits e
 
 ## Infrastruktur
 
-Die Pipeline läuft auf dem HPC-Cluster mit 4 NVIDIA H100 80GB GPUs, verwaltet über SLURM. Als Inference-Runtime für die LLM- und Vision-Language-Stufen (4–5) dient **vLLM** (OpenAI-kompatibler Server): das Qwen3.5-122B-A10B-FP8-Modell wird mit Tensor-Parallelität (TP=4) über alle vier GPUs geshardet und bedient beide Stufen über getrennte Ports. Das Embedding-Modell (Stufe 6) läuft in bfloat16 datenparallel über dieselben vier GPUs. Die zuvor blockierende alte CUDA-Version wurde auf **CUDA 12.9** angehoben, was den Wechsel von Ollama zu vLLM erst ermöglicht hat.
+Die Pipeline läuft auf dem HPC-Cluster der Uni, verwaltet über SLURM. Stufe 4 und Stufe 5 laufen als **eigenständige** SLURM-Jobs mit je eigener **vLLM**-Serverinstanz (OpenAI-kompatibel) auf je **4 NVIDIA H100 80GB GPUs** (Tensor-Parallelität TP=4, getrennte Ports 8000/8001) und können parallel laufen — macht bis zu 8 GPUs gleichzeitig für Stufe 4+5. Die Embedding-Erstellung (Stufe 6) läuft anschließend als eigener Job ebenfalls auf 4 GPUs, dort datenparallel (eine Modell-Replica pro GPU) statt tensor-parallel. Die zuvor blockierende alte CUDA-Version wurde auf **CUDA 12.9** angehoben, was den Wechsel von Ollama zu vLLM erst ermöglicht hat.
 
 ---
 
