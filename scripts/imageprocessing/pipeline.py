@@ -431,7 +431,7 @@ Examples:
 
   # Custom model / vLLM endpoint
   python -m scripts.imageprocessing ./output/my_pdf \\
-      --model Qwen/Qwen3-VL-32B-Instruct --base-url http://gpu-server:8001/v1
+      --model Qwen/Qwen3.5-122B-A10B-FP8 --base-url http://gpu-server:8001/v1
         """,
     )
     p.add_argument(

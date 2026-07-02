@@ -35,11 +35,11 @@ def dump_json_atomic(data, path) -> None:
 # vLLM (OpenAI-compatible API) – vision model (Qwen3-VL)
 # ---------------------------------------------------------------------------
 # Serve the model with vLLM, e.g.:
-#   vllm serve Qwen/Qwen3-VL-32B-Instruct --port 8001
+#   vllm serve Qwen/Qwen3.5-122B-A10B-FP8 --port 8001
 # VLM_MODEL must match the server's --served-model-name (defaults to the HF id).
 # All values are overridable via environment variables for deployment.
 VLM_BASE_URL = os.environ.get("VLM_BASE_URL", "http://localhost:8001/v1")
-VLM_MODEL    = os.environ.get("VLM_MODEL", "Qwen/Qwen3-VL-32B-Instruct")
+VLM_MODEL    = os.environ.get("VLM_MODEL", "Qwen/Qwen3.5-122B-A10B-FP8")
 VLM_API_KEY  = os.environ.get("VLM_API_KEY", "EMPTY")  # vLLM ignores the value
 
 # Timeout in seconds for a single vision request (client-side).
