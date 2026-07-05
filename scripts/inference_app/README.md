@@ -60,9 +60,11 @@ comfortably within one 12 GB card.
 | `EMBEDDING_MODEL` | `Qwen/Qwen3-VL-Embedding-8B` | HF id of the embedding model. |
 | `EMBED_IDLE_UNLOAD_SECONDS` | `0` | 0 = strict on-demand; >0 = keep warm, unload after idle. |
 | `EMBED_LOCK_TIMEOUT_S` | `300` | Max wait for another session's embed to finish. |
-| `LLM_BASE_URL` / `LLM_MODEL` / `LLM_API_KEY` | placeholders | Remote OpenAI-compatible endpoint (fill at deploy time). |
-| `LLM_TOKENIZER_ID` | = `LLM_MODEL` | Tokenizer for chunk sizing (falls back to char/4). |
-| `LLM_STUB_MODE` | unset | Truthy → canned answers, for testing retrieval before the endpoint exists. |
+| `LLM_BASE_URL` | set at deploy time | OpenAI-compatible `/chat/completions` base URL. |
+| `LLM_MODEL` | `agent_xzXlgfmSwiaWCuvtRFCq5` | The "DB4KWP" qwen3.5 agent. Alternative: `agent_7qE8YPFNPQ9KQQInK9FNc` ("Test", plain passthrough). List with `GET {LLM_BASE_URL}/models`. |
+| `LLM_API_KEY` | from `.env` | The key is read from a `.env` file (`LLM_API_KEY=...`). |
+| `LLM_TOKENIZER_ID` | = `LLM_MODEL` | Tokenizer for chunk sizing. The agent id is not a HF repo, so this falls back to a char/4 heuristic (fine). |
+| `LLM_STUB_MODE` | unset | Truthy → canned answers, for testing retrieval without calling the endpoint. |
 | `TOP_K` / `MAX_CHUNK_ATTEMPTS` / `CHUNK_TOKEN_BUDGET` | 50 / 10 / 6000 | Retrieval + QA knobs. |
 | `QUERY_CACHE_PATH` | `data/inference_app_query_cache.db` | Separate cache DB (never KWP.db). |
 
@@ -95,11 +97,13 @@ python scripts/inference_app_smoketest.py --image data/pdf/processed/<doc>/resul
 #    Expect "ALL CHECKS PASSED". If NF4 fails to load on CC 6.1, STOP and evaluate the
 #    fp16-over-both-cards fallback before running the app.
 
-# 7) run the app (point LLM_* at the real endpoint, or LLM_STUB_MODE=1 to test retrieval only)
+# 7) run the app. LLM base_url/model default to the configured endpoint and the
+#    API key is read from .env (LLM_API_KEY=...). Only the
+#    data paths need pointing at the copied-over corpus. LLM_STUB_MODE=1 tests
+#    the retrieval half without calling the endpoint.
 export INFERENCE_DB_PATH=data/KWP.db
 export INFERENCE_INDEX_PATH=data/faiss_index.bin
 export INFERENCE_IMAGE_ROOT=data/pdf/processed
-export LLM_BASE_URL=... LLM_MODEL=... LLM_API_KEY=...
 streamlit run scripts/inference_app/app.py --server.address 0.0.0.0 --server.port 8501
 ```
 

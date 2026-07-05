@@ -24,34 +24,55 @@ from . import db
 log = logging.getLogger(__name__)
 
 
-def load_global_index(index_path: Path) -> faiss.Index:
+def load_global_index(index_path: Path) -> tuple[faiss.Index, dict[int, int]]:
     """
-    Load the global FAISS IDMap(IndexFlatIP) into RAM once.
+    Load the global FAISS IndexIDMap(IndexFlatIP) into RAM once, together with a
+    dict mapping each stored faiss_id → its internal position.
 
-    Eagerly builds the direct map so per-request reconstruct(id) is an O(1)
-    lookup (and so the map is not built lazily/racily on first use under
-    concurrent Streamlit sessions).
+    An IndexIDMap does NOT support reconstruct(id) (it raises "reconstruct not
+    implemented for this type of index"). To pull a vector back out we read the
+    position→id table (`id_map`), invert it, and reconstruct by position on the
+    wrapped flat index — see reconstruct_vector(). Building the dict once at load
+    keeps per-request lookups O(1).
     """
     index = faiss.read_index(str(index_path))
-    try:
-        index.make_direct_map()
-    except Exception as e:  # some index types build it implicitly
-        log.debug("make_direct_map() skipped: %s", e)
+    id_to_pos = _build_id_to_pos(index)
     log.info("Loaded global FAISS index: %s (%d vectors)", index_path, index.ntotal)
-    return index
+    return index, id_to_pos
 
 
-def build_subindex(global_index: faiss.Index, faiss_ids: list[int]) -> faiss.IndexFlatIP:
+def _build_id_to_pos(index: faiss.Index) -> dict[int, int]:
+    """Map each original faiss_id → its internal position in the index."""
+    try:
+        id_array = faiss.vector_to_array(index.id_map)  # position -> original id
+    except Exception:
+        # Not an IndexIDMap (e.g. a plain flat index): identity mapping.
+        return {i: i for i in range(index.ntotal)}
+    return {int(fid): pos for pos, fid in enumerate(id_array)}
+
+
+def reconstruct_vector(global_index: faiss.Index, id_to_pos: dict[int, int], faiss_id: int):
+    """Reconstruct one stored vector by its original faiss_id."""
+    inner = getattr(global_index, "index", global_index)  # wrapped IndexFlatIP
+    return inner.reconstruct(int(id_to_pos[int(faiss_id)]))
+
+
+def build_subindex(
+    global_index: faiss.Index,
+    id_to_pos: dict[int, int],
+    faiss_ids: list[int],
+) -> faiss.IndexFlatIP:
     """
     Reconstruct the given vector ids from the global index and pack them into a
     fresh IndexFlatIP. Local position p in the sub-index corresponds to
-    faiss_ids[p], so the caller maps results back through that list.
+    faiss_ids[p], so the caller maps results back through that list. `faiss_ids`
+    must all be present in `id_to_pos` (retrieve() filters to that).
     """
     sub = faiss.IndexFlatIP(EMBEDDING_DIM)
     if not faiss_ids:
         return sub
     vectors = np.vstack(
-        [global_index.reconstruct(int(fid)) for fid in faiss_ids]
+        [reconstruct_vector(global_index, id_to_pos, fid) for fid in faiss_ids]
     ).astype("float32")
     sub.add(vectors)
     return sub
@@ -73,6 +94,7 @@ def search_subindex(
 def retrieve(
     conn: sqlite3.Connection,
     global_index: faiss.Index,
+    id_to_pos: dict[int, int],
     document_id: int,
     embedding_types: list[str],
     query_vec: np.ndarray,
@@ -91,13 +113,16 @@ def retrieve(
     fetch = content_fetcher or db.fetch_owner_content
 
     rows = db.get_candidate_faiss_ids(conn, document_id, embedding_types)
+    # Only ids actually present in the index (guards against DB/index drift and
+    # keeps the local-position ↔ faiss_id mapping below exact).
+    rows = [r for r in rows if r[0] in id_to_pos]
     if not rows:
         return []
 
     faiss_ids = [r[0] for r in rows]
     id_to_owner: dict[int, tuple[str, int]] = {r[0]: (r[2], r[3]) for r in rows}
 
-    sub_index = build_subindex(global_index, faiss_ids)
+    sub_index = build_subindex(global_index, id_to_pos, faiss_ids)
     scores, positions = search_subindex(sub_index, query_vec, top_k)
 
     # Highest score per (owner_kind, owner_id).
