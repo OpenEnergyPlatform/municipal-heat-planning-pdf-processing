@@ -68,25 +68,40 @@ comfortably within one 12 GB card.
 
 ## Setup & run on the inference server
 
+Two gotchas on this specific box, already baked into the steps below:
+- **`/tmp` is a 1 GB tmpfs** — pip's torch extract overflows it. Point `TMPDIR` at the home
+  partition (2.5 TB) for every install/download.
+- **The default PyPI torch is a CUDA-13 build** the 555 driver rejects. Install torch from the
+  **cu124** index first (sm_60 kernels cover the sm_61 Pascal cards).
+
 ```bash
+export TMPDIR=~/projects/embedding/tmp && mkdir -p "$TMPDIR"
+
 # 1) data (copied over separately): KWP.db, faiss_index.bin, and the table/figure PNGs
 #    land under ~/projects/embedding/data/. Page numbers come from the DB — no JSON needed.
 
 # 2) dedicated venv
 python3 -m venv ~/projects/embedding/.venv
 source ~/projects/embedding/.venv/bin/activate
-pip install -r scripts/inference_app/requirements.txt
+
+# 3) torch FIRST, from the CUDA 12.4 index (driver 555 = CUDA 12.5; default PyPI wheel is cu130)
+pip install --no-cache-dir --index-url https://download.pytorch.org/whl/cu124 torch==2.6.0
+#    quick check: torch.cuda.is_available() True, get_device_capability(0) == (6,1)
+
+# 4) the rest
+pip install --no-cache-dir -r scripts/inference_app/requirements.txt
 pip check
 
-# 3) pre-download the embedding model into the HF cache (~16 GB, once)
+# 5) pre-download the embedding model into the HF cache (~16 GB, once)
 python -c "from huggingface_hub import snapshot_download; snapshot_download('Qwen/Qwen3-VL-Embedding-8B')"
 
-# 4) SMOKE TEST FIRST — proves NF4 works on these Pascal cards + VRAM is freed
+# 6) SMOKE TEST FIRST — proves NF4 works on these Pascal cards + VRAM is freed.
+#    Any PNG works to exercise the vision path (a synthetic one if no corpus PNG is present yet).
 python scripts/inference_app_smoketest.py --image data/pdf/processed/<doc>/results/images/<some>.png
 #    Expect "ALL CHECKS PASSED". If NF4 fails to load on CC 6.1, STOP and evaluate the
 #    fp16-over-both-cards fallback before running the app.
 
-# 5) run the app (point LLM_* at the real endpoint, or LLM_STUB_MODE=1 to test retrieval only)
+# 7) run the app (point LLM_* at the real endpoint, or LLM_STUB_MODE=1 to test retrieval only)
 export INFERENCE_DB_PATH=~/projects/embedding/data/KWP.db
 export INFERENCE_INDEX_PATH=~/projects/embedding/data/faiss_index.bin
 export INFERENCE_IMAGE_ROOT=~/projects/embedding/data/pdf/processed

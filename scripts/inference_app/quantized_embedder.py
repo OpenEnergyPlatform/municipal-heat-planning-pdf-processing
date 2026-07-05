@@ -180,14 +180,31 @@ def _free_current() -> None:
     _STATE["embedder"] = None
     _STATE["device"] = None
     if embedder is not None:
+        model = getattr(embedder, "model", None)
+        if model is not None:
+            # A model loaded with device_map has accelerate AlignDevicesHooks
+            # attached to its submodules; these hold references that keep the
+            # (multi-GB) weights alive after a plain `del`, so VRAM is never
+            # returned. Strip them first, then drop every reference.
+            try:
+                from accelerate.hooks import remove_hook_from_module
+                remove_hook_from_module(model, recurse=True)
+            except Exception:
+                pass
+            try:
+                del embedder.model
+            except Exception:
+                pass
+            del model
         try:
-            del embedder.model
+            del embedder.processor
         except Exception:
             pass
         del embedder
     gc.collect()
     if device is not None and torch.cuda.is_available():
         with torch.cuda.device(device):
+            torch.cuda.synchronize()
             torch.cuda.empty_cache()
             torch.cuda.ipc_collect()
     log.info("Embedder unloaded, VRAM freed on %s", device)

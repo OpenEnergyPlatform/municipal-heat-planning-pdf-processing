@@ -4,25 +4,30 @@
 # root requirements.txt (PaddleOCR / spaCy / etc.), which is for the batch
 # pipeline only.
 #
-# Hardware target: NVIDIA TITAN X (Pascal), CC 6.1, CUDA 12.5 driver.
+# Hardware target: NVIDIA TITAN X (Pascal), CC 6.1, driver 555.42.02 (CUDA 12.5).
 #
-# IMPORTANT: pin torch / transformers / bitsandbytes to EXACT versions once the
-# smoke test (scripts/inference_app_smoketest.py) passes on the real hardware.
-# The ranges below are for initial install only. In particular:
-#   * torch — the CUDA-12.x build MUST still ship sm_61 (Pascal) kernels; some
-#     newer releases drop pre-Volta support. Verify get_device_capability works.
-#   * transformers — must be new enough to provide the Qwen3-VL classes
-#     (the batch pipeline pins transformers==5.3.0; match that where possible).
-#   * bitsandbytes — NF4 on CC 6.1 is the single biggest unknown; the smoke test
-#     is what confirms the chosen version actually loads on these cards.
+# ── torch + torchvision: install FIRST, from the CUDA 12.4 index ─────────────
+#   pip install --index-url https://download.pytorch.org/whl/cu124 \
+#       torch==2.6.0 torchvision==0.21.0
+# Why: the default PyPI torch wheel is now a CUDA-13 build (`+cu130`), which the
+# 555 driver (CUDA 12.5) rejects ("driver too old, found 12050"). The cu124
+# build reports arch_list sm_50/sm_60/... — no sm_61, but sm_60 cubins are
+# binary-compatible with the sm_61 Pascal cards (same major arch), verified
+# working. torchvision is required by the Qwen3-VL image processor. Do NOT let
+# `pip install -r requirements.txt` pull torch from PyPI.
+#
+# The versions below are the exact ones verified by scripts/inference_app_
+# smoketest.py on this hardware.
+# -----------------------------------------------------------------------------
 
-streamlit>=1.38
-torch>=2.4
-transformers>=4.56
-accelerate>=1.0
-bitsandbytes>=0.43
-faiss-cpu>=1.8
-openai>=1.40
-qwen-vl-utils>=0.0.14
+torch==2.6.0               # install from the cu124 index first (see note above)
+torchvision==0.21.0        # cu124 index too; needed by the Qwen3-VL processor
+transformers==5.3.0        # provides the Qwen3-VL classes (matches batch pipeline)
+bitsandbytes==0.49.2       # NF4 4-bit; verified on CC 6.1 Pascal
+accelerate==1.14.0
+faiss-cpu==1.14.3
+openai==2.44.0
+qwen-vl-utils==0.0.14
+streamlit==1.58.0
 pillow
 numpy
