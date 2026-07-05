@@ -172,9 +172,12 @@ def make_search_phrase(task: str) -> str:
     """
     if LLM_STUB_MODE:
         return task.strip()
+    # No `system` role: the gateway's agent supplies a leading system message,
+    # and a second system message is rejected ("System message must be at the
+    # beginning"). Fold our instructions into the user turn — robust with or
+    # without a stored agent prompt.
     messages = [
-        {"role": "system", "content": PHRASE_SYSTEM_PROMPT},
-        {"role": "user", "content": task},
+        {"role": "user", "content": f"{PHRASE_SYSTEM_PROMPT}\n\nAuftrag des Nutzers:\n{task}"},
     ]
     try:
         parsed = _chat_json(messages, temperature=LLM_TEMPERATURE)
@@ -203,11 +206,11 @@ def ask_chunk(task: str, chunk_items: list[dict]) -> dict:
             "source_refs": [first.get("index", 0)] if chunk_items else [],
         }
 
+    # No `system` role (see make_search_phrase): fold instructions into the user
+    # turn so a stored agent system prompt does not collide with ours.
+    payload = json.dumps({"task": task, "excerpt": chunk_items}, ensure_ascii=False)
     messages = [
-        {"role": "system", "content": CHUNK_QA_SYSTEM_PROMPT},
-        {"role": "user", "content": json.dumps(
-            {"task": task, "excerpt": chunk_items}, ensure_ascii=False
-        )},
+        {"role": "user", "content": f"{CHUNK_QA_SYSTEM_PROMPT}\n\n{payload}"},
     ]
     try:
         parsed = _chat_json(messages, temperature=LLM_TEMPERATURE)
