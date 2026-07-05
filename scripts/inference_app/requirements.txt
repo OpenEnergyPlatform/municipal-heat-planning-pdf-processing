@@ -1,0 +1,28 @@
+# Minimal, standalone requirements for the inference_app (Streamlit RAG chat).
+#
+# Install into a DEDICATED venv on the inference server — do NOT reuse the huge
+# root requirements.txt (PaddleOCR / spaCy / etc.), which is for the batch
+# pipeline only.
+#
+# Hardware target: NVIDIA TITAN X (Pascal), CC 6.1, CUDA 12.5 driver.
+#
+# IMPORTANT: pin torch / transformers / bitsandbytes to EXACT versions once the
+# smoke test (scripts/inference_app_smoketest.py) passes on the real hardware.
+# The ranges below are for initial install only. In particular:
+#   * torch — the CUDA-12.x build MUST still ship sm_61 (Pascal) kernels; some
+#     newer releases drop pre-Volta support. Verify get_device_capability works.
+#   * transformers — must be new enough to provide the Qwen3-VL classes
+#     (the batch pipeline pins transformers==5.3.0; match that where possible).
+#   * bitsandbytes — NF4 on CC 6.1 is the single biggest unknown; the smoke test
+#     is what confirms the chosen version actually loads on these cards.
+
+streamlit>=1.38
+torch>=2.4
+transformers>=4.56
+accelerate>=1.0
+bitsandbytes>=0.43
+faiss-cpu>=1.8
+openai>=1.40
+qwen-vl-utils>=0.0.14
+pillow
+numpy

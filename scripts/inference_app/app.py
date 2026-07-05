@@ -1,0 +1,279 @@
+"""
+app.py – Streamlit RAG chat over the KWP knowledge base.
+
+The only module that imports Streamlit. Wires together: document picker + scope
+selection (sidebar), a chat box with an optional image upload, on-demand
+embedding of the query, scoped sub-index retrieval, and the iterative chunk-by-
+chunk LLM question answering with citations.
+
+Run:
+    streamlit run scripts/inference_app/app.py --server.address 0.0.0.0 --server.port 8501
+
+Author: Felix Vossel
+"""
+from __future__ import annotations
+
+import logging
+import os
+import tempfile
+from pathlib import Path
+
+import streamlit as st
+
+from . import config, db, faiss_store, query_cache, chunker, llm_client
+
+logging.basicConfig(level=logging.INFO)
+log = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# Cached resources (RAM is abundant; only the embedding model's VRAM is scarce,
+# and that is deliberately NOT cached — see quantized_embedder.load_embedder).
+# ---------------------------------------------------------------------------
+@st.cache_resource
+def get_index():
+    return faiss_store.load_global_index(config.INDEX_PATH)
+
+
+@st.cache_resource
+def get_db():
+    return db.connect_readonly(config.DB_PATH)
+
+
+@st.cache_resource
+def get_cache():
+    return query_cache.connect(config.QUERY_CACHE_PATH)
+
+
+@st.cache_resource
+def get_tokenizer():
+    return chunker.get_tokenizer()
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+def resolve_image_path(stored_path: str | None) -> Path | None:
+    """Best-effort resolution of a Tables/Images `path` to an on-disk file."""
+    if not stored_path:
+        return None
+    candidates = [Path(stored_path), config.IMAGE_ROOT / stored_path]
+    for c in candidates:
+        if c.exists():
+            return c
+    return None
+
+
+def embed_query(item: dict, cache_conn, cache_key: str):
+    """Return the query vector, from cache or a fresh on-demand embed."""
+    cached = query_cache.get(cache_conn, cache_key)
+    if cached is not None:
+        log.info("Query cache hit (%s)", cache_key[:12])
+        return cached, True
+    # Heavy backend imported lazily so a cache-hit turn never touches torch.
+    from .quantized_embedder import embed_query as _embed
+    vec = _embed(
+        item,
+        model_name=config.EMBEDDING_MODEL,
+        max_length=config.EMBEDDING_MAX_TOKEN_LENGTH,
+        timeout_s=config.EMBED_LOCK_TIMEOUT_S,
+        idle_unload_seconds=config.EMBED_IDLE_UNLOAD_SECONDS,
+    )
+    query_cache.put(cache_conn, cache_key, vec)
+    return vec, False
+
+
+def run_turn(task: str, image_bytes: bytes | None, image_only: bool,
+             document_id: int, scopes: list[str]):
+    """
+    Execute one full retrieval + QA turn. Returns a dict with keys:
+    answer (str|None), citations (list[dict]), n_chunks_tried (int),
+    cache_hit (bool), n_hits (int).
+    """
+    conn = get_db()
+    index = get_index()
+    cache_conn = get_cache()
+    tokenizer = get_tokenizer()
+
+    # --- 1) build the query item + cache key, per mode ---
+    tmp_path = None
+    if image_bytes is not None and image_only:
+        mode = "image"
+        tmp_path = _write_temp_image(image_bytes)
+        item = {"image": tmp_path}
+        phrase = None
+        cache_key = query_cache.make_key(mode, image_bytes=image_bytes)
+    elif image_bytes is not None:
+        mode = "image+text"
+        phrase = llm_client.make_search_phrase(task)
+        tmp_path = _write_temp_image(image_bytes)
+        item = {"text": phrase, "image": tmp_path}
+        cache_key = query_cache.make_key(mode, text=phrase, image_bytes=image_bytes)
+    else:
+        mode = "text"
+        phrase = llm_client.make_search_phrase(task)
+        item = {"text": phrase}
+        cache_key = query_cache.make_key(mode, text=phrase)
+
+    # --- 2) embed (cache or on-demand load) ---
+    with st.spinner("Embedding wird berechnet …"):
+        query_vec, cache_hit = embed_query(item, cache_conn, cache_key)
+    if tmp_path:
+        try:
+            Path(tmp_path).unlink(missing_ok=True)
+        except OSError:
+            pass
+
+    # --- 3) scoped retrieval ---
+    embedding_types = [t for s in scopes for t in config.SCOPE_TO_EMBEDDING_TYPES[s]]
+    with st.spinner("Suche im Dokument …"):
+        hits = faiss_store.retrieve(
+            conn, index, document_id, embedding_types, query_vec, config.TOP_K
+        )
+
+    result = {"answer": None, "citations": [], "n_chunks_tried": 0,
+              "cache_hit": cache_hit, "n_hits": len(hits), "phrase": phrase}
+    if not hits:
+        return result
+
+    # --- 4) iterative chunk QA (two distinct budgets, see llm_client) ---
+    chunks = chunker.pack_chunks(hits, config.CHUNK_TOKEN_BUDGET, tokenizer)
+    for attempt, chunk in enumerate(chunks[: config.MAX_CHUNK_ATTEMPTS], start=1):
+        result["n_chunks_tried"] = attempt
+        with st.status(f"Prüfe Auszug {attempt}/{min(len(chunks), config.MAX_CHUNK_ATTEMPTS)} …",
+                       expanded=False):
+            answer = llm_client.ask_chunk(task, chunk.items)
+        if answer.get("found"):
+            result["answer"] = answer["answer"]
+            refs = answer.get("source_refs", [])
+            # Map source_refs (global hit indices) back to hits for citation.
+            ref_idxs = {int(r) for r in refs if isinstance(r, int) or str(r).isdigit()}
+            cited = [hits[i] for i in sorted(ref_idxs) if 0 <= i < len(hits)]
+            result["citations"] = cited or [c_item_hit(chunk, hits)]
+            break
+
+    return result
+
+
+def c_item_hit(chunk: "chunker.Chunk", hits: list[dict]) -> dict:
+    """Fallback citation: the first hit represented in the answering chunk."""
+    if chunk.items:
+        idx = chunk.items[0].get("index", 0)
+        if 0 <= idx < len(hits):
+            return hits[idx]
+    return hits[0] if hits else {}
+
+
+def _write_temp_image(image_bytes: bytes) -> str:
+    fd, path = tempfile.mkstemp(suffix=".png", prefix="kwp_query_")
+    with os.fdopen(fd, "wb") as f:
+        f.write(image_bytes)
+    return path
+
+
+# ---------------------------------------------------------------------------
+# UI
+# ---------------------------------------------------------------------------
+def main() -> None:
+    st.set_page_config(page_title="KWP RAG Chat", layout="wide")
+    st.title("Kommunale Wärmeplanung – Recherche")
+
+    conn = get_db()
+
+    # ---- Sidebar: document + scopes ----
+    with st.sidebar:
+        st.header("Auswahl")
+        include_old = st.checkbox("Historische Versionen einbeziehen", value=False)
+        docs = db.list_documents(conn, include_superseded=include_old)
+        if not docs:
+            st.error("Keine Dokumente in der Datenbank gefunden.")
+            st.stop()
+
+        labels = {d["id"]: db.document_label(d) for d in docs}
+        doc_id = st.selectbox(
+            "Wärmeplan", options=[d["id"] for d in docs],
+            format_func=lambda i: labels[i],
+        )
+        scopes = st.multiselect(
+            "Suchbereich", options=config.ALL_SCOPES, default=config.ALL_SCOPES,
+        )
+        if config.LLM_STUB_MODE:
+            st.info("LLM_STUB_MODE aktiv – Antworten sind Platzhalter.")
+
+    # ---- Reset chat when the document changes ----
+    if st.session_state.get("doc_id") != doc_id:
+        st.session_state["doc_id"] = doc_id
+        st.session_state["chat_history"] = []
+
+    history = st.session_state.setdefault("chat_history", [])
+
+    # ---- Render history ----
+    for msg in history:
+        with st.chat_message(msg["role"]):
+            st.markdown(msg["content"])
+            for cit in msg.get("citations", []):
+                _render_citation(cit)
+
+    # ---- Optional image upload + mode ----
+    # The text task always drives the final question answering; the image (if
+    # any) and this toggle only change how the *query embedding* is formed.
+    uploaded = st.file_uploader("Optionales Bild zur Anfrage", type=["png", "jpg", "jpeg"])
+    image_only = False
+    if uploaded is not None:
+        image_only = st.radio(
+            "Bild fürs Retrieval verwenden als",
+            options=["Bild + Text", "Nur Bild"], horizontal=True,
+        ) == "Nur Bild"
+
+    # ---- Chat input (always required: it is the extraction task for the LLM) ----
+    task = st.chat_input("Extraktionsauftrag …")
+    if not task:
+        return
+
+    if not scopes:
+        st.warning("Bitte mindestens einen Suchbereich wählen.")
+        return
+
+    image_bytes = uploaded.getvalue() if uploaded is not None else None
+
+    # Echo the user turn
+    user_text = task if uploaded is None else f"{task}  \n_(mit Bild)_"
+    history.append({"role": "user", "content": user_text})
+    with st.chat_message("user"):
+        st.markdown(user_text)
+
+    # Run pipeline
+    result = run_turn(task, image_bytes, image_only, doc_id, scopes)
+
+    # Compose assistant reply
+    with st.chat_message("assistant"):
+        if result["answer"] is None:
+            if result["n_hits"] == 0:
+                reply = "Keine Treffer im gewählten Suchbereich."
+            else:
+                reply = (f"Antwort im gewählten Bereich nicht gefunden "
+                         f"({result['n_chunks_tried']} Auszüge geprüft).")
+            st.markdown(reply)
+            history.append({"role": "assistant", "content": reply, "citations": []})
+        else:
+            st.markdown(result["answer"])
+            with st.expander("Quellen"):
+                for cit in result["citations"]:
+                    _render_citation(cit)
+            history.append({
+                "role": "assistant", "content": result["answer"],
+                "citations": result["citations"],
+            })
+
+
+def _render_citation(cit: dict) -> None:
+    """Render one citation (source label + optional image)."""
+    label = chunker.citation_label(cit)
+    st.caption(f"📄 {label}")
+    img = resolve_image_path(cit.get("image_path"))
+    if img is not None:
+        st.image(str(img))
+
+
+if __name__ == "__main__":
+    main()
