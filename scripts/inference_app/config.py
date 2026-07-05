@@ -11,6 +11,44 @@ Author: Felix Vossel
 import os
 from pathlib import Path
 
+
+def _load_dotenv() -> None:
+    """
+    Populate os.environ from a .env file (zero-dependency, no python-dotenv).
+
+    Only keys not already set in the environment are added, so an explicit env
+    var always wins. Searched, first hit used: $INFERENCE_ENV_FILE, ./.env,
+    ~/projects/embedding/.env. Lines are `KEY=VALUE`; surrounding quotes on the
+    value are stripped; `#` comment lines and blanks are ignored.
+    """
+    candidates = [
+        os.environ.get("INFERENCE_ENV_FILE"),
+        ".env",
+        os.path.expanduser("~/projects/embedding/.env"),
+    ]
+    for path in candidates:
+        if not path:
+            continue
+        p = Path(path)
+        if not p.is_file():
+            continue
+        try:
+            for raw in p.read_text(encoding="utf-8").splitlines():
+                line = raw.strip()
+                if not line or line.startswith("#") or "=" not in line:
+                    continue
+                key, _, val = line.partition("=")
+                key = key.strip()
+                val = val.strip().strip('"').strip("'")
+                if key and key not in os.environ:
+                    os.environ[key] = val
+        except OSError:
+            continue
+        break  # first readable .env wins
+
+
+_load_dotenv()
+
 # ---------------------------------------------------------------------------
 # Corpus data (read-only for this app)
 # ---------------------------------------------------------------------------
@@ -35,11 +73,19 @@ EMBED_IDLE_UNLOAD_SECONDS = int(os.environ.get("EMBED_IDLE_UNLOAD_SECONDS", "0")
 EMBED_LOCK_TIMEOUT_S = float(os.environ.get("EMBED_LOCK_TIMEOUT_S", "300"))
 
 # ---------------------------------------------------------------------------
-# LLM (remote, OpenAI-compatible – university-hosted, filled in at deploy time)
+# LLM (remote, OpenAI-compatible — University of Osnabrück "agents" gateway)
 # ---------------------------------------------------------------------------
-LLM_BASE_URL = os.environ.get("LLM_BASE_URL", "http://localhost:8000/v1")
-LLM_MODEL    = os.environ.get("LLM_MODEL", "Qwen/Qwen3.5-122B-A10B-FP8")
-LLM_API_KEY  = os.environ.get("LLM_API_KEY", "EMPTY")
+# A LibreChat agents API exposing an OpenAI-compatible /chat/completions
+# (base_url + "/chat/completions"). "Models" are preconfigured agents on
+# qwen3.5; list them with GET {LLM_BASE_URL}/models. Two exist:
+#   agent_xzXlgfmSwiaWCuvtRFCq5  "DB4KWP"  (project-named; the default)
+#   agent_7qE8YPFNPQ9KQQInK9FNc  "Test"    (plain passthrough alternative)
+# Both honor a strict-JSON, context-only system prompt; qwen3.5's reasoning is
+# returned in a separate `reasoning` field, so message.content stays clean JSON.
+# The API key lives in a .env file as UOS_API_KEY (loaded by _load_dotenv above).
+LLM_BASE_URL = os.environ.get("LLM_BASE_URL", "https://kiwi-secure.uni-osnabrueck.de/api/agents/v1")
+LLM_MODEL    = os.environ.get("LLM_MODEL", "agent_xzXlgfmSwiaWCuvtRFCq5")
+LLM_API_KEY  = os.environ.get("LLM_API_KEY") or os.environ.get("UOS_API_KEY", "EMPTY")
 LLM_TIMEOUT  = float(os.environ.get("LLM_TIMEOUT", "180"))
 LLM_TEMPERATURE = float(os.environ.get("LLM_TEMPERATURE", "0.1"))
 LLM_MAX_TOKENS  = int(os.environ.get("LLM_MAX_TOKENS", "2048"))

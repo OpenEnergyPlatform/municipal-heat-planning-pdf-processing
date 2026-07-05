@@ -40,6 +40,7 @@ log = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 @st.cache_resource
 def get_index():
+    """Returns (faiss_index, id_to_pos) — loaded once, held in RAM."""
     return faiss_store.load_global_index(config.INDEX_PATH)
 
 
@@ -99,7 +100,7 @@ def run_turn(task: str, image_bytes: bytes | None, image_only: bool,
     cache_hit (bool), n_hits (int).
     """
     conn = get_db()
-    index = get_index()
+    index, id_to_pos = get_index()
     cache_conn = get_cache()
     tokenizer = get_tokenizer()
 
@@ -136,7 +137,7 @@ def run_turn(task: str, image_bytes: bytes | None, image_only: bool,
     embedding_types = [t for s in scopes for t in config.SCOPE_TO_EMBEDDING_TYPES[s]]
     with st.spinner("Suche im Dokument …"):
         hits = faiss_store.retrieve(
-            conn, index, document_id, embedding_types, query_vec, config.TOP_K
+            conn, index, id_to_pos, document_id, embedding_types, query_vec, config.TOP_K
         )
 
     result = {"answer": None, "citations": [], "n_chunks_tried": 0,
