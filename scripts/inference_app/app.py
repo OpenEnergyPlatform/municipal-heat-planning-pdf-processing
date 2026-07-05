@@ -15,12 +15,20 @@ from __future__ import annotations
 
 import logging
 import os
+import sys
 import tempfile
 from pathlib import Path
 
+# `streamlit run scripts/inference_app/app.py` executes this file as a top-level
+# script (no package context), so relative imports would fail. Put the repo root
+# (.../ above scripts/) on sys.path and import the package absolutely.
+_REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+if _REPO_ROOT not in sys.path:
+    sys.path.insert(0, _REPO_ROOT)
+
 import streamlit as st
 
-from . import config, db, faiss_store, query_cache, chunker, llm_client
+from scripts.inference_app import config, db, faiss_store, query_cache, chunker, llm_client
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger(__name__)
@@ -71,7 +79,7 @@ def embed_query(item: dict, cache_conn, cache_key: str):
         log.info("Query cache hit (%s)", cache_key[:12])
         return cached, True
     # Heavy backend imported lazily so a cache-hit turn never touches torch.
-    from .quantized_embedder import embed_query as _embed
+    from scripts.inference_app.quantized_embedder import embed_query as _embed
     vec = _embed(
         item,
         model_name=config.EMBEDDING_MODEL,
