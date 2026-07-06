@@ -77,7 +77,7 @@ def citation_label(hit: dict) -> str:
     return page_str
 
 
-def _format_hit(index: int, hit: dict) -> dict:
+def format_hit(index: int, hit: dict) -> dict:
     """Build the per-item dict embedded in a chunk (with source + text)."""
     title = hit.get("title")
     body = hit.get("text") or ""
@@ -102,7 +102,7 @@ def pack_chunks(hits: list[dict], token_budget: int, tokenizer=None) -> list[Chu
     current_tokens = 0
 
     for i, hit in enumerate(hits):
-        item = _format_hit(i, hit)
+        item = format_hit(i, hit)
         t = count_tokens(item["text"], tokenizer)
         if current and current_tokens + t > token_budget:
             chunks.append(Chunk(items=current))

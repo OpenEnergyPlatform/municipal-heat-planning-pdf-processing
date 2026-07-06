@@ -54,11 +54,6 @@ def get_cache():
     return query_cache.connect(config.QUERY_CACHE_PATH)
 
 
-@st.cache_resource
-def get_tokenizer():
-    return chunker.get_tokenizer()
-
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -97,80 +92,83 @@ def run_turn(task: str, image_bytes: bytes | None, image_only: bool,
     """
     Execute one full retrieval + QA turn. Returns a dict with keys:
     answer (str|None), citations (list[dict]), n_chunks_tried (int),
-    cache_hit (bool), n_hits (int).
+    cache_hit (bool), n_hits (int), phrase (str|None).
+
+    All sub-steps run inside a single st.status so there is one continuously
+    animated progress indicator for the whole turn (search phrase → embedding →
+    retrieval → source-by-source QA) with no dead gap where the UI looks frozen.
+
+    Retrieved hits are checked ONE AT A TIME, so the source shown for an answer
+    is exactly the one the LLM used — no guessing from multi-hit source_refs.
     """
-    conn = get_db()
-    index, id_to_pos = get_index()
-    cache_conn = get_cache()
-    tokenizer = get_tokenizer()
+    result = {"answer": None, "citations": [], "n_chunks_tried": 0,
+              "cache_hit": False, "n_hits": 0, "phrase": None}
 
-    # --- 1) build the query item + cache key, per mode ---
-    tmp_path = None
-    if image_bytes is not None and image_only:
-        mode = "image"
-        tmp_path = _write_temp_image(image_bytes)
-        item = {"image": tmp_path}
-        phrase = None
-        cache_key = query_cache.make_key(mode, image_bytes=image_bytes)
-    elif image_bytes is not None:
-        mode = "image+text"
-        phrase = llm_client.make_search_phrase(task)
-        tmp_path = _write_temp_image(image_bytes)
-        item = {"text": phrase, "image": tmp_path}
-        cache_key = query_cache.make_key(mode, text=phrase, image_bytes=image_bytes)
-    else:
-        mode = "text"
-        phrase = llm_client.make_search_phrase(task)
-        item = {"text": phrase}
-        cache_key = query_cache.make_key(mode, text=phrase)
+    with st.status("Anfrage wird bearbeitet …", expanded=False) as status:
+        conn = get_db()
+        cache_conn = get_cache()
+        status.update(label="Index wird geladen …")
+        index, id_to_pos = get_index()
 
-    # --- 2) embed (cache or on-demand load) ---
-    with st.spinner("Embedding wird berechnet …"):
+        # --- 1) build the query item + cache key, per mode ---
+        tmp_path = None
+        if image_bytes is not None and image_only:
+            mode = "image"
+            tmp_path = _write_temp_image(image_bytes)
+            item = {"image": tmp_path}
+            phrase = None
+            cache_key = query_cache.make_key(mode, image_bytes=image_bytes)
+        elif image_bytes is not None:
+            mode = "image+text"
+            status.update(label="Suchphrase wird erzeugt …")
+            phrase = llm_client.make_search_phrase(task)
+            tmp_path = _write_temp_image(image_bytes)
+            item = {"text": phrase, "image": tmp_path}
+            cache_key = query_cache.make_key(mode, text=phrase, image_bytes=image_bytes)
+        else:
+            mode = "text"
+            status.update(label="Suchphrase wird erzeugt …")
+            phrase = llm_client.make_search_phrase(task)
+            item = {"text": phrase}
+            cache_key = query_cache.make_key(mode, text=phrase)
+        result["phrase"] = phrase
+
+        # --- 2) embed (cache or on-demand model load) ---
+        status.update(label="Embedding wird berechnet (Modell lädt ggf.) …")
         query_vec, cache_hit = embed_query(item, cache_conn, cache_key)
-    if tmp_path:
-        try:
-            Path(tmp_path).unlink(missing_ok=True)
-        except OSError:
-            pass
+        result["cache_hit"] = cache_hit
+        if tmp_path:
+            try:
+                Path(tmp_path).unlink(missing_ok=True)
+            except OSError:
+                pass
 
-    # --- 3) scoped retrieval ---
-    embedding_types = [t for s in scopes for t in config.SCOPE_TO_EMBEDDING_TYPES[s]]
-    with st.spinner("Suche im Dokument …"):
+        # --- 3) scoped retrieval ---
+        status.update(label="Passende Stellen werden gesucht …")
+        embedding_types = [t for s in scopes for t in config.SCOPE_TO_EMBEDDING_TYPES[s]]
         hits = faiss_store.retrieve(
             conn, index, id_to_pos, document_id, embedding_types, query_vec, config.TOP_K
         )
+        result["n_hits"] = len(hits)
+        if not hits:
+            status.update(label="Keine Treffer im gewählten Suchbereich.", state="complete")
+            return result
 
-    result = {"answer": None, "citations": [], "n_chunks_tried": 0,
-              "cache_hit": cache_hit, "n_hits": len(hits), "phrase": phrase}
-    if not hits:
-        return result
+        # --- 4) source-by-source QA: first hit that answers IS the cited source ---
+        top_hits = hits[: config.MAX_CHUNK_ATTEMPTS]
+        for attempt, hit in enumerate(top_hits, start=1):
+            result["n_chunks_tried"] = attempt
+            status.update(label=f"Quelle {attempt}/{len(top_hits)} wird geprüft …")
+            answer = llm_client.ask_chunk(task, [chunker.format_hit(attempt - 1, hit)])
+            if answer.get("found"):
+                result["answer"] = answer["answer"]
+                result["citations"] = [hit]          # exactly the source that answered
+                status.update(label=f"Antwort in Quelle {attempt} gefunden.", state="complete")
+                return result
 
-    # --- 4) iterative chunk QA (two distinct budgets, see llm_client) ---
-    chunks = chunker.pack_chunks(hits, config.CHUNK_TOKEN_BUDGET, tokenizer)
-    for attempt, chunk in enumerate(chunks[: config.MAX_CHUNK_ATTEMPTS], start=1):
-        result["n_chunks_tried"] = attempt
-        with st.status(f"Prüfe Auszug {attempt}/{min(len(chunks), config.MAX_CHUNK_ATTEMPTS)} …",
-                       expanded=False):
-            answer = llm_client.ask_chunk(task, chunk.items)
-        if answer.get("found"):
-            result["answer"] = answer["answer"]
-            refs = answer.get("source_refs", [])
-            # Map source_refs (global hit indices) back to hits for citation.
-            ref_idxs = {int(r) for r in refs if isinstance(r, int) or str(r).isdigit()}
-            cited = [hits[i] for i in sorted(ref_idxs) if 0 <= i < len(hits)]
-            result["citations"] = cited or [c_item_hit(chunk, hits)]
-            break
-
+        status.update(label=f"In {len(top_hits)} Quellen keine Antwort gefunden.",
+                      state="complete")
     return result
-
-
-def c_item_hit(chunk: "chunker.Chunk", hits: list[dict]) -> dict:
-    """Fallback citation: the first hit represented in the answering chunk."""
-    if chunk.items:
-        idx = chunk.items[0].get("index", 0)
-        if 0 <= idx < len(hits):
-            return hits[idx]
-    return hits[0] if hits else {}
 
 
 def _write_temp_image(image_bytes: bytes) -> str:
