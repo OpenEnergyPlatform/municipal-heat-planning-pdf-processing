@@ -15,6 +15,7 @@ Author: Felix Vossel
 """
 from __future__ import annotations
 
+import re
 import sqlite3
 from pathlib import Path
 from typing import Optional
@@ -78,6 +79,33 @@ def list_documents(
     return conn.execute(sql).fetchall()
 
 
+_KONVOI_DROP_PREFIX = {"waermeplan", "waermepaln", "wärmeplan", "energiekonzept", "kwp"}
+
+
+def _konvoi_lead(filename: str) -> str:
+    """
+    Best-effort convoy name from a `*_konvoi_*` filename.
+
+    Member municipalities of a joint ("Konvoi") plan are each mapped to the same
+    convoy Document by their own ags, so the picker would otherwise show a member
+    name (e.g. "Gemmrigheim") for a plan actually led by another town. Strip the
+    known plan-type prefix, the trailing date/quarter, and the "konvoi" marker;
+    what remains is the convoy lead (e.g. waermeplan_konvoi_hessigheim_20260401 →
+    "Hessigheim"). Returns "" if nothing sensible is left.
+    """
+    stem = (filename or "").rsplit(".", 1)[0]
+    out = []
+    for tok in re.split(r"[_\s]+", stem):
+        t = tok.strip()
+        tl = t.lower()
+        if not t or tl in _KONVOI_DROP_PREFIX or tl == "konvoi":
+            continue
+        if re.fullmatch(r"\d{6,8}", t) or re.fullmatch(r"\d{4}q[1-4]", tl):
+            continue  # date (20260401 / 250327) or quarter (2024q2)
+        out.append(t)
+    return " ".join(out).strip().title()
+
+
 def document_label(row: sqlite3.Row) -> str:
     """Build a readable picker label from a list_documents() row."""
     name = row["municipality_name"] or row["organisation_unit_name"] or row["filename"]
@@ -86,6 +114,12 @@ def document_label(row: sqlite3.Row) -> str:
         parts.append(f"({row['organisation_unit_name']})")
     if row["published"]:
         parts.append(str(row["published"]))
+    # Flag joint/convoy plans so a member-municipality label is not mistaken for
+    # a standalone plan (see _konvoi_lead).
+    filename = row["filename"] or ""
+    if "konvoi" in filename.lower():
+        lead = _konvoi_lead(filename)
+        parts.append(f"Konvoi: {lead}" if lead else "Konvoi")
     parts.append("(aktuell)" if row["is_current"] else "(alt)")
     return " · ".join(parts)
 
