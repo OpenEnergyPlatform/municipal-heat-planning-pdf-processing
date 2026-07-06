@@ -184,8 +184,11 @@ def fetch_owner_content(
     Returns a uniform dict:
         {owner_kind, owner_id, title, text, page_number, image_path,
          section_number, section_title, document_id}
-    image_path is None for section owners. Returns None if the row vanished
-    (should not happen for a consistent DB, but guards against races).
+    image_path is None for section owners; for table/figure owners it is the
+    stored crop path made **relative to IMAGE_ROOT** (i.e. prefixed with the
+    document's asset folder: `<filename-without-.pdf>/images/..`), so the app
+    can resolve it directly. Returns None if the row vanished (should not happen
+    for a consistent DB, but guards against races).
     """
     if owner_kind == "section":
         row = conn.execute(
@@ -223,7 +226,7 @@ def fetch_owner_content(
             "title": row["caption"],
             "text": row["markdown"] or "",
             "page_number": row["page_number"],
-            "image_path": row["path"] or None,
+            "image_path": _asset_path(_document_folder(conn, doc_id), row["path"]),
             "section_number": sec_num,
             "section_title": sec_title,
             "document_id": doc_id,
@@ -245,7 +248,7 @@ def fetch_owner_content(
             "title": row["caption"],
             "text": row["description"] or "",
             "page_number": row["page_number"],
-            "image_path": row["path"] or None,
+            "image_path": _asset_path(_document_folder(conn, doc_id), row["path"]),
             "section_number": sec_num,
             "section_title": sec_title,
             "document_id": doc_id,
@@ -259,3 +262,37 @@ def _section_document(conn: sqlite3.Connection, section_id: int) -> Optional[int
         "SELECT document FROM Sections WHERE id = ?", (section_id,)
     ).fetchone()
     return row["document"] if row else None
+
+
+def _document_folder(conn: sqlite3.Connection, document_id: Optional[int]) -> Optional[str]:
+    """
+    Name of the on-disk folder holding a document's extracted assets.
+
+    imageprocessing writes each document's crops under
+    `<IMAGE_ROOT>/<filename-without-.pdf>/images/...`, so the folder is the
+    Documents.filename with a trailing `.pdf` stripped. Folder names keep the
+    exact (URL-encoded, e.g. ``ö`` → ``%c3%b6``) spelling stored in `filename`
+    — do NOT re-encode.
+    """
+    if document_id is None:
+        return None
+    row = conn.execute(
+        "SELECT filename FROM Documents WHERE id = ?", (document_id,)
+    ).fetchone()
+    if row is None or not row["filename"]:
+        return None
+    fn = row["filename"]
+    return fn[:-4] if fn.lower().endswith(".pdf") else fn
+
+
+def _asset_path(folder: Optional[str], stored_path: Optional[str]) -> Optional[str]:
+    """
+    Join a document's asset `folder` with a stored `images/..` path into a path
+    relative to IMAGE_ROOT (the app resolves it as `IMAGE_ROOT / result`).
+
+    Falls back to the bare stored path if the folder is unknown (keeps the old
+    behaviour rather than dropping the reference).
+    """
+    if not stored_path:
+        return None
+    return f"{folder}/{stored_path}" if folder else stored_path
