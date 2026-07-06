@@ -149,6 +149,34 @@ def test_list_documents_and_label(corpus):
     assert "(aktuell)" in label
 
 
+def _doc_row(**kw):
+    base = {"municipality_name": "Gemmrigheim", "organisation_unit_name": None,
+            "published": "20260401", "is_current": 1,
+            "filename": "waermeplan_konvoi_hessigheim_20260401.pdf"}
+    base.update(kw)
+    return base
+
+
+def test_konvoi_lead_parsing():
+    assert db._konvoi_lead("waermeplan_konvoi_hessigheim_20260401.pdf") == "Hessigheim"
+    assert db._konvoi_lead("waermeplan_denzlingen_konvoi_2024q2.pdf") == "Denzlingen"
+    assert db._konvoi_lead("waermeplan__asperg_et_al_konvoi_2024q2.pdf") == "Asperg Et Al"
+    assert db._konvoi_lead("waermeplan_by6_konvoi_250327.pdf") == "By6"
+
+
+def test_document_label_flags_konvoi():
+    label = db.document_label(_doc_row())
+    assert "Gemmrigheim" in label           # the member the user picked
+    assert "Konvoi: Hessigheim" in label    # ...revealed as the Hessigheim convoy plan
+
+
+def test_document_label_non_konvoi_has_no_tag():
+    label = db.document_label(_doc_row(filename="waermeplan_flensburg_20240701.pdf",
+                                       municipality_name="Flensburg"))
+    assert "Konvoi" not in label
+    assert "Flensburg" in label
+
+
 # ---------------------------------------------------------------------------
 # chunker.py
 # ---------------------------------------------------------------------------
