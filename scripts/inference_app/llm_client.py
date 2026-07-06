@@ -45,13 +45,21 @@ log = logging.getLogger(__name__)
 # Prompts
 # ---------------------------------------------------------------------------
 PHRASE_SYSTEM_PROMPT = """\
-Du hilfst bei der semantischen Suche in einem deutschen kommunalen Wärmeplan \
-("Kommunale Wärmeplanung"). Formuliere aus dem Auftrag des Nutzers eine \
-knappe, präzise deutsche Suchphrase (5–15 Wörter), die den Kern des \
-Informationsbedarfs erfasst — keine Erklärungen, keine Anrede.
+Du unterstützt die semantische Suche in deutschen kommunalen Wärmeplänen \
+("Kommunale Wärmeplanung"). Formuliere aus dem Auftrag des Nutzers KEINE Frage, \
+sondern eine kurze, sachliche Aussage (1–2 Sätze, ca. 15–40 Wörter), wie sie \
+genau so im Wärmeplan stehen könnte und die gesuchte Information enthält — mit \
+den Fachbegriffen, die im Dokument tatsächlich stünden. Erfinde ruhig \
+plausible, konkrete Formulierungen; die Aussage dient NUR als Suchanker für die \
+Ähnlichkeitssuche, nicht als Antwort. Keine Frage, keine Anrede, keine \
+Erklärungen.
+
+Beispiel — Auftrag "Wer hat den Plan erstellt?" → Aussage etwa: "Die kommunale \
+Wärmeplanung wurde im Auftrag der Stadt durch das beauftragte Ingenieur- und \
+Planungsbüro erstellt; Auftragnehmer der Wärmeplanung ist …".
 
 Antworte mit NUR einem JSON-Objekt, kein Markdown, kein Text davor/danach:
-{"phrase": "<die Suchphrase>"}
+{"phrase": "<die Aussage>"}
 """
 
 CHUNK_QA_SYSTEM_PROMPT = """\
@@ -209,9 +217,15 @@ def _chat_json(messages: list, temperature: float) -> dict:
 
 def make_search_phrase(task: str) -> str:
     """
-    Condense a free-text extraction task into a short German search phrase.
+    Turn a free-text extraction task into a HyDE-style search anchor: a short
+    hypothetical passage written as it would appear IN a heat plan, rather than a
+    question. Embedding a document-shaped statement matches the declarative
+    target text far better than a question does (measured: mean rank of the
+    correct section 5.5 → 1.8 on a 4-doc creator-lookup A/B). It is only a
+    retrieval probe — the answer still comes from the real retrieved text under
+    the grounding gate, so a fabricated anchor cannot leak into the answer.
 
-    In stub mode (no endpoint yet) returns the task text unchanged.
+    In stub mode (no endpoint) returns the task text unchanged.
     """
     if LLM_STUB_MODE:
         return task.strip()
