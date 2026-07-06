@@ -228,3 +228,40 @@ def test_query_cache_key_sensitivity():
     assert k_text != k_other       # text matters
     assert k_text != k_mode        # mode matters
     assert k_img != k_mode         # image bytes matter
+
+
+# ---------------------------------------------------------------------------
+# llm_client.py – grounding gate (anti-hallucination)
+# ---------------------------------------------------------------------------
+def _excerpt(text):
+    return [{"index": 0, "source": "Abschnitt „X“, Seite 1", "text": text}]
+
+
+def test_quote_grounded_accepts_verbatim_span():
+    llm = pytest.importorskip("scripts.inference_app.llm_client")
+    items = _excerpt("Der Wärmeplan wurde durch die Musterbüro GmbH erstellt und geprüft.")
+    # whitespace/case-tolerant verbatim substring
+    assert llm._quote_is_grounded("durch die  MUSTERBÜRO GmbH  erstellt", items) is True
+
+
+def test_quote_grounded_rejects_fabrication():
+    llm = pytest.importorskip("scripts.inference_app.llm_client")
+    items = _excerpt("Der Auszug behandelt Fernwärme, Wärmepumpen und Sanierung.")
+    # a plausible but absent company name must NOT validate
+    assert llm._quote_is_grounded("erstellt von der endura kommunal GmbH", items) is False
+
+
+def test_quote_grounded_rejects_too_short():
+    llm = pytest.importorskip("scripts.inference_app.llm_client")
+    items = _excerpt("Beauftragt wurde die Beispiel GmbH aus Musterstadt.")
+    assert llm._quote_is_grounded("GmbH", items) is False        # stray common token
+
+
+def test_ask_chunk_stub_quote_is_grounded():
+    llm = pytest.importorskip("scripts.inference_app.llm_client")
+    if not llm.LLM_STUB_MODE:
+        pytest.skip("stub mode off")
+    items = _excerpt("Die Beispiel GmbH hat den Plan erstellt.")
+    out = llm.ask_chunk("Wer hat den Plan erstellt?", items)
+    assert out["found"] is True
+    assert llm._quote_is_grounded(out["quote"], items)

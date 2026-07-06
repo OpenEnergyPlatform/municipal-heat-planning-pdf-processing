@@ -162,7 +162,9 @@ def run_turn(task: str, image_bytes: bytes | None, image_only: bool,
             answer = llm_client.ask_chunk(task, [chunker.format_hit(attempt - 1, hit)])
             if answer.get("found"):
                 result["answer"] = answer["answer"]
-                result["citations"] = [hit]          # exactly the source that answered
+                # Carry the verifying verbatim quote alongside the source so the
+                # citation shows the exact passage the answer is grounded in.
+                result["citations"] = [{**hit, "quote": answer.get("quote")}]
                 status.update(label=f"Antwort in Quelle {attempt} gefunden.", state="complete")
                 return result
 
@@ -274,9 +276,12 @@ def main() -> None:
 
 
 def _render_citation(cit: dict) -> None:
-    """Render one citation (source label + optional image)."""
+    """Render one citation: source label, the verbatim supporting quote, image."""
     label = chunker.citation_label(cit)
     st.caption(f"📄 {label}")
+    quote = cit.get("quote")
+    if quote:
+        st.markdown("> " + str(quote).replace("\n", " "))
     img = resolve_image_path(cit.get("image_path"))
     if img is not None:
         st.image(str(img))
