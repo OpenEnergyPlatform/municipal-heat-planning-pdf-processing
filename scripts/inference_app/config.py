@@ -127,15 +127,15 @@ QUERY_CACHE_PATH = Path(os.environ.get("QUERY_CACHE_PATH", "data/inference_app_q
 #   *_vl   = the rendered image PLUS its caption/description  (the visual vector)
 #   *_text = only the caption/description text                (no image)
 # There is NO image-without-text vector. So the meaningful user choice is
-# "mit Bild (VL)" vs. "nur Beschreibung (Text)" — each exposed as its own scope
-# so either, or both, can be searched. Selecting both still needs the retrieval
-# dedup by (owner_kind, owner_id): one Table/Image row is then hit via both its
-# types in the same search.
+# "Bild + Beschreibung (VL)" vs. "nur Beschreibung (Text)" — each exposed as its
+# own scope so either, or both, can be searched. Selecting both still needs the
+# retrieval dedup by (owner_kind, owner_id): one Table/Image row is then hit via
+# both its types in the same search.
 SCOPE_HEADINGS      = "Überschriften"
 SCOPE_TEXT          = "Textinhalte"
-SCOPE_TABLES_VL     = "Tabellen (mit Bild)"
+SCOPE_TABLES_VL     = "Tabellen (Bild + Beschreibung)"
 SCOPE_TABLES_TEXT   = "Tabellen (nur Beschreibung)"
-SCOPE_FIGURES_VL    = "Bilder (mit Bild)"
+SCOPE_FIGURES_VL    = "Bilder (Bild + Beschreibung)"
 SCOPE_FIGURES_TEXT  = "Bilder (nur Beschreibung)"
 
 SCOPE_TO_EMBEDDING_TYPES: dict[str, list[str]] = {

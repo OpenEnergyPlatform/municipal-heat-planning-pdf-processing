@@ -11,9 +11,9 @@ remote OpenAI-compatible API.
 
 1. Pick one Wärmeplan (document).
 2. Pick search scopes (multi-select). Tables and figures are each embedded twice, so each
-   is offered as two scopes: **Überschriften**, **Textinhalte**, **Tabellen (mit Bild)** /
-   **Tabellen (nur Beschreibung)**, **Bilder (mit Bild)** / **Bilder (nur Beschreibung)**.
-   `*_vl` ("mit Bild") = the rendered image plus its caption/description; `*_text`
+   is offered as two scopes: **Überschriften**, **Textinhalte**, **Tabellen (Bild + Beschreibung)** /
+   **Tabellen (nur Beschreibung)**, **Bilder (Bild + Beschreibung)** / **Bilder (nur Beschreibung)**.
+   `*_vl` ("Bild + Beschreibung") = the rendered image plus its caption/description; `*_text`
    ("nur Beschreibung") = only the caption/description text (no image). There is no
    image-without-text vector. A figure/table-only selection also switches the query anchor
    to a caption style.
