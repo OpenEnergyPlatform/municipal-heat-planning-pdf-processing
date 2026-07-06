@@ -209,9 +209,9 @@ def run_turn(task: str, image_bytes: bytes | None, image_only: bool,
 
 @contextmanager
 def _timed_spinner(label: str, timings: dict):
-    """st.spinner that records its elapsed wall-time into `timings[label]`."""
+    """st.spinner (with live elapsed timer) that also records its wall-time."""
     t0 = time.perf_counter()
-    with st.spinner(f"{label} …"):
+    with st.spinner(f"{label} …", show_time=True):
         yield
     timings[label] = time.perf_counter() - t0
 

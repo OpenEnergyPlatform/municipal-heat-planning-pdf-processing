@@ -293,3 +293,34 @@ def test_ask_chunk_stub_quote_is_grounded():
     out = llm.ask_chunk("Wer hat den Plan erstellt?", items)
     assert out["found"] is True
     assert llm._quote_is_grounded(out["quote"], items)
+
+
+# ---------------------------------------------------------------------------
+# llm_client.py – search-anchor guard (reject evaluation/refusal phrases)
+# ---------------------------------------------------------------------------
+def test_non_anchor_detects_refusal_phrase():
+    llm = pytest.importorskip("scripts.inference_app.llm_client")
+    # the exact self-contradictory string the gateway produced for an image query
+    assert llm._looks_like_non_anchor(
+        "Abbildung: Keine ähnlichen Diagramme im bereitgestellten Kontext nachweisbar."
+    ) is True
+
+
+@pytest.mark.parametrize("bad", [
+    "Die Information ist nicht enthalten.",
+    "Dazu liegen keine Angaben vor.",
+    "Lässt sich aus dem Kontext nicht ableiten.",
+])
+def test_non_anchor_detects_variants(bad):
+    llm = pytest.importorskip("scripts.inference_app.llm_client")
+    assert llm._looks_like_non_anchor(bad) is True
+
+
+@pytest.mark.parametrize("good", [
+    "Abbildung: Gestapeltes Balkendiagramm des jährlichen Wärmebedarfs nach Sektoren in MWh/a.",
+    "Die kommunale Wärmeplanung wurde durch die Musterplan Energie GmbH aus Freiburg erstellt.",
+    "Säulendiagramm der Baualtersklassen der Gebäude im Gemeindegebiet, Anteile in Prozent.",
+])
+def test_non_anchor_passes_real_anchors(good):
+    llm = pytest.importorskip("scripts.inference_app.llm_client")
+    assert llm._looks_like_non_anchor(good) is False
