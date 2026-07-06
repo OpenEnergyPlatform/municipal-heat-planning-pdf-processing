@@ -58,6 +58,12 @@ stattdessen plausible konkrete Inhalte (z.B. einen realistischen, erfundenen \
 Büro-/Firmennamen oder Zahlenwert) — sie dienen NUR als Suchanker für die \
 Ähnlichkeitssuche, nicht als Antwort.
 
+Der Auftrag kann eine Ja/Nein- oder Ähnlichkeitsfrage sein. Beantworte oder \
+bewerte sie NICHT. Erzeuge IMMER eine positive, konkrete Aussage — niemals eine \
+Verneinung oder Absage. Verwende NIE Wörter wie "keine", "nicht nachweisbar", \
+"nicht enthalten", "liegen nicht vor" oder "im bereitgestellten Kontext"; das \
+ist ein Suchanker, keine Auskunft.
+
 Beispiel — Auftrag "Wer hat den Plan erstellt?" → Aussage etwa: "Die kommunale \
 Wärmeplanung wurde im Auftrag der Stadt durch das beauftragte Ingenieurbüro \
 erstellt. Auftragnehmer ist die Musterplan Energie GmbH aus Freiburg."
@@ -101,6 +107,12 @@ KONKRET, was darauf zu sehen wäre — Diagramm-/Kartentyp, dargestellte Größe
 und Einheiten, Gebiet/Bezug — mit den Fachbegriffen, die in einer solchen \
 Bildunterschrift stünden. Keine Meta-Sätze, keine Frage, keine Anrede.
 
+Der Auftrag kann eine Ja/Nein- oder Ähnlichkeitsfrage sein (z.B. "Gibt es \
+ähnliche Diagramme?") — beantworte oder bewerte sie NICHT, sondern erzeuge IMMER \
+eine positive Bildunterschrift EINER konkreten, hypothetischen Abbildung. \
+Verwende NIE Wörter wie "keine", "nicht nachweisbar", "nicht enthalten" oder \
+"im bereitgestellten Kontext".
+
 Beispiel — Auftrag "Diagramm zum Wärmebedarf pro Jahr" → Aussage etwa: \
 "Abbildung: Jährlicher Wärmebedarf der Gemeinde nach Sektoren in MWh/a, \
 dargestellt als gestapeltes Balkendiagramm über die Szenariojahre."
@@ -129,9 +141,13 @@ _ANSWER_PROMPT_TAIL = """, "supports": [{"index": <int des in DIESEN Auszügen g
 
 Für JEDE neue Aussage MUSS ein "support" mit wörtlichem, vollständigem \
 Beleg-Satz aus dem passenden Auszug vorhanden sein (Belege aus "bisher" nicht \
-wiederholen). Enthalten diese Auszüge nichts Relevantes, antworte EXAKT: \
-{"found": false}. Setze "complete" auf false, wenn weitere Auszüge noch \
-fehlende Teile liefern könnten.
+wiederholen). Zählst du mehrere Elemente auf (z.B. mehrere Diagrammtypen, \
+Namen, Werte), braucht JEDES EINZELNE Element seinen eigenen "support" mit \
+Beleg-Satz. "answer" und "supports" müssen deckungsgleich sein: nenne in \
+"answer" KEIN Element, für das kein "support" mit wörtlichem Beleg existiert — \
+lieber weglassen als unbelegt behaupten. Enthalten diese Auszüge nichts \
+Relevantes, antworte EXAKT: {"found": false}. Setze "complete" auf false, wenn \
+weitere Auszüge noch fehlende Teile liefern könnten.
 
 Nutze niemals Wissen außerhalb der Auszüge und "bisher". Erfinde keine Namen, \
 Zahlen oder Fakten. Beantworte GENAU den Auftrag — verwechsle z.B. nicht, wer \
@@ -288,6 +304,32 @@ def grounded_quote(quote, chunk_item: dict) -> Optional[str]:
 # Public API
 # ---------------------------------------------------------------------------
 
+# A search anchor is a HYPOTHETICAL, present-tense passage/caption. If the model
+# slips into evaluating or refusing ("keine ähnlichen Diagramme im
+# bereitgestellten Kontext nachweisbar") the string is not an anchor at all — it
+# also contradicts a later successful hit. Detect and regenerate/fall back.
+_NON_ANCHOR_RE = re.compile(
+    r"(?i)(bereitgestellt\w*\s+kontext|nicht\s+nachweisbar|nicht\s+enthalten|"
+    r"nicht\s+vorhanden|nicht\s+ersichtlich|nicht\s+erkennbar|"
+    r"nicht\s+ableit\w*|nicht\s+ermittel\w*|liegen?\s+nicht\s+vor|"
+    r"lässt\s+sich\s+nicht|kann(?:st)?\s+nicht|"
+    r"keine\s+(?:ähnlich\w*|angaben|information\w*|daten|diagramm\w*|abbildung\w*))"
+)
+
+_ANCHOR_CORRECTION = (
+    "Deine letzte Ausgabe war eine Bewertung oder Absage, KEIN Suchanker. Gib "
+    "jetzt ausschließlich eine positive, konkrete Aussage bzw. Bildunterschrift "
+    "EINER hypothetischen Fundstelle aus — keine Verneinung, keine Wörter wie "
+    "'keine', 'nicht nachweisbar', 'nicht enthalten' oder 'Kontext'. Nur "
+    '{"phrase": "<die Aussage>"}.'
+)
+
+
+def _looks_like_non_anchor(phrase: str) -> bool:
+    """True if the 'phrase' reads as an evaluation/refusal instead of an anchor."""
+    return bool(_NON_ANCHOR_RE.search(phrase or ""))
+
+
 def make_search_phrase(task: str, visual: bool = False) -> str:
     """
     Turn a free-text extraction task into a HyDE-style search anchor: a short
@@ -309,16 +351,23 @@ def make_search_phrase(task: str, visual: bool = False) -> str:
     # beginning"). Fold our instructions into the user turn — robust with or
     # without a stored agent prompt.
     prompt = IMAGE_PHRASE_SYSTEM_PROMPT if visual else PHRASE_SYSTEM_PROMPT
-    messages = [
-        {"role": "user", "content": f"{prompt}\n\nAuftrag des Nutzers:\n{task}"},
-    ]
-    try:
-        parsed = _chat_json(messages, temperature=LLM_TEMPERATURE)
+    base = f"{prompt}\n\nAuftrag des Nutzers:\n{task}"
+    messages = [{"role": "user", "content": base}]
+    # Up to two attempts: if the model evaluates/denies instead of anchoring
+    # (a self-contradictory, useless anchor), re-ask once with a correction; then
+    # fall back to the raw task, which is always a safe retrieval probe.
+    for attempt in range(2):
+        try:
+            parsed = _chat_json(messages, temperature=LLM_TEMPERATURE)
+        except Exception as e:
+            log.warning("Search-phrase generation failed, using raw task: %s", e)
+            return task.strip()
         phrase = str(parsed.get("phrase", "")).strip()
-        return phrase or task.strip()
-    except Exception as e:
-        log.warning("Search-phrase generation failed, using raw task: %s", e)
-        return task.strip()
+        if phrase and not _looks_like_non_anchor(phrase):
+            return phrase
+        log.warning("Search phrase read as evaluation/denial, retrying: %r", phrase)
+        messages = [{"role": "user", "content": f"{base}\n\n{_ANCHOR_CORRECTION}"}]
+    return task.strip()
 
 
 def ask_chunk(task: str, chunk_items: list[dict]) -> dict:
