@@ -273,9 +273,10 @@ def main() -> None:
             st.markdown(result["answer"])
             if result.get("phrase"):
                 st.caption(f"🔎 Suchanker (Embedding-Phrase): {result['phrase']}")
-            with st.expander("Quellen"):
-                for cit in result["citations"]:
-                    _render_citation(cit)
+            # Rendered directly (not inside an expander) so each citation can carry
+            # its own "Kontext anzeigen" expander without illegal nesting.
+            for cit in result["citations"]:
+                _render_citation(cit)
             history.append({
                 "role": "assistant", "content": result["answer"],
                 "citations": result["citations"], "phrase": result.get("phrase"),
@@ -283,12 +284,24 @@ def main() -> None:
 
 
 def _render_citation(cit: dict) -> None:
-    """Render one citation: source label, the verbatim supporting quote, image."""
+    """Render one citation: source label, verbatim quote, expandable full context, image.
+
+    Must NOT be called inside another st.expander (Streamlit forbids nesting the
+    context expander below).
+    """
     label = chunker.citation_label(cit)
     st.caption(f"📄 {label}")
     quote = cit.get("quote")
     if quote:
         st.markdown("> " + str(quote).replace("\n", " "))
+    context = (cit.get("text") or "").strip()
+    if context:
+        with st.expander("Kontext anzeigen"):
+            body = context
+            # Best-effort: emphasise the exact quote within its full context.
+            if quote and str(quote) in body:
+                body = body.replace(str(quote), f"**{quote}**", 1)
+            st.markdown(body)
     img = resolve_image_path(cit.get("image_path"))
     if img is not None:
         st.image(str(img))

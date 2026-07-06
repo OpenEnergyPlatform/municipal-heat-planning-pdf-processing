@@ -48,17 +48,22 @@ PHRASE_SYSTEM_PROMPT = """\
 Du unterstützt die semantische Suche in deutschen kommunalen Wärmeplänen \
 ("Kommunale Wärmeplanung"). Formuliere aus dem Auftrag des Nutzers KEINE Frage, \
 sondern eine kurze, sachliche Aussage (1–2 Sätze, ca. 15–40 Wörter), wie sie \
-genau so im Wärmeplan stehen könnte und die gesuchte Information enthält — mit \
-den Fachbegriffen, die im Dokument tatsächlich stünden. Erfinde ruhig \
-plausible, konkrete Formulierungen; die Aussage dient NUR als Suchanker für die \
-Ähnlichkeitssuche, nicht als Antwort. Keine Frage, keine Anrede, keine \
-Erklärungen.
+genau so im Wärmeplan stehen könnte und die gesuchte Information KONKRET \
+enthält — mit den Fachbegriffen, die im Dokument tatsächlich stünden.
+
+WICHTIG: Schreibe die Aussage so, als STÜNDE die Information bereits konkret \
+darin. Verwende KEINE Meta-Sätze wie "der Name ist in diesem Abschnitt \
+genannt", "steht im Impressum" oder "wird weiter unten beschrieben". Erfinde \
+stattdessen plausible konkrete Inhalte (z.B. einen realistischen, erfundenen \
+Büro-/Firmennamen oder Zahlenwert) — sie dienen NUR als Suchanker für die \
+Ähnlichkeitssuche, nicht als Antwort.
 
 Beispiel — Auftrag "Wer hat den Plan erstellt?" → Aussage etwa: "Die kommunale \
-Wärmeplanung wurde im Auftrag der Stadt durch das beauftragte Ingenieur- und \
-Planungsbüro erstellt; Auftragnehmer der Wärmeplanung ist …".
+Wärmeplanung wurde im Auftrag der Stadt durch das beauftragte Ingenieurbüro \
+erstellt. Auftragnehmer ist die Musterplan Energie GmbH aus Freiburg."
 
-Antworte mit NUR einem JSON-Objekt, kein Markdown, kein Text davor/danach:
+Keine Frage, keine Anrede, keine Erklärungen. Antworte mit NUR einem \
+JSON-Objekt, kein Markdown, kein Text davor/danach:
 {"phrase": "<die Aussage>"}
 """
 
@@ -73,8 +78,9 @@ Wenn — und nur wenn — der Auszug die Antwort auf den Auftrag enthält, antwo
 
 Das Feld "quote" MUSS ein exakter, zusammenhängender Ausschnitt aus dem \
 Auszug-Text sein — kopiere ihn Zeichen für Zeichen, ohne umzuformulieren, zu \
-kürzen oder zu ergänzen. Findest du keinen solchen belegenden Ausschnitt, gilt \
-die Antwort als NICHT enthalten.
+kürzen oder zu ergänzen, und zitiere möglichst den GANZEN belegenden Satz (kein \
+Satzfragment aus der Satzmitte). Findest du keinen solchen belegenden \
+Ausschnitt, gilt die Antwort als NICHT enthalten.
 
 Wenn der Auszug die Antwort NICHT enthält, antworte EXAKT:
 {"found": false}
