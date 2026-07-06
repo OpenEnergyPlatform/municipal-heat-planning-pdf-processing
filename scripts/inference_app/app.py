@@ -258,9 +258,9 @@ def main() -> None:
         )
         scopes = st.multiselect(
             "Suchbereich", options=config.ALL_SCOPES, default=config.ALL_SCOPES,
-            help="Tabellen/Bilder liegen doppelt im Index: „mit Bild“ durchsucht das "
-                 "eingebettete Bild samt Beschreibung, „nur Beschreibung“ nur den "
-                 "Caption-/Beschreibungstext ohne das Bild.",
+            help="Tabellen/Bilder liegen doppelt im Index: „Bild + Beschreibung“ "
+                 "durchsucht das eingebettete Bild samt Beschreibung, "
+                 "„nur Beschreibung“ nur den Caption-/Beschreibungstext ohne das Bild.",
         )
         out_fmt = st.radio("Antwortformat", ["Fließtext", "JSON"], horizontal=True)
         as_json = out_fmt == "JSON"
