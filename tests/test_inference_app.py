@@ -124,7 +124,8 @@ def test_fetch_table_content_has_parent_section(corpus):
     assert c["title"] == "Energieträger"
     assert c["text"] == "| a | b |"
     assert c["page_number"] == 12
-    assert c["image_path"] == "images/p12_tbl0.png"
+    # image_path is IMAGE_ROOT-relative: doc folder = filename ('doc.pdf') minus .pdf
+    assert c["image_path"] == "doc/images/p12_tbl0.png"
     assert c["section_title"] == "Wärmebedarf"     # parent section
     assert c["document_id"] == 1
 
@@ -135,6 +136,7 @@ def test_fetch_figure_content(corpus):
     assert c["title"] == "Wärmekarte"
     assert c["text"] == "Eine Karte."
     assert c["page_number"] == 20
+    assert c["image_path"] == "doc/images/p20_img0.png"   # IMAGE_ROOT-relative
     assert c["section_title"] == "Potenziale"
 
 
