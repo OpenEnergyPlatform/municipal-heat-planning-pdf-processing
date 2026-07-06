@@ -220,6 +220,8 @@ def main() -> None:
     for msg in history:
         with st.chat_message(msg["role"]):
             st.markdown(msg["content"])
+            if msg.get("phrase"):
+                st.caption(f"🔎 Suchanker (Embedding-Phrase): {msg['phrase']}")
             for cit in msg.get("citations", []):
                 _render_citation(cit)
 
@@ -263,15 +265,20 @@ def main() -> None:
                 reply = (f"Antwort im gewählten Bereich nicht gefunden "
                          f"({result['n_chunks_tried']} Auszüge geprüft).")
             st.markdown(reply)
-            history.append({"role": "assistant", "content": reply, "citations": []})
+            if result.get("phrase"):
+                st.caption(f"🔎 Suchanker (Embedding-Phrase): {result['phrase']}")
+            history.append({"role": "assistant", "content": reply, "citations": [],
+                            "phrase": result.get("phrase")})
         else:
             st.markdown(result["answer"])
+            if result.get("phrase"):
+                st.caption(f"🔎 Suchanker (Embedding-Phrase): {result['phrase']}")
             with st.expander("Quellen"):
                 for cit in result["citations"]:
                     _render_citation(cit)
             history.append({
                 "role": "assistant", "content": result["answer"],
-                "citations": result["citations"],
+                "citations": result["citations"], "phrase": result.get("phrase"),
             })
 
 
