@@ -131,8 +131,10 @@ def run_turn(task: str, image_bytes: bytes | None, image_only: bool,
         cache_key = query_cache.make_key(mode, text=phrase, image_bytes=image_bytes)
     else:
         mode = "text"
+        # A figure/table-only search wants a caption-style anchor, not prose.
+        visual_anchor = _scopes_are_visual(scopes)
         with _timed_spinner("🔎 Suchanker", timings):
-            phrase = llm_client.make_search_phrase(task)
+            phrase = llm_client.make_search_phrase(task, visual=visual_anchor)
         item = {"text": phrase}
         cache_key = query_cache.make_key(mode, text=phrase)
     result["phrase"] = phrase
@@ -207,6 +209,11 @@ def run_turn(task: str, image_bytes: bytes | None, image_only: bool,
     return result
 
 
+def _scopes_are_visual(scopes: list[str]) -> bool:
+    """True if the query targets ONLY figure/table scopes → caption-style anchor."""
+    return bool(scopes) and all(s in config.VISUAL_SCOPES for s in scopes)
+
+
 @contextmanager
 def _timed_spinner(label: str, timings: dict):
     """st.spinner (with live elapsed timer) that also records its wall-time."""
@@ -251,6 +258,9 @@ def main() -> None:
         )
         scopes = st.multiselect(
             "Suchbereich", options=config.ALL_SCOPES, default=config.ALL_SCOPES,
+            help="Tabellen/Bilder liegen doppelt im Index: „mit Bild“ durchsucht das "
+                 "eingebettete Bild samt Beschreibung, „nur Beschreibung“ nur den "
+                 "Caption-/Beschreibungstext ohne das Bild.",
         )
         out_fmt = st.radio("Antwortformat", ["Fließtext", "JSON"], horizontal=True)
         as_json = out_fmt == "JSON"

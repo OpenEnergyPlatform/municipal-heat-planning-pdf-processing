@@ -108,6 +108,31 @@ def test_candidate_ids_other_document_isolated(corpus):
     assert db.get_candidate_faiss_ids(conn, 2, ["section_text"]) == []
 
 
+# ---------------------------------------------------------------------------
+# config.py – granular VL / text scope split
+# ---------------------------------------------------------------------------
+def test_scope_split_maps_each_to_single_type():
+    assert C.SCOPE_TO_EMBEDDING_TYPES[C.SCOPE_FIGURES_VL] == ["figure_vl"]
+    assert C.SCOPE_TO_EMBEDDING_TYPES[C.SCOPE_FIGURES_TEXT] == ["figure_text"]
+    assert C.SCOPE_TO_EMBEDDING_TYPES[C.SCOPE_TABLES_VL] == ["table_vl"]
+    assert C.SCOPE_TO_EMBEDDING_TYPES[C.SCOPE_TABLES_TEXT] == ["table_text"]
+
+
+def test_all_scopes_cover_all_six_types_once():
+    flat = [t for s in C.ALL_SCOPES for t in C.SCOPE_TO_EMBEDDING_TYPES[s]]
+    assert set(flat) == {"section_title", "section_text",
+                         "table_vl", "table_text", "figure_vl", "figure_text"}
+    assert len(flat) == 6           # each scope contributes exactly one type
+
+
+def test_visual_scopes_are_figure_and_table_only():
+    assert C.VISUAL_SCOPES == frozenset({
+        C.SCOPE_TABLES_VL, C.SCOPE_TABLES_TEXT,
+        C.SCOPE_FIGURES_VL, C.SCOPE_FIGURES_TEXT})
+    assert C.SCOPE_HEADINGS not in C.VISUAL_SCOPES
+    assert C.SCOPE_TEXT not in C.VISUAL_SCOPES
+
+
 def test_fetch_section_content(corpus):
     conn = db.connect_readonly(corpus)
     c = db.fetch_owner_content(conn, "section", 1)
