@@ -104,12 +104,16 @@ LLM_STUB_MODE = os.environ.get("LLM_STUB_MODE", "").strip() not in ("", "0", "fa
 # Retrieval / QA
 # ---------------------------------------------------------------------------
 TOP_K = int(os.environ.get("TOP_K", "50"))
-# Hard cap on how many retrieved content chunks are shown to the LLM, one at a
-# time, before giving up ("answer not found in the selected scope").
+# Hard cap on how many retrieved sources are examined (one grounded partial is
+# extracted from each; information may be spread across several) before the
+# findings are synthesised into the final answer.
 MAX_CHUNK_ATTEMPTS = int(os.environ.get("MAX_CHUNK_ATTEMPTS", "10"))
-# Token budget per chunk fed to the LLM (leaves room for system prompt, the
-# question, and the response within the model's context window).
-CHUNK_TOKEN_BUDGET = int(os.environ.get("CHUNK_TOKEN_BUDGET", "6000"))
+# Token budget for the sources packed into the single answer call. The top
+# retrieved sources are included up to this budget (char/4 heuristic) so the
+# prompt stays safely inside the model's context window (leaves room for the
+# instructions + the generated answer). Sources beyond the budget are dropped
+# (reported to the user), so a very wide spread is a known limitation.
+ANSWER_CONTEXT_TOKENS = int(os.environ.get("ANSWER_CONTEXT_TOKENS", "10000"))
 
 # ---------------------------------------------------------------------------
 # Query→vector cache (separate SQLite file – NEVER the authoritative KWP.db)

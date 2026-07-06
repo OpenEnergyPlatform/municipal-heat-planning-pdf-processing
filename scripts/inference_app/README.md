@@ -65,7 +65,7 @@ comfortably within one 12 GB card.
 | `LLM_API_KEY` / `UOS_API_KEY` | from `.env` | The key is read from a `.env` file (`UOS_API_KEY=...`); `LLM_API_KEY` overrides if set. |
 | `LLM_TOKENIZER_ID` | = `LLM_MODEL` | Tokenizer for chunk sizing. The agent id is not a HF repo, so this falls back to a char/4 heuristic (fine). |
 | `LLM_STUB_MODE` | unset | Truthy → canned answers, for testing retrieval without calling the endpoint. |
-| `TOP_K` / `MAX_CHUNK_ATTEMPTS` / `CHUNK_TOKEN_BUDGET` | 50 / 10 / 6000 | Retrieval + QA knobs. |
+| `TOP_K` / `MAX_CHUNK_ATTEMPTS` / `ANSWER_CONTEXT_TOKENS` | 50 / 10 / 10000 | Retrieval depth / max sources examined / per-call source token budget (context-safe batching). |
 | `QUERY_CACHE_PATH` | `data/inference_app_query_cache.db` | Separate cache DB (never KWP.db). |
 
 ## Setup & run on the inference server

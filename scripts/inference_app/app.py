@@ -13,10 +13,13 @@ Author: Felix Vossel
 """
 from __future__ import annotations
 
+import json
 import logging
 import os
 import sys
 import tempfile
+import time
+from contextlib import contextmanager
 from pathlib import Path
 
 # `streamlit run scripts/inference_app/app.py` executes this file as a top-level
@@ -88,89 +91,129 @@ def embed_query(item: dict, cache_conn, cache_key: str):
 
 
 def run_turn(task: str, image_bytes: bytes | None, image_only: bool,
-             document_id: int, scopes: list[str]):
+             document_id: int, scopes: list[str], as_json: bool = False):
     """
-    Execute one full retrieval + QA turn. Returns a dict with keys:
-    answer (str|None), citations (list[dict]), n_chunks_tried (int),
-    cache_hit (bool), n_hits (int), phrase (str|None).
+    Execute one full retrieval + answer turn. Returns a dict with:
+    answer (str|None), citations (list[dict]), n_findings (int), cache_hit (bool),
+    n_hits (int), phrase (str|None), as_json (bool), timings (dict).
 
-    All sub-steps run inside a single st.status so there is one continuously
-    animated progress indicator for the whole turn (search phrase → embedding →
-    retrieval → source-by-source QA) with no dead gap where the UI looks frozen.
-
-    Retrieved hits are checked ONE AT A TIME, so the source shown for an answer
-    is exactly the one the LLM used — no guessing from multi-hit source_refs.
+    Each sub-step runs under its own timed st.spinner. The top sources are handed
+    to the LLM in a SINGLE call, so it sees every source together — fewest calls,
+    it picks the right source, and info spread across several is combined in one
+    pass. Every statement is validated against a verbatim quote from its cited
+    source (grounding); an answer with no grounded support is refused.
     """
-    result = {"answer": None, "citations": [], "n_chunks_tried": 0,
-              "cache_hit": False, "n_hits": 0, "phrase": None}
+    result = {"answer": None, "citations": [], "n_findings": 0, "cache_hit": False,
+              "n_hits": 0, "phrase": None, "as_json": as_json, "timings": {},
+              "n_batches": 0}
+    timings = result["timings"]
 
-    with st.status("Anfrage wird bearbeitet …", expanded=False) as status:
-        conn = get_db()
-        cache_conn = get_cache()
-        status.update(label="Index wird geladen …")
+    conn = get_db()
+    cache_conn = get_cache()
+    with _timed_spinner("Vorbereiten", timings):
         index, id_to_pos = get_index()
 
-        # --- 1) build the query item + cache key, per mode ---
-        tmp_path = None
-        if image_bytes is not None and image_only:
-            mode = "image"
-            tmp_path = _write_temp_image(image_bytes)
-            item = {"image": tmp_path}
-            phrase = None
-            cache_key = query_cache.make_key(mode, image_bytes=image_bytes)
-        elif image_bytes is not None:
-            mode = "image+text"
-            status.update(label="Suchphrase wird erzeugt …")
+    # --- 1) build the query item + cache key, per mode ---
+    tmp_path = None
+    if image_bytes is not None and image_only:
+        mode = "image"
+        tmp_path = _write_temp_image(image_bytes)
+        item = {"image": tmp_path}
+        phrase = None
+        cache_key = query_cache.make_key(mode, image_bytes=image_bytes)
+    elif image_bytes is not None:
+        mode = "image+text"
+        # visual anchor: a figure/diagram-style caption matches figures better.
+        with _timed_spinner("🔎 Suchanker (Bild+Text)", timings):
+            phrase = llm_client.make_search_phrase(task, visual=True)
+        tmp_path = _write_temp_image(image_bytes)
+        item = {"text": phrase, "image": tmp_path}
+        cache_key = query_cache.make_key(mode, text=phrase, image_bytes=image_bytes)
+    else:
+        mode = "text"
+        with _timed_spinner("🔎 Suchanker", timings):
             phrase = llm_client.make_search_phrase(task)
-            tmp_path = _write_temp_image(image_bytes)
-            item = {"text": phrase, "image": tmp_path}
-            cache_key = query_cache.make_key(mode, text=phrase, image_bytes=image_bytes)
-        else:
-            mode = "text"
-            status.update(label="Suchphrase wird erzeugt …")
-            phrase = llm_client.make_search_phrase(task)
-            item = {"text": phrase}
-            cache_key = query_cache.make_key(mode, text=phrase)
-        result["phrase"] = phrase
+        item = {"text": phrase}
+        cache_key = query_cache.make_key(mode, text=phrase)
+    result["phrase"] = phrase
 
-        # --- 2) embed (cache or on-demand model load) ---
-        status.update(label="Embedding wird berechnet (Modell lädt ggf.) …")
+    # --- 2) embed (cache or on-demand model load) ---
+    with _timed_spinner("🧮 Embedding", timings):
         query_vec, cache_hit = embed_query(item, cache_conn, cache_key)
-        result["cache_hit"] = cache_hit
-        if tmp_path:
-            try:
-                Path(tmp_path).unlink(missing_ok=True)
-            except OSError:
-                pass
+    result["cache_hit"] = cache_hit
+    if tmp_path:
+        try:
+            Path(tmp_path).unlink(missing_ok=True)
+        except OSError:
+            pass
 
-        # --- 3) scoped retrieval ---
-        status.update(label="Passende Stellen werden gesucht …")
+    # --- 3) scoped retrieval ---
+    with _timed_spinner("📚 Suche", timings):
         embedding_types = [t for s in scopes for t in config.SCOPE_TO_EMBEDDING_TYPES[s]]
         hits = faiss_store.retrieve(
             conn, index, id_to_pos, document_id, embedding_types, query_vec, config.TOP_K
         )
-        result["n_hits"] = len(hits)
-        if not hits:
-            status.update(label="Keine Treffer im gewählten Suchbereich.", state="complete")
-            return result
+    result["n_hits"] = len(hits)
+    if not hits:
+        return result
 
-        # --- 4) source-by-source QA: first hit that answers IS the cited source ---
-        top_hits = hits[: config.MAX_CHUNK_ATTEMPTS]
-        for attempt, hit in enumerate(top_hits, start=1):
-            result["n_chunks_tried"] = attempt
-            status.update(label=f"Quelle {attempt}/{len(top_hits)} wird geprüft …")
-            answer = llm_client.ask_chunk(task, [chunker.format_hit(attempt - 1, hit)])
-            if answer.get("found"):
-                result["answer"] = answer["answer"]
-                # Carry the verifying verbatim quote alongside the source so the
-                # citation shows the exact passage the answer is grounded in.
-                result["citations"] = [{**hit, "quote": answer.get("quote")}]
-                status.update(label=f"Antwort in Quelle {attempt} gefunden.", state="complete")
-                return result
+    # --- 4) answer across the top sources in context-safe BATCHES. Usually ONE
+    #        call; a further batch runs only while the answer is still incomplete,
+    #        so no source is dropped (no truncation). Every statement keeps an
+    #        exact, verbatim-quote reference to its source. ---
+    top_hits = hits[: config.MAX_CHUNK_ATTEMPTS]
+    batches = chunker.pack_chunks(top_hits, config.ANSWER_CONTEXT_TOKENS, tokenizer=None)
+    citations, seen = [], set()
+    prior_text = None
+    with _timed_spinner("🔍 Antwort aus den Quellen", timings):
+        for bi, chunk in enumerate(batches, start=1):
+            items = chunk.items
+            # text answer during batching; JSON formatting happens once at the end
+            out = llm_client.answer_from_sources(task, items, prior=prior_text, as_json=False)
+            item_by_index = {it["index"]: it for it in items}
+            for s in out.get("supports", []):
+                try:
+                    idx = int(s.get("index"))
+                except (TypeError, ValueError):
+                    continue
+                it = item_by_index.get(idx)
+                if it is None or not (0 <= idx < len(top_hits)):
+                    continue
+                gq = llm_client.grounded_quote(s.get("quote", ""), it)
+                if gq is None:
+                    continue
+                hit = top_hits[idx]
+                key = (hit["owner_kind"], hit["owner_id"])
+                if key in seen:
+                    continue
+                seen.add(key)
+                citations.append({**hit, "quote": gq})
+            if out.get("found"):
+                prior_text = out.get("answer")
+            result["n_batches"] = bi
+            if out.get("complete") and citations:
+                break     # fully answered → don't scan the remaining batches
+    if not citations or not prior_text:      # nothing grounded → refuse (anti-hallucination)
+        return result
 
-        status.update(label=f"In {len(top_hits)} Quellen keine Antwort gefunden.",
-                      state="complete")
+    # --- 5) final answer (format to JSON once at the end, if requested) ---
+    if as_json:
+        with _timed_spinner("🧩 Als JSON", timings):
+            result["answer"] = llm_client.format_as_json(task, prior_text)
+    else:
+        result["answer"] = prior_text
+    result["citations"] = citations
+    result["n_findings"] = len(citations)
     return result
+
+
+@contextmanager
+def _timed_spinner(label: str, timings: dict):
+    """st.spinner that records its elapsed wall-time into `timings[label]`."""
+    t0 = time.perf_counter()
+    with st.spinner(f"{label} …"):
+        yield
+    timings[label] = time.perf_counter() - t0
 
 
 def _write_temp_image(image_bytes: bytes) -> str:
@@ -185,6 +228,9 @@ def _write_temp_image(image_bytes: bytes) -> str:
 # ---------------------------------------------------------------------------
 def main() -> None:
     st.set_page_config(page_title="KWP RAG Chat", layout="wide")
+    # Hide Streamlit's top-right "running man" status widget (not wanted).
+    st.markdown("<style>[data-testid='stStatusWidget']{display:none !important;}</style>",
+                unsafe_allow_html=True)
     st.title("Kommunale Wärmeplanung – Recherche")
 
     conn = get_db()
@@ -206,6 +252,8 @@ def main() -> None:
         scopes = st.multiselect(
             "Suchbereich", options=config.ALL_SCOPES, default=config.ALL_SCOPES,
         )
+        out_fmt = st.radio("Antwortformat", ["Fließtext", "JSON"], horizontal=True)
+        as_json = out_fmt == "JSON"
         if config.LLM_STUB_MODE:
             st.info("LLM_STUB_MODE aktiv – Antworten sind Platzhalter.")
 
@@ -219,9 +267,13 @@ def main() -> None:
     # ---- Render history ----
     for msg in history:
         with st.chat_message(msg["role"]):
-            st.markdown(msg["content"])
+            if msg["role"] == "assistant":
+                _render_answer(msg["content"], msg.get("as_json", False))
+            else:
+                st.markdown(msg["content"])
             if msg.get("phrase"):
                 st.caption(f"🔎 Suchanker (Embedding-Phrase): {msg['phrase']}")
+            _render_timings(msg.get("timings"))
             for cit in msg.get("citations", []):
                 _render_citation(cit)
 
@@ -254,7 +306,7 @@ def main() -> None:
         st.markdown(user_text)
 
     # Run pipeline
-    result = run_turn(task, image_bytes, image_only, doc_id, scopes)
+    result = run_turn(task, image_bytes, image_only, doc_id, scopes, as_json=as_json)
 
     # Compose assistant reply
     with st.chat_message("assistant"):
@@ -262,17 +314,20 @@ def main() -> None:
             if result["n_hits"] == 0:
                 reply = "Keine Treffer im gewählten Suchbereich."
             else:
-                reply = (f"Antwort im gewählten Bereich nicht gefunden "
-                         f"({result['n_chunks_tried']} Auszüge geprüft).")
+                reply = ("In den geprüften Quellen wurde keine belegbare Information "
+                         "zum Auftrag gefunden.")
             st.markdown(reply)
             if result.get("phrase"):
                 st.caption(f"🔎 Suchanker (Embedding-Phrase): {result['phrase']}")
+            _render_timings(result.get("timings"))
             history.append({"role": "assistant", "content": reply, "citations": [],
-                            "phrase": result.get("phrase")})
+                            "phrase": result.get("phrase"), "as_json": False,
+                            "timings": result.get("timings")})
         else:
-            st.markdown(result["answer"])
+            _render_answer(result["answer"], result["as_json"])
             if result.get("phrase"):
                 st.caption(f"🔎 Suchanker (Embedding-Phrase): {result['phrase']}")
+            _render_timings(result.get("timings"))
             # Rendered directly (not inside an expander) so each citation can carry
             # its own "Kontext anzeigen" expander without illegal nesting.
             for cit in result["citations"]:
@@ -280,7 +335,27 @@ def main() -> None:
             history.append({
                 "role": "assistant", "content": result["answer"],
                 "citations": result["citations"], "phrase": result.get("phrase"),
+                "as_json": result["as_json"], "timings": result.get("timings"),
             })
+
+
+def _render_timings(timings: dict | None) -> None:
+    """Small caption with the per-phase durations and total (⏱)."""
+    if not timings:
+        return
+    parts = [f"{k} {v:.0f}s" for k, v in timings.items()]
+    st.caption("⏱ " + "  ·  ".join(parts) + f"  ·  gesamt {sum(timings.values()):.0f}s")
+
+
+def _render_answer(answer: str, as_json: bool) -> None:
+    """Render the assistant answer: pretty JSON (interactive, code fallback) or prose."""
+    if as_json:
+        try:
+            st.json(json.loads(answer))
+        except (ValueError, TypeError):
+            st.code(answer, language="json")
+    else:
+        st.markdown(answer)
 
 
 def _render_citation(cit: dict) -> None:
