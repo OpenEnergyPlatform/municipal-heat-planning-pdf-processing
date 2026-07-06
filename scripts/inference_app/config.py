@@ -121,25 +121,44 @@ ANSWER_CONTEXT_TOKENS = int(os.environ.get("ANSWER_CONTEXT_TOKENS", "10000"))
 QUERY_CACHE_PATH = Path(os.environ.get("QUERY_CACHE_PATH", "data/inference_app_query_cache.db"))
 
 # ---------------------------------------------------------------------------
-# Scopes: the four UI-selectable search areas → underlying embedding types.
+# Scopes: the UI-selectable search areas → underlying embedding types.
 # ---------------------------------------------------------------------------
-# Tables and figures each map to TWO embedding types (text + vision-language),
-# which is exactly why retrieval must dedup by (owner_kind, owner_id): one Table
-# row can be hit via both table_text and table_vl in the same search.
-SCOPE_HEADINGS = "Überschriften"
-SCOPE_TEXT     = "Textinhalte"
-SCOPE_TABLES   = "Tabellen"
-SCOPE_FIGURES  = "Bilder"
+# Tables and figures are each embedded TWICE (see chunking.py:94):
+#   *_vl   = the rendered image PLUS its caption/description  (the visual vector)
+#   *_text = only the caption/description text                (no image)
+# There is NO image-without-text vector. So the meaningful user choice is
+# "mit Bild (VL)" vs. "nur Beschreibung (Text)" — each exposed as its own scope
+# so either, or both, can be searched. Selecting both still needs the retrieval
+# dedup by (owner_kind, owner_id): one Table/Image row is then hit via both its
+# types in the same search.
+SCOPE_HEADINGS      = "Überschriften"
+SCOPE_TEXT          = "Textinhalte"
+SCOPE_TABLES_VL     = "Tabellen (mit Bild)"
+SCOPE_TABLES_TEXT   = "Tabellen (nur Beschreibung)"
+SCOPE_FIGURES_VL    = "Bilder (mit Bild)"
+SCOPE_FIGURES_TEXT  = "Bilder (nur Beschreibung)"
 
 SCOPE_TO_EMBEDDING_TYPES: dict[str, list[str]] = {
-    SCOPE_HEADINGS: ["section_title"],
-    SCOPE_TEXT:     ["section_text"],
-    SCOPE_TABLES:   ["table_text", "table_vl"],
-    SCOPE_FIGURES:  ["figure_text", "figure_vl"],
+    SCOPE_HEADINGS:     ["section_title"],
+    SCOPE_TEXT:         ["section_text"],
+    SCOPE_TABLES_VL:    ["table_vl"],
+    SCOPE_TABLES_TEXT:  ["table_text"],
+    SCOPE_FIGURES_VL:   ["figure_vl"],
+    SCOPE_FIGURES_TEXT: ["figure_text"],
 }
 
 # Ordered list for the UI multiselect (and as the default = everything).
-ALL_SCOPES: list[str] = [SCOPE_HEADINGS, SCOPE_TEXT, SCOPE_TABLES, SCOPE_FIGURES]
+ALL_SCOPES: list[str] = [
+    SCOPE_HEADINGS, SCOPE_TEXT,
+    SCOPE_TABLES_VL, SCOPE_TABLES_TEXT,
+    SCOPE_FIGURES_VL, SCOPE_FIGURES_TEXT,
+]
+
+# Figure/table scopes. A caption-style search anchor matches these far better
+# than a prose-passage anchor, so the query anchor switches to visual mode when
+# the search targets ONLY these (see app._scopes_are_visual).
+VISUAL_SCOPES = frozenset({SCOPE_TABLES_VL, SCOPE_TABLES_TEXT,
+                           SCOPE_FIGURES_VL, SCOPE_FIGURES_TEXT})
 
 # Which embedding types belong to each owner kind (used to split a scope
 # selection across the three UNION branches of the candidate query).

@@ -10,7 +10,13 @@ remote OpenAI-compatible API.
 ## Flow (per query)
 
 1. Pick one Wärmeplan (document).
-2. Pick search scopes — Überschriften / Textinhalte / Tabellen / Bilder (multi-select).
+2. Pick search scopes (multi-select). Tables and figures are each embedded twice, so each
+   is offered as two scopes: **Überschriften**, **Textinhalte**, **Tabellen (mit Bild)** /
+   **Tabellen (nur Beschreibung)**, **Bilder (mit Bild)** / **Bilder (nur Beschreibung)**.
+   `*_vl` ("mit Bild") = the rendered image plus its caption/description; `*_text`
+   ("nur Beschreibung") = only the caption/description text (no image). There is no
+   image-without-text vector. A figure/table-only selection also switches the query anchor
+   to a caption style.
 3. Type an extraction task; optionally attach an image (toggle: image+text / image-only —
    this only affects how the *query embedding* is formed; the text task always drives the
    final question answering).
