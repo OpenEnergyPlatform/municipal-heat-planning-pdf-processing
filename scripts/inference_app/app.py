@@ -251,11 +251,17 @@ def main() -> None:
             st.error("Keine Dokumente in der Datenbank gefunden.")
             st.stop()
 
-        labels = {d["id"]: db.document_label(d) for d in docs}
+        coverage = db.municipality_coverage(conn, docs)
+        labels = {d["id"]: db.document_label(d, coverage.get(d["id"])) for d in docs}
         doc_id = st.selectbox(
             "Wärmeplan", options=[d["id"] for d in docs],
             format_func=lambda i: labels[i],
         )
+        # Which municipalities this plan covers (convoys cover several) — clickable.
+        covered = coverage.get(doc_id, [])
+        if len(covered) > 1:
+            with st.expander(f"🏘 Zugehörige Gemeinden ({len(covered)})"):
+                st.markdown("\n".join(f"- {m}" for m in covered))
         scopes = st.multiselect(
             "Suchbereich", options=config.ALL_SCOPES, default=config.ALL_SCOPES,
             help="Tabellen/Bilder liegen doppelt im Index: „Bild + Beschreibung“ "
