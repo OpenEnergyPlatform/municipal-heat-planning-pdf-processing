@@ -76,3 +76,21 @@ def pdf_page_url(prefix: str, filename: str, page: int,
     if phrase:
         url += f"&search={_urlquote(phrase)}"
     return url
+
+
+def pdf_viewer_url(viewer_prefix: str, pdf_prefix: str, filename: str, page: int,
+                   phrase: Optional[str] = None) -> str:
+    """
+    Deep link through the bundled **pdf.js** viewer, for DETERMINISTIC highlight
+    in every browser (Chrome's native viewer ignores `#search`).
+
+    Form: `<viewer>/viewer.html?file=<encoded pdf path>#page=N&search=<phrase>&phrase=true`.
+    The PDF path is same-origin (both under the static route), which pdf.js
+    requires; `phrase=true` makes `search` an exact-phrase find.
+    """
+    pdf_path = f"{pdf_prefix.rstrip('/')}/{_urlquote(filename)}"
+    file_param = _urlquote(pdf_path, safe="")
+    url = f"{viewer_prefix.rstrip('/')}/viewer.html?file={file_param}#page={int(page)}"
+    if phrase:
+        url += f"&search={_urlquote(phrase)}&phrase=true"
+    return url

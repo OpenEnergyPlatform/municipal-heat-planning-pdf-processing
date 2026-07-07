@@ -124,11 +124,16 @@ QUERY_CACHE_PATH = Path(os.environ.get("QUERY_CACHE_PATH", "data/inference_app_q
 # Source-PDF deep links
 # ---------------------------------------------------------------------------
 # URL path prefix under which the source PDFs are reachable. Served via
-# Streamlit static serving (a `static/pdf` symlink → the extracted PDFs), so the
+# Streamlit static serving (the PDFs hard-linked into static/pdf), so the
 # default is the Streamlit static route. Set to "" to hide the PDF links.
 PDF_URL_PREFIX = os.environ.get("PDF_URL_PREFIX", "/app/static/pdf")
+# Bundled pdf.js viewer directory (contains viewer.html). When set, PDF links go
+# through pdf.js so #page + #search highlight DETERMINISTICALLY in every browser
+# (Chrome's native viewer ignores #search). Set to "" to use the browser's own
+# PDF viewer (native #page jump; highlight only in Firefox/Adobe).
+PDF_VIEWER_PREFIX = os.environ.get("PDF_VIEWER_PREFIX", "/app/static/pdfjs/web")
 # Filesystem directory holding the source PDFs (for existence checks / the
-# static symlink target). Not required for building links.
+# static hard-link target). Not required for building links.
 PDF_ROOT = Path(os.environ.get("INFERENCE_PDF_ROOT", "data/pdf"))
 
 # ---------------------------------------------------------------------------
