@@ -420,10 +420,17 @@ def _pdf_link_for(cit: dict):
         return None
     page = cit.get("page_number")
     phrase = None
-    if cit.get("owner_kind") == "section" and cit.get("quote") and cit.get("owner_id"):
-        loc = pdf_link.locate_quote(cit["quote"], db.section_segments(conn, cit["owner_id"]))
+    quote = cit.get("quote")
+    if cit.get("owner_kind") == "section" and quote and cit.get("owner_id"):
+        loc = pdf_link.locate_quote(quote, db.section_segments(conn, cit["owner_id"]))
         if loc:
-            page, phrase = loc
+            page, phrase = loc            # Segments give the exact page (+ a fallback phrase)
+        if page:
+            # Prefer a phrase drawn from the REAL PDF page (matches pdf.js's own
+            # text layer far better than our refined/re-extracted Segments).
+            pdf_phrase = pdf_link.best_search_phrase(config.PDF_ROOT / filename, page, quote)
+            if pdf_phrase:
+                phrase = pdf_phrase
     if not page:
         return None
     if config.PDF_VIEWER_PREFIX:      # through bundled pdf.js → highlight in every browser

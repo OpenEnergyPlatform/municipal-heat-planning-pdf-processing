@@ -286,6 +286,11 @@ def test_locate_quote_keeps_punctuation_verbatim():
     assert phrase in seg
 
 
+def test_best_search_phrase_graceful_on_missing_file():
+    # returns None (never raises) if the PDF/page is unavailable or deps missing
+    assert pdf_link.best_search_phrase("/no/such/file.pdf", 1, "irgendein Zitat hier") is None
+
+
 def test_locate_quote_returns_none_when_no_shared_run():
     segments = [(2, "Auftragnehmer ist die Musterbüro Energie GmbH aus Freiburg.")]
     # a quote with no 3-word contiguous overlap

@@ -31,3 +31,5 @@ qwen-vl-utils==0.0.14
 streamlit==1.58.0
 pillow
 numpy
+pymupdf                    # read the source PDF page text for the highlight locator
+rapidfuzz                  # Levenshtein-based fuzzy match of the quote onto the PDF text

@@ -98,3 +98,55 @@ def pdf_viewer_url(viewer_prefix: str, pdf_prefix: str, filename: str, page: int
     if phrase:
         url += f"&search={_urlquote(phrase)}&phrase=true"
     return url
+
+
+def best_search_phrase(pdf_path, page_number: int, quote: str,
+                       max_words: int = 8, min_score: float = 55.0) -> Optional[str]:
+    """
+    Verbatim phrase from the ACTUAL PDF page that best matches `quote`.
+
+    Opens the real PDF (PyMuPDF) and fuzzy-aligns the refined quote to the page's
+    OWN extracted text (rapidfuzz `partial_ratio`, a Levenshtein-based score),
+    then returns that text slice. Because the phrase is drawn from the same text
+    layer the browser searches, pdf.js is far likelier to highlight it than a
+    phrase reconstructed from our (differently-extracted, refined) Segments. The
+    span is snapped to word boundaries and capped at `max_words`.
+
+    Returns None if PyMuPDF/rapidfuzz aren't installed, the file/page is
+    unavailable, or the best match is too weak — the caller then falls back to
+    the Segments-based phrase (locate_quote).
+    """
+    try:
+        import fitz
+        from rapidfuzz import fuzz
+    except ImportError:
+        return None
+    if not (quote or "").strip():
+        return None
+    try:
+        doc = fitz.open(str(pdf_path))
+    except Exception:
+        return None
+    try:
+        if not (1 <= int(page_number) <= doc.page_count):
+            return None
+        text = doc.load_page(int(page_number) - 1).get_text()
+    except Exception:
+        return None
+    finally:
+        doc.close()
+    if not text.strip():
+        return None
+    al = fuzz.partial_ratio_alignment(quote, text)
+    if al is None or al.score < min_score:
+        return None
+    a, b = al.dest_start, al.dest_end
+    while a > 0 and text[a - 1].isalnum():           # snap start to a word boundary
+        a -= 1
+    while b < len(text) and text[b].isalnum():        # snap end to a word boundary
+        b += 1
+    span = re.sub(r"\s+", " ", text[a:b]).strip()
+    words = span.split(" ")
+    if len(words) > max_words:
+        span = " ".join(words[:max_words])
+    return span if len(span.split(" ")) >= 3 else None
