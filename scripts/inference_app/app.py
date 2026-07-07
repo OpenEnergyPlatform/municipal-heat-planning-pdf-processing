@@ -434,21 +434,17 @@ def _pdf_link_for(cit: dict):
     rects = None
     quote = cit.get("quote")
     if cit.get("owner_kind") == "section" and quote and cit.get("owner_id"):
-        segs = db.section_segments_geo(conn, cit["owner_id"])
-        geo = pdf_link.best_segment_rects(quote, segs)
-        if geo:
-            # Exact page + the matched segment's stored geometry → a coordinate
-            # overlay (drawn by the bundled pdfjs_overlay.js). Preferred over a
-            # text search: resolution-independent and immune to text-layer quirks.
-            page, rects = geo
-        else:
-            # No stored geometry (old DB, or no matching segment): fall back to a
-            # verbatim search phrase, drawn from the REAL PDF page so it matches
-            # pdf.js's own text layer far better than our refined Segments.
-            loc = pdf_link.locate_quote(quote, [(p, t) for p, t, _ in segs])
-            if loc:
-                page, phrase = loc
-            if page:
+        loc = pdf_link.locate_quote(quote, db.section_segments(conn, cit["owner_id"]))
+        if loc:
+            page, phrase = loc            # exact page (+ a fallback phrase)
+        if page:
+            # Precise coordinate overlay: the actual per-line rects of the quote
+            # on the real PDF page (fuzzy/Levenshtein aligned), so ONLY the cited
+            # passage is boxed — not the whole (possibly page-spanning) segment,
+            # which the stored segment bbox would light up. Drawn by pdfjs_overlay.js.
+            rects = pdf_link.best_quote_rects(config.PDF_ROOT / filename, page, quote)
+            if not rects:
+                # No line rects → verbatim page-derived search phrase instead.
                 pdf_phrase = pdf_link.best_search_phrase(config.PDF_ROOT / filename, page, quote)
                 if pdf_phrase:
                     phrase = pdf_phrase
