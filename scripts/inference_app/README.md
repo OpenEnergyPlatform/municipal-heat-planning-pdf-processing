@@ -56,6 +56,20 @@ backbone is quantized to NF4 (`bnb_4bit_compute_dtype=torch.float16`), the visio
 left fp32 so image queries keep full quality. Footprint: ~4–5 GB (LM) + fp32 vision tower,
 comfortably within one 12 GB card.
 
+## Code execution (calculations)
+
+The answer LLM can offload real arithmetic (sums, ratios, kWh↔MWh, aggregations over table
+values) instead of doing unreliable mental math. When `CODE_EXEC_URL` is set, `answer_from_sources`
+runs a **ReAct loop**: the model may reply `{"action":"python","code":...}`, the app POSTs it to the
+hardened remote sandbox (`code_exec.py` → `sandbox_service.py` on a podman host, reached over an SSH
+remote-forward), feeds the printed output back, and the model then gives the grounded answer — up to
+`CODE_EXEC_MAX_ROUNDS` runs, and **only when the model asks** (a retrieval-only query makes zero
+extra calls). The batch's retrieved tables are injected as a `tables` variable (list of
+`{caption, markdown}`); numpy/pandas/pymupdf are available; there is **no network** inside the
+sandbox. The executed code + output are shown under the answer (🧮 expander). The feature is OFF
+unless `CODE_EXEC_URL` is configured, so a plain deployment is unaffected. `sandbox_service.py` is
+deployed on the sandbox host, not here — see its module docstring.
+
 ## Configuration (env vars)
 
 | Var | Default | Meaning |
@@ -74,7 +88,12 @@ comfortably within one 12 GB card.
 | `TOP_K` / `MAX_CHUNK_ATTEMPTS` / `ANSWER_CONTEXT_TOKENS` | 50 / 10 / 10000 | Retrieval depth / max sources examined / per-call source token budget (context-safe batching). |
 | `QUERY_CACHE_PATH` | `data/inference_app_query_cache.db` | Separate cache DB (never KWP.db). |
 | `PDF_URL_PREFIX` | `/app/static/pdf` | URL path prefix where the source PDFs are served (Streamlit static). Empty → hide the PDF links. |
+| `PDF_VIEWER_PREFIX` | `/app/static/pdfjs/web` | Bundled pdf.js viewer dir. Empty → native browser viewer. |
 | `INFERENCE_PDF_ROOT` | `data/pdf` | Filesystem dir holding the source PDFs. |
+| `CODE_EXEC_URL` | (empty) | Sandbox `/run` endpoint (`sandbox_service.py`). **Empty → the calculation feature is OFF.** |
+| `CODE_EXEC_TOKEN` | from `.env` | Bearer token for the sandbox (matches its `KWP_SANDBOX_TOKEN`). |
+| `CODE_EXEC_MAX_ROUNDS` | `2` | Max code runs the model may request per answer batch. |
+| `CODE_EXEC_TIMEOUT` | `45` | HTTP timeout for a sandbox call (s). |
 
 ## Source-PDF deep links
 
