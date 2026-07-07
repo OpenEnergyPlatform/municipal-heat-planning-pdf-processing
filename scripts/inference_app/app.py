@@ -18,8 +18,6 @@ import logging
 import os
 import sys
 import tempfile
-import time
-from contextlib import contextmanager
 from pathlib import Path
 
 # `streamlit run scripts/inference_app/app.py` executes this file as a top-level
@@ -31,7 +29,9 @@ if _REPO_ROOT not in sys.path:
 
 import streamlit as st
 
-from scripts.inference_app import config, db, faiss_store, query_cache, chunker, llm_client
+from scripts.inference_app import (
+    config, db, faiss_store, query_cache, chunker, llm_client, pdf_link,
+)
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger(__name__)
@@ -95,7 +95,7 @@ def run_turn(task: str, image_bytes: bytes | None, image_only: bool,
     """
     Execute one full retrieval + answer turn. Returns a dict with:
     answer (str|None), citations (list[dict]), n_findings (int), cache_hit (bool),
-    n_hits (int), phrase (str|None), as_json (bool), timings (dict).
+    n_hits (int), phrase (str|None), as_json (bool).
 
     Each sub-step runs under its own timed st.spinner. The top sources are handed
     to the LLM in a SINGLE call, so it sees every source together — fewest calls,
@@ -104,13 +104,11 @@ def run_turn(task: str, image_bytes: bytes | None, image_only: bool,
     source (grounding); an answer with no grounded support is refused.
     """
     result = {"answer": None, "citations": [], "n_findings": 0, "cache_hit": False,
-              "n_hits": 0, "phrase": None, "as_json": as_json, "timings": {},
-              "n_batches": 0}
-    timings = result["timings"]
+              "n_hits": 0, "phrase": None, "as_json": as_json, "n_batches": 0}
 
     conn = get_db()
     cache_conn = get_cache()
-    with _timed_spinner("Vorbereiten", timings):
+    with _spinner("Vorbereiten"):
         index, id_to_pos = get_index()
 
     # --- 1) build the query item + cache key, per mode ---
@@ -124,7 +122,7 @@ def run_turn(task: str, image_bytes: bytes | None, image_only: bool,
     elif image_bytes is not None:
         mode = "image+text"
         # visual anchor: a figure/diagram-style caption matches figures better.
-        with _timed_spinner("🔎 Suchanker (Bild+Text)", timings):
+        with _spinner("🔎 Suchanker (Bild+Text)"):
             phrase = llm_client.make_search_phrase(task, visual=True)
         tmp_path = _write_temp_image(image_bytes)
         item = {"text": phrase, "image": tmp_path}
@@ -133,14 +131,14 @@ def run_turn(task: str, image_bytes: bytes | None, image_only: bool,
         mode = "text"
         # A figure/table-only search wants a caption-style anchor, not prose.
         visual_anchor = _scopes_are_visual(scopes)
-        with _timed_spinner("🔎 Suchanker", timings):
+        with _spinner("🔎 Suchanker"):
             phrase = llm_client.make_search_phrase(task, visual=visual_anchor)
         item = {"text": phrase}
         cache_key = query_cache.make_key(mode, text=phrase)
     result["phrase"] = phrase
 
     # --- 2) embed (cache or on-demand model load) ---
-    with _timed_spinner("🧮 Embedding", timings):
+    with _spinner("🧮 Embedding"):
         query_vec, cache_hit = embed_query(item, cache_conn, cache_key)
     result["cache_hit"] = cache_hit
     if tmp_path:
@@ -150,7 +148,7 @@ def run_turn(task: str, image_bytes: bytes | None, image_only: bool,
             pass
 
     # --- 3) scoped retrieval ---
-    with _timed_spinner("📚 Suche", timings):
+    with _spinner("📚 Suche"):
         embedding_types = [t for s in scopes for t in config.SCOPE_TO_EMBEDDING_TYPES[s]]
         hits = faiss_store.retrieve(
             conn, index, id_to_pos, document_id, embedding_types, query_vec, config.TOP_K
@@ -167,7 +165,7 @@ def run_turn(task: str, image_bytes: bytes | None, image_only: bool,
     batches = chunker.pack_chunks(top_hits, config.ANSWER_CONTEXT_TOKENS, tokenizer=None)
     citations, seen = [], set()
     prior_text = None
-    with _timed_spinner("🔍 Antwort aus den Quellen", timings):
+    with _spinner("🔍 Antwort aus den Quellen"):
         for bi, chunk in enumerate(batches, start=1):
             items = chunk.items
             # text answer during batching; JSON formatting happens once at the end
@@ -200,7 +198,7 @@ def run_turn(task: str, image_bytes: bytes | None, image_only: bool,
 
     # --- 5) final answer (format to JSON once at the end, if requested) ---
     if as_json:
-        with _timed_spinner("🧩 Als JSON", timings):
+        with _spinner("🧩 Als JSON"):
             result["answer"] = llm_client.format_as_json(task, prior_text)
     else:
         result["answer"] = prior_text
@@ -214,13 +212,9 @@ def _scopes_are_visual(scopes: list[str]) -> bool:
     return bool(scopes) and all(s in config.VISUAL_SCOPES for s in scopes)
 
 
-@contextmanager
-def _timed_spinner(label: str, timings: dict):
-    """st.spinner (with live elapsed timer) that also records its wall-time."""
-    t0 = time.perf_counter()
-    with st.spinner(f"{label} …", show_time=True):
-        yield
-    timings[label] = time.perf_counter() - t0
+def _spinner(label: str):
+    """A labelled spinner with Streamlit's built-in live elapsed timer."""
+    return st.spinner(f"{label} …", show_time=True)
 
 
 def _write_temp_image(image_bytes: bytes) -> str:
@@ -289,7 +283,6 @@ def main() -> None:
                 st.markdown(msg["content"])
             if msg.get("phrase"):
                 st.caption(f"🔎 Suchanker (Embedding-Phrase): {msg['phrase']}")
-            _render_timings(msg.get("timings"))
             for cit in msg.get("citations", []):
                 _render_citation(cit)
 
@@ -335,15 +328,12 @@ def main() -> None:
             st.markdown(reply)
             if result.get("phrase"):
                 st.caption(f"🔎 Suchanker (Embedding-Phrase): {result['phrase']}")
-            _render_timings(result.get("timings"))
             history.append({"role": "assistant", "content": reply, "citations": [],
-                            "phrase": result.get("phrase"), "as_json": False,
-                            "timings": result.get("timings")})
+                            "phrase": result.get("phrase"), "as_json": False})
         else:
             _render_answer(result["answer"], result["as_json"])
             if result.get("phrase"):
                 st.caption(f"🔎 Suchanker (Embedding-Phrase): {result['phrase']}")
-            _render_timings(result.get("timings"))
             # Rendered directly (not inside an expander) so each citation can carry
             # its own "Kontext anzeigen" expander without illegal nesting.
             for cit in result["citations"]:
@@ -351,16 +341,8 @@ def main() -> None:
             history.append({
                 "role": "assistant", "content": result["answer"],
                 "citations": result["citations"], "phrase": result.get("phrase"),
-                "as_json": result["as_json"], "timings": result.get("timings"),
+                "as_json": result["as_json"],
             })
-
-
-def _render_timings(timings: dict | None) -> None:
-    """Small caption with the per-phase durations and total (⏱)."""
-    if not timings:
-        return
-    parts = [f"{k} {v:.0f}s" for k, v in timings.items()]
-    st.caption("⏱ " + "  ·  ".join(parts) + f"  ·  gesamt {sum(timings.values()):.0f}s")
 
 
 def _render_answer(answer: str, as_json: bool) -> None:
@@ -374,6 +356,33 @@ def _render_answer(answer: str, as_json: bool) -> None:
         st.markdown(answer)
 
 
+def _pdf_link_for(cit: dict):
+    """
+    (url, page) deep link into the source PDF for a citation, or None.
+
+    For a section citation the exact page + a verbatim highlight phrase come from
+    the raw Segments via pdf_link.locate_quote (the refined quote is matched back
+    onto the raw PDF text). For table/figure citations, and when no verbatim run
+    is found, the link falls back to the citation's own page (jump, no highlight).
+    """
+    prefix = config.PDF_URL_PREFIX
+    if not prefix:
+        return None
+    conn = get_db()
+    filename = db.document_filename(conn, cit.get("document_id"))
+    if not filename:
+        return None
+    page = cit.get("page_number")
+    phrase = None
+    if cit.get("owner_kind") == "section" and cit.get("quote") and cit.get("owner_id"):
+        loc = pdf_link.locate_quote(cit["quote"], db.section_segments(conn, cit["owner_id"]))
+        if loc:
+            page, phrase = loc
+    if not page:
+        return None
+    return pdf_link.pdf_page_url(prefix, filename, page, phrase), page
+
+
 def _render_citation(cit: dict) -> None:
     """Render one citation: source label, verbatim quote, expandable full context, image.
 
@@ -385,6 +394,10 @@ def _render_citation(cit: dict) -> None:
     quote = cit.get("quote")
     if quote:
         st.markdown("> " + str(quote).replace("\n", " "))
+    link = _pdf_link_for(cit)
+    if link:
+        url, page = link
+        st.link_button(f"📄 Seite {page} im PDF öffnen", url)
     context = (cit.get("text") or "").strip()
     if context:
         with st.expander("Kontext anzeigen"):

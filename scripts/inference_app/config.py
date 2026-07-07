@@ -121,6 +121,17 @@ ANSWER_CONTEXT_TOKENS = int(os.environ.get("ANSWER_CONTEXT_TOKENS", "10000"))
 QUERY_CACHE_PATH = Path(os.environ.get("QUERY_CACHE_PATH", "data/inference_app_query_cache.db"))
 
 # ---------------------------------------------------------------------------
+# Source-PDF deep links
+# ---------------------------------------------------------------------------
+# URL path prefix under which the source PDFs are reachable. Served via
+# Streamlit static serving (a `static/pdf` symlink → the extracted PDFs), so the
+# default is the Streamlit static route. Set to "" to hide the PDF links.
+PDF_URL_PREFIX = os.environ.get("PDF_URL_PREFIX", "/app/static/pdf")
+# Filesystem directory holding the source PDFs (for existence checks / the
+# static symlink target). Not required for building links.
+PDF_ROOT = Path(os.environ.get("INFERENCE_PDF_ROOT", "data/pdf"))
+
+# ---------------------------------------------------------------------------
 # Scopes: the UI-selectable search areas → underlying embedding types.
 # ---------------------------------------------------------------------------
 # Tables and figures are each embedded TWICE (see chunking.py:94):
