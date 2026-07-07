@@ -30,31 +30,35 @@ def locate_quote(
     quote: str,
     segments: list[tuple[int, str]],
     min_words: int = 3,
-    max_words: int = 12,
+    max_words: int = 8,
 ) -> Optional[tuple[int, str]]:
     """
     Best (page, search_phrase) for a refined `quote` against raw page `segments`.
 
     Each segment is (page, raw_text). Returns the page of the segment sharing the
-    longest contiguous word-run with the quote, plus that run (verbatim from the
-    raw text, capped at `max_words`) as the `&search=` phrase. Returns None if no
-    run of at least `min_words` words is found (refinement diverged too far → the
-    caller links to the page only, without a highlight).
+    longest contiguous word-run with the quote, plus that run as a **verbatim
+    substring of the raw text** (original punctuation/spacing preserved, only
+    inner whitespace collapsed), capped at `max_words` words, as the `&search=`
+    phrase. Verbatim matters: the phrase must occur literally in the PDF text
+    layer for the highlight to land — a punctuation-stripped, space-joined
+    reconstruction (e.g. "Emmy Noether Str" for "Emmy-Noether-Str.") would not.
+    Returns None if no run of at least `min_words` words is found (refinement
+    diverged too far → the caller links to the page only, without a highlight).
     """
-    q_raw = _words(quote)
-    q = [w.casefold() for w in q_raw]
+    q = [w.casefold() for w in _words(quote)]
     if len(q) < min_words:
         return None
     best: Optional[tuple[int, int, str]] = None   # (size, page, phrase)
     for page, text in segments:
-        r_raw = _words(text)
-        if len(r_raw) < min_words:
+        toks = list(_WORD.finditer(text))         # words WITH their char offsets
+        if len(toks) < min_words:
             continue
-        r = [w.casefold() for w in r_raw]
+        r = [m.group(0).casefold() for m in toks]
         m = SequenceMatcher(None, q, r, autojunk=False).find_longest_match(
             0, len(q), 0, len(r))
         if m.size >= min_words and (best is None or m.size > best[0]):
-            phrase = " ".join(r_raw[m.b : m.b + min(m.size, max_words)])
+            last = min(m.b + m.size, m.b + max_words) - 1
+            phrase = re.sub(r"\s+", " ", text[toks[m.b].start(): toks[last].end()]).strip()
             best = (m.size, page, phrase)
     if best is None:
         return None

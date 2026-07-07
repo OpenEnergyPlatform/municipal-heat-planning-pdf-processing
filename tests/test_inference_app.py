@@ -271,10 +271,19 @@ def test_locate_quote_finds_page_and_verbatim_phrase():
     quote = "Der Steuerungskreis setzt sich aus Vertretern der Gemeindeverwaltungen zusammen"
     page, phrase = pdf_link.locate_quote(quote, segments)
     assert page == 18
-    # the phrase is a verbatim run drawn from the raw segment text
-    assert phrase.split() == pdf_link._words(phrase)
     assert "Steuerungskreis setzt sich" in phrase
-    assert phrase in segments[1][1].replace(",", "")  # verbatim (word run)
+    assert phrase in segments[1][1]              # a literal substring of the raw text
+
+
+def test_locate_quote_keeps_punctuation_verbatim():
+    # the phrase must occur LITERALLY in the PDF text layer, so hyphens/periods
+    # are preserved (a space-joined "Emmy Noether Str" would not highlight).
+    seg = "endura kommunal GmbH Emmy-Noether-Str. 2 79110 Freiburg info@endura-kommunal.de"
+    quote = "erstellt durch die endura kommunal GmbH Emmy-Noether-Str 2 79110 Freiburg"
+    page, phrase = pdf_link.locate_quote(quote, [(2, seg)])
+    assert page == 2
+    assert "Emmy-Noether-Str." in phrase
+    assert phrase in seg
 
 
 def test_locate_quote_returns_none_when_no_shared_run():
