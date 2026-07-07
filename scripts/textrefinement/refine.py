@@ -523,6 +523,36 @@ def _thread_provenance(inputs: list[dict], outputs: list[dict]) -> None:
         _finalize_pages(out)
 
 
+def _reattach_media_bbox(inputs: list[dict], outputs: list[dict]) -> None:
+    """
+    Stamp each output table/figure's layout ``bbox`` from the Stage-3 input,
+    keyed on the globally-unique block id.
+
+    Segments carry their bbox for free (``_thread_provenance`` copies whole
+    segment dicts), but tables/figures are re-emitted by the LLM, which may drop
+    or mangle a numeric array it was shown. So the authoritative geometry is
+    reattached deterministically here — the same philosophy as segment
+    provenance — and it survives regardless of what the model echoed.
+    """
+    bbox_by_id: dict[str, list] = {}
+    for sec in inputs:
+        if not isinstance(sec, dict):
+            continue
+        for item in (sec.get("tables") or []) + (sec.get("figures") or []):
+            if isinstance(item, dict) and item.get("id") and item.get("bbox") is not None:
+                bbox_by_id[item["id"]] = item["bbox"]
+    if not bbox_by_id:
+        return
+    for sec in outputs:
+        if not isinstance(sec, dict):
+            continue
+        for item in (sec.get("tables") or []) + (sec.get("figures") or []):
+            if isinstance(item, dict):
+                b = bbox_by_id.get(item.get("id"))
+                if b is not None:
+                    item["bbox"] = b
+
+
 def _finalize_pages(section: dict) -> None:
     """Recompute a section's `pages` (and page_number) from its segments and
     its tables'/figures' page numbers, keeping them self-consistent after
@@ -751,6 +781,10 @@ def refine_sections(sections: list[dict]) -> list[dict]:
                 refined.extend(applied)
 
     log.info(f"Stage 4: {len(refined)} sections after LLM refinement")
+
+    # Reattach authoritative table/figure geometry from the Stage-3 input (the
+    # LLM re-emits media items and may drop the bbox it was shown).
+    _reattach_media_bbox(sections, refined)
 
     # ── Post-filter: remove empty sections ───────────────────────────────
     before = len(refined)
