@@ -36,7 +36,7 @@ if _REPO_ROOT not in sys.path:
 import streamlit as st
 
 from scripts.inference_app import (
-    config, db, faiss_store, query_cache, chunker, llm_client, pdf_link,
+    config, db, faiss_store, query_cache, chunker, llm_client, pdf_link, code_exec,
 )
 
 logging.basicConfig(level=logging.INFO)
@@ -110,7 +110,8 @@ def run_turn(task: str, image_bytes: bytes | None, image_only: bool,
     source (grounding); an answer with no grounded support is refused.
     """
     result = {"answer": None, "citations": [], "n_findings": 0, "cache_hit": False,
-              "n_hits": 0, "phrase": None, "as_json": as_json, "n_batches": 0}
+              "n_hits": 0, "phrase": None, "as_json": as_json, "n_batches": 0,
+              "compute": []}
 
     conn = get_db()
     cache_conn = get_cache()
@@ -174,8 +175,15 @@ def run_turn(task: str, image_bytes: bytes | None, image_only: bool,
     with _spinner("🔍 Antwort aus den Quellen"):
         for bi, chunk in enumerate(batches, start=1):
             items = chunk.items
-            # text answer during batching; JSON formatting happens once at the end
-            out = llm_client.answer_from_sources(task, items, prior=prior_text, as_json=False)
+            # text answer during batching; JSON formatting happens once at the end.
+            # If a code sandbox is configured, let the model offload calculations
+            # (ReAct) with this batch's tables as context — only fires when it asks.
+            code_ctx = _code_context(items, top_hits) if code_exec.is_enabled() else None
+            out = llm_client.answer_from_sources(
+                task, items, prior=prior_text, as_json=False,
+                code_runner=(code_exec.run_code if code_exec.is_enabled() else None),
+                code_context=code_ctx, max_compute=config.CODE_EXEC_MAX_ROUNDS)
+            result["compute"].extend(out.get("compute") or [])
             item_by_index = {it["index"]: it for it in items}
             for s in out.get("supports", []):
                 try:
@@ -216,6 +224,19 @@ def run_turn(task: str, image_bytes: bytes | None, image_only: bool,
 def _scopes_are_visual(scopes: list[str]) -> bool:
     """True if the query targets ONLY figure/table scopes → caption-style anchor."""
     return bool(scopes) and all(s in config.VISUAL_SCOPES for s in scopes)
+
+
+def _code_context(items: list[dict], top_hits: list[dict]) -> dict:
+    """Sandbox context for a batch: its table sources as {caption, markdown}."""
+    tables = []
+    for it in items:
+        idx = it.get("index")
+        if not isinstance(idx, int) or not (0 <= idx < len(top_hits)):
+            continue
+        hit = top_hits[idx]
+        if hit.get("owner_kind") == "table" and (hit.get("text") or "").strip():
+            tables.append({"caption": hit.get("title") or "", "markdown": hit.get("text") or ""})
+    return {"tables": tables}
 
 
 def _spinner(label: str):
@@ -289,6 +310,7 @@ def main() -> None:
                 st.markdown(msg["content"])
             if msg.get("phrase"):
                 st.caption(f"🔎 Suchanker (Embedding-Phrase): {msg['phrase']}")
+            _render_compute(msg.get("compute"))
             for cit in msg.get("citations", []):
                 _render_citation(cit)
 
@@ -334,12 +356,15 @@ def main() -> None:
             st.markdown(reply)
             if result.get("phrase"):
                 st.caption(f"🔎 Suchanker (Embedding-Phrase): {result['phrase']}")
+            _render_compute(result.get("compute"))
             history.append({"role": "assistant", "content": reply, "citations": [],
-                            "phrase": result.get("phrase"), "as_json": False})
+                            "phrase": result.get("phrase"), "as_json": False,
+                            "compute": result.get("compute", [])})
         else:
             _render_answer(result["answer"], result["as_json"])
             if result.get("phrase"):
                 st.caption(f"🔎 Suchanker (Embedding-Phrase): {result['phrase']}")
+            _render_compute(result.get("compute"))
             # Rendered directly (not inside an expander) so each citation can carry
             # its own "Kontext anzeigen" expander without illegal nesting.
             for cit in result["citations"]:
@@ -347,8 +372,23 @@ def main() -> None:
             history.append({
                 "role": "assistant", "content": result["answer"],
                 "citations": result["citations"], "phrase": result.get("phrase"),
-                "as_json": result["as_json"],
+                "as_json": result["as_json"], "compute": result.get("compute", []),
             })
+
+
+def _render_compute(compute: list | None) -> None:
+    """Show the code the model ran in the sandbox + its output (transparency)."""
+    if not compute:
+        return
+    with st.expander(f"🧮 Berechnung anzeigen ({len(compute)}×)"):
+        for step in compute:
+            st.code(step.get("code", ""), language="python")
+            out = step.get("output") or {}
+            if out.get("ok"):
+                txt = (out.get("stdout") or "").strip() or "(keine Ausgabe)"
+            else:
+                txt = "Fehler: " + (out.get("error") or (out.get("stderr") or "").strip() or "?")
+            st.text(txt[:2000])
 
 
 def _render_answer(answer: str, as_json: bool) -> None:

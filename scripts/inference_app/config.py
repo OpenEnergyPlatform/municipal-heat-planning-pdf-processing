@@ -121,6 +121,18 @@ ANSWER_CONTEXT_TOKENS = int(os.environ.get("ANSWER_CONTEXT_TOKENS", "10000"))
 QUERY_CACHE_PATH = Path(os.environ.get("QUERY_CACHE_PATH", "data/inference_app_query_cache.db"))
 
 # ---------------------------------------------------------------------------
+# Code-execution sandbox (optional) — a hardened remote service (sandbox_service.py
+# on a podman host) the LLM can call for calculations. EMPTY CODE_EXEC_URL = the
+# whole feature is OFF (the answer flow behaves exactly as before).
+# ---------------------------------------------------------------------------
+CODE_EXEC_URL = os.environ.get("CODE_EXEC_URL", "")
+CODE_EXEC_TOKEN = os.environ.get("CODE_EXEC_TOKEN") or os.environ.get("KWP_SANDBOX_TOKEN", "")
+CODE_EXEC_TIMEOUT = float(os.environ.get("CODE_EXEC_TIMEOUT", "45"))
+# Max code runs the model may request while answering ONE batch (keeps the slow
+# gateway round-trips bounded).
+CODE_EXEC_MAX_ROUNDS = int(os.environ.get("CODE_EXEC_MAX_ROUNDS", "2"))
+
+# ---------------------------------------------------------------------------
 # Source-PDF deep links
 # ---------------------------------------------------------------------------
 # URL path prefix under which the source PDFs are reachable. Served via

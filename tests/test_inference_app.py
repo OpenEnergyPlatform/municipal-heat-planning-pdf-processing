@@ -462,3 +462,61 @@ def test_non_anchor_detects_variants(bad):
 def test_non_anchor_passes_real_anchors(good):
     llm = pytest.importorskip("scripts.inference_app.llm_client")
     assert llm._looks_like_non_anchor(good) is False
+
+
+# ---------------------------------------------------------------------------
+# code_exec.py + llm_client ReAct compute loop
+# ---------------------------------------------------------------------------
+def test_code_exec_disabled_returns_error(monkeypatch):
+    ce = pytest.importorskip("scripts.inference_app.code_exec")
+    monkeypatch.setattr(ce.config, "CODE_EXEC_URL", "")
+    assert ce.is_enabled() is False
+    out = ce.run_code("print(1)")
+    assert out["ok"] is False and "disabled" in out["error"]
+
+
+def test_format_exec_result_ok_and_error():
+    llm = pytest.importorskip("scripts.inference_app.llm_client")
+    assert "50" in llm._format_exec_result({"ok": True, "stdout": "50\n"})
+    r = llm._format_exec_result({"ok": False, "error": "Boom"})
+    assert "fehlgeschlagen" in r.lower() and "Boom" in r
+
+
+def test_answer_from_sources_runs_react_compute_loop(monkeypatch):
+    llm = pytest.importorskip("scripts.inference_app.llm_client")
+    monkeypatch.setattr(llm, "LLM_STUB_MODE", False)
+    calls = {"n": 0}
+
+    def fake_chat_json(messages, temperature):
+        calls["n"] += 1
+        if calls["n"] == 1:                      # first: request a computation
+            return {"action": "python", "code": "print(50)"}
+        return {"found": True, "complete": True, "answer": "Die Summe ist 50",
+                "supports": [{"index": 0, "quote": "x"}]}
+
+    monkeypatch.setattr(llm, "_chat_json", fake_chat_json)
+    ran = {}
+
+    def runner(code, ctx):
+        ran["code"], ran["ctx"] = code, ctx
+        return {"ok": True, "stdout": "50\n"}
+
+    out = llm.answer_from_sources("Summe?", [{"index": 0, "source": "s", "text": "t"}],
+                                  code_runner=runner, code_context={"tables": []}, max_compute=2)
+    assert calls["n"] == 2                        # one action call + one final-answer call
+    assert ran["code"] == "print(50)"
+    assert out["answer"] == "Die Summe ist 50"
+    assert len(out["compute"]) == 1
+    assert out["compute"][0]["output"]["stdout"] == "50\n"
+
+
+def test_answer_from_sources_no_action_no_compute(monkeypatch):
+    llm = pytest.importorskip("scripts.inference_app.llm_client")
+    monkeypatch.setattr(llm, "LLM_STUB_MODE", False)
+    monkeypatch.setattr(llm, "_chat_json",
+                        lambda messages, temperature: {"found": True, "complete": True,
+                                                       "answer": "direkt", "supports": []})
+    # no code_runner → the compute hint is never added and compute stays empty
+    out = llm.answer_from_sources("x", [{"index": 0, "source": "s", "text": "t"}])
+    assert out["answer"] == "direkt"
+    assert out["compute"] == []

@@ -169,6 +169,23 @@ wähle sprechende Felder; in der Antwort fehlende Angaben = null. Antworte mit \
 NUR dem JSON-Objekt, kein Markdown, kein Text davor/danach.
 """
 
+# Appended to the answer prompt only when a code-exec sandbox is available, so
+# the model can offload a real calculation instead of doing (unreliable) mental
+# arithmetic. It answers with an action object; the caller runs it and feeds the
+# printed output back, then the model finalises. A retrieval-only deployment
+# (no sandbox) never sees this and behaves exactly as before.
+_COMPUTE_HINT = """
+
+Wenn die Antwort eine nicht-triviale Berechnung erfordert (Summen, Anteile, \
+Umrechnungen wie kWh↔MWh, Aggregationen über Tabellenwerte), darfst du STATT \
+des Antwort-Objekts EIN Aktions-Objekt zurückgeben: {"action": "python", \
+"code": "<Python-Code>"}. Verfügbar sind numpy und pandas; die gefundenen \
+Tabellen liegen als Variable `tables` vor (Liste von Objekten mit "caption" und \
+"markdown"). Gib jedes Ergebnis mit print() aus. Du bekommst danach die Ausgabe \
+zurück und lieferst DANN die finale Antwort im vorgegebenen Format. Erfinde \
+berechnete Zahlen NIE — lasse sie berechnen. Ist keine Berechnung nötig, \
+antworte direkt."""
+
 
 # ---------------------------------------------------------------------------
 # Client + parsing helpers (mirrors refine.py)
@@ -421,18 +438,34 @@ def ask_chunk(task: str, chunk_items: list[dict]) -> dict:
     return {"found": True, "answer": answer, "quote": quote}
 
 
+def _format_exec_result(out: dict) -> str:
+    """The user-turn text fed back to the model after a sandbox run."""
+    if out.get("ok"):
+        s = (out.get("stdout") or "").strip()
+        return "Ausführungsergebnis (stdout):\n" + (s if s else "(keine Ausgabe)")
+    err = (out.get("error") or (out.get("stderr") or "")).strip() or "unbekannter Fehler"
+    return ("Ausführung fehlgeschlagen:\n" + err[:1500] +
+            "\nKorrigiere den Code ODER antworte ohne Berechnung.")
+
+
 def answer_from_sources(task: str, chunk_items: list[dict],
-                        prior: Optional[str] = None, as_json: bool = False) -> dict:
+                        prior: Optional[str] = None, as_json: bool = False,
+                        code_runner=None, code_context: Optional[dict] = None,
+                        max_compute: int = 0) -> dict:
     """
-    Answer `task` from the given batch of sources in ONE call, extending an
-    optional `prior` partial answer. Returns:
+    Answer `task` from the given batch of sources in ONE call (plus optional code
+    runs), extending an optional `prior` partial answer. Returns:
         {"found": bool, "complete": bool, "answer": <str|dict>,
-         "supports": [{"index", "quote"}]}
-    The model sees every source in the batch together (picks the right one, and
-    combines spread info); the caller validates each support's quote against
-    chunk_items (grounding → exact reference). `complete=False` tells the caller
-    more sources may still be needed (→ next batch, no truncation). `as_json` →
-    answer is a JSON object (honouring a schema named in the task).
+         "supports": [{"index", "quote"}], "compute": [{"code", "output"}]}
+    The model sees every source together (picks the right one, combines spread
+    info); the caller validates each support's quote against chunk_items
+    (grounding → exact reference). `complete=False` → more sources may be needed.
+
+    When `code_runner` is given and `max_compute > 0`, the model may reply with
+    {"action":"python","code":...} to offload a calculation: we call
+    `code_runner(code, code_context)` (→ {"ok","stdout","stderr","error"}), feed
+    the printed output back, and let it finalise — up to `max_compute` runs. This
+    is a ReAct loop that only fires when the model asks (0 extra calls otherwise).
     """
     if LLM_STUB_MODE:
         first = chunk_items[0] if chunk_items else {}
@@ -440,29 +473,59 @@ def answer_from_sources(task: str, chunk_items: list[dict],
             else f"[STUB] Antwort basierend auf: {first.get('source', 'n/a')}"
         return {"found": True, "complete": True, "answer": ans,
                 "supports": [{"index": first.get("index", 0),
-                              "quote": str(first.get("text", ""))[:120]}]}
+                              "quote": str(first.get("text", ""))[:120]}], "compute": []}
 
     spec = _ANSWER_SPEC_JSON if as_json else _ANSWER_SPEC_TEXT
     prompt = _ANSWER_PROMPT_HEAD + spec + _ANSWER_PROMPT_TAIL
+    budget = max_compute if code_runner else 0
+    if budget > 0:
+        prompt = prompt + _COMPUTE_HINT
     payload = json.dumps({"task": task, "bisher": prior, "excerpt": chunk_items},
                          ensure_ascii=False)
     messages = [{"role": "user", "content": f"{prompt}\n\n{payload}"}]
-    try:
-        parsed = _chat_json(messages, temperature=LLM_TEMPERATURE)
-    except Exception as e:
-        log.warning("answer_from_sources produced no valid JSON, treating as not-found: %s", e)
-        return {"found": False, "complete": False}
+
+    compute: list[dict] = []
+    while True:
+        try:
+            parsed = _chat_json(messages, temperature=LLM_TEMPERATURE)
+        except Exception as e:
+            log.warning("answer_from_sources produced no valid JSON, treating as not-found: %s", e)
+            return {"found": False, "complete": False, "compute": compute}
+        is_action = isinstance(parsed, dict) and parsed.get("action") == "python" and parsed.get("code")
+        if is_action and len(compute) < budget:
+            code = str(parsed["code"])
+            out = code_runner(code, code_context) or {"ok": False, "error": "kein Ergebnis"}
+            compute.append({"code": code, "output": out})
+            messages = messages + [
+                {"role": "assistant", "content": json.dumps(parsed, ensure_ascii=False)},
+                {"role": "user", "content": _format_exec_result(out)},
+            ]
+            continue
+        if is_action:      # compute budget spent but still wants to run → force an answer
+            messages = messages + [
+                {"role": "assistant", "content": json.dumps(parsed, ensure_ascii=False)},
+                {"role": "user", "content": "Keine weiteren Ausführungen möglich. Gib JETZT "
+                                            "die finale Antwort im vorgegebenen JSON-Format "
+                                            "(kein weiteres action-Objekt)."},
+            ]
+            try:
+                parsed = _chat_json(messages, temperature=LLM_TEMPERATURE)
+            except Exception as e:
+                log.warning("answer_from_sources finalisation failed: %s", e)
+                return {"found": False, "complete": False, "compute": compute}
+        break
 
     complete = bool(parsed.get("complete"))
     if not bool(parsed.get("found")):
-        return {"found": False, "complete": complete}
+        return {"found": False, "complete": complete, "compute": compute}
     answer = parsed.get("answer")
     if answer is None or (isinstance(answer, str) and not answer.strip()):
-        return {"found": False, "complete": complete}
+        return {"found": False, "complete": complete, "compute": compute}
     supports = parsed.get("supports", [])
     if not isinstance(supports, list):
         supports = []
-    return {"found": True, "complete": complete, "answer": answer, "supports": supports}
+    return {"found": True, "complete": complete, "answer": answer,
+            "supports": supports, "compute": compute}
 
 
 def format_as_json(task: str, answer_text: str) -> str:
