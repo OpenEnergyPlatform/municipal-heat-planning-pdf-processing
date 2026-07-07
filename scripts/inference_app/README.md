@@ -110,6 +110,17 @@ PDF text layer (extraction is PyMuPDF, not OCR), hence a reliable highlight anch
 segment's real `page_number` (**`Segments.page` is a FK to `Pages.id`, not the page number** — it
 is joined through `Pages`).
 
+**Coordinate overlay (preferred).** When the matched segment carries a stored `bbox` (the pipeline
+now writes per-segment geometry, `[[x0,y0,x1,y1],…]` in PDF points, top-left origin), the link uses
+it instead of a text search: `pdf_link.best_segment_rects` picks the same matched segment's rects
+and the URL carries `#page=N&mhl=<base64url rects>`. The bundled **`pdfjs_overlay.js`** companion
+decodes `mhl` and draws a highlight box on the page (`fitz-point × viewport.scale`, no y-flip at
+rotation 0), which is exact and resolution-independent — no dependence on the text layer at all.
+`&search=` remains the automatic fallback when no `bbox` is stored (old DB) or no segment matches,
+so nothing regresses. Install the companion once into the bundle:
+`cp scripts/inference_app/pdfjs_overlay.js <static>/pdfjs/web/` and add
+`<script src="pdfjs_overlay.js"></script>` before `</body>` in the bundle's `viewer.html`.
+
 **Serving (on the server, not in the repo):** everything is exposed via Streamlit static serving —
 `--server.enableStaticServing=true` on the ExecStart. The PDFs are **hard-linked** into
 `scripts/inference_app/static/pdf/` (`ln data/pdf/*.pdf scripts/inference_app/static/pdf/`); hard

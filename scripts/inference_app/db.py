@@ -15,6 +15,7 @@ Author: Felix Vossel
 """
 from __future__ import annotations
 
+import json
 import re
 import sqlite3
 from pathlib import Path
@@ -432,6 +433,45 @@ def section_segments(
         (section_id,),
     ).fetchall()
     return [(r["page"], r["text"]) for r in rows]
+
+
+def section_segments_geo(
+    conn: sqlite3.Connection, section_id: int
+) -> list[tuple[int, str, Optional[list]]]:
+    """
+    Like `section_segments`, but also returns each text segment's stored `bbox`
+    — a list of [x0, y0, x1, y1] rectangles in PDF points (top-left origin), or
+    None. This is the geometry the PDF viewer draws as a coordinate highlight
+    overlay (see pdf_link.best_segment_rects); the text is still returned so the
+    same quote→segment match as `locate_quote` can be reused.
+
+    Degrades gracefully on a pre-bbox database (the column is missing): it then
+    returns None for every rects slot, so the app simply falls back to the
+    `&search=` phrase highlight. This lets the app code ship before the
+    bbox-carrying DB is copied to the server.
+    """
+    try:
+        rows = conn.execute(
+            "SELECT p.page_number AS page, s.text AS text, s.bbox AS bbox "
+            "FROM Segments s JOIN Pages p ON s.page = p.id "
+            "WHERE s.section = ? AND s.kind = 'text' "
+            "AND s.text IS NOT NULL AND s.text != '' "
+            "ORDER BY s.ordinal",
+            (section_id,),
+        ).fetchall()
+    except sqlite3.OperationalError:               # no `bbox` column yet
+        return [(p, t, None) for (p, t) in section_segments(conn, section_id)]
+
+    out: list[tuple[int, str, Optional[list]]] = []
+    for r in rows:
+        rects = None
+        if r["bbox"]:
+            try:
+                rects = json.loads(r["bbox"])
+            except (ValueError, TypeError):
+                rects = None
+        out.append((r["page"], r["text"], rects))
+    return out
 
 
 def _document_folder(conn: sqlite3.Connection, document_id: Optional[int]) -> Optional[str]:
