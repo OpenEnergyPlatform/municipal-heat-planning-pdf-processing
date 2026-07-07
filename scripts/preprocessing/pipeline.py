@@ -33,9 +33,10 @@ from .config import (
     dump_json_atomic,
 )
 from .models import PageData
-from .stage1_extract import extract_all_pages
-from .stage2_layout import detect_layout_all_pages, load_model
 from .stage3_structure import build_sections, save_output, sections_to_dict
+# Stage 1/2 (fitz, torch, PP-DocLayout) are imported lazily inside the functions
+# that need them, so `--rebuild-stage3` (Stage 3 only) stays light enough to run
+# on a CPU login node without pulling in the GPU stack.
 
 log = logging.getLogger(__name__)
 
@@ -103,6 +104,8 @@ def run_single(
         pages = _load_pages_cache(output_dir)
 
     if pages is None:
+        from .stage1_extract import extract_all_pages
+        from .stage2_layout import detect_layout_all_pages, load_model
         # Only load the layout model when we actually need it
         if model_tuple is None:
             model_tuple = load_model()
@@ -207,6 +210,7 @@ def run_folder(
         for p in pdf_files
     )
     if needs_extraction:
+        from .stage2_layout import load_model
         model_tuple = load_model()
     else:
         log.info("All PDFs have cached extractions – skipping layout model load")
