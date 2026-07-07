@@ -66,6 +66,23 @@ def _block_is_title(block: Block) -> bool:
     return block.layout_label in SECTION_TITLE_CLASSES
 
 
+def _rect(bbox) -> Optional[list[float]]:
+    """A block bbox as a clean [x0, y0, x1, y1] rect (PDF points), or None.
+
+    Rounds to 2 decimals; drops degenerate/short boxes so a segment's stored
+    geometry never carries a malformed rectangle.
+    """
+    if not bbox or len(bbox) < 4:
+        return None
+    try:
+        r = [round(float(v), 2) for v in bbox[:4]]
+    except (TypeError, ValueError):
+        return None
+    if r[2] <= r[0] or r[3] <= r[1]:
+        return None
+    return r
+
+
 def _resolve_title_text(block: Block) -> Optional[str]:
     """
     Returns the display text for a title block, or None if no text was
@@ -251,8 +268,17 @@ def build_sections(pages: list[PageData]) -> list[Section]:
 
     sections:        list[Section]  = []
     current_section: Optional[Section] = None
-    # (text, page) fragments accumulated for the current section before flushing.
-    pending: list[tuple[str, int]] = []
+    # (text, page, rect) fragments accumulated for the current section before
+    # flushing; rect is the block's [x0,y0,x1,y1] in PDF points (or None).
+    pending: list[tuple[str, int, Optional[list[float]]]] = []
+
+    def _emit_text_segment(page, parts: list[str], rects: list[list[float]]) -> None:
+        """Append one page-tagged text segment; attach the constituent block
+        rects (kept per-block for a finer coordinate highlight than a union)."""
+        seg: dict = {"page": page, "kind": "text", "text": " ".join(parts)}
+        if rects:
+            seg["bbox"] = rects
+        current_section.segments.append(seg)
 
     def _flush_text() -> None:
         """
@@ -264,28 +290,27 @@ def build_sections(pages: list[PageData]) -> list[Section]:
         if current_section is None or not pending:
             pending = []
             return
-        joined = " ".join(t.strip() for (t, _p) in pending if t.strip())
+        joined = " ".join(t.strip() for (t, _p, _b) in pending if t.strip())
         if joined:
             sep = " " if current_section.content else ""
             current_section.content += sep + joined
         group_page: Optional[int] = None
         group_parts: list[str] = []
-        for (t, p) in pending:
+        group_rects: list[list[float]] = []
+        for (t, p, b) in pending:
             ts = t.strip()
             if not ts:
                 continue
             if group_parts and p != group_page:
-                current_section.segments.append(
-                    {"page": group_page, "kind": "text",
-                     "text": " ".join(group_parts)}
-                )
+                _emit_text_segment(group_page, group_parts, group_rects)
                 group_parts = []
+                group_rects = []
             group_page = p
             group_parts.append(ts)
+            if b is not None:
+                group_rects.append(b)
         if group_parts:
-            current_section.segments.append(
-                {"page": group_page, "kind": "text", "text": " ".join(group_parts)}
-            )
+            _emit_text_segment(group_page, group_parts, group_rects)
         pending = []
 
     def _open_section(title: str, page_number: Optional[int] = None) -> None:
@@ -313,7 +338,7 @@ def build_sections(pages: list[PageData]) -> list[Section]:
                         f"{block.layout_label}) has no text → treated as text"
                     )
                     if block.content:
-                        pending.append((block.content, pg.page_number))
+                        pending.append((block.content, pg.page_number, _rect(block.bbox)))
                     continue
                 log.debug(
                     f"  Page {pg.page_number}: new section '{title_text}' "
@@ -325,40 +350,46 @@ def build_sections(pages: list[PageData]) -> list[Section]:
             if block.type == "table":
                 _flush_text()
                 if current_section is not None:
+                    rect = _rect(block.bbox)
                     ref = TableRef(
                         id=block.id,
                         path=block.path or "",
                         caption=block.caption,
                         page_number=pg.page_number,
                         source_text=block.source_text,
+                        bbox=[rect] if rect is not None else None,
                     )
                     current_section.tables.append(ref)
                     sep = " " if current_section.content else ""
                     current_section.content += sep + f"[{block.id}]"
-                    current_section.segments.append(
-                        {"page": pg.page_number, "kind": "table", "ref": block.id}
-                    )
+                    seg: dict = {"page": pg.page_number, "kind": "table", "ref": block.id}
+                    if rect is not None:
+                        seg["bbox"] = [rect]
+                    current_section.segments.append(seg)
                 continue
 
             if block.type == "image":
                 _flush_text()
                 if current_section is not None:
+                    rect = _rect(block.bbox)
                     ref = FigureRef(
                         id=block.id,
                         path=block.path or "",
                         caption=block.caption,
                         page_number=pg.page_number,
+                        bbox=[rect] if rect is not None else None,
                     )
                     current_section.figures.append(ref)
                     sep = " " if current_section.content else ""
                     current_section.content += sep + f"[{block.id}]"
-                    current_section.segments.append(
-                        {"page": pg.page_number, "kind": "figure", "ref": block.id}
-                    )
+                    seg = {"page": pg.page_number, "kind": "figure", "ref": block.id}
+                    if rect is not None:
+                        seg["bbox"] = [rect]
+                    current_section.segments.append(seg)
                 continue
 
             if block.type == "text" and block.content:
-                pending.append((block.content, pg.page_number))
+                pending.append((block.content, pg.page_number, _rect(block.bbox)))
 
     # Flush any remaining text after the last page.
     _flush_text()

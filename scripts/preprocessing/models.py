@@ -110,6 +110,11 @@ class FigureRef:
     path: str
     caption: Optional[str] = None
     page_number: Optional[int] = None
+    # Layout region on the page as a list of one [x0, y0, x1, y1] rect in PDF
+    # points (top-left origin) — the detected figure block's bbox. Stored as a
+    # rect *list* (not a bare rect) to match the Segments.bbox shape, enabling a
+    # coordinate overlay on the source PDF instead of only a page-level link.
+    bbox: Optional[list[list[float]]] = None
 
     def to_dict(self) -> dict:
         d: dict = {"id": self.id, "path": self.path}
@@ -117,6 +122,8 @@ class FigureRef:
             d["caption"] = self.caption
         if self.page_number is not None:
             d["page_number"] = self.page_number
+        if self.bbox is not None:
+            d["bbox"] = self.bbox
         return d
 
 
@@ -128,6 +135,9 @@ class TableRef:
     caption: Optional[str] = None
     page_number: Optional[int] = None
     source_text: Optional[str] = None   # native PDF text inside the table bbox (QA reference)
+    # Layout region as a list of one [x0, y0, x1, y1] rect in PDF points
+    # (top-left origin), the detected table block's bbox (see FigureRef.bbox).
+    bbox: Optional[list[list[float]]] = None
 
     def to_dict(self) -> dict:
         d: dict = {"id": self.id, "path": self.path}
@@ -137,6 +147,8 @@ class TableRef:
             d["page_number"] = self.page_number
         if self.source_text is not None:
             d["source_text"] = self.source_text
+        if self.bbox is not None:
+            d["bbox"] = self.bbox
         return d
 
 

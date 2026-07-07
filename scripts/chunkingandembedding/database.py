@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import sqlite3
 from contextlib import closing
 from pathlib import Path
@@ -67,6 +68,26 @@ def connect(db_path: Path) -> sqlite3.Connection:
     conn = sqlite3.connect(db_path)
     conn.execute("PRAGMA foreign_keys = ON")
     return conn
+
+
+def _ensure_bbox_columns(connection: sqlite3.Connection) -> None:
+    """
+    Add the `bbox` column to Segments/Tables/Images on a DB that predates it.
+
+    Idempotent: a fresh DB built from data/KWP.db.sql already has the columns,
+    so this only fires on an older live DB. Purely additive (ADD COLUMN keeps
+    every existing row and value) — safe to run before an insert or an enrich.
+    """
+    for table in ("Segments", "Tables", "Images"):
+        cols = {row[1] for row in connection.execute(f'PRAGMA table_info("{table}")')}
+        if "bbox" not in cols:
+            connection.execute(f'ALTER TABLE "{table}" ADD COLUMN "bbox" TEXT')
+
+
+def _bbox_json(item: dict) -> Optional[str]:
+    """Serialise an item's `bbox` (a list of rects) to JSON text, or None."""
+    b = item.get("bbox")
+    return json.dumps(b, ensure_ascii=False) if b else None
 
 
 # ---------------------------------------------------------------------------
@@ -211,25 +232,26 @@ def _insert_sections(
             if kind not in ("text", "table", "figure"):
                 continue
             connection.execute(
-                "INSERT INTO Segments (section, ordinal, page, kind, ref, text) "
-                "VALUES (?, ?, ?, ?, ?, ?)",
-                (section_id, ordinal, pid, kind, seg.get("ref"), seg.get("text")),
+                "INSERT INTO Segments (section, ordinal, page, kind, ref, text, bbox) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (section_id, ordinal, pid, kind, seg.get("ref"), seg.get("text"),
+                 _bbox_json(seg)),
             )
 
         for t in section.get("tables", []):
             connection.execute(
-                "INSERT INTO Tables (section, block_id, path, page_number, caption, markdown) "
-                "VALUES (?, ?, ?, ?, ?, ?)",
+                "INSERT INTO Tables (section, block_id, path, page_number, caption, markdown, bbox) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?)",
                 (section_id, t.get("id"), t.get("path", ""), t.get("page_number"),
-                 t.get("caption"), t.get("markdown")),
+                 t.get("caption"), t.get("markdown"), _bbox_json(t)),
             )
 
         for fig in section.get("figures", []):
             connection.execute(
-                "INSERT INTO Images (section, block_id, path, page_number, caption, description) "
-                "VALUES (?, ?, ?, ?, ?, ?)",
+                "INSERT INTO Images (section, block_id, path, page_number, caption, description, bbox) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?)",
                 (section_id, fig.get("id"), fig.get("path", ""), fig.get("page_number"),
-                 fig.get("caption"), fig.get("description")),
+                 fig.get("caption"), fig.get("description"), _bbox_json(fig)),
             )
 
 
@@ -259,6 +281,7 @@ def update_database(
     log.info("Step 2: Inserting sections for %d documents", len(candidates))
 
     with closing(connect(db_path)) as conn:
+        _ensure_bbox_columns(conn)   # no-op on a fresh v2 schema; migrates an old DB
         for i, pdf_dir in enumerate(candidates):
             pdf_name = pdf_dir.name
             doc_id = _resolve_document_id(pdf_name, conn)
@@ -293,6 +316,134 @@ def update_database(
             )
 
     log.info("Step 2 complete.")
+
+
+# ---------------------------------------------------------------------------
+# Additive bbox backfill (non-destructive)
+# ---------------------------------------------------------------------------
+
+# Stage-3 output holds the raw, geometry-bearing sections (pre-refinement); it
+# is the authoritative source of per-segment/-media bbox and is regenerated
+# cheaply and deterministically (no LLM/VL) by re-running Stage 3.
+_STAGE3_JSON = "results/structured_output.json"
+
+
+def _norm_seg_text(text: Optional[str]) -> str:
+    """Whitespace-collapsed key for matching a text segment across the JSON /
+    DB boundary (the raw text is carried verbatim, but be lenient anyway)."""
+    return re.sub(r"\s+", " ", text or "").strip()
+
+
+def _bbox_lookups_from_stage3(stage3: dict) -> tuple[dict, dict]:
+    """
+    Build (media_by_id, text_by_page_text) bbox lookups from a Stage-3 doc.
+
+    media_by_id:       block id           → bbox JSON  (tables + figures + media segments)
+    text_by_page_text: (page, norm_text)  → bbox JSON  (text segments)
+    """
+    media_by_id: dict[str, str] = {}
+    text_by_page_text: dict[tuple, str] = {}
+    for section in stage3.get("sections", []):
+        for item in (section.get("tables") or []) + (section.get("figures") or []):
+            if isinstance(item, dict) and item.get("id") and item.get("bbox"):
+                media_by_id[item["id"]] = json.dumps(item["bbox"], ensure_ascii=False)
+        for seg in section.get("segments") or []:
+            if not isinstance(seg, dict) or not seg.get("bbox"):
+                continue
+            bbox_json = json.dumps(seg["bbox"], ensure_ascii=False)
+            if seg.get("kind") == "text":
+                text_by_page_text[(seg.get("page"), _norm_seg_text(seg.get("text")))] = bbox_json
+            elif seg.get("ref"):
+                media_by_id.setdefault(seg["ref"], bbox_json)
+    return media_by_id, text_by_page_text
+
+
+def enrich_bbox(db_path: Path, root_dir: Path, *, force: bool = False) -> dict:
+    """
+    Additively backfill the `bbox` column on existing Segments/Tables/Images
+    rows from freshly re-run Stage-3 outputs — touching nothing else.
+
+    This is the non-destructive path for a corpus that was embedded before bbox
+    existed. Re-run Stage 3 (deterministic, cheap — it consumes the cached
+    layout blocks, no LLM/VL) so each doc's structured_output.json carries the
+    geometry, then match it onto the DB rows by block id (tables/figures/media
+    segments) and by (page, text) (text segments) and `UPDATE` only the bbox
+    column. Embeddings, FAISS ids, Sections.content and every other value are
+    left byte-for-byte as they were: no delete, no re-embed, no re-chunk.
+
+    `force` re-derives even rows that already carry a bbox; by default a row
+    whose bbox is already set is left untouched (so a partial run resumes).
+
+    Returns a stats dict of matched/updated counts.
+    """
+    root_dir = Path(root_dir)
+    stats = {"documents": 0, "segments": 0, "tables": 0, "images": 0}
+
+    candidates = sorted(
+        d for d in root_dir.iterdir()
+        if d.is_dir() and (d / _STAGE3_JSON).exists()
+    )
+    if not candidates:
+        log.warning("enrich-bbox: no Stage-3 outputs found under '%s'.", root_dir)
+        return stats
+
+    log.info("enrich-bbox: %d documents", len(candidates))
+    cond = "" if force else " AND bbox IS NULL"
+
+    with closing(connect(db_path)) as conn:
+        _ensure_bbox_columns(conn)
+        for pdf_dir in candidates:
+            doc_id = _resolve_document_id(pdf_dir.name, conn)
+            if doc_id is None:
+                continue
+
+            with open(pdf_dir / _STAGE3_JSON, "r", encoding="utf-8") as f:
+                stage3 = json.load(f)
+            media_by_id, text_by_page_text = _bbox_lookups_from_stage3(stage3)
+            if not media_by_id and not text_by_page_text:
+                continue
+
+            # Text + media segments (page_number via the Pages join).
+            rows = conn.execute(
+                "SELECT sg.id, p.page_number, sg.kind, sg.ref, sg.text "
+                "FROM Segments sg "
+                "JOIN Sections s ON sg.section = s.id "
+                "JOIN Pages p ON sg.page = p.id "
+                f"WHERE s.document = ?{cond}",
+                (doc_id,),
+            ).fetchall()
+            for seg_id, page_number, kind, ref, text in rows:
+                if kind == "text":
+                    bbox_json = text_by_page_text.get((page_number, _norm_seg_text(text)))
+                else:
+                    bbox_json = media_by_id.get(ref)
+                if bbox_json is not None:
+                    conn.execute("UPDATE Segments SET bbox = ? WHERE id = ?",
+                                 (bbox_json, seg_id))
+                    stats["segments"] += 1
+
+            # Table / Image rows, matched by block id.
+            for table, key in (("Tables", "tables"), ("Images", "images")):
+                for row_id, block_id in conn.execute(
+                    f"SELECT t.id, t.block_id FROM {table} t "
+                    f"JOIN Sections s ON t.section = s.id "
+                    f"WHERE s.document = ?{cond}",
+                    (doc_id,),
+                ).fetchall():
+                    bbox_json = media_by_id.get(block_id)
+                    if bbox_json is not None:
+                        conn.execute(f"UPDATE {table} SET bbox = ? WHERE id = ?",
+                                     (bbox_json, row_id))
+                        stats[key] += 1
+
+            conn.commit()
+            stats["documents"] += 1
+
+    log.info(
+        "enrich-bbox complete: %d docs, %d segments, %d tables, %d images updated",
+        stats["documents"], stats["segments"], stats["tables"], stats["images"],
+    )
+    return stats
 
 
 # ---------------------------------------------------------------------------
