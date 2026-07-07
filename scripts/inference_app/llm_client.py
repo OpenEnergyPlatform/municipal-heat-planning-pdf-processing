@@ -321,6 +321,37 @@ def grounded_quote(quote, chunk_item: dict) -> Optional[str]:
 # Public API
 # ---------------------------------------------------------------------------
 
+def _history_context(history: Optional[list], limit: int = 5) -> str:
+    """
+    A compact block of the last `limit` conversation turns for follow-ups.
+
+    Each turn contributes its question, search anchor and answer — but NOT the
+    retrieved document excerpts. It is framed strictly as reference-resolution
+    help ("und …", pronouns, ellipsis), never as a fact source, so grounding
+    stays tied to the current excerpts. Empty string if there is no history.
+    """
+    if not history:
+        return ""
+    blocks = []
+    for turn in history[-limit:]:
+        frage = str(turn.get("task", "")).strip()
+        if not frage:
+            continue
+        lines = [f"- Frage: {frage}"]
+        anker = str(turn.get("phrase", "")).strip()
+        if anker:
+            lines.append(f"  Suchanker: {anker}")
+        antwort = str(turn.get("answer", "")).strip()
+        if antwort:
+            lines.append(f"  Antwort: {antwort[:800]}")
+        blocks.append("\n".join(lines))
+    if not blocks:
+        return ""
+    return ("\n\nBisheriger Gesprächsverlauf (nutze ihn NUR, um Bezüge im aktuellen Auftrag "
+            "aufzulösen — Pronomen, \"und …\", Auslassungen; KEINE Faktenquelle, Belege "
+            "ausschließlich aus den Auszügen):\n" + "\n".join(blocks))
+
+
 # A search anchor is a HYPOTHETICAL, present-tense passage/caption. If the model
 # slips into evaluating or refusing ("keine ähnlichen Diagramme im
 # bereitgestellten Kontext nachweisbar") the string is not an anchor at all — it
@@ -347,7 +378,7 @@ def _looks_like_non_anchor(phrase: str) -> bool:
     return bool(_NON_ANCHOR_RE.search(phrase or ""))
 
 
-def make_search_phrase(task: str, visual: bool = False) -> str:
+def make_search_phrase(task: str, visual: bool = False, history: Optional[list] = None) -> str:
     """
     Turn a free-text extraction task into a HyDE-style search anchor: a short
     hypothetical passage written as it would appear IN a heat plan, rather than a
@@ -368,7 +399,7 @@ def make_search_phrase(task: str, visual: bool = False) -> str:
     # beginning"). Fold our instructions into the user turn — robust with or
     # without a stored agent prompt.
     prompt = IMAGE_PHRASE_SYSTEM_PROMPT if visual else PHRASE_SYSTEM_PROMPT
-    base = f"{prompt}\n\nAuftrag des Nutzers:\n{task}"
+    base = f"{prompt}{_history_context(history)}\n\nAuftrag des Nutzers:\n{task}"
     messages = [{"role": "user", "content": base}]
     # Up to two attempts: if the model evaluates/denies instead of anchoring
     # (a self-contradictory, useless anchor), re-ask once with a correction; then
@@ -469,7 +500,7 @@ def _compute_tail(compute: list, force: bool) -> str:
 def answer_from_sources(task: str, chunk_items: list[dict],
                         prior: Optional[str] = None, as_json: bool = False,
                         code_runner=None, code_context: Optional[dict] = None,
-                        max_compute: int = 0) -> dict:
+                        max_compute: int = 0, history: Optional[list] = None) -> dict:
     """
     Answer `task` from the given batch of sources in ONE call (plus optional code
     runs), extending an optional `prior` partial answer. Returns:
@@ -500,7 +531,7 @@ def answer_from_sources(task: str, chunk_items: list[dict],
         prompt = prompt + _COMPUTE_HINT
     payload = json.dumps({"task": task, "bisher": prior, "excerpt": chunk_items},
                          ensure_ascii=False)
-    base = f"{prompt}\n\n{payload}"
+    base = f"{prompt}{_history_context(history)}\n\n{payload}"
 
     compute: list[dict] = []
     parsed: dict = {}

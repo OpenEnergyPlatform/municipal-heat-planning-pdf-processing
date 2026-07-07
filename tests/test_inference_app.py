@@ -525,6 +525,23 @@ def test_answer_from_sources_runs_react_compute_loop(monkeypatch):
     assert out["compute"][0]["output"]["stdout"] == "50\n"
 
 
+def test_history_context_includes_recent_turns_but_frames_as_non_source():
+    llm = pytest.importorskip("scripts.inference_app.llm_client")
+    hist = [{"task": "Wer hat den Plan erstellt?", "phrase": "anker1", "answer": "Firma X"},
+            {"task": "Und der Projektleiter?", "phrase": "anker2", "answer": "Herr Y"}]
+    ctx = llm._history_context(hist, limit=5)
+    assert "Firma X" in ctx and "Und der Projektleiter?" in ctx and "anker2" in ctx
+    assert "keine faktenquelle" in ctx.lower()          # framed as reference-only
+    assert llm._history_context([]) == "" and llm._history_context(None) == ""
+
+
+def test_history_context_caps_to_limit():
+    llm = pytest.importorskip("scripts.inference_app.llm_client")
+    hist = [{"task": f"Frage {i}", "answer": f"A{i}"} for i in range(8)]
+    ctx = llm._history_context(hist, limit=5)
+    assert "Frage 7" in ctx and "Frage 2" not in ctx       # only the last 5
+
+
 def test_answer_from_sources_no_action_no_compute(monkeypatch):
     llm = pytest.importorskip("scripts.inference_app.llm_client")
     monkeypatch.setattr(llm, "LLM_STUB_MODE", False)

@@ -97,7 +97,8 @@ def embed_query(item: dict, cache_conn, cache_key: str):
 
 
 def run_turn(task: str, image_bytes: bytes | None, image_only: bool,
-             document_id: int, scopes: list[str], as_json: bool = False):
+             document_id: int, scopes: list[str], as_json: bool = False,
+             history: list | None = None):
     """
     Execute one full retrieval + answer turn. Returns a dict with:
     answer (str|None), citations (list[dict]), n_findings (int), cache_hit (bool),
@@ -109,9 +110,9 @@ def run_turn(task: str, image_bytes: bytes | None, image_only: bool,
     pass. Every statement is validated against a verbatim quote from its cited
     source (grounding); an answer with no grounded support is refused.
     """
-    result = {"answer": None, "citations": [], "n_findings": 0, "cache_hit": False,
-              "n_hits": 0, "phrase": None, "as_json": as_json, "n_batches": 0,
-              "compute": []}
+    result = {"answer": None, "answer_text": None, "citations": [], "n_findings": 0,
+              "cache_hit": False, "n_hits": 0, "phrase": None, "as_json": as_json,
+              "n_batches": 0, "compute": []}
 
     conn = get_db()
     cache_conn = get_cache()
@@ -130,7 +131,7 @@ def run_turn(task: str, image_bytes: bytes | None, image_only: bool,
         mode = "image+text"
         # visual anchor: a figure/diagram-style caption matches figures better.
         with _spinner("🔎 Suchanker (Bild+Text)"):
-            phrase = llm_client.make_search_phrase(task, visual=True)
+            phrase = llm_client.make_search_phrase(task, visual=True, history=history)
         tmp_path = _write_temp_image(image_bytes)
         item = {"text": phrase, "image": tmp_path}
         cache_key = query_cache.make_key(mode, text=phrase, image_bytes=image_bytes)
@@ -139,7 +140,7 @@ def run_turn(task: str, image_bytes: bytes | None, image_only: bool,
         # A figure/table-only search wants a caption-style anchor, not prose.
         visual_anchor = _scopes_are_visual(scopes)
         with _spinner("🔎 Suchanker"):
-            phrase = llm_client.make_search_phrase(task, visual=visual_anchor)
+            phrase = llm_client.make_search_phrase(task, visual=visual_anchor, history=history)
         item = {"text": phrase}
         cache_key = query_cache.make_key(mode, text=phrase)
     result["phrase"] = phrase
@@ -182,7 +183,8 @@ def run_turn(task: str, image_bytes: bytes | None, image_only: bool,
             out = llm_client.answer_from_sources(
                 task, items, prior=prior_text, as_json=False,
                 code_runner=(code_exec.run_code if code_exec.is_enabled() else None),
-                code_context=code_ctx, max_compute=config.CODE_EXEC_MAX_ROUNDS)
+                code_context=code_ctx, max_compute=config.CODE_EXEC_MAX_ROUNDS,
+                history=history)
             result["compute"].extend(out.get("compute") or [])
             item_by_index = {it["index"]: it for it in items}
             for s in out.get("supports", []):
@@ -211,6 +213,7 @@ def run_turn(task: str, image_bytes: bytes | None, image_only: bool,
         return result
 
     # --- 5) final answer (format to JSON once at the end, if requested) ---
+    result["answer_text"] = prior_text          # prose answer, for follow-up context
     if as_json:
         with _spinner("🧩 Als JSON"):
             result["answer"] = llm_client.format_as_json(task, prior_text)
@@ -298,6 +301,7 @@ def main() -> None:
     if st.session_state.get("doc_id") != doc_id:
         st.session_state["doc_id"] = doc_id
         st.session_state["chat_history"] = []
+        st.session_state["turns"] = []          # follow-up context resets with the document
 
     history = st.session_state.setdefault("chat_history", [])
 
@@ -342,8 +346,9 @@ def main() -> None:
     with st.chat_message("user"):
         st.markdown(user_text)
 
-    # Run pipeline
-    result = run_turn(task, image_bytes, image_only, doc_id, scopes, as_json=as_json)
+    # Run pipeline (with the last few turns as follow-up context — no doc excerpts)
+    result = run_turn(task, image_bytes, image_only, doc_id, scopes, as_json=as_json,
+                      history=st.session_state.get("turns", []))
 
     # Compose assistant reply
     with st.chat_message("assistant"):
@@ -374,6 +379,12 @@ def main() -> None:
                 "citations": result["citations"], "phrase": result.get("phrase"),
                 "as_json": result["as_json"], "compute": result.get("compute", []),
             })
+            # remember this turn (question + anchor + prose answer) for follow-ups —
+            # capped at the last 5; no document excerpts are retained.
+            turns = st.session_state.setdefault("turns", [])
+            turns.append({"task": task, "phrase": result.get("phrase"),
+                          "answer": result.get("answer_text") or result.get("answer")})
+            st.session_state["turns"] = turns[-5:]
 
 
 def _render_compute(compute: list | None) -> None:
