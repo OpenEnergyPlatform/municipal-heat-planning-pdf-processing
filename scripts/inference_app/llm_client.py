@@ -448,6 +448,24 @@ def _format_exec_result(out: dict) -> str:
             "\nKorrigiere den Code ODER antworte ohne Berechnung.")
 
 
+def _compute_tail(compute: list, force: bool) -> str:
+    """
+    User-message suffix carrying prior code runs — the ReAct loop is kept
+    SINGLE-TURN (no assistant echo of the action JSON), because some gateway
+    agents reject a JSON-string assistant turn (a stricter Responses-API path).
+    So each round re-sends the accumulated results inside the user message.
+    """
+    if not compute:
+        return ""
+    done = "\n\n".join(f"Ausgeführter Code:\n{c['code']}\n{_format_exec_result(c['output'])}"
+                       for c in compute)
+    guide = ("Gib JETZT die finale Antwort im vorgegebenen JSON-Format (KEIN action-Objekt mehr)."
+             if force else
+             "Gib die finale Antwort im vorgegebenen JSON-Format — oder, nur falls unbedingt "
+             'nötig, eine weitere {"action":"python","code":...}.')
+    return "\n\nBereits ausgeführt:\n" + done + "\n\n" + guide
+
+
 def answer_from_sources(task: str, chunk_items: list[dict],
                         prior: Optional[str] = None, as_json: bool = False,
                         code_runner=None, code_context: Optional[dict] = None,
@@ -482,37 +500,25 @@ def answer_from_sources(task: str, chunk_items: list[dict],
         prompt = prompt + _COMPUTE_HINT
     payload = json.dumps({"task": task, "bisher": prior, "excerpt": chunk_items},
                          ensure_ascii=False)
-    messages = [{"role": "user", "content": f"{prompt}\n\n{payload}"}]
+    base = f"{prompt}\n\n{payload}"
 
     compute: list[dict] = []
-    while True:
+    parsed: dict = {}
+    for attempt in range(budget + 1):
+        force = attempt == budget                    # last allowed call → must answer
         try:
-            parsed = _chat_json(messages, temperature=LLM_TEMPERATURE)
+            parsed = _chat_json([{"role": "user", "content": base + _compute_tail(compute, force)}],
+                                temperature=LLM_TEMPERATURE)
         except Exception as e:
             log.warning("answer_from_sources produced no valid JSON, treating as not-found: %s", e)
             return {"found": False, "complete": False, "compute": compute}
-        is_action = isinstance(parsed, dict) and parsed.get("action") == "python" and parsed.get("code")
-        if is_action and len(compute) < budget:
+        is_action = (code_runner and isinstance(parsed, dict)
+                     and parsed.get("action") == "python" and parsed.get("code"))
+        if is_action and not force:
             code = str(parsed["code"])
             out = code_runner(code, code_context) or {"ok": False, "error": "kein Ergebnis"}
             compute.append({"code": code, "output": out})
-            messages = messages + [
-                {"role": "assistant", "content": json.dumps(parsed, ensure_ascii=False)},
-                {"role": "user", "content": _format_exec_result(out)},
-            ]
             continue
-        if is_action:      # compute budget spent but still wants to run → force an answer
-            messages = messages + [
-                {"role": "assistant", "content": json.dumps(parsed, ensure_ascii=False)},
-                {"role": "user", "content": "Keine weiteren Ausführungen möglich. Gib JETZT "
-                                            "die finale Antwort im vorgegebenen JSON-Format "
-                                            "(kein weiteres action-Objekt)."},
-            ]
-            try:
-                parsed = _chat_json(messages, temperature=LLM_TEMPERATURE)
-            except Exception as e:
-                log.warning("answer_from_sources finalisation failed: %s", e)
-                return {"found": False, "complete": False, "compute": compute}
         break
 
     complete = bool(parsed.get("complete"))
