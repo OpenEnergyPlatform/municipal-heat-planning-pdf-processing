@@ -59,6 +59,25 @@ def test_degenerate_or_missing_bbox_is_dropped():
     assert "bbox" not in seg
 
 
+# ── Stage-3-only rebuild from the pages cache (the HPC re-run mechanism) ─────
+
+def test_rebuild_stage3_from_cache_propagates_bbox(tmp_path):
+    from scripts.preprocessing import pipeline as pp
+    docdir = tmp_path / "somedoc" / "results"
+    docdir.mkdir(parents=True)
+    pg = PageData(page_number=3, width_pt=595.0, height_pt=842.0)
+    pg.blocks = [Block(id="p3_t0", type="text", bbox=[10, 20, 100, 40],
+                       content="Hallo Welt")]
+    # the Stage-1/2 cache already carries Block.bbox; only Stage 3 must re-run
+    (docdir / "pages_extracted.json").write_text(json.dumps([pg.to_dict()]),
+                                                 encoding="utf-8")
+
+    assert pp.rebuild_stage3_from_cache(tmp_path) == 1
+    out = json.loads((docdir / "structured_output.json").read_text(encoding="utf-8"))
+    seg = [s for s in out["sections"][0]["segments"] if s["kind"] == "text"][0]
+    assert seg["bbox"] == [[10, 20, 100, 40]]
+
+
 # ── models: serialisation ───────────────────────────────────────────────────
 
 def test_ref_to_dict_includes_or_omits_bbox():
