@@ -33,9 +33,10 @@ from .config import (
     dump_json_atomic,
 )
 from .models import PageData
-from .stage1_extract import extract_all_pages
-from .stage2_layout import detect_layout_all_pages, load_model
 from .stage3_structure import build_sections, save_output, sections_to_dict
+# Stage 1/2 (fitz, torch, PP-DocLayout) are imported lazily inside the functions
+# that need them, so `--rebuild-stage3` (Stage 3 only) stays light enough to run
+# on a CPU login node without pulling in the GPU stack.
 
 log = logging.getLogger(__name__)
 
@@ -103,6 +104,8 @@ def run_single(
         pages = _load_pages_cache(output_dir)
 
     if pages is None:
+        from .stage1_extract import extract_all_pages
+        from .stage2_layout import detect_layout_all_pages, load_model
         # Only load the layout model when we actually need it
         if model_tuple is None:
             model_tuple = load_model()
@@ -207,6 +210,7 @@ def run_folder(
         for p in pdf_files
     )
     if needs_extraction:
+        from .stage2_layout import load_model
         model_tuple = load_model()
     else:
         log.info("All PDFs have cached extractions – skipping layout model load")
@@ -270,6 +274,42 @@ def _write_index(
 
 
 # ---------------------------------------------------------------------------
+# Stage-3-only rebuild (no PDF, no layout model)
+# ---------------------------------------------------------------------------
+
+def rebuild_stage3_from_cache(output_dir: Path) -> int:
+    """
+    Re-run ONLY Stage 3 for every already-extracted doc, overwriting its
+    structured_output.json from the cached Stage-1/2 layout blocks.
+
+    No PDF input, no layout model — pure CPU. Use this to propagate a Stage-3
+    change (e.g. a new per-segment field like bbox) across a corpus that was
+    already extracted, without re-running the GPU extraction or any downstream
+    LLM/VL stage. A doc is processed iff it has a readable pages cache.
+    """
+    output_dir = Path(output_dir)
+    doc_dirs = sorted(
+        d for d in output_dir.iterdir()
+        if d.is_dir() and (d / CACHE_PAGES_JSON).exists()
+    )
+    log.info("Rebuild Stage 3: %d docs with a pages cache under '%s'",
+             len(doc_dirs), output_dir)
+    done = 0
+    for i, d in enumerate(doc_dirs):
+        pages = _load_pages_cache(d)
+        if pages is None:
+            log.warning("  [%d/%d] %s: pages cache unreadable – skipping",
+                        i + 1, len(doc_dirs), d.name)
+            continue
+        save_output(build_sections(pages), d)
+        done += 1
+        if (i + 1) % 50 == 0 or (i + 1) == len(doc_dirs):
+            log.info("  [%d/%d] rebuilt", i + 1, len(doc_dirs))
+    log.info("Rebuild Stage 3 complete: %d/%d docs", done, len(doc_dirs))
+    return done
+
+
+# ---------------------------------------------------------------------------
 # Unified entry point
 # ---------------------------------------------------------------------------
 
@@ -279,15 +319,22 @@ def run(
     force_reextract: bool = False,
     page_range: Optional[tuple[int, int]] = None,
     glob: str = "*.pdf",
+    rebuild_stage3: bool = False,
 ) -> Optional[dict] | dict[str, Optional[dict]]:
     """
     Entry point of the preprocessing pipeline.
 
     Automatically detects whether input_path is a file or folder and
-    delegates to run_single() or run_folder().
+    delegates to run_single() or run_folder(). With *rebuild_stage3*, skips
+    input entirely and re-runs only Stage 3 over *output_dir*'s caches.
     """
-    input_path = Path(input_path)
     output_dir = Path(output_dir)
+
+    if rebuild_stage3:
+        rebuild_stage3_from_cache(output_dir)
+        return {}
+
+    input_path = Path(input_path)
 
     if input_path.is_dir():
         if page_range is not None:
@@ -325,12 +372,19 @@ Examples:
   python -m scripts.preprocessing.pipeline doc.pdf ./out --pages 0 20
   python -m scripts.preprocessing.pipeline ./pdfs/ ./out --glob "*.pdf"
   python -m scripts.preprocessing.pipeline doc.pdf ./out --force-reextract
+  python -m scripts.preprocessing.pipeline ./out --rebuild-stage3
         """,
     )
-    p.add_argument("input",  help="PDF file or folder containing PDFs")
+    p.add_argument("input",  nargs="?", default=None,
+                   help="PDF file or folder containing PDFs "
+                        "(omit with --rebuild-stage3)")
     p.add_argument("output", help="Output directory")
     p.add_argument("--force-reextract", action="store_true",
                    help="Ignore cache and re-run Stages 1+2")
+    p.add_argument("--rebuild-stage3", action="store_true",
+                   help="Re-run ONLY Stage 3 over the output dir's cached docs "
+                        "(no PDF input, no layout model); rewrites "
+                        "structured_output.json from pages_extracted.json")
     p.add_argument("--pages", nargs=2, type=int, metavar=("START", "END"),
                    help="Only process pages START..END, 0-indexed (single PDF only)")
     p.add_argument("--glob", default="*.pdf",
@@ -353,6 +407,10 @@ def main() -> None:
 
     page_range = tuple(args.pages) if args.pages else None
 
+    if not args.rebuild_stage3 and args.input is None:
+        log.error("input is required unless --rebuild-stage3 is given")
+        sys.exit(1)
+
     try:
         run(
             input_path=args.input,
@@ -360,6 +418,7 @@ def main() -> None:
             force_reextract=args.force_reextract,
             page_range=page_range,
             glob=args.glob,
+            rebuild_stage3=args.rebuild_stage3,
         )
         sys.exit(0)
     except ValueError as e:

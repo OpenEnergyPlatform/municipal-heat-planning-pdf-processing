@@ -75,6 +75,12 @@ CREATE TABLE IF NOT EXISTS "SectionPages" (
 
 -- Ordered content pieces inside a section, each tagged with its page → the
 -- fine-grained provenance used to cite "which part of the chunk is on page N".
+-- `bbox` columns below hold the source-PDF geometry for coordinate-precise
+-- source highlighting: a JSON array of one or more [x0, y0, x1, y1] rectangles
+-- in PDF points, top-left origin (the layout blocks' bbox from Stage 2/3). A
+-- text segment carries one rect per constituent block; a table/figure carries
+-- its single region rect. NULL when geometry is unknown. Display/provenance
+-- only — orthogonal to retrieval (never embedded).
 CREATE TABLE IF NOT EXISTS "Segments" (
     "id"      INTEGER PRIMARY KEY AUTOINCREMENT,
     "section" INTEGER NOT NULL REFERENCES "Sections"("id") ON DELETE CASCADE,
@@ -83,6 +89,7 @@ CREATE TABLE IF NOT EXISTS "Segments" (
     "kind"    TEXT NOT NULL CHECK ("kind" IN ('text', 'table', 'figure')),
     "ref"     TEXT,   -- block id for table/figure segments (e.g. p12_tbl0)
     "text"    TEXT,   -- raw text for text segments
+    "bbox"    TEXT,   -- JSON [[x0,y0,x1,y1], …] in PDF points (top-left origin)
     UNIQUE("section", "ordinal")
 );
 
@@ -93,7 +100,8 @@ CREATE TABLE IF NOT EXISTS "Tables" (
     "path"        TEXT NOT NULL,
     "page_number" INTEGER,
     "caption"     TEXT,
-    "markdown"    TEXT
+    "markdown"    TEXT,
+    "bbox"        TEXT   -- JSON [[x0,y0,x1,y1]] region in PDF points
 );
 
 CREATE TABLE IF NOT EXISTS "Images" (
@@ -103,7 +111,8 @@ CREATE TABLE IF NOT EXISTS "Images" (
     "path"        TEXT NOT NULL,
     "page_number" INTEGER,
     "caption"     TEXT,
-    "description" TEXT
+    "description" TEXT,
+    "bbox"        TEXT   -- JSON [[x0,y0,x1,y1]] region in PDF points
 );
 
 -- One row per embedded vector. `faiss_id` is the id in the FAISS IDMap index.
