@@ -15,10 +15,16 @@ from __future__ import annotations
 
 import json
 import logging
+import mimetypes
 import os
 import sys
 import tempfile
 from pathlib import Path
+
+# The bundled pdf.js viewer is served as ES modules; some Python installs don't
+# map .mjs → a JS MIME type, and browsers refuse to execute modules served as
+# octet-stream. Register it so Streamlit's static handler serves it correctly.
+mimetypes.add_type("text/javascript", ".mjs")
 
 # `streamlit run scripts/inference_app/app.py` executes this file as a top-level
 # script (no package context), so relative imports would fail. Put the repo root
@@ -380,7 +386,11 @@ def _pdf_link_for(cit: dict):
             page, phrase = loc
     if not page:
         return None
-    return pdf_link.pdf_page_url(prefix, filename, page, phrase), page
+    if config.PDF_VIEWER_PREFIX:      # through bundled pdf.js → highlight in every browser
+        url = pdf_link.pdf_viewer_url(config.PDF_VIEWER_PREFIX, prefix, filename, page, phrase)
+    else:                             # native browser viewer (highlight only in Firefox/Adobe)
+        url = pdf_link.pdf_page_url(prefix, filename, page, phrase)
+    return url, page
 
 
 def _render_citation(cit: dict) -> None:

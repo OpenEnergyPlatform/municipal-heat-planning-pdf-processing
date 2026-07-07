@@ -300,6 +300,21 @@ def test_pdf_page_url_encodes_raw_umlaut_filename():
     assert url == "/app/static/pdf/waermepaln_t%C3%B6nning_20241129.pdf#page=3"
 
 
+def test_pdf_viewer_url_wraps_pdfjs_with_encoded_file_param():
+    url = pdf_link.pdf_viewer_url("/app/static/pdfjs/web", "/app/static/pdf",
+                                  "waermeplan_x.pdf", 9, "Der Steuerungskreis")
+    # file= is the fully-encoded same-origin PDF path; hash carries page+phrase.
+    assert url == ("/app/static/pdfjs/web/viewer.html"
+                   "?file=%2Fapp%2Fstatic%2Fpdf%2Fwaermeplan_x.pdf"
+                   "#page=9&search=Der%20Steuerungskreis&phrase=true")
+
+
+def test_pdf_viewer_url_page_only_when_no_phrase():
+    url = pdf_link.pdf_viewer_url("/app/static/pdfjs/web", "/app/static/pdf",
+                                  "waermeplan_x.pdf", 4)
+    assert url.endswith("viewer.html?file=%2Fapp%2Fstatic%2Fpdf%2Fwaermeplan_x.pdf#page=4")
+
+
 # ---------------------------------------------------------------------------
 # chunker.py
 # ---------------------------------------------------------------------------
