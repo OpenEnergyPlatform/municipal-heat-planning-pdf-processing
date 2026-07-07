@@ -78,7 +78,8 @@ def pdf_page_url(prefix: str, filename: str, page: int,
     """
     url = f"{prefix.rstrip('/')}/{_urlquote(filename)}#page={int(page)}"
     if phrase:
-        url += f"&search={_urlquote(phrase)}"
+        # the search value must be wrapped in double quotes → search="…"
+        url += "&search=" + _urlquote(f'"{phrase}"')
     return url
 
 
@@ -96,7 +97,8 @@ def pdf_viewer_url(viewer_prefix: str, pdf_prefix: str, filename: str, page: int
     file_param = _urlquote(pdf_path, safe="")
     url = f"{viewer_prefix.rstrip('/')}/viewer.html?file={file_param}#page={int(page)}"
     if phrase:
-        url += f"&search={_urlquote(phrase)}&phrase=true"
+        # the search value must be wrapped in double quotes → search="…"
+        url += "&search=" + _urlquote(f'"{phrase}"') + "&phrase=true"
     return url
 
 

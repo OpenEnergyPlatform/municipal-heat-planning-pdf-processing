@@ -305,7 +305,8 @@ def test_pdf_page_url_page_only_and_with_search():
     assert pdf_link.pdf_page_url("/app/static/pdf", "waermeplan_x.pdf", 5) \
         == "/app/static/pdf/waermeplan_x.pdf#page=5"
     url = pdf_link.pdf_page_url("/app/static/pdf/", "waermeplan_x.pdf", 5, "Der Steuerungskreis")
-    assert url == "/app/static/pdf/waermeplan_x.pdf#page=5&search=Der%20Steuerungskreis"
+    # the search value is wrapped in double quotes (%22)
+    assert url == "/app/static/pdf/waermeplan_x.pdf#page=5&search=%22Der%20Steuerungskreis%22"
 
 
 def test_pdf_page_url_encodes_raw_umlaut_filename():
@@ -320,7 +321,7 @@ def test_pdf_viewer_url_wraps_pdfjs_with_encoded_file_param():
     # file= is the fully-encoded same-origin PDF path; hash carries page+phrase.
     assert url == ("/app/static/pdfjs/web/viewer.html"
                    "?file=%2Fapp%2Fstatic%2Fpdf%2Fwaermeplan_x.pdf"
-                   "#page=9&search=Der%20Steuerungskreis&phrase=true")
+                   "#page=9&search=%22Der%20Steuerungskreis%22&phrase=true")
 
 
 def test_pdf_viewer_url_page_only_when_no_phrase():
