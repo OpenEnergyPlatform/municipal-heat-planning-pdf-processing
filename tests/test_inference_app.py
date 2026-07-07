@@ -10,7 +10,7 @@ import sqlite3
 
 import pytest
 
-from scripts.inference_app import db, chunker, query_cache
+from scripts.inference_app import db, chunker, query_cache, pdf_link
 from scripts.inference_app import config as C
 
 
@@ -47,6 +47,13 @@ def corpus(kwp_db):
             (201, 'table_vl',      'table',   1),
             (300, 'figure_text',   'figure',  1),
             (301, 'figure_vl',     'figure',  1);
+
+        -- Pages/Segments: Segments.page is a FK to Pages.id (10/11), NOT the
+        -- human page_number (12/13). section_segments must resolve the number.
+        INSERT INTO Pages (id, document, page_number) VALUES (10, 1, 12), (11, 1, 13);
+        INSERT INTO Segments (section, ordinal, page, kind, text) VALUES
+            (1, 0, 10, 'text', 'Der Waermebedarf betrug 100 GWh im Jahr.'),
+            (1, 1, 11, 'text', 'Fortsetzung auf der naechsten Seite.');
         """
     )
     con.commit()
@@ -155,6 +162,21 @@ def test_fetch_table_content_has_parent_section(corpus):
     assert c["document_id"] == 1
 
 
+def test_section_segments_resolves_page_number(corpus):
+    conn = db.connect_readonly(corpus)
+    segs = db.section_segments(conn, 1)
+    # page is the human page_number joined from Pages (12/13), NOT the
+    # Segments.page FK values (10/11).
+    assert segs == [(12, "Der Waermebedarf betrug 100 GWh im Jahr."),
+                    (13, "Fortsetzung auf der naechsten Seite.")]
+
+
+def test_document_filename_lookup(corpus):
+    conn = db.connect_readonly(corpus)
+    assert db.document_filename(conn, 1) == "doc.pdf"
+    assert db.document_filename(conn, 999) is None
+
+
 def test_fetch_figure_content(corpus):
     conn = db.connect_readonly(corpus)
     c = db.fetch_owner_content(conn, "figure", 1)
@@ -234,6 +256,48 @@ def test_covered_names_konvoi_mops_up_unclaimed_members():
     got = db._covered_names(11, "Gemmrigheim", True, 2, {10, 11}, members)
     assert got == ["Gemmrigheim", "Hessigheim", "Mundelsheim", "Walheim"]
     assert "Besigheim" not in got          # kept by its own standalone plan
+
+
+# ---------------------------------------------------------------------------
+# pdf_link.py – locate a verbatim search phrase for the source-PDF deep link
+# ---------------------------------------------------------------------------
+def test_locate_quote_finds_page_and_verbatim_phrase():
+    # refined quote vs. raw segments (page 18 holds the matching run)
+    segments = [
+        (17, "Vorbemerkung zum Beteiligungsprozess der Kommune."),
+        (18, "Der Steuerungskreis setzt sich aus Vertretern der Gemeindeverwaltungen "
+             "und der endura kommunal GmbH zusammen."),
+    ]
+    quote = "Der Steuerungskreis setzt sich aus Vertretern der Gemeindeverwaltungen zusammen"
+    page, phrase = pdf_link.locate_quote(quote, segments)
+    assert page == 18
+    # the phrase is a verbatim run drawn from the raw segment text
+    assert phrase.split() == pdf_link._words(phrase)
+    assert "Steuerungskreis setzt sich" in phrase
+    assert phrase in segments[1][1].replace(",", "")  # verbatim (word run)
+
+
+def test_locate_quote_returns_none_when_no_shared_run():
+    segments = [(2, "Auftragnehmer ist die Musterbüro Energie GmbH aus Freiburg.")]
+    # a quote with no 3-word contiguous overlap
+    assert pdf_link.locate_quote("völlig anderer Wortlaut ohne Bezug", segments) is None
+
+
+def test_locate_quote_none_for_too_short_quote():
+    assert pdf_link.locate_quote("zwei Wörter", [(1, "zwei Wörter hier stehen")]) is None
+
+
+def test_pdf_page_url_page_only_and_with_search():
+    assert pdf_link.pdf_page_url("/app/static/pdf", "waermeplan_x.pdf", 5) \
+        == "/app/static/pdf/waermeplan_x.pdf#page=5"
+    url = pdf_link.pdf_page_url("/app/static/pdf/", "waermeplan_x.pdf", 5, "Der Steuerungskreis")
+    assert url == "/app/static/pdf/waermeplan_x.pdf#page=5&search=Der%20Steuerungskreis"
+
+
+def test_pdf_page_url_encodes_raw_umlaut_filename():
+    # DB filenames are stored raw (e.g. tönning); the path segment is encoded once.
+    url = pdf_link.pdf_page_url("/app/static/pdf", "waermepaln_tönning_20241129.pdf", 3)
+    assert url == "/app/static/pdf/waermepaln_t%C3%B6nning_20241129.pdf#page=3"
 
 
 # ---------------------------------------------------------------------------

@@ -398,6 +398,42 @@ def _section_document(conn: sqlite3.Connection, section_id: int) -> Optional[int
     return row["document"] if row else None
 
 
+def document_filename(conn: sqlite3.Connection, document_id: Optional[int]) -> Optional[str]:
+    """The stored PDF filename for a document (used to build the source-PDF link)."""
+    if document_id is None:
+        return None
+    row = conn.execute(
+        "SELECT filename FROM Documents WHERE id = ?", (document_id,)
+    ).fetchone()
+    return row["filename"] if row and row["filename"] else None
+
+
+def section_segments(
+    conn: sqlite3.Connection, section_id: int
+) -> list[tuple[int, str]]:
+    """
+    Raw, page-tagged text segments of a section (pre-refinement provenance).
+
+    Returns [(page_number, text), ...] in reading order for the text pieces only
+    (kind 'text'); these carry the verbatim PDF-text-layer wording, which is what
+    a `&search=` highlight must match (the Sections.content the LLM produced is
+    refined and may differ). See pdf_link.locate_quote.
+
+    NB `Segments.page` is a foreign key to `Pages.id`, NOT the human page number,
+    so it is joined to `Pages` to return the real 1-based `page_number` the PDF
+    viewer's `#page=` expects.
+    """
+    rows = conn.execute(
+        "SELECT p.page_number AS page, s.text AS text "
+        "FROM Segments s JOIN Pages p ON s.page = p.id "
+        "WHERE s.section = ? AND s.kind = 'text' "
+        "AND s.text IS NOT NULL AND s.text != '' "
+        "ORDER BY s.ordinal",
+        (section_id,),
+    ).fetchall()
+    return [(r["page"], r["text"]) for r in rows]
+
+
 def _document_folder(conn: sqlite3.Connection, document_id: Optional[int]) -> Optional[str]:
     """
     Name of the on-disk folder holding a document's extracted assets.

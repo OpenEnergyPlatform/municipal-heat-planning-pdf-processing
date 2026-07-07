@@ -73,6 +73,30 @@ comfortably within one 12 GB card.
 | `LLM_STUB_MODE` | unset | Truthy → canned answers, for testing retrieval without calling the endpoint. |
 | `TOP_K` / `MAX_CHUNK_ATTEMPTS` / `ANSWER_CONTEXT_TOKENS` | 50 / 10 / 10000 | Retrieval depth / max sources examined / per-call source token budget (context-safe batching). |
 | `QUERY_CACHE_PATH` | `data/inference_app_query_cache.db` | Separate cache DB (never KWP.db). |
+| `PDF_URL_PREFIX` | `/app/static/pdf` | URL path prefix where the source PDFs are served (Streamlit static). Empty → hide the PDF links. |
+| `INFERENCE_PDF_ROOT` | `data/pdf` | Filesystem dir holding the source PDFs. |
+
+## Source-PDF deep links
+
+Each citation carries a **"📄 Seite N im PDF öffnen"** link into the original PDF at the right
+page, with the matching passage highlighted where the browser's PDF viewer supports it
+(`#page=N&search=<phrase>` — Firefox/pdf.js and Adobe highlight; Chrome's built-in viewer jumps
+to the page but ignores `search`).
+
+The chunk text is LLM-refined, so a verbatim `search=` term cannot come from it. Instead
+`pdf_link.locate_quote` matches the grounding quote back onto the **raw page `Segments`** (the
+pre-refinement, page-tagged provenance) and takes the longest shared word-run — verbatim in the
+PDF text layer (extraction is PyMuPDF, not OCR), hence a reliable highlight anchor. The page is the
+segment's real `page_number` (**`Segments.page` is a FK to `Pages.id`, not the page number** — it
+is joined through `Pages`).
+
+**Serving (on the server, not in the repo):** the PDFs are exposed via Streamlit static serving —
+`--server.enableStaticServing=true` on the ExecStart, and the PDFs **hard-linked** into
+`scripts/inference_app/static/pdf/` (`ln data/pdf/*.pdf scripts/inference_app/static/pdf/`). Hard
+links share the same inodes, so this adds **no** disk (one copy of the bytes); a symlink is
+rejected by Streamlit's path-traversal guard. Filenames are stored raw in the DB (a few are
+URL-encoded, e.g. `m%c3%b6nchengladbach`); the link percent-encodes the name once and the static
+server decodes it back, so every on-disk name resolves.
 
 ## Setup & run on the inference server
 
