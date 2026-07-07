@@ -26,6 +26,7 @@ from .config import MERGED_JSON, EMBEDDING_MODEL
 from .merge import merge_batch
 from .database import (
     update_database,
+    enrich_bbox,
     get_existing_embeddings,
     clear_embedding_ids,
     get_document_faiss_ids,
@@ -64,6 +65,17 @@ def run(
     data_dir = Path(data_dir)
     db_path = Path(db_path)
     index_path = Path(index_path)
+
+    # Additive, non-destructive bbox backfill — a standalone maintenance step,
+    # never part of the default merge→db→embed run (it must not touch embeddings
+    # or the FAISS index at all).
+    if step == "enrich-bbox":
+        sep = "=" * 60
+        log.info(sep)
+        log.info("Additive bbox backfill (non-destructive; no re-embed)")
+        log.info(sep)
+        enrich_bbox(db_path, data_dir, force=force)
+        return
 
     steps = [step] if step else ["merge", "db", "embed"]
 
@@ -180,8 +192,10 @@ Examples:
     p.add_argument("db_path", help="Path to the SQLite database file")
     p.add_argument("index_path", help="Path to the FAISS index file")
     p.add_argument(
-        "--step", choices=["merge", "db", "embed"], default=None,
-        help="Run only a specific step (default: all steps)",
+        "--step", choices=["merge", "db", "embed", "enrich-bbox"], default=None,
+        help="Run only a specific step (default: merge, db, embed). "
+             "'enrich-bbox' additively backfills segment/table/image bbox from "
+             "re-run Stage-3 outputs without re-embedding (index_path is ignored).",
     )
     p.add_argument("--force", action="store_true", help="Force re-processing")
     p.add_argument(
