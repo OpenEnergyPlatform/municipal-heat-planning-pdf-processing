@@ -431,22 +431,33 @@ def _pdf_link_for(cit: dict):
         return None
     page = cit.get("page_number")
     phrase = None
+    rects = None
     quote = cit.get("quote")
     if cit.get("owner_kind") == "section" and quote and cit.get("owner_id"):
-        loc = pdf_link.locate_quote(quote, db.section_segments(conn, cit["owner_id"]))
-        if loc:
-            page, phrase = loc            # Segments give the exact page (+ a fallback phrase)
-        if page:
-            # Prefer a phrase drawn from the REAL PDF page (matches pdf.js's own
-            # text layer far better than our refined/re-extracted Segments).
-            pdf_phrase = pdf_link.best_search_phrase(config.PDF_ROOT / filename, page, quote)
-            if pdf_phrase:
-                phrase = pdf_phrase
+        segs = db.section_segments_geo(conn, cit["owner_id"])
+        geo = pdf_link.best_segment_rects(quote, segs)
+        if geo:
+            # Exact page + the matched segment's stored geometry → a coordinate
+            # overlay (drawn by the bundled pdfjs_overlay.js). Preferred over a
+            # text search: resolution-independent and immune to text-layer quirks.
+            page, rects = geo
+        else:
+            # No stored geometry (old DB, or no matching segment): fall back to a
+            # verbatim search phrase, drawn from the REAL PDF page so it matches
+            # pdf.js's own text layer far better than our refined Segments.
+            loc = pdf_link.locate_quote(quote, [(p, t) for p, t, _ in segs])
+            if loc:
+                page, phrase = loc
+            if page:
+                pdf_phrase = pdf_link.best_search_phrase(config.PDF_ROOT / filename, page, quote)
+                if pdf_phrase:
+                    phrase = pdf_phrase
     if not page:
         return None
     if config.PDF_VIEWER_PREFIX:      # through bundled pdf.js → highlight in every browser
-        url = pdf_link.pdf_viewer_url(config.PDF_VIEWER_PREFIX, prefix, filename, page, phrase)
-    else:                             # native browser viewer (highlight only in Firefox/Adobe)
+        url = pdf_link.pdf_viewer_url(config.PDF_VIEWER_PREFIX, prefix, filename,
+                                      page, phrase, rects)
+    else:                             # native browser viewer (no overlay; phrase only)
         url = pdf_link.pdf_page_url(prefix, filename, page, phrase)
     return url, page
 

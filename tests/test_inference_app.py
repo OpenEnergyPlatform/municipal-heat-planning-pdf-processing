@@ -331,6 +331,89 @@ def test_pdf_viewer_url_page_only_when_no_phrase():
 
 
 # ---------------------------------------------------------------------------
+# pdf_link.py – coordinate highlight overlay (bbox)
+# ---------------------------------------------------------------------------
+def test_best_segment_rects_picks_matched_segment_geometry():
+    segs = [
+        (17, "Vorbemerkung zum Beteiligungsprozess der Kommune.", [[1, 2, 3, 4]]),
+        (18, "Der Steuerungskreis setzt sich aus Vertretern der "
+             "Gemeindeverwaltungen zusammen.", [[5, 6, 7, 8], [5, 9, 7, 11]]),
+    ]
+    quote = ("Der Steuerungskreis setzt sich aus Vertretern der "
+             "Gemeindeverwaltungen zusammen")
+    assert pdf_link.best_segment_rects(quote, segs) == (18, [[5, 6, 7, 8], [5, 9, 7, 11]])
+
+
+def test_best_segment_rects_none_without_geometry_or_match():
+    # matching segment but no stored rects → None (caller uses the phrase fallback)
+    assert pdf_link.best_segment_rects(
+        "Der Steuerungskreis setzt sich zusammen",
+        [(18, "Der Steuerungskreis setzt sich zusammen.", None)]) is None
+    # geometry present but no shared 3-word run → None
+    assert pdf_link.best_segment_rects(
+        "völlig anderer Wortlaut", [(3, "Ganz etwas anderes hier.", [[1, 2, 3, 4]])]) is None
+
+
+def test_encode_rects_is_urlsafe_and_roundtrips():
+    import base64
+    import json as _json
+    rects = [[10.5, 20.0, 100.25, 40.0], [12.0, 60.0, 90.0, 75.5]]
+    tok = pdf_link.encode_rects(rects)
+    assert not any(c in tok for c in "+/=")          # url-safe, unpadded
+    pad = "=" * (-len(tok) % 4)
+    assert _json.loads(base64.urlsafe_b64decode(tok + pad)) == rects
+
+
+def test_pdf_viewer_url_rects_overlay_supersedes_search():
+    url = pdf_link.pdf_viewer_url("/app/static/pdfjs/web", "/app/static/pdf",
+                                  "waermeplan_x.pdf", 9, phrase="ignored",
+                                  rects=[[1, 2, 3, 4]])
+    assert "#page=9&mhl=" in url
+    assert "search" not in url                       # overlay replaces the text find
+    assert url.startswith("/app/static/pdfjs/web/viewer.html?file=%2Fapp")
+
+
+def test_section_segments_geo_parses_bbox_and_nulls(kwp_db):
+    db_path, con = kwp_db
+    con.executescript(
+        """
+        INSERT INTO Sections (id, document, section_number, title, content, page_number)
+            VALUES (1, 1, 0, 'S', 'c', 7);
+        INSERT INTO Pages (id, document, page_number) VALUES (10, 1, 7);
+        INSERT INTO Segments (section, ordinal, page, kind, text, bbox) VALUES
+            (1, 0, 10, 'text', 'Hallo Welt hier', '[[10.0,20.0,100.0,40.0]]'),
+            (1, 1, 10, 'text', 'Absatz ohne Geometrie', NULL);
+        """
+    )
+    con.commit()
+    conn = db.connect_readonly(db_path)
+    assert db.section_segments_geo(conn, 1) == [
+        (7, 'Hallo Welt hier', [[10.0, 20.0, 100.0, 40.0]]),
+        (7, 'Absatz ohne Geometrie', None),
+    ]
+
+
+def test_section_segments_geo_degrades_on_pre_bbox_db(tmp_path):
+    import sqlite3 as _sq
+    p = tmp_path / "old.db"
+    c = _sq.connect(p)
+    c.executescript(
+        """
+        CREATE TABLE Pages (id INTEGER PRIMARY KEY, document INTEGER, page_number INTEGER);
+        CREATE TABLE Segments (id INTEGER PRIMARY KEY, section INTEGER, ordinal INTEGER,
+                               page INTEGER, kind TEXT, ref TEXT, text TEXT);
+        INSERT INTO Pages VALUES (10, 1, 7);
+        INSERT INTO Segments (section, ordinal, page, kind, text)
+            VALUES (1, 0, 10, 'text', 'Hallo Welt hier');
+        """
+    )
+    c.commit()
+    c.row_factory = _sq.Row
+    # no `bbox` column → falls back to (page, text, None), never raises
+    assert db.section_segments_geo(c, 1) == [(7, 'Hallo Welt hier', None)]
+
+
+# ---------------------------------------------------------------------------
 # chunker.py
 # ---------------------------------------------------------------------------
 def _hit(i, kind="section", chars=400, page=12):

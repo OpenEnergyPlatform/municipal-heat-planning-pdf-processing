@@ -14,6 +14,8 @@ Pure (no DB, no Streamlit) so it is unit-testable; the DB reads live in db.py.
 """
 from __future__ import annotations
 
+import base64
+import json
 import re
 from difflib import SequenceMatcher
 from typing import Optional
@@ -65,6 +67,49 @@ def locate_quote(
     return best[1], best[2]
 
 
+def best_segment_rects(
+    quote: str,
+    segments: list[tuple[int, str, Optional[list]]],
+    min_words: int = 3,
+) -> Optional[tuple[int, list]]:
+    """
+    (page, rects) of the raw text segment that best matches `quote`, for a
+    coordinate highlight overlay in the PDF viewer.
+
+    `segments` are (page, text, rects) triples (db.section_segments_geo); rects
+    is that segment's list of [x0, y0, x1, y1] PDF-point rectangles. The matched
+    segment is the one sharing the longest contiguous word-run with the quote —
+    the same rule `locate_quote` uses for its search phrase, so the coordinate
+    overlay lands on the exact segment the phrase highlight would. Returns None
+    when no segment shares a run of at least `min_words` words *and* carries
+    geometry (the caller then falls back to the `&search=` phrase).
+    """
+    q = [w.casefold() for w in _words(quote)]
+    if len(q) < min_words:
+        return None
+    best: Optional[tuple[int, int, list]] = None    # (size, page, rects)
+    for page, text, rects in segments:
+        if not rects:
+            continue
+        r = [w.casefold() for w in _words(text)]
+        if len(r) < min_words:
+            continue
+        m = SequenceMatcher(None, q, r, autojunk=False).find_longest_match(
+            0, len(q), 0, len(r))
+        if m.size >= min_words and (best is None or m.size > best[0]):
+            best = (m.size, page, rects)
+    if best is None:
+        return None
+    return best[1], best[2]
+
+
+def encode_rects(rects: list) -> str:
+    """URL-safe token carrying the highlight rects for the viewer's `&mhl=` hash
+    param: base64url of compact JSON, padding stripped (added back in JS)."""
+    raw = json.dumps(rects, separators=(",", ":")).encode("utf-8")
+    return base64.urlsafe_b64encode(raw).decode("ascii").rstrip("=")
+
+
 def pdf_page_url(prefix: str, filename: str, page: int,
                  phrase: Optional[str] = None) -> str:
     """
@@ -84,19 +129,28 @@ def pdf_page_url(prefix: str, filename: str, page: int,
 
 
 def pdf_viewer_url(viewer_prefix: str, pdf_prefix: str, filename: str, page: int,
-                   phrase: Optional[str] = None) -> str:
+                   phrase: Optional[str] = None,
+                   rects: Optional[list] = None) -> str:
     """
     Deep link through the bundled **pdf.js** viewer, for DETERMINISTIC highlight
     in every browser (Chrome's native viewer ignores `#search`).
 
-    Form: `<viewer>/viewer.html?file=<encoded pdf path>#page=N&search=<phrase>&phrase=true`.
-    The PDF path is same-origin (both under the static route), which pdf.js
-    requires; `phrase=true` makes `search` an exact-phrase find.
+    Form: `<viewer>/viewer.html?file=<encoded pdf path>#page=N&…`. The PDF path
+    is same-origin (both under the static route), which pdf.js requires.
+
+    Highlight, in order of precedence:
+      * `rects` given → `&mhl=<base64url rects>`, read by the bundled
+        `pdfjs_overlay.js` companion, which draws a coordinate box on the page
+        (exact, resolution-independent). `&search=` is omitted so the two do not
+        double-highlight.
+      * else `phrase` → `&search="…"&phrase=true` (pdf.js text-layer find).
     """
     pdf_path = f"{pdf_prefix.rstrip('/')}/{_urlquote(filename)}"
     file_param = _urlquote(pdf_path, safe="")
     url = f"{viewer_prefix.rstrip('/')}/viewer.html?file={file_param}#page={int(page)}"
-    if phrase:
+    if rects:
+        url += "&mhl=" + encode_rects(rects)
+    elif phrase:
         # the search value must be wrapped in double quotes → search="…"
         url += "&search=" + _urlquote(f'"{phrase}"') + "&phrase=true"
     return url
