@@ -120,7 +120,7 @@ def log_request(
     - Failed requests: error_message set; other fields as available
     - Cache hits: cache_hit=True, usually no retrieval stats
     """
-    conn.execute(
+    cur = conn.execute(
         """
         INSERT INTO requests
         (plan_id, query_text, mode, scopes, latency_ms, n_hits, n_citations,
@@ -141,7 +141,7 @@ def log_request(
         ),
     )
     conn.commit()
-    return conn.lastrowid
+    return cur.lastrowid
 
 
 def cache_response(
