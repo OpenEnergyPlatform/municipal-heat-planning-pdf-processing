@@ -38,6 +38,7 @@ remote OpenAI-compatible API.
 | `faiss_store.py` | Global index load (+`make_direct_map`), sub-index build + search, `retrieve()` with per-owner dedup. |
 | `quantized_embedder.py` | NF4 subclass of the shared embedder + on-demand load/unload context manager, GPU auto-select, process lock. |
 | `query_cache.py` | SQLite cache (separate file): query hash → embedding vector. |
+| `request_log.py` | SQLite request logger + response cache: request metadata + query-response pairs (text-only). Errors logged but not cached (retried on next occurrence). |
 | `chunker.py` | Tokenizer + greedy chunk packing + citation labels. |
 | `llm_client.py` | OpenAI-compatible client: search-phrase generation + strict-JSON chunk QA + retry loop. |
 | `app.py` | Streamlit UI + orchestration (the only file importing `streamlit`). |
@@ -86,7 +87,8 @@ deployed on the sandbox host, not here — see its module docstring.
 | `LLM_TOKENIZER_ID` | = `LLM_MODEL` | Tokenizer for chunk sizing. The agent id is not a HF repo, so this falls back to a char/4 heuristic (fine). |
 | `LLM_STUB_MODE` | unset | Truthy → canned answers, for testing retrieval without calling the endpoint. |
 | `TOP_K` / `MAX_CHUNK_ATTEMPTS` / `ANSWER_CONTEXT_TOKENS` | 50 / 10 / 10000 | Retrieval depth / max sources examined / per-call source token budget (context-safe batching). |
-| `QUERY_CACHE_PATH` | `data/inference_app_query_cache.db` | Separate cache DB (never KWP.db). |
+| `QUERY_CACHE_PATH` | `data/inference_app_query_cache.db` | Separate embedding-vector cache DB (never KWP.db). |
+| `REQUEST_LOG_PATH` | `data/inference_app_request_log.db` | Separate request log + response cache DB (never KWP.db). Persists request metadata + successful query-response pairs (text mode only). |
 | `PDF_URL_PREFIX` | `/app/static/pdf` | URL path prefix where the source PDFs are served (Streamlit static). Empty → hide the PDF links. |
 | `PDF_VIEWER_PREFIX` | `/app/static/pdfjs/web` | Bundled pdf.js viewer dir. Empty → native browser viewer. |
 | `INFERENCE_PDF_ROOT` | `data/pdf` | Filesystem dir holding the source PDFs. |
@@ -179,14 +181,24 @@ streamlit run scripts/inference_app/app.py --server.address 0.0.0.0 --server.por
 Deploy edits from the repo the same way as the HPC modules: `scp` the files over,
 LF-normalize (`sed -i 's/\r$//' ...`), `python -m py_compile` to check.
 
+## Logging and caching
+
+Two separate SQLite DBs are created automatically (never the authoritative KWP.db):
+
+- **`REQUEST_LOG_PATH` (`data/inference_app_request_log.db`):** Every request is logged with metadata (plan_id, query, mode, scopes, timestamp, latency_ms, n_hits, n_citations, error_message). **Successful text queries are also cached** (plan_id + query_key → answer + citations), so repeats skip both retrieval and LLM (cost ≈ 0 ms, logged with `cache_hit=true`). Errors are logged but **not cached** — failed queries retry on next occurrence.
+- **`QUERY_CACHE_PATH` (`data/inference_app_query_cache.db`):** Embedding-vector cache (query hash → vector). Identical queries skip the on-demand NF4 model load.
+
+Both grow unbounded; neither requires manual eviction.
+
 ## Known limits (deliberate for v1)
 
 - **Serialized GPU use.** A single process-wide lock serializes all embedding across sessions
   (held for the whole load→embed→unload span). Right for an interactive single-user-at-a-time
   tool; not a high-QPS service. Run as one Streamlit process (not multiple workers), else the
   lock must become a file lock.
-- **No cache eviction.** The query cache grows unbounded (~16 KB/entry); trivial against the
-  server's disk. Add an LRU trim later if ever needed.
+- **No cache eviction.** The query/embedding caches grow unbounded; trivial against the
+  server's disk (embedding cache ~16 KB/entry, response cache varies by answer length).
+  Add an LRU trim later if ever needed.
 - **Precision.** Corpus vectors were built in bf16 on H100; queries here are NF4/fp16 on
   Pascal. Cosine retrieval is robust to this, but the smoke test's retrieval-sanity step is
   the place to confirm topical relevance.

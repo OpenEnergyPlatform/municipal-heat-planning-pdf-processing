@@ -13,12 +13,14 @@ Author: Felix Vossel
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import mimetypes
 import os
 import sys
 import tempfile
+import time
 from pathlib import Path
 
 # The bundled pdf.js viewer is served as ES modules; some Python installs don't
@@ -37,6 +39,7 @@ import streamlit as st
 
 from scripts.inference_app import (
     config, db, faiss_store, query_cache, chunker, llm_client, pdf_link, code_exec,
+    request_log,
 )
 
 logging.basicConfig(level=logging.INFO)
@@ -61,6 +64,11 @@ def get_db():
 @st.cache_resource
 def get_cache():
     return query_cache.connect(config.QUERY_CACHE_PATH)
+
+
+@st.cache_resource
+def get_request_log():
+    return request_log.connect(config.REQUEST_LOG_PATH)
 
 
 # ---------------------------------------------------------------------------
@@ -114,6 +122,7 @@ def run_turn(task: str, image_bytes: bytes | None, image_only: bool,
               "cache_hit": False, "n_hits": 0, "phrase": None, "as_json": as_json,
               "n_batches": 0, "compute": []}
 
+    start_time = time.time()
     conn = get_db()
     cache_conn = get_cache()
     with _spinner("Vorbereiten"):
@@ -145,6 +154,23 @@ def run_turn(task: str, image_bytes: bytes | None, image_only: bool,
         cache_key = query_cache.make_key(mode, text=phrase)
     result["phrase"] = phrase
 
+    # --- 1.5) Check response cache (for text-only queries, before expensive embedding) ---
+    log_conn = get_request_log()
+    response_query_key = request_log.make_query_key(document_id, phrase, scopes)
+    if mode == "text":  # Only cache text queries; image queries are less predictable
+        cached_response = request_log.get_cached_response(log_conn, document_id, response_query_key)
+        if cached_response is not None:
+            result["answer"] = cached_response["answer"]
+            result["answer_text"] = cached_response["answer"]
+            result["citations"] = cached_response["citations"]
+            result["n_findings"] = cached_response["n_findings"]
+            result["cache_hit"] = True
+            request_log.log_request(
+                log_conn, document_id, task or phrase or "", mode, scopes,
+                latency_ms=0, n_citations=result["n_findings"], cache_hit=True
+            )
+            return result
+
     # --- 2) embed (cache or on-demand model load) ---
     with _spinner("🧮 Embedding"):
         query_vec, cache_hit = embed_query(item, cache_conn, cache_key)
@@ -163,6 +189,11 @@ def run_turn(task: str, image_bytes: bytes | None, image_only: bool,
         )
     result["n_hits"] = len(hits)
     if not hits:
+        latency_ms = (time.time() - start_time) * 1000
+        request_log.log_request(
+            log_conn, document_id, task or phrase or "", mode, scopes,
+            latency_ms=latency_ms, n_hits=0, error_message="No hits", cache_hit=False
+        )
         return result
 
     # --- 4) answer across the top sources in context-safe BATCHES. Usually ONE
@@ -210,6 +241,12 @@ def run_turn(task: str, image_bytes: bytes | None, image_only: bool,
             if out.get("complete") and citations:
                 break     # fully answered → don't scan the remaining batches
     if not citations or not prior_text:      # nothing grounded → refuse (anti-hallucination)
+        latency_ms = (time.time() - start_time) * 1000
+        request_log.log_request(
+            log_conn, document_id, task or phrase or "", mode, scopes,
+            latency_ms=latency_ms, n_hits=result["n_hits"],
+            error_message="No grounded citations", cache_hit=False
+        )
         return result
 
     # --- 5) final answer (format to JSON once at the end, if requested) ---
@@ -221,6 +258,20 @@ def run_turn(task: str, image_bytes: bytes | None, image_only: bool,
         result["answer"] = prior_text
     result["citations"] = citations
     result["n_findings"] = len(citations)
+
+    # --- 6) Log request and cache the response (successful case only) ---
+    latency_ms = (time.time() - start_time) * 1000
+    answer_hash = hashlib.sha256((result["answer"] or "").encode()).hexdigest()[:12]
+    request_log.log_request(
+        log_conn, document_id, task or phrase or "", mode, scopes,
+        latency_ms=latency_ms, n_hits=result["n_hits"], n_citations=result["n_findings"],
+        answer_hash=answer_hash, cache_hit=False
+    )
+    if mode == "text" and result["citations"]:  # Only cache text queries with grounding
+        request_log.cache_response(
+            log_conn, document_id, response_query_key,
+            result["answer"], result["citations"], result["n_findings"]
+        )
     return result
 
 
