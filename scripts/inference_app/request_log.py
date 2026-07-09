@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import sqlite3
 from datetime import datetime
 from pathlib import Path
@@ -57,17 +58,23 @@ def connect(path: Path) -> sqlite3.Connection:
     return conn
 
 
-def make_query_key(plan_id: int, phrase: Optional[str], scopes: list[str]) -> str:
+def make_query_key(plan_id: int, text: Optional[str], scopes: list[str]) -> str:
     """
-    Deterministic cache key over (plan_id, search phrase, scopes).
+    Deterministic cache key over (plan_id, user question, scopes).
 
-    Same query to different plans or with different scopes → different keys.
+    `text` is the RAW user question (not the LLM-generated search phrase), so
+    re-asking the identical question hits the cache even though the search phrase
+    is regenerated (and varies slightly) each time. It is normalized — inner
+    whitespace collapsed and case-folded — so trivially different spellings of
+    the same question ("Was ist das Zieljahr?" vs "was ist das  zieljahr?")
+    share a key. Same question to different plans or with different scopes still
+    yields different keys.
     """
+    norm = re.sub(r"\s+", " ", (text or "").strip()).casefold()
     h = hashlib.sha256()
     h.update(str(plan_id).encode("utf-8"))
     h.update(b"\x00")
-    if phrase:
-        h.update(phrase.encode("utf-8"))
+    h.update(norm.encode("utf-8"))
     h.update(b"\x00")
     h.update(json.dumps(sorted(scopes or []), separators=(",", ":")).encode("utf-8"))
     return h.hexdigest()
