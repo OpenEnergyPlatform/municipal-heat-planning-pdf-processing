@@ -40,6 +40,7 @@ CREATE TABLE IF NOT EXISTS response_cache (
     plan_id         INTEGER NOT NULL,
     query_key       TEXT NOT NULL,
     answer          TEXT NOT NULL,
+    answer_text     TEXT,
     citations_json  TEXT NOT NULL,
     n_findings      INTEGER NOT NULL,
     created_at      TEXT NOT NULL DEFAULT (datetime('now')),
@@ -54,21 +55,26 @@ def connect(path: Path) -> sqlite3.Connection:
     path.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(path, check_same_thread=False)
     conn.executescript(_SCHEMA)
+    # Idempotent migration for DBs created before answer_text existed.
+    cols = {r[1] for r in conn.execute("PRAGMA table_info(response_cache)")}
+    if "answer_text" not in cols:
+        conn.execute("ALTER TABLE response_cache ADD COLUMN answer_text TEXT")
     conn.commit()
     return conn
 
 
-def make_query_key(plan_id: int, text: Optional[str], scopes: list[str]) -> str:
+def make_query_key(plan_id: int, text: Optional[str], scopes: list[str],
+                   as_json: bool = False) -> str:
     """
-    Deterministic cache key over (plan_id, user question, scopes).
+    Deterministic cache key over (plan_id, user question, scopes, output format).
 
     `text` is the RAW user question (not the LLM-generated search phrase), so
     re-asking the identical question hits the cache even though the search phrase
     is regenerated (and varies slightly) each time. It is normalized — inner
     whitespace collapsed and case-folded — so trivially different spellings of
     the same question ("Was ist das Zieljahr?" vs "was ist das  zieljahr?")
-    share a key. Same question to different plans or with different scopes still
-    yields different keys.
+    share a key. Same question to a different plan, with different scopes, or in
+    a different output format (prose vs JSON) still yields different keys.
     """
     norm = re.sub(r"\s+", " ", (text or "").strip()).casefold()
     h = hashlib.sha256()
@@ -77,6 +83,8 @@ def make_query_key(plan_id: int, text: Optional[str], scopes: list[str]) -> str:
     h.update(norm.encode("utf-8"))
     h.update(b"\x00")
     h.update(json.dumps(sorted(scopes or []), separators=(",", ":")).encode("utf-8"))
+    h.update(b"\x00")
+    h.update(b"json" if as_json else b"prose")
     return h.hexdigest()
 
 
@@ -86,12 +94,15 @@ def get_cached_response(
     query_key: str
 ) -> Optional[dict]:
     """
-    Return cached (answer, citations, n_findings) for a query, or None on a miss.
+    Return cached (answer, answer_text, citations, n_findings) for a query, or
+    None on a miss.
 
-    Returns a dict with keys: answer, citations (list), n_findings.
+    Returns a dict with keys: answer, answer_text, citations (list), n_findings.
+    `answer_text` is the prose form (for follow-up context); it falls back to
+    `answer` for rows written before that column existed.
     """
     row = conn.execute(
-        "SELECT answer, citations_json, n_findings FROM response_cache "
+        "SELECT answer, answer_text, citations_json, n_findings FROM response_cache "
         "WHERE plan_id = ? AND query_key = ?",
         (plan_id, query_key),
     ).fetchone()
@@ -100,8 +111,9 @@ def get_cached_response(
     try:
         return {
             "answer": row[0],
-            "citations": json.loads(row[1]),
-            "n_findings": row[2],
+            "answer_text": row[1] if row[1] is not None else row[0],
+            "citations": json.loads(row[2]),
+            "n_findings": row[3],
         }
     except (json.JSONDecodeError, ValueError):
         return None
@@ -156,24 +168,28 @@ def cache_response(
     plan_id: int,
     query_key: str,
     answer: str,
+    answer_text: Optional[str],
     citations: list,
     n_findings: int,
 ) -> None:
     """
     Store a successful response in the cache.
 
-    Idempotent — overwrites on repeat (same plan_id + query_key).
+    `answer` is the displayed form (JSON when the JSON toggle is on, else prose);
+    `answer_text` is the prose form kept for follow-up context. Idempotent —
+    overwrites on repeat (same plan_id + query_key).
     """
     conn.execute(
         """
         INSERT OR REPLACE INTO response_cache
-        (plan_id, query_key, answer, citations_json, n_findings)
-        VALUES (?, ?, ?, ?, ?)
+        (plan_id, query_key, answer, answer_text, citations_json, n_findings)
+        VALUES (?, ?, ?, ?, ?, ?)
         """,
         (
             plan_id,
             query_key,
             answer,
+            answer_text,
             json.dumps(citations, separators=(",", ":"), ensure_ascii=False),
             n_findings,
         ),
