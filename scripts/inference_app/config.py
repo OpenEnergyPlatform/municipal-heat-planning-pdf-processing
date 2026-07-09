@@ -124,6 +124,11 @@ ANSWER_CONTEXT_TOKENS = int(os.environ.get("ANSWER_CONTEXT_TOKENS", "10000"))
 QUERY_CACHE_PATH = Path(os.environ.get("QUERY_CACHE_PATH", "data/inference_app_query_cache.db"))
 
 # ---------------------------------------------------------------------------
+# Request logging and response cache (separate SQLite file)
+# ---------------------------------------------------------------------------
+REQUEST_LOG_PATH = Path(os.environ.get("REQUEST_LOG_PATH", "data/inference_app_request_log.db"))
+
+# ---------------------------------------------------------------------------
 # Code-execution sandbox (optional) — a hardened remote service (sandbox_service.py
 # on a podman host) the LLM can call for calculations. EMPTY CODE_EXEC_URL = the
 # whole feature is OFF (the answer flow behaves exactly as before).
