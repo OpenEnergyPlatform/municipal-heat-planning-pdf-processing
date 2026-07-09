@@ -125,6 +125,30 @@ def run_turn(task: str, image_bytes: bytes | None, image_only: bool,
     start_time = time.time()
     conn = get_db()
     cache_conn = get_cache()
+    log_conn = get_request_log()
+
+    # --- 0) Response cache: an identical user question on the same plan+scopes
+    #        (text mode, prose output) returns instantly — skipping phrase-gen,
+    #        embedding, retrieval AND the answer LLM. Keyed on the RAW user task,
+    #        not the generated search phrase, so re-asking the same question hits
+    #        reliably. JSON-output queries are not cached (the stored answer is
+    #        prose); image queries are not cached (less predictable). ---
+    response_query_key = None
+    if image_bytes is None and not as_json:
+        response_query_key = request_log.make_query_key(document_id, task, scopes)
+        cached_response = request_log.get_cached_response(log_conn, document_id, response_query_key)
+        if cached_response is not None:
+            result["answer"] = cached_response["answer"]
+            result["answer_text"] = cached_response["answer"]
+            result["citations"] = cached_response["citations"]
+            result["n_findings"] = cached_response["n_findings"]
+            result["cache_hit"] = True
+            request_log.log_request(
+                log_conn, document_id, task or "", "text", scopes,
+                latency_ms=0, n_citations=result["n_findings"], cache_hit=True
+            )
+            return result
+
     with _spinner("Vorbereiten"):
         index, id_to_pos = get_index()
 
@@ -153,23 +177,6 @@ def run_turn(task: str, image_bytes: bytes | None, image_only: bool,
         item = {"text": phrase}
         cache_key = query_cache.make_key(mode, text=phrase)
     result["phrase"] = phrase
-
-    # --- 1.5) Check response cache (for text-only queries, before expensive embedding) ---
-    log_conn = get_request_log()
-    response_query_key = request_log.make_query_key(document_id, phrase, scopes)
-    if mode == "text":  # Only cache text queries; image queries are less predictable
-        cached_response = request_log.get_cached_response(log_conn, document_id, response_query_key)
-        if cached_response is not None:
-            result["answer"] = cached_response["answer"]
-            result["answer_text"] = cached_response["answer"]
-            result["citations"] = cached_response["citations"]
-            result["n_findings"] = cached_response["n_findings"]
-            result["cache_hit"] = True
-            request_log.log_request(
-                log_conn, document_id, task or phrase or "", mode, scopes,
-                latency_ms=0, n_citations=result["n_findings"], cache_hit=True
-            )
-            return result
 
     # --- 2) embed (cache or on-demand model load) ---
     with _spinner("🧮 Embedding"):
@@ -267,7 +274,9 @@ def run_turn(task: str, image_bytes: bytes | None, image_only: bool,
         latency_ms=latency_ms, n_hits=result["n_hits"], n_citations=result["n_findings"],
         answer_hash=answer_hash, cache_hit=False
     )
-    if mode == "text" and result["citations"]:  # Only cache text queries with grounding
+    # response_query_key is set only for cacheable turns (text mode, prose output);
+    # cache only when the answer is grounded (has citations).
+    if response_query_key is not None and result["citations"]:
         request_log.cache_response(
             log_conn, document_id, response_query_key,
             result["answer"], result["citations"], result["n_findings"]
