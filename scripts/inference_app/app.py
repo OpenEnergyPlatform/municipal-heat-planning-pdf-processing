@@ -128,18 +128,18 @@ def run_turn(task: str, image_bytes: bytes | None, image_only: bool,
     log_conn = get_request_log()
 
     # --- 0) Response cache: an identical user question on the same plan+scopes
-    #        (text mode, prose output) returns instantly — skipping phrase-gen,
-    #        embedding, retrieval AND the answer LLM. Keyed on the RAW user task,
-    #        not the generated search phrase, so re-asking the same question hits
-    #        reliably. JSON-output queries are not cached (the stored answer is
-    #        prose); image queries are not cached (less predictable). ---
+    #        (text mode) returns instantly — skipping phrase-gen, embedding,
+    #        retrieval AND the answer LLM. Keyed on the RAW user task, not the
+    #        generated search phrase, so re-asking the same question hits
+    #        reliably; the output format (prose vs JSON) is part of the key so
+    #        the two variants don't collide. Image queries are not cached. ---
     response_query_key = None
-    if image_bytes is None and not as_json:
-        response_query_key = request_log.make_query_key(document_id, task, scopes)
+    if image_bytes is None:
+        response_query_key = request_log.make_query_key(document_id, task, scopes, as_json)
         cached_response = request_log.get_cached_response(log_conn, document_id, response_query_key)
         if cached_response is not None:
             result["answer"] = cached_response["answer"]
-            result["answer_text"] = cached_response["answer"]
+            result["answer_text"] = cached_response["answer_text"]
             result["citations"] = cached_response["citations"]
             result["n_findings"] = cached_response["n_findings"]
             result["cache_hit"] = True
@@ -274,12 +274,14 @@ def run_turn(task: str, image_bytes: bytes | None, image_only: bool,
         latency_ms=latency_ms, n_hits=result["n_hits"], n_citations=result["n_findings"],
         answer_hash=answer_hash, cache_hit=False
     )
-    # response_query_key is set only for cacheable turns (text mode, prose output);
-    # cache only when the answer is grounded (has citations).
+    # response_query_key is set only for cacheable turns (text mode); cache only
+    # when the answer is grounded (has citations). Store both the displayed answer
+    # (JSON or prose) and the prose form for follow-up context.
     if response_query_key is not None and result["citations"]:
         request_log.cache_response(
             log_conn, document_id, response_query_key,
-            result["answer"], result["citations"], result["n_findings"]
+            result["answer"], result["answer_text"],
+            result["citations"], result["n_findings"]
         )
     return result
 
