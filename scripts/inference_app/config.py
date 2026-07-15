@@ -65,9 +65,9 @@ IMAGE_ROOT = Path(os.environ.get("INFERENCE_IMAGE_ROOT", "data/pdf/processed"))
 EMBEDDING_MODEL = os.environ.get("EMBEDDING_MODEL", "Qwen/Qwen3-VL-Embedding-8B")
 EMBEDDING_DIM   = 4096
 EMBEDDING_MAX_TOKEN_LENGTH = int(os.environ.get("EMBEDDING_MAX_TOKEN_LENGTH", "16384"))
-# 0 = strict on-demand (load → embed → free every request). >0 = keep the model
-# resident and unload it only after this many idle seconds (opt-in keep-warm).
-EMBED_IDLE_UNLOAD_SECONDS = int(os.environ.get("EMBED_IDLE_UNLOAD_SECONDS", "0"))
+# Keep the model resident and unload it after this many idle seconds; 0 = strict
+# on-demand (load → embed → free every request).
+EMBED_IDLE_UNLOAD_SECONDS = int(os.environ.get("EMBED_IDLE_UNLOAD_SECONDS", "600"))
 # How long a request will wait for another session's embedding call to finish
 # (the embed lock serializes GPU use) before giving up with a clear error.
 EMBED_LOCK_TIMEOUT_S = float(os.environ.get("EMBED_LOCK_TIMEOUT_S", "300"))
