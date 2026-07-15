@@ -1,17 +1,13 @@
 """
 quantized_embedder.py – On-demand, NF4-quantized Qwen3-VL embedder.
 
-Wraps the shared Qwen3VLEmbedder (scripts/qwen3_vl_embedding.py) WITHOUT editing
-it. The shared class is production HPC code (4×H100, bf16, a deliberate
-`.to(device)` for replica placement); here we need the opposite: a single 12 GB
-Pascal card, the LM backbone loaded in bitsandbytes NF4 (4-bit), the vision
-tower left fp32 (image queries must stay full quality), and the whole model
-loaded on demand and freed again after every request so it never sits resident
-in VRAM on a shared server.
+Subclasses the shared Qwen3VLEmbedder (scripts/qwen3_vl_embedding.py) WITHOUT
+editing it: the LM backbone is loaded in bitsandbytes NF4, the vision tower left
+fp32, and the model is loaded on demand and freed again so it does not sit
+resident in VRAM.
 
-NF4 is chosen over 8-bit because bitsandbytes LLM.int8() requires compute
-capability >= 7.5 (Turing+); the TITAN X (Pascal) cards are CC 6.1. NF4 requires
-only CC >= 6.0.
+NF4 rather than 8-bit is forced by the deployment GPUs: bitsandbytes LLM.int8()
+requires a newer compute capability than they have. NF4 does not.
 
 Author: Felix Vossel
 """
@@ -27,8 +23,6 @@ import torch
 import torch.nn.functional as F
 from transformers import BitsAndBytesConfig
 
-# Reuse everything from the shared embedder except the two spots that are
-# incompatible with a quantized, on-demand load (see class docstring).
 from scripts.qwen3_vl_embedding import (
     Qwen3VLEmbedder,
     Qwen3VLForEmbedding,
@@ -46,13 +40,11 @@ log = logging.getLogger(__name__)
 
 class QuantizedQwen3VLEmbedder(Qwen3VLEmbedder):
     """
-    NF4-quantized variant of Qwen3VLEmbedder for 12 GB Pascal cards.
+    NF4-quantized variant of Qwen3VLEmbedder.
 
-    Overrides only __init__ (quantized load, no `.to(device)`, fp32 vision
-    tower) and process() (the pixel_values dtype fix). Every other method —
-    format_model_input, _preprocess_inputs, _pooling_last, _truncate_tokens,
-    forward — is inherited unchanged, so behaviour matches the parent for the
-    text path and the HPC pipeline is entirely untouched.
+    Overrides only __init__ (quantized load, no `.to(device)`, fp32 vision tower)
+    and process() (the pixel_values dtype fix); every other method is inherited
+    unchanged.
     """
 
     def __init__(
@@ -69,7 +61,7 @@ class QuantizedQwen3VLEmbedder(Qwen3VLEmbedder):
         default_instruction: str = "Represent the user's input.",
         **kwargs,
     ):
-        # --- attribute setup: mirrors Qwen3VLEmbedder.__init__ (qwen3_vl_embedding.py:176-185) ---
+        # --- attribute setup: mirrors Qwen3VLEmbedder.__init__ ---
         self.device = torch.device(device)
         self.max_length = max_length
         self.min_pixels = min_pixels
@@ -84,7 +76,7 @@ class QuantizedQwen3VLEmbedder(Qwen3VLEmbedder):
         bnb_config = BitsAndBytesConfig(
             load_in_4bit=True,
             bnb_4bit_quant_type="nf4",
-            bnb_4bit_compute_dtype=torch.float16,   # Pascal-friendly (no bf16 tensor cores)
+            bnb_4bit_compute_dtype=torch.float16,   # not bf16: unsupported on the deployment GPUs
             bnb_4bit_use_double_quant=True,
             llm_int8_skip_modules=["visual"],        # keep the vision tower unquantized
         )
@@ -96,8 +88,7 @@ class QuantizedQwen3VLEmbedder(Qwen3VLEmbedder):
             torch_dtype=torch.float16,       # dtype of the unquantized (vision) submodules
             **kwargs,
         )
-        # Upcast the (skipped) vision tower to fp32 for image-query quality; the
-        # torch_dtype above would otherwise leave it in fp16.
+        # torch_dtype above would leave the skipped vision tower in fp16.
         self.model.visual.to(torch.float32)
 
         # Compute dtype for LM-path floating inputs. pixel_values are handled
@@ -113,9 +104,8 @@ class QuantizedQwen3VLEmbedder(Qwen3VLEmbedder):
         """
         Same as Qwen3VLEmbedder.process, but casts pixel_values to fp32 (for the
         unquantized vision tower) while other floating inputs follow the LM
-        compute dtype (fp16). The parent casts *everything* to param_dtype, which
-        would send pixel_values into the fp32 tower as fp16 and raise a dtype
-        mismatch on image queries.
+        compute dtype. The parent casts *everything* to param_dtype, which raises
+        a dtype mismatch on image queries here.
         """
         conversations = [
             self.format_model_input(
@@ -151,11 +141,10 @@ class QuantizedQwen3VLEmbedder(Qwen3VLEmbedder):
 # On-demand load / unload with a process-wide lock
 # ---------------------------------------------------------------------------
 # One lock serializes ALL embedding work in this process (across Streamlit
-# sessions/threads), held for the whole load→embed→unload span, so we never run
-# two GPU forwards or two loads at once on the shared box. A single
-# threading.Lock suffices because one Streamlit server process hosts all
-# sessions; if ever run as multiple worker processes this must become a file
-# lock.
+# sessions/threads), held for the whole load→embed→unload span, so two GPU
+# forwards or loads never run at once. A threading.Lock suffices only because one
+# server process hosts every session; under multiple worker processes this must
+# become a file lock.
 _EMBED_LOCK = threading.Lock()
 
 # Keep-warm state (only used when idle_unload_seconds > 0).
@@ -163,7 +152,7 @@ _STATE: dict = {"embedder": None, "device": None, "timer": None}
 
 
 def _pick_gpu() -> int:
-    """Return the index of the visible GPU with the most free VRAM right now."""
+    """Index of the visible GPU with the most free VRAM right now."""
     n = torch.cuda.device_count()
     if n == 0:
         raise RuntimeError("No CUDA device visible to this process.")
@@ -225,14 +214,13 @@ def load_embedder(
     idle_unload_seconds: int = 0,
 ):
     """
-    Acquire the process-wide embed lock, ensure the NF4 embedder is loaded on
-    the currently-freest GPU, yield it, then either free it immediately
-    (strict on-demand, idle_unload_seconds == 0) or keep it warm and schedule an
-    idle unload. The lock is held across the whole with-block, so the caller's
-    .process() call is serialized against every other session.
+    Yield the NF4 embedder, loaded on the currently-freest GPU. On exit it is
+    either freed immediately (idle_unload_seconds == 0) or kept warm with an idle
+    unload scheduled.
 
-    Raises TimeoutError if another session's request does not finish within
-    timeout_s.
+    The process-wide embed lock is held across the whole with-block, so the
+    caller's .process() call is serialized against every other session. Raises
+    TimeoutError if another session's request does not finish within timeout_s.
     """
     if not _EMBED_LOCK.acquire(timeout=timeout_s):
         raise TimeoutError(
@@ -240,7 +228,7 @@ def load_embedder(
             f"Embedding-Anfrage gewartet."
         )
     try:
-        # Cancel any pending idle-unload so we reuse the warm model.
+        # Cancel any pending idle-unload so the warm model is reused.
         if _STATE["timer"] is not None:
             _STATE["timer"].cancel()
             _STATE["timer"] = None
@@ -260,7 +248,6 @@ def load_embedder(
         yield _STATE["embedder"]
     finally:
         if idle_unload_seconds and idle_unload_seconds > 0:
-            # Keep the model warm; unload it after the idle window.
             timer = threading.Timer(idle_unload_seconds, _idle_unload)
             timer.daemon = True
             _STATE["timer"] = timer
@@ -273,9 +260,8 @@ def load_embedder(
 def embed_query(item: dict, model_name: str, max_length: int,
                 timeout_s: float = 300.0, idle_unload_seconds: int = 0):
     """
-    Convenience: embed a single query item ({"text":...} / {"image":...} /
-    both) and return an L2-normalized float32 numpy vector, loading/unloading
-    the model on demand.
+    Embed a single query item ({"text":...} / {"image":...} / both) and return an
+    L2-normalized float32 numpy vector, loading/unloading the model on demand.
     """
     with load_embedder(model_name, max_length, timeout_s, idle_unload_seconds) as emb:
         vec = emb.process([item])[0]

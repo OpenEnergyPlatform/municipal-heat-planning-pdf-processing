@@ -6,56 +6,53 @@
 
 ## Überblick
 
-Wir verarbeiten aktuell **617 kommunale Wärmepläne** in einer Pipeline aus **fünf Modulen** (`fileprocessing` → `preprocessing` → `textrefinement` → `imageprocessing` → `chunkingandembedding`), die aus den Roh-PDFs eine semantisch durchsuchbare Wissensbasis aufbaut, um damit (hoffentlich) die Entwicklung der MHPO zu untersützen. Die unten beschriebenen sechs logischen Verarbeitungsstufen verteilen sich auf diese fünf Module (`preprocessing` umfasst die Layout-Erkennung und den Strukturaufbau). Das Ergebnis sind strukturierte Daten, angereicherte Metadaten und multimodale Embeddings, die in einem FAISS-Index für die semantische Suche gespeichert werden. Diese Wissensbasis dient dann als Ausgangspunkt für vielfältige LLM gestützte Informationsextraktionen.
+Die Pipeline baut aus kommunalen Wärmeplänen (Roh-PDFs) eine semantisch durchsuchbare Wissensbasis auf, um die Entwicklung der MHPO zu unterstützen. Sie besteht aus **fünf Modulen** (`fileprocessing` → `preprocessing` → `textrefinement` → `imageprocessing` → `chunkingandembedding`), auf die sich sechs logische Verarbeitungsstufen verteilen (`preprocessing` umfasst Layout-Erkennung und Strukturaufbau). Ergebnis sind strukturierte Daten, angereicherte Metadaten und multimodale Embeddings in einem FAISS-Index.
 
-Dabei nutzen wir aktuellste open LLMs, DeepLearning-Modelle sowie RAG-Strategien. Alle KI-Modelle werden lokal auf dem HPC der Uni ausgeführt – die LLM- und Vision-Language-Stufen über **vLLM** (OpenAI-kompatibler Server, Continuous Batching), das Embedding direkt über HuggingFace Transformers.
+Alle KI-Modelle laufen lokal – die LLM- und Vision-Language-Stufen über **vLLM** (OpenAI-kompatibler Server), das Embedding direkt über HuggingFace Transformers.
 
 ---
 
 ## Pipeline-Architektur
+
 ### Stufe 1 – Dateiverwaltung (`fileprocessing`)
 
-Als Ausgangspunkt dient die Excel-Tabelle der KWW  mit den Metadaten zu allen veröffentlichten Wärmeplänen: Gemeindename, Organisationseinheit, Bundesland, Veröffentlichungsdatum und PDF-Download-Link. Für jeden abgeschlossenen Wärmeplan mit gültigem PDF-Link lädt die Pipeline das Dokument herunter, extrahiert die Seitenanzahl und legt Dokument-, Organisations- und Gemeindeeinträge in einer SQLite-Datenbank an.
+Ausgangspunkt ist die Excel-Tabelle der KWW mit den Metadaten aller veröffentlichten Wärmepläne: Gemeindename, Organisationseinheit, Bundesland, Veröffentlichungsdatum und PDF-Download-Link. Für jeden abgeschlossenen Wärmeplan mit gültigem PDF-Link lädt die Pipeline das Dokument herunter, extrahiert die Seitenanzahl und legt Dokument-, Organisations- und Gemeindeeinträge in einer SQLite-Datenbank an.
 
 ### Stufe 2 – Layout-Erkennung (`preprocessing`)
 
-Jede PDF-Seite wird als hochauflösendes PNG gerendert und anschließend von **PP-DocLayoutV3** (PaddlePaddle, via HuggingFace Transformers) analysiert. Das Modell erkennt und klassifiziert die Struktur jeder Seite: Tabellen, Abbildungen, Überschriften, Textblöcke, Kopf-/Fußzeilen, Seitenzahlen und Bildunterschriften. Jedes erkannte Element erhält eine Bounding Box mit Pixelkoordinaten und einen Confidence Score. Diese räumlichen Informationen sind essenziell, um visuelle Inhalte sauber vom Fließtext zu trennen und Bildunterschriften korrekt zuzuordnen.
+Jede PDF-Seite wird als hochauflösendes PNG gerendert und von **PP-DocLayoutV3** analysiert. Das Modell klassifiziert die Struktur jeder Seite – Tabellen, Abbildungen, Überschriften, Textblöcke, Kopf-/Fußzeilen, Seitenzahlen, Bildunterschriften – jeweils mit Bounding Box und Confidence Score.
 
 ### Stufe 3 – Textextraktion und Strukturaufbau (`preprocessing`)
 
-Mit PyMuPDF wird Text auf Zeichenebene aus jeder PDF-Seite extrahiert. Der Rohtext wird dann mit den Layout-Erkennungsergebnissen aus Stufe 2 abgeglichen, um eine strukturierte JSON-Repräsentation des gesamten Dokuments aufzubauen.
+PyMuPDF extrahiert Text auf Zeichenebene; der Rohtext wird mit den Layout-Ergebnissen aus Stufe 2 abgeglichen und zu einer strukturierten JSON-Repräsentation des Dokuments zusammengebaut.
 
-Jedes Dokument wird in Abschnitte zerlegt, die jeweils einen Titel, eine Seitenzahl, Textinhalt und Referenzen auf enthaltene Tabellen und Abbildungen enthalten. Tabellen und Abbildungen werden anhand ihrer erkannten Bounding Boxes aus den gerenderten Seitenbildern ausgeschnitten und als einzelne PNG-Dateien gespeichert. Platzhalter-Tokens (z.B. `[p13_tbl0]`) werden an den entsprechenden Stellen im Abschnittstext eingefügt und erhalten die Lesereihenfolge aufrecht. Außerdem werden Textfragmente wie Kopf- und Fußzeilen, Firmentitel sowie Texte aus Tabellen oder Bildern anhand der Boundingboxes entfernt, sodass die Abschnitte jeweils nur noch inhaltlichen Fließtext enthalten ohne Fragmente. 
+Jedes Dokument wird in Abschnitte mit Titel, Seitenzahl, Textinhalt und Referenzen auf Tabellen/Abbildungen zerlegt. Tabellen und Abbildungen werden anhand ihrer Bounding Boxes aus den Seitenbildern ausgeschnitten und als PNG gespeichert; Platzhalter-Tokens (z.B. `[p13_tbl0]`) halten die Lesereihenfolge im Abschnittstext aufrecht. Kopf-/Fußzeilen, Firmentitel und Texte aus Tabellen oder Bildern werden über die Bounding Boxes entfernt, sodass Abschnitte nur noch Fließtext enthalten.
 
 Ausgabe: `structured_output.json` pro PDF.
 
 ### Stufe 4 – LLM-Verfeinerung (`textrefinement`)
 
-Die strukturierte Ausgabe aus Stufe 3 enthält häufig Extraktionsartefakte: fehlerhafte Titel, falsch zugeordnete Bildunterschriften, Resttext aus Kopf-/Fußzeilen und Inhaltsverzeichnisseiten, die eigentlich ausgeschlossen werden sollten. Vorab werden die deterministisch erkennbaren Fälle (wiederkehrende Kopf-/Fußzeilen, Verzeichnislisten, Titel-Normalisierung) bereits im Code in `preprocessing` bereinigt; den Rest übernimmt **Qwen3.5-122B-A10B-FP8** (ein multimodales 122B-Mixture-of-Experts-Modell, FP8), serviert über vLLM.
+Deterministisch erkennbare Fälle (wiederkehrende Kopf-/Fußzeilen, Verzeichnislisten, Titel-Normalisierung) werden bereits in `preprocessing` bereinigt; den Rest übernimmt **Qwen3.5-122B-A10B-FP8** über vLLM.
 
-Das Modell normalisiert Abschnittstitel, korrigiert oder ergänzt fehlende Bildunterschriften, entfernt verbleibende Verzeichnisseiten und konvertiert Literaturverzeichnisse ins BibTeX-Format. Es operiert dabei in gleitenden Fenstern auf dem Abschnittskontext (inkl. Vorgänger-Kontext für fensterübergreifende Merges) und kann Abschnitte zusammenführen, aufteilen, entfernen oder ersetzen, um fundierte Entscheidungen über jedes Element treffen zu können.
+Das Modell normalisiert Abschnittstitel, korrigiert oder ergänzt fehlende Bildunterschriften, entfernt verbleibende Verzeichnisseiten und konvertiert Literaturverzeichnisse ins BibTeX-Format. Es operiert in gleitenden Fenstern auf dem Abschnittskontext (inkl. Vorgänger-Kontext für fensterübergreifende Merges) und kann Abschnitte zusammenführen, aufteilen, entfernen oder ersetzen.
 
 Ausgabe: `structured_output_final.json`.
 
 ### Stufe 5 – Bildverarbeitung (`imageprocessing`)
 
-Die in Stufe 2–3 erkannten Tabellen und Abbildungen enthalten zu diesem Zeitpunkt nur ihre ausgeschnittenen Bilder und eventuell aus dem Text extrahierte Bildunterschriften. In dieser Stufe reichert **dasselbe Qwen3.5-122B-A10B-FP8-Modell** wie in Stufe 4 jedes visuelle Element über seine Vision-Language-Fähigkeiten an — allerdings über eine **eigene** vLLM-Serverinstanz (Port 8001 statt 8000, eigene 4-GPU-SLURM-Allocation, ebenfalls TP=4). Diese Stufe läuft parallel zu Stufe 4 als eigener Job, muss aber vor Stufe 6 abgeschlossen sein.
+Dasselbe Qwen3.5-122B-A10B-FP8-Modell wie in Stufe 4 reichert jedes visuelle Element über seine Vision-Language-Fähigkeiten an – allerdings über eine **eigene** vLLM-Serverinstanz. Die Stufe läuft parallel zu Stufe 4, muss aber vor Stufe 6 abgeschlossen sein.
 
-Für **Tabellen** erzeugt das Modell eine strukturierte Markdown-Transkription des Tabelleninhalts. Für **Abbildungen** wird eine detaillierte textuelle Beschreibung des visuellen Inhalts generiert. Wo Bildunterschriften fehlen, werden sie auf Basis des Bildinhalts und des umgebenden Kontexts ebenfalls erzeugt.
-
-Die Verarbeitung läuft lokal über vLLM mit vielen parallelen Anfragen (Continuous Batching). Ein Retry-Mechanismus mit Konversations-Feedback behandelt JSON-Parse-Fehler, und ein QA-Gate (Coverage-/Dedup-Check mit gezieltem Retry) sichert die Tabellenextraktion ab. Im aktuellen Lauf blieben nur **5 von 17.879 Tabellen** ohne Markdown (≈0,03 %) und **0 Abbildungen** ohne Beschreibung; solche Restfälle behalten weiterhin ihr Vision-Language-Embedding (siehe Stufe 6) und verlieren lediglich das Text-Embedding.
+Für **Tabellen** entsteht eine strukturierte Markdown-Transkription, für **Abbildungen** eine textuelle Beschreibung; fehlende Bildunterschriften werden aus Bildinhalt und umgebendem Kontext erzeugt. Ein Retry-Mechanismus mit Konversations-Feedback behandelt JSON-Parse-Fehler, ein QA-Gate (Coverage-/Dedup-Check mit gezieltem Retry) sichert die Tabellenextraktion ab. Elemente ohne Markdown bzw. Beschreibung behalten ihr Vision-Language-Embedding und verlieren lediglich das Text-Embedding.
 
 Ausgabe: `structured_output_images.json`.
 
 ### Stufe 6 – Chunking, Embedding und Datenbankpopulation (`chunkingandembedding`)
 
-Die letzte Stufe führt alle Ergebnisse zusammen und baut den semantischen Suchindex auf.
+**Schritt 1 – Merge:** Die Abschnittsstruktur aus Stufe 4 dient als Basis; Tabellen und Abbildungen werden per ID-Matching mit den angereicherten Versionen aus Stufe 5 zusammengeführt. Ergebnis: `output.json`.
 
-**Schritt 1 – Merge:** Die Abschnittsstruktur aus Stufe 4 dient als Basis. Tabellen und Abbildungen werden per ID-Matching mit den angereicherten Versionen aus Stufe 5 zusammengeführt, die nun Markdown-Transkriptionen und Beschreibungen enthalten. Ergebnis: `output.json`.
+**Schritt 2 – Datenbankpopulation:** Abschnitte, Tabellen und Bilder werden mit Fremdschlüssel-Referenzen auf die bestehenden Dokumenteinträge in die SQLite-Datenbank eingetragen.
 
-**Schritt 2 – Datenbankpopulation:** Abschnitte, Tabellen und Bilder werden mit Fremdschlüssel-Referenzen auf die bestehenden Dokumenteinträge in die SQLite-Datenbank eingetragen. Jeder Abschnitt speichert seinen Titel, die Seitenzahl und den Abschnittsindex. Tabellen speichern ihren Bildpfad, die Bildunterschrift und die Markdown-Transkription. Bilder (Abbildungen) speichern ihren Pfad, die Bildunterschrift und die textuelle Beschreibung.
-
-**Schritt 3 – Embedding-Erstellung:** Es werden sechs Embedding-Typen erzeugt, unter Verwendung von **Qwen3-VL-Embedding-8B** (ein multimodales Embedding-Modell, 4096-dimensionale Vektoren). Das Modell läuft direkt über HuggingFace Transformers in **bfloat16**, datenparallel (eine Modell-Replica pro GPU), und die Eingaben aller Dokumente werden gesammelt und in vollen, dokumentübergreifenden Batches verarbeitet, um die GPUs auszulasten:
+**Schritt 3 – Embedding-Erstellung:** Sechs Embedding-Typen, erzeugt mit **Qwen3-VL-Embedding-8B** (4096-dimensionale Vektoren) über HuggingFace Transformers in bfloat16, datenparallel (eine Modell-Replica pro GPU). Die Eingaben aller Dokumente werden gesammelt und in dokumentübergreifenden Batches verarbeitet:
 
 | Embedding-Typ | Inhalt | DB-Spalte |
 |---|---|---|
@@ -66,15 +63,7 @@ Die letzte Stufe führt alle Ergebnisse zusammen und baut den semantischen Suchi
 | `figure_text` | Bildunterschrift + textuelle Beschreibung | Images.text_embedding |
 | `figure_vl` | Abbildungsbild + Bildunterschrift + Beschreibung (Vision-Language-Embedding) | Images.image_embedding |
 
-Alle Embeddings werden L2-normalisiert und in einem globalen FAISS-Index gespeichert.
-
-Die Datenbank dient als Single Source of Truth dafür, welche Elemente bereits embedded sind. Bei Wiederholungsläufen werden nur fehlende Embeddings erstellt.
-
----
-
-## Infrastruktur
-
-Die Pipeline läuft auf dem HPC-Cluster der Uni, verwaltet über SLURM. Stufe 4 und Stufe 5 laufen als **eigenständige** SLURM-Jobs mit je eigener **vLLM**-Serverinstanz (OpenAI-kompatibel, tensor-parallel) und können parallel laufen. Die Embedding-Erstellung (Stufe 6) läuft anschließend als eigener Job, dort datenparallel (eine Modell-Replica pro GPU) statt tensor-parallel.
+Alle Embeddings werden L2-normalisiert und in einem globalen FAISS-Index gespeichert. Die Datenbank ist die Single Source of Truth dafür, welche Elemente bereits embedded sind – bei Wiederholungsläufen werden nur fehlende Embeddings erstellt.
 
 ---
 
@@ -94,7 +83,7 @@ Die Pipeline läuft auf dem HPC-Cluster der Uni, verwaltet über SLURM. Stufe 4 
 |---|---|
 | PyMuPDF (fitz) | PDF-Textextraktion und Seitenrendering |
 | Transformers | Modellbetrieb für Layout-Erkennung und Embedding |
-| vLLM | Inference-Runtime (OpenAI-kompatibel, Continuous Batching) für LLM und VLM |
+| vLLM | Inference-Runtime (OpenAI-kompatibel) für LLM und VLM |
 | FAISS | Vektorsuchindex für semantische Suche |
 | SQLite | Metadaten- und Embedding-ID-Speicherung |
 | spaCy | NLP-Verarbeitung und Entitätserkennung |
@@ -102,20 +91,6 @@ Die Pipeline läuft auf dem HPC-Cluster der Uni, verwaltet über SLURM. Stufe 4 
 ---
 
 ## Offene Punkte zur Diskussion
-
-### 1) Umgang mit aktualisierten Wärmeplänen
-
-Manche Kommunen veröffentlichen aktualisierte Versionen ihrer Wärmepläne. Aktuell identifizieren wir Dokumente über den Dateinamen und versionieren nicht. Die Frage ist: Nutzen wir immer die neueste Version und überschreiben die alte, oder versionieren wir?
-
-Versionierung würde das Mapping zwischen Dokumenten und KWW-Metadaten deutlich komplizierter machen, weil die KWW ihrerseits Links aktualisiert und wir teilweise eigene korrigierte Versionen bestimmter Wärmepläne haben. In der Praxis ist vor jeder Erweiterung des Datensatzes ein kurzer manueller Doppelcheck nötig, die Extraktion ist also aktuell ca. 95% automatisch.
-
-### 2) Modelldurchsatz und vLLM *(erledigt)*
-
-Die Pipeline ist von Ollama auf **vLLM** umgestellt (Continuous Batching, PagedAttention, Tensor-Parallelität) – inkl. eines deutlich größeren, einheitlichen Modells (Qwen3.5-122B-A10B-FP8) für die Stufen 4 und 5. Auch das Embedding wurde auf bfloat16 + Datenparallelität umgestellt. Offen bleibt das Feintuning des Durchsatzes.
-
-### 3) Wünsche und Anregungen
-
-Falls es Ideen gibt zur Pipeline-Architektur, zur Embedding-Strategie, zum Datenbankschema oder zu zusätzlichen Verarbeitungsschritten – gerne einbringen. Zum Beispiel:
 
 - Gibt es zusätzliche Metadatenfelder oder Strukturelemente, die wir extrahieren sollten?
 - Sollten wir alternative Chunking-Strategien jenseits von Abschnitts-Level-Chunks in Betracht ziehen?

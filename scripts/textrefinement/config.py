@@ -1,10 +1,5 @@
 """
-config.py – Configuration for the text-refinement module.
-
-Reads the Stage-3 structured output (structured_output.json) and refines it
-with an LLM served by vLLM (OpenAI-compatible API): cleans extraction
-artefacts, removes directory pages, converts bibliographies to BibTeX,
-merges/splits sections, and normalises titles.
+config.py – Configuration and system prompt for the text-refinement module.
 
 Author: Felix Vossel
 """
@@ -23,31 +18,24 @@ STRUCTURED_OUTPUT_JSON = f"{DIR_RESULTS}/structured_output.json"        # input 
 FINAL_OUTPUT_JSON      = f"{DIR_RESULTS}/structured_output_final.json"  # output (refined)
 
 # ---------------------------------------------------------------------------
-# vLLM (OpenAI-compatible API)
+# LLM (OpenAI-compatible API)
 # ---------------------------------------------------------------------------
-# Serve the model with vLLM, e.g.:
-#   vllm serve Qwen/Qwen3.5-122B-A10B-FP8 --port 8000
-# LLM_MODEL must match the server's --served-model-name (defaults to the HF id).
-# All values are overridable via environment variables for deployment.
+# LLM_MODEL must match the name the server serves the model under.
 LLM_BASE_URL = os.environ.get("LLM_BASE_URL", "http://localhost:8000/v1")
 LLM_MODEL    = os.environ.get("LLM_MODEL", "Qwen/Qwen3.5-122B-A10B-FP8")
-LLM_API_KEY  = os.environ.get("LLM_API_KEY", "EMPTY")  # vLLM ignores the value
+LLM_API_KEY  = os.environ.get("LLM_API_KEY", "EMPTY")  # ignored by vLLM
 LLM_TIMEOUT  = float(os.environ.get("LLM_TIMEOUT", "180"))
 
-# Concurrent requests fired at the single vLLM server (continuous batching),
-# the main throughput lever.
+# Concurrent in-flight requests; the main throughput lever.
 LLM_NUM_PARALLEL = int(os.environ.get("LLM_NUM_PARALLEL", "8"))
 
 MAX_RETRIES = 4
-WINDOW_SIZE = 3  # sections processed per LLM call
+WINDOW_SIZE = 3  # sections per LLM call
 
 LLM_TEMPERATURE = 0.1
-# Cap generation so a reasoning model cannot spin indefinitely before emitting
-# JSON and trip the request timeout.
 LLM_MAX_TOKENS = 8192
 
-# Deterministic title-cleanup guarantee (numbering-prefix strip + ALL-CAPS
-# de-shout) applied on top of the LLM's semantic pass. Set False to disable.
+# Numbering-prefix strip + ALL-CAPS de-shout applied on top of the LLM's pass.
 TITLE_CLEANUP_ENABLE = True
 
 # ---------------------------------------------------------------------------
@@ -238,12 +226,9 @@ def clean_data(obj):
 
 def dump_json_atomic(data, path) -> None:
     """
-    Serialise *data* as UTF-8 JSON to *path* atomically.
-
-    Writes to a temporary file in the same directory and os.replace()s it onto
-    the destination, so a crash / Ctrl-C / power loss mid-write can never leave
-    a truncated, unreadable file behind (os.replace is atomic on the same
-    filesystem, including on Windows).
+    Serialise *data* as UTF-8 JSON to *path* atomically (temp file in the same
+    directory + os.replace), so an interrupted write cannot leave a truncated
+    file behind. Atomic only within one filesystem.
     """
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)

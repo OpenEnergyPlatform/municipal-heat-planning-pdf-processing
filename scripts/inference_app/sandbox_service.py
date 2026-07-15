@@ -1,15 +1,11 @@
 #!/usr/bin/env python3
 """
-sandbox_service.py – Localhost HTTP wrapper around llm-sandbox (rootless podman).
+sandbox_service.py – Localhost HTTP wrapper around llm-sandbox.
 
-Runs on the **sandbox host** (a machine with podman + the `llm-sandbox` venv), NOT
-on the inference server. The Streamlit app reaches it over an SSH remote-forward,
-so it binds 127.0.0.1 only and is guarded by a bearer token.
-
-Each request runs the code in a FRESH, ephemeral podman container built from an
-image with numpy/pandas/pymupdf preinstalled, with **no network**, resource
-limits, all Linux capabilities dropped, and an execution timeout — so untrusted,
-possibly prompt-injected LLM code cannot touch the host or the network.
+Each request runs the code in a FRESH, ephemeral container with no network,
+resource limits, all capabilities dropped and an execution timeout, so untrusted,
+possibly prompt-injected LLM code cannot reach the host or the network. It binds
+loopback only and is guarded by a bearer token; do NOT expose it directly.
 
     POST /run   Authorization: Bearer <KWP_SANDBOX_TOKEN>
        body: {"code": "<python>", "context": {"var": <json-value>, ...}, "timeout": <int>}
@@ -17,11 +13,7 @@ possibly prompt-injected LLM code cannot touch the host or the network.
     GET  /health -> {"ok": true}    (no auth; readiness probe)
 
 `context` entries are injected as pre-defined variables (JSON-decoded) before the
-submitted code, so the app can hand over e.g. the retrieved tables and numbers.
-
-Config (env): KWP_SANDBOX_TOKEN (required), KWP_SANDBOX_PORT (8600),
-KWP_SANDBOX_IMAGE (localhost/kwp-sandbox:latest), KWP_SANDBOX_TIMEOUT (20),
-KWP_SANDBOX_MAX_TIMEOUT (30), KWP_SANDBOX_MEM (512m), KWP_SANDBOX_HOST (127.0.0.1).
+submitted code. Configured entirely from the environment (see below).
 
 Author: Felix Vossel
 """
@@ -43,9 +35,8 @@ DEFAULT_TIMEOUT = int(os.environ.get("KWP_SANDBOX_TIMEOUT", "20"))
 MAX_TIMEOUT = int(os.environ.get("KWP_SANDBOX_MAX_TIMEOUT", "30"))
 MEM = os.environ.get("KWP_SANDBOX_MEM", "512m")
 
-# Container hardening (validated against rootless podman): no network is the key
-# guard; the container is ephemeral and capability-stripped. Resource limits are
-# best-effort under rootless cgroupfs but do not break creation.
+# Container hardening. `network_mode: none` is the key guard. Resource limits are
+# best-effort under rootless cgroupfs but do not break container creation.
 HARDENING = {
     "network_mode": "none",
     "mem_limit": MEM,
@@ -54,7 +45,7 @@ HARDENING = {
     "security_opt": ["no-new-privileges"],
 }
 
-# One container at a time — a single-user tool; keeps resource use bounded.
+# One container at a time; keeps resource use bounded.
 _LOCK = threading.Lock()
 
 
@@ -120,7 +111,7 @@ class Handler(BaseHTTPRequestHandler):
         self._send(200, run_code(code, payload.get("context"), payload.get("timeout", DEFAULT_TIMEOUT)))
 
     def log_message(self, *args):
-        pass  # quiet; systemd captures stdout
+        pass  # quiet
 
 
 def main() -> None:

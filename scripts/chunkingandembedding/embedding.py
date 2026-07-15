@@ -1,13 +1,8 @@
 """
-embedding.py – Step 3: Create embeddings and build FAISS index.
+embedding.py – Step 3: Create text + VL embeddings and build the FAISS index.
 
-Uses Qwen3-VL-Embedding-8B via the project's Qwen3VLEmbedder wrapper
-to create text and vision-language embeddings.  All embeddings are stored
-in a single FAISS IDMap(IndexFlatIP) with globally unique IDs.
-
-The database is the single source of truth for which items have been
-embedded.  On --force, old FAISS IDs are removed from both the DB and
-the index before re-embedding.
+All embeddings live in one FAISS IDMap(IndexFlatIP) keyed by globally unique
+ids allocated from the DB.
 
 Author: Felix Vossel
 """
@@ -33,9 +28,8 @@ def load_or_create_index(index_path: Path) -> tuple[faiss.Index, int]:
     """
     Load an existing FAISS index or create a new IDMap(IndexFlatIP).
 
-    Returns:
-        Tuple of (index, next_id) where next_id is the next available
-        FAISS vector ID.
+    Returns (index, next_id). next_id is only a floor derived from ntotal —
+    reconcile it with next_faiss_id(db) before allocating.
     """
     if index_path.exists():
         log.info("Loading existing FAISS index: %s", index_path)
@@ -58,16 +52,7 @@ def save_index(index: faiss.Index, index_path: Path) -> None:
 
 
 def remove_ids_from_index(index: faiss.Index, ids: list[int]) -> int:
-    """
-    Remove vectors by their IDs from a FAISS IDMap index.
-
-    Args:
-        index: The FAISS IDMap index.
-        ids:   List of vector IDs to remove.
-
-    Returns:
-        Number of vectors actually removed.
-    """
+    """Remove vectors by id from a FAISS IDMap index; returns the count removed."""
     if not ids:
         return 0
     id_array = np.array(ids, dtype=np.int64)
@@ -77,11 +62,11 @@ def remove_ids_from_index(index: faiss.Index, ids: list[int]) -> int:
 
 
 def load_embedder(model_name: str = EMBEDDING_MODEL):
-    """Load the embedding model, data-parallel across all visible GPUs in bf16.
+    """
+    Load the embedding model, data-parallel across all visible GPUs in bf16.
 
-    Returns a MultiGPUEmbedder (one replica per GPU); it exposes the same
-    ``process()`` interface as a single Qwen3VLEmbedder and degenerates to one
-    replica when only a single device is visible.
+    Returns a MultiGPUEmbedder, which exposes the same ``process()`` interface
+    as a single Qwen3VLEmbedder.
     """
     from scripts.qwen3_vl_embedding import MultiGPUEmbedder
     log.info("Loading embedding model: %s", model_name)
@@ -108,37 +93,15 @@ def create_embeddings(
     save_every: int = 1000,
 ) -> int:
     """
-    Create embeddings for a list of inputs (which may span many documents),
-    add them to the FAISS index, and write the IDs to the database in batched
-    transactions.
+    Embed `inputs` (which may mix pdf_names), add the vectors to `index`, and
+    write their ids to the DB. Returns the updated next_id.
 
-    Inputs are pooled *across documents* and split into two global groups —
-    text-only and VL — each then packed into full ``batch_size`` batches. This
-    keeps the GPU saturated regardless of how few items any single document
-    contributes (a per-document caller would otherwise fire many tiny,
-    half-empty batches). Each ``EmbeddingInput`` carries its own ``pdf_name``,
-    so DB writeback is grouped per document within every batch.
+    Inputs are split into text-only and VL groups and packed into full
+    ``batch_size`` batches across documents; each input's ``pdf_name`` keeps the
+    DB writeback grouped per document. A failed batch is logged and skipped.
 
-    The FAISS index is persisted every ``save_every`` batches (and once at the
-    end) when ``index_path`` is given, so a long run survives interruption.
-
-    Args:
-        inputs:      List of EmbeddingInput objects (may mix pdf_names).
-        index:       FAISS IDMap index to add vectors to.
-        next_id:     Next available FAISS ID.
-        db_path:     Path to the SQLite database for ID writeback.
-        embedder:    Pre-loaded embedder (loaded lazily if None).
-        model_name:  Model name/path for lazy loading.
-        batch_size:  Number of items per embedding batch.
-        index_path:  If given, the index is checkpointed here periodically.
-        save_every:  Persist the index every N successful batches. The whole
-                     index is rewritten each time (FAISS has no incremental
-                     flush) and it grows to multiple GB, so this is deliberately
-                     coarse — it is crash insurance, not a per-batch durability
-                     guarantee. The final save always happens regardless.
-
-    Returns:
-        Updated next_id after all embeddings have been added.
+    With ``index_path``, the index is rewritten whole every ``save_every``
+    batches (crash insurance, not per-batch durability) and once at the end.
     """
     if not inputs:
         return next_id
@@ -184,8 +147,7 @@ def create_embeddings(
             ids = np.arange(next_id, next_id + len(vectors), dtype=np.int64)
             index.add_with_ids(vectors, ids)
 
-            # The batch may straddle several documents — write each doc's ids
-            # into its own row group.
+            # The batch may straddle several documents.
             records_by_doc: dict[str, list[tuple]] = defaultdict(list)
             for i, inp in enumerate(batch):
                 records_by_doc[inp.pdf_name].append(

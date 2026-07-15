@@ -16,14 +16,8 @@ from utils import database
 
 def _load_and_filter_excel(excel_file: Path) -> pd.DataFrame:
     """
-    Load and filter the Excel datasource for completed Wärmepläne with PDF links.
-    
-    Returns:
-        A pandas DataFrame containing only completed plans (Stand in der KWP == "abgeschlossen")
-        that have valid PDF links.
-    
-    Note:
-        Column names are normalized by replacing spaces with underscores for easier access.
+    Completed Wärmepläne ("Stand in der KWP" == "abgeschlossen") that have a PDF
+    link. Column names are returned with spaces replaced by underscores.
     """
     kww_data = pd.read_excel(
         excel_file,
@@ -41,21 +35,11 @@ def _load_and_filter_excel(excel_file: Path) -> pd.DataFrame:
 
 def download_pdf(url: str, data_dir: Path) -> str:
     """
-    Download a PDF file from the given URL and save it locally.
-    
-    Args:
-        url: The full URL to the PDF file.
-    
-    Returns:
-        The filename of the saved PDF (lowercase).
-    
-    Raises:
-        requests.HTTPError: If the HTTP request fails.
-        IOError: If writing the file fails.
-    
-    Note:
-        Files are saved to the 'data/pdf' directory with lowercase filenames.
-        Skips download if file already exists locally to optimize performance.
+    Download `url` into `data_dir` and return the saved filename (lowercased).
+
+    A no-op returning the existing name if the file is already there. Raises
+    requests.HTTPError on a failed request and IOError if the response is not a
+    PDF.
     """
     filename = Path(urlparse(url).path).name.lower()
     file_path = data_dir / filename
@@ -69,9 +53,8 @@ def download_pdf(url: str, data_dir: Path) -> str:
     if not content.startswith(b"%PDF"):
         raise IOError(f"Downloaded file is not a PDF (no %PDF header): {url}")
 
-    # Atomic write (temp + os.replace) so a killed job never leaves a partial /
-    # poisoned .pdf that a later run reuses and feeds to PyMuPDF (which can
-    # segfault on a truncated file).
+    # Atomic write: a killed job must not leave a partial .pdf that a later run
+    # reuses and feeds to PyMuPDF, which can segfault on a truncated file.
     data_dir.mkdir(parents=True, exist_ok=True)
     fd, tmp = tempfile.mkstemp(dir=str(data_dir), prefix=filename + ".", suffix=".part")
     try:
@@ -89,24 +72,12 @@ def download_pdf(url: str, data_dir: Path) -> str:
 
 def get_num_pages(filename: str, data_dir: Path) -> int:
     """
-    Extract the number of pages from a PDF document.
-    
-    Args:
-        filename: The name of the PDF file (located in 'data/pdf' directory).
-    
-    Returns:
-        The total number of pages in the PDF document.
-    
-    Raises:
-        FileNotFoundError: If the PDF file cannot be found.
-        Exception: If the file cannot be opened as a valid PDF.
-    
-    Note:
-        The PDF file is opened and closed within this function to retrieve metadata.
+    Page count of `data_dir / filename`.
+
+    Raises IOError if the file is not a PDF, FileNotFoundError if it is missing.
     """
     file_path = data_dir / filename
-    # Guard PyMuPDF against a non-PDF / truncated file (it can segfault rather
-    # than raise) — turn that into a clean, skippable error.
+    # PyMuPDF can segfault rather than raise on a non-PDF / truncated file.
     with open(file_path, "rb") as f:
         if not f.read(5).startswith(b"%PDF"):
             raise IOError(f"Not a valid PDF (missing %PDF header): {file_path}")
@@ -118,20 +89,12 @@ def get_num_pages(filename: str, data_dir: Path) -> int:
 
 def process_entry(row: Any, connection: sqlite3.Connection, data_dir: Path) -> None:
     """
-    Process a single entry from the Excel datasource.
-    
-    Handles two scenarios:
-    1. Document already exists in database: Link municipality to existing organizational unit
-    2. Document is new: Download PDF, extract metadata, and store both document and municipality
-    
-    Args:
-        row: A namedtuple-like object representing one row from the filtered Excel data.
-             Expected attributes: Gemeindename, Verbandsname, Bundesland_lang, 
-             Link_Wärmeplan, Datum_der_Veröffentlichung
-        connection: Active SQLite database connection.
-    
-    Note:
-        Logs all operations for transparency. Properly handles both new and existing documents.
+    Register one row of the filtered Excel data, downloading its PDF if the
+    document is not in the DB yet.
+
+    `row` is an itertuples row and must carry Gemeindename, Gemeindeschlüssel,
+    Verbandsname, Bundesland_lang, Link_Wärmeplan, Ersetzte_Datei and
+    Datum_der_Veröffentlichung.
     """
     municipality_name = row.Gemeindename
     municipality_ags = row.Gemeindeschlüssel
@@ -158,22 +121,14 @@ def process_entry(row: Any, connection: sqlite3.Connection, data_dir: Path) -> N
 
 def run(excel_file: Path, db_file: Path, data_dir: Path) -> None:
     """
-    Execute the complete file processing pipeline.
-
-    Loads municipality data from Excel, creates database if needed,
-    downloads PDFs, and stores documents and municipalities in the database.
-
-    Args:
-        excel_file: Path to the Excel file containing municipality metadata.
-        db_file: Path to the SQLite database file.
-        data_dir: Directory where PDF files will be stored.
+    Load the municipality metadata from `excel_file`, create `db_file` if it does
+    not exist, download the PDFs into `data_dir` and register them in the DB.
     """
     kww_data = _load_and_filter_excel(excel_file)
     data_dir.mkdir(parents=True, exist_ok=True)
     if not db_file.exists():
-        # Prefer the relational v2 schema (e.g. data/KWP.db.sql) when it sits
-        # next to the DB, so a fresh build has foreign keys + the page-provenance
-        # tables; fall back to the bundled DATABASE_SCHEMA otherwise.
+        # A "<db_file>.sql" next to the DB wins over the bundled DATABASE_SCHEMA:
+        # only it carries the foreign keys and page-provenance tables.
         schema_path = db_file.with_name(db_file.name + ".sql")
         with sqlite3.connect(db_file) as connection:
             if schema_path.exists():
@@ -185,18 +140,12 @@ def run(excel_file: Path, db_file: Path, data_dir: Path) -> None:
         for row in tqdm(kww_data.itertuples(), desc="Processing municipality", total=kww_data.shape[0]):
             process_entry(row, connection, data_dir)
         # Link re-published plans: newest per municipality = current, older ones
-        # superseded. Runs over the full table so it is correct on every re-run.
+        # superseded. Runs over the full table, so re-runs stay correct.
         database.link_document_versions(connection)
     
 
 def _build_parser() -> argparse.ArgumentParser:
-    """
-    Build and return the command-line argument parser.
-
-    Returns:
-        An ArgumentParser configured with all required and optional arguments
-        for the file processing CLI.
-    """
+    """Build the CLI argument parser."""
     p = argparse.ArgumentParser(
         prog="python -m scripts.fileprocessing",
         description="Download and meta-data enrichments of the original KWP PDF files",
@@ -231,12 +180,7 @@ python -m scripts.fileprocessing /path_to_kww_excel/file.xlxs /path_to_db/KWP.db
     return p
 
 def main() -> None:
-    """
-    Entry point for the command-line interface.
-
-    Parses command-line arguments, configures logging, and executes the
-    file processing pipeline.
-    """
+    """CLI entry point."""
     parser = _build_parser()
     args = parser.parse_args()
 

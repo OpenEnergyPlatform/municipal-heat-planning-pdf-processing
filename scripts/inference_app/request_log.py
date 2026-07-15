@@ -1,9 +1,5 @@
 """
-request_log.py – Logging and response caching for inference app requests.
-
-Maintains a separate SQLite database with two tables:
-  - requests: Full log of every request (plan_id, query, scopes, timestamp, latency, stats, errors)
-  - response_cache: Query-response pairs keyed by (plan_id, query_key) for fast hits
+request_log.py – Request logging + response caching, in a separate SQLite file.
 
 Errors are logged but NOT cached — failed queries retry on next occurrence.
 
@@ -68,13 +64,10 @@ def make_query_key(plan_id: int, text: Optional[str], scopes: list[str],
     """
     Deterministic cache key over (plan_id, user question, scopes, output format).
 
-    `text` is the RAW user question (not the LLM-generated search phrase), so
-    re-asking the identical question hits the cache even though the search phrase
-    is regenerated (and varies slightly) each time. It is normalized — inner
-    whitespace collapsed and case-folded — so trivially different spellings of
-    the same question ("Was ist das Zieljahr?" vs "was ist das  zieljahr?")
-    share a key. Same question to a different plan, with different scopes, or in
-    a different output format (prose vs JSON) still yields different keys.
+    `text` must be the RAW user question, NOT the LLM-generated search phrase,
+    which is regenerated (and varies) on every turn. It is normalized —
+    whitespace collapsed, case-folded — so trivially different spellings of the
+    same question share a key.
     """
     norm = re.sub(r"\s+", " ", (text or "").strip()).casefold()
     h = hashlib.sha256()
@@ -94,11 +87,8 @@ def get_cached_response(
     query_key: str
 ) -> Optional[dict]:
     """
-    Return cached (answer, answer_text, citations, n_findings) for a query, or
-    None on a miss.
-
-    Returns a dict with keys: answer, answer_text, citations (list), n_findings.
-    `answer_text` is the prose form (for follow-up context); it falls back to
+    Cached {answer, answer_text, citations, n_findings} for a query, or None on a
+    miss (or unparseable row). `answer_text` is the prose form, falling back to
     `answer` for rows written before that column existed.
     """
     row = conn.execute(
@@ -132,13 +122,7 @@ def log_request(
     error_message: Optional[str] = None,
     cache_hit: bool = False,
 ) -> int:
-    """
-    Log a single request. Returns the request_id.
-
-    - Successful requests: n_hits, n_citations, answer_hash set; error_message=None
-    - Failed requests: error_message set; other fields as available
-    - Cache hits: cache_hit=True, usually no retrieval stats
-    """
+    """Log a single request. Returns the request_id."""
     cur = conn.execute(
         """
         INSERT INTO requests
@@ -173,11 +157,11 @@ def cache_response(
     n_findings: int,
 ) -> None:
     """
-    Store a successful response in the cache.
+    Store a successful response in the cache. Idempotent — overwrites on a repeat
+    (plan_id, query_key).
 
     `answer` is the displayed form (JSON when the JSON toggle is on, else prose);
-    `answer_text` is the prose form kept for follow-up context. Idempotent —
-    overwrites on repeat (same plan_id + query_key).
+    `answer_text` is the prose form kept for follow-up context.
     """
     conn.execute(
         """

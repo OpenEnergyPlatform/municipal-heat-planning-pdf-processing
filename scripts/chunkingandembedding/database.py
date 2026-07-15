@@ -1,16 +1,9 @@
 """
-database.py – Step 2 and 4: Database operations.
+database.py – Insert sections/tables/images from merged data, and write FAISS
+embedding IDs back. Documents themselves are populated by fileprocessing.
 
-Step 2: Insert Sections (+ their Pages, SectionPages, Segments), Tables and
-        Images from merged data. Documents are populated by fileprocessing.
-Step 4: Write FAISS embedding IDs back to the DB (Embeddings table).
-
-The database is the single source of truth for which items have been embedded.
-The embedding step queries the DB to determine what is missing, and --force
-clears all embeddings for a document before re-processing.
-
-The schema is defined in data/KWP.db.sql (foreign keys + page-provenance
-tables). Every connection enables `PRAGMA foreign_keys = ON`.
+The DB (schema: data/KWP.db.sql) is the source of truth for what has been
+embedded and for FAISS id allocation.
 
 Author: Felix Vossel
 """
@@ -71,13 +64,7 @@ def connect(db_path: Path) -> sqlite3.Connection:
 
 
 def _ensure_bbox_columns(connection: sqlite3.Connection) -> None:
-    """
-    Add the `bbox` column to Segments/Tables/Images on a DB that predates it.
-
-    Idempotent: a fresh DB built from data/KWP.db.sql already has the columns,
-    so this only fires on an older live DB. Purely additive (ADD COLUMN keeps
-    every existing row and value) — safe to run before an insert or an enrich.
-    """
+    """Add the `bbox` column to Segments/Tables/Images on a DB that predates it."""
     for table in ("Segments", "Tables", "Images"):
         cols = {row[1] for row in connection.execute(f'PRAGMA table_info("{table}")')}
         if "bbox" not in cols:
@@ -154,9 +141,8 @@ def _delete_document_content(document_id: int, connection: sqlite3.Connection) -
     """
     Delete all content for a document so it can be cleanly re-inserted.
 
-    Embeddings are polymorphic (no FK), so they are deleted explicitly first;
-    Sections/Pages cascade to their children (SectionPages, Segments, Tables,
-    Images) via ON DELETE CASCADE.
+    Embeddings are polymorphic (no FK) and must be deleted explicitly first;
+    Sections/Pages then cascade to their children.
     """
     _delete_document_embeddings(document_id, connection)
     connection.execute("DELETE FROM Sections WHERE document = ?", (document_id,))
@@ -197,6 +183,7 @@ def _insert_sections(
     Insert all sections (with page provenance), tables and images for one
     document. Sections are numbered by their index in the sections list.
     """
+    # Segments.page / SectionPages.page are FKs to Pages.id, not page numbers.
     page_cache: dict[int, int] = {}
 
     for sec_idx, section in enumerate(merged_data.get("sections", [])):
@@ -281,7 +268,7 @@ def update_database(
     log.info("Step 2: Inserting sections for %d documents", len(candidates))
 
     with closing(connect(db_path)) as conn:
-        _ensure_bbox_columns(conn)   # no-op on a fresh v2 schema; migrates an old DB
+        _ensure_bbox_columns(conn)
         for i, pdf_dir in enumerate(candidates):
             pdf_name = pdf_dir.name
             doc_id = _resolve_document_id(pdf_name, conn)
@@ -322,15 +309,12 @@ def update_database(
 # Additive bbox backfill (non-destructive)
 # ---------------------------------------------------------------------------
 
-# Stage-3 output holds the raw, geometry-bearing sections (pre-refinement); it
-# is the authoritative source of per-segment/-media bbox and is regenerated
-# cheaply and deterministically (no LLM/VL) by re-running Stage 3.
+# Stage-3 output carries the raw, geometry-bearing sections: the source of bbox.
 _STAGE3_JSON = "results/structured_output.json"
 
 
 def _norm_seg_text(text: Optional[str]) -> str:
-    """Whitespace-collapsed key for matching a text segment across the JSON /
-    DB boundary (the raw text is carried verbatim, but be lenient anyway)."""
+    """Whitespace-collapsed key for matching a text segment across JSON/DB."""
     return re.sub(r"\s+", " ", text or "").strip()
 
 
@@ -360,21 +344,13 @@ def _bbox_lookups_from_stage3(stage3: dict) -> tuple[dict, dict]:
 
 def enrich_bbox(db_path: Path, root_dir: Path, *, force: bool = False) -> dict:
     """
-    Additively backfill the `bbox` column on existing Segments/Tables/Images
-    rows from freshly re-run Stage-3 outputs — touching nothing else.
+    Backfill the `bbox` column on existing Segments/Tables/Images rows from
+    Stage-3 outputs, updating that column only — no delete, re-embed or re-chunk.
 
-    This is the non-destructive path for a corpus that was embedded before bbox
-    existed. Re-run Stage 3 (deterministic, cheap — it consumes the cached
-    layout blocks, no LLM/VL) so each doc's structured_output.json carries the
-    geometry, then match it onto the DB rows by block id (tables/figures/media
-    segments) and by (page, text) (text segments) and `UPDATE` only the bbox
-    column. Embeddings, FAISS ids, Sections.content and every other value are
-    left byte-for-byte as they were: no delete, no re-embed, no re-chunk.
-
-    `force` re-derives even rows that already carry a bbox; by default a row
-    whose bbox is already set is left untouched (so a partial run resumes).
-
-    Returns a stats dict of matched/updated counts.
+    Requires Stage 3 to have been re-run so each doc's structured_output.json
+    carries the geometry. `force` also re-derives rows that already have a bbox;
+    by default those are skipped, so a partial run resumes. Returns a stats dict
+    of updated counts.
     """
     root_dir = Path(root_dir)
     stats = {"documents": 0, "segments": 0, "tables": 0, "images": 0}
@@ -403,7 +379,6 @@ def enrich_bbox(db_path: Path, root_dir: Path, *, force: bool = False) -> dict:
             if not media_by_id and not text_by_page_text:
                 continue
 
-            # Text + media segments (page_number via the Pages join).
             rows = conn.execute(
                 "SELECT sg.id, p.page_number, sg.kind, sg.ref, sg.text "
                 "FROM Segments sg "
@@ -422,7 +397,6 @@ def enrich_bbox(db_path: Path, root_dir: Path, *, force: bool = False) -> dict:
                                  (bbox_json, seg_id))
                     stats["segments"] += 1
 
-            # Table / Image rows, matched by block id.
             for table, key in (("Tables", "tables"), ("Images", "images")):
                 for row_id, block_id in conn.execute(
                     f"SELECT t.id, t.block_id FROM {table} t "
@@ -455,10 +429,9 @@ def get_existing_embeddings(
     pdf_name: str,
 ) -> set[tuple[str, int, Optional[str]]]:
     """
-    Query the DB for items that already have embeddings for a given PDF.
-
-    Returns a set of (embedding_type, section_index, item_id) tuples, where
-    item_id is the table/figure block id (None for section-level embeddings).
+    Items of this PDF that already have embeddings, as a set of
+    (embedding_type, section_index, item_id) — item_id is the table/figure
+    block id, None for section-level embeddings. Empty if the doc is unknown.
     """
     existing: set[tuple[str, int, Optional[str]]] = set()
 
@@ -467,7 +440,6 @@ def get_existing_embeddings(
         if doc_id is None:
             return existing
 
-        # Section embeddings.
         for section_number, etype in conn.execute(
             "SELECT s.section_number, e.embedding_type "
             "FROM Embeddings e JOIN Sections s "
@@ -477,7 +449,6 @@ def get_existing_embeddings(
         ):
             existing.add((etype, section_number, None))
 
-        # Table embeddings.
         for section_number, block_id, etype in conn.execute(
             "SELECT s.section_number, t.block_id, e.embedding_type "
             "FROM Embeddings e JOIN Tables t "
@@ -488,7 +459,6 @@ def get_existing_embeddings(
         ):
             existing.add((etype, section_number, block_id))
 
-        # Figure embeddings.
         for section_number, block_id, etype in conn.execute(
             "SELECT s.section_number, i.block_id, e.embedding_type "
             "FROM Embeddings e JOIN Images i "
@@ -524,12 +494,11 @@ def clear_embedding_ids(db_path: Path, pdf_name: str) -> list[int]:
 
 def get_document_faiss_ids(db_path: Path, pdf_name: str) -> list[int]:
     """
-    Read-only snapshot of every FAISS id currently mapped to a document.
+    Read-only snapshot of every FAISS id currently mapped to a document; [] if
+    the doc is unknown.
 
-    The pipeline snapshots these BEFORE Step 2 deletes the Embeddings rows so
-    Step 3 can still evict the now-stale vectors from the shared index — a full
-    --force run would otherwise orphan them (the DB delete races ahead of the
-    index cleanup).
+    Must be called BEFORE the db step's --force delete removes the Embeddings
+    rows, or the ids are gone and their vectors are orphaned in the index.
     """
     with closing(connect(db_path)) as conn:
         doc_id = _resolve_document_id(pdf_name, conn)
@@ -542,11 +511,9 @@ def next_faiss_id(db_path: Path) -> int:
     """
     Smallest FAISS id not currently claimed by any Embeddings row.
 
-    The DB is the source of truth for id allocation. Seeding the next id from
-    here (rather than from index.ntotal, a live vector *count*) prevents reusing
-    an id still held by another document after a --force pass removed some
-    vectors — which, with the v2 `faiss_id` PRIMARY KEY, would otherwise raise an
-    IntegrityError and abort the run.
+    Seed id allocation from here, not from index.ntotal: ntotal is a live count
+    and can dip below the high-water mark after an eviction, so it hands back an
+    id another row still holds and the faiss_id PK rejects the insert.
     """
     with closing(connect(db_path)) as conn:
         row = conn.execute(
@@ -561,11 +528,11 @@ def write_embedding_ids_batch(
     records: list[tuple[str, int, Optional[str], int]],
 ) -> None:
     """
-    Write multiple FAISS embedding IDs to the DB in a single transaction.
+    Write FAISS embedding ids to the DB in one transaction.
 
-    Args:
-        records: list of (embedding_type, section_index, item_id, faiss_id).
-                 item_id is the table/figure block id (None for sections).
+    `records` are (embedding_type, section_index, item_id, faiss_id); item_id is
+    the table/figure block id, None for sections. Records whose owner row cannot
+    be resolved are skipped silently.
     """
     if not records:
         return

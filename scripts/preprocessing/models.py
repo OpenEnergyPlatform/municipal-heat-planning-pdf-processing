@@ -11,21 +11,16 @@ from typing import Optional
 
 
 # ---------------------------------------------------------------------------
-# Low-level block (unchanged from original)
+# Low-level block
 # ---------------------------------------------------------------------------
 
 @dataclass
 class Block:
     """
-    Represents a single content block on a PDF page.
+    A single content block on a PDF page.
 
-    type:   "text"  – Text block from PyMuPDF rawdict
-            "table" – Detected table (layout model)
-            "image" – Detected image/figure (layout model)
-    bbox:   [x0, y0, x1, y1] in PDF points (pt), origin top-left.
-    layout_label:  original PP-DocLayout class name (e.g. "paragraph_title",
-                   "header", "footer", …) – set during Stage 2 for layout
-                   blocks; None for raw text blocks from Stage 1.
+    bbox:   [x0, y0, x1, y1] in PDF points, origin top-left.
+    layout_label:  PP-DocLayout class name; None for raw Stage-1 text blocks.
     """
     id: str
     type: str                         # "text" | "table" | "image"
@@ -36,9 +31,8 @@ class Block:
     confidence: Optional[float] = None
     layout_label: Optional[str] = None  # raw PP-DocLayout class
     source_text: Optional[str] = None   # native PDF text inside a table bbox (QA reference)
-    # Dominant font signature of a Stage-1 text block (size in pt, bold flag).
-    # Transient: used for font-based heading promotion in Stage 2 before the
-    # pages cache is written, so it is intentionally NOT serialised.
+    # Dominant font of a Stage-1 text block. Transient: intentionally NOT
+    # serialised, so it is absent on blocks loaded from the pages cache.
     font_size: Optional[float] = None
     font_bold: Optional[bool] = None
 
@@ -110,10 +104,8 @@ class FigureRef:
     path: str
     caption: Optional[str] = None
     page_number: Optional[int] = None
-    # Layout region on the page as a list of one [x0, y0, x1, y1] rect in PDF
-    # points (top-left origin) — the detected figure block's bbox. Stored as a
-    # rect *list* (not a bare rect) to match the Segments.bbox shape, enabling a
-    # coordinate overlay on the source PDF instead of only a page-level link.
+    # A *list* of one [x0, y0, x1, y1] rect in PDF points (top-left origin),
+    # not a bare rect — the shape matches Segments.bbox.
     bbox: Optional[list[list[float]]] = None
 
     def to_dict(self) -> dict:
@@ -135,9 +127,7 @@ class TableRef:
     caption: Optional[str] = None
     page_number: Optional[int] = None
     source_text: Optional[str] = None   # native PDF text inside the table bbox (QA reference)
-    # Layout region as a list of one [x0, y0, x1, y1] rect in PDF points
-    # (top-left origin), the detected table block's bbox (see FigureRef.bbox).
-    bbox: Optional[list[list[float]]] = None
+    bbox: Optional[list[list[float]]] = None   # see FigureRef.bbox
 
     def to_dict(self) -> dict:
         d: dict = {"id": self.id, "path": self.path}
@@ -159,10 +149,9 @@ class Section:
     page_number: Optional[int] = None
     tables: list[TableRef] = field(default_factory=list)
     figures: list[FigureRef] = field(default_factory=list)
-    # Fine-grained page provenance: ordered content segments, each tagged with
-    # the source page. A segment is either a run of text or a table/figure
-    # reference: {"page": int, "kind": "text"|"table"|"figure",
-    #             "text": str (text only), "ref": block_id (table/figure only)}.
+    # Ordered content segments in reading order:
+    # {"page": int, "kind": "text"|"table"|"figure",
+    #  "text": str (text only), "ref": block_id (table/figure only)}.
     segments: list[dict] = field(default_factory=list)
     # Sorted distinct page numbers this section spans (derived from segments).
     pages: list[int] = field(default_factory=list)

@@ -1,17 +1,8 @@
 """
 pipeline.py – Orchestration of the imageprocessing module.
 
-Reads the structured output produced by the preprocessing pipeline,
-enriches tables and figures via a vision LLM, and writes the result.
-
-Modes:
-  - Single: process one PDF's output directory.
-  - Batch:  process all PDF subdirectories under a root.
-
-CLI:
-  python -m scripts.imageprocessing ./output/my_pdf
-  python -m scripts.imageprocessing ./output/ --batch
-  python -m scripts.imageprocessing ./output/my_pdf --dry-run
+Enriches one PDF's output directory, or all PDF subdirectories under a root
+(--batch), via a vision LLM. See ``_build_parser`` for the CLI.
 
 Author: Felix Vossel
 """
@@ -43,10 +34,8 @@ from .process import process_table, process_figure
 
 log = logging.getLogger(__name__)
 
-# Documents (PDF output dirs) enriched concurrently. Each doc's vision calls are
-# pure VLM-API (no shared GPU model), so processing several docs at once overlaps
-# their image-enrichment requests and keeps the vLLM server saturated across doc
-# boundaries (small docs no longer starve it). In-flight ≈ DOC_PARALLEL × VLM_NUM_PARALLEL.
+# Documents (PDF output dirs) enriched concurrently.
+# Total in-flight requests ≈ DOC_PARALLEL × VLM_NUM_PARALLEL.
 DOC_PARALLEL = int(os.environ.get("DOC_PARALLEL", "8"))
 
 
@@ -56,11 +45,8 @@ DOC_PARALLEL = int(os.environ.get("DOC_PARALLEL", "8"))
 
 def _resolve_input(output_dir: Path) -> Optional[Path]:
     """
-    Finds the best available input JSON inside a preprocessing output_dir.
-
-    Priority:
-      1. structured_output_final.json  (Stage 4 output)
-      2. structured_output.json        (Stage 3 output)
+    Best available input JSON inside a preprocessing output_dir: the Stage-4
+    output, else the Stage-3 one. None if neither exists.
     """
     for candidate in (FINAL_OUTPUT_JSON, STRUCTURED_OUTPUT_JSON):
         p = output_dir / candidate
@@ -71,11 +57,11 @@ def _resolve_input(output_dir: Path) -> Optional[Path]:
 
 def _load_source_texts(output_dir: Path) -> dict[str, str]:
     """
-    Maps table id → PyMuPDF source text from the Stage 3 structured output.
+    Maps table id → PyMuPDF source text, for the table QA gate. Empty if
+    unreadable.
 
-    This is read straight from structured_output.json (not the chosen input)
-    because the Stage 4 LLM refinement does not preserve the source_text field;
-    it is used by the table QA gate to measure extraction coverage.
+    Always read from the Stage-3 structured_output.json rather than the chosen
+    input: Stage 4 does not preserve source_text.
     """
     p = output_dir / STRUCTURED_OUTPUT_JSON
     if not p.exists():
@@ -108,24 +94,12 @@ def run_single(
     model: Optional[str] = None,
 ) -> Optional[dict]:
     """
-    Processes a single PDF's output directory.
+    Sends each table/figure image in one PDF's output directory to the vision
+    model and writes the enriched output.
 
-    Reads the structured output JSON, sends each table/figure image to the
-    vision model, and writes the enriched output.
-
-    Item-level caching: if the enriched output already exists from a
-    previous run, tables with a "markdown" key and figures with a
-    "description" key are pulled from the cache and skipped.  Only items
-    that are still missing these keys are sent to the vision model.
-    Use ``--force`` to ignore the cache entirely and re-process everything.
-
-    Args:
-        output_dir:   Preprocessing output dir (contains results/ and images/).
-        input_json:   Override: path to input JSON (relative to output_dir).
-        dry_run:      Only report statistics, skip vLLM calls.
-        force:        Re-process even if enriched output already exists.
-        base_url:     Override the vLLM base URL (…/v1).
-        model:        Override vision model name.
+    Caching is item-level: tables that already have a "markdown" key and figures
+    that already have a "description" key are reused from a previous enriched
+    output unless *force* is set. *input_json* is relative to *output_dir*.
 
     Returns:
         Enriched data dict, or None on failure.
@@ -134,7 +108,6 @@ def run_single(
     model = model or VLM_MODEL
     out_path = output_dir / ENRICHED_OUTPUT_JSON
 
-    # ── Load previous cache for item-level reuse ─────────────────────────
     cached_items: dict[str, dict] = {}       # id → cached table/figure dict
     if out_path.exists() and not force:
         try:
@@ -155,7 +128,6 @@ def run_single(
         except (json.JSONDecodeError, KeyError) as e:
             log.warning("Could not load cache (%s), processing all items", e)
 
-    # ── Resolve input ────────────────────────────────────────────────────
     if input_json:
         src_path = output_dir / input_json
     else:
@@ -169,7 +141,6 @@ def run_single(
     with open(src_path, "r", encoding="utf-8") as f:
         data = json.load(f)
 
-    # ── Count items and determine what needs processing ──────────────────
     stats = ProcessingStats()
     pending_tables = 0
     pending_figures = 0
@@ -195,7 +166,6 @@ def run_single(
         len(data["sections"]),
     )
 
-    # Count cached items as already processed in stats
     stats.processed_tables = cached_tables
     stats.processed_figures = cached_figures
 
@@ -204,17 +174,15 @@ def run_single(
         log.info(stats.summary())
         return data
 
-    # If everything is cached, skip the vLLM server entirely
+    # Everything cached → skip the server, but still merge and write.
     if pending_tables == 0 and pending_figures == 0:
         log.info("All items cached – nothing to process.")
         log.info(stats.summary())
-        # Still need to merge cache into data and write
         enriched = _merge_cache(data, cached_items)
         _strip_source_text(enriched)
         dump_json_atomic(enriched, out_path)
         return enriched
 
-    # ── vLLM client ──────────────────────────────────────────────────────
     client = create_client(base_url=base_url)
     if not check_model_available(client, model):
         log.error(
@@ -224,7 +192,7 @@ def run_single(
         )
         return None
 
-    # ── Build the worklist: fill cached items in place, collect pending ───
+    # Build the worklist: fill cached items in place, collect pending.
     enriched = copy.deepcopy(data)
     # (kind, section_index, item_index, item, section)
     tasks: list[tuple[str, int, int, dict, dict]] = []
@@ -241,7 +209,6 @@ def run_single(
             else:
                 tasks.append(("figure", si, fi, f, section))
 
-    # ── Dispatch all pending items concurrently; vLLM batches them ────────
     log.info(
         "Processing %d pending items with %d parallel slots",
         len(tasks), VLM_NUM_PARALLEL,
@@ -274,8 +241,8 @@ def run_single(
                 key = "tables" if kind == "table" else "figures"
                 enriched["sections"][si][key][ti] = res
 
-    # ── Write output (always, to persist partial progress) ───────────────
-    _strip_source_text(enriched)  # also covers any crash-fallback (res = item)
+    # Write unconditionally, to persist partial progress.
+    _strip_source_text(enriched)
     log.info("Writing: %s", out_path)
     dump_json_atomic(enriched, out_path)
 
@@ -286,8 +253,8 @@ def run_single(
 def _strip_source_text(enriched: dict) -> None:
     """Drop the QA-only source_text from every table before writing the output.
 
-    process_table already strips it on the normal path; this is a belt-and-
-    suspenders pass that also covers the crash-fallback branch (res = item).
+    process_table already strips it on the normal path; this also covers the
+    crash-fallback branch.
     """
     for section in enriched.get("sections", []):
         for t in section.get("tables", []):
@@ -317,10 +284,8 @@ def run_batch(
     **kwargs,
 ) -> dict[str, bool]:
     """
-    Runs enrichment for every PDF subdirectory under root_dir.
-
-    A subdirectory counts as a valid target if it contains one of the
-    expected structured output JSONs.
+    Runs enrichment for every subdirectory under *root_dir* that contains one of
+    the expected structured output JSONs.
 
     Returns:
         Dict mapping directory name → success boolean.
@@ -353,9 +318,7 @@ def run_batch(
             return d.name, False
 
     total = len(candidates)
-    # Process several docs concurrently so their vision-enrichment calls overlap
-    # and keep the vLLM server saturated (pure VLM-API per doc, no shared GPU
-    # state). Results are collected in the main thread (no dict races).
+    # Results are collected in the main thread (no dict races).
     doc_workers = DOC_PARALLEL if DOC_PARALLEL > 1 else 1
     if doc_workers > 1:
         log.info("Processing %d dirs with %d concurrent workers", total, doc_workers)
@@ -391,13 +354,7 @@ def run(
     batch: bool = False,
     **kwargs,
 ) -> Optional[dict] | dict[str, bool]:
-    """
-    Entry point: auto-selects single or batch mode.
-
-    If batch=True, treats input_path as a root directory containing
-    multiple PDF output subdirectories. Otherwise treats it as a single
-    PDF output directory.
-    """
+    """Entry point: auto-selects single or batch mode."""
     input_path = Path(input_path)
 
     if batch:

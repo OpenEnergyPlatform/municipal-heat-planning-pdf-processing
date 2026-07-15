@@ -1,19 +1,12 @@
 """
 llm_client.py – Remote LLM (OpenAI-compatible) for search-phrase generation and
-iterative, chunk-by-chunk question answering.
-
-Mirrors the client + strict-JSON-parse + retry/self-correction pattern of
-scripts/textrefinement/refine.py. The answer contract is deliberately tiny so
-the loop over retrieved chunks can be driven mechanically:
-
-    {"found": true,  "answer": "...", "source_refs": [<ints>]}   – answer present
-    {"found": false}                                              – not in this chunk
+chunk-by-chunk question answering.
 
 Two independent budgets (do not conflate):
-  * MAX_CHUNK_ATTEMPTS  – how many distinct content chunks are shown to the LLM
-    (the outer loop, in app.py). Stops at the first found=true.
-  * LLM_MAX_RETRIES     – re-tries of a *single* chunk's call on malformed JSON
-    or transport error (the inner loop here). Does not advance the chunk count.
+  * MAX_CHUNK_ATTEMPTS  – how many content chunks are shown to the LLM (the
+    outer loop, in app.py).
+  * LLM_MAX_RETRIES     – re-tries of a *single* call on malformed JSON or a
+    transport error (the inner loop here). Does not advance the chunk count.
 
 Author: Felix Vossel
 """
@@ -121,13 +114,11 @@ Antworte mit NUR einem JSON-Objekt, kein Markdown, kein Text davor/danach:
 {"phrase": "<die Bildunterschrift/Beschreibung>"}
 """
 
-# Batched QA: the top sources are handed over together (per call) with a
-# "bisher" partial answer carried across batches, so info spread over many
-# sources is combined WITHOUT dropping any (no truncation) — extra batches run
-# only while `complete` is still false. Every statement is tied to a source via
-# a verbatim `quote` + `index`, validated by the caller → the reference stays
-# EXACT no matter how many chunks share a call. Assembled at call time with the
-# answer-format spec spliced in, so the literal `{...}` braces need no escaping.
+# Batched QA: the top sources are handed over together with a "bisher" partial
+# answer carried across batches. Every statement is tied to a source via a
+# verbatim `quote` + `index`, validated by the caller. Assembled at call time
+# with the answer-format spec spliced in, so the literal `{...}` braces here need
+# no escaping.
 _ANSWER_PROMPT_HEAD = """\
 Du beantwortest den Auftrag des Nutzers AUSSCHLIESSLICH auf Basis der \
 nummerierten Auszüge ("excerpt": Liste mit je "index", Quelle und Text) aus \
@@ -169,11 +160,9 @@ wähle sprechende Felder; in der Antwort fehlende Angaben = null. Antworte mit \
 NUR dem JSON-Objekt, kein Markdown, kein Text davor/danach.
 """
 
-# Appended to the answer prompt only when a code-exec sandbox is available, so
-# the model can offload a real calculation instead of doing (unreliable) mental
-# arithmetic. It answers with an action object; the caller runs it and feeds the
-# printed output back, then the model finalises. A retrieval-only deployment
-# (no sandbox) never sees this and behaves exactly as before.
+# Appended to the answer prompt only when a code-exec sandbox is available: the
+# model answers with an action object, the caller runs it and feeds the printed
+# output back, then the model finalises.
 _COMPUTE_HINT = """
 
 Wenn die Antwort eine nicht-triviale Berechnung erfordert (Summen, Anteile, \
@@ -188,7 +177,7 @@ antworte direkt."""
 
 
 # ---------------------------------------------------------------------------
-# Client + parsing helpers (mirrors refine.py)
+# Client + parsing helpers
 # ---------------------------------------------------------------------------
 _client: Optional[OpenAI] = None
 
@@ -255,10 +244,8 @@ def _quote_is_grounded(quote: str, chunk_items: list[dict]) -> bool:
     """
     True iff `quote` is a verbatim (whitespace/case-tolerant) span of the excerpt.
 
-    This is the guard against fabricated answers: if the model claims found=true
-    but cannot point to a real, contiguous passage in the supplied text, the
-    answer is not grounded in the document and is rejected. A too-short match is
-    also rejected so a stray common word (e.g. "GmbH") cannot pass as evidence.
+    The guard against fabricated answers. A match under 12 chars is rejected too,
+    so a stray common word (e.g. "GmbH") cannot pass as evidence.
     """
     q = _norm(quote)
     if len(q) < 12:
@@ -269,7 +256,7 @@ def _quote_is_grounded(quote: str, chunk_items: list[dict]) -> bool:
 
 def _chat_json(messages: list, temperature: float) -> dict:
     """
-    One chat completion returning a parsed JSON object, with the refine.py-style
+    One chat completion returning a parsed JSON object, with a
     retry/self-correction loop. Raises RuntimeError if all retries fail.
     """
     client = get_client()
@@ -322,11 +309,9 @@ def grounded_quote(quote, chunk_item: dict) -> Optional[str]:
 
 def _history_context(history: Optional[list], limit: int = 5) -> str:
     """
-    A compact block of the last `limit` conversation turns for follow-ups.
-
-    Each turn contributes its question, search anchor and answer — but NOT the
-    retrieved document excerpts. It is framed strictly as reference-resolution
-    help ("und …", pronouns, ellipsis), never as a fact source, so grounding
+    A compact block of the last `limit` turns (question, anchor, answer — never
+    the retrieved excerpts) for resolving references in a follow-up. Framed
+    strictly as reference-resolution help, never as a fact source, so grounding
     stays tied to the current excerpts. Empty string if there is no history.
     """
     if not history:
@@ -352,9 +337,8 @@ def _history_context(history: Optional[list], limit: int = 5) -> str:
 
 
 # A search anchor is a HYPOTHETICAL, present-tense passage/caption. If the model
-# slips into evaluating or refusing ("keine ähnlichen Diagramme im
-# bereitgestellten Kontext nachweisbar") the string is not an anchor at all — it
-# also contradicts a later successful hit. Detect and regenerate/fall back.
+# slips into evaluating or refusing instead, the string is not an anchor at all;
+# detect that and regenerate / fall back.
 _NON_ANCHOR_RE = re.compile(
     r"(?i)(bereitgestellt\w*\s+kontext|nicht\s+nachweisbar|nicht\s+enthalten|"
     r"nicht\s+vorhanden|nicht\s+ersichtlich|nicht\s+erkennbar|"
@@ -381,28 +365,22 @@ def make_search_phrase(task: str, visual: bool = False, history: Optional[list] 
     """
     Turn a free-text extraction task into a HyDE-style search anchor: a short
     hypothetical passage written as it would appear IN a heat plan, rather than a
-    question. Embedding a document-shaped statement matches the declarative
-    target text far better than a question does (measured: mean rank of the
-    correct section 5.5 → 1.8 on a 4-doc creator-lookup A/B). It is only a
-    retrieval probe — the answer still comes from the real retrieved text under
-    the grounding gate, so a fabricated anchor cannot leak into the answer.
+    question. `visual=True` produces a figure/caption-style anchor instead.
 
-    `visual=True` (image+text queries) produces a figure/diagram-style caption
-    instead, so the anchor matches figure/table captions when looking for similar
-    diagrams. In stub mode (no endpoint) returns the task text unchanged.
+    Never raises: falls back to the raw task, which is always a safe retrieval
+    probe. The anchor is only a retrieval probe — the answer still comes from the
+    real retrieved text under the grounding gate.
     """
     if LLM_STUB_MODE:
         return task.strip()
-    # No `system` role: the gateway's agent supplies a leading system message,
-    # and a second system message is rejected ("System message must be at the
-    # beginning"). Fold our instructions into the user turn — robust with or
-    # without a stored agent prompt.
+    # No `system` role: the gateway's agent supplies a leading system message and
+    # rejects a second one ("System message must be at the beginning"). Fold our
+    # instructions into the user turn instead.
     prompt = IMAGE_PHRASE_SYSTEM_PROMPT if visual else PHRASE_SYSTEM_PROMPT
     base = f"{prompt}{_history_context(history)}\n\nAuftrag des Nutzers:\n{task}"
     messages = [{"role": "user", "content": base}]
-    # Up to two attempts: if the model evaluates/denies instead of anchoring
-    # (a self-contradictory, useless anchor), re-ask once with a correction; then
-    # fall back to the raw task, which is always a safe retrieval probe.
+    # If the model evaluates/denies instead of anchoring, re-ask once with a
+    # correction, then fall back to the raw task.
     for attempt in range(2):
         try:
             parsed = _chat_json(messages, temperature=LLM_TEMPERATURE)
@@ -421,13 +399,11 @@ def ask_chunk(task: str, chunk_items: list[dict]) -> dict:
     """
     Ask the LLM to answer `task` using only `chunk_items`.
 
-    Returns the parsed contract dict: {"found": bool, ...}. A response that is
-    malformed after all inner retries is treated defensively as {"found": false}
-    (logged distinctly from a genuine semantic not-found) so one bad chunk never
-    aborts the whole session.
+    Returns {"found": True, "answer", "quote"} or {"found": False}. Never raises:
+    a malformed response, an empty answer, or a quote that is not grounded in the
+    excerpt all come back as {"found": False}.
     """
     if LLM_STUB_MODE:
-        # Canonical answer so the retrieval half can be exercised end-to-end.
         first = chunk_items[0] if chunk_items else {}
         return {
             "found": True,
@@ -435,8 +411,7 @@ def ask_chunk(task: str, chunk_items: list[dict]) -> dict:
             "quote": str(first.get("text", ""))[:120],
         }
 
-    # No `system` role (see make_search_phrase): fold instructions into the user
-    # turn so a stored agent system prompt does not collide with ours.
+    # No `system` role — see make_search_phrase.
     payload = json.dumps({"task": task, "excerpt": chunk_items}, ensure_ascii=False)
     messages = [
         {"role": "user", "content": f"{CHUNK_QA_SYSTEM_PROMPT}\n\n{payload}"},
@@ -457,8 +432,7 @@ def ask_chunk(task: str, chunk_items: list[dict]) -> dict:
         return {"found": False}
 
     # Anti-hallucination gate: the answer must be backed by a verbatim quote that
-    # actually occurs in the excerpt. A missing/invented quote → not grounded →
-    # treat as not-found so we never surface a fabricated answer.
+    # actually occurs in the excerpt.
     quote = _clean_quote(parsed.get("quote", ""))
     if not _quote_is_grounded(quote, chunk_items):
         log.warning("Chunk QA answer not backed by a verbatim quote from the excerpt "
@@ -480,10 +454,10 @@ def _format_exec_result(out: dict) -> str:
 
 def _compute_tail(compute: list, force: bool) -> str:
     """
-    User-message suffix carrying prior code runs — the ReAct loop is kept
-    SINGLE-TURN (no assistant echo of the action JSON), because some gateway
-    agents reject a JSON-string assistant turn (a stricter Responses-API path).
-    So each round re-sends the accumulated results inside the user message.
+    User-message suffix carrying prior code runs. The ReAct loop must stay
+    SINGLE-TURN (no assistant echo of the action JSON) because some gateway
+    agents reject a JSON-string assistant turn — so each round re-sends the
+    accumulated results inside the user message.
     """
     if not compute:
         return ""
@@ -501,19 +475,18 @@ def answer_from_sources(task: str, chunk_items: list[dict],
                         code_runner=None, code_context: Optional[dict] = None,
                         max_compute: int = 0, history: Optional[list] = None) -> dict:
     """
-    Answer `task` from the given batch of sources in ONE call (plus optional code
-    runs), extending an optional `prior` partial answer. Returns:
+    Answer `task` from the given batch of sources, extending an optional `prior`
+    partial answer. Returns:
         {"found": bool, "complete": bool, "answer": <str|dict>,
          "supports": [{"index", "quote"}], "compute": [{"code", "output"}]}
-    The model sees every source together (picks the right one, combines spread
-    info); the caller validates each support's quote against chunk_items
-    (grounding → exact reference). `complete=False` → more sources may be needed.
+    `complete=False` → more sources may be needed. The CALLER must validate each
+    support's quote against chunk_items (see grounded_quote); this function does
+    not.
 
     When `code_runner` is given and `max_compute > 0`, the model may reply with
-    {"action":"python","code":...} to offload a calculation: we call
-    `code_runner(code, code_context)` (→ {"ok","stdout","stderr","error"}), feed
-    the printed output back, and let it finalise — up to `max_compute` runs. This
-    is a ReAct loop that only fires when the model asks (0 extra calls otherwise).
+    {"action":"python","code":...} to offload a calculation: `code_runner(code,
+    code_context)` is called (→ {"ok","stdout","stderr","error"}), its printed
+    output fed back, and the model finalises — up to `max_compute` runs.
     """
     if LLM_STUB_MODE:
         first = chunk_items[0] if chunk_items else {}

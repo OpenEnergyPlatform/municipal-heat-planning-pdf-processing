@@ -1,8 +1,8 @@
 """
-vision.py – vLLM (OpenAI-compatible) vision-model interaction layer.
+vision.py – Vision-model interaction layer (OpenAI-compatible API).
 
-Handles client creation, model availability checks, and the chat-completions
-call with a base64 image + JSON response parsing.
+Client creation, model availability checks, and the chat-completions call with
+a base64 image + JSON response parsing.
 
 Author: Felix Vossel
 """
@@ -88,24 +88,20 @@ def call_vision(
     repetition_penalty: float | None = None,
 ) -> dict | None:
     """
-    Sends an image + prompt to the vision model via vLLM's chat-completions API.
+    Sends an image + prompt to the vision model and parses the JSON response.
 
-    The wall-clock bound per request is the client timeout configured by
-    create_client(); on a timeout the model is likely stuck in a repetition
-    loop, so vLLM's repetition_penalty is escalated for the next attempt. On
-    any failure the conversation is reset to the original system+image turn (so
-    it cannot grow unboundedly), and for parse failures the raw response is fed
-    back so the next attempt can self-correct. max_tokens caps output length.
+    The wall-clock bound per request is the client timeout set by
+    create_client(), not *max_retries*.
 
     Returns:
-        Parsed JSON dict, or None if all retries exhausted.
+        Parsed JSON dict, or None if all retries were exhausted.
     """
-    # Escalating repetition_penalty for timeout retries (vLLM extra_body).
-    # First attempt: none (preserve table quality); after a timeout the model
-    # is likely stuck repeating, so raise the penalty to break out of it.
+    # A timeout usually means the model is stuck in a repetition loop, so the
+    # penalty is escalated per retry. First attempt: none, to preserve table
+    # quality.
     timeout_penalties = [None, 1.1, 1.3]
-    # Qwen3.5 is a reasoning model; disable thinking so the full token budget
-    # goes to the JSON answer instead of a <think> block that truncates content.
+    # Reasoning models must not spend the token budget on a <think> block; that
+    # truncates the JSON answer.
     extra_body: dict = {"chat_template_kwargs": {"enable_thinking": False}}
     if repetition_penalty is not None:
         extra_body["repetition_penalty"] = repetition_penalty
@@ -143,7 +139,7 @@ def call_vision(
             if parsed is not None:
                 return parsed
 
-            # ── Parse failed → feed response back as context ─────────
+            # Parse failed → feed the response back so the model can correct it.
             log.warning("  Attempt %d: JSON parsing failed (%s)", attempt, error_detail)
 
             if attempt < max_retries:
@@ -164,7 +160,6 @@ def call_vision(
         except openai.APITimeoutError as e:
             log.warning("  Attempt %d: request timed out (%s)", attempt, e)
             messages = list(base_messages)
-            # Escalate repetition_penalty to break a repetition loop next time.
             penalty_idx = min(attempt, len(timeout_penalties) - 1)
             penalty = timeout_penalties[penalty_idx]
             if penalty is not None:
@@ -189,12 +184,11 @@ def call_vision(
 
 def _parse_json_response(raw: str) -> tuple[dict | None, str]:
     """
-    Extracts a JSON object from model output.
-
-    Handles <think> blocks, ```json fences, and bare JSON objects.
+    Extracts a JSON object from model output, tolerating <think> blocks and
+    ```json fences.
 
     Returns:
-        (parsed_dict, error_detail)
+        (parsed_dict, error_detail); parsed_dict is None iff extraction failed.
     """
     cleaned = re.sub(r"<think>.*?</think>", "", raw, flags=re.DOTALL).strip()
 

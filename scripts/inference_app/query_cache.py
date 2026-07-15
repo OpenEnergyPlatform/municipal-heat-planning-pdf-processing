@@ -1,9 +1,6 @@
 """
-query_cache.py – On-disk cache mapping a query to its embedding vector.
-
-The GPU-expensive step is embedding a query (it triggers an on-demand NF4 model
-load). This cache skips that whenever the identical query — the same generated
-search phrase, and/or the same uploaded image, in the same mode — recurs.
+query_cache.py – On-disk cache mapping a query to its embedding vector, so an
+identical query skips the on-demand model load.
 
 Stored in a separate SQLite file, never the authoritative KWP.db.
 
@@ -39,11 +36,9 @@ def connect(path: Path) -> sqlite3.Connection:
 
 def make_key(mode: str, text: Optional[str] = None, image_bytes: Optional[bytes] = None) -> str:
     """
-    Deterministic key over the effective query input.
-
-    `mode` distinguishes text-only / image-only / image+text so the same phrase
-    embedded differently does not collide. Image content is hashed by bytes so
-    re-uploading an identical image reuses its vector.
+    Deterministic key over the effective query input. `mode` distinguishes
+    text-only / image-only / image+text so the same phrase embedded differently
+    does not collide.
     """
     h = hashlib.sha256()
     h.update(mode.encode("utf-8"))

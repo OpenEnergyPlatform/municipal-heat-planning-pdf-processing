@@ -1,14 +1,9 @@
 """
 qa.py – Quality checks for VLM table extraction.
 
-Pure, dependency-free helpers used to judge a vision model's Markdown
-transcription of a table:
-
-- coverage:   fraction of the table's source text (PyMuPDF) recovered in the
-              Markdown — catches truncation / under-extraction.
-- duplication: fraction of repeated data rows — catches the "stutter" loop
-              where a sequence model regenerates the same row repeatedly.
-- dedup_consecutive_rows: cleanup that collapses runs of identical rows.
+Pure helpers that judge a vision model's Markdown transcription of a table:
+coverage against the PyMuPDF source text (catches truncation) and row
+duplication (catches repetition loops).
 
 Author: Felix Vossel
 """
@@ -16,9 +11,9 @@ from __future__ import annotations
 
 import re
 
-# Salient content tokens: numbers (incl. German decimals like "45,2") and
-# words of at least two letters. Single letters / punctuation are ignored so
-# that minor formatting differences ("24V" vs "24 V") do not affect coverage.
+# Salient content tokens: numbers (incl. German decimals like "45,2") and words
+# of at least two letters. Single letters and punctuation are deliberately
+# ignored, so formatting differences ("24V" vs "24 V") do not affect coverage.
 _TOKEN_RE = re.compile(r"\d+(?:[.,]\d+)*|[^\W\d_]{2,}", re.UNICODE)
 
 # A Markdown table separator row (e.g. "| --- | --- |") uses only these chars.

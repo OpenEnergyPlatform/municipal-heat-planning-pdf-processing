@@ -1,18 +1,11 @@
 """
 pipeline.py – Orchestration of the PDF preprocessing pipeline (Stages 1-3).
 
-Stages:
-  1. PyMuPDF        → Text blocks (rawdict) + page PNGs
+  1. PyMuPDF        → Text blocks (rawdict)
   2. PP-DocLayoutV3 → Table / image crops + layout labels + caption resolution
-  3. Section assembly → Deterministic JSON output (structured_output.json)
+  3. Section assembly → structured_output.json
 
-LLM-based section refinement is a separate concern handled by the
-``scripts.textrefinement`` module (which reads structured_output.json and
-writes structured_output_final.json).
-
-CLI:
-  python -m scripts.preprocessing.pipeline input.pdf ./output
-  python -m scripts.preprocessing.pipeline ./pdfs/ ./output
+LLM-based section refinement lives in ``scripts.textrefinement``.
 
 Author: Felix Vossel
 """
@@ -34,9 +27,8 @@ from .config import (
 )
 from .models import PageData
 from .stage3_structure import build_sections, save_output, sections_to_dict
-# Stage 1/2 (fitz, torch, PP-DocLayout) are imported lazily inside the functions
-# that need them, so `--rebuild-stage3` (Stage 3 only) stays light enough to run
-# on a CPU login node without pulling in the GPU stack.
+# Keep Stage 1/2 imports (fitz, torch, PP-DocLayout) lazy inside the functions
+# that need them: --rebuild-stage3 must run without pulling in the GPU stack.
 
 log = logging.getLogger(__name__)
 
@@ -78,18 +70,9 @@ def run_single(
     page_range: Optional[tuple[int, int]] = None,
 ) -> Optional[dict]:
     """
-    Processes a single PDF through Stages 1-3.
-
-    Stage 1 + 2 results are cached in *pages_extracted.json*.  If the cache
-    exists and *force_reextract* is False, Stages 1 and 2 are skipped.
-
-    Output structure in output_dir:
-        pages_extracted.json   – Stage 1+2 cache
-        pages/                 – Page PNGs
-        images/                – Table and image crops
-        structured_output.json – Structured JSON (Stage 3)
-
-    Returns the Stage-3 dict or None on failure.
+    Processes a single PDF through Stages 1-3; returns the Stage-3 dict, or
+    None on failure. Stage 1+2 results are cached in pages_extracted.json and
+    reused unless *force_reextract*.
     """
     output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -106,7 +89,6 @@ def run_single(
     if pages is None:
         from .stage1_extract import extract_all_pages
         from .stage2_layout import detect_layout_all_pages, load_model
-        # Only load the layout model when we actually need it
         if model_tuple is None:
             model_tuple = load_model()
 
@@ -121,9 +103,8 @@ def run_single(
         finally:
             fitz_doc.close()
 
-        # Do not cache an incomplete extraction: a partial cache would be
-        # silently reused as if complete on the next run. Skipping the write
-        # forces a re-extraction (which retries the failed pages) next time.
+        # Never cache an incomplete extraction — it would be reused as if
+        # complete. Skipping the write forces a retry on the next run.
         if n_failed:
             log.warning(
                 f"{pdf_path.name}: {n_failed} page(s) failed extraction – "
@@ -184,12 +165,10 @@ def run_folder(
     glob: str = "*.pdf",
 ) -> dict[str, Optional[dict]]:
     """
-    Processes all PDFs in *input_dir* sequentially.
-
-    The PP-DocLayoutV3 model is loaded once and reused for every PDF (it is
-    GPU-bound and not thread-safe, so processing is sequential). Each PDF gets
-    its own subdirectory named after its stem. *_index.json* is written after
-    each PDF so partial results are preserved on interruption.
+    Processes all PDFs in *input_dir* sequentially, keyed by path relative to
+    *input_dir*. The layout model is loaded once and reused; it is not
+    thread-safe, so processing must stay sequential. _index.json is rewritten
+    after each PDF so partial results survive an interruption.
     """
     pdf_files = sorted(input_dir.glob(glob))
     if not pdf_files:
@@ -204,7 +183,6 @@ def run_folder(
 
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    # Check if any PDF actually needs Stages 1+2 (no cache or force)
     needs_extraction = force_reextract or any(
         not (output_dir / p.relative_to(input_dir).with_suffix("") / CACHE_PAGES_JSON).exists()
         for p in pdf_files
@@ -216,9 +194,8 @@ def run_folder(
         log.info("All PDFs have cached extractions – skipping layout model load")
         model_tuple = None
 
-    # Keyed by the path relative to input_dir (not just the file name) so two
-    # same-named PDFs in different subdirectories under a recursive glob do not
-    # collide and overwrite each other in the results dict and _index.json.
+    # Keyed by relative path, not file name: a recursive glob can yield two
+    # same-named PDFs in different subdirectories.
     results: dict[str, Optional[dict]] = {}
     output_dirs: dict[str, str] = {}
 
@@ -279,13 +256,9 @@ def _write_index(
 
 def rebuild_stage3_from_cache(output_dir: Path) -> int:
     """
-    Re-run ONLY Stage 3 for every already-extracted doc, overwriting its
-    structured_output.json from the cached Stage-1/2 layout blocks.
-
-    No PDF input, no layout model — pure CPU. Use this to propagate a Stage-3
-    change (e.g. a new per-segment field like bbox) across a corpus that was
-    already extracted, without re-running the GPU extraction or any downstream
-    LLM/VL stage. A doc is processed iff it has a readable pages cache.
+    Re-run ONLY Stage 3 for every doc under *output_dir* that has a readable
+    pages cache, overwriting its structured_output.json. No PDF input and no
+    layout model. Returns the number of docs rebuilt.
     """
     output_dir = Path(output_dir)
     doc_dirs = sorted(
@@ -322,11 +295,9 @@ def run(
     rebuild_stage3: bool = False,
 ) -> Optional[dict] | dict[str, Optional[dict]]:
     """
-    Entry point of the preprocessing pipeline.
-
-    Automatically detects whether input_path is a file or folder and
-    delegates to run_single() or run_folder(). With *rebuild_stage3*, skips
-    input entirely and re-runs only Stage 3 over *output_dir*'s caches.
+    Entry point: dispatches to run_single() or run_folder() depending on
+    whether *input_path* is a file or a folder. With *rebuild_stage3*, ignores
+    *input_path* and re-runs only Stage 3 over *output_dir*'s caches.
     """
     output_dir = Path(output_dir)
 

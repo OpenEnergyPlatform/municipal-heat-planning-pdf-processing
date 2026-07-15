@@ -1,10 +1,9 @@
 """
 faiss_store.py – Global index loading + ephemeral sub-index retrieval.
 
-The corpus is one global FAISS IndexIDMap(IndexFlatIP). To scope a search to a
-single document and a chosen set of embedding types, we reconstruct just the
-candidate vectors into a small in-memory IndexFlatIP and search that. Kept free
-of any Streamlit import so it can be unit-tested with a synthetic index.
+The corpus is one global FAISS IndexIDMap(IndexFlatIP). A search is scoped to a
+document + a set of embedding types by reconstructing just the candidate vectors
+into a small in-memory IndexFlatIP and searching that.
 
 Author: Felix Vossel
 """
@@ -26,14 +25,13 @@ log = logging.getLogger(__name__)
 
 def load_global_index(index_path: Path) -> tuple[faiss.Index, dict[int, int]]:
     """
-    Load the global FAISS IndexIDMap(IndexFlatIP) into RAM once, together with a
-    dict mapping each stored faiss_id → its internal position.
+    Load the global FAISS index into RAM, with a dict mapping each stored
+    faiss_id → its internal position.
 
-    An IndexIDMap does NOT support reconstruct(id) (it raises "reconstruct not
-    implemented for this type of index"). To pull a vector back out we read the
-    position→id table (`id_map`), invert it, and reconstruct by position on the
-    wrapped flat index — see reconstruct_vector(). Building the dict once at load
-    keeps per-request lookups O(1).
+    The dict is needed because an IndexIDMap does NOT support reconstruct(id);
+    a vector is pulled back out by inverting the position→id table (`id_map`)
+    and reconstructing by position on the wrapped flat index — see
+    reconstruct_vector().
     """
     index = faiss.read_index(str(index_path))
     id_to_pos = _build_id_to_pos(index)
@@ -64,9 +62,11 @@ def build_subindex(
 ) -> faiss.IndexFlatIP:
     """
     Reconstruct the given vector ids from the global index and pack them into a
-    fresh IndexFlatIP. Local position p in the sub-index corresponds to
-    faiss_ids[p], so the caller maps results back through that list. `faiss_ids`
-    must all be present in `id_to_pos` (retrieve() filters to that).
+    fresh IndexFlatIP.
+
+    Local position p in the sub-index corresponds to faiss_ids[p]; the caller
+    maps results back through that list. Every id in `faiss_ids` MUST be present
+    in `id_to_pos`.
     """
     sub = faiss.IndexFlatIP(EMBEDDING_DIM)
     if not faiss_ids:
@@ -103,18 +103,17 @@ def retrieve(
 ) -> list[dict]:
     """
     Full scoped retrieval: candidate ids → sub-index → top-k → dedup by owner →
-    content + citation, ranked by score descending.
+    content + citation, ranked by score descending. Empty list if nothing matches.
 
-    Dedup is post-search on (owner_kind, owner_id): when both e.g. table_text
-    and table_vl point at the same Table row, only the higher-scoring hit's
-    content is kept. This must be done after the search (not before), since we
-    cannot know which embedding type scores higher until we search.
+    Dedup must happen POST-search on (owner_kind, owner_id): when e.g. table_text
+    and table_vl point at the same Table row, only the higher-scoring hit is
+    kept, and which type scores higher is not known until the search is done.
     """
     fetch = content_fetcher or db.fetch_owner_content
 
     rows = db.get_candidate_faiss_ids(conn, document_id, embedding_types)
-    # Only ids actually present in the index (guards against DB/index drift and
-    # keeps the local-position ↔ faiss_id mapping below exact).
+    # Only ids actually present in the index: guards against DB/index drift and
+    # keeps the local-position ↔ faiss_id mapping below exact.
     rows = [r for r in rows if r[0] in id_to_pos]
     if not rows:
         return []

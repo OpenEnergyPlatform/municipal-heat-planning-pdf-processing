@@ -1,28 +1,9 @@
 """
 stage3_structure.py – Deterministic section assembly from layout-annotated pages.
 
-Replaces the old Stage 3 (chunking) and Stage 4 (LLM) with a purely
-rule-based structuring pass that is both fast and reproducible.
-
-Algorithm
----------
-1.  Iterate over all blocks of all pages in reading order (top-to-bottom,
-    left-to-right).
-2.  A block whose layout_label is in SECTION_TITLE_CLASSES opens a new
-    Section.  Exception: paragraph_title blocks that sit on the same row as
-    another detected element are already converted to plain text in Stage 2
-    and do NOT carry layout_label, so they naturally fall into the text path.
-3.  For every table / image block:
-      - A [block_id] placeholder is appended to the running text content of
-        the current section.
-      - The corresponding TableRef / FigureRef (with path and caption) is
-        added to the section.
-4.  For every plain text block the content is appended to the running prose
-    of the current section.
-5.  Adjacent text pieces within a section are joined with a single space;
-    trailing / leading whitespace is stripped.
-
-The result is a list of Section objects ready for serialisation.
+Walks all blocks in reading order: SECTION_TITLE_CLASSES blocks open a new
+Section, tables/figures become a TableRef/FigureRef plus a [block_id]
+placeholder in the section content, and plain text is appended as prose.
 
 Author: Felix Vossel
 """
@@ -67,11 +48,8 @@ def _block_is_title(block: Block) -> bool:
 
 
 def _rect(bbox) -> Optional[list[float]]:
-    """A block bbox as a clean [x0, y0, x1, y1] rect (PDF points), or None.
-
-    Rounds to 2 decimals; drops degenerate/short boxes so a segment's stored
-    geometry never carries a malformed rectangle.
-    """
+    """A block bbox as a clean [x0, y0, x1, y1] rect (PDF points), or None when
+    it is malformed or degenerate."""
     if not bbox or len(bbox) < 4:
         return None
     try:
@@ -84,11 +62,8 @@ def _rect(bbox) -> Optional[list[float]]:
 
 
 def _resolve_title_text(block: Block) -> Optional[str]:
-    """
-    Returns the display text for a title block, or None if no text was
-    extracted (so the caller can treat the block as plain text instead of
-    opening an empty section).
-    """
+    """Display text of a title block, or None if it has none — the caller then
+    treats the block as plain text rather than opening an empty section."""
     text = (block.content or "").strip()
     return text if text else None
 
@@ -97,8 +72,8 @@ def _resolve_title_text(block: Block) -> Optional[str]:
 # Deterministic running-header / footer stripping
 # ---------------------------------------------------------------------------
 
-# Standalone numbers (page numbers) are normalised out so a header that only
-# varies by its page number collapses to one key across pages.
+# Standalone numbers are normalised out so a header that only varies by its
+# page number collapses to one key across pages.
 _HDR_NUM_RE = re.compile(r"\b\d{1,4}\b")
 
 
@@ -132,12 +107,10 @@ def _header_candidate(block: Block) -> bool:
 
 def strip_running_headers(pages: list[PageData]) -> int:
     """
-    Drop running-header/footer text blocks that PP-DocLayout mislabelled as
-    plain text (so SUPPRESS_CLASSES missed them). A block is removed when its
-    page-number-normalized text recurs in the same (header/footer) zone on at
-    least HEADER_FOOTER_MIN_PAGE_FRAC of the pages. Section-title blocks are
-    never considered. Mutates *pages* in place; returns the number of blocks
-    dropped.
+    Drop text blocks whose page-number-normalized text recurs in the same
+    header/footer zone on at least HEADER_FOOTER_MIN_PAGE_FRAC of the pages.
+    Section titles are never touched. Mutates *pages* in place; returns the
+    number of blocks dropped.
     """
     if not HEADER_FOOTER_STRIP_ENABLE or len(pages) < 4:
         return 0
@@ -185,8 +158,8 @@ _DIR_FIGTAB_RE = re.compile(
 )
 # A dot-leader entry ("Einleitung ............ 10").
 _DIR_LEADER_RE = re.compile(r".{2,90}?\.{2,}\s*\d{1,4}(?=\s|$)")
-# Real media placeholders — their presence means the section references actual
-# tables/figures (e.g. an appendix of maps), so it is NOT a directory listing.
+# Real media placeholders — a section holding one references actual
+# tables/figures, so it is not a directory listing.
 _DIR_PLACEHOLDER_RE = re.compile(r"\[p\d+_(?:img|tbl)\d+\]")
 # Bibliography titles → routed to the Stage-4 [LITERATURE] BibTeX path, not dropped.
 _DIR_LIT_TITLE_RE = re.compile(r"literatur|quellen|referenz|bibliograf", re.IGNORECASE)
@@ -197,9 +170,8 @@ _DIR_TITLE_RE = re.compile(r"inhalt|verzeichnis|contents|directory", re.IGNORECA
 def _directory_metrics(content: str) -> tuple[float, int, int]:
     """
     (listing_fraction, entry_count, non_listing_chars) for *content*. The
-    fraction is the share of characters covered by directory-listing entries
-    (overlaps counted once via a covered-char map); non_listing_chars is the
-    remainder (a proxy for how much real prose is left).
+    fraction is the share of chars covered by directory-listing entries, with
+    overlaps counted once.
     """
     if not content or len(content) < 40:
         return 0.0, 0, len(content or "")
@@ -227,9 +199,8 @@ def _is_directory_section(section: Section) -> bool:
     if _DIR_TITLE_RE.search(section.title or "") and score >= DIRECTORY_TITLE_SCORE_THRESHOLD:
         return True
     # Otherwise drop only a section that is a listing FROM THE START and has
-    # almost no prose left over — this protects real content sections that
-    # merely reference a few figures or carry a short trailing list, and ones
-    # that open with a prose sentence before a measure/figure listing.
+    # almost no prose left over — this protects content sections that merely
+    # reference a few figures or carry a short trailing list.
     if score >= DIRECTORY_SCORE_THRESHOLD and residual <= DIRECTORY_MAX_RESIDUAL_CHARS:
         head_score, _, _ = _directory_metrics(content[:DIRECTORY_HEAD_LEN])
         if head_score >= DIRECTORY_HEAD_SCORE_THRESHOLD:
@@ -253,15 +224,13 @@ def build_sections(pages: list[PageData]) -> list[Section]:
     """
     Assembles a flat list of Section objects from the annotated pages.
 
-    A Section is opened by the *first* title block encountered (or, if the
-    document starts without a title, a synthetic "Dokument" section is
-    created so that leading content is not lost).
+    Each title block opens a Section; a synthetic "Dokument" section catches
+    content before the first title. Section.content carries [block_id] markers
+    where a table or figure appears in the reading order.
 
-    The content field of each section uses [block_id] markers at the
-    positions where a table or figure appears in the reading order.
+    Note: mutates *pages* (running headers/footers are stripped in place).
     """
-    # Drop running headers/footers PP-DocLayout mislabelled as text, before they
-    # get merged into section segments.
+    # Must happen before blocks get merged into section segments.
     n_hdr = strip_running_headers(pages)
     if n_hdr:
         log.info(f"Stage 3: stripped {n_hdr} running header/footer block(s)")
@@ -273,19 +242,16 @@ def build_sections(pages: list[PageData]) -> list[Section]:
     pending: list[tuple[str, int, Optional[list[float]]]] = []
 
     def _emit_text_segment(page, parts: list[str], rects: list[list[float]]) -> None:
-        """Append one page-tagged text segment; attach the constituent block
-        rects (kept per-block for a finer coordinate highlight than a union)."""
+        """Append one page-tagged text segment. Rects stay per-block rather
+        than unioned, for a finer coordinate highlight."""
         seg: dict = {"page": page, "kind": "text", "text": " ".join(parts)}
         if rects:
             seg["bbox"] = rects
         current_section.segments.append(seg)
 
     def _flush_text() -> None:
-        """
-        Flush accumulated text fragments into the current section's content and
-        its page-tagged segments (consecutive same-page fragments are merged
-        into one text segment).
-        """
+        """Flush pending fragments into the current section's content and
+        segments; consecutive same-page fragments merge into one segment."""
         nonlocal pending
         if current_section is None or not pending:
             pending = []
@@ -322,9 +288,8 @@ def build_sections(pages: list[PageData]) -> list[Section]:
         sections.append(new_section)
         current_section = new_section
 
-    # Open with page_number=None so the derivation step below sets it from the
-    # first real content page (a leading cover/blank page may push real content
-    # to page 2+); hardcoding 1 would mis-attribute the primary page.
+    # page_number=None, not 1: a leading cover/blank page can push real content
+    # to page 2+, so the derivation step below sets it from the first segment.
     _open_section("Dokument", page_number=None)
 
     for pg in pages:
@@ -391,13 +356,12 @@ def build_sections(pages: list[PageData]) -> list[Section]:
             if block.type == "text" and block.content:
                 pending.append((block.content, pg.page_number, _rect(block.bbox)))
 
-    # Flush any remaining text after the last page.
     _flush_text()
     if current_section is not None:
         current_section.content = current_section.content.strip()
 
-    # Drop a leading empty "Dokument" section if the document starts with a
-    # real title on the very first block.
+    # Drop the synthetic "Dokument" section when the document opened with a
+    # real title and it stayed empty.
     if (
         sections
         and sections[0].title == "Dokument"
@@ -407,8 +371,6 @@ def build_sections(pages: list[PageData]) -> list[Section]:
     ):
         sections.pop(0)
 
-    # Drop table-of-contents / list-of-figures / index sections (low-value
-    # listing noise). Literature and real-media sections are guarded.
     sections, n_dir = drop_directory_sections(sections)
     if n_dir:
         log.info(f"Stage 3: dropped {n_dir} directory/index section(s)")
@@ -442,10 +404,7 @@ def sections_to_dict(sections: list[Section]) -> dict:
 
 
 def save_output(sections: list[Section], output_dir: Path) -> Path:
-    """
-    Writes the Stage 3 JSON to *output_dir / STRUCTURED_OUTPUT_JSON* and
-    returns the path.
-    """
+    """Writes the Stage 3 JSON under *output_dir* and returns its path."""
     out_path = output_dir / STRUCTURED_OUTPUT_JSON
     data     = clean_data(sections_to_dict(sections))
     dump_json_atomic(data, out_path)

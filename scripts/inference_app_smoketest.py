@@ -1,17 +1,10 @@
 """
-inference_app_smoketest.py – Standalone NF4-on-Pascal verification.
-
-Run this on the actual inference server BEFORE wiring up the Streamlit app. Its
-whole purpose is to prove that bitsandbytes NF4 quantization of
-Qwen3-VL-Embedding-8B's LM backbone (vision tower left fp32) works on the exact
-Pascal / CC 6.1 hardware, that image queries survive the fp32-vision / fp16-LM
-dtype boundary, and that VRAM is fully released after each on-demand load.
+inference_app_smoketest.py – Check that the NF4-quantized embedder loads, embeds
+text and images, and releases its VRAM. Run it on the inference server.
 
     python scripts/inference_app_smoketest.py [--image /path/to/a/table_or_figure.png]
 
-Exit code 0 = all checks passed; non-zero = a check failed (see the printed
-VERDICT). If NF4 does not load on CC 6.1 here, STOP and evaluate the fp16-over-
-both-cards fallback before building any UI on top of it.
+Exit code 0 = all checks passed; non-zero = a check failed (see printed VERDICT).
 
 Author: Felix Vossel
 """
@@ -22,8 +15,7 @@ import os
 import sys
 import time
 
-# Allow running by path (`python scripts/inference_app_smoketest.py`): put the
-# repo root (.../ above scripts/) on sys.path so `scripts.*` imports resolve.
+# Put the repo root on sys.path so `scripts.*` resolves when run by path.
 _REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _REPO_ROOT not in sys.path:
     sys.path.insert(0, _REPO_ROOT)
@@ -46,9 +38,10 @@ def _wait_baseline(idx: int, baseline_mb: float, tol_mb: float = 300.0,
                    timeout_s: float = 180.0) -> float:
     """
     Poll until device `idx`'s free VRAM is back within `tol_mb` of baseline, or
-    `timeout_s` elapses. On this host the driver reports a freed allocation with
-    a lag of up to ~2 min, so an immediate reading after unload understates the
-    real free memory — wait for it to settle before asserting.
+    `timeout_s` elapses; returns the last reading.
+
+    The driver reports a freed allocation with a lag, so a reading taken right
+    after an unload understates the real free memory.
     """
     deadline = time.time() + timeout_s
     free = _gpu_free_mb(idx)
@@ -69,7 +62,7 @@ def main() -> int:
 
     failures: list[str] = []
 
-    # 1) Environment sanity ---------------------------------------------------
+    # 1) Environment ----------------------------------------------------------
     print("=== 1. Environment ===")
     print(f"torch {torch.__version__}, CUDA {torch.version.cuda}")
     if not torch.cuda.is_available():
@@ -115,7 +108,7 @@ def main() -> int:
         if abs(norm - 1.0) > 1e-2:
             failures.append(f"text embedding not L2-normalized (||v||={norm:.4f})")
 
-        # 5) Image embed (the fp32-vision / fp16-LM dtype boundary) -----------
+        # 5) Image embed ------------------------------------------------------
         if args.image:
             print("\n=== 5. Image embed (VL) ===")
             try:
@@ -151,24 +144,19 @@ def main() -> int:
             failures.append(f"batch inconsistency: cos={c:.4f} < 0.999")
 
     # 8) Unload → VRAM back to baseline --------------------------------------
-    # This host reports a freed allocation with up to ~2 min of lag, so poll
-    # until each device settles back to baseline rather than reading instantly.
     print("\n=== 8. Unload / VRAM release (settling up to ~3 min) ===")
     after = [_wait_baseline(i, baseline[i]) for i in range(n)]
     print(f"free after unload: {['%.0f' % a for a in after]} MB "
           f"(baseline {['%.0f' % b for b in baseline]} MB)")
     for i in range(n):
-        if baseline[i] - after[i] > 300:  # >300 MB not reclaimed after settling = leak
+        if baseline[i] - after[i] > 300:
             failures.append(f"cuda:{i} did not return to baseline "
                             f"({baseline[i]-after[i]:.0f} MB still used)")
 
     # 9) Repeat load/unload x3 — check for UNBOUNDED accumulation ------------
-    # Under rapid back-to-back cycling this host has not yet reported the most
-    # recent unload's free (the ~2 min lag), so an exact baseline check false-
-    # fails. A real leak instead ACCUMULATES: free would drop monotonically
-    # round over round toward OOM. So assert non-accumulation (free doesn't
-    # shrink materially round 1 → round 3) and that no device holds more than a
-    # single model's footprint (~one load's worth), not exact baseline return.
+    # Back-to-back cycling outruns the driver's free-reporting lag, so an exact
+    # baseline check false-fails here. A real leak accumulates instead, so
+    # assert that free does not shrink from round 1 to round 3.
     print("\n=== 9. Repeat load/unload x3 (checking no unbounded accumulation) ===")
     rounds: list[list[float]] = []
     for r in range(3):
@@ -179,13 +167,13 @@ def main() -> int:
         print(f"  round {r+1}: free={['%.0f' % f for f in free_now]} MB")
 
     tot_first, tot_last = sum(rounds[0]), sum(rounds[-1])
-    if tot_first - tot_last > 500:  # total free shrinking across rounds = real leak
+    if tot_first - tot_last > 500:
         failures.append(
             f"VRAM accumulating across rounds (total free {tot_first:.0f} -> "
             f"{tot_last:.0f} MB) — genuine leak, not reporting lag"
         )
     for i in range(n):
-        # >~1 model footprint (9 GB) below baseline would mean >1 model stuck.
+        # More than one model's footprint below baseline = >1 model stuck.
         if baseline[i] - rounds[-1][i] > 9000:
             failures.append(
                 f"cuda:{i} holds more than one model's footprint "

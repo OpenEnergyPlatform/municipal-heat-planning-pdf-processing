@@ -1,8 +1,6 @@
 """
-qwen3_vl_embedding.py – Qwen3-VL embedding model wrapper.
-
-Provides the Qwen3VLEmbedder class for producing normalized text and
-vision-language embeddings using Qwen3-VL-Embedding-8B.
+qwen3_vl_embedding.py – Qwen3-VL wrapper producing normalized text and
+vision-language embeddings.
 
 Author: Felix Vossel
 """
@@ -106,9 +104,8 @@ class Qwen3VLForEmbedding(Qwen3VLPreTrainedModel):
         logits_to_keep: Union[int, torch.Tensor] = 0,
         **kwargs: Unpack[TransformersKwargs],
     ) -> Union[tuple, Qwen3VLForEmbeddingOutput]:
-        # Newer Qwen3-VL requires mm_token_type_ids (returned by the processor)
-        # to compute multimodal RoPE (M-RoPE); pass it through when present, but
-        # stay compatible with text-only batches / older processors that omit it.
+        # Newer Qwen3-VL needs mm_token_type_ids for multimodal RoPE; text-only
+        # batches and older processors omit it, so only pass it when present.
         extra = {}
         if mm_token_type_ids is not None:
             extra["mm_token_type_ids"] = mm_token_type_ids
@@ -184,18 +181,16 @@ class Qwen3VLEmbedder:
         self.max_frames = max_frames
         self.default_instruction = default_instruction
 
-        # Default to bf16 on GPU (≈2× throughput + ~½ the VRAM of the implicit
-        # fp32 load, at no measurable retrieval-quality cost); fp32 on CPU where
-        # bf16 matmuls are slow/unsupported.
+        # bf16 on GPU; fp32 on CPU, where bf16 matmuls are slow/unsupported.
         if torch_dtype is None:
             torch_dtype = torch.bfloat16 if device.type == "cuda" else torch.float32
 
         self.model = Qwen3VLForEmbedding.from_pretrained(
             model_name_or_path, trust_remote_code=True, torch_dtype=torch_dtype, **kwargs
         ).to(device)
-        # The actual loaded parameter dtype (from_pretrained may coerce); used to
-        # cast floating-point inputs (e.g. pixel_values) so the visual tower does
-        # not hit a float32-vs-bf16 matmul type error.
+        # from_pretrained may coerce the dtype; read it back, since float inputs
+        # (pixel_values) must be cast to it or the visual tower hits a matmul
+        # type error.
         self.param_dtype = next(self.model.parameters()).dtype
         self.processor = Qwen3VLProcessor.from_pretrained(
             model_name_or_path, padding_side='right'
@@ -302,11 +297,7 @@ class Qwen3VLEmbedder:
         return conversation
 
     def _preprocess_inputs(self, conversations: List[List[Dict]]) -> Dict[str, torch.Tensor]:
-        """
-        Tokenize and preprocess conversations for the model.
-
-        Logs a warning for any input that gets truncated at max_length.
-        """
+        """Tokenize and preprocess conversations for the model."""
         text = self.processor.apply_chat_template(
             conversations, add_generation_prompt=True, tokenize=False
         )
@@ -362,14 +353,9 @@ class Qwen3VLEmbedder:
 
     def process(self, inputs: List[Dict[str, Any]], normalize: bool = True) -> torch.Tensor:
         """
-        Process a batch of inputs and return normalized embeddings.
-
-        Args:
-            inputs:    List of dicts with 'text' and optionally 'image'/'video' keys.
-            normalize: Whether to L2-normalize the output embeddings.
-
-        Returns:
-            Tensor of shape (batch_size, hidden_dim).
+        Embed a batch of inputs — dicts with 'text' and optionally
+        'image'/'video' — into a (batch_size, hidden_dim) tensor, L2-normalized
+        unless `normalize` is False.
         """
         conversations = [self.format_model_input(
             text=ele.get('text'),
@@ -399,23 +385,12 @@ class Qwen3VLEmbedder:
 class MultiGPUEmbedder:
     """Data-parallel wrapper: one Qwen3VLEmbedder replica per visible GPU.
 
-    The 8B model fits comfortably on a single 80 GB H100, so the right way to
-    use four cards is *replication* (data parallelism), not ``device_map="auto"``
-    sharding — sharding would split the layers across GPUs and leave all but one
-    idle during each forward pass. Here every ``.process()`` call:
-
-      1. round-robin-splits the input list across the replicas (so shards stay
-         balanced even when items differ in cost),
-      2. runs each replica's forward concurrently in its own thread — the heavy
-         CUDA work releases the GIL, so the per-device forwards genuinely
-         overlap (the CPU-side tokenisation/vision preprocessing still
-         serialises under the GIL, so the speed-up is real but sub-linear),
-      3. re-interleaves the per-replica embeddings back into the original input
-         order on the CPU.
+    Each ``.process()`` call round-robin-splits the inputs across the replicas,
+    runs the forwards concurrently in one thread each, and re-interleaves the
+    results back into the original input order.
 
     Exposes the same ``process(inputs, normalize=True) -> Tensor`` interface as
-    :class:`Qwen3VLEmbedder`, so callers are unchanged. With a single GPU (or
-    CPU) it degenerates to one replica and just forwards the call.
+    :class:`Qwen3VLEmbedder`; with a single device it degenerates to one replica.
     """
 
     def __init__(

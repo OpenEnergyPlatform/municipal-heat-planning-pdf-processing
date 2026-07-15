@@ -1,27 +1,10 @@
 """
 stage2_layout.py – Layout detection via PP-DocLayoutV3 (HuggingFace Transformers).
 
-IMPROVEMENTS:
-  - Non-Maximum Suppression (NMS) removes duplicate/overlapping detections
-  - Box expansion for tables/images to capture full content + captions
-  - Optimized confidence thresholds for better recall
-  - Better handling of edge cases
-
-Model: PaddlePaddle/PP-DocLayoutV3_safetensors
-
-Receives the open fitz pages from Stage 1 and renders them per batch (so the
-whole document's page images are never resident at once), then:
-
-1.  Runs batch object-detection inference using AutoModelForObjectDetection.
-2.  Applies per-class NMS, then cross-class suppression between table and
-    image/chart boxes over the same region.
-3.  For every detected box:
-      - SUPPRESS_CLASSES: overlapping text blocks are removed from the page.
-      - TABLE_CLASSES / IMAGE_CLASSES: crop saved to images/, Block added.
-      - SECTION_TITLE_CLASSES: text extracted via fitz.Page.get_textbox().
-      - CAPTION_CLASSES: same text extraction strategy as titles.
-      - All other classes: ignored, PyMuPDF text blocks cover this content.
-4.  Each crop is encoded and written to disk immediately (per page).
+Renders the open fitz pages from Stage 1 per batch, runs object detection, and
+turns each surviving box into either a text suppression, a saved table/image
+crop, or a title/caption Block. Classes outside those sets are ignored — the
+Stage-1 PyMuPDF text blocks already cover that content.
 
 Author: Felix Vossel
 """
@@ -72,9 +55,7 @@ from .config import (
 from .models import Block, PageData
 from .stage1_extract import _render_page_to_pil
 
-# Media classes whose detections produce a saved crop; used for cross-class
-# suppression so a region detected as both a table and an image/chart does not
-# yield two overlapping crops.
+# Classes whose detections produce a saved crop.
 MEDIA_LABELS = TABLE_CLASSES | IMAGE_CLASSES
 
 log = logging.getLogger(__name__)
@@ -82,10 +63,9 @@ log = logging.getLogger(__name__)
 
 def load_model():
     """
-    Downloads (first run) and returns (processor, model, device).
-
-    Call once at pipeline start and pass the tuple to
-    detect_layout_all_pages() so the weights are never reloaded between PDFs.
+    Returns (processor, model, device), downloading the weights on first run.
+    Call once and pass the tuple to detect_layout_all_pages() — reloading per
+    PDF re-reads the weights.
     """
     try:
         from transformers import AutoImageProcessor, AutoModelForObjectDetection
@@ -127,18 +107,10 @@ class _Detection:
 
 
 def _compute_iou(box_a: list[float], box_b: list[float]) -> float:
-    """
-    Computes Intersection over Union (IoU) between two boxes in pixel coordinates.
-    
-    Args:
-        box_a, box_b: [x0, y0, x1, y1]
-    
-    Returns:
-        IoU value in [0, 1].
-    """
+    """IoU in [0, 1] of two [x0, y0, x1, y1] boxes in pixel coordinates."""
     x0_a, y0_a, x1_a, y1_a = box_a
     x0_b, y0_b, x1_b, y1_b = box_b
-    
+
     # Intersection
     xi0 = max(x0_a, x0_b)
     yi0 = max(y0_a, y0_b)
@@ -168,47 +140,36 @@ def _boxes_intersect(box_a: list[float], box_b: list[float]) -> bool:
 
 def _apply_nms(detections: list[_Detection], iou_threshold: float) -> list[_Detection]:
     """
-    Applies Non-Maximum Suppression to remove overlapping detections.
-    
-    Keeps detections with highest confidence; removes lower-confidence detections
-    that overlap significantly with kept ones. Applies NMS per-class.
-    
-    Args:
-        detections: List of detection objects
-        iou_threshold: IoU threshold for suppression (0-1)
-    
-    Returns:
-        Filtered list of detections.
+    Per-class Non-Maximum Suppression: of two same-class boxes overlapping by
+    more than *iou_threshold*, only the higher-confidence one survives.
+    iou_threshold >= 1.0 is a no-op.
     """
     if not detections or iou_threshold >= 1.0:
         return detections
-    
-    # Group by class
+
     by_class: dict[str, list[_Detection]] = {}
     for det in detections:
         if det.label not in by_class:
             by_class[det.label] = []
         by_class[det.label].append(det)
-    
+
     kept: list[_Detection] = []
-    
+
     for label, class_dets in by_class.items():
-        # Sort by score descending
         class_dets.sort(key=lambda d: d.score, reverse=True)
-        
+
         kept_in_class: list[_Detection] = []
         for det in class_dets:
-            # Check if this detection overlaps significantly with any kept detection
             overlaps_with_kept = False
             for kept_det in kept_in_class:
                 iou = _compute_iou(det.bbox_px, kept_det.bbox_px)
                 if iou > iou_threshold:
                     overlaps_with_kept = True
                     break
-            
+
             if not overlaps_with_kept:
                 kept_in_class.append(det)
-        
+
         kept.extend(kept_in_class)
 
     return kept
@@ -218,13 +179,9 @@ def _suppress_cross_class_media(
     detections: list[_Detection], iou_threshold: float
 ) -> list[_Detection]:
     """
-    Removes a media detection (table/image/chart) that overlaps a
-    higher-confidence media detection of a DIFFERENT class.
-
-    Per-class NMS already dedups within a class; this handles the case where
-    the model emits e.g. both a 'table' and an 'image' box over the same
-    region, which would otherwise produce two crops for one region. The
-    original detection order is preserved (only suppressed boxes are dropped).
+    Removes a media detection that overlaps a higher-confidence media detection
+    of a DIFFERENT class, so one region never yields two crops. Run after
+    per-class NMS; the original detection order is preserved.
     """
     if iou_threshold >= 1.0:
         return detections
@@ -249,9 +206,9 @@ def _infer_batch(
     device: str,
 ) -> list[list[_Detection]]:
     """
-    Runs PP-DocLayoutV3 on one batch of page images and returns per-image
-    detections (global pre-filter, per-class thresholds, per-class NMS, and
-    cross-class media suppression all applied).
+    Detections per input image, with the global pre-filter, per-class
+    thresholds, per-class NMS and cross-class media suppression applied.
+    Boxes are in the input images' pixel space.
     """
     inputs = processor(images=images, return_tensors="pt")
     inputs = {k: v.to(device) for k, v in inputs.items()}
@@ -339,34 +296,24 @@ def _expand_bbox_pt(
     page_h_pt: float,
 ) -> list[float]:
     """
-    Expands a bounding box by the given margins while staying within page bounds.
-    
-    Args:
-        bbox_pt: [x0, y0, x1, y1] in points
-        margin_pt: (left, top, right, bottom) in points
-        page_w_pt, page_h_pt: Page dimensions in points
-    
-    Returns:
-        Expanded bounding box, clamped to page bounds.
+    Expands *bbox_pt* by *margin_pt* (left, top, right, bottom), clamped to the
+    page bounds.
     """
     x0, y0, x1, y1 = bbox_pt
     ml, mt, mr, mb = margin_pt
-    
+
     x0_exp = max(0.0, x0 - ml)
     y0_exp = max(0.0, y0 - mt)
     x1_exp = min(page_w_pt, x1 + mr)
     y1_exp = min(page_h_pt, y1 + mb)
-    
+
     return [x0_exp, y0_exp, x1_exp, y1_exp]
 
 
 def _overlap_fraction(text_bbox: list[float], region_bbox: list[float]) -> float:
     """
-    Returns the fraction of *text_bbox* area that is covered by *region_bbox*.
-
-    Asymmetric by design: a small text block fully inside a large region
-    yields 1.0, while a large text block that only partially overlaps yields
-    a low value.
+    Fraction of *text_bbox*'s area covered by *region_bbox*. Asymmetric by
+    design — the argument order matters.
     """
     ix0 = max(text_bbox[0], region_bbox[0])
     iy0 = max(text_bbox[1], region_bbox[1])
@@ -382,12 +329,7 @@ def _overlap_fraction(text_bbox: list[float], region_bbox: list[float]) -> float
 
 
 def _vertical_overlap_fraction(bbox_a: list[float], bbox_b: list[float]) -> float:
-    """
-    Returns the vertical overlap fraction relative to the shorter of the two boxes.
-
-    Used to detect whether a paragraph_title sits on the same row as another
-    detected element.
-    """
+    """Vertical overlap fraction, relative to the shorter of the two boxes."""
     y0_a, y1_a = bbox_a[1], bbox_a[3]
     y0_b, y1_b = bbox_b[1], bbox_b[3]
 
@@ -413,11 +355,7 @@ def _euclidean_dist(p1: tuple[float, float], p2: tuple[float, float]) -> float:
 
 
 def _text_from_bbox(fp: fitz.Page, bbox_pt: list[float]) -> str:
-    """
-    Extracts text from a region of a fitz.Page using its bounding box.
-
-    Handles edge cases like empty regions or invalid coordinates.
-    """
+    """Text inside *bbox_pt* on the page; "" when empty or on any failure."""
     try:
         x0, y0, x1, y1 = bbox_pt
         rect = fitz.Rect(x0, y0, x1, y1)
@@ -435,14 +373,9 @@ def _extract_crop_rgb(
     mask_bboxes_px: Optional[list[list[float]]] = None,
 ) -> Optional[np.ndarray]:
     """
-    Extracts an RGB crop from a PIL image.
-
-    If *mask_bboxes_px* is given (boxes in the same image-pixel space as
-    *bbox_px*), the pixels of each box that fall inside the crop are
-    overwritten with white (255). This is the semantic pre-masking step that
-    erases embedded figures/charts from a table crop before vision inference.
-
-    Returns None if the crop would be degenerate.
+    RGB crop of *bbox_px* from *image*, or None if the crop would be
+    degenerate. Boxes in *mask_bboxes_px* — which must be in the same
+    image-pixel space as *bbox_px*, not crop-local — are whited out.
     """
     x0, y0, x1, y1 = [int(round(v)) for v in bbox_px]
     w = image.width
@@ -483,13 +416,7 @@ def _encode_crop(job: _CropJob) -> tuple[str, Path, bytes]:
 
 
 def _write_crop(job: _CropJob) -> bool:
-    """
-    Encodes one crop as PNG and writes it to disk immediately.
-
-    Encoding and writing per crop (instead of buffering every crop's RGB array
-    and every PNG byte-string for the whole document before flushing) keeps the
-    peak memory at one crop at a time.
-    """
+    """Encodes one crop as PNG and writes it to disk; True on success."""
     try:
         _, out_path, pngdata = _encode_crop(job)
     except Exception as e:
@@ -514,13 +441,11 @@ def _process_page(
     images_dir: Path,
 ) -> tuple[PageData, list[_CropJob]]:
     """
-    Processes one page through all detection-type branches.
+    Processes one page through all detection-type branches; returns the updated
+    PageData and the crop jobs still to be written.
 
-    Detections are in detection-image pixel coordinates (det_w x det_h); crops
-    are extracted from *crop_image*, which may be rendered at a different DPI
-    than the detection input.
-
-    Returns the updated PageData and a list of crop jobs to be written later.
+    *detections* are in detection-image pixel space (det_w x det_h), while
+    crops come from *crop_image*, which may be rendered at a different DPI.
     """
     prefix = f"p{pg.page_number - 1}"
 
@@ -533,8 +458,8 @@ def _process_page(
     tbl_counter   = 0
     img_counter   = 0
 
-    # Figure/chart boxes (detection-pixel space) for semantic pre-masking of
-    # any figure embedded in a table crop.
+    # Figure/chart boxes in detection-pixel space, for pre-masking figures
+    # embedded in a table crop.
     figure_dets_px = (
         [d.bbox_px for d in detections if d.label in IMAGE_CLASSES]
         if MASK_FIGURES_IN_TABLE_CROPS else []
@@ -561,12 +486,10 @@ def _process_page(
                 )
                 continue
 
-            # Reject titles with excluded prefixes
             if any(title_text.lower().startswith(p) for p in TITLE_EXCLUDE_PREFIXES):
                 log.debug(f"Page {pg.page_number}: title rejected (excluded prefix)")
                 continue
 
-            # Check for same-row overlap with other elements
             overlaps_same_row = any(
                 _vertical_overlap_fraction(bbox_pt, sb)
                 > (1.0 - TITLE_SAME_ROW_OVERLAP_FRACTION)
@@ -605,7 +528,6 @@ def _process_page(
             continue
 
         if label in TABLE_CLASSES:
-            # Expand bbox for better content capture
             bbox_pt_expanded = _expand_bbox_pt(
                 bbox_pt, TABLE_BOX_MARGIN_PT, pg.width_pt, pg.height_pt
             )
@@ -615,8 +537,8 @@ def _process_page(
                 crop_image.width, crop_image.height,
             )
 
-            # Semantic pre-masking: white out any figure/chart overlapping this
-            # table so its lines are not transcribed as phantom table rows.
+            # White out any figure/chart overlapping this table so its lines are
+            # not transcribed as phantom table rows.
             mask_boxes_px: list[list[float]] = []
             for fpx in figure_dets_px:
                 fpt = _bbox_px_to_pt(fpx, det_w, det_h, pg.width_pt, pg.height_pt)
@@ -650,8 +572,7 @@ def _process_page(
                 path=f"{DIR_IMAGES}/{filename}",
                 confidence=det.score,
                 layout_label=label,
-                # Native PDF text inside the (unexpanded) table box, kept as a
-                # QA reference for the downstream vision extraction.
+                # Native text inside the *unexpanded* box, as a QA reference.
                 source_text=(_text_from_bbox(fp, bbox_pt) or None),
             ))
             crop_jobs.append(_CropJob(
@@ -663,7 +584,6 @@ def _process_page(
             continue
 
         if label in IMAGE_CLASSES:
-            # Expand bbox for better content capture
             bbox_pt_expanded = _expand_bbox_pt(
                 bbox_pt, IMAGE_BOX_MARGIN_PT, pg.width_pt, pg.height_pt
             )
@@ -744,8 +664,7 @@ def _looks_like_heading(
         return False
     if any(text.lower().startswith(p) for p in TITLE_EXCLUDE_PREFIXES):
         return False
-    # Prose guard: a heading rarely ends in sentence punctuation or contains a
-    # sentence boundary — this filters bold/emphasised body lines.
+    # Prose guard: filters bold/emphasised body lines.
     if text.endswith((".", "!", "?")):
         return False
     if re.search(r"[.!?]\s+[A-ZÄÖÜ]", text):
@@ -767,12 +686,9 @@ def _looks_like_heading(
 
 def promote_headings_by_font(pages: list[PageData]) -> list[PageData]:
     """
-    Promotes plain Stage-1 text blocks that look like headings (by font size /
-    bold / all-caps) to section titles, so Stage 3 opens a section there.
-
-    Only blocks PP-DocLayout did NOT already classify (layout_label is None)
-    are considered, so this acts purely as a recall booster for headings the
-    layout model missed. Disabled via FONT_HEADING_ENABLE.
+    Promotes heading-looking plain text blocks to "paragraph_title" so Stage 3
+    opens a section there. Only blocks the layout model left unclassified
+    (layout_label is None) are considered. Mutates *pages* in place.
     """
     if not FONT_HEADING_ENABLE:
         return pages
@@ -780,10 +696,9 @@ def promote_headings_by_font(pages: list[PageData]) -> list[PageData]:
     body = _body_font_size(pages)
     promoted = 0
     for pg in pages:
-        # Regions already occupied by other content; a candidate that shares a
-        # row (vertically overlaps) one of these is likely an inline label, not
-        # a section heading — mirrors the same-row title demotion in
-        # _process_page and avoids re-promoting a deliberately demoted title.
+        # A candidate sharing a row with one of these is an inline label, not a
+        # heading — mirrors the same-row demotion in _process_page, so a
+        # deliberately demoted title is not re-promoted here.
         occupied = [
             b.bbox for b in pg.blocks
             if b.type in ("table", "image")
@@ -821,16 +736,12 @@ def _title_between(y_a: float, y_b: float, title_ys: list[float]) -> bool:
 
 def resolve_captions(pages: list[PageData]) -> list[PageData]:
     """
-    Attaches captions to table and image blocks.
+    Attaches captions to table/image blocks: nearest CAPTION_CLASSES block (no
+    distance limit), else nearest plain text block within CAPTION_MAX_DIST_PT.
 
-    Resolution priority per figure/table block:
-      1. Nearest block with layout_label in CAPTION_CLASSES – no distance
-         limit since the model classification is already a strong signal.
-      2. Nearest plain text block within CAPTION_MAX_DIST_PT as fallback
-         when no caption-class block is available.
-
-    The winning caption block's content is written into Block.caption and the
-    caption block is removed from the page so it does not appear in section content.
+    The winning block's content goes into Block.caption and the block itself is
+    removed from the page, so it never reaches section content. Each caption is
+    claimed by at most one media block. Mutates *pages* in place.
     """
     for pg in pages:
         media_blocks  = [b for b in pg.blocks if b.type in ("table", "image")]
@@ -846,8 +757,8 @@ def resolve_captions(pages: list[PageData]) -> list[PageData]:
             and b.content
         ]
 
-        # Section-heading y-centers act as boundaries: a caption candidate is
-        # rejected if a heading lies vertically between it and the media block.
+        # Heading y-centers act as boundaries: a candidate is rejected if a
+        # heading lies vertically between it and the media block.
         title_ys = (
             [_bbox_center(b.bbox)[1] for b in pg.blocks
              if b.layout_label in SECTION_TITLE_CLASSES]
@@ -903,22 +814,13 @@ def detect_layout_all_pages(
     model_tuple,
 ) -> list[PageData]:
     """
-    Runs PP-DocLayoutV3 layout detection on all pages, rendering per batch.
+    Runs layout detection over *pages*, writing crop PNGs into
+    output_dir/DIR_IMAGES and returning the updated PageData list (suppressed
+    text blocks removed, table/image/title blocks added).
 
-    Pages are rendered (and crops cut) chunk by chunk of LAYOUT_BATCH_SIZE and
-    freed after each chunk, so the whole document's page images are never
-    resident at once. Detection input is rendered at LAYOUT_DETECT_DPI and
-    crops at PAGE_RENDER_DPI (one render per page when the two are equal).
-
-    Args:
-        pages:        PageData objects from Stage 1.
-        fitz_pages:   Open fitz.Page objects from Stage 1, same order as pages.
-        output_dir:   Root output directory; crop PNGs go into DIR_IMAGES/.
-        model_tuple:  (processor, model, device) from load_model().
-
-    Returns:
-        Updated PageData list with suppressed text blocks removed, and
-        table/image/title blocks added.
+    *fitz_pages* must be in the same order as *pages* and still open;
+    *model_tuple* is (processor, model, device) from load_model(). Pages are
+    rendered and freed per batch, so the whole document is never resident.
     """
     processor, model, device = model_tuple
 
@@ -959,7 +861,7 @@ def detect_layout_all_pages(
             f"(pages {chunk_pages[0].page_number}–{chunk_pages[-1].page_number})"
         )
 
-        # Render this chunk's detection images; skip pages that fail to render.
+        # Skip pages that fail to render.
         rendered: list[tuple[PageData, fitz.Page, Image.Image]] = []
         for pg, fp in zip(chunk_pages, chunk_fitz):
             try:
@@ -984,7 +886,7 @@ def detect_layout_all_pages(
                     pg, fp, det_img.width, det_img.height, crop_img, dets, images_dir
                 )
                 page_by_number[updated_pg.page_number] = updated_pg
-                # Encode + write each crop right away and drop its RGB array.
+                # Write each crop right away so only one RGB array is held.
                 for job in crop_jobs:
                     total_crops += 1
                     if _write_crop(job):
@@ -995,7 +897,7 @@ def detect_layout_all_pages(
                     exc_info=True,
                 )
 
-        # Free this chunk's rendered images before rendering the next.
+        # Free this chunk's images before rendering the next.
         del det_images, rendered
 
     updated_pages = [page_by_number[pg.page_number] for pg in pages]

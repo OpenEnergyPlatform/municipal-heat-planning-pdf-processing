@@ -86,20 +86,18 @@ def process_table(
     source_text: str = "",
 ) -> dict:
     """
-    Enriches a single table entry with a ``markdown`` key.
+    Returns a copy of *table* enriched with a ``markdown`` key.
 
-    After extraction a QA gate checks the markdown for coverage (against the
-    table's PyMuPDF *source_text*) and row duplication. On failure it retries
-    once with higher entropy + a repetition penalty and keeps the better
-    attempt; a still-failing result is kept (best effort) but flagged via a
-    ``qa_warning`` field and the ``qa_failed_tables`` stat.
+    A QA gate checks coverage against *source_text* and row duplication; on
+    failure the table is still returned (best effort) but carries a
+    ``qa_warning`` field.
 
-    *lock* guards the shared ProcessingStats so this is safe to call from
-    several worker threads at once.
+    *lock* guards the shared ProcessingStats: without it this is not safe to
+    call from several threads at once.
     """
     guard = lock or nullcontext()
-    # Shallow copy is enough: the caller already deep-copied the whole document
-    # and we only set top-level keys (markdown/caption) on the result.
+    # Shallow copy is enough: the caller deep-copied the whole document and we
+    # only set top-level keys on the result.
     result = dict(table)
     result.pop("source_text", None)  # internal QA aid, never part of the output
     image_path = base_path / table["path"]
@@ -136,7 +134,6 @@ def process_table(
     passed, metrics = _assess_table(raw_md, source_text)
 
     if not passed:
-        # Adaptive fallback: one retry to break stutter loops / recover rows.
         retry = call_vision(
             client, TABLE_SYSTEM_PROMPT, user_prompt + _QA_RETRY_HINT, image_path,
             temperature=TABLE_QA_RETRY_TEMPERATURE,
@@ -193,13 +190,12 @@ def process_figure(
     lock: threading.Lock | None = None,
 ) -> dict:
     """
-    Enriches a single figure entry with a ``description`` key.
+    Returns a copy of *figure* enriched with a ``description`` key.
 
-    *lock* guards the shared ProcessingStats so this is safe to call from
-    several worker threads at once.
+    *lock* guards the shared ProcessingStats: without it this is not safe to
+    call from several threads at once.
     """
     guard = lock or nullcontext()
-    # Shallow copy is enough (see process_table).
     result = dict(figure)
     image_path = base_path / figure["path"]
 

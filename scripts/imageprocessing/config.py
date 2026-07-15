@@ -11,8 +11,8 @@ from pathlib import Path
 
 def dump_json_atomic(data, path) -> None:
     """
-    Serialise *data* as UTF-8 JSON to *path* atomically (temp file + os.replace),
-    so an interrupted write can never leave a truncated, unreadable file behind.
+    Serialise *data* as UTF-8 JSON to *path* atomically (temp file +
+    os.replace). Atomic only within one filesystem.
     """
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -32,44 +32,35 @@ def dump_json_atomic(data, path) -> None:
 
 
 # ---------------------------------------------------------------------------
-# vLLM (OpenAI-compatible API) – vision model (Qwen3-VL)
+# Vision model (OpenAI-compatible API)
 # ---------------------------------------------------------------------------
-# Serve the model with vLLM, e.g.:
-#   vllm serve Qwen/Qwen3.5-122B-A10B-FP8 --port 8001
-# VLM_MODEL must match the server's --served-model-name (defaults to the HF id).
-# All values are overridable via environment variables for deployment.
+# VLM_MODEL must match the name the server serves the model under.
 VLM_BASE_URL = os.environ.get("VLM_BASE_URL", "http://localhost:8001/v1")
 VLM_MODEL    = os.environ.get("VLM_MODEL", "Qwen/Qwen3.5-122B-A10B-FP8")
-VLM_API_KEY  = os.environ.get("VLM_API_KEY", "EMPTY")  # vLLM ignores the value
+VLM_API_KEY  = os.environ.get("VLM_API_KEY", "EMPTY")  # ignored by vLLM
 
-# Timeout in seconds for a single vision request (client-side).
-VLM_TIMEOUT  = float(os.environ.get("VLM_TIMEOUT", "180"))  # 3 minutes per attempt
+# Client-side timeout in seconds for a single vision request.
+VLM_TIMEOUT  = float(os.environ.get("VLM_TIMEOUT", "180"))
 
-# Number of concurrent vision requests fired at the single vLLM server. vLLM
-# batches them server-side, so this is the main throughput lever for images.
+# Concurrent in-flight vision requests; the main throughput lever for images.
 VLM_NUM_PARALLEL = int(os.environ.get("VLM_NUM_PARALLEL", "8"))
 
 MAX_RETRIES = 4
 
-# Figure description tolerates some creativity; table transcription must be
-# verbatim, so tables use a separate near-deterministic temperature.
+# Table transcription must be verbatim, so tables use their own near-
+# deterministic temperature.
 VLM_TEMPERATURE       = 0.6
 TABLE_VLM_TEMPERATURE = 0.1
 VLM_MAX_TOKENS        = 8192
 
 # ---------------------------------------------------------------------------
-# Table QA gate (runs after vision extraction; see qa.py / process.py)
+# Table QA gate (see qa.py / process.py)
 # ---------------------------------------------------------------------------
-# Reject + retry a table transcription that looks degenerate. Coverage = the
-# fraction of the table's PyMuPDF source text recovered in the markdown (only
-# assessed when the table has a text layer); duplication = fraction of repeated
-# rows (stutter loops). Thresholds are conservative: they catch gross failures
-# (truncation, repetition loops) without false-rejecting normal tables.
+# Coverage is only assessed when the table has a text layer.
 TABLE_QA_MIN_COVERAGE      = 0.5
 TABLE_QA_MAX_DUPLICATION   = 0.4
 TABLE_QA_MIN_SOURCE_TOKENS = 8
-# Adaptive fallback on QA failure: one retry with higher entropy plus a
-# repetition penalty to break loops / force a careful re-read.
+# Used for the single retry on QA failure.
 TABLE_QA_RETRY_TEMPERATURE = 0.4
 TABLE_QA_RETRY_PENALTY     = 1.3
 
@@ -77,8 +68,7 @@ TABLE_QA_RETRY_PENALTY     = 1.3
 # Input / output file paths (relative to a preprocessing output_dir)
 # ---------------------------------------------------------------------------
 
-# Preferred input: Stage 4 output from the preprocessing pipeline.
-# Falls back to STRUCTURED_OUTPUT_JSON if the final version doesn't exist.
+# Preferred input; falls back to STRUCTURED_OUTPUT_JSON when absent.
 FINAL_OUTPUT_JSON      = "results/structured_output_final.json"
 STRUCTURED_OUTPUT_JSON = "results/structured_output.json"
 
@@ -89,12 +79,8 @@ ENRICHED_OUTPUT_JSON   = "results/structured_output_images.json"
 DIR_IMAGES = "images"
 
 # ---------------------------------------------------------------------------
-# Prompts
-# ---------------------------------------------------------------------------
-# All prompts are written in English for optimal model performance.
-# The model is instructed to produce German-language output where
-# appropriate (captions, descriptions) since the source documents are
-# German municipal heat plans ("Kommunale Wärmepläne").
+# Prompts – English instructions, German output (the source documents are
+# German municipal heat plans).
 # ---------------------------------------------------------------------------
 
 TABLE_SYSTEM_PROMPT = """\
