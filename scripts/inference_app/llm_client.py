@@ -285,7 +285,6 @@ def _chat_json(messages: list, temperature: float) -> dict:
                 response_format={"type": "json_object"},
                 temperature=temperature,
                 max_tokens=LLM_MAX_TOKENS,
-                extra_body={"chat_template_kwargs": {"enable_thinking": False}},
             )
             raw = _clean_raw(response.choices[0].message.content or "")
             if not raw:
