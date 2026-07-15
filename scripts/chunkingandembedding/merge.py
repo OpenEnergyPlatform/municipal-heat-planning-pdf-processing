@@ -1,10 +1,6 @@
 """
 merge.py – Step 1: Merge preprocessing and imageprocessing outputs.
 
-Takes sections from structured_output_final.json (the LLM-refined text)
-and replaces tables/figures with the enriched versions from
-structured_output_images.json (containing markdown / description).
-
 Author: Felix Vossel
 """
 from __future__ import annotations
@@ -23,10 +19,10 @@ log = logging.getLogger(__name__)
 
 def _build_enriched_lookup(images_data: dict) -> dict[str, dict]:
     """
-    Build an id-to-item dict from the images JSON for fast lookup.
+    Build an id-to-item dict from the images JSON.
 
-    Only items that have actual enrichment (markdown for tables,
-    description for figures) are included.
+    Only enriched items are included: tables need a `markdown`, figures a
+    `description`.
     """
     lookup: dict[str, dict] = {}
     for section in images_data.get("sections", []):
@@ -43,16 +39,11 @@ def merge_single(output_dir: Path, *, force: bool = False) -> Optional[dict]:
     """
     Merge final + images JSONs for a single PDF output directory.
 
-    Uses sections from structured_output_final.json as the base and
-    replaces each table/figure entry with the enriched version from
-    structured_output_images.json, matched by item ID.
-
-    Args:
-        output_dir: Preprocessing output dir containing results/.
-        force:      Re-merge even if output.json already exists.
-
-    Returns:
-        Merged data dict, or None on failure.
+    Sections come from structured_output_final.json; each table/figure is
+    replaced by its enriched counterpart from structured_output_images.json,
+    matched by item id. Writes output.json and returns the merged dict, or
+    None if the final JSON is missing. `force` re-merges past a cached
+    output.json.
     """
     output_dir = Path(output_dir)
     merged_path = output_dir / MERGED_JSON

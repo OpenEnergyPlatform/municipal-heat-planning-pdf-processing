@@ -1,9 +1,6 @@
 """
 chunking.py – Build embedding inputs from merged section data.
 
-Transforms sections into embedding-ready text chunks and VL inputs
-by replacing placeholders with enriched content.
-
 Author: Felix Vossel
 """
 from __future__ import annotations
@@ -30,12 +27,7 @@ _PLACEHOLDER_RE = re.compile(r"\[([a-z0-9_]+)\]")
 
 @dataclass
 class EmbeddingInput:
-    """
-    A single item to be embedded.
-
-    For text-only embeddings only ``text`` is set.
-    For VL embeddings both ``text`` and ``image`` are set.
-    """
+    """A single item to be embedded; ``image`` is set only for VL inputs."""
     embedding_type: str
     pdf_name: str
     section_index: int
@@ -88,23 +80,10 @@ def build_embedding_inputs(
     output_dir: Path,
 ) -> list[EmbeddingInput]:
     """
-    Build all embedding inputs for one PDF from its merged data.
+    Build the section/table/figure embedding inputs (text + VL) for one PDF.
 
-    Produces 6 types of embeddings per applicable item:
-      1. section_text:   title + content (placeholders replaced)
-      2. section_title:  title alone
-      3. table_text:     caption + markdown
-      4. table_vl:       image + caption + markdown
-      5. figure_text:    caption + description
-      6. figure_vl:      image + caption + description
-
-    Args:
-        merged_data: The merged output.json data.
-        pdf_name:    PDF identifier (directory name).
-        output_dir:  Base path for resolving image file paths.
-
-    Returns:
-        List of EmbeddingInput objects ready for the embedding model.
+    `output_dir` is the base for resolving each item's image path; VL inputs are
+    only emitted for images that exist on disk. Returns [] if nothing qualifies.
     """
     inputs: list[EmbeddingInput] = []
 

@@ -1,17 +1,8 @@
 """
-pipeline.py – Batch orchestration of the text-refinement module.
+pipeline.py – Orchestration of the text-refinement module.
 
-Reads each document's Stage-3 ``structured_output.json``, refines its sections
-with the LLM (see ``refine.run_refine``), and writes
-``structured_output_final.json``.
-
-Modes:
-  - Single: refine one document's output directory.
-  - Batch:  refine every document subdirectory under a processed root.
-
-CLI:
-  python -m scripts.textrefinement data/pdf/processed --batch
-  python -m scripts.textrefinement data/pdf/processed/<doc>
+Refines one document directory, or every document subdirectory under a
+processed root (--batch). See ``_build_parser`` for the CLI.
 
 Author: Felix Vossel
 """
@@ -31,9 +22,7 @@ from .refine import run_refine
 
 log = logging.getLogger(__name__)
 
-# Documents refined concurrently. Each document's refinement is pure LLM-API
-# (no shared GPU state), so overlapping several documents keeps the vLLM server
-# saturated across document boundaries (small documents no longer starve it).
+# Documents refined concurrently.
 # Total in-flight requests ≈ DOC_PARALLEL × LLM_NUM_PARALLEL.
 DOC_PARALLEL = int(os.environ.get("DOC_PARALLEL", "8"))
 
@@ -49,11 +38,9 @@ def _has_input(doc_dir: Path) -> bool:
 
 def run_single(doc_dir: Path, *, force: bool = False) -> Optional[dict]:
     """
-    Refines one document directory (which contains
-    ``results/structured_output.json``).
-
-    With ``force`` a cached ``structured_output_final.json`` is removed first so
-    the LLM re-refines instead of returning the cache.
+    Refines one document directory. With ``force`` a cached
+    ``structured_output_final.json`` is deleted first so the LLM re-refines.
+    Returns the refined dict, or None on failure.
     """
     doc_dir = Path(doc_dir)
     if force:
@@ -100,9 +87,7 @@ def run_batch(root_dir: Path, *, force: bool = False) -> dict[str, bool]:
             log.error("Error refining '%s': %s", d.name, e, exc_info=True)
             return d.name, False
 
-    # Process several documents concurrently so their LLM windows overlap and
-    # keep the vLLM server saturated. Results are collected in the main thread
-    # (no dict races).
+    # Results are collected in the main thread (no dict races).
     doc_workers = DOC_PARALLEL if DOC_PARALLEL > 1 else 1
     if doc_workers > 1:
         log.info("Refining %d documents with %d concurrent workers", total, doc_workers)

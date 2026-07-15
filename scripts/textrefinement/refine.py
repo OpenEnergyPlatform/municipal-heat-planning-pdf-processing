@@ -1,29 +1,8 @@
 """
-refine.py – LLM-based section refinement via vLLM (text-refinement module).
+refine.py – LLM-based section refinement (Stage 4).
 
-After preprocessing (Stages 1-3) has produced a deterministic section
-assembly, this module uses a local LLM (served by vLLM, reached through its
-OpenAI-compatible API) to:
-
-  1. Clean extraction artefacts (broken words, orphaned fragments, OCR noise,
-     garbled Unicode, misplaced line breaks, etc.).
-  2. Clean section titles and captions by removing numbering prefixes
-     (e.g. "4.1", "Abbildung 2:", "Tabelle 3:", "Anhang A:", etc.).
-  3. Remove sections that consist solely of structural directory pages.
-  4. Convert bibliography entries into a dedicated [LITERATURE] section whose
-     content is a JSON array of BibTeX strings.
-  5. Merge sections that clearly belong together.
-  6. Split sections that contain embedded sub-headings into separate sections.
-
-Processing strategy:
-  - Uses Qwen3.5-122B-A10B-FP8 served by a single vLLM server (config.LLM_BASE_URL).
-  - response_format=json_object plus the system prompt constrain output to
-    valid JSON.
-  - Section windows are dispatched concurrently, up to LLM_NUM_PARALLEL
-    in-flight requests; vLLM batches them server-side (continuous batching).
-  - Results are collected in original order and assembled sequentially
-    (merge/split actions require ordering).
-  - Empty sections are removed as a post-processing step.
+Cleans extraction artefacts and titles, drops directory pages, converts
+bibliographies to BibTeX, and merges/splits sections via an LLM.
 
 Author: Felix Vossel
 """
@@ -62,9 +41,8 @@ def _loads_json_object(text: str) -> dict:
     """
     Parse a JSON object from model output, tolerating a non-JSON wrapper.
 
-    Tries a direct parse first; on failure falls back to the outermost
-    {...} block. Raises json.JSONDecodeError if nothing parses, so the
-    caller's retry / self-correction path still triggers.
+    Falls back to the outermost {...} block; raises json.JSONDecodeError if
+    nothing parses.
     """
     try:
         return json.loads(text)
@@ -77,7 +55,7 @@ def _loads_json_object(text: str) -> dict:
 
 
 # ---------------------------------------------------------------------------
-# vLLM (OpenAI-compatible) API wrapper
+# LLM API wrapper
 # ---------------------------------------------------------------------------
 
 
@@ -110,29 +88,17 @@ def _call_llm(
     prev_context: Optional[dict] = None,
 ) -> Optional[list[dict]]:
     """
-    Sends a window of sections to the vLLM chat-completions API and parses the
-    JSON response.
+    Sends a window of sections to the LLM and parses the JSON response.
 
-    response_format=json_object plus the system prompt constrain the model to a
-    valid JSON object. On a content failure (empty / missing "sections" / unparseable),
-    the failed turn is fed back so the model can self-correct on the next
-    attempt; the conversation is rebuilt from the original two messages each
-    time so it cannot grow unboundedly. Transport errors and timeouts reset
-    the conversation and back off. The wall-clock bound per request is the
-    httpx client timeout configured on *client*.
-
-    *prev_context* (the previous window's last section) is included read-only
-    so the model can judge whether the first section is a continuation that
-    should be merged across the window boundary.
-
-    Retries up to MAX_RETRIES times.
+    *prev_context* (the previous window's last section) is passed read-only so
+    the model can judge whether the first section is a continuation that should
+    be merged across the window boundary. Retries up to MAX_RETRIES times.
 
     Returns:
         Parsed list of section dicts with "_action" fields, or None on failure.
     """
-    # Strip page-provenance fields (segments/pages) from the LLM payload; the
-    # model must not see or rewrite them. They are reattached to the cleaned
-    # output afterwards (see _thread_provenance).
+    # segments/pages are stripped from the payload: the model must not see or
+    # rewrite them. They are reattached afterwards (see _thread_provenance).
     stripped = [
         {k: v for k, v in s.items() if k not in ("segments", "pages")}
         for s in sections_window
@@ -176,19 +142,15 @@ def _call_llm(
                 response_format={"type": "json_object"},
                 temperature=LLM_TEMPERATURE,
                 max_tokens=LLM_MAX_TOKENS,
-                # Qwen3.5 is a reasoning model; disable thinking so the full
-                # token budget goes to the JSON answer (not a <think> block that
-                # truncates/empties content → JSON parse failures).
+                # Reasoning models must not spend the token budget on a <think>
+                # block; that truncates the JSON answer.
                 extra_body={"chat_template_kwargs": {"enable_thinking": False}},
             )
 
             raw_text = response.choices[0].message.content or ""
 
-            # Belt-and-suspenders: enable_thinking=False above should prevent a
-            # <think> block, but strip one (plus stray markdown fences) anyway
-            # before parsing. Without this, leaked reasoning makes json.loads
-            # fail, burns the retry budget, and the whole window silently
-            # falls back to the unrefined originals.
+            # Strip any leaked <think> block and stray markdown fences before
+            # parsing.
             raw_text = re.sub(
                 r"<think>.*?</think>", "", raw_text, flags=re.DOTALL
             ).strip()
@@ -237,8 +199,7 @@ def _call_llm(
             ]
             _backoff(attempt)
         except Exception as e:
-            # Covers connection errors and the httpx request timeout. Reset the
-            # conversation (drop the failed turn) and back off before retrying.
+            # Covers connection errors and the request timeout.
             log.error(
                 f"   Attempt {attempt}/{MAX_RETRIES}: LLM request failed: {e}"
             )
@@ -255,12 +216,9 @@ def _call_llm(
 
 def _coerce_section(sec: dict) -> dict:
     """
-    Defensively normalise an LLM-returned section to the expected shape.
-
-    format="json" guarantees valid JSON but not a schema, so a misbehaving
-    model could return wrong types (content as a dict, tables missing, …)
-    that crash downstream consumers. This coerces title to str, content to
-    str|list, and tables/figures to lists, dropping nothing that is usable.
+    Normalise an LLM-returned section to the expected shape: title str,
+    content str|list, tables/figures lists. JSON mode guarantees valid JSON
+    but not a schema.
     """
     if not isinstance(sec, dict):
         return {"title": "", "content": "", "tables": [], "figures": [],
@@ -335,8 +293,8 @@ def _apply_actions(
 # ---------------------------------------------------------------------------
 
 # Placeholder markers the LLM is instructed to preserve verbatim, e.g.
-# "[p5_tbl0]" / "[p3_img2]". They are the exact anchor between an input
-# segment and the output section that ends up owning it.
+# "[p5_tbl0]" / "[p3_img2]". They are the only anchor between an input segment
+# and the output section that ends up owning it.
 _REF_RE = re.compile(r"\[([A-Za-z0-9_]+)\]")
 _TOKEN_RE = re.compile(r"\w+", re.UNICODE)
 
@@ -378,9 +336,7 @@ def _block_ids_of_input(section: dict) -> set[str]:
 
 
 def _text_containment(seg_text: str, out_token_set: set[str]) -> float:
-    """Fraction of a text segment's tokens present in an output's content.
-    Robust to the LLM's cleaning (de-hyphenation, whitespace) because cleaning
-    preserves most tokens; used only to pick the best-matching child."""
+    """Fraction of a text segment's tokens present in an output's content."""
     toks = _tokens(seg_text)
     if not toks:
         return 0.0
@@ -396,9 +352,7 @@ def _pick_monotone(cands: list[int], cursor: int) -> int:
 
 def _pick_target(cands: list[int], cursor: int, page, out_pages: list[set]) -> int:
     """Among equally-scoring text candidates, prefer one that already holds this
-    segment's own page (keeps same-page content together), then reading order.
-    Guards against shared German boilerplate routing a page onto the wrong
-    child."""
+    segment's own page (keeps same-page content together), then reading order."""
     if page is not None:
         same_page = [c for c in cands if page in out_pages[c]]
         if same_page:
@@ -407,10 +361,9 @@ def _pick_target(cands: list[int], cursor: int, page, out_pages: list[set]) -> i
 
 
 def _positional_consistent(inputs: list[dict], outputs: list[dict]) -> bool:
-    """A 1:1 positional reattach is trustworthy only if no block marker moved
-    across positions, i.e. each output's block ids are a subset of its
-    positional input's. This guards the fast path against a same-length window
-    that nonetheless rearranged content (e.g. a split paired with a drop)."""
+    """True if a 1:1 positional reattach is trustworthy, i.e. each output's
+    block ids are a subset of its positional input's. Guards against a
+    same-length window that nonetheless rearranged content."""
     for inp, out in zip(inputs, outputs):
         if not _block_ids_of_output(out).issubset(_block_ids_of_input(inp)):
             return False
@@ -421,26 +374,21 @@ def _redistribute_segments(
     inputs: list[dict], outputs: list[dict], *, shrink: bool
 ) -> None:
     """
-    Re-home every input segment onto the output section that actually contains
-    it. Used when the section count changed (a split, or — defensively — an LLM
-    that dropped a section by omission instead of marking it _action:"remove").
+    Re-home every input segment onto the output section that contains it. Used
+    when the section count changed (a split, or a section dropped by omission).
 
-      * table/figure segments → matched exactly by their globally-unique block
-        id (the LLM distributes the placeholders into the children verbatim);
+      * table/figure segments → matched by their globally-unique block id;
       * text segments → the child with the highest token containment, ties
         broken toward the child that already holds the segment's own page, then
         reading order.
 
-    Anchorless orphans are NOT force-attached to an arbitrary survivor: doing so
-    would phantom-cite a page the child does not hold (e.g. a removed directory
-    section leaking its page onto a neighbour). A text run that matches no child
-    is dropped from provenance; a table/figure whose marker the LLM dropped keeps
-    a best-effort home only on a split (never on a shrink, where the owning
-    section was removed). Because Stage-3 text segments never span a page
-    boundary, a split that changes page attribution falls between segments, so
-    per-child pages stay correct; only total token annihilation of a run (rare —
-    the prompt forbids paraphrase) costs a page, and dropping it beats a
-    confident mis-citation.
+    Relies on the Stage-3 invariant that a text segment never spans a page
+    boundary, so a split can never cut one.
+
+    Anchorless orphans are dropped from provenance rather than force-attached to
+    an arbitrary survivor, which would phantom-cite a page the child does not
+    hold. A table/figure whose marker the LLM dropped keeps a best-effort home
+    only on a split, never on a shrink.
     """
     pool = [seg for inp in inputs for seg in (inp.get("segments") or [])
             if isinstance(seg, dict)]
@@ -467,9 +415,7 @@ def _redistribute_segments(
                 target = _pick_target(cands, cursor, seg.get("page"), out_pages)
 
         if target is None:
-            # No anchor / no overlap. Keep a real media page on a split (the LLM
-            # merely dropped the marker), but never force anchorless text — or
-            # anything on a shrink — onto an arbitrary survivor; drop it instead.
+            # No anchor / no overlap.
             if is_media and not shrink and outputs:
                 target = min(cursor, len(outputs) - 1)
             else:
@@ -491,21 +437,12 @@ def _redistribute_segments(
 
 def _thread_provenance(inputs: list[dict], outputs: list[dict]) -> None:
     """
-    Reattach fine-grained page provenance (segments → pages) from the input
-    window onto the LLM's cleaned output sections.
+    Reattach page provenance (segments → pages) from the input window onto the
+    LLM's cleaned output sections, in place.
 
-    The LLM never sees segments/pages (they are stripped from its payload) and
-    it preserves the [block_id] placeholders verbatim while keeping reading
-    order. We exploit that:
-
-      * keep / remove / merge preserve the section count → exact 1:1 positional
-        reattach (guarded by `_positional_consistent`);
-      * a split emits more sections than it received → `_redistribute_segments`
-        re-homes each input segment onto the child that actually contains it,
-        so every split child ends up with precisely its own pages.
-
-    Pages are finalised per output afterwards, so the result is always
-    self-consistent regardless of which path ran.
+    A same-length, positionally-consistent window reattaches 1:1; anything else
+    goes through `_redistribute_segments`. Pages are finalised per output
+    afterwards either way.
     """
     if not inputs:
         for out in outputs:
@@ -526,13 +463,8 @@ def _thread_provenance(inputs: list[dict], outputs: list[dict]) -> None:
 def _reattach_media_bbox(inputs: list[dict], outputs: list[dict]) -> None:
     """
     Stamp each output table/figure's layout ``bbox`` from the Stage-3 input,
-    keyed on the globally-unique block id.
-
-    Segments carry their bbox for free (``_thread_provenance`` copies whole
-    segment dicts), but tables/figures are re-emitted by the LLM, which may drop
-    or mangle a numeric array it was shown. So the authoritative geometry is
-    reattached deterministically here — the same philosophy as segment
-    provenance — and it survives regardless of what the model echoed.
+    keyed on the globally-unique block id. Tables/figures are re-emitted by the
+    LLM, which may drop or mangle the bbox it was shown.
     """
     bbox_by_id: dict[str, list] = {}
     for sec in inputs:
@@ -554,10 +486,9 @@ def _reattach_media_bbox(inputs: list[dict], outputs: list[dict]) -> None:
 
 
 def _finalize_pages(section: dict) -> None:
-    """Recompute a section's `pages` (and page_number) from its segments and
-    its tables'/figures' page numbers, keeping them self-consistent after
-    merges/splits. Falls back to the section's own page_number for a within-page
-    split child that carries no page-bearing segments or media."""
+    """Recompute a section's `pages` (and page_number) in place from its
+    segments and its tables'/figures' page numbers. Falls back to the section's
+    own page_number when nothing else carries one."""
     pages: set[int] = set()
     for seg in section.get("segments") or []:
         if isinstance(seg, dict) and seg.get("page") is not None:
@@ -574,11 +505,8 @@ def _finalize_pages(section: dict) -> None:
 
 def _backfill_empty_pages(sections: list[dict]) -> None:
     """
-    Best-effort: a kept, content-bearing section that finalised with no pages
-    (e.g. a within-page split child that won no segment and whose page_number
-    the LLM omitted) inherits a page from its nearest neighbour, so it ingests
-    as a citable chunk instead of an un-citable NULL-page row. A neighbour page
-    is an approximation, but strictly better than no citation.
+    A kept, content-bearing section that finalised with no pages inherits an
+    approximate page from its nearest neighbour, so it stays citable.
     """
     for i, sec in enumerate(sections):
         if sec.get("pages") or _is_empty_section(sec):
@@ -619,9 +547,8 @@ def _is_empty_section(sec: dict) -> bool:
     return not has_content and not has_tables and not has_figures
 
 
-# Leading numbering prefix: hierarchical (3.3.3 / 4-1), short single number
-# (6, 11, with optional trailing . or )), appendix letter (A. / B)), or roman
-# numeral (IV.). A 1–2 digit bare number is stripped; 4-digit years are not.
+# Leading numbering prefix. A 1–2 digit bare number is stripped; 4-digit years
+# are not.
 _TITLE_NUM_PREFIX_RE = re.compile(
     r"^\s*(?:"
     r"\d+(?:[.\-]\d+)+[.\)]?"   # 3.3.3  / 4-1
@@ -634,22 +561,20 @@ _TITLE_NUM_PREFIX_RE = re.compile(
 
 def _normalize_title(title: str) -> str:
     """
-    Deterministic guarantee on top of the LLM's title cleaning: strip leading
-    numbering prefixes and de-shout ALL-CAPS titles (preserving short acronyms
-    like KWP / CO2). The "[LITERATURE]" sentinel is left untouched.
+    Strip leading numbering prefixes and de-shout ALL-CAPS titles (preserving
+    short acronyms like KWP / CO2). The "[LITERATURE]" sentinel is left
+    untouched.
     """
     if not isinstance(title, str):
         return title
     t = title.strip()
     if not t or t == "[LITERATURE]":
         return title
-    # Strip possibly-stacked numbering prefixes ("Anhang 6.1" → handled by LLM;
-    # "6.1 Foo" → "Foo").
+    # Prefixes can stack ("6.1 Foo").
     prev = None
     while prev != t:
         prev = t
         t = _TITLE_NUM_PREFIX_RE.sub("", t).strip()
-    # De-shout an ALL-CAPS title word-by-word, keeping short acronyms intact.
     alpha = [c for c in t if c.isalpha()]
     if len(alpha) > 5 and all(c.isupper() for c in alpha):
         def _fix(w: str) -> str:
@@ -668,21 +593,17 @@ def _normalize_title(title: str) -> str:
 
 def refine_sections(sections: list[dict]) -> list[dict]:
     """
-    Processes all sections through the LLM in windows of WINDOW_SIZE.
+    Processes all sections through the LLM in windows of WINDOW_SIZE, dispatched
+    in parallel but assembled in order (merge/split semantics are positional).
 
-    Windows are dispatched in parallel (up to LLM_NUM_PARALLEL concurrent
-    requests to the vLLM server, which batches them). Results are collected in
-    order and assembled sequentially to preserve merge/split semantics.
-
-    Returns:
-        Refined list of section dicts.
+    Mutates *sections* in place (source_text is stripped); returns the refined
+    list.
     """
     if not sections:
         return sections
 
-    # source_text is a QA reference for the downstream image processing, not
-    # something the refinement LLM should see or echo back — drop it from the
-    # payload (it stays in structured_output.json, which imageprocessing reads).
+    # source_text is a QA reference for the downstream image processing; it
+    # stays in structured_output.json, which imageprocessing reads separately.
     _strip_table_source_text(sections)
 
     log.info(
@@ -700,10 +621,8 @@ def refine_sections(sections: list[dict]) -> list[dict]:
     total_windows = len(windows)
     log.info(f"Stage 4: {total_windows} windows to process")
 
-    # ── One shared OpenAI client pointed at the vLLM server, reused across all
-    #    windows (thread-safe, so LLM_NUM_PARALLEL workers can share it; vLLM
-    #    batches the concurrent requests server-side). max_retries=0 leaves
-    #    retry control to our own loop. ─────────────────────────────────────
+    # One shared client for all windows: it is thread-safe, so the workers can
+    # share it. max_retries=0 leaves retry control to our own loop.
     try:
         from openai import OpenAI
     except ImportError:
@@ -723,8 +642,7 @@ def refine_sections(sections: list[dict]) -> list[dict]:
     with ThreadPoolExecutor(max_workers=LLM_NUM_PARALLEL) as executor:
         futures = {}
         for win_idx, window in enumerate(windows):
-            # Give each window (except the first) the previous window's last
-            # original section as read-only context for boundary merges.
+            # Read-only context for merges across the window boundary.
             prev_ctx = windows[win_idx - 1][-1] if win_idx > 0 else None
             future = executor.submit(_call_llm, window, client, prev_ctx)
             futures[future] = (win_idx, window)
@@ -761,10 +679,8 @@ def refine_sections(sections: list[dict]) -> list[dict]:
             refined.extend(window)
             previous_kept = window[-1] if window else previous_kept
         else:
-            # Defensive: the LLM very occasionally emits a bare string where a
-            # section object belongs. Drop those before provenance threading
-            # (_block_ids_of_output would call .get() on the string and crash the
-            # whole document); if nothing usable remains, keep the originals.
+            # The LLM occasionally emits a bare string where a section object
+            # belongs; drop those before provenance threading.
             llm_result = [s for s in llm_result if isinstance(s, dict)]
             if not llm_result:
                 log.warning(
@@ -782,8 +698,6 @@ def refine_sections(sections: list[dict]) -> list[dict]:
 
     log.info(f"Stage 4: {len(refined)} sections after LLM refinement")
 
-    # Reattach authoritative table/figure geometry from the Stage-3 input (the
-    # LLM re-emits media items and may drop the bbox it was shown).
     _reattach_media_bbox(sections, refined)
 
     # ── Post-filter: remove empty sections ───────────────────────────────
@@ -796,11 +710,8 @@ def refine_sections(sections: list[dict]) -> list[dict]:
     # Keep each section's page span self-consistent after merges/splits.
     for s in refined:
         _finalize_pages(s)
-    # Rescue any kept content-bearing section left without a page citation.
     _backfill_empty_pages(refined)
 
-    # Deterministic title-cleanup guarantee (numbering prefixes + ALL-CAPS) on
-    # top of the LLM's semantic pass.
     if TITLE_CLEANUP_ENABLE:
         for s in refined:
             s["title"] = _normalize_title(s.get("title", ""))
@@ -816,31 +727,23 @@ def refine_sections(sections: list[dict]) -> list[dict]:
 
 def run_refine(output_dir: Path, data: Optional[dict] = None) -> Optional[dict]:
     """
-    Refines the Stage-3 sections via the LLM and writes
-    structured_output_final.json.
+    Refines the Stage-3 sections and writes structured_output_final.json under
+    *output_dir*. An existing final output is returned from cache without
+    re-running the LLM.
 
-    If structured_output_final.json already exists, it is loaded from cache
-    and returned without re-running the LLM.
-
-    Args:
-        output_dir: The output directory; the final output is written here.
-        data:       The Stage 3 result dict to refine. When None (e.g. a
-                    standalone Stage 4 run), structured_output.json is read
-                    from output_dir instead. Passing it in keeps a single
-                    source of truth between Stage 3 and Stage 4.
+    *data* is the Stage-3 result dict; when None, structured_output.json is read
+    from *output_dir* instead.
 
     Returns:
         The refined output dict, or None on failure.
     """
     final_path = output_dir / FINAL_OUTPUT_JSON
 
-    # ── Cache check: skip LLM if final output already exists ─────────────
     if final_path.exists():
         log.info(f"Stage 4: cache hit → {final_path}")
         with open(final_path, encoding="utf-8") as f:
             return json.load(f)
 
-    # ── Resolve Stage 3 input (passed in, or read from disk) ─────────────
     if data is None:
         input_path = output_dir / STRUCTURED_OUTPUT_JSON
         if not input_path.exists():
@@ -858,7 +761,6 @@ def run_refine(output_dir: Path, data: Optional[dict] = None) -> Optional[dict]:
     result = {"sections": refined}
     result = clean_data(result)
 
-    # Write refined output (atomic: temp file + os.replace)
     dump_json_atomic(result, final_path)
     log.info(f"Stage 4: refined output written → {final_path}")
 

@@ -1,8 +1,5 @@
 """
-Configuration settings for file processing module.
-
-This module contains constants and database schema definitions used throughout
-the file processing pipeline for handling PDF documents and metadata.
+Constants and the fallback database schema for the fileprocessing module.
 """
 
 EXCEL_SHEET = "Datensatz Status quo KWP"

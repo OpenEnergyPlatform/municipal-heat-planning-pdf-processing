@@ -11,9 +11,7 @@ MERGED_JSON = "results/output.json"
 EMBEDDING_MODEL = "Qwen/Qwen3-VL-Embedding-8B"
 EMBEDDING_DIM = 4096
 MAX_TOKEN_LENGTH = 16384
-# Batch is split round-robin across the GPU replicas (see MultiGPUEmbedder), so
-# this is the *aggregate* batch; with 4 H100s in bf16 that is ~8 items/GPU.
-# Tune down if VL (image) batches ever approach VRAM limits.
+# Aggregate batch: MultiGPUEmbedder splits it round-robin across the replicas.
 EMBEDDING_BATCH_SIZE = 32
 
 FAISS_INDEX_FILE = "faiss_index.bin"

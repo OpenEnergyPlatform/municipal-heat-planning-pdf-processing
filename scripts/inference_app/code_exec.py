@@ -1,12 +1,9 @@
 """
-code_exec.py – Client for the sandboxed code-execution service.
+code_exec.py – Client for the sandboxed code-execution service: POSTs LLM-written
+Python to `sandbox_service.py` at `CODE_EXEC_URL`.
 
-Thin, zero-dependency (stdlib urllib) HTTP client that POSTs LLM-written Python
-to the hardened `sandbox_service.py` running on the podman host, reached over an
-SSH remote-forward at `CODE_EXEC_URL`. Returns a uniform dict; never raises, so a
-sandbox outage degrades to "no calculation" rather than breaking a query.
-
-The feature is OFF unless `CODE_EXEC_URL` is configured (see is_enabled()).
+Never raises, so a sandbox outage degrades to "no calculation" rather than
+breaking a query. The feature is OFF unless `CODE_EXEC_URL` is set (is_enabled()).
 """
 from __future__ import annotations
 
@@ -32,8 +29,8 @@ def run_code(code: str, context: Optional[dict] = None,
     Execute `code` in the sandbox with `context` injected as variables.
 
     Returns {"ok": bool, "stdout": str, "stderr": str, "exit_code": int|None,
-    "error": str|None}. Any transport/HTTP problem is returned as ok=False with an
-    `error` (never raised) so the caller can just carry on.
+    "error": str|None}. Never raises: a disabled sandbox or any transport/HTTP
+    problem comes back as ok=False with an `error`.
     """
     if not config.CODE_EXEC_URL:
         return {"ok": False, "stdout": "", "stderr": "", "exit_code": None,

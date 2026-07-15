@@ -1,9 +1,6 @@
 """
-chunker.py – Pack ranked retrieval hits into token-budgeted chunks.
-
-Each chunk is fed to the LLM as one QA attempt. Token counting uses the LLM's
-own tokenizer when available (small download, no model weights) and falls back
-to a char/4 heuristic offline.
+chunker.py – Pack ranked retrieval hits into token-budgeted chunks, each fed to
+the LLM as one QA attempt.
 
 Author: Felix Vossel
 """
@@ -29,9 +26,8 @@ class Chunk:
 
 def get_tokenizer(tokenizer_id: str = LLM_TOKENIZER_ID):
     """
-    Lazily load the LLM tokenizer for accurate token counting. Cached across
-    calls; returns None (→ char/4 heuristic) if it cannot be loaded (offline,
-    gated repo, missing dependency).
+    Lazily load the LLM tokenizer, cached across calls. None if it cannot be
+    loaded (offline, gated repo, missing dependency) → char/4 heuristic.
     """
     global _TOKENIZER, _TOKENIZER_TRIED
     if _TOKENIZER_TRIED:
@@ -55,9 +51,7 @@ def count_tokens(text: str, tokenizer=None) -> int:
 
 def citation_label(hit: dict) -> str:
     """Human-readable source label for a retrieval hit."""
-    # German typographic quotes as explicit code points, to avoid any chance of
-    # a quote char colliding with the surrounding f-string delimiter.
-    lq, rq = '„', '“'  # „ …  "
+    lq, rq = '„', '“'
     page = hit.get("page_number")
     page_str = f'Seite {page}' if page is not None else 'Seite unbekannt'
     sec_title = hit.get("section_title")
@@ -93,9 +87,8 @@ def pack_chunks(hits: list[dict], token_budget: int, tokenizer=None) -> list[Chu
     """
     Greedily pack score-ranked hits into chunks under `token_budget` each.
 
-    A single hit larger than the whole budget gets its own oversized chunk
-    (better to send it whole and let the model's context absorb it than to
-    silently truncate content the user asked to search).
+    A single hit larger than the whole budget gets its own OVERSIZED chunk —
+    content is never truncated, so a chunk can exceed the budget.
     """
     chunks: list[Chunk] = []
     current: list[dict] = []

@@ -1,10 +1,6 @@
 """
-app.py – Streamlit RAG chat over the KWP knowledge base.
-
-The only module that imports Streamlit. Wires together: document picker + scope
-selection (sidebar), a chat box with an optional image upload, on-demand
-embedding of the query, scoped sub-index retrieval, and the iterative chunk-by-
-chunk LLM question answering with citations.
+app.py – Streamlit RAG chat over the KWP knowledge base. The only module that
+imports Streamlit.
 
 Run:
     streamlit run scripts/inference_app/app.py --server.address 0.0.0.0 --server.port 8501
@@ -25,12 +21,11 @@ from pathlib import Path
 
 # The bundled pdf.js viewer is served as ES modules; some Python installs don't
 # map .mjs → a JS MIME type, and browsers refuse to execute modules served as
-# octet-stream. Register it so Streamlit's static handler serves it correctly.
+# octet-stream.
 mimetypes.add_type("text/javascript", ".mjs")
 
-# `streamlit run scripts/inference_app/app.py` executes this file as a top-level
-# script (no package context), so relative imports would fail. Put the repo root
-# (.../ above scripts/) on sys.path and import the package absolutely.
+# `streamlit run` executes this file as a top-level script (no package context),
+# so relative imports would fail — import the package absolutely off the repo root.
 _REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 if _REPO_ROOT not in sys.path:
     sys.path.insert(0, _REPO_ROOT)
@@ -47,8 +42,8 @@ log = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
-# Cached resources (RAM is abundant; only the embedding model's VRAM is scarce,
-# and that is deliberately NOT cached — see quantized_embedder.load_embedder).
+# Cached resources. The embedding model is deliberately NOT cached here — see
+# quantized_embedder.load_embedder.
 # ---------------------------------------------------------------------------
 @st.cache_resource
 def get_index():
@@ -109,14 +104,11 @@ def run_turn(task: str, image_bytes: bytes | None, image_only: bool,
              history: list | None = None):
     """
     Execute one full retrieval + answer turn. Returns a dict with:
-    answer (str|None), citations (list[dict]), n_findings (int), cache_hit (bool),
-    n_hits (int), phrase (str|None), as_json (bool).
+    answer (str|None), answer_text (str|None), citations (list[dict]),
+    n_findings (int), cache_hit (bool), n_hits (int), phrase (str|None),
+    as_json (bool), n_batches (int), compute (list).
 
-    Each sub-step runs under its own timed st.spinner. The top sources are handed
-    to the LLM in a SINGLE call, so it sees every source together — fewest calls,
-    it picks the right source, and info spread across several is combined in one
-    pass. Every statement is validated against a verbatim quote from its cited
-    source (grounding); an answer with no grounded support is refused.
+    answer is None when nothing was retrieved or nothing could be grounded.
     """
     result = {"answer": None, "answer_text": None, "citations": [], "n_findings": 0,
               "cache_hit": False, "n_hits": 0, "phrase": None, "as_json": as_json,
@@ -127,12 +119,9 @@ def run_turn(task: str, image_bytes: bytes | None, image_only: bool,
     cache_conn = get_cache()
     log_conn = get_request_log()
 
-    # --- 0) Response cache: an identical user question on the same plan+scopes
-    #        (text mode) returns instantly — skipping phrase-gen, embedding,
-    #        retrieval AND the answer LLM. Keyed on the RAW user task, not the
-    #        generated search phrase, so re-asking the same question hits
-    #        reliably; the output format (prose vs JSON) is part of the key so
-    #        the two variants don't collide. Image queries are not cached. ---
+    # --- 0) Response cache. Keyed on the RAW user task, not the generated search
+    #        phrase, so re-asking the same question hits reliably. Image queries
+    #        are not cached. ---
     response_query_key = None
     if image_bytes is None:
         response_query_key = request_log.make_query_key(document_id, task, scopes, as_json)
@@ -162,7 +151,6 @@ def run_turn(task: str, image_bytes: bytes | None, image_only: bool,
         cache_key = query_cache.make_key(mode, image_bytes=image_bytes)
     elif image_bytes is not None:
         mode = "image+text"
-        # visual anchor: a figure/diagram-style caption matches figures better.
         with _spinner("🔎 Suchanker (Bild+Text)"):
             phrase = llm_client.make_search_phrase(task, visual=True, history=history)
         tmp_path = _write_temp_image(image_bytes)
@@ -170,7 +158,6 @@ def run_turn(task: str, image_bytes: bytes | None, image_only: bool,
         cache_key = query_cache.make_key(mode, text=phrase, image_bytes=image_bytes)
     else:
         mode = "text"
-        # A figure/table-only search wants a caption-style anchor, not prose.
         visual_anchor = _scopes_are_visual(scopes)
         with _spinner("🔎 Suchanker"):
             phrase = llm_client.make_search_phrase(task, visual=visual_anchor, history=history)
@@ -203,10 +190,8 @@ def run_turn(task: str, image_bytes: bytes | None, image_only: bool,
         )
         return result
 
-    # --- 4) answer across the top sources in context-safe BATCHES. Usually ONE
-    #        call; a further batch runs only while the answer is still incomplete,
-    #        so no source is dropped (no truncation). Every statement keeps an
-    #        exact, verbatim-quote reference to its source. ---
+    # --- 4) answer across the top sources in context-safe batches; a further
+    #        batch runs only while the answer is still incomplete ---
     top_hits = hits[: config.MAX_CHUNK_ATTEMPTS]
     batches = chunker.pack_chunks(top_hits, config.ANSWER_CONTEXT_TOKENS, tokenizer=None)
     citations, seen = [], set()
@@ -214,9 +199,7 @@ def run_turn(task: str, image_bytes: bytes | None, image_only: bool,
     with _spinner("🔍 Antwort aus den Quellen"):
         for bi, chunk in enumerate(batches, start=1):
             items = chunk.items
-            # text answer during batching; JSON formatting happens once at the end.
-            # If a code sandbox is configured, let the model offload calculations
-            # (ReAct) with this batch's tables as context — only fires when it asks.
+            # Text answer during batching; JSON formatting happens once at the end.
             code_ctx = _code_context(items, top_hits) if code_exec.is_enabled() else None
             out = llm_client.answer_from_sources(
                 task, items, prior=prior_text, as_json=False,
@@ -266,7 +249,7 @@ def run_turn(task: str, image_bytes: bytes | None, image_only: bool,
     result["citations"] = citations
     result["n_findings"] = len(citations)
 
-    # --- 6) Log request and cache the response (successful case only) ---
+    # --- 6) log + cache the response (successful case only) ---
     latency_ms = (time.time() - start_time) * 1000
     answer_hash = hashlib.sha256((result["answer"] or "").encode()).hexdigest()[:12]
     request_log.log_request(
@@ -274,9 +257,8 @@ def run_turn(task: str, image_bytes: bytes | None, image_only: bool,
         latency_ms=latency_ms, n_hits=result["n_hits"], n_citations=result["n_findings"],
         answer_hash=answer_hash, cache_hit=False
     )
-    # response_query_key is set only for cacheable turns (text mode); cache only
-    # when the answer is grounded (has citations). Store both the displayed answer
-    # (JSON or prose) and the prose form for follow-up context.
+    # response_query_key is set only for cacheable turns (text mode); only a
+    # grounded answer (one with citations) is cached.
     if response_query_key is not None and result["citations"]:
         request_log.cache_response(
             log_conn, document_id, response_query_key,
@@ -321,7 +303,7 @@ def _write_temp_image(image_bytes: bytes) -> str:
 # ---------------------------------------------------------------------------
 def main() -> None:
     st.set_page_config(page_title="KWP RAG Chat", layout="wide")
-    # Hide Streamlit's top-right "running man" status widget (not wanted).
+    # Hide Streamlit's top-right "running man" status widget.
     st.markdown("<style>[data-testid='stStatusWidget']{display:none !important;}</style>",
                 unsafe_allow_html=True)
     st.title("Kommunale Wärmeplanung – Recherche")
@@ -343,7 +325,6 @@ def main() -> None:
             "Wärmeplan", options=[d["id"] for d in docs],
             format_func=lambda i: labels[i],
         )
-        # Which municipalities this plan covers (convoys cover several) — clickable.
         covered = coverage.get(doc_id, [])
         if len(covered) > 1:
             with st.expander(f"🏘 Zugehörige Gemeinden ({len(covered)})"):
@@ -381,8 +362,8 @@ def main() -> None:
                 _render_citation(cit)
 
     # ---- Optional image upload + mode ----
-    # The text task always drives the final question answering; the image (if
-    # any) and this toggle only change how the *query embedding* is formed.
+    # The image and this toggle only change how the *query embedding* is formed;
+    # the text task always drives the final question answering.
     uploaded = st.file_uploader("Optionales Bild zur Anfrage", type=["png", "jpg", "jpeg"])
     image_only = False
     if uploaded is not None:
@@ -408,7 +389,6 @@ def main() -> None:
     with st.chat_message("user"):
         st.markdown(user_text)
 
-    # Run pipeline (with the last few turns as follow-up context — no doc excerpts)
     result = run_turn(task, image_bytes, image_only, doc_id, scopes, as_json=as_json,
                       history=st.session_state.get("turns", []))
 
@@ -441,8 +421,7 @@ def main() -> None:
                 "citations": result["citations"], "phrase": result.get("phrase"),
                 "as_json": result["as_json"], "compute": result.get("compute", []),
             })
-            # remember this turn (question + anchor + prose answer) for follow-ups —
-            # capped at the last 5; no document excerpts are retained.
+            # Remember this turn for follow-ups; no document excerpts are retained.
             turns = st.session_state.setdefault("turns", [])
             turns.append({"task": task, "phrase": result.get("phrase"),
                           "answer": result.get("answer_text") or result.get("answer")})
@@ -450,7 +429,7 @@ def main() -> None:
 
 
 def _render_compute(compute: list | None) -> None:
-    """Show the code the model ran in the sandbox + its output (transparency)."""
+    """Show the code the model ran in the sandbox + its output."""
     if not compute:
         return
     with st.expander(f"🧮 Berechnung anzeigen ({len(compute)}×)"):
@@ -477,12 +456,8 @@ def _render_answer(answer: str, as_json: bool) -> None:
 
 def _pdf_link_for(cit: dict):
     """
-    (url, page) deep link into the source PDF for a citation, or None.
-
-    For a section citation the exact page + a verbatim highlight phrase come from
-    the raw Segments via pdf_link.locate_quote (the refined quote is matched back
-    onto the raw PDF text). For table/figure citations, and when no verbatim run
-    is found, the link falls back to the citation's own page (jump, no highlight).
+    (url, page) deep link into the source PDF for a citation, or None if no PDF
+    area is configured, the filename is unknown, or no page could be resolved.
     """
     prefix = config.PDF_URL_PREFIX
     if not prefix:
@@ -500,19 +475,16 @@ def _pdf_link_for(cit: dict):
         if loc:
             page, phrase = loc            # exact page (+ a fallback phrase)
         if page:
-            # Precise coordinate overlay: the actual per-line rects of the quote
-            # on the real PDF page (fuzzy/Levenshtein aligned), so ONLY the cited
-            # passage is boxed — not the whole (possibly page-spanning) segment,
-            # which the stored segment bbox would light up. Drawn by pdfjs_overlay.js.
+            # Per-line rects of the quote itself, so ONLY the cited passage is
+            # boxed. Drawn by pdfjs_overlay.js.
             rects = pdf_link.best_quote_rects(config.PDF_ROOT / filename, page, quote)
             if not rects:
-                # No line rects → verbatim page-derived search phrase instead.
                 pdf_phrase = pdf_link.best_search_phrase(config.PDF_ROOT / filename, page, quote)
                 if pdf_phrase:
                     phrase = pdf_phrase
     if not page:
         return None
-    if config.PDF_VIEWER_PREFIX:      # through bundled pdf.js → highlight in every browser
+    if config.PDF_VIEWER_PREFIX:      # bundled pdf.js → highlight in every browser
         url = pdf_link.pdf_viewer_url(config.PDF_VIEWER_PREFIX, prefix, filename,
                                       page, phrase, rects)
     else:                             # native browser viewer (no overlay; phrase only)
@@ -521,7 +493,7 @@ def _pdf_link_for(cit: dict):
 
 
 def _render_citation(cit: dict) -> None:
-    """Render one citation: source label, verbatim quote, expandable full context, image.
+    """Render one citation: source label, quote, expandable context, image.
 
     Must NOT be called inside another st.expander (Streamlit forbids nesting the
     context expander below).
@@ -539,7 +511,6 @@ def _render_citation(cit: dict) -> None:
     if context:
         with st.expander("Kontext anzeigen"):
             body = context
-            # Best-effort: emphasise the exact quote within its full context.
             if quote and str(quote) in body:
                 body = body.replace(str(quote), f"**{quote}**", 1)
             st.markdown(body)

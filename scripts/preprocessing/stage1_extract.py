@@ -1,19 +1,10 @@
 """
-stage1_extract.py – Text extraction with PyMuPDF (rawdict) + in-memory rendering.
+stage1_extract.py – Text extraction with PyMuPDF (rawdict).
 
-For each PDF page, text blocks are extracted via page.get_text("rawdict"),
-filtered, and returned as PageData objects. No paragraph merging is performed
-so that block boundaries remain precise enough for Stage 2 suppression to
-work correctly against model-predicted bounding boxes.
-
-Image blocks (type=1) are ignored – they are detected in Stage 2.
-
-Pages are NOT rendered here. Stage 2 renders them per batch from the open
-fitz pages so the whole document's page images are never resident at once.
-The `_render_page_to_pil` helper lives here and is imported by Stage 2.
-
-Coordinate system: PyMuPDF provides BBoxes as fitz.Rect with the origin at the
-top-left in points (pt). [x0, y0, x1, y1] is stored without coordinate flipping.
+Text blocks are extracted per page and returned as PageData. Paragraphs are
+deliberately NOT merged: Stage 2 suppression needs block boundaries precise
+enough to match model-predicted boxes. Bboxes are [x0, y0, x1, y1] in points,
+origin top-left, stored without coordinate flipping.
 
 Author: Felix Vossel
 """
@@ -41,10 +32,7 @@ def _rect_to_bbox(rect: fitz.Rect) -> list[float]:
 
 
 def _spans_to_text(block: dict) -> str:
-    """
-    Extracts text from a rawdict block and resolves hyphenation across line
-    breaks using structural and linguistic heuristics.
-    """
+    """Text of a rawdict block, with hyphenation across line breaks resolved."""
     lines_text: list[str] = []
 
     for line in block.get("lines", []):
@@ -92,10 +80,8 @@ def _spans_to_text(block: dict) -> str:
 
 
 def _dominant_font(block: dict) -> tuple[Optional[float], bool]:
-    """
-    Returns the (char-weighted) dominant font size and a bold-majority flag for
-    a rawdict text block, used downstream for font-based heading promotion.
-    """
+    """(char-weighted dominant font size, bold-majority flag) of a rawdict text
+    block. Size is None when the block has no chars."""
     sizes: dict[float, int] = {}
     bold_chars = 0
     total_chars = 0
@@ -143,7 +129,7 @@ def _extract_page_text(page: fitz.Page, page_index: int) -> PageData:
     raw = page.get_text("rawdict", flags=0)
 
     for block in raw.get("blocks", []):
-        if block.get("type") != 0:
+        if block.get("type") != 0:      # non-text (type 1 = image): Stage 2 detects those
             continue
 
         bbox = _rect_to_bbox(fitz.Rect(block["bbox"]))
@@ -179,28 +165,12 @@ def extract_all_pages(
     page_range: Optional[tuple[int, int]] = None,
 ) -> tuple[list[PageData], list[fitz.Page], fitz.Document, int]:
     """
-    Extracts text and returns the open fitz pages for Stage 2.
+    Extracts text and returns (pages, fitz_pages, fitz_doc, n_failed), where
+    fitz_pages is index-aligned with pages and n_failed counts pages that were
+    skipped. *page_range* is (start, end), 0-indexed and end-exclusive.
 
-    Pages are NOT rendered here: Stage 2 renders them per batch (see
-    detect_layout_all_pages) so the whole document's page images are never
-    resident in memory at once.
-
-    The returned fitz.Document must be closed by the caller after Stage 2
-    has finished, since fitz.Page objects are only valid while their parent
-    document remains open.
-
-    Args:
-        pdf_path:   Path to the source PDF file.
-        page_range: Optional (start, end) tuple (0-indexed, end exclusive).
-                    Defaults to the full document.
-
-    Returns:
-        A tuple (pages, fitz_pages, fitz_doc, n_failed) where:
-          pages:      list[PageData]  – one entry per successfully processed page.
-          fitz_pages: list[fitz.Page] – open fitz pages, index-aligned with pages.
-          fitz_doc:   fitz.Document   – must be closed by the caller.
-          n_failed:   int             – number of pages that failed and were
-                                        skipped; the two lists stay aligned.
+    The caller MUST close fitz_doc once Stage 2 is done: the returned
+    fitz.Page objects are only valid while their parent document is open.
     """
     pdf_path = Path(pdf_path)
     doc      = fitz.open(str(pdf_path))
@@ -225,8 +195,8 @@ def extract_all_pages(
     for i, page_index in enumerate(page_indices):
         try:
             fitz_page = doc[page_index]
-            # Build then append together so a failure can never leave the two
-            # lists at mismatched lengths.
+            # Build before appending: a failure must not leave the two lists at
+            # mismatched lengths.
             page_data = _extract_page_text(fitz_page, page_index)
             pages.append(page_data)
             fitz_pages.append(fitz_page)
