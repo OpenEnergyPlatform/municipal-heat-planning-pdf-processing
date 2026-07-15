@@ -75,19 +75,15 @@ EMBED_LOCK_TIMEOUT_S = float(os.environ.get("EMBED_LOCK_TIMEOUT_S", "300"))
 # ---------------------------------------------------------------------------
 # LLM (remote, OpenAI-compatible — University of Osnabrück "agents" gateway)
 # ---------------------------------------------------------------------------
-# A LibreChat agents API exposing an OpenAI-compatible /chat/completions
-# (base_url + "/chat/completions"). "Models" are preconfigured agents on
-# qwen3.5; list them with GET {LLM_BASE_URL}/models. Two exist:
-#   agent_7qE8YPFNPQ9KQQInK9FNc  "Test"    (plain passthrough; DEFAULT)
-#   agent_xzXlgfmSwiaWCuvtRFCq5  "DB4KWP"  (project-named; reasoning FORCED on)
-# The "DB4KWP" agent has reasoning hard-wired at the agent level: enable_thinking
-# and reasoning_effort are IGNORED, so it generates ~1300–2000 reasoning chars
-# per call → ~6x slower (measured: 1.0s vs 5.9s on a trivial call). We fold all
-# instructions into the user turn anyway, so the passthrough "Test" agent (no
-# reasoning) is faster AND sufficient — hence the default. message.content is
-# clean JSON. The API key lives in .env as UOS_API_KEY (loaded above).
+# A LibreChat agents API exposing an OpenAI-compatible /chat/completions.
+# "Models" are preconfigured agents on qwen3.5; list them with
+# GET {LLM_BASE_URL}/models:
+#   agent_xzXlgfmSwiaWCuvtRFCq5  "DB4KWP"  (DEFAULT; ~0.8s on a trivial call)
+#   agent_7qE8YPFNPQ9KQQInK9FNc  "Test"    (plain passthrough; ~18s — do not use)
+# The agents' relative speed has flipped before; re-measure before switching.
+# The API key lives in .env as UOS_API_KEY (loaded above).
 LLM_BASE_URL = os.environ.get("LLM_BASE_URL", "https://kiwi-secure.uni-osnabrueck.de/api/agents/v1")
-LLM_MODEL    = os.environ.get("LLM_MODEL", "agent_7qE8YPFNPQ9KQQInK9FNc")
+LLM_MODEL    = os.environ.get("LLM_MODEL", "agent_xzXlgfmSwiaWCuvtRFCq5")
 LLM_API_KEY  = os.environ.get("LLM_API_KEY") or os.environ.get("UOS_API_KEY", "EMPTY")
 LLM_TIMEOUT  = float(os.environ.get("LLM_TIMEOUT", "180"))
 LLM_TEMPERATURE = float(os.environ.get("LLM_TEMPERATURE", "0.1"))
