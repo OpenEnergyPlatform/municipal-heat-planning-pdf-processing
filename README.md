@@ -126,7 +126,7 @@ Six embedding types are produced per document, all stored in a single global FAI
 
 ## Infrastructure
 
-The pipeline runs on the university's HPC cluster, scheduled via SLURM. Stages 4 and 5 each run as an independent SLURM job with its own vLLM server instance on 4× NVIDIA H100 80GB GPUs (tensor-parallel, TP=4, separate ports) and can execute concurrently — up to 8 GPUs in use at once. The embedding step (Stage 6) then runs as its own job, also on 4 GPUs, but data-parallel (one model replica per GPU) rather than tensor-parallel.
+The pipeline runs on the university's HPC cluster, scheduled via SLURM. Stages 4 and 5 each run as an independent job with its own vLLM server instance (tensor-parallel) and can execute concurrently. The embedding step (Stage 6) then runs as its own job, data-parallel (one model replica per GPU) rather than tensor-parallel.
 
 ## Collaboration
 

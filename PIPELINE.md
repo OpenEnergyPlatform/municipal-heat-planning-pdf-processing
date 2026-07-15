@@ -55,7 +55,7 @@ Die letzte Stufe führt alle Ergebnisse zusammen und baut den semantischen Suchi
 
 **Schritt 2 – Datenbankpopulation:** Abschnitte, Tabellen und Bilder werden mit Fremdschlüssel-Referenzen auf die bestehenden Dokumenteinträge in die SQLite-Datenbank eingetragen. Jeder Abschnitt speichert seinen Titel, die Seitenzahl und den Abschnittsindex. Tabellen speichern ihren Bildpfad, die Bildunterschrift und die Markdown-Transkription. Bilder (Abbildungen) speichern ihren Pfad, die Bildunterschrift und die textuelle Beschreibung.
 
-**Schritt 3 – Embedding-Erstellung:** Es werden sechs Embedding-Typen erzeugt, unter Verwendung von **Qwen3-VL-Embedding-8B** (ein multimodales Embedding-Modell, 4096-dimensionale Vektoren). Das Modell läuft direkt über HuggingFace Transformers in **bfloat16**, datenparallel über alle vier H100 (eine Modell-Replica pro GPU), und die Eingaben aller Dokumente werden gesammelt und in vollen, dokumentübergreifenden Batches verarbeitet, um die GPUs auszulasten:
+**Schritt 3 – Embedding-Erstellung:** Es werden sechs Embedding-Typen erzeugt, unter Verwendung von **Qwen3-VL-Embedding-8B** (ein multimodales Embedding-Modell, 4096-dimensionale Vektoren). Das Modell läuft direkt über HuggingFace Transformers in **bfloat16**, datenparallel (eine Modell-Replica pro GPU), und die Eingaben aller Dokumente werden gesammelt und in vollen, dokumentübergreifenden Batches verarbeitet, um die GPUs auszulasten:
 
 | Embedding-Typ | Inhalt | DB-Spalte |
 |---|---|---|
@@ -74,7 +74,7 @@ Die Datenbank dient als Single Source of Truth dafür, welche Elemente bereits e
 
 ## Infrastruktur
 
-Die Pipeline läuft auf dem HPC-Cluster der Uni, verwaltet über SLURM. Stufe 4 und Stufe 5 laufen als **eigenständige** SLURM-Jobs mit je eigener **vLLM**-Serverinstanz (OpenAI-kompatibel) auf je **4 NVIDIA H100 80GB GPUs** (Tensor-Parallelität TP=4, getrennte Ports 8000/8001) und können parallel laufen — macht bis zu 8 GPUs gleichzeitig für Stufe 4+5. Die Embedding-Erstellung (Stufe 6) läuft anschließend als eigener Job ebenfalls auf 4 GPUs, dort datenparallel (eine Modell-Replica pro GPU) statt tensor-parallel. Die zuvor blockierende alte CUDA-Version wurde auf **CUDA 12.9** angehoben, was den Wechsel von Ollama zu vLLM erst ermöglicht hat.
+Die Pipeline läuft auf dem HPC-Cluster der Uni, verwaltet über SLURM. Stufe 4 und Stufe 5 laufen als **eigenständige** SLURM-Jobs mit je eigener **vLLM**-Serverinstanz (OpenAI-kompatibel, tensor-parallel) und können parallel laufen. Die Embedding-Erstellung (Stufe 6) läuft anschließend als eigener Job, dort datenparallel (eine Modell-Replica pro GPU) statt tensor-parallel.
 
 ---
 
@@ -111,7 +111,7 @@ Versionierung würde das Mapping zwischen Dokumenten und KWW-Metadaten deutlich 
 
 ### 2) Modelldurchsatz und vLLM *(erledigt)*
 
-Ursprünglich blockierte die alte CUDA-Version (12.1) den Einsatz von vLLM. Nach dem Upgrade auf CUDA 12.9 ist die Pipeline von Ollama auf **vLLM** umgestellt (Continuous Batching, PagedAttention, Tensor-Parallelität über 4 GPUs) – inkl. eines deutlich größeren, einheitlichen Modells (Qwen3.5-122B-A10B-FP8) für die Stufen 4 und 5. Auch das Embedding wurde auf bfloat16 + Datenparallelität über alle vier GPUs umgestellt. Offen bleibt das Feintuning des Durchsatzes (z. B. Parallelitätsgrade, DeepGEMM für dichte FP8-Pfade).
+Die Pipeline ist von Ollama auf **vLLM** umgestellt (Continuous Batching, PagedAttention, Tensor-Parallelität) – inkl. eines deutlich größeren, einheitlichen Modells (Qwen3.5-122B-A10B-FP8) für die Stufen 4 und 5. Auch das Embedding wurde auf bfloat16 + Datenparallelität umgestellt. Offen bleibt das Feintuning des Durchsatzes.
 
 ### 3) Wünsche und Anregungen
 
