@@ -6,7 +6,7 @@ import tempfile
 import fitz
 import requests
 import pandas as pd
-from .config import EXCEL_SHEET, DATABASE_SCHEMA, PDF_OVERRIDES
+from .config import EXCEL_SHEET, DATABASE_SCHEMA, PDF_OVERRIDES, MUNICIPALITY_META_COLUMNS
 from pathlib import Path
 from urllib.parse import urlparse
 from tqdm import tqdm
@@ -17,7 +17,7 @@ from utils import database
 def _load_and_filter_excel(excel_file: Path) -> pd.DataFrame:
     """
     Completed Wärmepläne ("Stand in der KWP" == "abgeschlossen") that have a PDF
-    link. Column names are returned with spaces replaced by underscores.
+    link. Original KWW column names are kept (rows are consumed as dicts).
     """
     kww_data = pd.read_excel(
         excel_file,
@@ -29,9 +29,26 @@ def _load_and_filter_excel(excel_file: Path) -> pd.DataFrame:
         (kww_data["Link Wärmeplan"].str.lower().str.contains(".pdf", na=False))
     ]
 
-    kww_data.columns = kww_data.columns.str.replace(" ", "_")
-
     return kww_data
+
+
+def _coerce(value: Any, sqltype: str):
+    """Excel cell → a SQLite-storable value (NaN/NaT → None) for the given type."""
+    if pd.isna(value):
+        return None
+    if sqltype == "INTEGER":
+        return int(value)
+    if sqltype == "DATE":
+        return pd.Timestamp(value).strftime("%Y-%m-%d")
+    return str(value).strip()
+
+
+def _extract_meta(row: dict) -> dict:
+    """{db_column: coerced value} for the metadata columns of one Excel row."""
+    return {
+        db: _coerce(row.get(excel), sqltype)
+        for excel, db, sqltype in MUNICIPALITY_META_COLUMNS
+    }
 
 def download_pdf(url: str, data_dir: Path) -> str:
     """
@@ -87,45 +104,42 @@ def get_num_pages(filename: str, data_dir: Path) -> int:
     return num_pages
 
 
-def process_entry(row: Any, connection: sqlite3.Connection, data_dir: Path) -> None:
+def process_entry(row: dict, connection: sqlite3.Connection, data_dir: Path) -> None:
     """
     Register one row of the filtered Excel data, downloading its PDF if the
-    document is not in the DB yet.
+    document is not in the DB yet, and store the row's KWW metadata.
 
-    `row` is an itertuples row and must carry Gemeindename, Gemeindeschlüssel,
-    Verbandsname, Bundesland_lang, Link_Wärmeplan and Datum_der_Veröffentlichung.
+    `row` is a dict keyed by the original Excel column names.
     """
-    municipality_name = row.Gemeindename
-    municipality_ags = int(row.Gemeindeschlüssel)   # Excel gives float when the column has any NaN
-    organisation_unit = row.Verbandsname
-    state = row.Bundesland_lang
-    published = pd.Timestamp(row.Datum_der_Veröffentlichung).strftime("%Y%m%d")
+    municipality_name = row["Gemeindename"]
+    municipality_ags = int(row["Gemeindeschlüssel"])   # Excel gives float when the column has any NaN
+    organisation_unit = row["Verbandsname"]
+    state = row["Bundesland lang"]
+    published = pd.Timestamp(row["Datum der Veröffentlichung"]).strftime("%Y%m%d")
     added = datetime.now().strftime("%Y%m%d")
 
     # A hand-sourced replacement for a broken KWW link (PDF_OVERRIDES) is a local
     # filename that must already be in data_dir — never downloaded.
     override = PDF_OVERRIDES.get(municipality_ags)
-    link = override if override else str(row.Link_Wärmeplan).strip()
+    link = override if override else str(row["Link Wärmeplan"]).strip()
     # urlparse(link).path is absolute, so joining it with data_dir would discard
     # data_dir — use the bare filename against data_dir instead.
     filename = Path(urlparse(link.lower()).path).name.lower()
 
     orga_id = database.update_organisation_unit(organisation_unit, state, connection)
 
-    if database.document_exists(filename, connection):
-        database.add_municipality(municipality_name, municipality_ags, orga_id, connection)
-        return
+    if not database.document_exists(filename, connection):
+        if not (data_dir / filename).exists():
+            if override:
+                raise FileNotFoundError(
+                    f"Override PDF for ags {municipality_ags} missing in {data_dir}: {filename}"
+                )
+            filename = download_pdf(link, data_dir)
+        num_pages = get_num_pages(filename, data_dir)
+        database.add_document(filename, orga_id, published, num_pages, added, municipality_ags, connection)
 
-    if not (data_dir / filename).exists():
-        if override:
-            raise FileNotFoundError(
-                f"Override PDF for ags {municipality_ags} missing in {data_dir}: {filename}"
-            )
-        filename = download_pdf(link, data_dir)
-
-    num_pages = get_num_pages(filename, data_dir)
-    database.add_document(filename, orga_id, published, num_pages, added, municipality_ags, connection)
     database.add_municipality(municipality_name, municipality_ags, orga_id, connection)
+    database.upsert_municipality_meta(municipality_ags, _extract_meta(row), connection)
 
 def run(excel_file: Path, db_file: Path, data_dir: Path) -> None:
     """
@@ -145,12 +159,38 @@ def run(excel_file: Path, db_file: Path, data_dir: Path) -> None:
                 connection.executescript(DATABASE_SCHEMA)
 
     with sqlite3.connect(db_file) as connection:
-        for row in tqdm(kww_data.itertuples(), desc="Processing municipality", total=kww_data.shape[0]):
+        database.ensure_municipality_meta_table(MUNICIPALITY_META_COLUMNS, connection)
+        for row in tqdm(kww_data.to_dict("records"), desc="Processing municipality", total=kww_data.shape[0]):
             process_entry(row, connection, data_dir)
         # Link re-published plans: newest per municipality = current, older ones
         # superseded. Runs over the full table, so re-runs stay correct.
         database.link_document_versions(connection)
-    
+
+
+def backfill_meta(excel_file: Path, db_file: Path) -> int:
+    """
+    Backfill MunicipalityMeta for municipalities ALREADY in the DB, from
+    `excel_file`, matched by ags. Additive and minimal-invasive: creates the
+    table if absent and only writes MunicipalityMeta — no downloads, no changes
+    to Documents/Sections/Embeddings. Returns the number of rows written.
+
+    Reads the full sheet (unfiltered) so a municipality's metadata is found even
+    if its own row would not pass the completed-plan import filter.
+    """
+    kww_data = pd.read_excel(excel_file, sheet_name=EXCEL_SHEET)
+    with sqlite3.connect(db_file) as connection:
+        database.ensure_municipality_meta_table(MUNICIPALITY_META_COLUMNS, connection)
+        existing = {r[0] for r in connection.execute("SELECT ags FROM Municipalities")}
+        written = 0
+        for row in kww_data.to_dict("records"):
+            ags = row.get("Gemeindeschlüssel")
+            if pd.isna(ags) or int(ags) not in existing:
+                continue
+            database.upsert_municipality_meta(int(ags), _extract_meta(row), connection)
+            written += 1
+        connection.commit()
+    return written
+
 
 def _build_parser() -> argparse.ArgumentParser:
     """Build the CLI argument parser."""
@@ -177,9 +217,14 @@ python -m scripts.fileprocessing /path_to_kww_excel/file.xlxs /path_to_db/KWP.db
     )
     p.add_argument(
         "--data-dir",
-        help="Directory where the pdf files should be stored",
+        help="Directory where the pdf files should be stored (not needed with --backfill-meta)",
         type=str,
-        required=True
+    )
+    p.add_argument(
+        "--backfill-meta",
+        action="store_true",
+        help="Only backfill MunicipalityMeta for municipalities already in the DB "
+             "(no downloads, no document changes).",
     )
     p.add_argument(
         "--log-level", default="INFO",
@@ -197,6 +242,12 @@ def main() -> None:
         format="%(asctime)s [%(levelname)s] %(name)s %(message)s",
         datefmt="%H:%M:%S",
     )
+    if args.backfill_meta:
+        n = backfill_meta(Path(args.excel), Path(args.db))
+        logging.info("MunicipalityMeta backfilled for %d municipalities", n)
+        return
+    if not args.data_dir:
+        parser.error("--data-dir is required unless --backfill-meta is given")
     run(Path(args.excel), Path(args.db), Path(args.data_dir))
 
 if __name__ == "__main__":

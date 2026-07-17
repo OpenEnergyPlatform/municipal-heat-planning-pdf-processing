@@ -28,6 +28,44 @@ PDF_OVERRIDES = {
     8116012: "waermeplan_bissingen_an_der_teck_2024q1.pdf",      # Bissingen an der Teck
 }
 
+# KWW Excel columns carried into the MunicipalityMeta table, as
+# (excel_column, db_column, sqltype). Excludes the identity columns already
+# modelled elsewhere (Gemeindename, Gemeindeschlüssel), the KWW-internal
+# workflow fields ("Eintrag durch", "Information von KuKs; Quellen und weitere
+# Anmerkungen") and the "VG Schlüssel für Formel" helper (identical to
+# Verbandsschlüssel). All numeric columns are whole-valued → INTEGER.
+MUNICIPALITY_META_COLUMNS = [
+    ("Verbandsschlüssel", "verbandsschluessel", "INTEGER"),
+    ("Landkreisschlüssel", "landkreisschluessel", "INTEGER"),
+    ("Amtlicher Regionalschlüssel (ARS)", "ars", "INTEGER"),
+    ("Bundesland kurz", "bundesland_kurz", "TEXT"),
+    ("Bundesland lang", "bundesland_lang", "TEXT"),
+    ("Verbandsname", "verbandsname", "TEXT"),
+    ("Verbandstyp", "verbandstyp", "TEXT"),
+    ("Landkreis", "landkreis", "TEXT"),
+    ("Textkennzeichen", "textkennzeichen", "TEXT"),
+    ("NKI-Förderung", "nki_foerderung", "TEXT"),
+    ("Konvoi ID", "konvoi_id", "TEXT"),
+    ("Konvoimitgliedschaft", "konvoimitgliedschaft", "TEXT"),
+    ("Stand in der KWP", "stand_in_der_kwp", "TEXT"),
+    ("Einwohnendenzahl nach GVZ", "einwohnendenzahl_gvz", "INTEGER"),
+    ("Einwohnergröße", "einwohnergroesse", "INTEGER"),
+    ("Größe nach WPG", "groesse_nach_wpg", "TEXT"),
+    ("Gemeindefläche in km²", "gemeindeflaeche_km2", "INTEGER"),
+    ("Bevölkerungsdichte", "bevoelkerungsdichte", "INTEGER"),
+    ("Link Wärmeplan", "link_waermeplan", "TEXT"),
+    ("Datum der Veröffentlichung", "datum_veroeffentlichung", "DATE"),
+    ("Jahr der Veröffentlichung", "jahr_veroeffentlichung", "INTEGER"),
+    ("Dienstleister", "dienstleister", "TEXT"),
+    ("Aktualität (Text)", "aktualitaet", "TEXT"),
+    ("vereinfachtes Verfahren", "vereinfachtes_verfahren", "TEXT"),
+    ("Verkürzte KWP", "verkuerzte_kwp", "TEXT"),
+    ("PVS ID", "pvs_id", "INTEGER"),
+    ("Verbandsangehörigkeit", "verbandsangehoerigkeit", "TEXT"),
+    ("Anzahl Mitgliedsgemeinden", "anzahl_mitgliedsgemeinden", "INTEGER"),
+    ("EW Verbandsgemeinden", "ew_verbandsgemeinden", "INTEGER"),
+]
+
 DATABASE_SCHEMA = """
 BEGIN TRANSACTION;
 CREATE TABLE IF NOT EXISTS "Documents" (
