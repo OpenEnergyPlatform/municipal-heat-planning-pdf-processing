@@ -6,7 +6,7 @@ import tempfile
 import fitz
 import requests
 import pandas as pd
-from .config import EXCEL_SHEET, DATABASE_SCHEMA
+from .config import EXCEL_SHEET, DATABASE_SCHEMA, PDF_OVERRIDES
 from pathlib import Path
 from urllib.parse import urlparse
 from tqdm import tqdm
@@ -93,31 +93,39 @@ def process_entry(row: Any, connection: sqlite3.Connection, data_dir: Path) -> N
     document is not in the DB yet.
 
     `row` is an itertuples row and must carry Gemeindename, Gemeindeschlüssel,
-    Verbandsname, Bundesland_lang, Link_Wärmeplan, Ersetzte_Datei and
-    Datum_der_Veröffentlichung.
+    Verbandsname, Bundesland_lang, Link_Wärmeplan and Datum_der_Veröffentlichung.
     """
     municipality_name = row.Gemeindename
-    municipality_ags = row.Gemeindeschlüssel
+    municipality_ags = int(row.Gemeindeschlüssel)   # Excel gives float when the column has any NaN
     organisation_unit = row.Verbandsname
     state = row.Bundesland_lang
-    link = str(row.Ersetzte_Datei if pd.notna(row.Ersetzte_Datei) else row.Link_Wärmeplan.strip())
     published = pd.Timestamp(row.Datum_der_Veröffentlichung).strftime("%Y%m%d")
     added = datetime.now().strftime("%Y%m%d")
-    
+
+    # A hand-sourced replacement for a broken KWW link (PDF_OVERRIDES) is a local
+    # filename that must already be in data_dir — never downloaded.
+    override = PDF_OVERRIDES.get(municipality_ags)
+    link = override if override else str(row.Link_Wärmeplan).strip()
+    # urlparse(link).path is absolute, so joining it with data_dir would discard
+    # data_dir — use the bare filename against data_dir instead.
+    filename = Path(urlparse(link.lower()).path).name.lower()
+
     orga_id = database.update_organisation_unit(organisation_unit, state, connection)
 
-    if database.document_exists(Path(urlparse(link.lower()).path).name.lower(), connection):
+    if database.document_exists(filename, connection):
         database.add_municipality(municipality_name, municipality_ags, orga_id, connection)
-    else:
-        # urlparse(link).path is absolute, so joining it with data_dir would
-        # discard data_dir — check the actual local filename instead.
-        filename = Path(urlparse(link.lower()).path).name.lower()
-        if not (data_dir / filename).exists():
-            filename = download_pdf(link, data_dir)
+        return
 
-        num_pages = get_num_pages(filename, data_dir)
-        database.add_document(filename, orga_id, published, num_pages, added, municipality_ags, connection)
-        database.add_municipality(municipality_name, municipality_ags, orga_id, connection)
+    if not (data_dir / filename).exists():
+        if override:
+            raise FileNotFoundError(
+                f"Override PDF for ags {municipality_ags} missing in {data_dir}: {filename}"
+            )
+        filename = download_pdf(link, data_dir)
+
+    num_pages = get_num_pages(filename, data_dir)
+    database.add_document(filename, orga_id, published, num_pages, added, municipality_ags, connection)
+    database.add_municipality(municipality_name, municipality_ags, orga_id, connection)
 
 def run(excel_file: Path, db_file: Path, data_dir: Path) -> None:
     """
