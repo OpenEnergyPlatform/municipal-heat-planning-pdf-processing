@@ -6,6 +6,7 @@ import tempfile
 import fitz
 import requests
 import pandas as pd
+from . import pdf_quality
 from .config import EXCEL_SHEET, DATABASE_SCHEMA, PDF_OVERRIDES, MUNICIPALITY_META_COLUMNS
 from pathlib import Path
 from urllib.parse import urlparse
@@ -13,6 +14,13 @@ from tqdm import tqdm
 from datetime import datetime
 from typing import Any
 from utils import database
+
+log = logging.getLogger(__name__)
+
+
+class UnusablePDF(Exception):
+    """A source PDF has no usable text layer — it is not registered."""
+
 
 def _load_and_filter_excel(excel_file: Path) -> pd.DataFrame:
     """
@@ -135,6 +143,11 @@ def process_entry(row: dict, connection: sqlite3.Connection, data_dir: Path) -> 
                     f"Override PDF for ags {municipality_ags} missing in {data_dir}: {filename}"
                 )
             filename = download_pdf(link, data_dir)
+        # Gate before any DB write: a scanned or garbled PDF yields empty/garbage
+        # sections downstream, so refuse it loudly instead of carrying it along.
+        usable, reason = pdf_quality.check(data_dir / filename)
+        if not usable:
+            raise UnusablePDF(f"{filename}: {reason}")
         num_pages = get_num_pages(filename, data_dir)
         database.add_document(filename, orga_id, published, num_pages, added, municipality_ags, connection)
 
@@ -158,13 +171,43 @@ def run(excel_file: Path, db_file: Path, data_dir: Path) -> None:
             else:
                 connection.executescript(DATABASE_SCHEMA)
 
+    rejected: dict[str, str] = {}
     with sqlite3.connect(db_file) as connection:
         database.ensure_municipality_meta_table(MUNICIPALITY_META_COLUMNS, connection)
         for row in tqdm(kww_data.to_dict("records"), desc="Processing municipality", total=kww_data.shape[0]):
-            process_entry(row, connection, data_dir)
+            try:
+                process_entry(row, connection, data_dir)
+            except UnusablePDF as e:
+                fn, _, reason = str(e).partition(": ")
+                if fn not in rejected:   # a convoy PDF appears on many rows
+                    log.error("UNUSABLE PDF – not registered: %s", e)
+                rejected[fn] = reason
         # Link re-published plans: newest per municipality = current, older ones
         # superseded. Runs over the full table, so re-runs stay correct.
         database.link_document_versions(connection)
+
+    if rejected:
+        _report_rejected(rejected, db_file)
+
+
+def _report_rejected(rejected: dict, db_file: Path) -> None:
+    """Loud end-of-run summary + a file listing the PDFs that were refused."""
+    out = db_file.parent / "rejected_pdfs.txt"
+    banner = "=" * 78
+    log.error("\n%s\n%d PDF(s) REFUSED — no usable text layer, not in the corpus.\n"
+              "Source a correct file by hand, then add it to config.PDF_OVERRIDES\n"
+              "(keyed by Gemeindeschlüssel) and re-run.\n%s",
+              banner, len(rejected), banner)
+    for fn, reason in sorted(rejected.items()):
+        log.error("  %-60s %s", fn, reason)
+    try:
+        out.write_text(
+            "".join(f"{fn}\t{reason}\n" for fn, reason in sorted(rejected.items())),
+            encoding="utf-8",
+        )
+        log.error("List written to %s", out)
+    except OSError as e:
+        log.error("Could not write %s: %s", out, e)
 
 
 def backfill_meta(excel_file: Path, db_file: Path) -> int:
