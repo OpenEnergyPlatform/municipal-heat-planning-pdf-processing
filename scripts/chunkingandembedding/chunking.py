@@ -6,6 +6,7 @@ Author: Felix Vossel
 from __future__ import annotations
 
 import logging
+import os
 import re
 from dataclasses import dataclass
 from pathlib import Path
@@ -34,6 +35,21 @@ class EmbeddingInput:
     item_id: Optional[str]
     text: str
     image: Optional[str] = None
+
+
+def _dir_names(path: Path, cache: dict[Path, set[str]]) -> set[str]:
+    """Entry names of `path`; each directory is read at most once per `cache`."""
+    names = cache.get(path)
+    if names is None:
+        try:
+            names = set(os.listdir(path))
+        # Only a genuinely absent directory is "no crops". A permission or I/O
+        # error must still raise: swallowing it would drop every VL input of the
+        # document without a trace, which is what Path.exists() also refused to do.
+        except (FileNotFoundError, NotADirectoryError):
+            names = set()
+        cache[path] = names
+    return names
 
 
 def _build_item_lookup(section: dict) -> dict[str, dict]:
@@ -86,6 +102,9 @@ def build_embedding_inputs(
     only emitted for images that exist on disk. Returns [] if nothing qualifies.
     """
     inputs: list[EmbeddingInput] = []
+    # One directory listing per crop directory instead of a stat() per crop: the
+    # corpus holds ~85k crops and metadata calls dominate on a parallel filesystem.
+    listings: dict[Path, set[str]] = {}
 
     for sec_idx, section in enumerate(merged_data.get("sections", [])):
         title = section.get("title", "") or ""
@@ -130,7 +149,7 @@ def build_embedding_inputs(
                 ))
 
             image_path = output_dir / t.get("path", "")
-            if image_path.exists():
+            if image_path.name in _dir_names(image_path.parent, listings):
                 inputs.append(EmbeddingInput(
                     embedding_type=EMBEDDING_TYPE_TABLE_VL,
                     pdf_name=pdf_name,
@@ -155,7 +174,7 @@ def build_embedding_inputs(
                 ))
 
             image_path = output_dir / fig.get("path", "")
-            if image_path.exists():
+            if image_path.name in _dir_names(image_path.parent, listings):
                 inputs.append(EmbeddingInput(
                     embedding_type=EMBEDDING_TYPE_FIGURE_VL,
                     pdf_name=pdf_name,

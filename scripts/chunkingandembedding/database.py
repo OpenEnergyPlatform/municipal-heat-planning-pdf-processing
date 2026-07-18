@@ -34,18 +34,47 @@ _SECTION_TYPES = {EMBEDDING_TYPE_SECTION_TEXT, EMBEDDING_TYPE_SECTION_TITLE}
 _TABLE_TYPES = {EMBEDDING_TYPE_TABLE_TEXT, EMBEDDING_TYPE_TABLE_VL}
 _FIGURE_TYPES = {EMBEDDING_TYPE_FIGURE_TEXT, EMBEDDING_TYPE_FIGURE_VL}
 
+# Every per-document lookup below must drive from Sections, whose index narrows
+# to the one document first. CROSS JOIN pins that order and is otherwise an
+# ordinary inner join; with a plain JOIN, SQLite instead drives from Embeddings
+# on owner_kind alone and rescans that whole partition once per document —
+# 338 ms rather than 1.1 ms per document at corpus scale. Do not "simplify"
+# these back to JOIN; test_database.py asserts the resulting query plans.
+
+# Items of one document that already carry an embedding.
+_EXISTING_SECTION_SQL = (
+    "SELECT s.section_number, e.embedding_type "
+    "FROM Sections s CROSS JOIN Embeddings e "
+    "  ON e.owner_kind = 'section' AND e.owner_id = s.id "
+    "WHERE s.document = ?"
+)
+_EXISTING_TABLE_SQL = (
+    "SELECT s.section_number, t.block_id, e.embedding_type "
+    "FROM Sections s CROSS JOIN Tables t ON t.section = s.id "
+    "CROSS JOIN Embeddings e "
+    "  ON e.owner_kind = 'table' AND e.owner_id = t.id "
+    "WHERE s.document = ?"
+)
+_EXISTING_FIGURE_SQL = (
+    "SELECT s.section_number, i.block_id, e.embedding_type "
+    "FROM Sections s CROSS JOIN Images i ON i.section = s.id "
+    "CROSS JOIN Embeddings e "
+    "  ON e.owner_kind = 'figure' AND e.owner_id = i.id "
+    "WHERE s.document = ?"
+)
+
 # All FAISS ids mapped to one document's items (section + table + figure owners).
 _DOCUMENT_FAISS_IDS_SQL = (
-    "SELECT e.faiss_id FROM Embeddings e JOIN Sections s "
+    "SELECT e.faiss_id FROM Sections s CROSS JOIN Embeddings e "
     "  ON e.owner_kind = 'section' AND e.owner_id = s.id WHERE s.document = ? "
     "UNION ALL "
-    "SELECT e.faiss_id FROM Embeddings e JOIN Tables t "
-    "  ON e.owner_kind = 'table' AND e.owner_id = t.id "
-    "JOIN Sections s ON t.section = s.id WHERE s.document = ? "
+    "SELECT e.faiss_id FROM Sections s CROSS JOIN Tables t ON t.section = s.id "
+    "CROSS JOIN Embeddings e "
+    "  ON e.owner_kind = 'table' AND e.owner_id = t.id WHERE s.document = ? "
     "UNION ALL "
-    "SELECT e.faiss_id FROM Embeddings e JOIN Images i "
-    "  ON e.owner_kind = 'figure' AND e.owner_id = i.id "
-    "JOIN Sections s ON i.section = s.id WHERE s.document = ?"
+    "SELECT e.faiss_id FROM Sections s CROSS JOIN Images i ON i.section = s.id "
+    "CROSS JOIN Embeddings e "
+    "  ON e.owner_kind = 'figure' AND e.owner_id = i.id WHERE s.document = ?"
 )
 
 
@@ -440,32 +469,16 @@ def get_existing_embeddings(
         if doc_id is None:
             return existing
 
-        for section_number, etype in conn.execute(
-            "SELECT s.section_number, e.embedding_type "
-            "FROM Embeddings e JOIN Sections s "
-            "  ON e.owner_kind = 'section' AND e.owner_id = s.id "
-            "WHERE s.document = ?",
-            (doc_id,),
-        ):
+        for section_number, etype in conn.execute(_EXISTING_SECTION_SQL, (doc_id,)):
             existing.add((etype, section_number, None))
 
         for section_number, block_id, etype in conn.execute(
-            "SELECT s.section_number, t.block_id, e.embedding_type "
-            "FROM Embeddings e JOIN Tables t "
-            "  ON e.owner_kind = 'table' AND e.owner_id = t.id "
-            "JOIN Sections s ON t.section = s.id "
-            "WHERE s.document = ?",
-            (doc_id,),
+            _EXISTING_TABLE_SQL, (doc_id,)
         ):
             existing.add((etype, section_number, block_id))
 
         for section_number, block_id, etype in conn.execute(
-            "SELECT s.section_number, i.block_id, e.embedding_type "
-            "FROM Embeddings e JOIN Images i "
-            "  ON e.owner_kind = 'figure' AND e.owner_id = i.id "
-            "JOIN Sections s ON i.section = s.id "
-            "WHERE s.document = ?",
-            (doc_id,),
+            _EXISTING_FIGURE_SQL, (doc_id,)
         ):
             existing.add((etype, section_number, block_id))
 
