@@ -112,7 +112,8 @@ def run(
         # Pool every document's new inputs so create_embeddings can pack full
         # cross-document batches; each input keeps its pdf_name for writeback.
         all_inputs: list = []
-        for i, pdf_dir in enumerate(candidates):
+        docs_with_inputs = 0
+        for pdf_dir in candidates:
             pdf_name = pdf_dir.name
 
             if force:
@@ -140,10 +141,11 @@ def run(
 
             if inputs:
                 all_inputs.extend(inputs)
+                docs_with_inputs += 1
 
         log.info(
             "Pooled %d new items to embed across %d/%d docs",
-            len(all_inputs), sum(1 for _ in candidates), len(candidates),
+            len(all_inputs), docs_with_inputs, len(candidates),
         )
 
         if all_inputs:
