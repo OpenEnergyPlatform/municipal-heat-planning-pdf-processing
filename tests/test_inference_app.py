@@ -665,6 +665,17 @@ def test_answer_from_sources_treats_an_honest_miss_as_a_miss(monkeypatch):
     assert out["found"] is False and not out.get("off_envelope")
 
 
+def test_phrase_prompt_forbids_invented_names_but_keeps_invented_quantities():
+    llm = pytest.importorskip("scripts.inference_app.llm_client")
+    p = llm.PHRASE_SYSTEM_PROMPT
+    # An invented firm/address in the anchor pulls the search towards towns that
+    # do not occur in the plan: median rank of the imprint section 37 -> 0 over
+    # 9 documents. Quantities stay invented — a wrong number costs nothing.
+    assert "erfinde KEINEN" in p and "Eigenname" in p
+    assert "plausiblen Wert" in p
+    assert "GmbH" not in p               # no invented firm in the example either
+
+
 def test_answer_prompt_scopes_task_format_specs_to_the_answer_field():
     llm = pytest.importorskip("scripts.inference_app.llm_client")
     tail = llm._ANSWER_PROMPT_TAIL.lower()

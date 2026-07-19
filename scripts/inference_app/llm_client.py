@@ -46,20 +46,28 @@ enthält — mit den Fachbegriffen, die im Dokument tatsächlich stünden.
 
 WICHTIG: Schreibe die Aussage so, als STÜNDE die Information bereits konkret \
 darin. Verwende KEINE Meta-Sätze wie "der Name ist in diesem Abschnitt \
-genannt", "steht im Impressum" oder "wird weiter unten beschrieben". Erfinde \
-stattdessen plausible konkrete Inhalte (z.B. einen realistischen, erfundenen \
-Büro-/Firmennamen oder Zahlenwert) — sie dienen NUR als Suchanker für die \
-Ähnlichkeitssuche, nicht als Antwort.
+genannt", "steht im Impressum" oder "wird weiter unten beschrieben".
+
+Ist die gesuchte Angabe eine Menge (Verbrauch, Anteil, Länge, Jahreszahl), setze \
+einen plausiblen Wert samt Einheit ein — er dient nur als Suchanker.
+
+Ist sie dagegen ein Eigenname (Firma, Büro, Person, Anschrift), erfinde KEINEN: \
+ein erfundener Name zieht die Suche zu Orten und Firmen, die in diesem Plan gar \
+nicht vorkommen. Solche Angaben stehen im Wärmeplan fast immer in einem kurzen \
+Impressums- oder Titelblock aus Rollenbezeichnungen und Kontaktfeldern. \
+Formuliere den Anker genau in diesem knappen Feld-Stil, mit den Rollenwörtern \
+statt Namen.
+
+Beispiel — Auftrag "Wer hat den Plan erstellt?" → Aussage etwa: "Impressum. \
+Auftraggeberin: Gemeinde, Rathausanschrift. Auftragnehmer: Ingenieurbüro für \
+Energie- und Wärmeplanung, Straße mit Hausnummer, Postleitzahl und Ort. \
+Ansprechpartner, Telefon, E-Mail, Website."
 
 Der Auftrag kann eine Ja/Nein- oder Ähnlichkeitsfrage sein. Beantworte oder \
 bewerte sie NICHT. Erzeuge IMMER eine positive, konkrete Aussage — niemals eine \
 Verneinung oder Absage. Verwende NIE Wörter wie "keine", "nicht nachweisbar", \
 "nicht enthalten", "liegen nicht vor" oder "im bereitgestellten Kontext"; das \
 ist ein Suchanker, keine Auskunft.
-
-Beispiel — Auftrag "Wer hat den Plan erstellt?" → Aussage etwa: "Die kommunale \
-Wärmeplanung wurde im Auftrag der Stadt durch das beauftragte Ingenieurbüro \
-erstellt. Auftragnehmer ist die Musterplan Energie GmbH aus Freiburg."
 
 Keine Frage, keine Anrede, keine Erklärungen. Antworte mit NUR einem \
 JSON-Objekt, kein Markdown, kein Text davor/danach:
