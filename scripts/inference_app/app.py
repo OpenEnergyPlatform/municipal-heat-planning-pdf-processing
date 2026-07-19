@@ -196,6 +196,7 @@ def run_turn(task: str, image_bytes: bytes | None, image_only: bool,
     batches = chunker.pack_chunks(top_hits, config.ANSWER_CONTEXT_TOKENS, tokenizer=None)
     citations, seen = [], set()
     prior_text = None
+    off_envelope = False
     with _spinner("🔍 Antwort aus den Quellen"):
         for bi, chunk in enumerate(batches, start=1):
             items = chunk.items
@@ -207,6 +208,7 @@ def run_turn(task: str, image_bytes: bytes | None, image_only: bool,
                 code_context=code_ctx, max_compute=config.CODE_EXEC_MAX_ROUNDS,
                 history=history)
             result["compute"].extend(out.get("compute") or [])
+            off_envelope = off_envelope or bool(out.get("off_envelope"))
             item_by_index = {it["index"]: it for it in items}
             for s in out.get("supports", []):
                 try:
@@ -232,10 +234,14 @@ def run_turn(task: str, image_bytes: bytes | None, image_only: bool,
                 break     # fully answered → don't scan the remaining batches
     if not citations or not prior_text:      # nothing grounded → refuse (anti-hallucination)
         latency_ms = (time.time() - start_time) * 1000
+        # An off-envelope reply is a model failure, not an absent fact — logging
+        # both as "no citations" makes the two indistinguishable after the fact.
         request_log.log_request(
             log_conn, document_id, task or phrase or "", mode, scopes,
             latency_ms=latency_ms, n_hits=result["n_hits"],
-            error_message="No grounded citations", cache_hit=False
+            error_message=("Answer ignored the response envelope" if off_envelope
+                           else "No grounded citations"),
+            cache_hit=False
         )
         return result
 

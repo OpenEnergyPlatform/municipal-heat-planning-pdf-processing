@@ -608,6 +608,71 @@ def test_answer_from_sources_runs_react_compute_loop(monkeypatch):
     assert out["compute"][0]["output"]["stdout"] == "50\n"
 
 
+_TASK_WITH_SCHEMA = ('Welche Firma hat den Plan erstellt? Bitte Antwort als JSON im Format: '
+                     '{"Firmname": str, "Postleitzahl": int}')
+_HIJACKED = {"Firmname": "Energieservice Westfalen Weser GmbH", "Postleitzahl": 32278}
+_ITEMS = [{"index": 0, "source": "s", "text": "Auftragnehmer: Energieservice Westfalen Weser GmbH"}]
+
+
+def test_answer_from_sources_retries_when_the_task_schema_hijacks_the_envelope(monkeypatch):
+    llm = pytest.importorskip("scripts.inference_app.llm_client")
+    monkeypatch.setattr(llm, "LLM_STUB_MODE", False)
+    seen = []
+
+    def fake_chat_json(messages, temperature):
+        seen.append(messages[0]["content"])
+        if len(seen) == 1:               # model answers in the task's schema instead
+            return dict(_HIJACKED)
+        return {"found": True, "complete": True, "answer": "Energieservice Westfalen Weser GmbH",
+                "supports": [{"index": 0, "quote": "Auftragnehmer: Energieservice"}]}
+
+    monkeypatch.setattr(llm, "_chat_json", fake_chat_json)
+    out = llm.answer_from_sources(_TASK_WITH_SCHEMA, _ITEMS)
+
+    # A reply in the task's own schema parses fine but has no "found", so without
+    # the retry it reads as "the document does not say" and the answer is lost.
+    assert len(seen) == 2
+    assert llm._ENVELOPE_CORRECTION in seen[1]
+    assert out["found"] and out["supports"]
+
+
+def test_answer_from_sources_flags_a_persistent_envelope_violation(monkeypatch):
+    llm = pytest.importorskip("scripts.inference_app.llm_client")
+    monkeypatch.setattr(llm, "LLM_STUB_MODE", False)
+    monkeypatch.setattr(llm, "_chat_json", lambda messages, temperature: dict(_HIJACKED))
+
+    out = llm.answer_from_sources(_TASK_WITH_SCHEMA, _ITEMS)
+
+    # Must stay distinguishable from an honest miss, or the next diagnosis starts
+    # from scratch again.
+    assert out["found"] is False and out["off_envelope"] is True
+
+
+def test_answer_from_sources_treats_an_honest_miss_as_a_miss(monkeypatch):
+    llm = pytest.importorskip("scripts.inference_app.llm_client")
+    monkeypatch.setattr(llm, "LLM_STUB_MODE", False)
+    calls = {"n": 0}
+
+    def fake_chat_json(messages, temperature):
+        calls["n"] += 1
+        return {"found": False}
+
+    monkeypatch.setattr(llm, "_chat_json", fake_chat_json)
+    out = llm.answer_from_sources(_TASK_WITH_SCHEMA, _ITEMS)
+
+    # {"found": false} carries the key, so it must not trigger a retry.
+    assert calls["n"] == 1
+    assert out["found"] is False and not out.get("off_envelope")
+
+
+def test_answer_prompt_scopes_task_format_specs_to_the_answer_field():
+    llm = pytest.importorskip("scripts.inference_app.llm_client")
+    tail = llm._ANSWER_PROMPT_TAIL.lower()
+    # Measured on the live model: without this the envelope is lost 4/4 times for
+    # a task carrying its own JSON schema, with it 4/4 times correct.
+    assert "formatvorgaben" in tail and '"answer"' in llm._ANSWER_PROMPT_TAIL
+
+
 def test_history_context_includes_recent_turns_but_frames_as_non_source():
     llm = pytest.importorskip("scripts.inference_app.llm_client")
     hist = [{"task": "Wer hat den Plan erstellt?", "phrase": "anker1", "answer": "Firma X"},
