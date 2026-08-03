@@ -203,15 +203,25 @@ def run_turn(task: str, image_bytes: bytes | None, image_only: bool,
             # same question searches past exactly these.
             examined.update((top_hits[it["index"]]["owner_kind"],
                              top_hits[it["index"]]["owner_id"]) for it in items)
+            # Attach the table/figure crops so values that exist only in a chart
+            # can be read off the image (capped; downscaled in llm_client).
+            images = {}
+            for it in items:
+                if len(images) >= config.ANSWER_MAX_IMAGES:
+                    break
+                img = resolve_image_path(top_hits[it["index"]].get("image_path"))
+                if img is not None:
+                    images[it["index"]] = str(img)
             # Text answer during batching; JSON formatting happens once at the end.
             code_ctx = _code_context(items, top_hits) if code_exec.is_enabled() else None
             out = llm_client.answer_from_sources(
                 task, items, prior=prior_text, as_json=False,
                 code_runner=(code_exec.run_code if code_exec.is_enabled() else None),
                 code_context=code_ctx, max_compute=config.CODE_EXEC_MAX_ROUNDS,
-                history=history)
+                history=history, images=images or None)
             result["compute"].extend(out.get("compute") or [])
             off_envelope = off_envelope or bool(out.get("off_envelope"))
+            attached = set(out.get("attached_images") or [])
             item_by_index = {it["index"]: it for it in items}
             for s in out.get("supports", []):
                 try:
@@ -221,15 +231,22 @@ def run_turn(task: str, image_bytes: bytes | None, image_only: bool,
                 it = item_by_index.get(idx)
                 if it is None or not (0 <= idx < len(top_hits)):
                     continue
-                gq = llm_client.grounded_quote(s.get("quote", ""), it)
-                if gq is None:
+                if s.get("bild"):
+                    # Read off an attached crop: no verbatim quote can exist, the
+                    # validated substitute is the reading + the flagged rendering.
+                    quote = llm_client.visual_reading(s, attached)
+                    visual = True
+                else:
+                    quote = llm_client.grounded_quote(s.get("quote", ""), it)
+                    visual = False
+                if quote is None:
                     continue
                 hit = top_hits[idx]
                 key = (hit["owner_kind"], hit["owner_id"])
                 if key in seen:
                     continue
                 seen.add(key)
-                citations.append({**hit, "quote": gq})
+                citations.append({**hit, "quote": quote, "visual": visual})
             if out.get("found"):
                 prior_text = out.get("answer")
             result["n_batches"] = bi
@@ -532,6 +549,8 @@ def _render_citation(cit: dict) -> None:
     quote = cit.get("quote")
     if quote:
         st.markdown("> " + str(quote).replace("\n", " "))
+    if cit.get("visual"):
+        st.caption("📷 Aus der Abbildung abgelesen – Schätzwert, Ablesefehler möglich")
     link = _pdf_link_for(cit)
     if link:
         url, page = link
