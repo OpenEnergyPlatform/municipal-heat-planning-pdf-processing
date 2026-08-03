@@ -80,4 +80,9 @@ def test_class_metadata_is_consistent():
     assert len(common.CLASS_NAMES) == 25
     assert common.CLASS_NAMES[13] == "header_image"     # the port-artifact fix
     assert common.CLASS_NAMES[9] == "footer_image"
-    assert all(0 <= i < 25 for i in common.EDITOR_CLASS_IDS)
+    # The palette is the frontend's ONLY class selector: anything missing here
+    # (e.g. "content" on TOC pages) cannot be assigned at all.
+    assert sorted(common.EDITOR_CLASS_IDS) == list(range(25))
+    assert common.EDITOR_CLASS_IDS[:9] == [22, 17, 21, 3, 14, 7, 6, 12, 8]
+    assert set(common.CLASS_COLORS) == set(range(25))
+    assert len(set(common.CLASS_COLORS.values())) == 25   # visually distinct
