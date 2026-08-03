@@ -119,25 +119,6 @@ def run_turn(task: str, image_bytes: bytes | None, image_only: bool,
     cache_conn = get_cache()
     log_conn = get_request_log()
 
-    # --- 0) Response cache. Keyed on the RAW user task, not the generated search
-    #        phrase, so re-asking the same question hits reliably. Image queries
-    #        are not cached. ---
-    response_query_key = None
-    if image_bytes is None:
-        response_query_key = request_log.make_query_key(document_id, task, scopes, as_json)
-        cached_response = request_log.get_cached_response(log_conn, document_id, response_query_key)
-        if cached_response is not None:
-            result["answer"] = cached_response["answer"]
-            result["answer_text"] = cached_response["answer_text"]
-            result["citations"] = cached_response["citations"]
-            result["n_findings"] = cached_response["n_findings"]
-            result["cache_hit"] = True
-            request_log.log_request(
-                log_conn, document_id, task or "", "text", scopes,
-                latency_ms=0, n_citations=result["n_findings"], cache_hit=True
-            )
-            return result
-
     with _spinner("Vorbereiten"):
         index, id_to_pos = get_index()
 
@@ -263,14 +244,6 @@ def run_turn(task: str, image_bytes: bytes | None, image_only: bool,
         latency_ms=latency_ms, n_hits=result["n_hits"], n_citations=result["n_findings"],
         answer_hash=answer_hash, cache_hit=False
     )
-    # response_query_key is set only for cacheable turns (text mode); only a
-    # grounded answer (one with citations) is cached.
-    if response_query_key is not None and result["citations"]:
-        request_log.cache_response(
-            log_conn, document_id, response_query_key,
-            result["answer"], result["answer_text"],
-            result["citations"], result["n_findings"]
-        )
     return result
 
 
@@ -427,11 +400,18 @@ def main() -> None:
                 "citations": result["citations"], "phrase": result.get("phrase"),
                 "as_json": result["as_json"], "compute": result.get("compute", []),
             })
-            # Remember this turn for follow-ups; no document excerpts are retained.
-            turns = st.session_state.setdefault("turns", [])
-            turns.append({"task": task, "phrase": result.get("phrase"),
-                          "answer": result.get("answer_text") or result.get("answer")})
-            st.session_state["turns"] = turns[-5:]
+
+    # Remember this turn for follow-ups; no document excerpts are retained.
+    # Failed turns too: "schau noch einmal nach" is asked precisely AFTER a
+    # failure, and without the failed question in context the anchor is built
+    # from the literal follow-up words with no referent at all.
+    turns = st.session_state.setdefault("turns", [])
+    turns.append({
+        "task": task, "phrase": result.get("phrase"),
+        "answer": result.get("answer_text") or result.get("answer")
+                  or "(keine belegte Antwort gefunden)",
+    })
+    st.session_state["turns"] = turns[-5:]
 
 
 def _render_compute(compute: list | None) -> None:
