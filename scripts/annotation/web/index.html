@@ -1,0 +1,573 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>KWP Layout Editor</title>
+<style>
+  :root {
+    --bg: #14161a; --panel: #1d2027; --panel2: #232733; --line: #2c313b;
+    --fg: #e6e8ec; --muted: #8b93a3; --ok: #3ddc84; --warn: #f5a524; --accent: #4c8dff;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    background: var(--bg); color: var(--fg); overflow: hidden;
+    font: 13px/1.5 "Segoe UI", system-ui, sans-serif;
+  }
+  #app { display: grid; grid-template-columns: 230px 1fr; height: 100%; }
+
+  /* ---------- Sidebar: image list ---------- */
+  aside { display: flex; flex-direction: column; background: var(--panel); border-right: 1px solid var(--line); min-height: 0; }
+  #side-head { padding: 10px 12px; border-bottom: 1px solid var(--line); }
+  #bar { height: 6px; background: var(--line); border-radius: 3px; overflow: hidden; margin-top: 7px; }
+  #fill { height: 100%; width: 0; background: var(--ok); transition: width .15s; }
+  #prog { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+  #filter { display: flex; gap: 4px; margin-top: 8px; }
+  #filter button { flex: 1; font-size: 11px; padding: 3px 0; }
+  #list { flex: 1; overflow-y: auto; min-height: 0; }
+  .item {
+    display: flex; align-items: center; gap: 8px; padding: 5px 12px;
+    cursor: pointer; border-left: 3px solid transparent; white-space: nowrap;
+  }
+  .item:hover { background: var(--panel2); }
+  .item.cur { background: var(--panel2); border-left-color: var(--accent); }
+  .item .dot { width: 8px; height: 8px; border-radius: 50%; flex: none; background: var(--muted); }
+  .item.confirmed .dot { background: var(--ok); }
+  .item.predicted .dot { background: var(--warn); }
+  .item .nm { overflow: hidden; text-overflow: ellipsis; font-size: 12px; }
+  .item .src { color: var(--muted); font-size: 10px; margin-right: 5px; }
+  .item .no { margin-left: auto; color: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+
+  /* ---------- Main area ---------- */
+  main { display: grid; grid-template-rows: auto 1fr auto auto; min-width: 0; min-height: 0; }
+
+  header { display: flex; align-items: center; gap: 12px; padding: 8px 14px; background: var(--panel); border-bottom: 1px solid var(--line); }
+  #file { font-weight: 600; overflow: hidden; text-overflow: ellipsis; }
+  #pos { color: var(--muted); font-variant-numeric: tabular-nums; flex: none; }
+  #badge { padding: 2px 9px; border-radius: 10px; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; border: 1px solid var(--line); flex: none; }
+  #badge.confirmed { background: rgba(61,220,132,.15); color: var(--ok); border-color: var(--ok); }
+  #badge.predicted { background: rgba(245,165,36,.13); color: var(--warn); border-color: var(--warn); }
+  #badge.unlabeled { color: var(--muted); }
+
+  button {
+    background: var(--panel2); color: var(--fg); border: 1px solid var(--line);
+    border-radius: 5px; padding: 5px 11px; cursor: pointer; font: inherit; font-size: 12px;
+  }
+  button:hover:not(:disabled) { background: #2c323d; border-color: #3d4553; }
+  button:disabled { opacity: .4; cursor: default; }
+  button.primary { background: var(--ok); color: #05170c; border-color: var(--ok); font-weight: 600; }
+  button.primary:hover:not(:disabled) { background: #57e698; }
+  button.danger { border-color: #6b3b3b; color: #f08a8a; }
+  button.danger:hover:not(:disabled) { background: #3a2626; border-color: #8d4a4a; }
+  button.on { border-color: var(--accent); color: var(--accent); }
+
+  #tools { display: flex; align-items: center; gap: 6px; padding: 7px 14px; background: var(--panel); border-top: 1px solid var(--line); flex-wrap: wrap; }
+  .sep { width: 1px; height: 20px; background: var(--line); margin: 0 4px; }
+  #palette { display: flex; gap: 5px; margin-left: auto; }
+  #palette button { display: flex; align-items: center; gap: 6px; }
+  #palette i { width: 11px; height: 11px; border-radius: 2px; display: inline-block; }
+
+  #stage { position: relative; overflow: hidden; background: #0d0f12; min-height: 0; }
+  canvas { position: absolute; inset: 0; cursor: crosshair; }
+
+  #hints { padding: 6px 14px; background: var(--bg); border-top: 1px solid var(--line); color: var(--muted); font-size: 11px; display: flex; gap: 16px; flex-wrap: wrap; }
+  kbd { background: #262b34; border: 1px solid var(--line); border-radius: 4px; padding: 0 5px; color: var(--fg); font-size: 10px; font-family: inherit; }
+
+  #toast { position: absolute; left: 50%; bottom: 22px; transform: translateX(-50%); background: #262b34; border: 1px solid var(--line); border-radius: 6px; padding: 7px 14px; opacity: 0; transition: opacity .2s; pointer-events: none; }
+  #toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+<div id="app">
+  <aside>
+    <div id="side-head">
+      <div id="prog">–</div>
+      <div id="bar"><div id="fill"></div></div>
+      <div id="filter">
+        <button data-f="all" class="on">all</button>
+        <button data-f="open">open</button>
+        <button data-f="confirmed">done</button>
+      </div>
+    </div>
+    <div id="list"></div>
+  </aside>
+
+  <main>
+    <header>
+      <span id="file">–</span>
+      <span id="badge" class="unlabeled">–</span>
+      <span id="pos" style="margin-left:auto"></span>
+    </header>
+
+    <div id="stage">
+      <canvas id="cv"></canvas>
+      <div id="toast"></div>
+    </div>
+
+    <div id="tools">
+      <button id="b-prev" title="Previous image (arrow left)">‹ back</button>
+      <button id="b-next" title="Next image (arrow right)">next ›</button>
+      <button id="b-confirm" class="primary" title="Confirm and continue (space bar)">✓ confirm + next</button>
+      <span class="sep"></span>
+      <button id="b-del" title="Delete selected box (Del)">delete box</button>
+      <button id="b-undo" title="Undo (Ctrl+Z)">↶ undo</button>
+      <button id="b-clear" title="Delete all boxes of this image">clear all</button>
+      <span class="sep"></span>
+      <button id="b-delimg" class="danger" title="Discard the whole image (Shift+Del) - moved to deleted/, not erased">🗑 discard image</button>
+      <span class="sep"></span>
+      <button id="b-zin" title="Zoom in (mouse wheel)">＋</button>
+      <button id="b-zout" title="Zoom out (mouse wheel)">－</button>
+      <button id="b-zreset" title="Reset view (0)">view</button>
+      <div id="palette"></div>
+    </div>
+
+    <div id="hints">
+      <span><kbd>Space</kbd> confirm + next</span>
+      <span><kbd>←</kbd><kbd>→</kbd> navigate</span>
+      <span><kbd>1</kbd>–<kbd>4</kbd> class</span>
+      <span><kbd>Tab</kbd> next box</span>
+      <span><kbd>Del</kbd> delete box</span>
+      <span><kbd>Shift</kbd>+<kbd>Del</kbd> discard image</span>
+      <span><kbd>Ctrl</kbd>+<kbd>Z</kbd> undo</span>
+      <span>Drag on empty area = new box · right-drag = pan · wheel = zoom</span>
+    </div>
+  </main>
+</div>
+
+<script>
+"use strict";
+
+// --------------------------------------------------------------------------
+// State
+// --------------------------------------------------------------------------
+const S = {
+  cfg: null,
+  list: [],            // [{name, stem, status}]
+  idx: 0,
+  img: new Image(),
+  boxes: [],           // [{cls, cx, cy, w, h}] normalized
+  conf: [],
+  sel: -1,
+  undo: [],
+  dirty: false,
+  view: { z: 1, x: 0, y: 0 },
+  drag: null,
+  activeCls: null,
+  filter: "all",
+};
+
+const cv = document.getElementById("cv");
+const ctx = cv.getContext("2d");
+const HANDLE = 7, HIT = 9;
+const $ = id => document.getElementById(id);
+
+function toast(msg) {
+  const t = $("toast");
+  t.textContent = msg; t.classList.add("show");
+  clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove("show"), 1400);
+}
+const clamp01 = v => Math.min(1, Math.max(0, v));
+function snapshot() { S.undo.push(JSON.stringify(S.boxes)); if (S.undo.length > 100) S.undo.shift(); }
+
+// --------------------------------------------------------------------------
+// Coordinates
+// --------------------------------------------------------------------------
+function fitScale() { return S.img.width ? Math.min(cv.width / S.img.width, cv.height / S.img.height) : 1; }
+function tf() {
+  const s = fitScale() * S.view.z;
+  return { s, ox: (cv.width - S.img.width * s) / 2 + S.view.x, oy: (cv.height - S.img.height * s) / 2 + S.view.y };
+}
+function toScreen(nx, ny) { const t = tf(); return [t.ox + nx * S.img.width * t.s, t.oy + ny * S.img.height * t.s]; }
+function toImage(px, py) { const t = tf(); return [(px - t.ox) / (S.img.width * t.s), (py - t.oy) / (S.img.height * t.s)]; }
+function boxCorners(b) {
+  const [x1, y1] = toScreen(b.cx - b.w / 2, b.cy - b.h / 2);
+  const [x2, y2] = toScreen(b.cx + b.w / 2, b.cy + b.h / 2);
+  return { x1, y1, x2, y2 };
+}
+function colorOf(cls) { return (S.cfg && S.cfg.class_colors[String(cls)]) || "#fff"; }
+function nameOf(cls) { return (S.cfg && S.cfg.class_names[cls]) || ("cls" + cls); }
+function handlePositions(c) {
+  const mx = (c.x1 + c.x2) / 2, my = (c.y1 + c.y2) / 2;
+  return [[c.x1,c.y1],[mx,c.y1],[c.x2,c.y1],[c.x2,my],[c.x2,c.y2],[mx,c.y2],[c.x1,c.y2],[c.x1,my]];
+}
+const HANDLE_DIRS = [[-1,-1],[0,-1],[1,-1],[1,0],[1,1],[0,1],[-1,1],[-1,0]];
+
+// --------------------------------------------------------------------------
+// Drawing
+// --------------------------------------------------------------------------
+function resize() { const st = $("stage"); cv.width = st.clientWidth; cv.height = st.clientHeight; draw(); }
+
+function draw() {
+  ctx.clearRect(0, 0, cv.width, cv.height);
+  if (!S.img.width) return;
+  const t = tf();
+  ctx.imageSmoothingEnabled = t.s < 1;    // show hard pixels when zooming in
+  ctx.drawImage(S.img, t.ox, t.oy, S.img.width * t.s, S.img.height * t.s);
+
+  S.boxes.forEach((b, i) => {
+    const c = boxCorners(b), col = colorOf(b.cls), on = i === S.sel;
+    ctx.lineWidth = on ? 2 : 1.4; ctx.strokeStyle = col;
+    ctx.strokeRect(c.x1, c.y1, c.x2 - c.x1, c.y2 - c.y1);
+
+    const conf = (S.conf[i] != null) ? " " + Number(S.conf[i]).toFixed(2) : "";
+    const txt = nameOf(b.cls) + conf;
+    ctx.font = "11px 'Segoe UI', sans-serif";
+    const tw = ctx.measureText(txt).width + 8;
+    const ty = c.y1 > 16 ? c.y1 - 14 : c.y2 + 2;
+    ctx.fillStyle = col; ctx.fillRect(c.x1, ty, tw, 14);
+    ctx.fillStyle = "#000"; ctx.fillText(txt, c.x1 + 4, ty + 11);
+
+    if (on) {
+      ctx.fillStyle = col;
+      for (const [hx, hy] of handlePositions(c)) ctx.fillRect(hx - HANDLE/2, hy - HANDLE/2, HANDLE, HANDLE);
+    }
+  });
+  $("b-undo").disabled = !S.undo.length;
+  $("b-del").disabled = S.sel < 0;
+  $("b-clear").disabled = !S.boxes.length;
+}
+
+// --------------------------------------------------------------------------
+// List and progress
+// --------------------------------------------------------------------------
+function renderList() {
+  const el = $("list"); el.innerHTML = "";
+  S.list.forEach((it, i) => {
+    if (S.filter === "open" && it.status === "confirmed") return;
+    if (S.filter === "confirmed" && it.status !== "confirmed") return;
+    const d = document.createElement("div");
+    d.className = "item " + it.status + (i === S.idx ? " cur" : "");
+    // With several sources the bare file name is ambiguous - two capture
+    // sessions both contain frame_0000.png.
+    const src = (S.cfg && S.cfg.multi_source) ? `<span class="src">${it.source}</span>` : "";
+    d.innerHTML = `<span class="dot"></span><span class="nm">${src}${it.name}</span><span class="no">${i + 1}</span>`;
+    d.onclick = () => loadImage(i);
+    el.appendChild(d);
+  });
+  const cur = el.querySelector(".cur");
+  if (cur) cur.scrollIntoView({ block: "nearest" });
+}
+
+function updateProgress() {
+  const total = S.list.length;
+  const done = S.list.filter(x => x.status === "confirmed").length;
+  $("fill").style.width = total ? (100 * done / total) + "%" : "0";
+  $("prog").textContent = `${done} / ${total} confirmed (${total ? Math.round(100*done/total) : 0} %)`;
+}
+
+// --------------------------------------------------------------------------
+// Load and save
+// --------------------------------------------------------------------------
+async function loadList() {
+  const d = await (await fetch("/api/images")).json();
+  S.list = d.images;
+  updateProgress();
+}
+
+async function loadImage(i) {
+  if (i < 0 || i >= S.list.length || i === null) return;
+  await save(false);                       // autosave on image change
+  S.idx = i;
+  const it = S.list[i];
+
+  // it.key and it.img are built server-side and already URL-safe.
+  const d = await (await fetch("/api/labels/" + it.key)).json();
+  S.boxes = d.boxes; S.conf = d.conf || [];
+  S.sel = S.boxes.length ? 0 : -1;
+  S.undo = []; S.dirty = false;
+  it.status = d.status;
+
+  await new Promise(res => {
+    S.img.onload = res;
+    S.img.onerror = () => { toast("image not loadable: " + it.name); res(); };
+    S.img.src = it.img;
+  });
+  resetView(); header(); renderList(); draw();
+}
+
+function header() {
+  const it = S.list[S.idx];
+  $("file").textContent = it.name;
+  $("pos").textContent = `${S.idx + 1} / ${S.list.length}`;
+  const b = $("badge");
+  b.className = it.status;
+  b.textContent = { confirmed: "confirmed", predicted: "pre-annotated", unlabeled: "unlabeled" }[it.status];
+  $("b-prev").disabled = S.idx <= 0;
+  $("b-next").disabled = S.idx >= S.list.length - 1;
+}
+
+async function save(confirm) {
+  if (!S.list.length) return;
+  // After a delete the current index points at nothing - saving then would
+  // write the removed image's boxes back and resurrect its label file.
+  if (S.idx < 0 || S.idx >= S.list.length) return;
+  if (!S.dirty && !confirm) return;
+  const it = S.list[S.idx];
+  const r = await fetch("/api/labels/" + it.key, {
+    method: "PUT", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ boxes: S.boxes, confirm: !!confirm }),
+  });
+  if (!r.ok) { toast("save failed"); return; }
+  it.status = (await r.json()).status;
+  S.dirty = false;
+  updateProgress(); renderList(); header();
+}
+
+async function confirmNext() {
+  await save(true);
+  if (S.idx < S.list.length - 1) await loadImage(S.idx + 1);
+  else { toast("reached last image"); renderList(); }
+}
+
+// --------------------------------------------------------------------------
+// View
+// --------------------------------------------------------------------------
+function resetView() { S.view = { z: 1, x: 0, y: 0 }; }
+
+function zoomAt(px, py, factor) {
+  const nz = Math.min(20, Math.max(1, S.view.z * factor));
+  const t = tf(), k = nz / S.view.z, fs = fitScale();
+  // The point under the cursor stays put.
+  S.view.x = px - k * (px - t.ox) - (cv.width  - S.img.width  * fs * nz) / 2;
+  S.view.y = py - k * (py - t.oy) - (cv.height - S.img.height * fs * nz) / 2;
+  S.view.z = nz;
+  draw();
+}
+
+cv.addEventListener("wheel", e => {
+  e.preventDefault();
+  const r = cv.getBoundingClientRect();
+  zoomAt(e.clientX - r.left, e.clientY - r.top, e.deltaY < 0 ? 1.15 : 1/1.15);
+}, { passive: false });
+cv.addEventListener("contextmenu", e => e.preventDefault());
+
+// --------------------------------------------------------------------------
+// Mouse on the canvas
+// --------------------------------------------------------------------------
+function hitTest(px, py) {
+  if (S.sel >= 0 && S.boxes[S.sel]) {          // handles of the selection take priority
+    const hs = handlePositions(boxCorners(S.boxes[S.sel]));
+    for (let k = 0; k < hs.length; k++)
+      if (Math.abs(px - hs[k][0]) <= HANDLE && Math.abs(py - hs[k][1]) <= HANDLE)
+        return { type: "resize", i: S.sel, k };
+  }
+  for (let i = S.boxes.length - 1; i >= 0; i--) {   // last drawn first
+    const c = boxCorners(S.boxes[i]);
+    if (px >= c.x1 - HIT && px <= c.x2 + HIT && py >= c.y1 - HIT && py <= c.y2 + HIT)
+      return { type: "move", i };
+  }
+  return null;
+}
+
+cv.addEventListener("pointerdown", e => {
+  if (!S.img.width) return;
+  const r = cv.getBoundingClientRect(), px = e.clientX - r.left, py = e.clientY - r.top;
+  cv.setPointerCapture(e.pointerId);
+
+  if (e.button === 2 || e.button === 1) {        // right/middle button: pan
+    S.drag = { type: "pan", px, py, vx: S.view.x, vy: S.view.y }; return;
+  }
+  if (e.button !== 0) return;
+
+  const hit = hitTest(px, py);
+  if (hit) {
+    S.sel = hit.i; snapshot();
+    S.drag = { ...hit, px, py, orig: { ...S.boxes[hit.i] } };
+  } else {
+    const [nx, ny] = toImage(px, py);
+    snapshot();
+    S.boxes.push({ cls: S.activeCls, cx: clamp01(nx), cy: clamp01(ny), w: 0, h: 0 });
+    S.conf.push(null);
+    S.sel = S.boxes.length - 1;
+    S.drag = { type: "create", i: S.sel, ax: clamp01(nx), ay: clamp01(ny) };
+  }
+  draw();
+});
+
+cv.addEventListener("pointermove", e => {
+  if (!S.drag) return;
+  const r = cv.getBoundingClientRect(), px = e.clientX - r.left, py = e.clientY - r.top;
+  const d = S.drag;
+
+  if (d.type === "pan") { S.view.x = d.vx + (px - d.px); S.view.y = d.vy + (py - d.py); draw(); return; }
+
+  const [nx, ny] = toImage(px, py), b = S.boxes[d.i];
+  if (!b) return;
+
+  if (d.type === "create") {
+    b.cx = (d.ax + clamp01(nx)) / 2; b.cy = (d.ay + clamp01(ny)) / 2;
+    b.w = Math.abs(clamp01(nx) - d.ax); b.h = Math.abs(clamp01(ny) - d.ay);
+  } else if (d.type === "move") {
+    const t = tf();
+    b.cx = clamp01(d.orig.cx + (px - d.px) / (S.img.width * t.s));
+    b.cy = clamp01(d.orig.cy + (py - d.py) / (S.img.height * t.s));
+  } else if (d.type === "resize") {
+    const [sx, sy] = HANDLE_DIRS[d.k];
+    let x1 = d.orig.cx - d.orig.w/2, x2 = d.orig.cx + d.orig.w/2;
+    let y1 = d.orig.cy - d.orig.h/2, y2 = d.orig.cy + d.orig.h/2;
+    if (sx < 0) x1 = clamp01(nx); else if (sx > 0) x2 = clamp01(nx);
+    if (sy < 0) y1 = clamp01(ny); else if (sy > 0) y2 = clamp01(ny);
+    if (x2 < x1) [x1, x2] = [x2, x1];
+    if (y2 < y1) [y1, y2] = [y2, y1];
+    b.cx = (x1+x2)/2; b.cy = (y1+y2)/2; b.w = x2-x1; b.h = y2-y1;
+  }
+  S.dirty = true; draw();
+});
+
+function endDrag() {
+  if (!S.drag) return;
+  if (S.drag.type !== "pan") {
+    const b = S.boxes[S.drag.i];
+    // Tiny boxes are almost always a slipped click, not a real target.
+    if (b && (b.w < 0.002 || b.h < 0.002)) {
+      S.boxes.splice(S.drag.i, 1); S.conf.splice(S.drag.i, 1);
+      S.sel = Math.min(S.sel, S.boxes.length - 1);
+    }
+  }
+  S.drag = null; draw();
+}
+cv.addEventListener("pointerup", endDrag);
+cv.addEventListener("pointercancel", endDrag);
+
+// --------------------------------------------------------------------------
+// Actions (used by buttons AND keyboard)
+// --------------------------------------------------------------------------
+function doUndo() {
+  if (!S.undo.length) { toast("nothing to undo"); return; }
+  S.boxes = JSON.parse(S.undo.pop());
+  S.sel = Math.min(S.sel, S.boxes.length - 1);
+  S.dirty = true; draw();
+}
+function doDelete() {
+  if (S.sel < 0) return;
+  snapshot();
+  S.boxes.splice(S.sel, 1); S.conf.splice(S.sel, 1);
+  S.sel = Math.min(S.sel, S.boxes.length - 1);
+  S.dirty = true; draw();
+}
+function doClear() {
+  if (!S.boxes.length) return;
+  snapshot(); S.boxes = []; S.conf = []; S.sel = -1; S.dirty = true; draw();
+}
+function setClass(cls) {
+  S.activeCls = cls;
+  if (S.sel >= 0) { snapshot(); S.boxes[S.sel].cls = cls; S.dirty = true; }
+  renderPalette(); draw();
+}
+function centerZoom(f) { zoomAt(cv.width / 2, cv.height / 2, f); }
+
+// Discards the whole image, not just a box. No confirm dialog on purpose: the
+// server moves the file into <source>/deleted/ instead of unlinking it, so a
+// misclick costs a file move, not the screenshot.
+async function doDeleteImage() {
+  if (!S.list.length) return;
+  const it = S.list[S.idx];
+  const r = await fetch("/api/image/" + it.key, { method: "DELETE" });
+  if (!r.ok) { toast("delete failed"); return; }
+  S.dirty = false;                          // nothing left to save for this one
+  S.list.splice(S.idx, 1);
+  if (!S.list.length) {
+    S.boxes = []; S.conf = []; S.sel = -1;
+    toast("all images deleted");
+    updateProgress(); renderList(); draw();
+    return;
+  }
+  toast(`moved to ${S.cfg.trash_dirname}/: ${it.name}`);
+  const next = Math.min(S.idx, S.list.length - 1);
+  S.idx = -1;                               // stop loadImage autosaving the gone image
+  await loadImage(next);
+  updateProgress();
+}
+
+// --------------------------------------------------------------------------
+// Controls
+// --------------------------------------------------------------------------
+$("b-prev").onclick    = () => loadImage(S.idx - 1);
+$("b-next").onclick    = () => loadImage(S.idx + 1);
+$("b-confirm").onclick = confirmNext;
+$("b-del").onclick     = doDelete;
+$("b-undo").onclick    = doUndo;
+$("b-clear").onclick   = doClear;
+$("b-zin").onclick     = () => centerZoom(1.3);
+$("b-zout").onclick    = () => centerZoom(1/1.3);
+$("b-zreset").onclick  = () => { resetView(); draw(); };
+$("b-delimg").onclick  = doDeleteImage;
+
+document.querySelectorAll("#filter button").forEach(b => {
+  b.onclick = () => {
+    S.filter = b.dataset.f;
+    document.querySelectorAll("#filter button").forEach(x => x.classList.toggle("on", x === b));
+    renderList();
+  };
+});
+
+function renderPalette() {
+  const el = $("palette"); el.innerHTML = "";
+  S.cfg.editor_class_ids.forEach((cls, i) => {
+    const b = document.createElement("button");
+    b.className = S.activeCls === cls ? "on" : "";
+    b.title = `Class ${nameOf(cls)} (key ${i + 1})`;
+    b.innerHTML = `<i style="background:${colorOf(cls)}"></i>${i + 1} ${nameOf(cls)}`;
+    b.onclick = () => setClass(cls);
+    el.appendChild(b);
+  });
+}
+
+// --------------------------------------------------------------------------
+// Keyboard
+// --------------------------------------------------------------------------
+document.addEventListener("keydown", async e => {
+  if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA") return;
+
+  if (e.ctrlKey && e.key.toLowerCase() === "z") { e.preventDefault(); doUndo(); return; }
+  // Shift+Del discards the whole image. Del alone stays on the selected box -
+  // that is the far more frequent action and must not become dangerous.
+  if (e.shiftKey && (e.key === "Delete" || e.key === "Backspace")) {
+    e.preventDefault(); await doDeleteImage(); return;
+  }
+  if (e.ctrlKey || e.altKey || e.metaKey) return;
+
+  switch (e.key) {
+    case " ":          e.preventDefault(); await confirmNext(); return;
+    case "ArrowRight": e.preventDefault(); await loadImage(S.idx + 1); return;
+    case "ArrowLeft":  e.preventDefault(); await loadImage(S.idx - 1); return;
+    case "Tab":
+      e.preventDefault();
+      if (S.boxes.length) { S.sel = (S.sel + (e.shiftKey ? -1 : 1) + S.boxes.length) % S.boxes.length; draw(); }
+      return;
+    case "Delete": case "Backspace": e.preventDefault(); doDelete(); return;
+    case "0": e.preventDefault(); resetView(); draw(); return;
+  }
+
+  const n = parseInt(e.key, 10);
+  if (!isNaN(n) && n >= 1 && n <= S.cfg.editor_class_ids.length) {
+    e.preventDefault(); setClass(S.cfg.editor_class_ids[n - 1]);
+  }
+});
+
+// Autosave on tab close as well.
+window.addEventListener("beforeunload", () => {
+  if (!S.dirty || !S.list.length) return;
+  if (S.idx < 0 || S.idx >= S.list.length) return;
+  navigator.sendBeacon("/api/labels/" + S.list[S.idx].key,
+    new Blob([JSON.stringify({ boxes: S.boxes, confirm: false })], { type: "application/json" }));
+});
+
+// --------------------------------------------------------------------------
+// Start
+// --------------------------------------------------------------------------
+(async function init() {
+  S.cfg = await (await fetch("/api/config")).json();
+  S.activeCls = S.cfg.editor_class_ids[0];
+  renderPalette();
+  await loadList();
+  if (!S.list.length) { toast("no images found"); return; }
+  window.addEventListener("resize", resize);
+  resize();
+  // Start at the first unconfirmed image, not bluntly at number one.
+  const first = S.list.findIndex(x => x.status !== "confirmed");
+  await loadImage(first >= 0 ? first : 0);
+})();
+</script>
+</body>
+</html>
