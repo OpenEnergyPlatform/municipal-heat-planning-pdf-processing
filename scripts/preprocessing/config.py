@@ -16,9 +16,11 @@ from re import compile
 # DPI used when rendering a page region to a crop PNG (tables/figures).
 PAGE_RENDER_DPI = 300
 
-# DPI for the layout-detection model input. Crops are always taken at
-# PAGE_RENDER_DPI; when the two are equal a page is rendered only once.
-LAYOUT_DETECT_DPI = 300
+# DPI for the layout-detection model input. The model's preprocessor resizes
+# every page to a fixed 800x800 (do_resize in its HF config), so rendering
+# beyond ~150 DPI is discarded work; pages with crops are re-rendered at
+# PAGE_RENDER_DPI (stage2 renders once only when the two values are equal).
+LAYOUT_DETECT_DPI = 150
 
 # ---------------------------------------------------------------------------
 # Stage 1 – Text extraction
@@ -52,8 +54,12 @@ PP_CLASS_THRESHOLDS: dict[int, float] = {
 # per-class thresholds are applied.
 PP_GLOBAL_MIN_CONF = 0.4
 
-# id2label mapping (25 classes, ids 0-24). IDs 8/9 both map to "footer" and
-# 12/13 both map to "header" – that duplication is in the upstream model config.
+# id2label mapping (25 classes, ids 0-24). The HF port's own id2label collapses
+# four pairs the original Paddle label list distinguishes: 8/9 footer /
+# footer_image, 12/13 header / header_image, 5/15 display / inline formula,
+# 22/23 text / vertical_text. The image variants are named here so their
+# suppression below is explicit; the formula and text collapses are kept —
+# both members are treated identically downstream.
 PP_ID2LABEL: dict[int, str] = {
     0:  "abstract",
     1:  "algorithm",
@@ -64,11 +70,11 @@ PP_ID2LABEL: dict[int, str] = {
     6:  "doc_title",
     7:  "figure_title",
     8:  "footer",
-    9:  "footer",
+    9:  "footer_image",
     10: "footnote",
     11: "formula_number",
     12: "header",
-    13: "header",
+    13: "header_image",
     14: "image",
     15: "formula",
     16: "number",
@@ -82,8 +88,10 @@ PP_ID2LABEL: dict[int, str] = {
     24: "vision_footnote",
 }
 
-# Classes whose text blocks are removed from page content entirely.
-SUPPRESS_CLASSES = {"header", "footer", "number", "footnote"}
+# Classes whose text blocks are removed from page content entirely. The image
+# variants are running furniture too (municipal logos in page corners).
+SUPPRESS_CLASSES = {"header", "header_image", "footer", "footer_image",
+                    "number", "footnote"}
 
 # ─── RUNNING HEADER / FOOTER STRIPPING (Stage 3, deterministic) ────────────
 # Removes running headers/footers the layout model mislabelled as plain "text"
