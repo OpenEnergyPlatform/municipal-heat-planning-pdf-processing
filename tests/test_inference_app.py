@@ -665,6 +665,64 @@ def test_answer_from_sources_treats_an_honest_miss_as_a_miss(monkeypatch):
     assert out["found"] is False and not out.get("off_envelope")
 
 
+def test_make_search_phrase_flags_a_recheck(monkeypatch):
+    llm = pytest.importorskip("scripts.inference_app.llm_client")
+    monkeypatch.setattr(llm, "LLM_STUB_MODE", False)
+    monkeypatch.setattr(llm, "_chat_json",
+                        lambda m, temperature: {"phrase": "Impressum. Auftragnehmer: ...",
+                                                "wiederholung": True})
+    hist = [{"task": "Welche Firma hat den Plan erstellt?", "answer": "(keine belegte Antwort gefunden)"}]
+
+    phrase, recheck = llm.make_search_phrase("Schau bitte noch einmal nach", history=hist)
+    assert recheck is True and phrase.startswith("Impressum")
+
+    # Without history there is nothing to re-check — the flag must not survive.
+    phrase, recheck = llm.make_search_phrase("Schau bitte noch einmal nach", history=None)
+    assert recheck is False
+
+
+def test_make_search_phrase_fallbacks_return_no_recheck(monkeypatch):
+    llm = pytest.importorskip("scripts.inference_app.llm_client")
+    monkeypatch.setattr(llm, "LLM_STUB_MODE", True)
+    assert llm.make_search_phrase("Frage?") == ("Frage?", False)
+
+    monkeypatch.setattr(llm, "LLM_STUB_MODE", False)
+
+    def _boom(m, temperature):
+        raise RuntimeError("gateway down")
+
+    monkeypatch.setattr(llm, "_chat_json", _boom)
+    assert llm.make_search_phrase("Frage?", history=[{"task": "x"}]) == ("Frage?", False)
+
+
+def test_retrieve_excludes_already_examined_owners(monkeypatch):
+    fs = pytest.importorskip("scripts.inference_app.faiss_store")
+    rows = [(10, "section_text", "section", 1),
+            (11, "section_text", "section", 2),
+            (12, "table_text", "table", 7)]
+    monkeypatch.setattr(fs.db, "get_candidate_faiss_ids", lambda c, d, t: rows)
+
+    built = {}
+
+    def fake_build(index, id_to_pos, faiss_ids):
+        built["ids"] = faiss_ids
+        return object()
+
+    import numpy as np
+    monkeypatch.setattr(fs, "build_subindex", fake_build)
+    monkeypatch.setattr(fs, "search_subindex",
+                        lambda sub, q, k: (np.ones((1, len(built["ids"]))),
+                                           np.arange(len(built["ids"])).reshape(1, -1)))
+
+    hits = fs.retrieve(None, None, {10: 0, 11: 1, 12: 2}, 1, ["section_text"], None, 50,
+                       content_fetcher=lambda c, k, i: {"owner_kind": k, "owner_id": i},
+                       exclude={("section", 1), ("table", 7)})
+
+    # An excluded owner must not even enter the sub-index, let alone the hits.
+    assert built["ids"] == [11]
+    assert [(h["owner_kind"], h["owner_id"]) for h in hits] == [("section", 2)]
+
+
 def test_phrase_prompt_forbids_invented_names_but_keeps_invented_quantities():
     llm = pytest.importorskip("scripts.inference_app.llm_client")
     p = llm.PHRASE_SYSTEM_PROMPT

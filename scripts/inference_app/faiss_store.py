@@ -100,10 +100,15 @@ def retrieve(
     query_vec: np.ndarray,
     top_k: int,
     content_fetcher: Optional[Callable[[sqlite3.Connection, str, int], Optional[dict]]] = None,
+    exclude: Optional[set] = None,
 ) -> list[dict]:
     """
     Full scoped retrieval: candidate ids → sub-index → top-k → dedup by owner →
     content + citation, ranked by score descending. Empty list if nothing matches.
+
+    `exclude` drops candidates whose (owner_kind, owner_id) is in the set — used
+    by re-check turns to search past the sources an earlier attempt already
+    examined.
 
     Dedup must happen POST-search on (owner_kind, owner_id): when e.g. table_text
     and table_vl point at the same Table row, only the higher-scoring hit is
@@ -115,6 +120,8 @@ def retrieve(
     # Only ids actually present in the index: guards against DB/index drift and
     # keeps the local-position ↔ faiss_id mapping below exact.
     rows = [r for r in rows if r[0] in id_to_pos]
+    if exclude:
+        rows = [r for r in rows if (r[2], r[3]) not in exclude]
     if not rows:
         return []
 
