@@ -253,6 +253,14 @@ def run_turn(task: str, image_bytes: bytes | None, image_only: bool,
             if out.get("complete") and citations:
                 break     # fully answered → don't scan the remaining batches
     result["examined"] = sorted(examined)
+    # Deterministic marking of read-off values: the prompt asks for the phrase,
+    # but only this guarantees it. In JSON output the schema may leave no room
+    # for it — there the flagged citation below the answer is the channel.
+    if prior_text and any(c.get("visual") for c in citations) \
+            and "abgelesen" not in prior_text:
+        prior_text = (prior_text.rstrip()
+                      + "\n\n(Hinweis: Werte teilweise aus Abbildungen abgelesen "
+                        "– Schätzwerte, Ablesefehler möglich.)")
     if not citations or not prior_text:      # nothing grounded → refuse (anti-hallucination)
         latency_ms = (time.time() - start_time) * 1000
         # An off-envelope reply is a model failure, not an absent fact — logging

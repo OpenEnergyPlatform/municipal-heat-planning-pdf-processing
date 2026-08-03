@@ -783,7 +783,9 @@ def test_answer_prompt_defines_the_image_support_contract():
     llm = pytest.importorskip("scripts.inference_app.llm_client")
     tail = llm._ANSWER_PROMPT_TAIL
     assert '"bild"' in tail and '"ablesung"' in tail
-    assert "Schätzwert" in tail            # answer must flag read-off values
+    # Read-off values must carry the literal marker phrase in the answer; the
+    # app additionally appends a deterministic note when the model forgets.
+    assert "aus der Abbildung abgelesen" in tail and "Schätzwert" in tail
 
 
 def test_answer_prompt_scopes_task_format_specs_to_the_answer_field():
