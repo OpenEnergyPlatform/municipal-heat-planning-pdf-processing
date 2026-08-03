@@ -798,6 +798,22 @@ def test_read_off_image_returns_parsed_reading(monkeypatch):
     # Exactly ONE image in the focused call — that is the whole point.
     assert sum(1 for p in sent["content"] if p.get("type") == "image_url") == 1
 
+
+def test_read_off_image_splices_the_value_into_an_echoed_reading(monkeypatch):
+    llm = pytest.importorskip("scripts.inference_app.llm_client")
+    monkeypatch.setattr(llm, "LLM_STUB_MODE", False)
+    monkeypatch.setattr(llm, "_image_part",
+                        lambda path, max_side=None, png=False: {"type": "image_url",
+                                                                "image_url": {"url": "d"}})
+    # Seen live: "ablesung" just echoes the hint, the number sits only in
+    # "wert" — a revision fed the bare sentence has nothing to correct with.
+    monkeypatch.setattr(llm, "_chat_json",
+                        lambda m, temperature: {"ablesung": "Graues Segment 2035 in Abb. 85",
+                                                "wert": 600.0, "einheit": "GWh/a",
+                                                "sicherheit": "hoch"})
+    ro = llm.read_off_image("Gas 2035?", "c.png", "Graues Segment 2035 in Abb. 85")
+    assert "600" in ro["ablesung"] and "GWh/a" in ro["ablesung"]
+
     monkeypatch.setattr(llm, "_chat_json",
                         lambda m, temperature: (_ for _ in ()).throw(RuntimeError("down")))
     assert llm.read_off_image("Gas 2035?", "chart.png", "x") is None
