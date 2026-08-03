@@ -506,8 +506,10 @@ function renderPalette() {
   S.cfg.editor_class_ids.forEach((cls, i) => {
     const b = document.createElement("button");
     b.className = S.activeCls === cls ? "on" : "";
-    b.title = `Class ${nameOf(cls)} (key ${i + 1})`;
-    b.innerHTML = `<i style="background:${colorOf(cls)}"></i>${i + 1} ${nameOf(cls)}`;
+    // Only the first nine entries are reachable by key - don't promise "17".
+    const key = i < 9 ? `${i + 1} ` : "";
+    b.title = key ? `Class ${nameOf(cls)} (key ${i + 1})` : `Class ${nameOf(cls)}`;
+    b.innerHTML = `<i style="background:${colorOf(cls)}"></i>${key}${nameOf(cls)}`;
     b.onclick = () => setClass(cls);
     el.appendChild(b);
   });

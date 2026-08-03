@@ -13,22 +13,38 @@ from scripts.preprocessing.config import PP_ID2LABEL
 
 CLASS_NAMES: list[str] = [PP_ID2LABEL[i] for i in sorted(PP_ID2LABEL)]
 
-# Classes offered on the editor's hotkeys (1-9); everything else stays visible
-# and editable via the class dropdown.
-EDITOR_CLASS_IDS: list[int] = [22, 17, 21, 3, 14, 7, 6, 12, 8]
+# Palette order: the frequent classes first (they get hotkeys 1-9), then every
+# remaining class — the palette is the ONLY class selector in the frontend, so
+# it must offer all 25 or boxes like "content" become uncorrectable.
+_FREQUENT: list[int] = [22, 17, 21, 3, 14, 7, 6, 12, 8]
+EDITOR_CLASS_IDS: list[int] = _FREQUENT + [i for i in range(25) if i not in _FREQUENT]
 
 CLASS_COLORS: dict[int, str] = {
+    0:  "#fabed4",   # abstract
+    1:  "#dcbeff",   # algorithm
+    2:  "#aaffc3",   # aside_text
     3:  "#e6194b",   # chart
+    4:  "#f032e6",   # content
+    5:  "#42d4f4",   # formula
     6:  "#911eb4",   # doc_title
     7:  "#f58231",   # figure_title
     8:  "#808000",   # footer
     9:  "#9a6324",   # footer_image
+    10: "#ffd8b1",   # footnote
+    11: "#bfef45",   # formula_number
     12: "#469990",   # header
     13: "#000075",   # header_image
     14: "#3cb44b",   # image
+    15: "#4fc3f7",   # formula (inline)
+    16: "#800000",   # number
     17: "#4363d8",   # paragraph_title
+    18: "#c8a2c8",   # reference
+    19: "#b5651d",   # reference_content
+    20: "#ff6f61",   # seal
     21: "#ffe119",   # table
     22: "#a9a9a9",   # text
+    23: "#708090",   # text (vertical)
+    24: "#2f4f4f",   # vision_footnote
 }
 DEFAULT_COLOR = "#666666"
 
