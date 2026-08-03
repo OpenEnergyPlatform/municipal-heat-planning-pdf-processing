@@ -112,7 +112,8 @@ def run_turn(task: str, image_bytes: bytes | None, image_only: bool,
     """
     result = {"answer": None, "answer_text": None, "citations": [], "n_findings": 0,
               "cache_hit": False, "n_hits": 0, "phrase": None, "as_json": as_json,
-              "n_batches": 0, "compute": []}
+              "n_batches": 0, "compute": [], "examined": [], "recheck": False,
+              "n_excluded": 0}
 
     start_time = time.time()
     conn = get_db()
@@ -124,6 +125,7 @@ def run_turn(task: str, image_bytes: bytes | None, image_only: bool,
 
     # --- 1) build the query item + cache key, per mode ---
     tmp_path = None
+    recheck = False
     if image_bytes is not None and image_only:
         mode = "image"
         tmp_path = _write_temp_image(image_bytes)
@@ -133,7 +135,7 @@ def run_turn(task: str, image_bytes: bytes | None, image_only: bool,
     elif image_bytes is not None:
         mode = "image+text"
         with _spinner("🔎 Suchanker (Bild+Text)"):
-            phrase = llm_client.make_search_phrase(task, visual=True, history=history)
+            phrase, recheck = llm_client.make_search_phrase(task, visual=True, history=history)
         tmp_path = _write_temp_image(image_bytes)
         item = {"text": phrase, "image": tmp_path}
         cache_key = query_cache.make_key(mode, text=phrase, image_bytes=image_bytes)
@@ -141,10 +143,24 @@ def run_turn(task: str, image_bytes: bytes | None, image_only: bool,
         mode = "text"
         visual_anchor = _scopes_are_visual(scopes)
         with _spinner("🔎 Suchanker"):
-            phrase = llm_client.make_search_phrase(task, visual=visual_anchor, history=history)
+            phrase, recheck = llm_client.make_search_phrase(task, visual=visual_anchor, history=history)
         item = {"text": phrase}
         cache_key = query_cache.make_key(mode, text=phrase)
     result["phrase"] = phrase
+    result["recheck"] = recheck
+
+    # A re-check ("schau noch einmal nach") searches PAST the sources earlier
+    # attempts already examined — otherwise it re-reads the same top sources and
+    # can only repeat itself. Walk back through the whole re-check chain to the
+    # original question, or the second re-check resurfaces the first turn's
+    # sources.
+    exclude = set()
+    if recheck:
+        for turn in reversed(history or []):
+            exclude.update((k, i) for k, i in turn.get("examined", []))
+            if not turn.get("recheck"):
+                break
+    result["n_excluded"] = len(exclude)
 
     # --- 2) embed (cache or on-demand model load) ---
     with _spinner("🧮 Embedding"):
@@ -160,7 +176,8 @@ def run_turn(task: str, image_bytes: bytes | None, image_only: bool,
     with _spinner("📚 Suche"):
         embedding_types = [t for s in scopes for t in config.SCOPE_TO_EMBEDDING_TYPES[s]]
         hits = faiss_store.retrieve(
-            conn, index, id_to_pos, document_id, embedding_types, query_vec, config.TOP_K
+            conn, index, id_to_pos, document_id, embedding_types, query_vec, config.TOP_K,
+            exclude=exclude,
         )
     result["n_hits"] = len(hits)
     if not hits:
@@ -178,9 +195,14 @@ def run_turn(task: str, image_bytes: bytes | None, image_only: bool,
     citations, seen = [], set()
     prior_text = None
     off_envelope = False
+    examined = set()
     with _spinner("🔍 Antwort aus den Quellen"):
         for bi, chunk in enumerate(batches, start=1):
             items = chunk.items
+            # Sources the LLM actually reads this turn; a later re-check of the
+            # same question searches past exactly these.
+            examined.update((top_hits[it["index"]]["owner_kind"],
+                             top_hits[it["index"]]["owner_id"]) for it in items)
             # Text answer during batching; JSON formatting happens once at the end.
             code_ctx = _code_context(items, top_hits) if code_exec.is_enabled() else None
             out = llm_client.answer_from_sources(
@@ -213,6 +235,7 @@ def run_turn(task: str, image_bytes: bytes | None, image_only: bool,
             result["n_batches"] = bi
             if out.get("complete") and citations:
                 break     # fully answered → don't scan the remaining batches
+    result["examined"] = sorted(examined)
     if not citations or not prior_text:      # nothing grounded → refuse (anti-hallucination)
         latency_ms = (time.time() - start_time) * 1000
         # An off-envelope reply is a model failure, not an absent fact — logging
@@ -336,6 +359,8 @@ def main() -> None:
                 st.markdown(msg["content"])
             if msg.get("phrase"):
                 st.caption(f"🔎 Suchanker (Embedding-Phrase): {msg['phrase']}")
+            if msg.get("recheck_note"):
+                st.caption(msg["recheck_note"])
             _render_compute(msg.get("compute"))
             for cit in msg.get("citations", []):
                 _render_citation(cit)
@@ -371,25 +396,37 @@ def main() -> None:
     result = run_turn(task, image_bytes, image_only, doc_id, scopes, as_json=as_json,
                       history=st.session_state.get("turns", []))
 
+    recheck_note = None
+    if result.get("recheck"):
+        recheck_note = (f"🔁 Wiederholungssuche – {result['n_excluded']} bereits "
+                        f"geprüfte Quellen übersprungen")
+
     # Compose assistant reply
     with st.chat_message("assistant"):
         if result["answer"] is None:
             if result["n_hits"] == 0:
-                reply = "Keine Treffer im gewählten Suchbereich."
+                reply = ("Alle passenden Quellen wurden bereits geprüft."
+                         if result.get("recheck") and result.get("n_excluded")
+                         else "Keine Treffer im gewählten Suchbereich.")
             else:
                 reply = ("In den geprüften Quellen wurde keine belegbare Information "
                          "zum Auftrag gefunden.")
             st.markdown(reply)
             if result.get("phrase"):
                 st.caption(f"🔎 Suchanker (Embedding-Phrase): {result['phrase']}")
+            if recheck_note:
+                st.caption(recheck_note)
             _render_compute(result.get("compute"))
             history.append({"role": "assistant", "content": reply, "citations": [],
                             "phrase": result.get("phrase"), "as_json": False,
+                            "recheck_note": recheck_note,
                             "compute": result.get("compute", [])})
         else:
             _render_answer(result["answer"], result["as_json"])
             if result.get("phrase"):
                 st.caption(f"🔎 Suchanker (Embedding-Phrase): {result['phrase']}")
+            if recheck_note:
+                st.caption(recheck_note)
             _render_compute(result.get("compute"))
             # Rendered directly (not inside an expander) so each citation can carry
             # its own "Kontext anzeigen" expander without illegal nesting.
@@ -398,7 +435,8 @@ def main() -> None:
             history.append({
                 "role": "assistant", "content": result["answer"],
                 "citations": result["citations"], "phrase": result.get("phrase"),
-                "as_json": result["as_json"], "compute": result.get("compute", []),
+                "as_json": result["as_json"], "recheck_note": recheck_note,
+                "compute": result.get("compute", []),
             })
 
     # Remember this turn for follow-ups; no document excerpts are retained.
@@ -410,6 +448,11 @@ def main() -> None:
         "task": task, "phrase": result.get("phrase"),
         "answer": result.get("answer_text") or result.get("answer")
                   or "(keine belegte Antwort gefunden)",
+        # (owner_kind, owner_id) of the sources the LLM read this turn — a
+        # re-check searches past these instead of re-reading them. The flag
+        # marks chain membership, so a second re-check excludes the whole chain.
+        "examined": result.get("examined", []),
+        "recheck": result.get("recheck", False),
     })
     st.session_state["turns"] = turns[-5:]
 

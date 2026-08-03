@@ -69,9 +69,15 @@ Verneinung oder Absage. Verwende NIE Wörter wie "keine", "nicht nachweisbar", \
 "nicht enthalten", "liegen nicht vor" oder "im bereitgestellten Kontext"; das \
 ist ein Suchanker, keine Auskunft.
 
+Setze "wiederholung" auf true NUR, wenn der Auftrag im Kern eine frühere Frage \
+aus dem Gesprächsverlauf ERNEUT stellt (etwa "schau noch einmal nach", "prüf das \
+bitte nochmal", "such weiter") — dann formuliere den Anker für DIESE frühere \
+Frage. Eine NEUE Frage, auch wenn sie sich auf den Verlauf bezieht ("und wer \
+ist dort …?"), ist keine Wiederholung: false.
+
 Keine Frage, keine Anrede, keine Erklärungen. Antworte mit NUR einem \
 JSON-Objekt, kein Markdown, kein Text davor/danach:
-{"phrase": "<die Aussage>"}
+{"phrase": "<die Aussage>", "wiederholung": <true|false>}
 """
 
 CHUNK_QA_SYSTEM_PROMPT = """\
@@ -118,8 +124,13 @@ Beispiel — Auftrag "Diagramm zum Wärmebedarf pro Jahr" → Aussage etwa: \
 "Abbildung: Jährlicher Wärmebedarf der Gemeinde nach Sektoren in MWh/a, \
 dargestellt als gestapeltes Balkendiagramm über die Szenariojahre."
 
+Setze "wiederholung" auf true NUR, wenn der Auftrag im Kern eine frühere Frage \
+aus dem Gesprächsverlauf ERNEUT stellt ("schau noch einmal nach", "such weiter") \
+— dann formuliere die Bildunterschrift für DIESE frühere Frage. Neue Fragen mit \
+Verlaufsbezug sind keine Wiederholung: false.
+
 Antworte mit NUR einem JSON-Objekt, kein Markdown, kein Text davor/danach:
-{"phrase": "<die Bildunterschrift/Beschreibung>"}
+{"phrase": "<die Bildunterschrift/Beschreibung>", "wiederholung": <true|false>}
 """
 
 # Batched QA: the top sources are handed over together with a "bisher" partial
@@ -387,18 +398,24 @@ def _looks_like_non_anchor(phrase: str) -> bool:
     return bool(_NON_ANCHOR_RE.search(phrase or ""))
 
 
-def make_search_phrase(task: str, visual: bool = False, history: Optional[list] = None) -> str:
+def make_search_phrase(task: str, visual: bool = False,
+                       history: Optional[list] = None) -> tuple[str, bool]:
     """
     Turn a free-text extraction task into a HyDE-style search anchor: a short
     hypothetical passage written as it would appear IN a heat plan, rather than a
     question. `visual=True` produces a figure/caption-style anchor instead.
 
-    Never raises: falls back to the raw task, which is always a safe retrieval
-    probe. The anchor is only a retrieval probe — the answer still comes from the
-    real retrieved text under the grounding gate.
+    Returns (phrase, recheck). `recheck` is True when the task re-asks an earlier
+    question from the history ("schau noch einmal nach") — the caller then steers
+    retrieval away from the sources that earlier attempt already examined. Only
+    meaningful with history; forced False without one.
+
+    Never raises: falls back to (raw task, False), which is always a safe
+    retrieval probe. The anchor is only a retrieval probe — the answer still
+    comes from the real retrieved text under the grounding gate.
     """
     if LLM_STUB_MODE:
-        return task.strip()
+        return task.strip(), False
     # No `system` role: the gateway's agent supplies a leading system message and
     # rejects a second one ("System message must be at the beginning"). Fold our
     # instructions into the user turn instead.
@@ -412,13 +429,13 @@ def make_search_phrase(task: str, visual: bool = False, history: Optional[list] 
             parsed = _chat_json(messages, temperature=LLM_TEMPERATURE)
         except Exception as e:
             log.warning("Search-phrase generation failed, using raw task: %s", e)
-            return task.strip()
+            return task.strip(), False
         phrase = str(parsed.get("phrase", "")).strip()
         if phrase and not _looks_like_non_anchor(phrase):
-            return phrase
+            return phrase, bool(parsed.get("wiederholung")) and bool(history)
         log.warning("Search phrase read as evaluation/denial, retrying: %r", phrase)
         messages = [{"role": "user", "content": f"{base}\n\n{_ANCHOR_CORRECTION}"}]
-    return task.strip()
+    return task.strip(), False
 
 
 def ask_chunk(task: str, chunk_items: list[dict]) -> dict:
