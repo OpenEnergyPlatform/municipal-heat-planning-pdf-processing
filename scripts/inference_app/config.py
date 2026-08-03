@@ -95,6 +95,10 @@ MAX_CHUNK_ATTEMPTS = int(os.environ.get("MAX_CHUNK_ATTEMPTS", "10"))
 # Token budget per answer call, so the prompt stays inside the model's context
 # window with room for the instructions + the generated answer.
 ANSWER_CONTEXT_TOKENS = int(os.environ.get("ANSWER_CONTEXT_TOKENS", "10000"))
+# Crop images attached to the (multimodal) answer call, so values that exist
+# only in a chart can be read off. Capped per call; longest side downscaled.
+ANSWER_MAX_IMAGES = int(os.environ.get("ANSWER_MAX_IMAGES", "4"))
+ANSWER_IMAGE_MAX_SIDE = int(os.environ.get("ANSWER_IMAGE_MAX_SIDE", "1280"))
 
 # ---------------------------------------------------------------------------
 # Query→vector cache (separate SQLite file – NEVER the authoritative KWP.db)

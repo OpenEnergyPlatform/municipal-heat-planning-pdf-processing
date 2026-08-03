@@ -734,6 +734,58 @@ def test_phrase_prompt_forbids_invented_names_but_keeps_invented_quantities():
     assert "GmbH" not in p               # no invented firm in the example either
 
 
+def test_answer_from_sources_attaches_labelled_crops(monkeypatch):
+    llm = pytest.importorskip("scripts.inference_app.llm_client")
+    monkeypatch.setattr(llm, "LLM_STUB_MODE", False)
+    monkeypatch.setattr(llm, "_image_part",
+                        lambda path: {"type": "image_url",
+                                      "image_url": {"url": f"data:{path}"}})
+    sent = {}
+
+    def fake_chat_json(messages, temperature):
+        sent["content"] = messages[0]["content"]
+        return {"found": True, "complete": True, "answer": "ca. 650 GWh (abgelesen)",
+                "supports": [{"index": 1, "bild": True,
+                              "ablesung": "Erdgas-Balken 2035: ca. 650 GWh/a"}]}
+
+    monkeypatch.setattr(llm, "_chat_json", fake_chat_json)
+    items = [{"index": 0, "source": "s0", "text": "t0"},
+             {"index": 1, "source": "s1", "text": "t1"}]
+
+    out = llm.answer_from_sources("Gas 2035?", items, images={1: "b.png", 0: "a.png"})
+
+    content = sent["content"]
+    # Multimodal content array: text first, then per crop a label + the image,
+    # in index order — the label is what lets a "bild" support cite its index.
+    assert isinstance(content, list) and content[0]["type"] == "text"
+    assert [p.get("text") for p in content if p["type"] == "text"][1:] == \
+           ["Bild zum Auszug index=0:", "Bild zum Auszug index=1:"]
+    assert out["attached_images"] == [0, 1]
+
+    out = llm.answer_from_sources("Gas 2035?", items)
+    # Without crops the message must stay a plain string (gateway compatibility).
+    assert isinstance(sent["content"], str)
+    assert out["attached_images"] == []
+
+
+def test_visual_reading_requires_an_actually_attached_image():
+    llm = pytest.importorskip("scripts.inference_app.llm_client")
+    s = {"index": 1, "bild": True, "ablesung": "Erdgas-Balken 2035: ca. 650 GWh/a"}
+    assert llm.visual_reading(s, {1}) == "Erdgas-Balken 2035: ca. 650 GWh/a"
+    # A "bild" support for a crop that was never sent could launder parametric
+    # knowledge past the grounding gate — must die here.
+    assert llm.visual_reading(s, {0, 2}) is None
+    assert llm.visual_reading({"index": 1, "bild": True, "ablesung": "650"}, {1}) is None
+    assert llm.visual_reading({"index": 1, "quote": "text"}, {1}) is None
+
+
+def test_answer_prompt_defines_the_image_support_contract():
+    llm = pytest.importorskip("scripts.inference_app.llm_client")
+    tail = llm._ANSWER_PROMPT_TAIL
+    assert '"bild"' in tail and '"ablesung"' in tail
+    assert "Schätzwert" in tail            # answer must flag read-off values
+
+
 def test_answer_prompt_scopes_task_format_specs_to_the_answer_field():
     llm = pytest.importorskip("scripts.inference_app.llm_client")
     tail = llm._ANSWER_PROMPT_TAIL.lower()
