@@ -628,6 +628,14 @@ def read_off_image(task: str, image_path: str, hint: str) -> Optional[dict]:
             return None
         reading = str(parsed.get("ablesung") or "").strip()
         if reading:
+            # The model sometimes echoes the hint as "ablesung" without the
+            # number — the value then only exists in "wert" and a revision fed
+            # the bare sentence has nothing to correct with. Splice it in.
+            wert = parsed.get("wert")
+            if isinstance(wert, (int, float)) and f"{wert:g}" not in reading:
+                einheit = str(parsed.get("einheit") or "").strip()
+                reading = f"{reading} — abgelesener Wert: {wert:g} {einheit}".strip()
+                parsed["ablesung"] = reading
             return parsed
         log.warning("Read-off ignored its schema (keys: %s), retrying", sorted(parsed)[:6])
     return None
