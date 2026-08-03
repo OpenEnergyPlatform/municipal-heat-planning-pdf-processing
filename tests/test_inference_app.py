@@ -803,6 +803,29 @@ def test_read_off_image_returns_parsed_reading(monkeypatch):
     assert llm.read_off_image("Gas 2035?", "chart.png", "x") is None
 
 
+def test_read_off_image_retries_when_task_schema_hijacks(monkeypatch):
+    llm = pytest.importorskip("scripts.inference_app.llm_client")
+    monkeypatch.setattr(llm, "LLM_STUB_MODE", False)
+    monkeypatch.setattr(llm, "_image_part",
+                        lambda path, max_side=None, png=False: {"type": "image_url",
+                                                                "image_url": {"url": "d"}})
+    calls = []
+
+    def fake_chat_json(messages, temperature):
+        calls.append(messages[0]["content"][0]["text"])
+        if len(calls) == 1:                # the task's own format spec wins
+            return {"amount": 1000.0, "unit": "GWh/a"}
+        return {"ablesung": "Erdgas 2035: ca. 600 GWh/a", "wert": 600.0,
+                "einheit": "GWh/a", "sicherheit": "hoch"}
+
+    monkeypatch.setattr(llm, "_chat_json", fake_chat_json)
+    ro = llm.read_off_image('Gas 2035? Als JSON {"amount":float}', "c.png", "Erdgas-Balken")
+    # Without the retry the hijacked reply reads as "no reading" and the wrong
+    # inline value survives — the exact bug seen live.
+    assert len(calls) == 2 and llm._READOFF_CORRECTION in calls[1]
+    assert ro["wert"] == 600.0
+
+
 def test_revise_with_readings_falls_back_to_the_original(monkeypatch):
     llm = pytest.importorskip("scripts.inference_app.llm_client")
     monkeypatch.setattr(llm, "LLM_STUB_MODE", False)
