@@ -253,6 +253,26 @@ def run_turn(task: str, image_bytes: bytes | None, image_only: bool,
             if out.get("complete") and citations:
                 break     # fully answered → don't scan the remaining batches
     result["examined"] = sorted(examined)
+
+    # Re-read every image-derived value in a focused single-image call and fold
+    # the results into the answer. The big call above only IDENTIFIES which
+    # figure carries the answer; with ten sources and several charts in one
+    # prompt it misreads (returned a stack's total height as one segment).
+    visual_cits = [c for c in citations if c.get("visual")]
+    if visual_cits and prior_text:
+        readings = []
+        with _spinner("🔬 Ablesung präzisieren"):
+            for cit in visual_cits[: config.READOFF_MAX_CALLS]:
+                img = resolve_image_path(cit.get("image_path"))
+                if img is None:
+                    continue
+                ro = llm_client.read_off_image(task, str(img), cit["quote"])
+                if ro:
+                    cit["quote"] = ro["ablesung"]
+                    readings.append(f"{chunker.citation_label(cit)}: {ro['ablesung']}")
+            if readings:
+                prior_text = llm_client.revise_with_readings(task, prior_text, readings)
+
     # Deterministic marking of read-off values: the prompt asks for the phrase,
     # but only this guarantees it. In JSON output the schema may leave no room
     # for it — there the flagged citation below the answer is the channel.

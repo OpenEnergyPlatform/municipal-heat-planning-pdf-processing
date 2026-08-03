@@ -779,6 +779,51 @@ def test_visual_reading_requires_an_actually_attached_image():
     assert llm.visual_reading({"index": 1, "quote": "text"}, {1}) is None
 
 
+def test_read_off_image_returns_parsed_reading(monkeypatch):
+    llm = pytest.importorskip("scripts.inference_app.llm_client")
+    monkeypatch.setattr(llm, "LLM_STUB_MODE", False)
+    monkeypatch.setattr(llm, "_image_part",
+                        lambda path, max_side=None, png=False: {"type": "image_url",
+                                                                "image_url": {"url": "d"}})
+    sent = {}
+
+    def fake_chat_json(messages, temperature):
+        sent["content"] = messages[0]["content"]
+        return {"ablesung": "Erdgas-Segment 2035: ca. 600 GWh/a",
+                "wert": 600.0, "einheit": "GWh/a", "sicherheit": "hoch"}
+
+    monkeypatch.setattr(llm, "_chat_json", fake_chat_json)
+    ro = llm.read_off_image("Gas 2035?", "chart.png", "Erdgas-Balken 2035")
+    assert ro["wert"] == 600.0
+    # Exactly ONE image in the focused call — that is the whole point.
+    assert sum(1 for p in sent["content"] if p.get("type") == "image_url") == 1
+
+    monkeypatch.setattr(llm, "_chat_json",
+                        lambda m, temperature: (_ for _ in ()).throw(RuntimeError("down")))
+    assert llm.read_off_image("Gas 2035?", "chart.png", "x") is None
+
+
+def test_revise_with_readings_falls_back_to_the_original(monkeypatch):
+    llm = pytest.importorskip("scripts.inference_app.llm_client")
+    monkeypatch.setattr(llm, "LLM_STUB_MODE", False)
+    monkeypatch.setattr(llm, "_chat_json",
+                        lambda m, temperature: {"answer": "korrigiert: 600 GWh/a"})
+    assert llm.revise_with_readings("t", "alt: 1200", ["Abb 85: 600 GWh/a"]) \
+        == "korrigiert: 600 GWh/a"
+    # A failed revision must never eat the answer that already exists.
+    monkeypatch.setattr(llm, "_chat_json",
+                        lambda m, temperature: (_ for _ in ()).throw(RuntimeError("down")))
+    assert llm.revise_with_readings("t", "alt: 1200", ["r"]) == "alt: 1200"
+    assert llm.revise_with_readings("t", "alt", []) == "alt"
+
+
+def test_readoff_prompt_forbids_total_for_segment():
+    llm = pytest.importorskip("scripts.inference_app.llm_client")
+    # The observed failure mode: a stacked bar's total height returned as one
+    # segment's value. The focused prompt must address it head-on.
+    assert "Gesamthöhe" in llm.READOFF_PROMPT and "Differenz" in llm.READOFF_PROMPT
+
+
 def test_answer_prompt_defines_the_image_support_contract():
     llm = pytest.importorskip("scripts.inference_app.llm_client")
     tail = llm._ANSWER_PROMPT_TAIL

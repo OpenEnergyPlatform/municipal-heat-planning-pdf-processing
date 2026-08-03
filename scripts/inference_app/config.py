@@ -99,6 +99,11 @@ ANSWER_CONTEXT_TOKENS = int(os.environ.get("ANSWER_CONTEXT_TOKENS", "10000"))
 # only in a chart can be read off. Capped per call; longest side downscaled.
 ANSWER_MAX_IMAGES = int(os.environ.get("ANSWER_MAX_IMAGES", "4"))
 ANSWER_IMAGE_MAX_SIDE = int(os.environ.get("ANSWER_IMAGE_MAX_SIDE", "1280"))
+# Focused single-image re-reads of the values the answer call flagged as
+# image-derived — one short call per figure, mirroring the setting in which the
+# model demonstrably reads charts correctly.
+READOFF_MAX_CALLS = int(os.environ.get("READOFF_MAX_CALLS", "3"))
+READOFF_IMAGE_MAX_SIDE = int(os.environ.get("READOFF_IMAGE_MAX_SIDE", "1600"))
 
 # ---------------------------------------------------------------------------
 # Query→vector cache (separate SQLite file – NEVER the authoritative KWP.db)
