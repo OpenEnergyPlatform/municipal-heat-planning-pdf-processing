@@ -133,12 +133,13 @@ def _no_real_sleep(monkeypatch):
 
 @pytest.fixture
 def kwp_db(tmp_path):
-    """A fresh SQLite DB with the v2 schema and one Document (id=1)."""
+    """A fresh SQLite DB with the core + kwp schema and one Document (id=1)."""
+    from docpipe import store
+    from docpipe.profile import load_profile
     from scripts.chunkingandembedding import database as DB
-    schema = pathlib.Path(ROOT, "data", "KWP.db.sql").read_text(encoding="utf-8")
     db = tmp_path / "kwp.db"
     con = DB.connect(db)
-    con.executescript(schema)
+    store.apply(con, load_profile("kwp"))
     con.execute("INSERT INTO Documents (id, filename, num_pages) VALUES (1, 'doc.pdf', 9)")
     con.commit()
     return db, con

@@ -25,8 +25,10 @@ def corpus(kwp_db):
         INSERT INTO OrganisationUnits (id, name, state) VALUES (1, 'Landkreis X', 'BW');
         INSERT INTO Municipalities (id, name, ags, organisation_unit)
             VALUES (1, 'Musterstadt', 12345, 1);
-        UPDATE Documents SET organisation_unit = 1, published = '20240101',
-            municipality_ags = 12345, is_current = 1 WHERE id = 1;
+        UPDATE Documents SET published = '20240101', is_current = 1,
+            group_key = '12345' WHERE id = 1;
+        INSERT INTO DocumentMeta (document, organisation_unit, municipality_ags)
+            VALUES (1, 1, 12345);
 
         INSERT INTO Sections (id, document, section_number, title, content, page_number)
             VALUES (1, 1, 0, 'Wärmebedarf', 'Der Wärmebedarf betrug 100 GWh.', 12),

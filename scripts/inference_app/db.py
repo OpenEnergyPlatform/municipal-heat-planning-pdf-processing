@@ -59,14 +59,15 @@ def list_documents(
                d.filename,
                d.published,
                d.num_pages,
-               d.municipality_ags,
-               d.organisation_unit,
+               dm.municipality_ags,
+               dm.organisation_unit,
                d.is_current,
                m.name AS municipality_name,
                o.name AS organisation_unit_name
         FROM Documents d
-        LEFT JOIN Municipalities m   ON d.municipality_ags = m.ags
-        LEFT JOIN OrganisationUnits o ON d.organisation_unit = o.id
+        LEFT JOIN DocumentMeta dm     ON dm.document = d.id
+        LEFT JOIN Municipalities m    ON dm.municipality_ags = m.ags
+        LEFT JOIN OrganisationUnits o ON dm.organisation_unit = o.id
         {where}
         ORDER BY d.is_current DESC, d.published DESC, d.filename
     """

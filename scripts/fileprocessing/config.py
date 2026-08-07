@@ -1,5 +1,6 @@
 """
-Constants and the fallback database schema for the fileprocessing module.
+Constants for the fileprocessing module. The schema lives in docpipe/store
+plus profiles/<name>/schema.sql.
 """
 
 EXCEL_SHEET = "Datensatz Status quo KWP"
@@ -66,66 +67,3 @@ MUNICIPALITY_META_COLUMNS = [
     ("EW Verbandsgemeinden", "ew_verbandsgemeinden", "INTEGER"),
 ]
 
-DATABASE_SCHEMA = """
-BEGIN TRANSACTION;
-CREATE TABLE IF NOT EXISTS "Documents" (
-	"id"	INTEGER NOT NULL UNIQUE,
-	"organisation_unit"	INTEGER,
-	"filename"	TEXT NOT NULL,
-	"published" TEXT,
-	"num_pages" INTEGER,
-	"added" TEXT,
-	"municipality_ags" INTEGER,
-	"is_current" INTEGER NOT NULL DEFAULT 1,
-	"supersedes" INTEGER,
-	PRIMARY KEY("id" AUTOINCREMENT)
-);
-CREATE TABLE IF NOT EXISTS "Images" (
-	"id"	INTEGER NOT NULL UNIQUE,
-	"section"	INTEGER NOT NULL,
-	"path"	TEXT NOT NULL,
-	"page_number"	INTEGER,
-	"caption"	TEXT,
-	"description"	TEXT,
-	"text_embedding"	INTEGER,
-	"image_embedding"	INTEGER,
-	PRIMARY KEY("id" AUTOINCREMENT)
-);
-CREATE TABLE IF NOT EXISTS "Municipalities" (
-	"id"	INTEGER NOT NULL UNIQUE,
-	"name"	TEXT NOT NULL,
-	"ags"	INTEGER NOT NULL UNIQUE,
-	"organisation_unit"	INTEGER NOT NULL,
-	UNIQUE("name", "ags", "organisation_unit"),
-	PRIMARY KEY("id" AUTOINCREMENT)
-);
-CREATE TABLE IF NOT EXISTS "OrganisationUnits" (
-	"id"	INTEGER NOT NULL UNIQUE,
-	"name"	TEXT NOT NULL,
-	"state" TEXT,
-	UNIQUE("name", "state")
-	PRIMARY KEY("id" AUTOINCREMENT)
-);
-CREATE TABLE IF NOT EXISTS "Sections" (
-	"id"	INTEGER NOT NULL UNIQUE,
-	"document"	INTEGER NOT NULL,
-	"section_number"	INTEGER NOT NULL,
-	"page_number"	INTEGER NOT NULL,
-	"text_embedding"	INTEGER,
-	"title"	TEXT,
-	"title_embedding"	INTEGER,
-	PRIMARY KEY("id" AUTOINCREMENT)
-);
-CREATE TABLE IF NOT EXISTS "Tables" (
-	"id"	INTEGER NOT NULL UNIQUE,
-	"section"	INTEGER NOT NULL,
-	"path"	TEXT NOT NULL,
-	"page_number"	INTEGER,
-	"caption"	TEXT,
-	"markdown"	TEXT,
-	"text_embedding"	INTEGER,
-	"image_embedding"	INTEGER,
-	PRIMARY KEY("id" AUTOINCREMENT)
-);
-COMMIT;
-"""

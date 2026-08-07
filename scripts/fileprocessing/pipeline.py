@@ -6,13 +6,16 @@ import tempfile
 import fitz
 import requests
 import pandas as pd
+from docpipe import store
+from docpipe.profile import Profile, add_profile_argument, load_profile
+
 from . import pdf_quality
-from .config import EXCEL_SHEET, DATABASE_SCHEMA, PDF_OVERRIDES, MUNICIPALITY_META_COLUMNS
+from .config import EXCEL_SHEET, MUNICIPALITY_META_COLUMNS, PDF_OVERRIDES
 from pathlib import Path
 from urllib.parse import urlparse
 from tqdm import tqdm
 from datetime import datetime
-from typing import Any
+from typing import Any, Optional
 from utils import database
 
 log = logging.getLogger(__name__)
@@ -154,26 +157,21 @@ def process_entry(row: dict, connection: sqlite3.Connection, data_dir: Path) -> 
     database.add_municipality(municipality_name, municipality_ags, orga_id, connection)
     database.upsert_municipality_meta(municipality_ags, _extract_meta(row), connection)
 
-def run(excel_file: Path, db_file: Path, data_dir: Path) -> None:
+def run(excel_file: Path, db_file: Path, data_dir: Path,
+        profile: Optional[Profile] = None) -> None:
     """
     Load the municipality metadata from `excel_file`, create `db_file` if it does
     not exist, download the PDFs into `data_dir` and register them in the DB.
+
+    The schema is the core schema plus the profile's own; without a profile only
+    the core tables are created.
     """
     kww_data = _load_and_filter_excel(excel_file)
     data_dir.mkdir(parents=True, exist_ok=True)
-    if not db_file.exists():
-        # A "<db_file>.sql" next to the DB wins over the bundled DATABASE_SCHEMA:
-        # only it carries the foreign keys and page-provenance tables.
-        schema_path = db_file.with_name(db_file.name + ".sql")
-        with sqlite3.connect(db_file) as connection:
-            if schema_path.exists():
-                connection.executescript(schema_path.read_text(encoding="utf-8"))
-            else:
-                connection.executescript(DATABASE_SCHEMA)
 
     rejected: dict[str, str] = {}
     with sqlite3.connect(db_file) as connection:
-        database.ensure_municipality_meta_table(MUNICIPALITY_META_COLUMNS, connection)
+        store.apply(connection, profile)
         for row in tqdm(kww_data.to_dict("records"), desc="Processing municipality", total=kww_data.shape[0]):
             try:
                 process_entry(row, connection, data_dir)
@@ -269,6 +267,7 @@ python -m scripts.fileprocessing /path_to_kww_excel/file.xlxs /path_to_db/KWP.db
         help="Only backfill MunicipalityMeta for municipalities already in the DB "
              "(no downloads, no document changes).",
     )
+    add_profile_argument(p)
     p.add_argument(
         "--log-level", default="INFO",
         choices=["DEBUG", "INFO", "WARNING", "ERROR"],
@@ -291,7 +290,8 @@ def main() -> None:
         return
     if not args.data_dir:
         parser.error("--data-dir is required unless --backfill-meta is given")
-    run(Path(args.excel), Path(args.db), Path(args.data_dir))
+    profile = load_profile(args.profile) if args.profile else None
+    run(Path(args.excel), Path(args.db), Path(args.data_dir), profile)
 
 if __name__ == "__main__":
     main()

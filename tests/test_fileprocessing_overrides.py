@@ -5,6 +5,8 @@ from urllib.parse import urlparse
 
 import pytest
 
+from docpipe import store
+from docpipe.profile import load_profile
 from scripts.fileprocessing import pipeline, config, pdf_quality
 
 GOOD_TEXT = ("Die kommunale Waermeplanung der Gemeinde beschreibt die Ziele bis 2045. "
@@ -27,29 +29,9 @@ def _pdf(path: Path, pages: int, text: str | None = GOOD_TEXT, lines: int = 3) -
 
 
 def _db():
+    """Core schema plus the kwp profile — the same tables the pipeline creates."""
     con = sqlite3.connect(":memory:")
-    con.executescript(
-        """
-        CREATE TABLE OrganisationUnits (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL, state TEXT, UNIQUE(name, state)
-        );
-        CREATE TABLE Municipalities (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL, ags INTEGER NOT NULL UNIQUE,
-            organisation_unit INTEGER NOT NULL,
-            UNIQUE(name, ags, organisation_unit)
-        );
-        CREATE TABLE Documents (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            organisation_unit INTEGER, filename TEXT NOT NULL UNIQUE,
-            published TEXT, num_pages INTEGER, added TEXT,
-            municipality_ags INTEGER, is_current INTEGER NOT NULL DEFAULT 1,
-            supersedes INTEGER
-        );
-        """
-    )
-    pipeline.database.ensure_municipality_meta_table(config.MUNICIPALITY_META_COLUMNS, con)
+    store.apply(con, load_profile("kwp"))
     return con
 
 
@@ -85,14 +67,16 @@ def test_override_replaces_broken_link(no_network):
     ags = next(iter(config.PDF_OVERRIDES))
     expected = config.PDF_OVERRIDES[ags]
     pipeline.process_entry(_row(ags, "https://kww/broken/original.pdf"), con, no_network)
-    fn = con.execute("SELECT filename FROM Documents WHERE municipality_ags=?", (ags,)).fetchone()
+    fn = con.execute("SELECT d.filename FROM Documents d JOIN DocumentMeta m ON m.document = d.id "
+                      "WHERE m.municipality_ags = ?", (ags,)).fetchone()
     assert fn[0] == expected
 
 
 def test_non_override_uses_kww_link(no_network):
     con = _db()
     pipeline.process_entry(_row(5555555, "https://kww/x/echterplan_2025.pdf"), con, no_network)
-    fn = con.execute("SELECT filename FROM Documents WHERE municipality_ags=5555555").fetchone()
+    fn = con.execute("SELECT d.filename FROM Documents d JOIN DocumentMeta m ON m.document = d.id "
+                      "WHERE m.municipality_ags = 5555555").fetchone()
     assert fn[0] == "echterplan_2025.pdf"
 
 
@@ -111,7 +95,7 @@ def test_float_ags_stored_as_integer(no_network):
     con = _db()
     pipeline.process_entry(_row(9999999.0, "https://kww/x/p.pdf"), con, no_network)
     assert con.execute("SELECT typeof(ags) FROM Municipalities").fetchone()[0] == "integer"
-    assert con.execute("SELECT typeof(municipality_ags) FROM Documents").fetchone()[0] == "integer"
+    assert con.execute("SELECT typeof(municipality_ags) FROM DocumentMeta").fetchone()[0] == "integer"
     assert con.execute("SELECT typeof(ags) FROM MunicipalityMeta").fetchone()[0] == "integer"
 
 
