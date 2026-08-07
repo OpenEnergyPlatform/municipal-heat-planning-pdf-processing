@@ -46,6 +46,8 @@ PDF_OVERRIDES = {
     3159036: "waermeplan_bad_sachsa_20250725.pdf",               # Walkenried
     # KWW link 404s; the Erläuterungsbericht is on the town's own site.
     3252003: "waermeplan_bad-pyrmont_20260701.pdf",              # Bad Pyrmont
+    # KWW link 404s; the Erläuterungsbericht is on the Stadtwerke's site.
+    3257031: "waermeplan_rinteln_20260529.pdf",                  # Rinteln
 }
 
 # KWW Excel columns carried into the MunicipalityMeta table, as
