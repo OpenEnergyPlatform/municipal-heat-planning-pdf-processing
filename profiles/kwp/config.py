@@ -54,6 +54,11 @@ PDF_OVERRIDES = {
     3257011: "waermeplan_sg-nenndorf_20251218.pdf",              # Haste
     3257016: "waermeplan_sg-nenndorf_20251218.pdf",              # Hohnhorst
     3257036: "waermeplan_sg-nenndorf_20251218.pdf",              # Suthfeld
+    # Konvoi "NI SG Elbmarsch" (3 Gemeinden); KWW link 404s (and ends in
+    # ".pdf.pdf"), the Abschlussbericht is on klimaschutz-elbmarsch.de.
+    3353007: "waermeplan_elbmarsch_20250801.pdf",                # Drage (Elbe)
+    3353023: "waermeplan_elbmarsch_20250801.pdf",                # Marschacht
+    3353033: "waermeplan_elbmarsch_20250801.pdf",                # Tespe
 }
 
 # KWW Excel columns carried into the MunicipalityMeta table, as
