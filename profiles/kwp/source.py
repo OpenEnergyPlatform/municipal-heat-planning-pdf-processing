@@ -39,13 +39,13 @@ def load_and_filter_excel(excel_file: Path) -> pd.DataFrame:
     ]
 
 
-def _warn_about_missing_columns(frame, excel_file: Path) -> None:
+def _warn_about_missing_columns(frame, excel_file) -> None:
     absent = missing_meta_columns(frame)
     if absent:
         log.warning(
             "%s carries %d of %d metadata columns; missing: %s. Their stored "
             "values are kept, not overwritten.",
-            excel_file.name, len(MUNICIPALITY_META_COLUMNS) - len(absent),
+            Path(excel_file).name, len(MUNICIPALITY_META_COLUMNS) - len(absent),
             len(MUNICIPALITY_META_COLUMNS), ", ".join(absent),
         )
 
