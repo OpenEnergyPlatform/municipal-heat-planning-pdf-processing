@@ -44,6 +44,8 @@ PDF_OVERRIDES = {
     # from the town's own site.
     3159004: "waermeplan_bad_sachsa_20250725.pdf",               # Bad Sachsa
     3159036: "waermeplan_bad_sachsa_20250725.pdf",               # Walkenried
+    # KWW link 404s; the Erläuterungsbericht is on the town's own site.
+    3252003: "waermeplan_bad-pyrmont_20260701.pdf",              # Bad Pyrmont
 }
 
 # KWW Excel columns carried into the MunicipalityMeta table, as
