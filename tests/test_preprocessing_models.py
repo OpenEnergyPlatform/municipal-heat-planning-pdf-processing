@@ -1,5 +1,5 @@
 """Tests for the preprocessing dataclasses (serialisation round-trips)."""
-from scripts.preprocessing.models import Block, FigureRef, PageData, Section, TableRef
+from docpipe.preprocessing.models import Block, FigureRef, PageData, Section, TableRef
 
 
 def test_block_roundtrip_rounds_confidence_and_omits_none():

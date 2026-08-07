@@ -2,8 +2,8 @@
 import json
 import types
 
-from scripts.imageprocessing import config as C
-from scripts.imageprocessing import pipeline as IP
+from docpipe.visuals import config as C
+from docpipe.visuals import pipeline as IP
 
 
 def _write_input(tmp_path, sections):

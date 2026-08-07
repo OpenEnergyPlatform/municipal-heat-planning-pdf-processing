@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import Optional
 
 from docpipe import prompts
+from docpipe.profile import add_profile_argument, resolve_profile
 
 from .config import (DIR_RESULTS, FINAL_OUTPUT_JSON, PROMPT_IDS,
                      STRUCTURED_OUTPUT_JSON)
@@ -162,24 +163,25 @@ def run(
 
 def _build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
-        prog="python -m scripts.textrefinement",
+        prog="python -m docpipe.refinement",
         description="Text Refinement – LLM-based section refinement of Stage-3 output",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""\
 Examples:
   # Batch: every document subdir under the processed root
-  python -m scripts.textrefinement data/pdf/processed --batch
+  python -m docpipe.refinement data/pdf/processed --batch
 
   # Single document directory
-  python -m scripts.textrefinement data/pdf/processed/my_doc
+  python -m docpipe.refinement data/pdf/processed/my_doc
 
   # Re-refine, ignoring a cached final output
-  python -m scripts.textrefinement data/pdf/processed --batch --force
+  python -m docpipe.refinement data/pdf/processed --batch --force
         """,
     )
     p.add_argument(
-        "input",
-        help="Processed root (with --batch) or a single document directory",
+        "input", nargs="?", default=None,
+        help="Processed root (with --batch) or a single document directory "
+             "(default: the profile's processed directory)",
     )
     p.add_argument(
         "--batch", action="store_true",
@@ -193,6 +195,7 @@ Examples:
         "--force", action="store_true",
         help="Re-refine even if structured_output_final.json already exists",
     )
+    add_profile_argument(p)
     p.add_argument(
         "--log-level", default="INFO",
         choices=["DEBUG", "INFO", "WARNING", "ERROR"],
@@ -209,6 +212,12 @@ def main() -> None:
         format="%(asctime)s [%(levelname)s] %(name)s %(message)s",
         datefmt="%H:%M:%S",
     )
+
+    profile = resolve_profile(args)
+    if args.input is None:
+        if profile is None:
+            raise SystemExit("give an input path or a --profile to take it from")
+        args.input = str(profile.processed_dir)
 
     try:
         if args.batch:

@@ -2,8 +2,8 @@
 import json
 import os
 
-from scripts.chunkingandembedding import merge as M
-from scripts.chunkingandembedding.config import FINAL_JSON, IMAGES_JSON, MERGED_JSON
+from docpipe.chunking import merge as M
+from docpipe.chunking.config import FINAL_JSON, IMAGES_JSON, MERGED_JSON
 
 
 def _write(path, data):

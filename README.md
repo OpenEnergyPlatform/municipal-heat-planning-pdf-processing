@@ -4,32 +4,52 @@
 
 Tools and scripts developed to support the [MHPO development](https://github.com/OpenEnergyPlatform/municipal-heat-planning-ontology) by automating data extraction, enrichment, and semantic indexing of municipal heat planning documents (Kommunale Wärmepläne).
 
+## Profiles
+
+The pipeline itself is generic: `docpipe/` knows about PDFs, not about heat
+plans. What a project contributes lives in `profiles/<name>/` — where its
+documents come from (`source.py`), the tables it adds (`schema.sql`), the
+prompts it overrides (`prompts/`) and the filters its app offers.
+
+Pick one per run. The profile also decides where the data lives
+(`data/<name>/`), so two projects never share a database or an index:
+
+```bash
+export DOCPIPE_PROFILE=kwp
+python -m docpipe.preprocessing            # paths come from the profile
+```
+
+Set it in the environment rather than only passing `--profile`: a stage binds
+its prompts when it is imported, before the command line is parsed. A profile
+that overrides prompts and is named only on the command line is refused rather
+than run with the wrong ones.
+
 ## Pipeline Overview
 
 The pipeline transforms raw PDF documents into a searchable, semantically indexed, versioned knowledge base. Five independent Python modules, run in sequence, cover six logical processing stages:
 
 | # | Stage | Module |
 | --- | --- | --- |
-| 1 | File processing – download PDFs, extract metadata, populate the document database | `fileprocessing` |
-| 2 | Layout detection – identify tables, figures, titles, headers via PP-DocLayoutV3 | `preprocessing` |
-| 3 | Text extraction & structure – build a structured JSON document, deterministic cleanup | `preprocessing` |
-| 4 | LLM refinement – clean extraction artefacts, normalize titles/captions, bibliographies to BibTeX | `textrefinement` |
-| 5 | Image processing – Markdown transcriptions for tables, descriptions for figures | `imageprocessing` |
-| 6 | Chunking, embedding & database population | `chunkingandembedding` |
+| 1 | File processing – download PDFs, extract metadata, populate the document database | `docpipe.ingest` + Profil |
+| 2 | Layout detection – identify tables, figures, titles, headers via PP-DocLayoutV3 | `docpipe.preprocessing` |
+| 3 | Text extraction & structure – build a structured JSON document, deterministic cleanup | `docpipe.preprocessing` |
+| 4 | LLM refinement – clean extraction artefacts, normalize titles/captions, bibliographies to BibTeX | `docpipe.refinement` |
+| 5 | Image processing – Markdown transcriptions for tables, descriptions for figures | `docpipe.visuals` |
+| 6 | Chunking, embedding & database population | `docpipe.chunking` |
 
 Each module reads/writes a per-document JSON artefact under `data/pdf/processed/<doc>/results/`, so any stage can be re-run in isolation and resumes incrementally — only documents/items missing their output are reprocessed.
 
-### 1. File processing (`fileprocessing`)
+### 1. File processing (`docpipe.ingest` + Profil)
 
 The source of truth is an Excel export from the KWW listing every published Wärmeplan (municipality, organisation unit, state, publication date, PDF link). For every completed plan with a valid PDF link, the pipeline downloads the PDF, extracts its page count, and creates `Documents` / `OrganisationUnits` / `Municipalities` rows.
 
 Documents sharing a municipality key (`ags`, the German Gemeindeschlüssel) are versions of the same plan — see [Versioning](#versioning).
 
-### 2. Layout detection (`preprocessing`, stage 2)
+### 2. Layout detection (`docpipe.preprocessing`, stage 2)
 
 Each PDF page is rendered to a high-resolution PNG and analysed by [PP-DocLayoutV3](https://huggingface.co/PaddlePaddle/PP-DocLayoutV3_safetensors), which classifies structural elements — tables, figures, titles, text blocks, headers/footers, page numbers, captions — each with a bounding box and a confidence score.
 
-### 3. Text extraction & structure (`preprocessing`, stage 3)
+### 3. Text extraction & structure (`docpipe.preprocessing`, stage 3)
 
 PyMuPDF extracts character-level text from each page and matches it against the Stage 2 layout to build a structured JSON representation of the document. Each document is split into sections carrying a title, page number, body text, and placeholder tokens (e.g. `[p13_tbl0]`) marking where a table or figure sits in the reading order. Tables/figures are cropped from the rendered page images and saved as individual PNGs.
 
@@ -37,19 +57,19 @@ A deterministic cleanup pass (no LLM) strips repeated header/footer lines, drops
 
 Output: `structured_output.json` per PDF.
 
-### 4. LLM refinement (`textrefinement`)
+### 4. LLM refinement (`docpipe.refinement`)
 
 An LLM served locally via [vLLM](https://github.com/vllm-project/vllm) cleans the artefacts that are hard to catch deterministically: misattributed captions, residual boilerplate, bibliography pages. It operates in a sliding window over a document's sections (carrying context from the previous window so it can merge across window boundaries) and, per section, decides to keep, merge into the previous section, split, remove, or replace it. Bibliographies are converted to BibTeX.
 
 Output: `structured_output_final.json`.
 
-### 5. Image processing (`imageprocessing`)
+### 5. Image processing (`docpipe.visuals`)
 
 Every visual element is enriched with a vision-language model — the same model as Stage 4, but served by its own vLLM instance so the two stages can run concurrently. Tables get a structured Markdown transcription; figures get a textual description; missing captions are generated from the image and its surrounding context. A QA gate checks each table transcription for content coverage (against the PyMuPDF source text) and repeated-row duplication, retrying poor transcriptions with feedback.
 
 Output: `structured_output_images.json`.
 
-### 6. Chunking, embedding & database population (`chunkingandembedding`)
+### 6. Chunking, embedding & database population (`docpipe.chunking`)
 
 1. **Merge** — Stage-4 sections and Stage-5 enrichments are combined by ID into `output.json`.
 2. **Database population** — sections, tables, and images are written to SQLite with page-level provenance: each `Sections` row records which pages it spans (`SectionPages`) and an ordered list of page-tagged text/table/figure pieces (`Segments`), so a retrieved chunk can be cited down to the exact source page.

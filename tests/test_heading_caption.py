@@ -1,6 +1,6 @@
 """Tests for font-based heading promotion and caption intervener detection."""
-from scripts.preprocessing import stage2_layout as s2
-from scripts.preprocessing.models import Block, PageData
+from docpipe.preprocessing import stage2_layout as s2
+from docpipe.preprocessing.models import Block, PageData
 
 
 def _text(bid, y, content, size=10.0, bold=False, label=None):

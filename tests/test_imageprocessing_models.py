@@ -1,5 +1,5 @@
 """Tests for the imageprocessing dataclasses."""
-from scripts.imageprocessing.models import EnrichedFigure, EnrichedTable, ProcessingStats
+from docpipe.visuals.models import EnrichedFigure, EnrichedTable, ProcessingStats
 
 
 def test_enriched_table_roundtrip():

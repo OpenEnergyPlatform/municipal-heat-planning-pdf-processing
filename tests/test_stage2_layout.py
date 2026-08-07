@@ -1,5 +1,5 @@
 """Tests for Stage 2 geometry: IoU, NMS, cross-class suppression, bbox transforms."""
-from scripts.preprocessing import stage2_layout as s2
+from docpipe.preprocessing import stage2_layout as s2
 
 D = s2._Detection
 

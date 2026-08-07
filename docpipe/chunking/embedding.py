@@ -68,7 +68,7 @@ def load_embedder(model_name: str = EMBEDDING_MODEL):
     Returns a MultiGPUEmbedder, which exposes the same ``process()`` interface
     as a single Qwen3VLEmbedder.
     """
-    from scripts.qwen3_vl_embedding import MultiGPUEmbedder
+    from docpipe.chunking.qwen3_vl_embedding import MultiGPUEmbedder
     log.info("Loading embedding model: %s", model_name)
     model = MultiGPUEmbedder(
         model_name_or_path=model_name,

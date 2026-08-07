@@ -5,7 +5,7 @@ pipeline.py – Orchestration of the PDF preprocessing pipeline (Stages 1-3).
   2. PP-DocLayoutV3 → Table / image crops + layout labels + caption resolution
   3. Section assembly → structured_output.json
 
-LLM-based section refinement lives in ``scripts.textrefinement``.
+LLM-based section refinement lives in ``docpipe.refinement``.
 
 Author: Felix Vossel
 """
@@ -18,6 +18,8 @@ import logging
 import sys
 from pathlib import Path
 from typing import Optional
+
+from docpipe.profile import add_profile_argument, resolve_profile
 
 from .config import (
     CACHE_PAGES_JSON,
@@ -333,23 +335,24 @@ def run(
 
 def _build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
-        prog="python -m scripts.preprocessing.pipeline",
+        prog="python -m docpipe.preprocessing.pipeline",
         description="Municipal Heat Planning – PDF Preprocessing Pipeline (Stages 1-3)",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  python -m scripts.preprocessing.pipeline doc.pdf ./out
-  python -m scripts.preprocessing.pipeline ./pdfs/ ./out
-  python -m scripts.preprocessing.pipeline doc.pdf ./out --pages 0 20
-  python -m scripts.preprocessing.pipeline ./pdfs/ ./out --glob "*.pdf"
-  python -m scripts.preprocessing.pipeline doc.pdf ./out --force-reextract
-  python -m scripts.preprocessing.pipeline ./out --rebuild-stage3
+  python -m docpipe.preprocessing.pipeline doc.pdf ./out
+  python -m docpipe.preprocessing.pipeline ./pdfs/ ./out
+  python -m docpipe.preprocessing.pipeline doc.pdf ./out --pages 0 20
+  python -m docpipe.preprocessing.pipeline ./pdfs/ ./out --glob "*.pdf"
+  python -m docpipe.preprocessing.pipeline doc.pdf ./out --force-reextract
+  python -m docpipe.preprocessing.pipeline ./out --rebuild-stage3
         """,
     )
     p.add_argument("input",  nargs="?", default=None,
                    help="PDF file or folder containing PDFs "
                         "(omit with --rebuild-stage3)")
-    p.add_argument("output", help="Output directory")
+    p.add_argument("output", nargs="?", default=None,
+                   help="Output directory (default: the profile's processed dir)")
     p.add_argument("--force-reextract", action="store_true",
                    help="Ignore cache and re-run Stages 1+2")
     p.add_argument("--rebuild-stage3", action="store_true",
@@ -360,6 +363,7 @@ Examples:
                    help="Only process pages START..END, 0-indexed (single PDF only)")
     p.add_argument("--glob", default="*.pdf",
                    help="Glob pattern for PDF search in folder (default: *.pdf)")
+    add_profile_argument(p)
     p.add_argument("--log-level", default="INFO",
                    choices=["DEBUG", "INFO", "WARNING", "ERROR"])
     return p
@@ -375,6 +379,12 @@ def main() -> None:
         format="%(asctime)s [%(levelname)s] %(name)s %(message)s",
         datefmt="%H:%M:%S",
     )
+
+    profile = resolve_profile(args)
+    if args.output is None:
+        if profile is None:
+            raise SystemExit("give an output directory or a --profile to take it from")
+        args.output = str(profile.processed_dir)
 
     page_range = tuple(args.pages) if args.pages else None
 

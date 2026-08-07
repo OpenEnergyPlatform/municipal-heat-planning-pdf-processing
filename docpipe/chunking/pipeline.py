@@ -2,7 +2,7 @@
 pipeline.py – Orchestration of the chunkingandembedding module: merge → db → embed.
 
 CLI:
-  python -m scripts.chunkingandembedding /data/processed/ /path/to/KWP.db /path/to/faiss.index
+  python -m docpipe.chunking /data/processed/ /path/to/KWP.db /path/to/faiss.index
 
 Author: Felix Vossel
 """
@@ -14,6 +14,8 @@ import logging
 import sys
 from pathlib import Path
 from typing import Optional
+
+from docpipe.profile import add_profile_argument, resolve_profile
 
 from .config import MERGED_JSON, EMBEDDING_MODEL
 from .merge import merge_batch
@@ -161,26 +163,31 @@ def run(
 def _build_parser() -> argparse.ArgumentParser:
     """Build the CLI argument parser."""
     p = argparse.ArgumentParser(
-        prog="python -m scripts.chunkingandembedding",
+        prog="python -m docpipe.chunking",
         description="Chunking & Embedding – Merge, embed, and index pipeline outputs",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""\
 Examples:
-  python -m scripts.chunkingandembedding ./data/processed/ ./KWP.db ./faiss.index
-  python -m scripts.chunkingandembedding ./data/processed/ ./KWP.db ./faiss.index --step merge
-  python -m scripts.chunkingandembedding ./data/processed/ ./KWP.db ./faiss.index --step embed
-  python -m scripts.chunkingandembedding ./data/processed/ ./KWP.db ./faiss.index --force
+  python -m docpipe.chunking ./data/processed/ ./KWP.db ./faiss.index
+  python -m docpipe.chunking ./data/processed/ ./KWP.db ./faiss.index --step merge
+  python -m docpipe.chunking ./data/processed/ ./KWP.db ./faiss.index --step embed
+  python -m docpipe.chunking ./data/processed/ ./KWP.db ./faiss.index --force
         """,
     )
-    p.add_argument("data_dir", help="Root directory containing PDF subdirectories")
-    p.add_argument("db_path", help="Path to the SQLite database file")
-    p.add_argument("index_path", help="Path to the FAISS index file")
+    p.add_argument("data_dir", nargs="?", default=None,
+                   help="Root with the PDF subdirectories "
+                        "(default: the profile's processed directory)")
+    p.add_argument("db_path", nargs="?", default=None,
+                   help="SQLite database (default: the profile's)")
+    p.add_argument("index_path", nargs="?", default=None,
+                   help="FAISS index (default: the profile's)")
     p.add_argument(
         "--step", choices=["merge", "db", "embed", "enrich-bbox"], default=None,
         help="Run only a specific step (default: merge, db, embed). "
              "'enrich-bbox' additively backfills segment/table/image bbox from "
              "re-run Stage-3 outputs without re-embedding (index_path is ignored).",
     )
+    add_profile_argument(p)
     p.add_argument("--force", action="store_true", help="Force re-processing")
     p.add_argument(
         "--log-level", default="INFO",
@@ -199,6 +206,15 @@ def main() -> None:
         format="%(asctime)s [%(levelname)s] %(name)s %(message)s",
         datefmt="%H:%M:%S",
     )
+
+    profile = resolve_profile(args)
+    if profile is not None:
+        args.data_dir = args.data_dir or str(profile.processed_dir)
+        args.db_path = args.db_path or str(profile.db_path)
+        args.index_path = args.index_path or str(profile.index_path)
+    missing = [n for n in ("data_dir", "db_path", "index_path") if not getattr(args, n)]
+    if missing:
+        raise SystemExit(f"missing path(s): {', '.join(missing)} — give them or a --profile")
 
     try:
         run(

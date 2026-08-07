@@ -1,6 +1,6 @@
 """Stage 3: per-segment page provenance."""
-from scripts.preprocessing.models import Block, PageData
-from scripts.preprocessing import stage3_structure as s3
+from docpipe.preprocessing.models import Block, PageData
+from docpipe.preprocessing import stage3_structure as s3
 
 
 def _page(n, blocks):

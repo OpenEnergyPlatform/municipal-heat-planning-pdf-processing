@@ -1,7 +1,7 @@
 """Tests for the preprocessing folder index (relative-path keying)."""
 import json
 
-from scripts.preprocessing import pipeline as pp
+from docpipe.preprocessing import pipeline as pp
 
 
 def test_write_index_keys_by_relative_path_no_collision(tmp_path):

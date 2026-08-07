@@ -6,7 +6,7 @@
 
 ## Überblick
 
-Die Pipeline baut aus kommunalen Wärmeplänen (Roh-PDFs) eine semantisch durchsuchbare Wissensbasis auf, um die Entwicklung der MHPO zu unterstützen. Sie besteht aus **fünf Modulen** (`fileprocessing` → `preprocessing` → `textrefinement` → `imageprocessing` → `chunkingandembedding`), auf die sich sechs logische Verarbeitungsstufen verteilen (`preprocessing` umfasst Layout-Erkennung und Strukturaufbau). Ergebnis sind strukturierte Daten, angereicherte Metadaten und multimodale Embeddings in einem FAISS-Index.
+Die Pipeline baut aus kommunalen Wärmeplänen (Roh-PDFs) eine semantisch durchsuchbare Wissensbasis auf, um die Entwicklung der MHPO zu unterstützen. Sie besteht aus **fünf Modulen** (`docpipe.ingest` + Profil → `docpipe.preprocessing` → `docpipe.refinement` → `docpipe.visuals` → `docpipe.chunking`), auf die sich sechs logische Verarbeitungsstufen verteilen (`docpipe.preprocessing` umfasst Layout-Erkennung und Strukturaufbau). Ergebnis sind strukturierte Daten, angereicherte Metadaten und multimodale Embeddings in einem FAISS-Index.
 
 Alle KI-Modelle laufen lokal – die LLM- und Vision-Language-Stufen über **vLLM** (OpenAI-kompatibler Server), das Embedding direkt über HuggingFace Transformers.
 
@@ -14,15 +14,15 @@ Alle KI-Modelle laufen lokal – die LLM- und Vision-Language-Stufen über **vLL
 
 ## Pipeline-Architektur
 
-### Stufe 1 – Dateiverwaltung (`fileprocessing`)
+### Stufe 1 – Dateiverwaltung (`docpipe.ingest` + Profil)
 
 Ausgangspunkt ist die Excel-Tabelle der KWW mit den Metadaten aller veröffentlichten Wärmepläne: Gemeindename, Organisationseinheit, Bundesland, Veröffentlichungsdatum und PDF-Download-Link. Für jeden abgeschlossenen Wärmeplan mit gültigem PDF-Link lädt die Pipeline das Dokument herunter, extrahiert die Seitenanzahl und legt Dokument-, Organisations- und Gemeindeeinträge in einer SQLite-Datenbank an.
 
-### Stufe 2 – Layout-Erkennung (`preprocessing`)
+### Stufe 2 – Layout-Erkennung (`docpipe.preprocessing`)
 
 Jede PDF-Seite wird als hochauflösendes PNG gerendert und von **PP-DocLayoutV3** analysiert. Das Modell klassifiziert die Struktur jeder Seite – Tabellen, Abbildungen, Überschriften, Textblöcke, Kopf-/Fußzeilen, Seitenzahlen, Bildunterschriften – jeweils mit Bounding Box und Confidence Score.
 
-### Stufe 3 – Textextraktion und Strukturaufbau (`preprocessing`)
+### Stufe 3 – Textextraktion und Strukturaufbau (`docpipe.preprocessing`)
 
 PyMuPDF extrahiert Text auf Zeichenebene; der Rohtext wird mit den Layout-Ergebnissen aus Stufe 2 abgeglichen und zu einer strukturierten JSON-Repräsentation des Dokuments zusammengebaut.
 
@@ -30,15 +30,15 @@ Jedes Dokument wird in Abschnitte mit Titel, Seitenzahl, Textinhalt und Referenz
 
 Ausgabe: `structured_output.json` pro PDF.
 
-### Stufe 4 – LLM-Verfeinerung (`textrefinement`)
+### Stufe 4 – LLM-Verfeinerung (`docpipe.refinement`)
 
-Deterministisch erkennbare Fälle (wiederkehrende Kopf-/Fußzeilen, Verzeichnislisten, Titel-Normalisierung) werden bereits in `preprocessing` bereinigt; den Rest übernimmt **Qwen3.5-122B-A10B-FP8** über vLLM.
+Deterministisch erkennbare Fälle (wiederkehrende Kopf-/Fußzeilen, Verzeichnislisten, Titel-Normalisierung) werden bereits in `docpipe.preprocessing` bereinigt; den Rest übernimmt **Qwen3.5-122B-A10B-FP8** über vLLM.
 
 Das Modell normalisiert Abschnittstitel, korrigiert oder ergänzt fehlende Bildunterschriften, entfernt verbleibende Verzeichnisseiten und konvertiert Literaturverzeichnisse ins BibTeX-Format. Es operiert in gleitenden Fenstern auf dem Abschnittskontext (inkl. Vorgänger-Kontext für fensterübergreifende Merges) und kann Abschnitte zusammenführen, aufteilen, entfernen oder ersetzen.
 
 Ausgabe: `structured_output_final.json`.
 
-### Stufe 5 – Bildverarbeitung (`imageprocessing`)
+### Stufe 5 – Bildverarbeitung (`docpipe.visuals`)
 
 Dasselbe Qwen3.5-122B-A10B-FP8-Modell wie in Stufe 4 reichert jedes visuelle Element über seine Vision-Language-Fähigkeiten an – allerdings über eine **eigene** vLLM-Serverinstanz. Die Stufe läuft parallel zu Stufe 4, muss aber vor Stufe 6 abgeschlossen sein.
 
@@ -46,7 +46,7 @@ Für **Tabellen** entsteht eine strukturierte Markdown-Transkription, für **Abb
 
 Ausgabe: `structured_output_images.json`.
 
-### Stufe 6 – Chunking, Embedding und Datenbankpopulation (`chunkingandembedding`)
+### Stufe 6 – Chunking, Embedding und Datenbankpopulation (`docpipe.chunking`)
 
 **Schritt 1 – Merge:** Die Abschnittsstruktur aus Stufe 4 dient als Basis; Tabellen und Abbildungen werden per ID-Matching mit den angereicherten Versionen aus Stufe 5 zusammengeführt. Ergebnis: `output.json`.
 

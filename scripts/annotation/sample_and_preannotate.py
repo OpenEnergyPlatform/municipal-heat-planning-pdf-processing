@@ -28,8 +28,8 @@ from pathlib import Path
 
 import fitz
 
-from scripts.preprocessing.stage1_extract import _render_page_to_pil
-from scripts.preprocessing.stage2_layout import load_model, _infer_batch
+from docpipe.preprocessing.stage1_extract import _render_page_to_pil
+from docpipe.preprocessing.stage2_layout import load_model, _infer_batch
 
 log = logging.getLogger(__name__)
 

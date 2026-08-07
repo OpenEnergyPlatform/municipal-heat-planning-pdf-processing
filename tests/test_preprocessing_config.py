@@ -1,7 +1,7 @@
-"""Tests for scripts.preprocessing.config (unicode cleaning, atomic JSON, paths)."""
+"""Tests for docpipe.preprocessing.config (unicode cleaning, atomic JSON, paths)."""
 import json
 
-from scripts.preprocessing import config
+from docpipe.preprocessing import config
 
 
 def test_clean_unicode_removes_surrogates():
