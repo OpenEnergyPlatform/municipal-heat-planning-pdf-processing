@@ -58,7 +58,9 @@ MUNICIPALITY_META_COLUMNS = [
     ("Datum der Veröffentlichung", "datum_veroeffentlichung", "DATE"),
     ("Jahr der Veröffentlichung", "jahr_veroeffentlichung", "INTEGER"),
     ("Dienstleister", "dienstleister", "TEXT"),
-    ("Aktualität (Text)", "aktualitaet", "TEXT"),
+    # KWW renamed this in the August 2026 export and it now ships a real
+    # date rather than "19.06.2025".
+    ("Aktualität", "aktualitaet", "DATE"),
     ("vereinfachtes Verfahren", "vereinfachtes_verfahren", "TEXT"),
     ("Verkürzte KWP", "verkuerzte_kwp", "TEXT"),
     ("PVS ID", "pvs_id", "INTEGER"),

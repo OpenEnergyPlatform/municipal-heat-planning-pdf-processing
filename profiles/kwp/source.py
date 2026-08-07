@@ -32,10 +32,22 @@ def load_and_filter_excel(excel_file: Path) -> pd.DataFrame:
     link. Original KWW column names are kept (rows are consumed as dicts).
     """
     kww_data = pd.read_excel(excel_file, sheet_name=EXCEL_SHEET)
+    _warn_about_missing_columns(kww_data, excel_file)
     return kww_data[
         (kww_data["Stand in der KWP"] == "abgeschlossen") &
         (kww_data["Link Wärmeplan"].str.lower().str.contains(".pdf", na=False))
     ]
+
+
+def _warn_about_missing_columns(frame, excel_file: Path) -> None:
+    absent = missing_meta_columns(frame)
+    if absent:
+        log.warning(
+            "%s carries %d of %d metadata columns; missing: %s. Their stored "
+            "values are kept, not overwritten.",
+            excel_file.name, len(MUNICIPALITY_META_COLUMNS) - len(absent),
+            len(MUNICIPALITY_META_COLUMNS), ", ".join(absent),
+        )
 
 
 def coerce(value: Any, sqltype: str):
@@ -50,9 +62,24 @@ def coerce(value: Any, sqltype: str):
 
 
 def extract_meta(row: dict) -> dict:
-    """{db_column: coerced value} for the metadata columns of one Excel row."""
-    return {db: coerce(row.get(excel), sqltype)
-            for excel, db, sqltype in MUNICIPALITY_META_COLUMNS}
+    """
+    {db_column: coerced value} for the metadata columns of one Excel row.
+
+    Columns the sheet does not carry are LEFT OUT rather than written as NULL.
+    The KWW export drops and renames columns between releases — August 2026 came
+    with 24 instead of 35 — and since the upsert writes every column it is
+    handed, a missing one would quietly erase what an earlier export stored for
+    every municipality in the register.
+    """
+    return {db: coerce(row[excel], sqltype)
+            for excel, db, sqltype in MUNICIPALITY_META_COLUMNS
+            if excel in row}
+
+
+def missing_meta_columns(frame) -> list:
+    """The metadata columns this export does not carry (their values are kept)."""
+    return [excel for excel, _db, _t in MUNICIPALITY_META_COLUMNS
+            if excel not in frame.columns]
 
 
 class KwwSource(Source):
@@ -115,6 +142,7 @@ def backfill_meta(excel_file: Path, db_file: Path) -> int:
     if its own row would not pass the completed-plan import filter.
     """
     kww_data = pd.read_excel(excel_file, sheet_name=EXCEL_SHEET)
+    _warn_about_missing_columns(kww_data, excel_file)
     with sqlite3.connect(db_file) as connection:
         store.ensure_municipality_meta_table(MUNICIPALITY_META_COLUMNS, connection)
         existing = {r[0] for r in connection.execute("SELECT ags FROM Municipalities")}

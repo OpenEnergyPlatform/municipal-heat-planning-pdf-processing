@@ -211,3 +211,47 @@ def test_refuses_unusable_pdf(monkeypatch, tmp_path):
         _process(_row(7654321, "https://kww/x/scan.pdf"), con, tmp_path)
     assert con.execute("SELECT COUNT(*) FROM Documents").fetchone()[0] == 0
     assert con.execute("SELECT COUNT(*) FROM Municipalities").fetchone()[0] == 0
+
+
+# ---------------------------------------------------------------------------
+# the KWW export changes shape between releases
+# ---------------------------------------------------------------------------
+def test_a_column_the_export_dropped_is_not_written_as_null():
+    """August 2026 shipped 24 columns instead of 35. Since the upsert writes
+    every column it is handed, writing None would erase what an earlier export
+    stored for every municipality in the register."""
+    from profiles.kwp.source import extract_meta
+
+    row = {"Bundesland lang": "Bayern", "Landkreis": "Kelheim"}   # the rest is gone
+    meta = extract_meta(row)
+    assert meta == {"bundesland_lang": "Bayern", "landkreis": "Kelheim"}
+    assert "dienstleister" not in meta
+
+
+def test_a_column_that_is_present_but_empty_still_clears_the_value():
+    """Absent and empty are different: an empty cell is a real 'no value'."""
+    import numpy as np
+
+    from profiles.kwp.source import extract_meta
+
+    assert extract_meta({"Landkreis": np.nan}) == {"landkreis": None}
+
+
+def test_missing_columns_are_reported():
+    import pandas as pd
+
+    from profiles.kwp.source import missing_meta_columns
+
+    frame = pd.DataFrame(columns=["Bundesland lang", "Landkreis"])
+    absent = missing_meta_columns(frame)
+    assert "Dienstleister" in absent
+    assert "Landkreis" not in absent
+
+
+def test_the_renamed_aktualitaet_column_is_read_as_a_date():
+    import pandas as pd
+
+    from profiles.kwp.source import extract_meta
+
+    meta = extract_meta({"Aktualität": pd.Timestamp("2025-06-19")})
+    assert meta == {"aktualitaet": "2025-06-19"}
