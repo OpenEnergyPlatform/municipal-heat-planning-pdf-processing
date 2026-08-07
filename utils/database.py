@@ -89,7 +89,7 @@ def add_municipality(name: str, ags: str, orga_id: int, connection: sqlite3.Conn
         (name, ags, orga_id)
     )
 
-def add_document(filename: str, orga_id: int, published: str, num_pages: int, added: str, ags: int, connection: sqlite3.Connection) -> None:
+def add_document(filename: str, orga_id: int, published: str, num_pages: int, added: str, ags: int, connection: sqlite3.Connection) -> int:
     """
     Add a document to the database with its metadata.
 
@@ -102,13 +102,38 @@ def add_document(filename: str, orga_id: int, published: str, num_pages: int, ad
         ags: The municipality key (Gemeindeschlüssel) this plan belongs to —
              used to group re-published versions of the same plan.
         connection: Active SQLite database connection.
+
+    Returns:
+        The id of the new Documents row.
     """
-    connection.execute(
+    document_id = connection.execute(
         """
-        INSERT INTO Documents (filename, organisation_unit, published, num_pages, added, municipality_ags)
+        INSERT INTO Documents (filename, external_id, group_key, published, num_pages, added)
         VALUES (?, ?, ?, ?, ?, ?)
+        RETURNING id
         """,
-        (filename, orga_id, published, num_pages, added, ags)
+        (filename, filename, str(ags), published, num_pages, added)
+    ).fetchone()[0]
+    upsert_document_meta(
+        document_id, {"organisation_unit": orga_id, "municipality_ags": ags}, connection)
+    return document_id
+
+
+def upsert_document_meta(document_id: int, values: dict,
+                         connection: sqlite3.Connection) -> None:
+    """Write the profile's per-document fields into its DocumentMeta table.
+
+    The core knows the table only by name; which columns exist is the profile's
+    business (profiles/<name>/schema.sql).
+    """
+    cols = list(values)
+    assignments = ", ".join(f'"{c}" = excluded."{c}"' for c in cols)
+    placeholders = ", ".join(["?"] * (len(cols) + 1))
+    quoted = ", ".join(f'"{c}"' for c in ["document"] + cols)
+    connection.execute(
+        f'INSERT INTO DocumentMeta ({quoted}) VALUES ({placeholders}) '
+        f'ON CONFLICT(document) DO UPDATE SET {assignments}',
+        [document_id] + [values[c] for c in cols],
     )
 
 
@@ -152,11 +177,12 @@ def link_document_versions(connection: sqlite3.Connection) -> None:
     """
     Mark current vs. superseded document versions.
 
-    Documents that share a municipality (`municipality_ags`) are versions of the
-    same plan. Within each group the newest `published` date is the current
-    version (`is_current=1`); every older one is marked `is_current=0` and points
-    at the next-older version via `supersedes` (NULL for the oldest). Documents
-    with no ags, or the only one for their ags, stay current with no predecessor.
+    Documents that share a `group_key` are versions of the same work; for this
+    project that key is the municipality. Within each group the newest
+    `published` date is the current version (`is_current=1`); every older one is
+    marked `is_current=0` and points at the next-older version via `supersedes`
+    (NULL for the oldest). Documents without a group_key, or alone in their
+    group, stay current with no predecessor.
 
     Idempotent: recomputes the whole grouping on every call.
     """
@@ -164,10 +190,10 @@ def link_document_versions(connection: sqlite3.Connection) -> None:
 
     rows = connection.execute(
         """
-        SELECT id, municipality_ags, COALESCE(published, '')
+        SELECT id, group_key, COALESCE(published, '')
         FROM Documents
-        WHERE municipality_ags IS NOT NULL
-        ORDER BY municipality_ags, COALESCE(published, ''), id
+        WHERE group_key IS NOT NULL
+        ORDER BY group_key, COALESCE(published, ''), id
         """
     ).fetchall()
 

@@ -3,26 +3,16 @@ import sqlite3
 
 import pytest
 
+from docpipe import store
+from docpipe.profile import load_profile
 from utils import database as DB
 
 
 def _db():
+    """Core schema plus the kwp profile — the same tables the pipeline creates."""
     con = sqlite3.connect(":memory:")
-    con.executescript(
-        """
-        CREATE TABLE Documents (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            filename TEXT NOT NULL UNIQUE,
-            organisation_unit INTEGER,
-            published TEXT,
-            num_pages INTEGER,
-            added TEXT,
-            municipality_ags INTEGER,
-            is_current INTEGER NOT NULL DEFAULT 1,
-            supersedes INTEGER
-        );
-        """
-    )
+    store.apply(con, load_profile("kwp"))
+    con.execute("INSERT INTO OrganisationUnits (id, name, state) VALUES (1, 'OU', 'NI')")
     return con
 
 
@@ -81,10 +71,10 @@ def test_different_ags_are_independent():
     assert st["townB.pdf"] == (1, None)
 
 
-def test_null_ags_untouched():
+def test_document_without_group_key_untouched():
     con = _db()
     con.execute(
-        "INSERT INTO Documents (filename, municipality_ags, is_current) VALUES ('x.pdf', NULL, 1)"
+        "INSERT INTO Documents (filename, group_key, is_current) VALUES ('x.pdf', NULL, 1)"
     )
     DB.link_document_versions(con)
     assert _state(con)["x.pdf"] == (1, None)
