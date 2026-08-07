@@ -42,11 +42,12 @@ PP_DOCLAYOUT_MODEL_ID = "PaddlePaddle/PP-DocLayoutV3_safetensors"
 LAYOUT_BATCH_SIZE = 30
 
 # Mixed precision for the detection forward pass: "bf16", "fp16" or "off".
-# The weights stay fp32; only the matmuls run in the lower precision, and the
-# logits/boxes are cast back to fp32 before post-processing — bf16 has 8 mantissa
-# bits, which on a 1700 px page is worth several pixels of box coordinate.
-# Overridable per run so a comparison against fp32 needs no code change.
-LAYOUT_AUTOCAST = os.environ.get("DOCPIPE_LAYOUT_AUTOCAST", "bf16").lower()
+# OFF by default, from measurement: the forward pass is 4.7 of ~80 ms per page
+# (the rest is PyMuPDF rendering and the processor's resize, both CPU), and
+# autocast makes it 1.15x faster — 0.7% of the stage for a precision change on
+# box coordinates. Not a trade worth taking; the switch stays for the day the
+# CPU side gets faster.
+LAYOUT_AUTOCAST = os.environ.get("DOCPIPE_LAYOUT_AUTOCAST", "off").lower()
 
 # Render the next batch's pages while the current one is on the GPU. 0 disables
 # the prefetch thread; 1 is enough to hide the rendering, since one batch of

@@ -267,16 +267,23 @@ def _autocast_dtype(device: str):
     return _AUTOCAST_DTYPES.get(LAYOUT_AUTOCAST)
 
 
+# What post-processing turns into geometry and scores. `out_masks` is by far the
+# largest output (batch x 300 queries x 200 x 200) and is only ever thresholded,
+# so upcasting it would double the biggest allocation of the stage for nothing.
+_GEOMETRY_OUTPUTS = ("logits", "pred_boxes")
+
+
 def _to_float32(outputs):
     """
-    Cast the model's float outputs back to fp32.
+    Cast the geometry-bearing outputs back to fp32.
 
     Post-processing turns `pred_boxes` into pixel coordinates, and bf16 carries
     8 mantissa bits: on a 1700 px page one representable step is several pixels,
     enough to move a crop's edge into the neighbouring text. The matmuls may run
     reduced, the geometry may not.
     """
-    for name, value in list(outputs.items()):
+    for name in _GEOMETRY_OUTPUTS:
+        value = outputs.get(name)
         if isinstance(value, torch.Tensor) and value.is_floating_point():
             outputs[name] = value.float()
     return outputs
