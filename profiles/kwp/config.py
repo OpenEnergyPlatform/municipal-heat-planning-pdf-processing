@@ -38,6 +38,8 @@ PDF_OVERRIDES = {
     1059043: "waermeplan_konvoi_amt_haddeby_20250606.pdf",       # Jagel
     1059056: "waermeplan_konvoi_amt_haddeby_20250606.pdf",       # Lottorf
     1059078: "waermeplan_konvoi_amt_haddeby_20250606.pdf",       # Selk
+    # KWW link 404s; the plan is published on the municipality's own site.
+    3157001: "waermeplan_edemissen_20250923.pdf",                # Edemissen
 }
 
 # KWW Excel columns carried into the MunicipalityMeta table, as
