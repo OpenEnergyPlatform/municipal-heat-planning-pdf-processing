@@ -419,6 +419,11 @@ PDF_OVERRIDES = {
     9674139: "warmeplan_vg_theres_20260225.pdf",  # Gädheim
     9674180: "warmeplan_vg_theres_20260225.pdf",  # Theres
     9674219: "warmeplan_vg_theres_20260225.pdf",  # Wonfurt
+    # KWW gave these three the link of a DIFFERENT town (see SHARED_FILE_OWNERS).
+    # Their own plans, verified by the town named in the document:
+    8216007: "waermeplan_buehl_20251016.pdf",                    # Bühl (nicht Greding)
+    3252007: "waermeplan_hessisch-oldendorf_20251216.pdf",       # Hessisch Oldendorf (nicht Oldenburg)
+    8215090: "waermeplan_weingarten-baden_20231113.pdf",         # Weingarten (Baden) (nicht Ravensburg)
 }
 
 # Files the register hands to several municipalities that are NOT a convoy: KWW

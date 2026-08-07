@@ -314,17 +314,17 @@ def test_two_municipalities_on_one_file_without_a_convoy_are_reported(caplog):
     That is a register error, and it must not disappear into the grouping."""
     from profiles.kwp.source import group_keys_by_filename
 
-    rows = [_row(3252007, "https://k/Oldenburg.pdf", name="Hessisch Oldendorf"),
-            _row(3403000, "https://k/Oldenburg.pdf", name="Oldenburg (Oldb)")]
+    rows = [_row(4444007, "https://k/Oldenburg.pdf", name="Ort A"),
+            _row(5555000, "https://k/Oldenburg.pdf", name="Ort B")]
     for r in rows:
         r["Konvoi ID"] = float("nan")
 
     with caplog.at_level("WARNING"):
         keys = group_keys_by_filename(rows)
 
-    assert keys == {"oldenburg.pdf": "3252007"}
+    assert keys == {"oldenburg.pdf": "4444007"}
     assert "no convoy between them" in caplog.text
-    assert "Hessisch Oldendorf" in caplog.text
+    assert "Ort A" in caplog.text
 
 
 def test_a_real_convoy_is_not_reported(caplog):
@@ -339,17 +339,28 @@ def test_a_real_convoy_is_not_reported(caplog):
     assert "no convoy" not in caplog.text
 
 
-def test_a_known_register_error_keeps_the_real_owner():
-    """The smallest ags picks the wrong municipality for a pasted-in link — it
-    did for all three cases in the August register, so the owner is pinned."""
-    from profiles.kwp.config import SHARED_FILE_OWNERS
+def test_the_three_pasted_links_are_resolved_by_their_own_plans():
+    """KWW gave Bühl Greding's link, Hessisch Oldendorf Oldenburg's and
+    Weingarten (Baden) the Württemberg Weingarten's. Each now has its own file,
+    so nobody is left holding another town's plan."""
+    from profiles.kwp.config import PDF_OVERRIDES, SHARED_FILE_OWNERS
     from profiles.kwp.source import group_keys_by_filename
 
-    rows = [_row(3252007, "https://k/Waermeplan_Oldenburg_20251112.pdf"),
-            _row(3403000, "https://k/Waermeplan_Oldenburg_20251112.pdf")]
-    for r in rows:
-        r["Konvoi ID"] = float("nan")
+    wrong_link = {8216007: "https://k/Waermeplan_Greding_20251016.pdf",
+                  3252007: "https://k/Waermeplan_Oldenburg_20251112.pdf",
+                  8215090: "https://k/Waermeplan_Weingarten_20231113.pdf"}
+    owners = {9576122: "waermeplan_greding_20251016.pdf",
+              3403000: "waermeplan_oldenburg_20251112.pdf",
+              8436082: "waermeplan_weingarten_20231113.pdf"}
 
+    rows = [_row(a, link) for a, link in wrong_link.items()]
+    rows += [_row(a, "https://k/" + fn) for a, fn in owners.items()]
     keys = group_keys_by_filename(rows)
-    assert keys == {"waermeplan_oldenburg_20251112.pdf": "3403000"}   # not 3252007
-    assert SHARED_FILE_OWNERS["waermeplan_oldenburg_20251112.pdf"] == 3403000
+
+    for ags in wrong_link:
+        assert PDF_OVERRIDES[ags] in keys, "the victim has its own file"
+        assert keys[PDF_OVERRIDES[ags]] == str(ags)
+    for ags, fn in owners.items():
+        assert keys[fn] == str(ags), "and the real owner keeps its plan"
+    # the pin stays as a guard: it names the owner if the paste ever returns
+    assert set(SHARED_FILE_OWNERS.values()) == set(owners)
