@@ -15,6 +15,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
+import requests
 from tqdm import tqdm
 
 from ..profile import Profile
@@ -57,6 +58,7 @@ def ingest(source, db_file: Path, data_dir: Path,
     data_dir.mkdir(parents=True, exist_ok=True)
 
     rejected: dict = {}
+    unreachable: dict = {}
     with sqlite3.connect(db_file) as connection:
         schema.apply(connection, profile)
         try:
@@ -72,12 +74,52 @@ def ingest(source, db_file: Path, data_dir: Path,
                     log.error("UNUSABLE PDF – not registered: %s", exc)
                 rejected[filename] = reason
                 continue
+            # A dead link is the normal case, not a crash: the registers we read
+            # link to municipal websites that reorganise. Collect them all and
+            # report at the end, so one run yields the whole worklist.
+            except (requests.RequestException, OSError) as exc:
+                if doc.filename not in unreachable:
+                    log.warning("UNREACHABLE – not registered: %s (%s)",
+                                doc.filename, _reason(exc))
+                unreachable[doc.filename] = (doc.group_key, doc.url, _reason(exc))
+                continue
             source.after_document(connection, doc)
         docs.link_document_versions(connection)
 
     if rejected:
         _report_rejected(rejected, db_file)
+    if unreachable:
+        _report_unreachable(unreachable, db_file)
     return rejected
+
+
+def _reason(exc: BaseException) -> str:
+    """One short line for the log and the worklist."""
+    response = getattr(exc, "response", None)
+    if response is not None:
+        return f"HTTP {response.status_code}"
+    return f"{type(exc).__name__}: {exc}"
+
+
+def _report_unreachable(unreachable: dict, db_file: Path) -> None:
+    """End-of-run summary + a worklist of the links that could not be fetched."""
+    out = db_file.parent / "unreachable_pdfs.txt"
+    banner = "=" * 78
+    log.error("\n%s\n%d PDF(s) UNREACHABLE — not in the corpus.\n"
+              "Source each one by hand, drop it in the data dir and add it to the "
+              "profile's PDF_OVERRIDES, then re-run.\n%s",
+              banner, len(unreachable), banner)
+    for filename, (group_key, url, reason) in sorted(unreachable.items()):
+        log.error("  %-12s %-55s %s", group_key or "-", filename, reason)
+    try:
+        out.write_text(
+            "".join(f"{group_key or ''}\t{fn}\t{reason}\t{url or ''}\n"
+                    for fn, (group_key, url, reason) in sorted(unreachable.items())),
+            encoding="utf-8",
+        )
+        log.error("Worklist written to %s", out)
+    except OSError as exc:
+        log.error("Could not write %s: %s", out, exc)
 
 
 def _report_rejected(rejected: dict, db_file: Path) -> None:
