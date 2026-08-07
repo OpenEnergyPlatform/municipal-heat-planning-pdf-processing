@@ -17,7 +17,10 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Optional
 
-from .config import STRUCTURED_OUTPUT_JSON, FINAL_OUTPUT_JSON
+from docpipe import prompts
+
+from .config import (DIR_RESULTS, FINAL_OUTPUT_JSON, PROMPT_IDS,
+                     STRUCTURED_OUTPUT_JSON)
 from .refine import run_refine
 
 log = logging.getLogger(__name__)
@@ -36,25 +39,45 @@ def _has_input(doc_dir: Path) -> bool:
 # Single-document refinement
 # ---------------------------------------------------------------------------
 
-def run_single(doc_dir: Path, *, force: bool = False) -> Optional[dict]:
+def run_single(doc_dir: Path, *, force: bool = False,
+               force_stale: bool = False) -> Optional[dict]:
     """
     Refines one document directory. With ``force`` a cached
     ``structured_output_final.json`` is deleted first so the LLM re-refines.
+    ``force_stale`` does the same, but only when the prompt has changed since
+    the cached output was written.
     Returns the refined dict, or None on failure.
     """
     doc_dir = Path(doc_dir)
-    if force:
-        final = doc_dir / FINAL_OUTPUT_JSON
-        if final.exists():
-            final.unlink()
-    return run_refine(doc_dir)
+    results_dir = doc_dir / DIR_RESULTS
+    final = doc_dir / FINAL_OUTPUT_JSON
+
+    changed = prompts.check(results_dir, PROMPT_IDS) if final.exists() else []
+    if changed and not force:
+        if force_stale:
+            log.info("Stage 4: %s was refined with an older prompt (%s) – redoing",
+                     doc_dir.name, ", ".join(changed))
+            force = True
+        else:
+            log.warning("Stage 4: %s was refined with an older prompt (%s); "
+                        "re-run with --force-stale to redo it",
+                        doc_dir.name, ", ".join(changed))
+
+    if force and final.exists():
+        final.unlink()
+
+    result = run_refine(doc_dir)
+    if result is not None:
+        prompts.record(results_dir, PROMPT_IDS)
+    return result
 
 
 # ---------------------------------------------------------------------------
 # Batch mode
 # ---------------------------------------------------------------------------
 
-def run_batch(root_dir: Path, *, force: bool = False) -> dict[str, bool]:
+def run_batch(root_dir: Path, *, force: bool = False,
+              force_stale: bool = False) -> dict[str, bool]:
     """
     Refines every document subdirectory under *root_dir* that has a Stage-3
     structured output. Returns a dict mapping directory name → success boolean.
@@ -81,7 +104,7 @@ def run_batch(root_dir: Path, *, force: bool = False) -> dict[str, bool]:
 
     def _process(d: Path) -> tuple[str, bool]:
         try:
-            res = run_single(d, force=force)
+            res = run_single(d, force=force, force_stale=force_stale)
             return d.name, res is not None
         except Exception as e:  # never let one document kill the whole run
             log.error("Error refining '%s': %s", d.name, e, exc_info=True)
@@ -124,12 +147,13 @@ def run(
     *,
     batch: bool = False,
     force: bool = False,
+    force_stale: bool = False,
 ) -> Optional[dict] | dict[str, bool]:
     """Entry point: auto-selects single or batch mode."""
     input_path = Path(input_path)
     if batch:
-        return run_batch(input_path, force=force)
-    return run_single(input_path, force=force)
+        return run_batch(input_path, force=force, force_stale=force_stale)
+    return run_single(input_path, force=force, force_stale=force_stale)
 
 
 # ---------------------------------------------------------------------------
@@ -162,6 +186,10 @@ Examples:
         help="Refine all document subdirectories under the input path",
     )
     p.add_argument(
+        "--force-stale", action="store_true",
+        help="re-refine documents whose prompt changed since the cached run",
+    )
+    p.add_argument(
         "--force", action="store_true",
         help="Re-refine even if structured_output_final.json already exists",
     )
@@ -184,11 +212,13 @@ def main() -> None:
 
     try:
         if args.batch:
-            results = run_batch(Path(args.input), force=args.force)
+            results = run_batch(Path(args.input), force=args.force,
+                                force_stale=args.force_stale)
             ok = sum(1 for v in results.values() if v)
             sys.exit(0 if ok == len(results) else 1)
         else:
-            res = run_single(Path(args.input), force=args.force)
+            res = run_single(Path(args.input), force=args.force,
+                             force_stale=args.force_stale)
             sys.exit(0 if res is not None else 1)
     except Exception as e:
         log.error("Fatal error: %s", e, exc_info=True)

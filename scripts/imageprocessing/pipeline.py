@@ -19,7 +19,10 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Optional
 
+from docpipe import prompts
+
 from .config import (
+    PROMPT_IDS,
     VLM_MODEL,
     VLM_BASE_URL,
     VLM_NUM_PARALLEL,
@@ -90,6 +93,7 @@ def run_single(
     input_json: Optional[str] = None,
     dry_run: bool = False,
     force: bool = False,
+    force_stale: bool = False,
     base_url: Optional[str] = None,
     model: Optional[str] = None,
 ) -> Optional[dict]:
@@ -107,6 +111,16 @@ def run_single(
     output_dir = Path(output_dir)
     model = model or VLM_MODEL
     out_path = output_dir / ENRICHED_OUTPUT_JSON
+
+    changed = prompts.check(output_dir, PROMPT_IDS) if out_path.exists() else []
+    if changed and not force:
+        if force_stale:
+            log.info("Prompts changed (%s) – re-describing every item",
+                     ", ".join(changed))
+            force = True
+        else:
+            log.warning("Cached items were described with older prompts (%s); "
+                        "re-run with --force-stale to redo them", ", ".join(changed))
 
     cached_items: dict[str, dict] = {}       # id → cached table/figure dict
     if out_path.exists() and not force:
@@ -245,6 +259,7 @@ def run_single(
     _strip_source_text(enriched)
     log.info("Writing: %s", out_path)
     dump_json_atomic(enriched, out_path)
+    prompts.record(output_dir, PROMPT_IDS)
 
     log.info(stats.summary())
     return enriched
@@ -404,6 +419,10 @@ Examples:
         help="Only report statistics, do not call the vLLM server",
     )
     p.add_argument(
+        "--force-stale", action="store_true",
+        help="re-describe items whose prompts changed since the cached run",
+    )
+    p.add_argument(
         "--force", action="store_true",
         help="Re-process even if enriched_output.json already exists",
     )
@@ -440,6 +459,7 @@ def main() -> None:
     common = dict(
         dry_run=args.dry_run,
         force=args.force,
+        force_stale=args.force_stale,
         base_url=args.base_url,
         model=args.model,
     )
