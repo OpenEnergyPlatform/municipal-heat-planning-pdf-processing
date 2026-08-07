@@ -1,9 +1,11 @@
 """
-fileprocessing – Read the KWW excel meta-data, download new KWP PDFs, register them in the DB.
+fileprocessing – CLI entry point for registering a profile's source PDFs.
+
+The generic half lives in docpipe.ingest, the KWW half in profiles/kwp/source.py.
 
 Usage:
-  python -m src.fileprocessing /path_to_kww_excel/file.xlxs /path_to_db/KWP.db
+  python -m scripts.fileprocessing --profile kwp --excel kww.xlsx --db data/kwp/kwp.db --data-dir data/kwp/pdf
 """
-from .pipeline import run
+from .pipeline import main
 
-__all__ = ["run"]
+__all__ = ["main"]
