@@ -1,11 +1,11 @@
-"""Tests for ags-based document version linking (utils.database)."""
+"""Version linking by group_key (docpipe.store.documents)."""
 import sqlite3
 
 import pytest
 
 from docpipe import store
 from docpipe.profile import load_profile
-from utils import database as DB
+from docpipe.store import documents as DB
 
 
 def _db():
@@ -17,7 +17,8 @@ def _db():
 
 
 def _insert(con, filename, ags, published):
-    DB.add_document(filename, 1, published, 10, "20260101", ags, con)
+    DB.add_document(filename, filename, str(ags), published, 10, "20260101",
+                    {"organisation_unit": 1, "municipality_ags": ags}, con)
 
 
 def _state(con):

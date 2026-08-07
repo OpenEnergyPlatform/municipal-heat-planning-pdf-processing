@@ -1,4 +1,4 @@
-"""Tests for process_entry: PDF overrides, ags coercion, KWW metadata, quality gate."""
+"""The KWW source: PDF overrides, ags coercion, metadata, and the quality gate."""
 import sqlite3
 from pathlib import Path
 from urllib.parse import urlparse
@@ -7,7 +7,9 @@ import pytest
 
 from docpipe import store
 from docpipe.profile import load_profile
-from scripts.fileprocessing import pipeline, config, pdf_quality
+from docpipe.ingest import pdf_quality
+from docpipe.ingest import pipeline as ingest
+from profiles.kwp import config, source as kwp
 
 GOOD_TEXT = ("Die kommunale Waermeplanung der Gemeinde beschreibt die Ziele bis 2045. "
              "Betrachtet werden Waermenetze, Grosswaermepumpen, Speicher und Sanierung.")
@@ -35,6 +37,14 @@ def _db():
     return con
 
 
+def _process(row, con, data_dir):
+    """One Excel row through the source and the core's register step."""
+    src = kwp.KwwSource(Path("unused.xlsx"))
+    doc = src.document_for(row, con)
+    ingest.register(doc, con, Path(data_dir))
+    src.after_document(con, doc)
+
+
 def _row(ags, link, name="Town", ou="OU", state="ST", published="2024-01-01", **meta):
     """A KWW row as a dict, keyed by the original Excel column names."""
     row = {
@@ -53,8 +63,8 @@ def no_network(monkeypatch, tmp_path):
         fn = Path(urlparse(str(url).lower()).path).name.lower()
         _pdf(Path(d) / fn, 6)
         return fn
-    monkeypatch.setattr(pipeline, "download_pdf", _fake_download)
-    monkeypatch.setattr(pipeline, "get_num_pages", lambda fn, d: 10)
+    monkeypatch.setattr(ingest, "download_pdf", _fake_download)
+    monkeypatch.setattr(ingest, "get_num_pages", lambda fn, d: 10)
     for fn in set(config.PDF_OVERRIDES.values()):
         _pdf(tmp_path / fn, 6)
     return tmp_path
@@ -66,7 +76,7 @@ def test_override_replaces_broken_link(no_network):
     con = _db()
     ags = next(iter(config.PDF_OVERRIDES))
     expected = config.PDF_OVERRIDES[ags]
-    pipeline.process_entry(_row(ags, "https://kww/broken/original.pdf"), con, no_network)
+    _process(_row(ags, "https://kww/broken/original.pdf"), con, no_network)
     fn = con.execute("SELECT d.filename FROM Documents d JOIN DocumentMeta m ON m.document = d.id "
                       "WHERE m.municipality_ags = ?", (ags,)).fetchone()
     assert fn[0] == expected
@@ -74,18 +84,18 @@ def test_override_replaces_broken_link(no_network):
 
 def test_non_override_uses_kww_link(no_network):
     con = _db()
-    pipeline.process_entry(_row(5555555, "https://kww/x/echterplan_2025.pdf"), con, no_network)
+    _process(_row(5555555, "https://kww/x/echterplan_2025.pdf"), con, no_network)
     fn = con.execute("SELECT d.filename FROM Documents d JOIN DocumentMeta m ON m.document = d.id "
                       "WHERE m.municipality_ags = 5555555").fetchone()
     assert fn[0] == "echterplan_2025.pdf"
 
 
 def test_missing_override_file_raises(monkeypatch, tmp_path):
-    monkeypatch.setattr(pipeline, "get_num_pages", lambda fn, d: 10)
+    monkeypatch.setattr(ingest, "get_num_pages", lambda fn, d: 10)
     con = _db()
     ags = next(iter(config.PDF_OVERRIDES))
     with pytest.raises(FileNotFoundError):
-        pipeline.process_entry(_row(ags, "https://kww/broken.pdf"), con, tmp_path)
+        _process(_row(ags, "https://kww/broken.pdf"), con, tmp_path)
 
 
 # --- ags coercion ------------------------------------------------------------
@@ -93,7 +103,7 @@ def test_missing_override_file_raises(monkeypatch, tmp_path):
 def test_float_ags_stored_as_integer(no_network):
     """June's column is float64 (has NaN); ags must land as INTEGER, not REAL."""
     con = _db()
-    pipeline.process_entry(_row(9999999.0, "https://kww/x/p.pdf"), con, no_network)
+    _process(_row(9999999.0, "https://kww/x/p.pdf"), con, no_network)
     assert con.execute("SELECT typeof(ags) FROM Municipalities").fetchone()[0] == "integer"
     assert con.execute("SELECT typeof(municipality_ags) FROM DocumentMeta").fetchone()[0] == "integer"
     assert con.execute("SELECT typeof(ags) FROM MunicipalityMeta").fetchone()[0] == "integer"
@@ -105,7 +115,7 @@ def test_convoy_members_share_one_document(no_network):
                if f == "waermeplan_selters_20250711.pdf"]
     assert len(selters) > 1
     for i, ags in enumerate(selters):
-        pipeline.process_entry(
+        _process(
             _row(ags, "https://kww/broken.pdf", name=f"M{i}", ou="Selters VG"), con, no_network)
     docs = con.execute(
         "SELECT COUNT(*) FROM Documents WHERE filename='waermeplan_selters_20250711.pdf'"
@@ -119,7 +129,7 @@ def test_convoy_members_share_one_document(no_network):
 
 def test_metadata_written_for_each_municipality(no_network):
     con = _db()
-    pipeline.process_entry(
+    _process(
         _row(1234567, "https://kww/x/p.pdf",
              **{"Landkreis": "Kreis Test", "Einwohnendenzahl nach GVZ": 4321.0,
                 "Verbandstyp": "verbandsfreie Gemeinde"}),
@@ -137,18 +147,18 @@ def test_metadata_written_for_each_municipality(no_network):
 
 def test_metadata_upsert_refreshes_on_rerun(no_network):
     con = _db()
-    pipeline.process_entry(_row(2222222, "https://kww/x/p.pdf", **{"Landkreis": "Alt"}), con, no_network)
-    pipeline.process_entry(_row(2222222, "https://kww/x/p.pdf", **{"Landkreis": "Neu"}), con, no_network)
+    _process(_row(2222222, "https://kww/x/p.pdf", **{"Landkreis": "Alt"}), con, no_network)
+    _process(_row(2222222, "https://kww/x/p.pdf", **{"Landkreis": "Neu"}), con, no_network)
     assert con.execute("SELECT landkreis FROM MunicipalityMeta WHERE ags=2222222").fetchall() == [("Neu",)]
 
 
 def test_coerce_types():
-    assert pipeline._coerce(float("nan"), "INTEGER") is None
-    assert pipeline._coerce(96326.0, "INTEGER") == 96326
-    assert pipeline._coerce("  x ", "TEXT") == "x"
+    assert kwp.coerce(float("nan"), "INTEGER") is None
+    assert kwp.coerce(96326.0, "INTEGER") == 96326
+    assert kwp.coerce("  x ", "TEXT") == "x"
     import pandas as pd
-    assert pipeline._coerce(pd.Timestamp("2024-07-01"), "DATE") == "2024-07-01"
-    assert pipeline._coerce(pd.NaT, "DATE") is None
+    assert kwp.coerce(pd.Timestamp("2024-07-01"), "DATE") == "2024-07-01"
+    assert kwp.coerce(pd.NaT, "DATE") is None
 
 
 # --- PDF quality gate --------------------------------------------------------
@@ -192,12 +202,12 @@ def test_gate_samples_across_the_document(tmp_path):
     assert not ok and reason.startswith("NO_TEXT"), reason
 
 
-def test_process_entry_refuses_unusable_pdf(monkeypatch, tmp_path):
+def test_refuses_unusable_pdf(monkeypatch, tmp_path):
     """A scan raises UnusablePDF and leaves nothing in the DB."""
     con = _db()
     _pdf(tmp_path / "scan.pdf", 12, text=None)
-    monkeypatch.setattr(pipeline, "download_pdf", lambda url, d: "scan.pdf")
-    with pytest.raises(pipeline.UnusablePDF):
-        pipeline.process_entry(_row(7654321, "https://kww/x/scan.pdf"), con, tmp_path)
+    monkeypatch.setattr(ingest, "download_pdf", lambda url, d: "scan.pdf")
+    with pytest.raises(ingest.UnusablePDF):
+        _process(_row(7654321, "https://kww/x/scan.pdf"), con, tmp_path)
     assert con.execute("SELECT COUNT(*) FROM Documents").fetchone()[0] == 0
     assert con.execute("SELECT COUNT(*) FROM Municipalities").fetchone()[0] == 0
