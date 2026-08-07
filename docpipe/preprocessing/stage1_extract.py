@@ -21,6 +21,7 @@ from PIL import Image
 from .config import (
     TEXT_BLOCK_MIN_CHARS,
     HYPHEN_EXCEPTIONS,
+    strip_private_use,
 )
 from .models import Block, PageData
 
@@ -29,6 +30,12 @@ log = logging.getLogger(__name__)
 
 def _rect_to_bbox(rect: fitz.Rect) -> list[float]:
     return [round(rect.x0, 2), round(rect.y0, 2), round(rect.x1, 2), round(rect.y1, 2)]
+
+
+# Counts private-use glyphs dropped while extracting one document, so a
+# document typeset with symbol fonts is visible in the log rather than silently
+# thinned out.
+_PRIVATE_USE_DROPPED = [0]
 
 
 def _spans_to_text(block: dict) -> str:
@@ -42,7 +49,10 @@ def _spans_to_text(block: dict) -> str:
                 c = char.get("c", "")
                 if c:
                     line_chars.append(c)
-        line_str = "".join(line_chars).strip()
+        line_str, dropped = strip_private_use("".join(line_chars))
+        if dropped:
+            _PRIVATE_USE_DROPPED[0] += dropped
+        line_str = line_str.strip()
         if line_str:
             lines_text.append(line_str)
 
@@ -191,6 +201,7 @@ def extract_all_pages(
     pages:      list[PageData]  = []
     fitz_pages: list[fitz.Page] = []
     n_failed = 0
+    _PRIVATE_USE_DROPPED[0] = 0
 
     for i, page_index in enumerate(page_indices):
         try:
@@ -212,6 +223,12 @@ def extract_all_pages(
         log.warning(
             f"Stage 1: {n_failed}/{len(page_indices)} page(s) FAILED – "
             f"extraction is incomplete"
+        )
+    if _PRIVATE_USE_DROPPED[0]:
+        log.warning(
+            f"Stage 1: dropped {_PRIVATE_USE_DROPPED[0]} private-use glyph(s) – "
+            f"'{pdf_path.name}' uses a symbol font whose characters carry no "
+            f"Unicode meaning"
         )
     log.info(f"Stage 1: done – {len(pages)}/{len(page_indices)} pages")
     return pages, fitz_pages, doc, n_failed

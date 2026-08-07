@@ -39,6 +39,7 @@ from .config import (
     SECTION_TITLE_CLASSES,
     TEXT_SUPPRESS_OVERLAP,
     CAPTION_MAX_DIST_PT,
+    caption_like,
     CAPTION_REJECT_ACROSS_TITLE,
     TITLE_EXCLUDE_PREFIXES,
     TITLE_SAME_ROW_OVERLAP_FRACTION,
@@ -745,16 +746,18 @@ def resolve_captions(pages: list[PageData]) -> list[PageData]:
     """
     for pg in pages:
         media_blocks  = [b for b in pg.blocks if b.type in ("table", "image")]
+        # A block too long to be a label is body prose, whatever its distance
+        # to the figure — and adopting it would delete it from the page.
         caption_pool  = [
             b for b in pg.blocks
-            if b.layout_label in CAPTION_CLASSES and b.content
+            if b.layout_label in CAPTION_CLASSES and caption_like(b.content)
         ]
         fallback_pool = [
             b for b in pg.blocks
             if b.type == "text"
             and b.layout_label not in SECTION_TITLE_CLASSES
             and b.layout_label not in CAPTION_CLASSES
-            and b.content
+            and caption_like(b.content)
         ]
 
         # Heading y-centers act as boundaries: a candidate is rejected if a

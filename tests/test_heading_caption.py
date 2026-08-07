@@ -109,3 +109,37 @@ def test_resolve_captions_links_when_no_intervener():
     cap = _text("p0_t1", 210, "Energieträger 2023")                               # y≈215, dist 15
     s2.resolve_captions([_page([fig, cap])])
     assert fig.caption == "Energieträger 2023"
+
+
+def test_a_paragraph_is_not_adopted_as_a_caption():
+    """The winning block is REMOVED from the page, so adopting a paragraph
+    would delete it from the section text — 205 captions in the corpus ran
+    past 40 words, the longest 156."""
+    fig = Block(id="p0_img0", type="image", bbox=[0, 195, 100, 205], path="images/x.png")
+    paragraph = _text("p0_t1", 210, " ".join(f"wort{i}" for i in range(60)))
+    page = _page([fig, paragraph])
+    s2.resolve_captions([page])
+    assert fig.caption is None
+    assert paragraph in page.blocks          # stays in the prose
+
+
+def test_a_long_figure_title_is_refused_too():
+    fig = Block(id="p0_img0", type="image", bbox=[0, 195, 100, 205], path="images/x.png")
+    long_title = _text("p0_t1", 210, " ".join(f"wort{i}" for i in range(60)),
+                       label="figure_title")
+    s2.resolve_captions([_page([fig, long_title])])
+    assert fig.caption is None
+
+
+def test_private_use_glyphs_are_dropped_from_extracted_text():
+    """A symbol font's checkmarks arrive as unassigned code points."""
+    from docpipe.preprocessing.config import strip_private_use
+    text, n = strip_private_use("Bewertung:  gut,  schlecht")
+    assert n == 2
+    assert "" not in text and "gut" in text and "schlecht" in text
+
+
+def test_ordinary_text_is_untouched():
+    from docpipe.preprocessing.config import strip_private_use
+    assert strip_private_use("Wärmenetz – 100 % erneuerbar") == \
+        ("Wärmenetz – 100 % erneuerbar", 0)

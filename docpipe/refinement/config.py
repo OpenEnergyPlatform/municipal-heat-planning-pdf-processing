@@ -34,6 +34,15 @@ LLM_NUM_PARALLEL = int(os.environ.get("LLM_NUM_PARALLEL", "8"))
 MAX_RETRIES = 4
 WINDOW_SIZE = 3  # sections per LLM call
 
+# ── Oversized sections ─────────────────────────────────────────────────────
+# A section is one retrieval chunk and one vector. Above SECTION_MAX_WORDS it
+# is cut into parts of roughly SECTION_TARGET_WORDS (see split.py). Short
+# sections are left alone: a short chunk is precise, a long one is mush.
+SECTION_SPLIT_ENABLE  = True
+SECTION_MAX_WORDS     = 1000
+SECTION_TARGET_WORDS  = 600
+SECTION_OUTLINE_WORDS = 14   # words per block shown to the model in the outline
+
 # Numbering-prefix strip + ALL-CAPS de-shout applied on top of the LLM's pass.
 TITLE_CLEANUP_ENABLE = True
 
@@ -45,7 +54,7 @@ SURROGATES = compile(r"[\uD800-\uDFFF]")
 # ---------------------------------------------------------------------------
 # System prompt for the LLM
 # ---------------------------------------------------------------------------
-PROMPT_IDS = ("refinement/refine",)
+PROMPT_IDS = ("refinement/refine", "refinement/split")
 
 _REFINE = prompts.load("refinement/refine")
 SYSTEM_PROMPT = _REFINE.text

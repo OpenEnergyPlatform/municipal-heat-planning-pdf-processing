@@ -11,6 +11,12 @@ MERGED_JSON = "results/output.json"
 EMBEDDING_MODEL = "Qwen/Qwen3-VL-Embedding-8B"
 EMBEDDING_DIM = 4096
 MAX_TOKEN_LENGTH = 16384
+
+# Hard ceiling for one section's embedding text. Refinement splits sections
+# above SECTION_MAX_WORDS, so this only catches what slipped through; it sits
+# clear of MAX_TOKEN_LENGTH so a capped section is never silently truncated by
+# the tokenizer instead.
+SECTION_EMBED_MAX_WORDS = 1800
 # Aggregate batch: MultiGPUEmbedder splits it round-robin across the replicas.
 EMBEDDING_BATCH_SIZE = 32
 

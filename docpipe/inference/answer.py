@@ -58,12 +58,17 @@ def _write_temp_image(image_bytes: bytes) -> str:
 
 
 def _code_context(items: list, top_hits: list) -> dict:
-    """Table markdown of the sources in this batch, for the code sandbox."""
+    """Table markdown of the sources in this batch, for the code sandbox.
+
+    A retrieved table carries its markdown in `text` — fetch_owner_content has
+    no `markdown` key, and reading one silently handed the sandbox an empty
+    context on every turn.
+    """
     out = {}
     for it in items:
         hit = top_hits[it["index"]]
-        if hit.get("owner_kind") == "table" and hit.get("markdown"):
-            out[str(it["index"])] = hit["markdown"]
+        if hit.get("owner_kind") == "table" and hit.get("text"):
+            out[str(it["index"])] = hit["text"]
     return out
 
 

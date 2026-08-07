@@ -30,6 +30,7 @@ from .config import (
     DIRECTORY_HEAD_LEN,
     DIRECTORY_HEAD_SCORE_THRESHOLD,
     DIRECTORY_MAX_RESIDUAL_CHARS,
+    caption_like,
     clean_data,
     dump_json_atomic,
 )
@@ -327,7 +328,7 @@ def build_sections(pages: list[PageData], column_layout: str = "auto") -> list[S
                     ref = TableRef(
                         id=block.id,
                         path=block.path or "",
-                        caption=block.caption,
+                        caption=block.caption if caption_like(block.caption) else None,
                         page_number=pg.page_number,
                         source_text=block.source_text,
                         bbox=[rect] if rect is not None else None,
@@ -348,7 +349,7 @@ def build_sections(pages: list[PageData], column_layout: str = "auto") -> list[S
                     ref = FigureRef(
                         id=block.id,
                         path=block.path or "",
-                        caption=block.caption,
+                        caption=block.caption if caption_like(block.caption) else None,
                         page_number=pg.page_number,
                         bbox=[rect] if rect is not None else None,
                     )
