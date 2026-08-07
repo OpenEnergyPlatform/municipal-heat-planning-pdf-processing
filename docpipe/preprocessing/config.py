@@ -151,6 +151,44 @@ TITLE_SAME_ROW_OVERLAP_FRACTION = 0.2
 # Maximum distance in points for "nearest text block" caption search.
 CAPTION_MAX_DIST_PT = 60.0
 
+# A caption is a label, not a paragraph. Without this the nearest-text-block
+# fallback below happily adopts a whole paragraph — measured on the corpus, 205
+# captions ran past 40 words, the longest 156 — and since the winning block is
+# REMOVED from the page, that prose disappears from the section text entirely.
+# Real captions sit at 8 words median, 24 at the 99th percentile.
+CAPTION_MAX_WORDS = 45
+
+
+def caption_like(text) -> bool:
+    """Is this short enough to be a caption rather than body prose?"""
+    return bool(text) and len(str(text).split()) <= CAPTION_MAX_WORDS
+
+
+# A symbol font (Wingdings and friends) puts its glyphs in the Unicode Private
+# Use Area, where they carry no meaning outside that font: what the extractor
+# returns for a checkmark or a smiley is an unassigned code point. Measured on
+# the corpus, 423 sections across 99 documents carry them. They are dropped —
+# as characters they are noise to the reader, to the LLM and to the embedder
+# alike, and the legend around them ("Ein roter Smiley gibt an, dass …") says
+# in prose what the glyph meant.
+STRIP_PRIVATE_USE = True
+
+
+def _is_private_use(char: str) -> bool:
+    o = ord(char)
+    return 0xE000 <= o <= 0xF8FF or 0xF0000 <= o <= 0xFFFFD or 0x100000 <= o <= 0x10FFFD
+
+
+def strip_private_use(text: str) -> tuple:
+    """(text without private-use glyphs, how many were removed)."""
+    if not STRIP_PRIVATE_USE or not text:
+        return text, 0
+    kept = [c for c in text if not _is_private_use(c)]
+    removed = len(text) - len(kept)
+    if not removed:
+        return text, 0
+    return "".join(kept), removed
+
 # Reject a caption candidate when a section heading lies vertically between it
 # and the table/figure — prevents linking a caption across a section boundary.
 CAPTION_REJECT_ACROSS_TITLE = True

@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Optional
 
 from .config import (
+    SECTION_EMBED_MAX_WORDS,
     EMBEDDING_TYPE_SECTION_TEXT,
     EMBEDDING_TYPE_SECTION_TITLE,
     EMBEDDING_TYPE_TABLE_TEXT,
@@ -52,6 +53,25 @@ def _dir_names(path: Path, cache: dict[Path, set[str]]) -> set[str]:
     return names
 
 
+def _capped(text: str, pdf_name: str, sec_idx: int) -> str:
+    """
+    Last line of defence against a section that is too long to embed.
+
+    Refinement splits oversized sections (docpipe.refinement.split), so this
+    should not trigger. When it does, the cut is reported rather than silent —
+    a quietly truncated vector is a section whose tail is simply not searchable.
+    """
+    words = text.split()
+    if len(words) <= SECTION_EMBED_MAX_WORDS:
+        return text
+    log.warning(
+        "%s section %d: %d words exceeds the embedding budget of %d — truncated. "
+        "Refinement should have split this section.",
+        pdf_name, sec_idx, len(words), SECTION_EMBED_MAX_WORDS,
+    )
+    return " ".join(words[:SECTION_EMBED_MAX_WORDS])
+
+
 def _build_item_lookup(section: dict) -> dict[str, dict]:
     """Build a placeholder-id to item dict from a section's tables and figures."""
     lookup: dict[str, dict] = {}
@@ -64,28 +84,22 @@ def _build_item_lookup(section: dict) -> dict[str, dict]:
 
 def _replace_placeholders(content: str, lookup: dict[str, dict]) -> str:
     """
-    Replace [p13_tbl0]-style placeholders in section content with
-    the caption + markdown/description of the referenced item.
+    Replace [p13_tbl0]-style placeholders in section content with the CAPTION of
+    the referenced item — what the section says about it, not the item itself.
+
+    The table's rows and the figure's description are embedded separately, as
+    table_text/table_vl and figure_text/figure_vl, and are retrieved as their
+    own sources. Pulling them in here as well used to make up 46% of the whole
+    section-text corpus: it diluted every section vector, pushed the longest
+    sections past the model's token limit, and promised content the section
+    itself cannot deliver — what the answering LLM later reads is the stored
+    content, where the placeholder is still a placeholder.
     """
     def _replacer(match: re.Match) -> str:
-        item_id = match.group(1)
-        item = lookup.get(item_id)
+        item = lookup.get(match.group(1))
         if item is None:
             return match.group(0)
-
-        parts = []
-        caption = item.get("caption", "")
-        if caption:
-            parts.append(caption)
-
-        markdown = item.get("markdown", "")
-        description = item.get("description", "")
-        if markdown:
-            parts.append(markdown)
-        elif description:
-            parts.append(description)
-
-        return "\n".join(parts) if parts else match.group(0)
+        return (item.get("caption") or "").strip() or match.group(0)
 
     return _PLACEHOLDER_RE.sub(_replacer, content)
 
@@ -113,16 +127,18 @@ def build_embedding_inputs(
             content = "\n".join(str(c) for c in content)
         item_lookup = _build_item_lookup(section)
 
-        enriched_content = _replace_placeholders(content, item_lookup)
-        section_text = (title + "\n" + enriched_content).strip()
+        labelled_content = _replace_placeholders(content, item_lookup)
+        section_text = (title + "\n" + labelled_content).strip()
 
-        if section_text:
+        # A section whose text is nothing but its title would only duplicate the
+        # section_title vector below.
+        if section_text and section_text != title.strip():
             inputs.append(EmbeddingInput(
                 embedding_type=EMBEDDING_TYPE_SECTION_TEXT,
                 pdf_name=pdf_name,
                 section_index=sec_idx,
                 item_id=None,
-                text=section_text,
+                text=_capped(section_text, pdf_name, sec_idx),
             ))
 
         if title:

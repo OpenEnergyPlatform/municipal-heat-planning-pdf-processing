@@ -14,8 +14,9 @@ import re
 import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-from typing import Optional
+from typing import Callable, Optional
 
+from .split import SPLIT_MAX_TOKENS, SPLIT_TEMPERATURE, split_oversized
 from .config import (
     STRUCTURED_OUTPUT_JSON,
     FINAL_OUTPUT_JSON,
@@ -591,6 +592,29 @@ def _normalize_title(title: str) -> str:
 # ---------------------------------------------------------------------------
 
 
+def _make_splitter(client) -> Callable[[str, str], str]:
+    """A one-shot JSON call for the split prompt — no retries, no repair.
+
+    A failed or unusable answer is not worth a second call: the mechanical
+    fallback in split.py cuts the section anyway, only less cleverly.
+    """
+    def ask(system_prompt: str, user_content: str) -> str:
+        response = client.chat.completions.create(
+            model=LLM_MODEL,
+            messages=[{"role": "system", "content": system_prompt},
+                      {"role": "user", "content": user_content}],
+            response_format={"type": "json_object"},
+            temperature=SPLIT_TEMPERATURE,
+            max_tokens=SPLIT_MAX_TOKENS,
+            extra_body={"chat_template_kwargs": {"enable_thinking": False}},
+        )
+        raw = response.choices[0].message.content or ""
+        raw = re.sub(r"<think>.*?</think>", "", raw, flags=re.DOTALL).strip()
+        raw = re.sub(r"^```(?:json)?\s*", "", raw)
+        return re.sub(r"\s*```$", "", raw).strip()
+    return ask
+
+
 def refine_sections(sections: list[dict]) -> list[dict]:
     """
     Processes all sections through the LLM in windows of WINDOW_SIZE, dispatched
@@ -606,6 +630,26 @@ def refine_sections(sections: list[dict]) -> list[dict]:
     # stays in structured_output.json, which imageprocessing reads separately.
     _strip_table_source_text(sections)
 
+    # One shared client for every call below: it is thread-safe, so the workers
+    # can share it. max_retries=0 leaves retry control to our own loop.
+    try:
+        from openai import OpenAI
+    except ImportError:
+        raise ImportError(
+            "openai package not installed.\n  pip install openai"
+        )
+    client = OpenAI(
+        base_url=LLM_BASE_URL,
+        api_key=LLM_API_KEY,
+        timeout=LLM_TIMEOUT,
+        max_retries=0,
+    )
+
+    # Cut oversized sections FIRST. A window has to echo every section it
+    # carries, so a section too long to be one chunk is also too long to echo —
+    # which is how those sections used to pass through unrefined.
+    sections = split_oversized(sections, ask=_make_splitter(client))
+
     log.info(
         f"Stage 4: {len(sections)} sections, window size {WINDOW_SIZE}, "
         f"parallel slots {LLM_NUM_PARALLEL}"
@@ -620,21 +664,6 @@ def refine_sections(sections: list[dict]) -> list[dict]:
 
     total_windows = len(windows)
     log.info(f"Stage 4: {total_windows} windows to process")
-
-    # One shared client for all windows: it is thread-safe, so the workers can
-    # share it. max_retries=0 leaves retry control to our own loop.
-    try:
-        from openai import OpenAI
-    except ImportError:
-        raise ImportError(
-            "openai package not installed.\n  pip install openai"
-        )
-    client = OpenAI(
-        base_url=LLM_BASE_URL,
-        api_key=LLM_API_KEY,
-        timeout=LLM_TIMEOUT,
-        max_retries=0,
-    )
 
     # ── Parallel dispatch ────────────────────────────────────────────────
     ordered_results: dict[int, tuple[Optional[list[dict]], list[dict]]] = {}
