@@ -422,6 +422,7 @@ def main() -> None:
     )
 
     profile = resolve_profile(args)
+    explicit_output = args.output is not None
     if args.output is None:
         if profile is None:
             raise SystemExit("give an output directory or a --profile to take it from")
@@ -430,7 +431,10 @@ def main() -> None:
     page_range = tuple(args.pages) if args.pages else None
 
     if args.report_columns:
-        report_columns(Path(args.output))
+        # The report reads a processed root, which is the second positional in
+        # a normal run but the only one anybody types here.
+        root = args.output if (explicit_output or args.input is None) else args.input
+        report_columns(Path(root))
         sys.exit(0)
 
     if not args.rebuild_stage3 and args.input is None:

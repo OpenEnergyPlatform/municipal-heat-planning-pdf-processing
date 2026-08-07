@@ -1,4 +1,6 @@
 """Reading order on one- and two-column pages."""
+from pathlib import Path
+
 import pytest
 
 from docpipe.preprocessing import columns
@@ -150,3 +152,28 @@ def test_stage3_leaves_a_single_column_document_alone():
     page = _page([_block(f"T{i}", 100.0 + i * 60) for i in range(8)])
     (section,) = build_sections([page], column_layout="auto")
     assert section.content == "T0 T1 T2 T3 T4 T5 T6 T7"
+
+
+# ---------------------------------------------------------------------------
+# the report reads a processed root, wherever it was typed
+# ---------------------------------------------------------------------------
+@pytest.mark.parametrize("argv,expected", [
+    (["--report-columns", "data/pdf/processed"], "data/pdf/processed"),
+    (["--report-columns", "in", "out"], "out"),
+    (["--report-columns"], None),                     # falls back to the profile
+])
+def test_report_columns_takes_the_path_from_either_positional(monkeypatch, argv, expected):
+    import sys as _sys
+
+    from docpipe.preprocessing import pipeline
+
+    seen = {}
+    monkeypatch.setattr(pipeline, "report_columns", lambda root, **kw: seen.setdefault("root", root))
+    monkeypatch.setenv("DOCPIPE_PROFILE", "kwp")
+    monkeypatch.setattr(_sys, "argv", ["prog", *argv])
+    with pytest.raises(SystemExit):
+        pipeline.main()
+    if expected is None:
+        assert seen["root"].name == "processed"       # the profile's own
+    else:
+        assert seen["root"] == Path(expected)
