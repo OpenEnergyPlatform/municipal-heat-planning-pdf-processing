@@ -21,7 +21,12 @@ import pandas as pd
 from docpipe.ingest.models import Source, SourceDoc
 
 from . import store
-from .config import EXCEL_SHEET, MUNICIPALITY_META_COLUMNS, PDF_OVERRIDES
+from .config import (
+    EXCEL_SHEET,
+    MUNICIPALITY_META_COLUMNS,
+    PDF_OVERRIDES,
+    SHARED_FILE_OWNERS,
+)
 
 log = logging.getLogger(__name__)
 
@@ -82,16 +87,74 @@ def missing_meta_columns(frame) -> list:
             if excel not in frame.columns]
 
 
+def filename_for(row: dict) -> str:
+    """The local file name a register row resolves to (override or KWW link)."""
+    ags = int(row["Gemeindeschlüssel"])
+    override = PDF_OVERRIDES.get(ags)
+    link = override if override else str(row["Link Wärmeplan"]).strip()
+    return Path(urlparse(link.lower()).path).name.lower()
+
+
+def group_keys_by_filename(rows: list) -> dict:
+    """
+    {filename: group_key} with the group key being the SMALLEST ags among the
+    municipalities that share the file.
+
+    A convoy plan is one document for many municipalities, and the group key is
+    what makes a re-published plan a new version of the old one rather than a
+    second current document. Taking the ags of whichever row happened to come
+    first would tie that to KWW's row order: reorder the sheet and next year's
+    edition lands in a different group, so both editions stay "current" side by
+    side. The smallest ags of the group is a property of the group itself.
+
+    Where the sharing is a register error rather than a convoy, SHARED_FILE_OWNERS
+    names the municipality the document really belongs to — read off the document.
+    The smallest ags would pick the wrong one there; it did in all three known
+    cases.
+    """
+    members: dict = {}
+    for row in rows:
+        members.setdefault(filename_for(row), []).append(row)
+    _warn_about_shared_files(members)
+    return {name: str(SHARED_FILE_OWNERS.get(
+                name, min(int(r["Gemeindeschlüssel"]) for r in rs)))
+            for name, rs in members.items()}
+
+
+def _warn_about_shared_files(members: dict) -> None:
+    """
+    Several municipalities on one file are normal — that is what a convoy is.
+    Several municipalities on one file with NO convoy marking between them is a
+    register error: KWW pasted one town's link into another town's row, and the
+    corpus then hands one municipality the other's plan.
+    """
+    for name, rows in sorted(members.items()):
+        if len(rows) < 2:
+            continue
+        ids = {str(r.get("Konvoi ID")) for r in rows} - {"nan", "None", ""}
+        if ids:
+            continue
+        log.warning(
+            "%s is shared by %d municipalities with no convoy between them "
+            "(%s) — one of them is pointing at the other's plan.",
+            name, len(rows),
+            ", ".join("%s %s" % (int(r["Gemeindeschlüssel"]), r["Gemeindename"])
+                      for r in rows),
+        )
+
+
 class KwwSource(Source):
     """The KWW register as a document source."""
 
     def __init__(self, excel_file: Path):
         self.excel_file = Path(excel_file)
         self._rows = None
+        self._group_keys: dict = {}
 
     def _load(self):
         if self._rows is None:
             self._rows = load_and_filter_excel(self.excel_file).to_dict("records")
+            self._group_keys = group_keys_by_filename(self._rows)
         return self._rows
 
     def __len__(self):
@@ -111,15 +174,18 @@ class KwwSource(Source):
         # local filename that must already be in the data dir — never downloaded.
         override = PDF_OVERRIDES.get(ags)
         link = override if override else str(row["Link Wärmeplan"]).strip()
-        filename = Path(urlparse(link.lower()).path).name.lower()
+        filename = filename_for(row)
 
         orga_id = store.update_organisation_unit(row["Verbandsname"], state, connection)
         return SourceDoc(
             external_id=filename,
             filename=filename,
             url=None if override else link,
-            # re-published plans of one municipality are versions of each other
-            group_key=str(ags),
+            # Re-published plans are versions of each other. For a convoy the key
+            # is the group's smallest ags, not this row's (group_keys_by_filename).
+            # The map comes from the whole sheet, which documents() has loaded;
+            # a single row on its own can only speak for itself.
+            group_key=self._group_keys.get(filename, str(ags)),
             published=published,
             meta={"organisation_unit": orga_id, "municipality_ags": ags},
             payload={"row": row, "ags": ags, "orga_id": orga_id},

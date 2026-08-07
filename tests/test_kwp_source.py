@@ -255,3 +255,101 @@ def test_the_renamed_aktualitaet_column_is_read_as_a_date():
 
     meta = extract_meta({"Aktualität": pd.Timestamp("2025-06-19")})
     assert meta == {"aktualitaet": "2025-06-19"}
+
+
+# ---------------------------------------------------------------------------
+# Convoy version grouping
+# ---------------------------------------------------------------------------
+def test_a_convoy_is_grouped_by_its_smallest_ags():
+    from profiles.kwp.source import group_keys_by_filename
+
+    rows = [_row(5555103, "https://k/Konvoi_VG.pdf"),
+            _row(5555018, "https://k/Konvoi_VG.pdf"),
+            _row(5555054, "https://k/Konvoi_VG.pdf")]
+    assert group_keys_by_filename(rows) == {"konvoi_vg.pdf": "5555018"}
+
+
+def test_the_row_order_does_not_decide_the_group():
+    """The whole point: KWW may reorder the sheet between exports. If the key
+    followed the first row, next year's edition would land in another group and
+    both editions would stay current side by side."""
+    from profiles.kwp.source import group_keys_by_filename
+
+    rows = [_row(5555103, "https://k/A.pdf"), _row(5555018, "https://k/A.pdf")]
+    assert group_keys_by_filename(rows) == group_keys_by_filename(rows[::-1])
+
+
+def test_a_single_municipality_keeps_its_own_ags():
+    from profiles.kwp.source import group_keys_by_filename
+
+    assert group_keys_by_filename([_row(8325049, "https://k/Rottweil.pdf")]) \
+        == {"rottweil.pdf": "8325049"}
+
+
+def test_a_new_edition_of_a_convoy_shares_the_group_of_the_old_one():
+    from profiles.kwp.source import group_keys_by_filename
+
+    members = [5555103, 5555018, 5555054]
+    old = group_keys_by_filename([_row(a, "https://k/Plan_2025.pdf") for a in members])
+    new = group_keys_by_filename([_row(a, "https://k/Plan_2026.pdf") for a in members[::-1]])
+    assert set(old.values()) == set(new.values()) == {"5555018"}
+
+
+def test_the_override_filename_decides_the_grouping():
+    """A hand-sourced replacement changes the file name, so the group has to be
+    computed from the name the document is actually stored under."""
+    from profiles.kwp.config import PDF_OVERRIDES
+    from profiles.kwp.source import group_keys_by_filename
+
+    ags = sorted(a for a, f in PDF_OVERRIDES.items()
+                 if list(PDF_OVERRIDES.values()).count(f) > 1)[:2]
+    rows = [_row(a, "https://kww/irrelevant_%d.pdf" % a) for a in ags]
+    keys = group_keys_by_filename(rows)
+    assert len(keys) == 1, "both rows must resolve to the one override file"
+    assert list(keys.values()) == [str(min(ags))]
+
+
+def test_two_municipalities_on_one_file_without_a_convoy_are_reported(caplog):
+    """KWW has pasted one town's link into another town's row more than once.
+    That is a register error, and it must not disappear into the grouping."""
+    from profiles.kwp.source import group_keys_by_filename
+
+    rows = [_row(3252007, "https://k/Oldenburg.pdf", name="Hessisch Oldendorf"),
+            _row(3403000, "https://k/Oldenburg.pdf", name="Oldenburg (Oldb)")]
+    for r in rows:
+        r["Konvoi ID"] = float("nan")
+
+    with caplog.at_level("WARNING"):
+        keys = group_keys_by_filename(rows)
+
+    assert keys == {"oldenburg.pdf": "3252007"}
+    assert "no convoy between them" in caplog.text
+    assert "Hessisch Oldendorf" in caplog.text
+
+
+def test_a_real_convoy_is_not_reported(caplog):
+    from profiles.kwp.source import group_keys_by_filename
+
+    rows = [_row(5555018, "https://k/K.pdf"), _row(5555103, "https://k/K.pdf")]
+    for r in rows:
+        r["Konvoi ID"] = "RLP VG Musterhausen"
+
+    with caplog.at_level("WARNING"):
+        group_keys_by_filename(rows)
+    assert "no convoy" not in caplog.text
+
+
+def test_a_known_register_error_keeps_the_real_owner():
+    """The smallest ags picks the wrong municipality for a pasted-in link — it
+    did for all three cases in the August register, so the owner is pinned."""
+    from profiles.kwp.config import SHARED_FILE_OWNERS
+    from profiles.kwp.source import group_keys_by_filename
+
+    rows = [_row(3252007, "https://k/Waermeplan_Oldenburg_20251112.pdf"),
+            _row(3403000, "https://k/Waermeplan_Oldenburg_20251112.pdf")]
+    for r in rows:
+        r["Konvoi ID"] = float("nan")
+
+    keys = group_keys_by_filename(rows)
+    assert keys == {"waermeplan_oldenburg_20251112.pdf": "3403000"}   # not 3252007
+    assert SHARED_FILE_OWNERS["waermeplan_oldenburg_20251112.pdf"] == 3403000
