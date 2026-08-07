@@ -32,10 +32,12 @@ if _REPO_ROOT not in sys.path:
 
 import streamlit as st
 
-from scripts.inference_app import (
-    config, db, faiss_store, query_cache, chunker, llm_client, pdf_link, code_exec,
-    request_log,
+from docpipe.inference import (
+    answer, chunker, faiss_store, llm_client, query_cache, request_log,
 )
+from docpipe.inference import config as core_config
+from docpipe.inference import db
+from scripts.inference_app import config, documents, pdf_link
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger(__name__)
@@ -86,15 +88,10 @@ def embed_query(item: dict, cache_conn, cache_key: str):
     if cached is not None:
         log.info("Query cache hit (%s)", cache_key[:12])
         return cached, True
-    # Heavy backend imported lazily so a cache-hit turn never touches torch.
-    from scripts.inference_app.quantized_embedder import embed_query as _embed
-    vec = _embed(
-        item,
-        model_name=config.EMBEDDING_MODEL,
-        max_length=config.EMBEDDING_MAX_TOKEN_LENGTH,
-        timeout_s=config.EMBED_LOCK_TIMEOUT_S,
-        idle_unload_seconds=config.EMBED_IDLE_UNLOAD_SECONDS,
-    )
+    # Heavy backend imported lazily so a cache-hit turn never touches torch;
+    # which backend that is (local model or an endpoint) is configuration.
+    from docpipe.embedding import get_embedder
+    vec = get_embedder().embed_one(item)
     query_cache.put(cache_conn, cache_key, vec)
     return vec, False
 
@@ -102,235 +99,33 @@ def embed_query(item: dict, cache_conn, cache_key: str):
 def run_turn(task: str, image_bytes: bytes | None, image_only: bool,
              document_id: int, scopes: list[str], as_json: bool = False,
              history: list | None = None):
-    """
-    Execute one full retrieval + answer turn. Returns a dict with:
-    answer (str|None), answer_text (str|None), citations (list[dict]),
-    n_findings (int), cache_hit (bool), n_hits (int), phrase (str|None),
-    as_json (bool), n_batches (int), compute (list).
-
-    answer is None when nothing was retrieved or nothing could be grounded.
-    """
-    result = {"answer": None, "answer_text": None, "citations": [], "n_findings": 0,
-              "cache_hit": False, "n_hits": 0, "phrase": None, "as_json": as_json,
-              "n_batches": 0, "compute": [], "examined": [], "recheck": False,
-              "n_excluded": 0}
-
-    start_time = time.time()
-    conn = get_db()
-    cache_conn = get_cache()
-    log_conn = get_request_log()
-
+    """One turn, with this app's resources and its spinners attached."""
     with _spinner("Vorbereiten"):
         index, id_to_pos = get_index()
+    cache_conn = get_cache()
 
-    # --- 1) build the query item + cache key, per mode ---
-    tmp_path = None
-    recheck = False
-    if image_bytes is not None and image_only:
-        mode = "image"
-        tmp_path = _write_temp_image(image_bytes)
-        item = {"image": tmp_path}
-        phrase = None
-        cache_key = query_cache.make_key(mode, image_bytes=image_bytes)
-    elif image_bytes is not None:
-        mode = "image+text"
-        with _spinner("🔎 Suchanker (Bild+Text)"):
-            phrase, recheck = llm_client.make_search_phrase(task, visual=True, history=history)
-        tmp_path = _write_temp_image(image_bytes)
-        item = {"text": phrase, "image": tmp_path}
-        cache_key = query_cache.make_key(mode, text=phrase, image_bytes=image_bytes)
-    else:
-        mode = "text"
-        visual_anchor = _scopes_are_visual(scopes)
-        with _spinner("🔎 Suchanker"):
-            phrase, recheck = llm_client.make_search_phrase(task, visual=visual_anchor, history=history)
-        item = {"text": phrase}
-        cache_key = query_cache.make_key(mode, text=phrase)
-    result["phrase"] = phrase
-    result["recheck"] = recheck
-
-    # A re-check ("schau noch einmal nach") searches PAST the sources earlier
-    # attempts already examined — otherwise it re-reads the same top sources and
-    # can only repeat itself. Walk back through the whole re-check chain to the
-    # original question, or the second re-check resurfaces the first turn's
-    # sources.
-    exclude = set()
-    if recheck:
-        for turn in reversed(history or []):
-            exclude.update((k, i) for k, i in turn.get("examined", []))
-            if not turn.get("recheck"):
-                break
-    result["n_excluded"] = len(exclude)
-
-    # --- 2) embed (cache or on-demand model load) ---
-    with _spinner("🧮 Embedding"):
-        query_vec, cache_hit = embed_query(item, cache_conn, cache_key)
-    result["cache_hit"] = cache_hit
-    if tmp_path:
-        try:
-            Path(tmp_path).unlink(missing_ok=True)
-        except OSError:
-            pass
-
-    # --- 3) scoped retrieval ---
-    with _spinner("📚 Suche"):
-        embedding_types = [t for s in scopes for t in config.SCOPE_TO_EMBEDDING_TYPES[s]]
-        hits = faiss_store.retrieve(
-            conn, index, id_to_pos, document_id, embedding_types, query_vec, config.TOP_K,
-            exclude=exclude,
+    def _embed(item):
+        key = query_cache.make_key(
+            "image" if item.get("image") and not item.get("text")
+            else ("image+text" if item.get("image") else "text"),
+            text=item.get("text"),
+            image_bytes=image_bytes if item.get("image") else None,
         )
-    result["n_hits"] = len(hits)
-    if not hits:
-        latency_ms = (time.time() - start_time) * 1000
-        request_log.log_request(
-            log_conn, document_id, task or phrase or "", mode, scopes,
-            latency_ms=latency_ms, n_hits=0, error_message="No hits", cache_hit=False
-        )
-        return result
+        return embed_query(item, cache_conn, key)
 
-    # --- 4) answer across the top sources in context-safe batches; a further
-    #        batch runs only while the answer is still incomplete ---
-    top_hits = hits[: config.MAX_CHUNK_ATTEMPTS]
-    batches = chunker.pack_chunks(top_hits, config.ANSWER_CONTEXT_TOKENS, tokenizer=None)
-    citations, seen = [], set()
-    prior_text = None
-    off_envelope = False
-    examined = set()
-    with _spinner("🔍 Antwort aus den Quellen"):
-        for bi, chunk in enumerate(batches, start=1):
-            items = chunk.items
-            # Sources the LLM actually reads this turn; a later re-check of the
-            # same question searches past exactly these.
-            examined.update((top_hits[it["index"]]["owner_kind"],
-                             top_hits[it["index"]]["owner_id"]) for it in items)
-            # Attach the table/figure crops so values that exist only in a chart
-            # can be read off the image (capped; downscaled in llm_client).
-            images = {}
-            for it in items:
-                if len(images) >= config.ANSWER_MAX_IMAGES:
-                    break
-                img = resolve_image_path(top_hits[it["index"]].get("image_path"))
-                if img is not None:
-                    images[it["index"]] = str(img)
-            # Text answer during batching; JSON formatting happens once at the end.
-            code_ctx = _code_context(items, top_hits) if code_exec.is_enabled() else None
-            out = llm_client.answer_from_sources(
-                task, items, prior=prior_text, as_json=False,
-                code_runner=(code_exec.run_code if code_exec.is_enabled() else None),
-                code_context=code_ctx, max_compute=config.CODE_EXEC_MAX_ROUNDS,
-                history=history, images=images or None)
-            result["compute"].extend(out.get("compute") or [])
-            off_envelope = off_envelope or bool(out.get("off_envelope"))
-            attached = set(out.get("attached_images") or [])
-            item_by_index = {it["index"]: it for it in items}
-            for s in out.get("supports", []):
-                try:
-                    idx = int(s.get("index"))
-                except (TypeError, ValueError):
-                    continue
-                it = item_by_index.get(idx)
-                if it is None or not (0 <= idx < len(top_hits)):
-                    continue
-                if s.get("bild"):
-                    # Read off an attached crop: no verbatim quote can exist, the
-                    # validated substitute is the reading + the flagged rendering.
-                    quote = llm_client.visual_reading(s, attached)
-                    visual = True
-                else:
-                    quote = llm_client.grounded_quote(s.get("quote", ""), it)
-                    visual = False
-                if quote is None:
-                    continue
-                hit = top_hits[idx]
-                key = (hit["owner_kind"], hit["owner_id"])
-                if key in seen:
-                    continue
-                seen.add(key)
-                citations.append({**hit, "quote": quote, "visual": visual})
-            if out.get("found"):
-                prior_text = out.get("answer")
-            result["n_batches"] = bi
-            if out.get("complete") and citations:
-                break     # fully answered → don't scan the remaining batches
-    result["examined"] = sorted(examined)
-
-    # Re-read every image-derived value in a focused single-image call and fold
-    # the results into the answer. The big call above only IDENTIFIES which
-    # figure carries the answer; with ten sources and several charts in one
-    # prompt it misreads (returned a stack's total height as one segment).
-    visual_cits = [c for c in citations if c.get("visual")]
-    if visual_cits and prior_text:
-        readings = []
-        with _spinner("🔬 Ablesung präzisieren"):
-            for cit in visual_cits[: config.READOFF_MAX_CALLS]:
-                img = resolve_image_path(cit.get("image_path"))
-                if img is None:
-                    continue
-                ro = llm_client.read_off_image(task, str(img), cit["quote"])
-                if ro:
-                    cit["quote"] = ro["ablesung"]
-                    readings.append(f"{chunker.citation_label(cit)}: {ro['ablesung']}")
-            if readings:
-                prior_text = llm_client.revise_with_readings(task, prior_text, readings)
-
-    # Deterministic marking of read-off values: the prompt asks for the phrase,
-    # but only this guarantees it. In JSON output the schema may leave no room
-    # for it — there the flagged citation below the answer is the channel.
-    if prior_text and any(c.get("visual") for c in citations) \
-            and "abgelesen" not in prior_text:
-        prior_text = (prior_text.rstrip()
-                      + "\n\n(Hinweis: Werte teilweise aus Abbildungen abgelesen "
-                        "– Schätzwerte, Ablesefehler möglich.)")
-    if not citations or not prior_text:      # nothing grounded → refuse (anti-hallucination)
-        latency_ms = (time.time() - start_time) * 1000
-        # An off-envelope reply is a model failure, not an absent fact — logging
-        # both as "no citations" makes the two indistinguishable after the fact.
-        request_log.log_request(
-            log_conn, document_id, task or phrase or "", mode, scopes,
-            latency_ms=latency_ms, n_hits=result["n_hits"],
-            error_message=("Answer ignored the response envelope" if off_envelope
-                           else "No grounded citations"),
-            cache_hit=False
-        )
-        return result
-
-    # --- 5) final answer (format to JSON once at the end, if requested) ---
-    result["answer_text"] = prior_text          # prose answer, for follow-up context
-    if as_json:
-        with _spinner("🧩 Als JSON"):
-            result["answer"] = llm_client.format_as_json(task, prior_text)
-    else:
-        result["answer"] = prior_text
-    result["citations"] = citations
-    result["n_findings"] = len(citations)
-
-    # --- 6) log + cache the response (successful case only) ---
-    latency_ms = (time.time() - start_time) * 1000
-    answer_hash = hashlib.sha256((result["answer"] or "").encode()).hexdigest()[:12]
-    request_log.log_request(
-        log_conn, document_id, task or phrase or "", mode, scopes,
-        latency_ms=latency_ms, n_hits=result["n_hits"], n_citations=result["n_findings"],
-        answer_hash=answer_hash, cache_hit=False
+    corpus = answer.Corpus(
+        conn=get_db(), index=index, id_to_pos=id_to_pos, embed=_embed,
+        resolve_image=resolve_image_path, log_conn=get_request_log(),
     )
-    return result
+    return answer.answer_question(
+        task, corpus, document_id, scopes, image_bytes=image_bytes,
+        image_only=image_only, as_json=as_json, history=history,
+        progress=_spinner,
+    )
 
 
-def _scopes_are_visual(scopes: list[str]) -> bool:
-    """True if the query targets ONLY figure/table scopes → caption-style anchor."""
-    return bool(scopes) and all(s in config.VISUAL_SCOPES for s in scopes)
 
 
-def _code_context(items: list[dict], top_hits: list[dict]) -> dict:
-    """Sandbox context for a batch: its table sources as {caption, markdown}."""
-    tables = []
-    for it in items:
-        idx = it.get("index")
-        if not isinstance(idx, int) or not (0 <= idx < len(top_hits)):
-            continue
-        hit = top_hits[idx]
-        if hit.get("owner_kind") == "table" and (hit.get("text") or "").strip():
-            tables.append({"caption": hit.get("title") or "", "markdown": hit.get("text") or ""})
-    return {"tables": tables}
 
 
 def _spinner(label: str):
@@ -338,11 +133,6 @@ def _spinner(label: str):
     return st.spinner(f"{label} …", show_time=True)
 
 
-def _write_temp_image(image_bytes: bytes) -> str:
-    fd, path = tempfile.mkstemp(suffix=".png", prefix="kwp_query_")
-    with os.fdopen(fd, "wb") as f:
-        f.write(image_bytes)
-    return path
 
 
 # ---------------------------------------------------------------------------
@@ -361,13 +151,13 @@ def main() -> None:
     with st.sidebar:
         st.header("Auswahl")
         include_old = st.checkbox("Historische Versionen einbeziehen", value=False)
-        docs = db.list_documents(conn, include_superseded=include_old)
+        docs = documents.list_documents(conn, include_superseded=include_old)
         if not docs:
             st.error("Keine Dokumente in der Datenbank gefunden.")
             st.stop()
 
-        coverage = db.municipality_coverage(conn, docs)
-        labels = {d["id"]: db.document_label(d, coverage.get(d["id"])) for d in docs}
+        coverage = documents.municipality_coverage(conn, docs)
+        labels = {d["id"]: documents.document_label(d, coverage.get(d["id"])) for d in docs}
         doc_id = st.selectbox(
             "Wärmeplan", options=[d["id"] for d in docs],
             format_func=lambda i: labels[i],

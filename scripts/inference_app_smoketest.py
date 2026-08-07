@@ -24,7 +24,7 @@ import numpy as np
 import torch
 
 from scripts.inference_app.config import EMBEDDING_MODEL, EMBEDDING_MAX_TOKEN_LENGTH
-from scripts.inference_app import quantized_embedder as qe
+from docpipe.embedding import quantized as qe
 
 TEXT_A = "Wärmebedarf der Kommune im Bestand nach Sektoren"
 TEXT_B = "Potenziale für Fernwärme und Wärmepumpen im Zielszenario"

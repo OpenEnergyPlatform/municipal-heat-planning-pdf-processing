@@ -10,8 +10,10 @@ import sqlite3
 
 import pytest
 
-from scripts.inference_app import db, chunker, query_cache, pdf_link
-from scripts.inference_app import config as C
+from docpipe.inference import chunker, db, query_cache
+from scripts.inference_app import documents, pdf_link
+from docpipe.embedding import config as EC
+from docpipe.inference import config as C
 
 
 # ---------------------------------------------------------------------------
@@ -191,11 +193,11 @@ def test_fetch_figure_content(corpus):
 
 def test_list_documents_and_label(corpus):
     conn = db.connect_readonly(corpus)
-    docs = db.list_documents(conn)
+    docs = documents.list_documents(conn)
     assert len(docs) == 1
-    cov = db.municipality_coverage(conn, docs)
+    cov = documents.municipality_coverage(conn, docs)
     assert cov[docs[0]["id"]] == ["Musterstadt"]      # single-doc OU → its member
-    label = db.document_label(docs[0], cov[docs[0]["id"]])
+    label = documents.document_label(docs[0], cov[docs[0]["id"]])
     assert "Musterstadt" in label
     assert "(aktuell)" in label
 
@@ -209,16 +211,16 @@ def _doc_row(**kw):
 
 
 def test_konvoi_lead_parsing():
-    assert db._konvoi_lead("waermeplan_konvoi_hessigheim_20260401.pdf") == "Hessigheim"
-    assert db._konvoi_lead("waermeplan_denzlingen_konvoi_2024q2.pdf") == "Denzlingen"
-    assert db._konvoi_lead("waermeplan__asperg_et_al_konvoi_2024q2.pdf") == "Asperg Et Al"
-    assert db._konvoi_lead("waermeplan_by6_konvoi_250327.pdf") == "By6"
+    assert documents._konvoi_lead("waermeplan_konvoi_hessigheim_20260401.pdf") == "Hessigheim"
+    assert documents._konvoi_lead("waermeplan_denzlingen_konvoi_2024q2.pdf") == "Denzlingen"
+    assert documents._konvoi_lead("waermeplan__asperg_et_al_konvoi_2024q2.pdf") == "Asperg Et Al"
+    assert documents._konvoi_lead("waermeplan_by6_konvoi_250327.pdf") == "By6"
 
 
 def test_document_label_convoy_uses_ou_and_count():
     # a convoy covering 4 municipalities is labelled by its unit + count + Konvoi,
     # NOT by one arbitrary member up front.
-    label = db.document_label(
+    label = documents.document_label(
         _doc_row(organisation_unit_name="GVV Besigheim"),
         covered=["Gemmrigheim", "Hessigheim", "Mundelsheim", "Walheim"],
     )
@@ -229,7 +231,7 @@ def test_document_label_convoy_uses_ou_and_count():
 
 
 def test_document_label_single_municipality_has_no_convoy_tag():
-    label = db.document_label(
+    label = documents.document_label(
         _doc_row(filename="waermeplan_flensburg_20240701.pdf",
                  municipality_name="Flensburg"),
         covered=["Flensburg"],
@@ -243,19 +245,19 @@ def test_document_label_single_municipality_has_no_convoy_tag():
 # ---------------------------------------------------------------------------
 def test_covered_names_single_doc_ou_covers_all_members():
     members = {1: "A", 2: "B", 3: "C"}
-    assert db._covered_names(1, "A", True, 1, {1}, members) == ["A", "B", "C"]
+    assert documents._covered_names(1, "A", True, 1, {1}, members) == ["A", "B", "C"]
 
 
 def test_covered_names_standalone_in_multidoc_ou_covers_only_self():
     members = {1: "A", 2: "B"}
-    assert db._covered_names(1, "A", False, 2, {1, 2}, members) == ["A"]
+    assert documents._covered_names(1, "A", False, 2, {1, 2}, members) == ["A"]
 
 
 def test_covered_names_konvoi_mops_up_unclaimed_members():
     members = {10: "Besigheim", 11: "Gemmrigheim", 12: "Hessigheim",
                13: "Mundelsheim", 14: "Walheim"}
     # OU has 2 plans: Besigheim's own (ags 10) + this convoy (own ags 11).
-    got = db._covered_names(11, "Gemmrigheim", True, 2, {10, 11}, members)
+    got = documents._covered_names(11, "Gemmrigheim", True, 2, {10, 11}, members)
     assert got == ["Gemmrigheim", "Hessigheim", "Mundelsheim", "Walheim"]
     assert "Besigheim" not in got          # kept by its own standalone plan
 
@@ -477,7 +479,7 @@ def test_query_cache_roundtrip(tmp_path):
     conn = query_cache.connect(tmp_path / "cache.db")
     key = query_cache.make_key("text", text="wärmebedarf")
     assert query_cache.get(conn, key) is None
-    vec = np.arange(C.EMBEDDING_DIM, dtype="float32")
+    vec = np.arange(EC.EMBEDDING_DIM, dtype="float32")
     query_cache.put(conn, key, vec)
     got = query_cache.get(conn, key)
     assert got is not None
@@ -504,27 +506,27 @@ def _excerpt(text):
 
 
 def test_quote_grounded_accepts_verbatim_span():
-    llm = pytest.importorskip("scripts.inference_app.llm_client")
+    llm = pytest.importorskip("docpipe.inference.llm_client")
     items = _excerpt("Der Wärmeplan wurde durch die Musterbüro GmbH erstellt und geprüft.")
     # whitespace/case-tolerant verbatim substring
     assert llm._quote_is_grounded("durch die  MUSTERBÜRO GmbH  erstellt", items) is True
 
 
 def test_quote_grounded_rejects_fabrication():
-    llm = pytest.importorskip("scripts.inference_app.llm_client")
+    llm = pytest.importorskip("docpipe.inference.llm_client")
     items = _excerpt("Der Auszug behandelt Fernwärme, Wärmepumpen und Sanierung.")
     # a plausible but absent company name must NOT validate
     assert llm._quote_is_grounded("erstellt von der endura kommunal GmbH", items) is False
 
 
 def test_quote_grounded_rejects_too_short():
-    llm = pytest.importorskip("scripts.inference_app.llm_client")
+    llm = pytest.importorskip("docpipe.inference.llm_client")
     items = _excerpt("Beauftragt wurde die Beispiel GmbH aus Musterstadt.")
     assert llm._quote_is_grounded("GmbH", items) is False        # stray common token
 
 
 def test_ask_chunk_stub_quote_is_grounded():
-    llm = pytest.importorskip("scripts.inference_app.llm_client")
+    llm = pytest.importorskip("docpipe.inference.llm_client")
     if not llm.LLM_STUB_MODE:
         pytest.skip("stub mode off")
     items = _excerpt("Die Beispiel GmbH hat den Plan erstellt.")
@@ -537,7 +539,7 @@ def test_ask_chunk_stub_quote_is_grounded():
 # llm_client.py – search-anchor guard (reject evaluation/refusal phrases)
 # ---------------------------------------------------------------------------
 def test_non_anchor_detects_refusal_phrase():
-    llm = pytest.importorskip("scripts.inference_app.llm_client")
+    llm = pytest.importorskip("docpipe.inference.llm_client")
     # the exact self-contradictory string the gateway produced for an image query
     assert llm._looks_like_non_anchor(
         "Abbildung: Keine ähnlichen Diagramme im bereitgestellten Kontext nachweisbar."
@@ -550,7 +552,7 @@ def test_non_anchor_detects_refusal_phrase():
     "Lässt sich aus dem Kontext nicht ableiten.",
 ])
 def test_non_anchor_detects_variants(bad):
-    llm = pytest.importorskip("scripts.inference_app.llm_client")
+    llm = pytest.importorskip("docpipe.inference.llm_client")
     assert llm._looks_like_non_anchor(bad) is True
 
 
@@ -560,7 +562,7 @@ def test_non_anchor_detects_variants(bad):
     "Säulendiagramm der Baualtersklassen der Gebäude im Gemeindegebiet, Anteile in Prozent.",
 ])
 def test_non_anchor_passes_real_anchors(good):
-    llm = pytest.importorskip("scripts.inference_app.llm_client")
+    llm = pytest.importorskip("docpipe.inference.llm_client")
     assert llm._looks_like_non_anchor(good) is False
 
 
@@ -568,7 +570,7 @@ def test_non_anchor_passes_real_anchors(good):
 # code_exec.py + llm_client ReAct compute loop
 # ---------------------------------------------------------------------------
 def test_code_exec_disabled_returns_error(monkeypatch):
-    ce = pytest.importorskip("scripts.inference_app.code_exec")
+    ce = pytest.importorskip("docpipe.inference.code_exec")
     monkeypatch.setattr(ce.config, "CODE_EXEC_URL", "")
     assert ce.is_enabled() is False
     out = ce.run_code("print(1)")
@@ -576,14 +578,14 @@ def test_code_exec_disabled_returns_error(monkeypatch):
 
 
 def test_format_exec_result_ok_and_error():
-    llm = pytest.importorskip("scripts.inference_app.llm_client")
+    llm = pytest.importorskip("docpipe.inference.llm_client")
     assert "50" in llm._format_exec_result({"ok": True, "stdout": "50\n"})
     r = llm._format_exec_result({"ok": False, "error": "Boom"})
     assert "fehlgeschlagen" in r.lower() and "Boom" in r
 
 
 def test_answer_from_sources_runs_react_compute_loop(monkeypatch):
-    llm = pytest.importorskip("scripts.inference_app.llm_client")
+    llm = pytest.importorskip("docpipe.inference.llm_client")
     monkeypatch.setattr(llm, "LLM_STUB_MODE", False)
     calls = {"n": 0}
 
@@ -617,7 +619,7 @@ _ITEMS = [{"index": 0, "source": "s", "text": "Auftragnehmer: Energieservice Wes
 
 
 def test_answer_from_sources_retries_when_the_task_schema_hijacks_the_envelope(monkeypatch):
-    llm = pytest.importorskip("scripts.inference_app.llm_client")
+    llm = pytest.importorskip("docpipe.inference.llm_client")
     monkeypatch.setattr(llm, "LLM_STUB_MODE", False)
     seen = []
 
@@ -639,7 +641,7 @@ def test_answer_from_sources_retries_when_the_task_schema_hijacks_the_envelope(m
 
 
 def test_answer_from_sources_flags_a_persistent_envelope_violation(monkeypatch):
-    llm = pytest.importorskip("scripts.inference_app.llm_client")
+    llm = pytest.importorskip("docpipe.inference.llm_client")
     monkeypatch.setattr(llm, "LLM_STUB_MODE", False)
     monkeypatch.setattr(llm, "_chat_json", lambda messages, temperature: dict(_HIJACKED))
 
@@ -651,7 +653,7 @@ def test_answer_from_sources_flags_a_persistent_envelope_violation(monkeypatch):
 
 
 def test_answer_from_sources_treats_an_honest_miss_as_a_miss(monkeypatch):
-    llm = pytest.importorskip("scripts.inference_app.llm_client")
+    llm = pytest.importorskip("docpipe.inference.llm_client")
     monkeypatch.setattr(llm, "LLM_STUB_MODE", False)
     calls = {"n": 0}
 
@@ -668,7 +670,7 @@ def test_answer_from_sources_treats_an_honest_miss_as_a_miss(monkeypatch):
 
 
 def test_make_search_phrase_flags_a_recheck(monkeypatch):
-    llm = pytest.importorskip("scripts.inference_app.llm_client")
+    llm = pytest.importorskip("docpipe.inference.llm_client")
     monkeypatch.setattr(llm, "LLM_STUB_MODE", False)
     monkeypatch.setattr(llm, "_chat_json",
                         lambda m, temperature: {"phrase": "Impressum. Auftragnehmer: ...",
@@ -684,7 +686,7 @@ def test_make_search_phrase_flags_a_recheck(monkeypatch):
 
 
 def test_make_search_phrase_fallbacks_return_no_recheck(monkeypatch):
-    llm = pytest.importorskip("scripts.inference_app.llm_client")
+    llm = pytest.importorskip("docpipe.inference.llm_client")
     monkeypatch.setattr(llm, "LLM_STUB_MODE", True)
     assert llm.make_search_phrase("Frage?") == ("Frage?", False)
 
@@ -698,7 +700,7 @@ def test_make_search_phrase_fallbacks_return_no_recheck(monkeypatch):
 
 
 def test_retrieve_excludes_already_examined_owners(monkeypatch):
-    fs = pytest.importorskip("scripts.inference_app.faiss_store")
+    fs = pytest.importorskip("docpipe.inference.faiss_store")
     rows = [(10, "section_text", "section", 1),
             (11, "section_text", "section", 2),
             (12, "table_text", "table", 7)]
@@ -726,7 +728,7 @@ def test_retrieve_excludes_already_examined_owners(monkeypatch):
 
 
 def test_phrase_prompt_forbids_invented_names_but_keeps_invented_quantities():
-    llm = pytest.importorskip("scripts.inference_app.llm_client")
+    llm = pytest.importorskip("docpipe.inference.llm_client")
     p = llm.PHRASE_SYSTEM_PROMPT
     # An invented firm/address in the anchor pulls the search towards towns that
     # do not occur in the plan: median rank of the imprint section 37 -> 0 over
@@ -737,7 +739,7 @@ def test_phrase_prompt_forbids_invented_names_but_keeps_invented_quantities():
 
 
 def test_answer_from_sources_attaches_labelled_crops(monkeypatch):
-    llm = pytest.importorskip("scripts.inference_app.llm_client")
+    llm = pytest.importorskip("docpipe.inference.llm_client")
     monkeypatch.setattr(llm, "LLM_STUB_MODE", False)
     monkeypatch.setattr(llm, "_image_part",
                         lambda path: {"type": "image_url",
@@ -771,7 +773,7 @@ def test_answer_from_sources_attaches_labelled_crops(monkeypatch):
 
 
 def test_visual_reading_requires_an_actually_attached_image():
-    llm = pytest.importorskip("scripts.inference_app.llm_client")
+    llm = pytest.importorskip("docpipe.inference.llm_client")
     s = {"index": 1, "bild": True, "ablesung": "Erdgas-Balken 2035: ca. 650 GWh/a"}
     assert llm.visual_reading(s, {1}) == "Erdgas-Balken 2035: ca. 650 GWh/a"
     # A "bild" support for a crop that was never sent could launder parametric
@@ -782,7 +784,7 @@ def test_visual_reading_requires_an_actually_attached_image():
 
 
 def test_read_off_image_returns_parsed_reading(monkeypatch):
-    llm = pytest.importorskip("scripts.inference_app.llm_client")
+    llm = pytest.importorskip("docpipe.inference.llm_client")
     monkeypatch.setattr(llm, "LLM_STUB_MODE", False)
     monkeypatch.setattr(llm, "_image_part",
                         lambda path, max_side=None, png=False: {"type": "image_url",
@@ -802,7 +804,7 @@ def test_read_off_image_returns_parsed_reading(monkeypatch):
 
 
 def test_read_off_image_splices_the_value_into_an_echoed_reading(monkeypatch):
-    llm = pytest.importorskip("scripts.inference_app.llm_client")
+    llm = pytest.importorskip("docpipe.inference.llm_client")
     monkeypatch.setattr(llm, "LLM_STUB_MODE", False)
     monkeypatch.setattr(llm, "_image_part",
                         lambda path, max_side=None, png=False: {"type": "image_url",
@@ -822,7 +824,7 @@ def test_read_off_image_splices_the_value_into_an_echoed_reading(monkeypatch):
 
 
 def test_read_off_image_retries_when_task_schema_hijacks(monkeypatch):
-    llm = pytest.importorskip("scripts.inference_app.llm_client")
+    llm = pytest.importorskip("docpipe.inference.llm_client")
     monkeypatch.setattr(llm, "LLM_STUB_MODE", False)
     monkeypatch.setattr(llm, "_image_part",
                         lambda path, max_side=None, png=False: {"type": "image_url",
@@ -845,7 +847,7 @@ def test_read_off_image_retries_when_task_schema_hijacks(monkeypatch):
 
 
 def test_revise_with_readings_falls_back_to_the_original(monkeypatch):
-    llm = pytest.importorskip("scripts.inference_app.llm_client")
+    llm = pytest.importorskip("docpipe.inference.llm_client")
     monkeypatch.setattr(llm, "LLM_STUB_MODE", False)
     monkeypatch.setattr(llm, "_chat_json",
                         lambda m, temperature: {"answer": "korrigiert: 600 GWh/a"})
@@ -859,14 +861,14 @@ def test_revise_with_readings_falls_back_to_the_original(monkeypatch):
 
 
 def test_readoff_prompt_forbids_total_for_segment():
-    llm = pytest.importorskip("scripts.inference_app.llm_client")
+    llm = pytest.importorskip("docpipe.inference.llm_client")
     # The observed failure mode: a stacked bar's total height returned as one
     # segment's value. The focused prompt must address it head-on.
     assert "Gesamthöhe" in llm.READOFF_PROMPT and "Differenz" in llm.READOFF_PROMPT
 
 
 def test_answer_prompt_defines_the_image_support_contract():
-    llm = pytest.importorskip("scripts.inference_app.llm_client")
+    llm = pytest.importorskip("docpipe.inference.llm_client")
     tail = llm._ANSWER_PROMPT_TAIL
     assert '"bild"' in tail and '"ablesung"' in tail
     # Read-off values must carry the literal marker phrase in the answer; the
@@ -875,7 +877,7 @@ def test_answer_prompt_defines_the_image_support_contract():
 
 
 def test_answer_prompt_scopes_task_format_specs_to_the_answer_field():
-    llm = pytest.importorskip("scripts.inference_app.llm_client")
+    llm = pytest.importorskip("docpipe.inference.llm_client")
     tail = llm._ANSWER_PROMPT_TAIL.lower()
     # Measured on the live model: without this the envelope is lost 4/4 times for
     # a task carrying its own JSON schema, with it 4/4 times correct.
@@ -883,7 +885,7 @@ def test_answer_prompt_scopes_task_format_specs_to_the_answer_field():
 
 
 def test_history_context_includes_recent_turns_but_frames_as_non_source():
-    llm = pytest.importorskip("scripts.inference_app.llm_client")
+    llm = pytest.importorskip("docpipe.inference.llm_client")
     hist = [{"task": "Wer hat den Plan erstellt?", "phrase": "anker1", "answer": "Firma X"},
             {"task": "Und der Projektleiter?", "phrase": "anker2", "answer": "Herr Y"}]
     ctx = llm._history_context(hist, limit=5)
@@ -893,14 +895,14 @@ def test_history_context_includes_recent_turns_but_frames_as_non_source():
 
 
 def test_history_context_caps_to_limit():
-    llm = pytest.importorskip("scripts.inference_app.llm_client")
+    llm = pytest.importorskip("docpipe.inference.llm_client")
     hist = [{"task": f"Frage {i}", "answer": f"A{i}"} for i in range(8)]
     ctx = llm._history_context(hist, limit=5)
     assert "Frage 7" in ctx and "Frage 2" not in ctx       # only the last 5
 
 
 def test_answer_from_sources_no_action_no_compute(monkeypatch):
-    llm = pytest.importorskip("scripts.inference_app.llm_client")
+    llm = pytest.importorskip("docpipe.inference.llm_client")
     monkeypatch.setattr(llm, "LLM_STUB_MODE", False)
     monkeypatch.setattr(llm, "_chat_json",
                         lambda messages, temperature: {"found": True, "complete": True,

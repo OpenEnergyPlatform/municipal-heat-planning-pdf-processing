@@ -7,6 +7,23 @@ placeholders.
 Author: Felix Vossel
 """
 import os
+
+# Everything the core owns is re-exported, never redefined: two copies of
+# LLM_BASE_URL is how a deployment ends up talking to the wrong endpoint.
+from docpipe.embedding.config import (  # noqa: F401
+    EMBEDDING_DIM, EMBEDDING_MAX_TOKEN_LENGTH, EMBEDDING_MODEL,
+    EMBED_IDLE_UNLOAD_SECONDS, EMBED_LOCK_TIMEOUT_S,
+)
+from docpipe.inference.config import (  # noqa: F401
+    ALL_SCOPES, ANSWER_CONTEXT_TOKENS, ANSWER_IMAGE_MAX_SIDE, ANSWER_MAX_IMAGES,
+    CODE_EXEC_MAX_ROUNDS, CODE_EXEC_TIMEOUT, CODE_EXEC_TOKEN, CODE_EXEC_URL,
+    FIGURE_EMBEDDING_TYPES, LLM_API_KEY, LLM_BASE_URL, LLM_MAX_RETRIES,
+    LLM_MAX_TOKENS, LLM_MODEL, LLM_STUB_MODE, LLM_TEMPERATURE, LLM_TIMEOUT,
+    LLM_TOKENIZER_ID, MAX_CHUNK_ATTEMPTS, READOFF_IMAGE_MAX_SIDE, READOFF_MAX_CALLS,
+    SCOPE_FIGURES_TEXT, SCOPE_FIGURES_VL, SCOPE_HEADINGS, SCOPE_TABLES_TEXT,
+    SCOPE_TABLES_VL, SCOPE_TEXT, SCOPE_TO_EMBEDDING_TYPES, SECTION_EMBEDDING_TYPES,
+    TABLE_EMBEDDING_TYPES, TOP_K, VISUAL_SCOPES,
+)
 from pathlib import Path
 
 
@@ -57,53 +74,32 @@ IMAGE_ROOT = Path(os.environ.get("INFERENCE_IMAGE_ROOT", "data/pdf/processed"))
 # ---------------------------------------------------------------------------
 # Embedding model (local, NF4-quantized, loaded on demand)
 # ---------------------------------------------------------------------------
-EMBEDDING_MODEL = os.environ.get("EMBEDDING_MODEL", "Qwen/Qwen3-VL-Embedding-8B")
-EMBEDDING_DIM   = 4096
-EMBEDDING_MAX_TOKEN_LENGTH = int(os.environ.get("EMBEDDING_MAX_TOKEN_LENGTH", "16384"))
 # Unload the model after this many idle seconds; 0 = load → embed → free on
 # every request.
-EMBED_IDLE_UNLOAD_SECONDS = int(os.environ.get("EMBED_IDLE_UNLOAD_SECONDS", "600"))
 # How long a request waits for another session's embedding call (the embed lock
 # serializes GPU use) before giving up.
-EMBED_LOCK_TIMEOUT_S = float(os.environ.get("EMBED_LOCK_TIMEOUT_S", "300"))
 
 # ---------------------------------------------------------------------------
 # LLM (remote, OpenAI-compatible)
 # ---------------------------------------------------------------------------
 # "Models" are preconfigured agents; list them with GET {LLM_BASE_URL}/models.
-LLM_BASE_URL = os.environ.get("LLM_BASE_URL", "https://kiwi-secure.uni-osnabrueck.de/api/agents/v1")
-LLM_MODEL    = os.environ.get("LLM_MODEL", "agent_xzXlgfmSwiaWCuvtRFCq5")
-LLM_API_KEY  = os.environ.get("LLM_API_KEY") or os.environ.get("UOS_API_KEY", "EMPTY")
-LLM_TIMEOUT  = float(os.environ.get("LLM_TIMEOUT", "180"))
-LLM_TEMPERATURE = float(os.environ.get("LLM_TEMPERATURE", "0.1"))
-LLM_MAX_TOKENS  = int(os.environ.get("LLM_MAX_TOKENS", "2048"))
 # HF tokenizer id used only for token-budget accounting. May differ from the
 # served model name; falls back to a char/4 heuristic if it cannot be loaded.
-LLM_TOKENIZER_ID = os.environ.get("LLM_TOKENIZER_ID", LLM_MODEL)
 # Retry budget for malformed-JSON / transport errors on a SINGLE LLM call.
 # Distinct from MAX_CHUNK_ATTEMPTS below.
-LLM_MAX_RETRIES = int(os.environ.get("LLM_MAX_RETRIES", "4"))
 # When truthy, llm_client returns canned answers instead of calling the endpoint.
-LLM_STUB_MODE = os.environ.get("LLM_STUB_MODE", "").strip() not in ("", "0", "false", "False")
 
 # ---------------------------------------------------------------------------
 # Retrieval / QA
 # ---------------------------------------------------------------------------
-TOP_K = int(os.environ.get("TOP_K", "50"))
 # Hard cap on how many retrieved sources are examined per turn.
-MAX_CHUNK_ATTEMPTS = int(os.environ.get("MAX_CHUNK_ATTEMPTS", "10"))
 # Token budget per answer call, so the prompt stays inside the model's context
 # window with room for the instructions + the generated answer.
-ANSWER_CONTEXT_TOKENS = int(os.environ.get("ANSWER_CONTEXT_TOKENS", "10000"))
 # Crop images attached to the (multimodal) answer call, so values that exist
 # only in a chart can be read off. Capped per call; longest side downscaled.
-ANSWER_MAX_IMAGES = int(os.environ.get("ANSWER_MAX_IMAGES", "4"))
-ANSWER_IMAGE_MAX_SIDE = int(os.environ.get("ANSWER_IMAGE_MAX_SIDE", "1280"))
 # Focused single-image re-reads of the values the answer call flagged as
 # image-derived — one short call per figure, mirroring the setting in which the
 # model demonstrably reads charts correctly.
-READOFF_MAX_CALLS = int(os.environ.get("READOFF_MAX_CALLS", "3"))
-READOFF_IMAGE_MAX_SIDE = int(os.environ.get("READOFF_IMAGE_MAX_SIDE", "1600"))
 
 # ---------------------------------------------------------------------------
 # Query→vector cache (separate SQLite file – NEVER the authoritative KWP.db)
@@ -119,11 +115,7 @@ REQUEST_LOG_PATH = Path(os.environ.get("REQUEST_LOG_PATH", "data/inference_app_r
 # Code-execution sandbox (optional) — a remote service the LLM can call for
 # calculations. An EMPTY CODE_EXEC_URL turns the whole feature OFF.
 # ---------------------------------------------------------------------------
-CODE_EXEC_URL = os.environ.get("CODE_EXEC_URL", "")
-CODE_EXEC_TOKEN = os.environ.get("CODE_EXEC_TOKEN") or os.environ.get("KWP_SANDBOX_TOKEN", "")
-CODE_EXEC_TIMEOUT = float(os.environ.get("CODE_EXEC_TIMEOUT", "45"))
 # Max code runs the model may request while answering ONE batch.
-CODE_EXEC_MAX_ROUNDS = int(os.environ.get("CODE_EXEC_MAX_ROUNDS", "2"))
 
 # ---------------------------------------------------------------------------
 # Source-PDF deep links
@@ -147,36 +139,12 @@ PDF_ROOT = Path(os.environ.get("INFERENCE_PDF_ROOT", "data/pdf"))
 # There is NO image-without-text vector. Selecting both types of one owner kind
 # relies on the retrieval dedup by (owner_kind, owner_id), since one Table/Image
 # row is then hit via both its types in the same search.
-SCOPE_HEADINGS      = "Überschriften"
-SCOPE_TEXT          = "Textinhalte"
-SCOPE_TABLES_VL     = "Tabellen (Bild + Beschreibung)"
-SCOPE_TABLES_TEXT   = "Tabellen (nur Beschreibung)"
-SCOPE_FIGURES_VL    = "Bilder (Bild + Beschreibung)"
-SCOPE_FIGURES_TEXT  = "Bilder (nur Beschreibung)"
 
-SCOPE_TO_EMBEDDING_TYPES: dict[str, list[str]] = {
-    SCOPE_HEADINGS:     ["section_title"],
-    SCOPE_TEXT:         ["section_text"],
-    SCOPE_TABLES_VL:    ["table_vl"],
-    SCOPE_TABLES_TEXT:  ["table_text"],
-    SCOPE_FIGURES_VL:   ["figure_vl"],
-    SCOPE_FIGURES_TEXT: ["figure_text"],
-}
 
 # Ordered list for the UI multiselect (and as the default = everything).
-ALL_SCOPES: list[str] = [
-    SCOPE_HEADINGS, SCOPE_TEXT,
-    SCOPE_TABLES_VL, SCOPE_TABLES_TEXT,
-    SCOPE_FIGURES_VL, SCOPE_FIGURES_TEXT,
-]
 
 # Figure/table scopes: the query anchor switches to caption style when the
 # search targets ONLY these (see app._scopes_are_visual).
-VISUAL_SCOPES = frozenset({SCOPE_TABLES_VL, SCOPE_TABLES_TEXT,
-                           SCOPE_FIGURES_VL, SCOPE_FIGURES_TEXT})
 
 # Which embedding types belong to each owner kind (used to split a scope
 # selection across the three UNION branches of the candidate query).
-SECTION_EMBEDDING_TYPES = {"section_text", "section_title"}
-TABLE_EMBEDDING_TYPES   = {"table_text", "table_vl"}
-FIGURE_EMBEDDING_TYPES  = {"figure_text", "figure_vl"}
