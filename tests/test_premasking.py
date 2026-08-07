@@ -1,8 +1,8 @@
 """Tests for semantic pre-masking of figures embedded in table crops (Stage 2)."""
 import pytest
 
-from scripts.preprocessing import stage2_layout as s2
-from scripts.preprocessing.models import PageData
+from docpipe.preprocessing import stage2_layout as s2
+from docpipe.preprocessing.models import PageData
 
 # These tests need the real Pillow (the conftest stub has no Image.new()).
 from PIL import Image

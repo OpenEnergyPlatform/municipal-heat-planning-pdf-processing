@@ -1,5 +1,5 @@
 """Tests for the table QA helpers (coverage, duplication, dedup, assess)."""
-from scripts.imageprocessing import qa
+from docpipe.visuals import qa
 
 _GOOD = "| Energieträger | Anteil |\n| --- | --- |\n| Erdgas | 45,2 |\n| Fernwärme | 23,1 |"
 

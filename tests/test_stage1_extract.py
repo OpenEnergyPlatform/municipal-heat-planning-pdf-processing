@@ -1,5 +1,5 @@
 """Tests for Stage 1 text helpers (hyphenation, block validity)."""
-from scripts.preprocessing import stage1_extract as s1
+from docpipe.preprocessing import stage1_extract as s1
 
 
 def _block(*lines):

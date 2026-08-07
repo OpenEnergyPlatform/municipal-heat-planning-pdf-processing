@@ -1,7 +1,7 @@
 """Tests for the imageprocessing config (prompts, temperatures, atomic JSON)."""
 import json
 
-from scripts.imageprocessing import config as C
+from docpipe.visuals import config as C
 
 
 def test_system_prompts_single_braced_and_injection_hardened():

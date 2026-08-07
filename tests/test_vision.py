@@ -3,7 +3,7 @@ import base64
 
 import openai  # real SDK or the conftest stub
 
-from scripts.imageprocessing import vision as V
+from docpipe.visuals import vision as V
 
 
 def test_parse_json_response_variants():

@@ -121,8 +121,8 @@ def seq_responder():
 @pytest.fixture(autouse=True)
 def _no_real_sleep(monkeypatch):
     """Never actually sleep during retry/backoff tests."""
-    import scripts.textrefinement.refine as s4
-    import scripts.imageprocessing.vision as vis
+    import docpipe.refinement.refine as s4
+    import docpipe.visuals.vision as vis
     monkeypatch.setattr(s4.time, "sleep", lambda *a, **k: None)
     monkeypatch.setattr(vis.time, "sleep", lambda *a, **k: None)
 
@@ -136,7 +136,7 @@ def kwp_db(tmp_path):
     """A fresh SQLite DB with the core + kwp schema and one Document (id=1)."""
     from docpipe import store
     from docpipe.profile import load_profile
-    from scripts.chunkingandembedding import database as DB
+    from docpipe.chunking import database as DB
     db = tmp_path / "kwp.db"
     con = DB.connect(db)
     store.apply(con, load_profile("kwp"))

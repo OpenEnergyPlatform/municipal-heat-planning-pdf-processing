@@ -1,5 +1,5 @@
 """Stage 4: carrying page provenance through LLM refinement."""
-from scripts.textrefinement import refine as s4
+from docpipe.refinement import refine as s4
 
 
 def test_thread_provenance_keep_is_one_to_one():

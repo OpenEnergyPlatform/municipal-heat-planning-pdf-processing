@@ -1,8 +1,8 @@
 """Building embedding inputs: VL inputs follow the crops that exist on disk."""
 import pytest
 
-from scripts.chunkingandembedding import chunking as CH
-from scripts.chunkingandembedding import config as C
+from docpipe.chunking import chunking as CH
+from docpipe.chunking import config as C
 
 _MERGED = {
     "sections": [

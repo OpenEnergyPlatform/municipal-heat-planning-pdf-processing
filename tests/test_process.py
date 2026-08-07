@@ -1,9 +1,9 @@
 """Tests for table/figure enrichment workers."""
 import json
 
-from scripts.imageprocessing import config as C
-from scripts.imageprocessing import process as P
-from scripts.imageprocessing.models import ProcessingStats
+from docpipe.visuals import config as C
+from docpipe.visuals import process as P
+from docpipe.visuals.models import ProcessingStats
 
 
 def _table_reply(markdown, caption="C"):

@@ -10,11 +10,11 @@ table/figure → its single region rect.
 """
 import json
 
-from scripts.preprocessing.models import Block, PageData, TableRef, FigureRef
-from scripts.preprocessing import stage3_structure as s3
-from scripts.textrefinement import refine as s4
-from scripts.chunkingandembedding import database as DB
-from scripts.chunkingandembedding import config as C
+from docpipe.preprocessing.models import Block, PageData, TableRef, FigureRef
+from docpipe.preprocessing import stage3_structure as s3
+from docpipe.refinement import refine as s4
+from docpipe.chunking import database as DB
+from docpipe.chunking import config as C
 
 
 def _page(n, blocks):
@@ -62,7 +62,7 @@ def test_degenerate_or_missing_bbox_is_dropped():
 # ── Stage-3-only rebuild from the pages cache (the HPC re-run mechanism) ─────
 
 def test_rebuild_stage3_from_cache_propagates_bbox(tmp_path):
-    from scripts.preprocessing import pipeline as pp
+    from docpipe.preprocessing import pipeline as pp
     docdir = tmp_path / "somedoc" / "results"
     docdir.mkdir(parents=True)
     pg = PageData(page_number=3, width_pt=595.0, height_pt=842.0)
@@ -108,8 +108,8 @@ def test_reattach_media_bbox_noop_without_geometry():
 # ── image processing: dict pass-through preserves bbox (no code change) ───────
 
 def test_imageprocessing_passthrough_preserves_bbox(tmp_path):
-    from scripts.imageprocessing.process import process_table, process_figure
-    from scripts.imageprocessing.models import ProcessingStats
+    from docpipe.visuals.process import process_table, process_figure
+    from docpipe.visuals.models import ProcessingStats
     stats = ProcessingStats()
     # missing image → early return, but the input dict's extra keys survive
     t = process_table({"id": "p1_tbl0", "path": "missing.png", "bbox": [[1, 2, 3, 4]]},

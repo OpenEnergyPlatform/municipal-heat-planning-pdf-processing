@@ -58,3 +58,28 @@ def test_rejects_unknown_column_layout():
 
 def test_facet_defaults_to_multiselect():
     assert Facet("f", "F").widget == "multiselect"
+
+
+def test_late_profile_is_refused_when_it_overrides_prompts(monkeypatch, tmp_path):
+    """Prompts bind at import; naming the profile afterwards would use the wrong ones."""
+    import argparse
+
+    from docpipe.profile import resolve_profile
+
+    override = tmp_path / "prompts" / "refinement" / "refine.md"
+    override.parent.mkdir(parents=True)
+    override.write_text("eigener Prompt", encoding="utf-8")
+    monkeypatch.setattr("docpipe.profile.load_profile",
+                        lambda name=None: Profile(name="probe", home=tmp_path))
+    monkeypatch.delenv(ENV_VAR, raising=False)
+    with pytest.raises(SystemExit):
+        resolve_profile(argparse.Namespace(profile="probe"))
+
+
+def test_late_profile_is_fine_without_prompt_overrides(monkeypatch):
+    import argparse
+
+    from docpipe.profile import resolve_profile
+
+    monkeypatch.delenv(ENV_VAR, raising=False)
+    assert resolve_profile(argparse.Namespace(profile="kwp")).name == "kwp"

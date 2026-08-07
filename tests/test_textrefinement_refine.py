@@ -3,7 +3,7 @@ import json
 
 import pytest
 
-from scripts.textrefinement import refine as s4
+from docpipe.refinement import refine as s4
 
 
 def test_loads_json_object_direct_and_fallback():

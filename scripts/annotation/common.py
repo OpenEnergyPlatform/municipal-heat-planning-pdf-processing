@@ -9,7 +9,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from scripts.preprocessing.config import PP_ID2LABEL
+from docpipe.preprocessing.config import PP_ID2LABEL
 
 CLASS_NAMES: list[str] = [PP_ID2LABEL[i] for i in sorted(PP_ID2LABEL)]
 

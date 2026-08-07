@@ -1,6 +1,6 @@
 """Step-2/4 DB: ingestion of page provenance + the Embeddings table."""
-from scripts.chunkingandembedding import database as DB
-from scripts.chunkingandembedding import config as C
+from docpipe.chunking import database as DB
+from docpipe.chunking import config as C
 
 _MERGED = {
     "sections": [

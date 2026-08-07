@@ -1,9 +1,9 @@
 """Tests for the deterministic cleanup passes added before the rerun:
 running header/footer stripping + directory removal (Stage 3) and the
 title-cleanup guarantee (Stage 4)."""
-from scripts.preprocessing.models import Block, PageData, Section
-from scripts.preprocessing import stage3_structure as s3
-from scripts.textrefinement import refine as s4
+from docpipe.preprocessing.models import Block, PageData, Section
+from docpipe.preprocessing import stage3_structure as s3
+from docpipe.refinement import refine as s4
 
 
 def _page(n, blocks, h=842.0):

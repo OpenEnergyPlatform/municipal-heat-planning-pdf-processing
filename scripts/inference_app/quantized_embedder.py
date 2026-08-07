@@ -23,7 +23,7 @@ import torch
 import torch.nn.functional as F
 from transformers import BitsAndBytesConfig
 
-from scripts.qwen3_vl_embedding import (
+from docpipe.chunking.qwen3_vl_embedding import (
     Qwen3VLEmbedder,
     Qwen3VLForEmbedding,
     MAX_LENGTH,

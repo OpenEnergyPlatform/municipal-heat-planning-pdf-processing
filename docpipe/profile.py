@@ -118,3 +118,25 @@ def add_profile_argument(parser) -> None:
     parser.add_argument("--profile", default=os.environ.get(ENV_VAR) or None,
                         help=f"project profile under {PROFILES_PACKAGE}/ "
                              f"(default: ${ENV_VAR})")
+
+
+def resolve_profile(args=None, name: Optional[str] = None) -> Optional[Profile]:
+    """The profile for this run, or None.
+
+    A stage binds its prompts when it is imported, which happens before the
+    command line is parsed. So a profile that overrides prompts has to be in the
+    environment from the start; --profile alone would silently use the core
+    prompts. That case is refused rather than run.
+    """
+    name = name or getattr(args, "profile", None) or os.environ.get(ENV_VAR)
+    if not name:
+        return None
+    profile = load_profile(name)
+    late = os.environ.get(ENV_VAR) != name
+    if late and profile.prompts_dir.is_dir() and any(profile.prompts_dir.rglob("*.md")):
+        raise SystemExit(
+            f"profile {name!r} overrides prompts, but {ENV_VAR} was not set when "
+            f"the stage was imported — the core prompts are already bound.\n"
+            f"Run it as:  {ENV_VAR}={name} python -m <stage> …")
+    os.environ[ENV_VAR] = name
+    return profile

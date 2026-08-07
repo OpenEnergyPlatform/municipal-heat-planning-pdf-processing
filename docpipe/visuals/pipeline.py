@@ -20,6 +20,7 @@ from pathlib import Path
 from typing import Optional
 
 from docpipe import prompts
+from docpipe.profile import add_profile_argument, resolve_profile
 
 from .config import (
     PROMPT_IDS,
@@ -384,31 +385,32 @@ def run(
 
 def _build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
-        prog="python -m scripts.imageprocessing",
+        prog="python -m docpipe.visuals",
         description="Image Processing – Vision-LLM enrichment of tables and figures",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""\
 Examples:
   # Single PDF output directory
-  python -m scripts.imageprocessing ./output/my_pdf
+  python -m docpipe.visuals ./output/my_pdf
 
   # Batch: all PDF subdirs
-  python -m scripts.imageprocessing ./output/ --batch
+  python -m docpipe.visuals ./output/ --batch
 
   # Dry-run (statistics only)
-  python -m scripts.imageprocessing ./output/my_pdf --dry-run
+  python -m docpipe.visuals ./output/my_pdf --dry-run
 
   # Force re-processing (ignore cache)
-  python -m scripts.imageprocessing ./output/my_pdf --force
+  python -m docpipe.visuals ./output/my_pdf --force
 
   # Custom model / vLLM endpoint
-  python -m scripts.imageprocessing ./output/my_pdf \\
+  python -m docpipe.visuals ./output/my_pdf \\
       --model Qwen/Qwen3.5-122B-A10B-FP8 --base-url http://gpu-server:8001/v1
         """,
     )
     p.add_argument(
-        "input",
-        help="Preprocessing output directory (single PDF, or root with --batch)",
+        "input", nargs="?", default=None,
+        help="Preprocessing output directory (single PDF, or root with --batch); "
+             "default: the profile's processed directory",
     )
     p.add_argument(
         "--batch", action="store_true",
@@ -438,6 +440,7 @@ Examples:
         "--base-url", default=None,
         help="vLLM OpenAI-compatible base URL (default: %s)" % VLM_BASE_URL,
     )
+    add_profile_argument(p)
     p.add_argument(
         "--log-level", default="INFO",
         choices=["DEBUG", "INFO", "WARNING", "ERROR"],
@@ -455,6 +458,12 @@ def main() -> None:
         format="%(asctime)s [%(levelname)s] %(name)s %(message)s",
         datefmt="%H:%M:%S",
     )
+
+    profile = resolve_profile(args)
+    if args.input is None:
+        if profile is None:
+            raise SystemExit("give an input path or a --profile to take it from")
+        args.input = str(profile.processed_dir)
 
     common = dict(
         dry_run=args.dry_run,
