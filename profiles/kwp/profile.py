@@ -7,9 +7,10 @@ PROFILE = Profile(
     document_noun="Wärmeplan",
     source_language="de",
     answer_language="de",
-    # Most plans are single-column, but roughly one in eight is typeset in two
-    # columns throughout (measured over the corpus), and those read as nonsense
-    # without this. Takes effect on the next Stage 3 (--rebuild-stage3).
+    # Measured over the 801-document corpus: 184 plans have multi-column pages,
+    # 44 of them throughout. Mostly two columns, a handful of three, one of
+    # four. Those pages read as interleaved nonsense without this.
+    # Takes effect on the next Stage 3 (--rebuild-stage3).
     column_layout="auto",
     # Filled by profiles/kwp/catalog.py; "jahr" is the year of the stored
     # publication token, so the filter and the label can never disagree.
