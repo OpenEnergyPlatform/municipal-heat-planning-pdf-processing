@@ -40,6 +40,10 @@ PDF_OVERRIDES = {
     1059078: "waermeplan_konvoi_amt_haddeby_20250606.pdf",       # Selk
     # KWW link 404s; the plan is published on the municipality's own site.
     3157001: "waermeplan_edemissen_20250923.pdf",                # Edemissen
+    # Konvoi NI13 (Bad Sachsa und Walkenried); KWW link 404s, the plan comes
+    # from the town's own site.
+    3159004: "waermeplan_bad_sachsa_20250725.pdf",               # Bad Sachsa
+    3159036: "waermeplan_bad_sachsa_20250725.pdf",               # Walkenried
 }
 
 # KWW Excel columns carried into the MunicipalityMeta table, as
