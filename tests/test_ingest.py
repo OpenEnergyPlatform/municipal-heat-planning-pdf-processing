@@ -2,6 +2,7 @@
 import sqlite3
 
 import pytest
+import requests
 
 from docpipe import store
 from docpipe.ingest import SourceDoc, UnusablePDF
@@ -87,6 +88,68 @@ def test_versions_are_linked_after_ingest(usable, tmp_path):
     con = sqlite3.connect(tmp_path / "db.sqlite")
     state = dict(con.execute("SELECT filename, is_current FROM Documents"))
     assert state == {"old.pdf": 0, "new.pdf": 1}
+
+
+def _http_error(status):
+    response = requests.Response()
+    response.status_code = status
+    return requests.HTTPError(f"{status}", response=response)
+
+
+def test_a_dead_link_does_not_stop_the_run(monkeypatch, usable, tmp_path):
+    """The registers link to municipal sites that reorganise; one 404 must not
+    cost the other 800 documents."""
+    def fetch(url, data_dir):
+        if "gone" in url:
+            raise _http_error(404)
+        return url.rsplit("/", 1)[-1]
+
+    monkeypatch.setattr(ingest, "download_pdf", fetch)
+    source = FakeSource([_doc("a.pdf"), _doc("gone.pdf", group="7133018"),
+                         _doc("b.pdf")])
+    ingest.ingest(source, tmp_path / "db.sqlite", usable, KWP)
+
+    con = sqlite3.connect(tmp_path / "db.sqlite")
+    assert [r[0] for r in con.execute("SELECT filename FROM Documents ORDER BY id")] \
+        == ["a.pdf", "b.pdf"]
+    assert source.accepted == ["a.pdf", "b.pdf"]
+
+
+def test_the_dead_links_are_written_out_as_a_worklist(monkeypatch, usable, tmp_path):
+    monkeypatch.setattr(ingest, "download_pdf",
+                        lambda url, d: (_ for _ in ()).throw(_http_error(404)))
+    source = FakeSource([_doc("gone.pdf", group="7133018")])
+    ingest.ingest(source, tmp_path / "db.sqlite", usable, KWP)
+
+    line = (tmp_path / "unreachable_pdfs.txt").read_text(encoding="utf-8").strip()
+    ags, filename, reason, url = line.split("\t")
+    assert (ags, filename, reason) == ("7133018", "gone.pdf", "HTTP 404")
+    assert url == "https://x/gone.pdf"       # so it can be checked by hand
+
+
+def test_a_missing_override_file_lands_on_the_worklist_too(usable, tmp_path):
+    """An override names a file that must be in the data dir; if it is not, that
+    belongs on the same list rather than killing the run."""
+    source = FakeSource([SourceDoc(external_id="x", filename="nowhere.pdf",
+                                   url=None, group_key="8115050")])
+    ingest.ingest(source, tmp_path / "db.sqlite", tmp_path, KWP)
+
+    assert "nowhere.pdf" in (tmp_path / "unreachable_pdfs.txt").read_text(
+        encoding="utf-8")
+
+
+def test_one_dead_convoy_link_is_reported_once(monkeypatch, usable, tmp_path, caplog):
+    monkeypatch.setattr(ingest, "download_pdf",
+                        lambda url, d: (_ for _ in ()).throw(_http_error(404)))
+    source = FakeSource([_doc("gone.pdf", group=str(a)) for a in (1, 2, 3)])
+    with caplog.at_level("WARNING"):
+        ingest.ingest(source, tmp_path / "db.sqlite", usable, KWP)
+
+    warnings = [r for r in caplog.records
+                if r.levelname == "WARNING" and "UNREACHABLE" in r.getMessage()]
+    assert len(warnings) == 1
+    assert len((tmp_path / "unreachable_pdfs.txt").read_text(
+        encoding="utf-8").strip().splitlines()) == 1
 
 
 def test_works_without_a_profile(usable, tmp_path):

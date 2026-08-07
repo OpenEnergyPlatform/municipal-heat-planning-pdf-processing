@@ -14,6 +14,12 @@ import fitz
 import requests
 
 
+BROWSER_HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                  "(KHTML, like Gecko) Chrome/126.0 Safari/537.36",
+}
+
+
 def filename_for(url: str) -> str:
     """The name a download of *url* will be saved under (lowercased)."""
     return Path(urlparse(url.lower()).path).name.lower()
@@ -33,7 +39,8 @@ def download_pdf(url: str, data_dir: Path) -> str:
     if file_path.exists():
         return file_path.name
 
-    response = requests.get(url, timeout=30)
+    # Municipal sites regularly answer 403 to a default requests User-Agent.
+    response = requests.get(url, timeout=30, headers=BROWSER_HEADERS)
     response.raise_for_status()
     content = response.content
     if not content.startswith(b"%PDF"):
