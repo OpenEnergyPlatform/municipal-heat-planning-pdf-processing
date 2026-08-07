@@ -99,3 +99,23 @@ def test_boxes_come_back_as_float32():
     assert out["logits"].dtype is torch.float32
     assert out["pred_boxes"].dtype is torch.float32
     assert out["labels"].dtype is torch.int64      # ints are left alone
+
+
+def test_the_masks_are_left_in_the_reduced_dtype():
+    """out_masks is (batch, 300, 200, 200) - the largest tensor of the stage,
+    thresholded and thrown away. Upcasting it would double it for nothing."""
+    outputs = {"pred_boxes": torch.zeros(1, 1, 4, dtype=torch.bfloat16),
+               "out_masks": torch.zeros(1, 2, 4, 4, dtype=torch.bfloat16)}
+
+    out = s2._to_float32(outputs)
+
+    assert out["pred_boxes"].dtype is torch.float32
+    assert out["out_masks"].dtype is torch.bfloat16
+
+
+def test_autocast_is_off_by_default():
+    """Measured: 1.15x on a forward pass that is 6% of the stage. Not worth a
+    precision change on box coordinates."""
+    from docpipe.preprocessing import config
+
+    assert config.LAYOUT_AUTOCAST == "off"
