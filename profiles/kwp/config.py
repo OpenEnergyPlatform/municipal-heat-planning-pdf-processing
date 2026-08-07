@@ -62,6 +62,8 @@ PDF_OVERRIDES = {
     # KWW link 404s; the Abschlussbericht is on the municipality's own site.
     # The KWW name carries no date, so neither does ours.
     3356002: "waermeplan_grasberg.pdf",                          # Grasberg
+    # KWW link 404s; the Abschlussbericht is on the municipality's own site.
+    3356011: "waermeplan_worpswede_20250829.pdf",                # Worpswede
 }
 
 # KWW Excel columns carried into the MunicipalityMeta table, as
