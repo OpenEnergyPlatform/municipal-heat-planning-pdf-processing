@@ -64,6 +64,8 @@ PDF_OVERRIDES = {
     3356002: "waermeplan_grasberg.pdf",                          # Grasberg
     # KWW link 404s; the Abschlussbericht is on the municipality's own site.
     3356011: "waermeplan_worpswede_20250829.pdf",                # Worpswede
+    # KWW link 404s; the Abschlussbericht is on the municipality's own site.
+    3459033: "waermeplan_wallenhorst_2025.pdf",                  # Wallenhorst
 }
 
 # KWW Excel columns carried into the MunicipalityMeta table, as
