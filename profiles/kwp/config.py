@@ -349,6 +349,92 @@ PDF_OVERRIDES = {
     9275137: "waermeplan_konvoi-abteiland-jandelsbrunn_20260527.pdf",  # Obernzell
     9275148: "waermeplan_konvoi-abteiland-jandelsbrunn_20260527.pdf",  # Sonnen
     9275150: "waermeplan_konvoi-abteiland-jandelsbrunn_20260527.pdf",  # Thyrnau
+    # --- Aus dem Lauf vom 2026-08-07: 40 tote KWW-Links plus Regensburg,
+    # dessen KWW-PDF ein Scan ohne Textebene ist. Ersatz jeweils von der
+    # Kommune, dem Planer (waermeplan.net) oder verwaltungsportal.de.
+    13072012: "waermeplan_amt_rostocker_heide.pdf",  # Bentwisch
+    13072015: "waermeplan_amt_rostocker_heide.pdf",  # Blankenhagen
+    13072032: "waermeplan_amt_rostocker_heide.pdf",  # Gelbensande
+    13072072: "waermeplan_amt_rostocker_heide.pdf",  # Mönchhagen
+    13072088: "waermeplan_amt_rostocker_heide.pdf",  # Rövershagen
+    9674120: "waermeplan_bundorf_20250601.pdf",  # Bundorf
+    9674121: "waermeplan_burgpreppach_20250601.pdf",  # Burgpreppach
+    9377116: "waermeplan_erbendorf_20260218.pdf",  # Erbendorf
+    9674223: "waermeplan_ermershausen_20250601.pdf",  # Ermershausen
+    9371122: "waermeplan_freudenberg_20260416.pdf",  # Freudenberg (Oberpfalz)
+    9371123: "waermeplan_gebenbach_20260416.pdf",  # Gebenbach
+    15086055: "waermeplan_gommern_20250328.pdf",  # Gommern
+    12067201: "waermeplan_gruenheide__mark__20251009.pdf",  # Grünheide (Mark)
+    9371126: "waermeplan_hahnbach_20260416.pdf",  # Hahnbach
+    10045114: "waermeplan_homburg_20260512.pdf",  # Homburg
+    9571111: "waermeplan_konvoi-adelshofen_mittelfranken__20260301.pdf",  # Adelshofen (Mittelfranken)
+    9471111: "waermeplan_konvoi-allianz-regnitz-aisch_20260223.pdf",  # Altendorf (Kreis Bamberg)
+    9471123: "waermeplan_konvoi-allianz-regnitz-aisch_20260223.pdf",  # Buttenheim
+    9474123: "waermeplan_konvoi-allianz-regnitz-aisch_20260223.pdf",  # Eggolsheim
+    9474133: "waermeplan_konvoi-allianz-regnitz-aisch_20260223.pdf",  # Hallerndorf
+    9276116: "waermeplan_konvoi-gruener-dreiberg_20251124.pdf",  # Bischofsmais
+    9276126: "waermeplan_konvoi-gruener-dreiberg_20251124.pdf",  # Kirchberg i.Wald
+    9276127: "waermeplan_konvoi-gruener-dreiberg_20251124.pdf",  # Kirchdorf i.Wald
+    9276139: "waermeplan_konvoi-gruener-dreiberg_20251124.pdf",  # Rinchnach
+    9272143: "waermeplan_konvoi-nationalparkgemeinden_20251001.pdf",  # Sankt Oswald-Riedlhütte
+    9272146: "waermeplan_konvoi-nationalparkgemeinden_20251001.pdf",  # Neuschönau
+    9272149: "waermeplan_konvoi-nationalparkgemeinden_20251001.pdf",  # Spiegelau
+    9276115: "waermeplan_konvoi-nationalparkgemeinden_20251001.pdf",  # Bayerisch Eisenstein
+    9276121: "waermeplan_konvoi-nationalparkgemeinden_20251001.pdf",  # Frauenau
+    9276130: "waermeplan_konvoi-nationalparkgemeinden_20251001.pdf",  # Lindberg
+    9571188: "waermeplan_konvoi-ohrenbach_20260301.pdf",  # Ohrenbach
+    9571205: "waermeplan_konvoi-steinsfeld_20260301.pdf",  # Steinsfeld
+    9278140: "waermeplan_konvoi-strasskirchen-und-irlbach_20250930.pdf",  # Irlbach
+    9278192: "waermeplan_konvoi-strasskirchen-und-irlbach_20250930.pdf",  # Straßkirchen
+    9474132: "waermeplan_konvoi-suedliche-fraenkische-schweiz_20260301.pdf",  # Gräfenberg
+    9474138: "waermeplan_konvoi-suedliche-fraenkische-schweiz_20260301.pdf",  # Hiltpoltstein
+    9474140: "waermeplan_konvoi-suedliche-fraenkische-schweiz_20260301.pdf",  # Igensdorf
+    9474173: "waermeplan_konvoi-suedliche-fraenkische-schweiz_20260301.pdf",  # Weißenohe
+    9575113: "waermeplan_konvoi-vg-diespeck_20260301.pdf",  # Baudenbach
+    9575118: "waermeplan_konvoi-vg-diespeck_20260301.pdf",  # Diespeck
+    9575128: "waermeplan_konvoi-vg-diespeck_20260301.pdf",  # Gutenstetten
+    9575150: "waermeplan_konvoi-vg-diespeck_20260301.pdf",  # Münchsteinach
+    9375131: "waermeplan_konvoi-vg-kallmuenz-duggendorf_20260301..pdf",  # Duggendorf
+    9375153: "waermeplan_konvoi-vg-kallmuenz-holzheim-am-forst_20260301..pdf",  # Holzheim a.Forst
+    9375156: "waermeplan_konvoi-vg-kallmuenz-kallmuenz_20260301.pdf",  # Kallmünz
+    9475174: "waermeplan_konvoi-vg-sparneck_20260407.pdf",  # Sparneck
+    9475184: "waermeplan_konvoi-vg-sparneck_20260407.pdf",  # Weißdorf
+    15087275: "waermeplan_mansfeld-suedharz_20251101.pdf",  # Mansfeld
+    14729270: "waermeplan_markranstaedt_20250825.pdf",  # Markranstädt
+    9371121: "waermeplan_markt-freihung_20260416.pdf",  # Freihung
+    9375170: "waermeplan_mintraching_20250731.pdf",  # Mintraching
+    9371141: "waermeplan_neukirchen-bei-sulzbach-rosenberg_20260101.pdf",  # Neukirchen b.Sulzbach-Rosenberg
+    9678164: "waermeplan_oberschwarzach_20251014.pdf",  # Oberschwarzach
+    9777158: "waermeplan_pforzen_20250926.pdf",  # Pforzen
+    9371144: "waermeplan_poppenricht_20260416.pdf",  # Poppenricht
+    9362000: "waermeplan_regensburg_20260429.pdf",  # Regensburg
+    16073076: "waermeplan_rudolstadt_202506.pdf",  # Rudolstadt
+    12061444: "waermeplan_schulzendorf_2025.pdf",  # Schulzendorf
+    9677116: "waermeplan_vg-burgsinn-aura-im-sinngrund_20260301.pdf",  # Aura i.Sinngrund
+    9677122: "waermeplan_vg-burgsinn-burgsinn_20260301.pdf",  # Burgsinn
+    9677128: "waermeplan_vg-burgsinn-fellen_20260301.pdf",  # Fellen
+    9677159: "waermeplan_vg-burgsinn-mittelsinn_20260301.pdf",  # Mittelsinn
+    9677169: "waermeplan_vg-burgsinn-obersinn_20260301.pdf",  # Obersinn
+    15088216: "waermeplan_wettin-loebejuen_20250724.pdf",  # Wettin-Löbejün
+    9674139: "warmeplan_vg_theres_20260225.pdf",  # Gädheim
+    9674180: "warmeplan_vg_theres_20260225.pdf",  # Theres
+    9674219: "warmeplan_vg_theres_20260225.pdf",  # Wonfurt
+}
+
+# Files the register hands to several municipalities that are NOT a convoy: KWW
+# pasted one town's link into another town's row. Keyed by the local filename →
+# the Gemeindeschlüssel of the municipality the document actually belongs to,
+# read off the document itself. Without this the version grouping would have to
+# guess, and the guess is wrong as often as not. The OTHER municipality still
+# has no plan of its own here — it needs its real link.
+SHARED_FILE_OWNERS = {
+    # "KOMMUNALE WÄRMEPLANUNG für die Stadt Greding"; Bühl (8216007) not named once.
+    "waermeplan_greding_20251016.pdf": 9576122,        # Greding
+    # "Abschlussbericht für die Stadt Oldenburg"; Hessisch Oldendorf (3252007) absent.
+    "waermeplan_oldenburg_20251112.pdf": 3403000,      # Oldenburg (Oldb)
+    # Weingarten 190x, Ravensburg 63x, Karlsruhe 0x → the Württemberg one,
+    # not Weingarten (Baden) (8215090).
+    "waermeplan_weingarten_20231113.pdf": 8436082,     # Weingarten (Ravensburg)
 }
 
 # KWW Excel columns carried into the MunicipalityMeta table, as
