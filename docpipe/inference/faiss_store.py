@@ -17,7 +17,7 @@ from typing import Callable, Optional
 import faiss
 import numpy as np
 
-from .config import EMBEDDING_DIM
+from docpipe.embedding.config import EMBEDDING_DIM
 from . import db
 
 log = logging.getLogger(__name__)
