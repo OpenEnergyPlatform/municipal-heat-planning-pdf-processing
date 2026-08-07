@@ -59,6 +59,9 @@ PDF_OVERRIDES = {
     3353007: "waermeplan_elbmarsch_20250801.pdf",                # Drage (Elbe)
     3353023: "waermeplan_elbmarsch_20250801.pdf",                # Marschacht
     3353033: "waermeplan_elbmarsch_20250801.pdf",                # Tespe
+    # KWW link 404s; the Abschlussbericht is on the municipality's own site.
+    # The KWW name carries no date, so neither does ours.
+    3356002: "waermeplan_grasberg.pdf",                          # Grasberg
 }
 
 # KWW Excel columns carried into the MunicipalityMeta table, as
