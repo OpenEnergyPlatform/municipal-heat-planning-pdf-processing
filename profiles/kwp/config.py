@@ -27,6 +27,17 @@ PDF_OVERRIDES = {
     7143067: "waermeplan_selters_20250711.pdf",                  # Selters (Westerwald)
     7143085: "waermeplan_selters_20250711.pdf",                  # Wölferlingen
     8116012: "waermeplan_bissingen_an_der_teck_2024q1.pdf",      # Bissingen an der Teck
+    # Amt Haddeby (Konvoi, 8 Gemeinden): the KWW link 404s; the plan is published
+    # at daten.verwaltungsportal.de as "Bericht_KWP_Haddeby_Versand_komprimiert".
+    # Kept under the KWW name so the convoy marker and the date survive.
+    1059012: "waermeplan_konvoi_amt_haddeby_20250606.pdf",       # Borgwedel
+    1059018: "waermeplan_konvoi_amt_haddeby_20250606.pdf",       # Busdorf
+    1059019: "waermeplan_konvoi_amt_haddeby_20250606.pdf",       # Dannewerk
+    1059026: "waermeplan_konvoi_amt_haddeby_20250606.pdf",       # Fahrdorf
+    1059032: "waermeplan_konvoi_amt_haddeby_20250606.pdf",       # Geltorf
+    1059043: "waermeplan_konvoi_amt_haddeby_20250606.pdf",       # Jagel
+    1059056: "waermeplan_konvoi_amt_haddeby_20250606.pdf",       # Lottorf
+    1059078: "waermeplan_konvoi_amt_haddeby_20250606.pdf",       # Selk
 }
 
 # KWW Excel columns carried into the MunicipalityMeta table, as
