@@ -1,13 +1,15 @@
-# inference_app — Streamlit RAG chat over the KWP knowledge base
+# inference_app — Streamlit RAG chat over a docpipe corpus
 
 A retrieval + question-answering front-end for the corpus produced by the batch pipeline
-(`KWP.db` + the global FAISS index). The multimodal embedding model is loaded NF4-quantized
-on demand and unloaded once idle; the answer-generating LLM is called over a remote
-OpenAI-compatible API.
+(the profile's DB + FAISS index). The turn itself lives in `docpipe.inference.answer`; this
+package is the UI around it. What the corpus is about comes from `DOCPIPE_PROFILE`: the
+profile's catalog supplies the document labels, the sidebar filters and the detail shown for
+the selected document (`profiles/<name>/catalog.py`); without a profile the app falls back to
+filename-and-date labels and no filters.
 
 ## Flow (per query)
 
-1. Pick one Wärmeplan (document).
+1. Filter and pick one document.
 2. Pick search scopes (multi-select). Tables and figures are each embedded twice, so each is
    offered as two scopes: `*_vl` ("Bild + Beschreibung") = the rendered image plus its
    caption/description; `*_text` ("nur Beschreibung") = only the caption/description text.
@@ -29,21 +31,15 @@ OpenAI-compatible API.
 
 | File | Responsibility |
 | --- | --- |
-| `config.py` | All env-var configuration (paths, LLM endpoint, embedder, retrieval, scopes). |
-| `db.py` | Read-only DB access: document list, candidate-faiss-id UNION query, content + citation. |
-| `faiss_store.py` | Global index load (+`make_direct_map`), sub-index build + search, `retrieve()` with per-owner dedup. |
-| `quantized_embedder.py` | NF4 subclass of the shared embedder + on-demand load/unload context manager, GPU auto-select, process lock. |
-| `query_cache.py` | SQLite cache (separate file): query hash → embedding vector. |
-| `request_log.py` | SQLite request logger + response cache. Errors are logged but not cached, so they retry on the next occurrence. |
-| `chunker.py` | Tokenizer + greedy chunk packing + citation labels. |
-| `llm_client.py` | OpenAI-compatible client: search-phrase generation + strict-JSON chunk QA + retry loop. |
 | `app.py` | Streamlit UI + orchestration (the only file importing `streamlit`). |
+| `config.py` | Env-var configuration; re-exports the core's values, derives the corpus paths from the profile. |
+| `pdf_link.py` | Source-PDF deep links: quote → page, bbox rects, viewer URL. |
+| `sandbox_service.py` | The code-execution service, deployed on the sandbox host (not here). |
 | `../inference_app_smoketest.py` | Standalone embedder verification (run first). |
 
-`quantized_embedder.py` imports the shared `scripts/qwen3_vl_embedding.py` and must not edit
-it — it subclasses `Qwen3VLEmbedder`, overriding only `__init__` (NF4 load, no `.to(device)`,
-fp32 vision tower) and `process()` (pixel_values→fp32 dtype fix), so the batch pipeline stays
-untouched. The LM backbone is quantized to NF4; the vision tower is left fp32.
+Everything else is core: `docpipe.inference` (`answer`, `catalog`, `db`, `faiss_store`,
+`chunker`, `llm_client`, `query_cache`, `request_log`, `code_exec`) and `docpipe.embedding`
+(local or API backend).
 
 ## Code execution (calculations)
 
@@ -60,23 +56,24 @@ numpy/pandas/pymupdf are available; there is no network inside the sandbox. The 
 
 | Var | Default | Meaning |
 | --- | --- | --- |
-| `INFERENCE_DB_PATH` | `data/KWP.db` | SQLite corpus DB (opened read-only). |
-| `INFERENCE_INDEX_PATH` | `data/faiss_index.bin` | Global FAISS index. |
-| `INFERENCE_IMAGE_ROOT` | `data/pdf/processed` | Root for resolving table/figure PNGs. |
+| `DOCPIPE_PROFILE` | unset | The project profile. Supplies the catalog (labels + filters) and the corpus paths below. |
+| `INFERENCE_DB_PATH` | `<profile>.db_path` | SQLite corpus DB (opened read-only). |
+| `INFERENCE_INDEX_PATH` | `<profile>.index_path` | Global FAISS index. |
+| `INFERENCE_IMAGE_ROOT` | `<profile>.processed_dir` | Root for resolving table/figure PNGs. |
 | `EMBEDDING_MODEL` | `Qwen/Qwen3-VL-Embedding-8B` | HF id of the embedding model. |
 | `EMBED_IDLE_UNLOAD_SECONDS` | `600` | Unload after this many idle seconds; 0 = strict on-demand. |
 | `EMBED_LOCK_TIMEOUT_S` | `300` | Max wait for another session's embed to finish. |
-| `LLM_BASE_URL` | UOS agents gateway | OpenAI-compatible `/chat/completions` base URL. |
+| `LLM_BASE_URL` | `http://localhost:8000/v1` | OpenAI-compatible `/chat/completions` base URL. |
 | `LLM_MODEL` | (see `config.py`) | Answer-generating agent id. List available ids with `GET {LLM_BASE_URL}/models`. |
 | `LLM_API_KEY` / `UOS_API_KEY` | from `.env` | The key is read from a `.env` file (`UOS_API_KEY=...`); `LLM_API_KEY` overrides if set. |
 | `LLM_TOKENIZER_ID` | = `LLM_MODEL` | Tokenizer for chunk sizing. An agent id is not a HF repo, so this falls back to a char/4 heuristic. |
 | `LLM_STUB_MODE` | unset | Truthy → canned answers, for testing retrieval without calling the endpoint. |
 | `TOP_K` / `MAX_CHUNK_ATTEMPTS` / `ANSWER_CONTEXT_TOKENS` | 50 / 10 / 10000 | Retrieval depth / max sources examined / per-call source token budget. |
-| `QUERY_CACHE_PATH` | `data/inference_app_query_cache.db` | Separate embedding-vector cache DB (never KWP.db). |
-| `REQUEST_LOG_PATH` | `data/inference_app_request_log.db` | Separate request log + response cache DB (never KWP.db). Text mode only. |
+| `QUERY_CACHE_PATH` | `data/inference_app_query_cache.db` | Separate embedding-vector cache DB (never the corpus DB). |
+| `REQUEST_LOG_PATH` | `data/inference_app_request_log.db` | Separate request log + response cache DB (never the corpus DB). Text mode only. |
 | `PDF_URL_PREFIX` | `/app/static/pdf` | URL prefix where the source PDFs are served. Empty → hide the PDF links. |
 | `PDF_VIEWER_PREFIX` | `/app/static/pdfjs/web` | Bundled pdf.js viewer dir. Empty → native browser viewer. |
-| `INFERENCE_PDF_ROOT` | `data/pdf` | Filesystem dir holding the source PDFs. |
+| `INFERENCE_PDF_ROOT` | `<profile>.pdf_dir` | Filesystem dir holding the source PDFs. |
 | `CODE_EXEC_URL` | (empty) | Sandbox `/run` endpoint. **Empty → the calculation feature is OFF.** |
 | `CODE_EXEC_TOKEN` | from `.env` | Bearer token for the sandbox (matches its `KWP_SANDBOX_TOKEN`). |
 | `CODE_EXEC_MAX_ROUNDS` | `2` | Max code runs the model may request per answer batch. |
@@ -115,7 +112,7 @@ Install into a dedicated venv, point the data paths at the corpus, then run:
 ```bash
 pip install -r scripts/inference_app/requirements.txt
 python scripts/inference_app_smoketest.py --image <some>.png   # verify the embedder first
-streamlit run scripts/inference_app/app.py
+DOCPIPE_PROFILE=kwp streamlit run scripts/inference_app/app.py
 ```
 
 The API key is read from a `.env` (`UOS_API_KEY=...`). `LLM_STUB_MODE=1` exercises retrieval
@@ -123,7 +120,7 @@ without calling the endpoint.
 
 ## Logging and caching
 
-Two separate SQLite DBs are created automatically (never the authoritative KWP.db):
+Two separate SQLite DBs are created automatically (never the authoritative corpus DB):
 
 - **`REQUEST_LOG_PATH`:** request metadata (plan_id, query, mode, scopes, timestamp,
   latency_ms, n_hits, n_citations, error_message). Successful text queries are also cached

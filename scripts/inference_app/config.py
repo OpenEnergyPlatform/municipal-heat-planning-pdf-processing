@@ -62,14 +62,33 @@ def _load_dotenv() -> None:
 
 _load_dotenv()
 
+# The profile decides what the corpus is about — its catalog supplies the
+# picker labels and filters, its data root the paths below. None is allowed:
+# without DOCPIPE_PROFILE the app still runs, on generic labels and the
+# historical data/ paths.
+from docpipe.profile import active_profile  # noqa: E402  (needs .env loaded)
+
+PROFILE = active_profile()
+
+
+def _path(env_var: str, from_profile, fallback: str) -> Path:
+    """An explicit env var wins over the profile, the profile over the default."""
+    explicit = os.environ.get(env_var)
+    if explicit:
+        return Path(explicit)
+    if PROFILE is not None:
+        return Path(from_profile(PROFILE))
+    return Path(fallback)
+
+
 # ---------------------------------------------------------------------------
 # Corpus data (read-only for this app)
 # ---------------------------------------------------------------------------
 # The batch pipeline is the single writer of these; the app only ever reads.
-DB_PATH    = Path(os.environ.get("INFERENCE_DB_PATH", "data/KWP.db"))
-INDEX_PATH = Path(os.environ.get("INFERENCE_INDEX_PATH", "data/faiss_index.bin"))
+DB_PATH    = _path("INFERENCE_DB_PATH", lambda p: p.db_path, "data/KWP.db")
+INDEX_PATH = _path("INFERENCE_INDEX_PATH", lambda p: p.index_path, "data/faiss_index.bin")
 # Paths stored in Tables.path / Images.path are resolved against this root.
-IMAGE_ROOT = Path(os.environ.get("INFERENCE_IMAGE_ROOT", "data/pdf/processed"))
+IMAGE_ROOT = _path("INFERENCE_IMAGE_ROOT", lambda p: p.processed_dir, "data/pdf/processed")
 
 # ---------------------------------------------------------------------------
 # Embedding model (local, NF4-quantized, loaded on demand)
@@ -128,7 +147,7 @@ PDF_URL_PREFIX = os.environ.get("PDF_URL_PREFIX", "/app/static/pdf")
 # viewer ignores #search). Set to "" to use the browser's own PDF viewer.
 PDF_VIEWER_PREFIX = os.environ.get("PDF_VIEWER_PREFIX", "/app/static/pdfjs/web")
 # Filesystem directory holding the source PDFs. Not required for building links.
-PDF_ROOT = Path(os.environ.get("INFERENCE_PDF_ROOT", "data/pdf"))
+PDF_ROOT = _path("INFERENCE_PDF_ROOT", lambda p: p.pdf_dir, "data/pdf")
 
 # ---------------------------------------------------------------------------
 # Scopes: the UI-selectable search areas → underlying embedding types.

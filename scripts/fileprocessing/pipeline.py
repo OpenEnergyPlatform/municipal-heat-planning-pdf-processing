@@ -49,13 +49,19 @@ def main() -> None:
         datefmt="%H:%M:%S",
     )
     profile = load_profile(args.profile)
-    from profiles.kwp.source import KwwSource, backfill_meta
 
     if args.backfill_meta:
-        n = backfill_meta(Path(args.excel), Path(args.db))
-        log.info("Backfilled MunicipalityMeta for %d municipalities", n)
+        backfill = profile.component("source", "backfill_meta")
+        if backfill is None:
+            raise SystemExit(f"profile {profile.name!r} has no --backfill-meta step")
+        n = backfill(Path(args.excel), Path(args.db))
+        log.info("Backfilled project metadata for %d entries", n)
         return
 
+    source_class = profile.component("source", "SOURCE")
+    if source_class is None:
+        raise SystemExit(f"profile {profile.name!r} provides no document source "
+                         f"(profiles/{profile.name}/source.py: SOURCE)")
     if not args.data_dir:
         raise SystemExit("--data-dir is required unless --backfill-meta is given")
-    ingest(KwwSource(Path(args.excel)), Path(args.db), Path(args.data_dir), profile)
+    ingest(source_class(Path(args.excel)), Path(args.db), Path(args.data_dir), profile)

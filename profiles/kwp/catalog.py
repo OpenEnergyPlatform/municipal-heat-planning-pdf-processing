@@ -1,56 +1,102 @@
 """
-documents.py – How this project labels its documents in the picker.
+catalog.py – How heat plans present themselves in the picker.
 
-Heat plans are published per municipality, sometimes as one convoy plan for
-several; the label has to say which. That is project knowledge, so it lives
-here and not in docpipe.
+Plans are published per municipality, sometimes as one convoy plan for several
+of them; the label has to say which, and the filters are municipality,
+Bundesland and year. All of that is project knowledge, so it lives here and not
+in docpipe.
 
 Author: Felix Vossel
 """
 from __future__ import annotations
-import json
+
 import re
 import sqlite3
-from pathlib import Path
 from typing import Optional
-from docpipe.inference.db import connect_readonly  # re-exported for the app
+
+from docpipe.inference.catalog import Catalog, format_published
 
 # Filename prefixes that are not a place name (convoy plans are named after
 # their lead municipality, behind one of these).
 _KONVOI_DROP_PREFIX = {"waermeplan", "waermepaln", "wärmeplan", "energiekonzept", "kwp"}
 
 
-def list_documents(
-    conn: sqlite3.Connection,
-    include_superseded: bool = False,
-) -> list[sqlite3.Row]:
-    """
-    Documents for the picker, newest/current first. Only current versions
-    (is_current=1) unless include_superseded.
+class KwpCatalog(Catalog):
+    """The municipal view of the corpus: who a plan covers, and where."""
 
-    Returns rows with keys: id, filename, published, num_pages,
-    municipality_ags, organisation_unit, is_current, municipality_name,
-    organisation_unit_name.
-    """
-    where = "" if include_superseded else "WHERE d.is_current = 1"
-    sql = f"""
-        SELECT d.id,
-               d.filename,
-               d.published,
-               d.num_pages,
-               dm.municipality_ags,
-               dm.organisation_unit,
-               d.is_current,
-               m.name AS municipality_name,
-               o.name AS organisation_unit_name
-        FROM Documents d
-        LEFT JOIN DocumentMeta dm     ON dm.document = d.id
-        LEFT JOIN Municipalities m    ON dm.municipality_ags = m.ags
-        LEFT JOIN OrganisationUnits o ON dm.organisation_unit = o.id
-        {where}
-        ORDER BY d.is_current DESC, d.published DESC, d.filename
-    """
-    return conn.execute(sql).fetchall()
+    def rows(self, conn: sqlite3.Connection,
+             include_superseded: bool = False) -> list:
+        """
+        Documents for the picker, newest/current first. Only current versions
+        (is_current=1) unless include_superseded.
+
+        Rows carry the core columns plus municipality_ags, organisation_unit,
+        municipality_name and organisation_unit_name.
+        """
+        where = "" if include_superseded else "WHERE d.is_current = 1"
+        return conn.execute(f"""
+            SELECT d.id,
+                   d.external_id,
+                   d.group_key,
+                   d.filename,
+                   d.published,
+                   d.num_pages,
+                   d.is_current,
+                   d.supersedes,
+                   dm.municipality_ags,
+                   dm.organisation_unit,
+                   m.name AS municipality_name,
+                   o.name AS organisation_unit_name
+            FROM Documents d
+            LEFT JOIN DocumentMeta dm     ON dm.document = d.id
+            LEFT JOIN Municipalities m    ON dm.municipality_ags = m.ags
+            LEFT JOIN OrganisationUnits o ON dm.organisation_unit = o.id
+            {where}
+            ORDER BY d.is_current DESC, d.published DESC, d.filename
+        """).fetchall()
+
+    def facet_values(self, conn: sqlite3.Connection, rows) -> dict:
+        """document id -> {gemeinde, bundesland_lang, jahr}."""
+        coverage = municipality_coverage(conn, rows)
+        states = _states_by_document(conn)
+        out = {}
+        for row in rows:
+            values = {"gemeinde": coverage.get(row["id"], [])}
+            state = states.get(row["id"])
+            if state:
+                values["bundesland_lang"] = [state]
+            year = str(row["published"] or "")[:4]
+            if year.isdigit():
+                values["jahr"] = [year]
+            out[row["id"]] = values
+        return out
+
+    def label(self, row, facets: Optional[dict] = None) -> str:
+        return document_label(row, (facets or {}).get("gemeinde"))
+
+    def detail(self, row, facets: Optional[dict] = None):
+        covered = (facets or {}).get("gemeinde") or []
+        if len(covered) <= 1:
+            return ()
+        return ((f"🏘 Zugehörige Gemeinden ({len(covered)})", covered),)
+
+
+CATALOG = KwpCatalog
+
+
+def _states_by_document(conn: sqlite3.Connection) -> dict:
+    """document id -> Bundesland, from the KWW metadata of its municipality."""
+    try:
+        rows = conn.execute("""
+            SELECT dm.document AS document, mm.bundesland_lang AS state
+            FROM DocumentMeta dm
+            JOIN MunicipalityMeta mm ON mm.ags = dm.municipality_ags
+            WHERE mm.bundesland_lang IS NOT NULL AND mm.bundesland_lang != ''
+        """).fetchall()
+    except sqlite3.OperationalError:      # corpus imported without MunicipalityMeta
+        return {}
+    return {r["document"]: r["state"] for r in rows}
+
 
 def _konvoi_lead(filename: str) -> str:
     """
@@ -70,15 +116,6 @@ def _konvoi_lead(filename: str) -> str:
         out.append(t)
     return " ".join(out).strip().title()
 
-def _fmt_published(published) -> str:
-    """Pretty-print the stored publish token: 20240708 → 2024-07-08, 2023q4 → 2023 Q4."""
-    s = str(published or "").strip()
-    if re.fullmatch(r"\d{8}", s):
-        return f"{s[0:4]}-{s[4:6]}-{s[6:8]}"
-    m = re.fullmatch(r"(\d{4})q([1-4])", s, re.IGNORECASE)
-    if m:
-        return f"{m.group(1)} Q{m.group(2)}"
-    return s
 
 def _covered_names(
     own_ags,
@@ -87,7 +124,7 @@ def _covered_names(
     n_docs_in_ou: int,
     claimed_ags: set,
     ou_members: dict,
-) -> list[str]:
+) -> list:
     """
     Municipalities a plan covers, derived from OU membership (`ou_members` maps
     ags→name).
@@ -115,10 +152,8 @@ def _covered_names(
         names = [own_muni_name]
     return names
 
-def municipality_coverage(
-    conn: sqlite3.Connection,
-    documents: list[sqlite3.Row],
-) -> dict[int, list[str]]:
+
+def municipality_coverage(conn: sqlite3.Connection, documents) -> dict:
     """
     Map each document id → the sorted list of municipalities it covers.
 
@@ -133,7 +168,7 @@ def municipality_coverage(
     for d in documents:
         by_ou.setdefault(d["organisation_unit"], []).append(d)
 
-    out: dict[int, list[str]] = {}
+    out: dict = {}
     for d in documents:
         siblings = by_ou.get(d["organisation_unit"], [])
         claimed = {s["municipality_ags"] for s in siblings}
@@ -144,7 +179,8 @@ def municipality_coverage(
         )
     return out
 
-def document_label(row: sqlite3.Row, covered: Optional[list[str]] = None) -> str:
+
+def document_label(row, covered: Optional[list] = None) -> str:
     """
     Plan-centric picker label.
 
@@ -155,7 +191,7 @@ def document_label(row: sqlite3.Row, covered: Optional[list[str]] = None) -> str
     """
     filename = row["filename"] or ""
     konvoi = "konvoi" in filename.lower()
-    published = _fmt_published(row["published"])
+    published = format_published(row["published"])
     tail = "(aktuell)" if row["is_current"] else "(alt)"
 
     if covered and len(covered) > 1:

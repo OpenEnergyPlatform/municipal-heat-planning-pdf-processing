@@ -60,6 +60,29 @@ def test_facet_defaults_to_multiselect():
     assert Facet("f", "F").widget == "multiselect"
 
 
+def test_components_are_optional():
+    assert load_profile("kwp").component("source", "SOURCE") is not None
+    assert load_profile("kwp").component("gibtsnicht", "X") is None
+    assert Profile(name="ohne").component("catalog", "CATALOG") is None
+
+
+def test_a_broken_component_is_an_error_not_an_absence(tmp_path, monkeypatch):
+    """A profile module that fails to import must not degrade to the default."""
+    import sys
+
+    pkg = tmp_path / "profiles" / "kaputt"
+    pkg.mkdir(parents=True)
+    (tmp_path / "profiles" / "__init__.py").write_text("", encoding="utf-8")
+    (pkg / "__init__.py").write_text("", encoding="utf-8")
+    (pkg / "catalog.py").write_text("import gibtsnichtimportiert\n", encoding="utf-8")
+    monkeypatch.syspath_prepend(str(tmp_path))
+    for name in [m for m in sys.modules if m == "profiles" or m.startswith("profiles.")]:
+        monkeypatch.delitem(sys.modules, name)
+
+    with pytest.raises(ModuleNotFoundError):
+        Profile(name="kaputt").component("catalog", "CATALOG")
+
+
 def test_late_profile_is_refused_when_it_overrides_prompts(monkeypatch, tmp_path):
     """Prompts bind at import; naming the profile afterwards would use the wrong ones."""
     import argparse

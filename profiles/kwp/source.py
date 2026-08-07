@@ -127,3 +127,7 @@ def backfill_meta(excel_file: Path, db_file: Path) -> int:
             written += 1
         connection.commit()
     return written
+
+
+# The source this profile contributes to `python -m scripts.fileprocessing`.
+SOURCE = KwwSource

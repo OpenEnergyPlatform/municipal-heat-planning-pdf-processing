@@ -1,9 +1,13 @@
 """
-app.py – Streamlit RAG chat over the KWP knowledge base. The only module that
-imports Streamlit.
+app.py – Streamlit RAG chat over a docpipe corpus. The only module that imports
+Streamlit.
+
+What the corpus is about comes from the profile: its catalog supplies the
+labels, the filters and the detail shown for a selected document.
 
 Run:
-    streamlit run scripts/inference_app/app.py --server.address 0.0.0.0 --server.port 8501
+    DOCPIPE_PROFILE=kwp streamlit run scripts/inference_app/app.py \\
+        --server.address 0.0.0.0 --server.port 8501
 
 Author: Felix Vossel
 """
@@ -33,11 +37,11 @@ if _REPO_ROOT not in sys.path:
 import streamlit as st
 
 from docpipe.inference import (
-    answer, chunker, faiss_store, llm_client, query_cache, request_log,
+    answer, catalog, chunker, faiss_store, llm_client, query_cache, request_log,
 )
 from docpipe.inference import config as core_config
 from docpipe.inference import db
-from scripts.inference_app import config, documents, pdf_link
+from scripts.inference_app import config, pdf_link
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger(__name__)
@@ -66,6 +70,12 @@ def get_cache():
 @st.cache_resource
 def get_request_log():
     return request_log.connect(config.REQUEST_LOG_PATH)
+
+
+@st.cache_resource
+def get_catalog():
+    """The profile's catalog, or the generic one if no profile is configured."""
+    return catalog.load_catalog(config.PROFILE)
 
 
 # ---------------------------------------------------------------------------
@@ -139,11 +149,13 @@ def _spinner(label: str):
 # UI
 # ---------------------------------------------------------------------------
 def main() -> None:
-    st.set_page_config(page_title="KWP RAG Chat", layout="wide")
+    cat = get_catalog()
+    title = config.PROFILE.display_title if config.PROFILE else "docpipe – Recherche"
+    st.set_page_config(page_title=title, layout="wide")
     # Hide Streamlit's top-right "running man" status widget.
     st.markdown("<style>[data-testid='stStatusWidget']{display:none !important;}</style>",
                 unsafe_allow_html=True)
-    st.title("Kommunale Wärmeplanung – Recherche")
+    st.title(title)
 
     conn = get_db()
 
@@ -151,21 +163,31 @@ def main() -> None:
     with st.sidebar:
         st.header("Auswahl")
         include_old = st.checkbox("Historische Versionen einbeziehen", value=False)
-        docs = documents.list_documents(conn, include_superseded=include_old)
-        if not docs:
+        entries = cat.entries(conn, include_superseded=include_old)
+        if not entries:
             st.error("Keine Dokumente in der Datenbank gefunden.")
             st.stop()
 
-        coverage = documents.municipality_coverage(conn, docs)
-        labels = {d["id"]: documents.document_label(d, coverage.get(d["id"])) for d in docs}
+        # Filters are whatever the profile declared and its catalog filled; a
+        # facet no document carries a value for is not offered at all.
+        options = catalog.facet_options(entries, cat.facets)
+        selections = {
+            facet.field: st.multiselect(facet.label, options[facet.field], default=[])
+            for facet in cat.facets if facet.field in options
+        }
+        entries = catalog.apply_filters(entries, selections)
+        if not entries:
+            st.warning("Kein Dokument passt zu dieser Filterauswahl.")
+            st.stop()
+
+        by_id = {e.id: e for e in entries}
         doc_id = st.selectbox(
-            "Wärmeplan", options=[d["id"] for d in docs],
-            format_func=lambda i: labels[i],
+            cat.document_noun, options=list(by_id),
+            format_func=lambda i: by_id[i].label,
         )
-        covered = coverage.get(doc_id, [])
-        if len(covered) > 1:
-            with st.expander(f"🏘 Zugehörige Gemeinden ({len(covered)})"):
-                st.markdown("\n".join(f"- {m}" for m in covered))
+        for heading, lines in by_id[doc_id].detail:
+            with st.expander(heading):
+                st.markdown("\n".join(f"- {line}" for line in lines))
         scopes = st.multiselect(
             "Suchbereich", options=config.ALL_SCOPES, default=config.ALL_SCOPES,
             help="Tabellen/Bilder liegen doppelt im Index: „Bild + Beschreibung“ "

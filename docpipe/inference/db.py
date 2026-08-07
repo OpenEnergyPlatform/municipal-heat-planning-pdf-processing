@@ -19,7 +19,7 @@ from .config import (
 
 def connect_readonly(db_path: Path) -> sqlite3.Connection:
     """
-    Open a read-only connection to KWP.db.
+    Open a read-only connection to a corpus database.
 
     The `mode=ro` URI keeps the app from ever writing to the authoritative
     database or taking a write lock that would contend with the batch pipeline
@@ -30,8 +30,6 @@ def connect_readonly(db_path: Path) -> sqlite3.Connection:
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
     return conn
-
-_KONVOI_DROP_PREFIX = {"waermeplan", "waermepaln", "wärmeplan", "energiekonzept", "kwp"}
 
 def get_candidate_faiss_ids(
     conn: sqlite3.Connection,
