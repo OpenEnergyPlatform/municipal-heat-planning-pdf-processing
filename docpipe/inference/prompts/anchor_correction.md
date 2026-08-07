@@ -1,0 +1,1 @@
+Deine letzte Ausgabe war eine Bewertung oder Absage, KEIN Suchanker. Gib jetzt ausschließlich eine positive, konkrete Aussage bzw. Bildunterschrift EINER hypothetischen Fundstelle aus — keine Verneinung, keine Wörter wie 'keine', 'nicht nachweisbar', 'nicht enthalten' oder 'Kontext'. Nur {"phrase": "<die Aussage>"}.
