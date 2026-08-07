@@ -39,12 +39,39 @@ class Profile:
     # where the profile's own files live; defaults to profiles/<name>
     home: Optional[Path] = None
     facets: Sequence[Facet] = field(default_factory=tuple)
+    # what the app calls the project and one of its documents
+    title: str = ""
+    document_noun: str = "Dokument"
 
     def __post_init__(self) -> None:
         if not self.name or "/" in self.name or "\\" in self.name:
             raise ValueError(f"unusable profile name: {self.name!r}")
         if self.column_layout not in COLUMN_LAYOUTS:
             raise ValueError(f"column_layout must be one of {COLUMN_LAYOUTS}")
+
+    @property
+    def display_title(self) -> str:
+        return self.title or self.name
+
+    # -- the Python parts a profile may contribute -------------------------
+    def component(self, module: str, attr: str):
+        """`profiles/<name>/<module>.py: <attr>`, or None if not provided.
+
+        A module the profile does not have is an absence; a module it has that
+        fails to import is an error. Swallowing the second would silently
+        degrade to the generic behaviour over a typo.
+        """
+        dotted = f"{PROFILES_PACKAGE}.{self.name}.{module}"
+        try:
+            loaded = importlib.import_module(dotted)
+        except ModuleNotFoundError as exc:
+            # Missing module or missing package above it → absence. Anything
+            # else the module failed to import is the profile's own bug.
+            missing = exc.name or ""
+            if dotted == missing or dotted.startswith(f"{missing}."):
+                return None
+            raise
+        return getattr(loaded, attr, None)
 
     # -- where the profile's own files live -------------------------------
     @property

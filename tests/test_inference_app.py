@@ -11,7 +11,7 @@ import sqlite3
 import pytest
 
 from docpipe.inference import chunker, db, query_cache
-from scripts.inference_app import documents, pdf_link
+from scripts.inference_app import pdf_link
 from docpipe.embedding import config as EC
 from docpipe.inference import config as C
 
@@ -189,77 +189,6 @@ def test_fetch_figure_content(corpus):
     assert c["page_number"] == 20
     assert c["image_path"] == "doc/images/p20_img0.png"   # IMAGE_ROOT-relative
     assert c["section_title"] == "Potenziale"
-
-
-def test_list_documents_and_label(corpus):
-    conn = db.connect_readonly(corpus)
-    docs = documents.list_documents(conn)
-    assert len(docs) == 1
-    cov = documents.municipality_coverage(conn, docs)
-    assert cov[docs[0]["id"]] == ["Musterstadt"]      # single-doc OU → its member
-    label = documents.document_label(docs[0], cov[docs[0]["id"]])
-    assert "Musterstadt" in label
-    assert "(aktuell)" in label
-
-
-def _doc_row(**kw):
-    base = {"municipality_name": "Gemmrigheim", "organisation_unit_name": None,
-            "published": "20260401", "is_current": 1,
-            "filename": "waermeplan_konvoi_hessigheim_20260401.pdf"}
-    base.update(kw)
-    return base
-
-
-def test_konvoi_lead_parsing():
-    assert documents._konvoi_lead("waermeplan_konvoi_hessigheim_20260401.pdf") == "Hessigheim"
-    assert documents._konvoi_lead("waermeplan_denzlingen_konvoi_2024q2.pdf") == "Denzlingen"
-    assert documents._konvoi_lead("waermeplan__asperg_et_al_konvoi_2024q2.pdf") == "Asperg Et Al"
-    assert documents._konvoi_lead("waermeplan_by6_konvoi_250327.pdf") == "By6"
-
-
-def test_document_label_convoy_uses_ou_and_count():
-    # a convoy covering 4 municipalities is labelled by its unit + count + Konvoi,
-    # NOT by one arbitrary member up front.
-    label = documents.document_label(
-        _doc_row(organisation_unit_name="GVV Besigheim"),
-        covered=["Gemmrigheim", "Hessigheim", "Mundelsheim", "Walheim"],
-    )
-    assert "GVV Besigheim" in label
-    assert "4 Gemeinden" in label
-    assert "Konvoi" in label
-    assert not label.startswith("Gemmrigheim")
-
-
-def test_document_label_single_municipality_has_no_convoy_tag():
-    label = documents.document_label(
-        _doc_row(filename="waermeplan_flensburg_20240701.pdf",
-                 municipality_name="Flensburg"),
-        covered=["Flensburg"],
-    )
-    assert "Konvoi" not in label
-    assert "Flensburg" in label
-
-
-# ---------------------------------------------------------------------------
-# db.py – municipality-coverage rule (pure)
-# ---------------------------------------------------------------------------
-def test_covered_names_single_doc_ou_covers_all_members():
-    members = {1: "A", 2: "B", 3: "C"}
-    assert documents._covered_names(1, "A", True, 1, {1}, members) == ["A", "B", "C"]
-
-
-def test_covered_names_standalone_in_multidoc_ou_covers_only_self():
-    members = {1: "A", 2: "B"}
-    assert documents._covered_names(1, "A", False, 2, {1, 2}, members) == ["A"]
-
-
-def test_covered_names_konvoi_mops_up_unclaimed_members():
-    members = {10: "Besigheim", 11: "Gemmrigheim", 12: "Hessigheim",
-               13: "Mundelsheim", 14: "Walheim"}
-    # OU has 2 plans: Besigheim's own (ags 10) + this convoy (own ags 11).
-    got = documents._covered_names(11, "Gemmrigheim", True, 2, {10, 11}, members)
-    assert got == ["Gemmrigheim", "Hessigheim", "Mundelsheim", "Walheim"]
-    assert "Besigheim" not in got          # kept by its own standalone plan
 
 
 # ---------------------------------------------------------------------------
