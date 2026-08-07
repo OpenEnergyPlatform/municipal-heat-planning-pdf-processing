@@ -103,6 +103,23 @@ HEADER_FOOTER_MAX_LEN        = 90     # running headers are short single lines
 HEADER_FOOTER_MIN_NORM_LEN   = 4      # ignore near-empty normalized text
 HEADER_FOOTER_MIN_PAGE_FRAC  = 0.30   # must recur on >= this fraction of pages (and >= 3)
 
+# ─── COLUMN LAYOUT / READING ORDER (Stage 3, deterministic) ────────────────
+# A two-column page must be read column by column; sorting by (y, x) reads
+# across the gutter. Which mode applies comes from the profile
+# (column_layout: auto | single | double); these are the detector's tunables.
+COLUMN_MIN_TEXT_BLOCKS  = 6      # too few blocks to tell a gutter from a gap
+COLUMN_GUTTER_WIDTH_PT  = 8.0    # the strip that must stay clear of text
+COLUMN_SEARCH_STEP_PT   = 2.0    # candidate gutter positions across the text width
+COLUMN_MAX_SPAN_FRAC    = 0.25   # at most this fraction of text blocks may cross a gutter
+COLUMN_MIN_COLUMN_SHARE = 0.5    # every column must carry this share of the average load
+COLUMN_MIN_WIDTH_PT     = 60.0   # narrower than this is an indent, not a column
+COLUMN_MAX_COLUMNS      = 4      # more splits than this is a table, not a text layout
+# A text column has a left edge; the labels scattered around a chart do not.
+# This is what keeps a diagram's internal text from being read as columns
+# (measured on the corpus: real columns >= 0.90, chart labels <= 0.43).
+COLUMN_ALIGN_TOL_PT     = 4.0    # left edges within this are the same edge
+COLUMN_MIN_ALIGNED_FRAC = 0.75   # this share of a column's blocks must sit on it
+
 # ─── DIRECTORY / INDEX SECTION REMOVAL (Stage 3, deterministic) ────────────
 # Drops assembled sections dominated by directory-listing lines (tables of
 # contents, lists of figures/tables, indexes). GUARDS: a section containing a

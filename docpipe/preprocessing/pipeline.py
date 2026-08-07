@@ -70,6 +70,7 @@ def run_single(
     model_tuple=None,
     force_reextract: bool = False,
     page_range: Optional[tuple[int, int]] = None,
+    column_layout: str = "auto",
 ) -> Optional[dict]:
     """
     Processes a single PDF through Stages 1-3; returns the Stage-3 dict, or
@@ -143,7 +144,7 @@ def run_single(
             log.warning(f"Stage 3 cache unreadable ({e}); rebuilding")
             result = None
     if result is None:
-        sections = build_sections(pages)
+        sections = build_sections(pages, column_layout)
         save_output(sections, output_dir)
         result = clean_data(sections_to_dict(sections))
 
@@ -165,6 +166,7 @@ def run_folder(
     output_dir: Path,
     force_reextract: bool = False,
     glob: str = "*.pdf",
+    column_layout: str = "auto",
 ) -> dict[str, Optional[dict]]:
     """
     Processes all PDFs in *input_dir* sequentially, keyed by path relative to
@@ -213,6 +215,7 @@ def run_folder(
                 output_dir=pdf_output,
                 model_tuple=model_tuple,
                 force_reextract=force_reextract,
+                column_layout=column_layout,
             )
             status = "ok" if result is not None else "error"
         except Exception as e:
@@ -256,7 +259,7 @@ def _write_index(
 # Stage-3-only rebuild (no PDF, no layout model)
 # ---------------------------------------------------------------------------
 
-def rebuild_stage3_from_cache(output_dir: Path) -> int:
+def rebuild_stage3_from_cache(output_dir: Path, column_layout: str = "auto") -> int:
     """
     Re-run ONLY Stage 3 for every doc under *output_dir* that has a readable
     pages cache, overwriting its structured_output.json. No PDF input and no
@@ -276,12 +279,44 @@ def rebuild_stage3_from_cache(output_dir: Path) -> int:
             log.warning("  [%d/%d] %s: pages cache unreadable – skipping",
                         i + 1, len(doc_dirs), d.name)
             continue
-        save_output(build_sections(pages), d)
+        save_output(build_sections(pages, column_layout), d)
         done += 1
         if (i + 1) % 50 == 0 or (i + 1) == len(doc_dirs):
             log.info("  [%d/%d] rebuilt", i + 1, len(doc_dirs))
     log.info("Rebuild Stage 3 complete: %d/%d docs", done, len(doc_dirs))
     return done
+
+
+def report_columns(output_dir: Path, top: int = 20) -> dict[str, tuple[int, int]]:
+    """
+    Report how many pages the column detector would read as two columns, per
+    doc, from the cached pages. Changes nothing — this is what a corpus is
+    asked before its profile switches to column_layout: auto.
+    """
+    from .columns import count_multi_column_pages
+
+    output_dir = Path(output_dir)
+    doc_dirs = sorted(
+        d for d in output_dir.iterdir()
+        if d.is_dir() and (d / CACHE_PAGES_JSON).exists()
+    )
+    found: dict[str, tuple[int, int, int]] = {}
+    total_pages = total_multi = 0
+    for d in doc_dirs:
+        pages = _load_pages_cache(d)
+        if pages is None:
+            continue
+        multi, widest = count_multi_column_pages(pages)
+        total_pages += len(pages)
+        total_multi += multi
+        if multi:
+            found[d.name] = (multi, len(pages), widest)
+
+    log.info("Column report: %d/%d docs have multi-column pages | %d/%d pages",
+             len(found), len(doc_dirs), total_multi, total_pages)
+    for name, (multi, n, widest) in sorted(found.items(), key=lambda kv: -kv[1][0])[:top]:
+        log.info("  %-56s %3d/%3d pages | up to %d columns", name[:56], multi, n, widest)
+    return found
 
 
 # ---------------------------------------------------------------------------
@@ -295,6 +330,7 @@ def run(
     page_range: Optional[tuple[int, int]] = None,
     glob: str = "*.pdf",
     rebuild_stage3: bool = False,
+    column_layout: str = "auto",
 ) -> Optional[dict] | dict[str, Optional[dict]]:
     """
     Entry point: dispatches to run_single() or run_folder() depending on
@@ -304,7 +340,7 @@ def run(
     output_dir = Path(output_dir)
 
     if rebuild_stage3:
-        rebuild_stage3_from_cache(output_dir)
+        rebuild_stage3_from_cache(output_dir, column_layout)
         return {}
 
     input_path = Path(input_path)
@@ -317,6 +353,7 @@ def run(
             output_dir=output_dir,
             force_reextract=force_reextract,
             glob=glob,
+            column_layout=column_layout,
         )
     elif input_path.is_file() and input_path.suffix.lower() == ".pdf":
         return run_single(
@@ -324,6 +361,7 @@ def run(
             output_dir=output_dir,
             force_reextract=force_reextract,
             page_range=page_range,
+            column_layout=column_layout,
         )
     else:
         raise ValueError(f"Input is neither a PDF nor a folder: {input_path}")
@@ -355,6 +393,9 @@ Examples:
                    help="Output directory (default: the profile's processed dir)")
     p.add_argument("--force-reextract", action="store_true",
                    help="Ignore cache and re-run Stages 1+2")
+    p.add_argument("--report-columns", action="store_true",
+                   help="Report which cached pages the column detector reads as "
+                        "two-column, and change nothing")
     p.add_argument("--rebuild-stage3", action="store_true",
                    help="Re-run ONLY Stage 3 over the output dir's cached docs "
                         "(no PDF input, no layout model); rewrites "
@@ -388,6 +429,10 @@ def main() -> None:
 
     page_range = tuple(args.pages) if args.pages else None
 
+    if args.report_columns:
+        report_columns(Path(args.output))
+        sys.exit(0)
+
     if not args.rebuild_stage3 and args.input is None:
         log.error("input is required unless --rebuild-stage3 is given")
         sys.exit(1)
@@ -400,6 +445,7 @@ def main() -> None:
             page_range=page_range,
             glob=args.glob,
             rebuild_stage3=args.rebuild_stage3,
+            column_layout=(profile.column_layout if profile else "auto"),
         )
         sys.exit(0)
     except ValueError as e:

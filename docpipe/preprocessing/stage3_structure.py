@@ -33,6 +33,7 @@ from .config import (
     clean_data,
     dump_json_atomic,
 )
+from .columns import sort_pages
 from .models import Block, FigureRef, PageData, Section, TableRef
 
 log = logging.getLogger(__name__)
@@ -220,7 +221,7 @@ def drop_directory_sections(sections: list[Section]) -> tuple[list[Section], int
 # Core assembly
 # ---------------------------------------------------------------------------
 
-def build_sections(pages: list[PageData]) -> list[Section]:
+def build_sections(pages: list[PageData], column_layout: str = "auto") -> list[Section]:
     """
     Assembles a flat list of Section objects from the annotated pages.
 
@@ -228,8 +229,15 @@ def build_sections(pages: list[PageData]) -> list[Section]:
     content before the first title. Section.content carries [block_id] markers
     where a table or figure appears in the reading order.
 
-    Note: mutates *pages* (running headers/footers are stripped in place).
+    *column_layout* (from the profile: auto | single | double) decides whether a
+    page is read as one column or column by column.
+
+    Note: mutates *pages* (blocks are put in reading order and running
+    headers/footers are stripped, both in place).
     """
+    # Reading order first: everything below walks the blocks in sequence.
+    sort_pages(pages, column_layout)
+
     # Must happen before blocks get merged into section segments.
     n_hdr = strip_running_headers(pages)
     if n_hdr:
