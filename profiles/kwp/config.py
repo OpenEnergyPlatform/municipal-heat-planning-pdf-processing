@@ -48,6 +48,12 @@ PDF_OVERRIDES = {
     3252003: "waermeplan_bad-pyrmont_20260701.pdf",              # Bad Pyrmont
     # KWW link 404s; the Erläuterungsbericht is on the Stadtwerke's site.
     3257031: "waermeplan_rinteln_20260529.pdf",                  # Rinteln
+    # Konvoi "NI SG Nenndorf" (4 Gemeinden); KWW link 404s, the Abschlussbericht
+    # is on the Samtgemeinde's own site.
+    3257006: "waermeplan_sg-nenndorf_20251218.pdf",              # Bad Nenndorf
+    3257011: "waermeplan_sg-nenndorf_20251218.pdf",              # Haste
+    3257016: "waermeplan_sg-nenndorf_20251218.pdf",              # Hohnhorst
+    3257036: "waermeplan_sg-nenndorf_20251218.pdf",              # Suthfeld
 }
 
 # KWW Excel columns carried into the MunicipalityMeta table, as
