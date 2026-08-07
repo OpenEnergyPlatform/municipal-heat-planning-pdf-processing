@@ -12,7 +12,9 @@ from __future__ import annotations
 
 import logging
 import math
+import queue
 import re
+import threading
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
@@ -25,8 +27,10 @@ from PIL import Image
 
 from .config import (
     DIR_IMAGES,
+    LAYOUT_AUTOCAST,
     LAYOUT_BATCH_SIZE,
     LAYOUT_DETECT_DPI,
+    LAYOUT_PREFETCH_BATCHES,
     PAGE_RENDER_DPI,
     PP_CLASS_THRESHOLDS,
     PP_DOCLAYOUT_MODEL_ID,
@@ -200,6 +204,84 @@ def _suppress_cross_class_media(
     return [d for d in detections if id(d) not in suppressed]
 
 
+# PyMuPDF is not thread-safe: one MuPDF context per document, and the prefetch
+# thread renders detection inputs from the same document the main thread renders
+# crops from. Every fitz call in this module goes through this lock. It does not
+# cost the overlap we are after — the main thread holds it only while rendering,
+# never while the batch is on the GPU.
+_FITZ_LOCK = threading.Lock()
+
+
+def _prefetch(items, produce, depth: int):
+    """
+    Yield produce(item) for each item, computing up to *depth* items ahead in a
+    worker thread. depth=0 falls back to plain sequential evaluation.
+
+    An exception in the worker is re-raised in the consumer, so a failure looks
+    exactly like it would without the thread.
+    """
+    if depth <= 0:
+        for item in items:
+            yield produce(item)
+        return
+
+    done = object()
+    box: queue.Queue = queue.Queue(maxsize=depth)
+
+    def work():
+        try:
+            for item in items:
+                box.put(produce(item))
+        except BaseException as exc:          # noqa: BLE001 — handed to consumer
+            box.put(exc)
+        finally:
+            box.put(done)
+
+    worker = threading.Thread(target=work, name="stage2-render", daemon=True)
+    worker.start()
+    try:
+        while True:
+            got = box.get()
+            if got is done:
+                return
+            if isinstance(got, BaseException):
+                raise got
+            yield got
+    finally:
+        # Drain so a consumer that stops early cannot wedge the worker on put().
+        while worker.is_alive():
+            try:
+                if box.get(timeout=0.1) is done:
+                    break
+            except queue.Empty:
+                pass
+
+
+_AUTOCAST_DTYPES = {"bf16": torch.bfloat16, "fp16": torch.float16}
+
+
+def _autocast_dtype(device: str):
+    """The dtype for the detection forward pass, or None to run in fp32."""
+    if device != "cuda":
+        return None
+    return _AUTOCAST_DTYPES.get(LAYOUT_AUTOCAST)
+
+
+def _to_float32(outputs):
+    """
+    Cast the model's float outputs back to fp32.
+
+    Post-processing turns `pred_boxes` into pixel coordinates, and bf16 carries
+    8 mantissa bits: on a 1700 px page one representable step is several pixels,
+    enough to move a crop's edge into the neighbouring text. The matmuls may run
+    reduced, the geometry may not.
+    """
+    for name, value in list(outputs.items()):
+        if isinstance(value, torch.Tensor) and value.is_floating_point():
+            outputs[name] = value.float()
+    return outputs
+
+
 def _infer_batch(
     images: list,
     processor,
@@ -214,8 +296,14 @@ def _infer_batch(
     inputs = processor(images=images, return_tensors="pt")
     inputs = {k: v.to(device) for k, v in inputs.items()}
 
+    dtype = _autocast_dtype(device)
     with torch.no_grad():
-        outputs = model(**inputs)
+        if dtype is None:
+            outputs = model(**inputs)
+        else:
+            with torch.autocast("cuda", dtype=dtype):
+                outputs = model(**inputs)
+            outputs = _to_float32(outputs)
 
     target_sizes = torch.tensor(
         [[img.size[1], img.size[0]] for img in images],
@@ -361,7 +449,9 @@ def _text_from_bbox(fp: fitz.Page, bbox_pt: list[float]) -> str:
         x0, y0, x1, y1 = bbox_pt
         rect = fitz.Rect(x0, y0, x1, y1)
 
-        text = fp.get_text("text", clip=rect).strip()
+        with _FITZ_LOCK:      # the prefetch thread renders from the same doc
+            text = fp.get_text("text", clip=rect)
+        text = text.strip()
         return text if text else ""
     except Exception as e:
         log.debug(f"Text extraction from bbox failed: {e}")
@@ -853,24 +943,31 @@ def detect_layout_all_pages(
     written     = 0
     total_crops = 0
 
-    for b_idx in range(n_batches):
+    def render_batch(b_idx: int):
+        """One batch of detection inputs. Runs in the prefetch thread."""
         start = b_idx * LAYOUT_BATCH_SIZE
         end   = min(start + LAYOUT_BATCH_SIZE, n)
         chunk_pages = pages[start:end]
         chunk_fitz  = fitz_pages[start:end]
 
-        log.info(
-            f"Stage 2: batch {b_idx + 1}/{n_batches} "
-            f"(pages {chunk_pages[0].page_number}–{chunk_pages[-1].page_number})"
-        )
-
         # Skip pages that fail to render.
         rendered: list[tuple[PageData, fitz.Page, Image.Image]] = []
         for pg, fp in zip(chunk_pages, chunk_fitz):
             try:
-                rendered.append((pg, fp, _render_page_to_pil(fp, LAYOUT_DETECT_DPI)))
+                with _FITZ_LOCK:
+                    image = _render_page_to_pil(fp, LAYOUT_DETECT_DPI)
+                rendered.append((pg, fp, image))
             except Exception as e:
                 log.error(f"Page {pg.page_number}: render failed, skipping detection: {e}")
+        return b_idx, chunk_pages, rendered
+
+    batches = _prefetch(range(n_batches), render_batch, LAYOUT_PREFETCH_BATCHES)
+
+    for b_idx, chunk_pages, rendered in batches:
+        log.info(
+            f"Stage 2: batch {b_idx + 1}/{n_batches} "
+            f"(pages {chunk_pages[0].page_number}–{chunk_pages[-1].page_number})"
+        )
         if not rendered:
             continue
 
@@ -884,7 +981,11 @@ def detect_layout_all_pages(
 
         for (pg, fp, det_img), dets in zip(rendered, dets_per_page):
             try:
-                crop_img = det_img if same_dpi else _render_page_to_pil(fp, PAGE_RENDER_DPI)
+                if same_dpi:
+                    crop_img = det_img
+                else:
+                    with _FITZ_LOCK:      # the prefetch thread is rendering too
+                        crop_img = _render_page_to_pil(fp, PAGE_RENDER_DPI)
                 updated_pg, crop_jobs = _process_page(
                     pg, fp, det_img.width, det_img.height, crop_img, dets, images_dir
                 )

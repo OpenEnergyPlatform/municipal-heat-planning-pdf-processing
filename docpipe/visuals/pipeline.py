@@ -426,7 +426,7 @@ Examples:
     )
     p.add_argument(
         "--force", action="store_true",
-        help="Re-process even if enriched_output.json already exists",
+        help="Re-process even if %s already exists" % ENRICHED_OUTPUT_JSON,
     )
     p.add_argument(
         "--input-json", default=None,

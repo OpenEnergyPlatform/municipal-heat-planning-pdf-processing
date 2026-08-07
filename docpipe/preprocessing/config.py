@@ -41,6 +41,18 @@ HYPHEN_EXCEPTIONS = (
 PP_DOCLAYOUT_MODEL_ID = "PaddlePaddle/PP-DocLayoutV3_safetensors"
 LAYOUT_BATCH_SIZE = 30
 
+# Mixed precision for the detection forward pass: "bf16", "fp16" or "off".
+# The weights stay fp32; only the matmuls run in the lower precision, and the
+# logits/boxes are cast back to fp32 before post-processing — bf16 has 8 mantissa
+# bits, which on a 1700 px page is worth several pixels of box coordinate.
+# Overridable per run so a comparison against fp32 needs no code change.
+LAYOUT_AUTOCAST = os.environ.get("DOCPIPE_LAYOUT_AUTOCAST", "bf16").lower()
+
+# Render the next batch's pages while the current one is on the GPU. 0 disables
+# the prefetch thread; 1 is enough to hide the rendering, since one batch of
+# work is all the GPU is ever waiting for.
+LAYOUT_PREFETCH_BATCHES = int(os.environ.get("DOCPIPE_LAYOUT_PREFETCH", "1"))
+
 # Per-class confidence thresholds, keyed by the model's class id.
 PP_CLASS_THRESHOLDS: dict[int, float] = {
     0: 0.50, 1: 0.50, 2: 0.50, 3: 0.45,
