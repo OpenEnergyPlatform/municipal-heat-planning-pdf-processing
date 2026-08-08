@@ -20,6 +20,17 @@ SECTION_EMBED_MAX_WORDS = 1800
 # Aggregate batch: MultiGPUEmbedder splits it round-robin across the replicas.
 EMBEDDING_BATCH_SIZE = 32
 
+# Documents prepared in parallel while the GPUs embed. Reading a merged JSON and
+# asking the DB what the document already has took 6.6 s each in the last full
+# run — 91 of 184 minutes with every GPU idle, because the whole corpus was
+# prepared before the first batch went out.
+EMBED_PREPARE_WORKERS = 8
+
+# Items collected before a chunk goes to the GPUs. Large enough that sorting by
+# length still fills batches with comparable sequences, small enough that the
+# GPUs start long before the last document is read.
+EMBED_FLUSH_ITEMS = 4096
+
 FAISS_INDEX_FILE = "faiss_index.bin"
 
 EMBEDDING_TYPE_SECTION_TEXT = "section_text"

@@ -119,6 +119,14 @@ def create_embeddings(
         if not group:
             continue
 
+        # Batches pad to their longest member. Unsorted, a section title of five
+        # tokens rides in the same batch as an 1800-word section and costs the
+        # same — sorting by length puts short with short, so the padding a batch
+        # carries is bounded by its own spread instead of the corpus-wide max.
+        # Order is free: a vector's identity comes from the (type, section,
+        # item) triple written alongside its FAISS id, not from its position.
+        group = sorted(group, key=lambda inp: len(inp.text or ""))
+
         total_batches = (len(group) + batch_size - 1) // batch_size
         log.info("Processing %d %s inputs in %d batches", len(group), group_label, total_batches)
 

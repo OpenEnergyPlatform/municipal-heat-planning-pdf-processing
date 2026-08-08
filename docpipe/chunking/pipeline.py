@@ -13,11 +13,17 @@ import json
 import logging
 import sys
 from pathlib import Path
+from concurrent.futures import ThreadPoolExecutor
 from typing import Optional
 
 from docpipe.profile import add_profile_argument, resolve_profile
 
-from .config import MERGED_JSON, EMBEDDING_MODEL
+from .config import (
+    EMBED_FLUSH_ITEMS,
+    EMBED_PREPARE_WORKERS,
+    EMBEDDING_MODEL,
+    MERGED_JSON,
+)
 from .merge import merge_batch
 from .database import (
     update_database,
@@ -111,14 +117,11 @@ def run(
 
         log.info("Found %d PDFs with merged output", len(candidates))
 
-        # Pool every document's new inputs so create_embeddings can pack full
-        # cross-document batches; each input keeps its pdf_name for writeback.
-        all_inputs: list = []
-        docs_with_inputs = 0
-        for pdf_dir in candidates:
-            pdf_name = pdf_dir.name
-
-            if force:
+        # Index eviction is the one part that must stay on this thread: it
+        # mutates the FAISS index, which the embedding loop also writes to.
+        if force:
+            for pdf_dir in candidates:
+                pdf_name = pdf_dir.name
                 # Prefer the snapshot (rows may already be deleted); fall back
                 # to a live read when the db step did not run this time.
                 old_ids = evict_ids.get(pdf_name)
@@ -128,33 +131,54 @@ def run(
                 if old_ids:
                     remove_ids_from_index(index, old_ids)
 
+        # Reading a document's merged JSON and asking the DB what it already has
+        # took 6.6 s per document in the last full run — 91 of 184 minutes, with
+        # every GPU idle, because all 800 documents were prepared before the
+        # first batch was embedded. Prepared in a pool, the work overlaps with
+        # the embedding instead of preceding it.
+        def prepare(pdf_dir):
+            pdf_name = pdf_dir.name
             existing = get_existing_embeddings(db_path, pdf_name)
-
             with open(pdf_dir / MERGED_JSON, "r", encoding="utf-8") as f:
                 merged_data = json.load(f)
-
-            inputs = build_embedding_inputs(merged_data, pdf_name, pdf_dir)
-
-            inputs = [
-                inp for inp in inputs
-                if (inp.embedding_type, inp.section_index, inp.item_id)
-                not in existing
+            return [
+                inp for inp in build_embedding_inputs(merged_data, pdf_name, pdf_dir)
+                if (inp.embedding_type, inp.section_index, inp.item_id) not in existing
             ]
 
-            if inputs:
-                all_inputs.extend(inputs)
+        # Embedded in chunks rather than one pooled call: the pool keeps
+        # preparing while the GPUs work on what is ready. A chunk still holds
+        # thousands of items, which is what the length sorting in
+        # create_embeddings needs to build length-homogeneous batches.
+        pending: list = []
+        docs_with_inputs = 0
+        embedded = 0
+
+        with ThreadPoolExecutor(max_workers=EMBED_PREPARE_WORKERS) as pool:
+            for inputs in pool.map(prepare, candidates):
+                if not inputs:
+                    continue
                 docs_with_inputs += 1
+                pending.extend(inputs)
+                if len(pending) >= EMBED_FLUSH_ITEMS:
+                    embedded += len(pending)
+                    next_id = create_embeddings(
+                        pending, index, next_id, db_path, embedder=embedder,
+                        index_path=index_path,
+                    )
+                    pending = []
 
-        log.info(
-            "Pooled %d new items to embed across %d/%d docs",
-            len(all_inputs), docs_with_inputs, len(candidates),
-        )
-
-        if all_inputs:
+        if pending:
+            embedded += len(pending)
             next_id = create_embeddings(
-                all_inputs, index, next_id, db_path, embedder=embedder,
+                pending, index, next_id, db_path, embedder=embedder,
                 index_path=index_path,
             )
+
+        log.info(
+            "Embedded %d new items across %d/%d docs",
+            embedded, docs_with_inputs, len(candidates),
+        )
 
         save_index(index, index_path)
         log.info("Embedding complete: %d total vectors in index", index.ntotal)

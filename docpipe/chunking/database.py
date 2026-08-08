@@ -89,6 +89,12 @@ def connect(db_path: Path) -> sqlite3.Connection:
     """Open a connection with foreign-key enforcement enabled."""
     conn = sqlite3.connect(db_path)
     conn.execute("PRAGMA foreign_keys = ON")
+    # The embed step now prepares documents in a thread pool while the batches
+    # it already has are being written back. sqlite3's default is to give up
+    # after 5 s; a batch write on a half-gigabyte database over shared storage
+    # can hold the lock longer than that, and the reader would fail rather than
+    # wait for it.
+    conn.execute("PRAGMA busy_timeout = 30000")
     return conn
 
 
