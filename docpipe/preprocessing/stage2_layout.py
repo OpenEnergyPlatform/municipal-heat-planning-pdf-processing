@@ -257,6 +257,10 @@ def _prefetch(items, produce, depth: int):
                 pass
 
 
+class LayoutDetectionFailed(RuntimeError):
+    """Raised when a batch never reached the model, so pages have no layout."""
+
+
 _AUTOCAST_DTYPES = {"bf16": torch.bfloat16, "fp16": torch.float16}
 
 
@@ -949,6 +953,7 @@ def detect_layout_all_pages(
     n_batches = math.ceil(n / LAYOUT_BATCH_SIZE)
     written     = 0
     total_crops = 0
+    failed_batches: list[int] = []
 
     def render_batch(b_idx: int):
         """One batch of detection inputs. Runs in the prefetch thread."""
@@ -983,6 +988,7 @@ def detect_layout_all_pages(
             dets_per_page = _infer_batch(det_images, processor, model, device)
         except Exception as e:
             log.error(f"Stage 2: inference failed for batch {b_idx + 1}: {e}", exc_info=True)
+            failed_batches.append(b_idx + 1)
             del det_images, rendered
             continue
 
@@ -1027,5 +1033,19 @@ def detect_layout_all_pages(
         f"Stage 2: done – {total_tables} tables | {total_images} images | "
         f"{total_titles} title blocks"
     )
+
+    # A batch that never reached the model leaves its pages with text but no
+    # layout at all: no tables, no figures, no headings. The document would go
+    # on to be cached, sectioned and embedded, and would look complete
+    # everywhere downstream. Refuse it instead — the caller drops the document
+    # and the next run retries it.
+    if failed_batches:
+        raise LayoutDetectionFailed(
+            "%d of %d batches failed (%s); %d page(s) have no layout"
+            % (len(failed_batches), n_batches,
+               ", ".join(str(b) for b in failed_batches[:8]),
+               sum(min(LAYOUT_BATCH_SIZE, n - (b - 1) * LAYOUT_BATCH_SIZE)
+                   for b in failed_batches))
+        )
 
     return updated_pages

@@ -119,3 +119,62 @@ def test_autocast_is_off_by_default():
     from docpipe.preprocessing import config
 
     assert config.LAYOUT_AUTOCAST == "off"
+
+
+# ---------------------------------------------------------------------------
+# A failed batch must not become a silently incomplete document
+# ---------------------------------------------------------------------------
+
+def test_a_failed_batch_refuses_the_whole_document(monkeypatch, tmp_path):
+    """The OOM case: one batch never reaches the model, so its pages carry text
+    but no tables, no figures, no headings. Written out, that document looks
+    complete for the rest of the pipeline — it has to be refused instead."""
+    from docpipe.preprocessing.models import PageData
+
+    pages = [PageData(page_number=i, width_pt=595, height_pt=842, blocks=[])
+             for i in range(1, 25)]
+    fitz_pages = [object()] * len(pages)
+
+    monkeypatch.setattr(s2, "LAYOUT_BATCH_SIZE", 12)
+    monkeypatch.setattr(s2, "_render_page_to_pil",
+                        lambda fp, dpi: _FakeImage())
+
+    calls = {"n": 0}
+
+    def flaky(images, processor, model, device):
+        calls["n"] += 1
+        if calls["n"] == 2:
+            raise torch.OutOfMemoryError("CUDA out of memory. Tried 8.05 GiB")
+        return [[] for _ in images]
+
+    monkeypatch.setattr(s2, "_infer_batch", flaky)
+
+    with pytest.raises(s2.LayoutDetectionFailed) as exc:
+        s2.detect_layout_all_pages(pages, fitz_pages, tmp_path, (None, None, "cpu"))
+
+    assert "1 of 2 batches failed" in str(exc.value)
+    assert "12 page(s) have no layout" in str(exc.value)
+
+
+def test_all_batches_succeeding_returns_the_pages(monkeypatch, tmp_path):
+    from docpipe.preprocessing.models import PageData
+
+    pages = [PageData(page_number=i, width_pt=595, height_pt=842, blocks=[])
+             for i in range(1, 13)]
+    monkeypatch.setattr(s2, "LAYOUT_BATCH_SIZE", 12)
+    monkeypatch.setattr(s2, "_render_page_to_pil", lambda fp, dpi: _FakeImage())
+    monkeypatch.setattr(s2, "_infer_batch",
+                        lambda images, *a: [[] for _ in images])
+
+    out = s2.detect_layout_all_pages(pages, [object()] * 12, tmp_path,
+                                     (None, None, "cpu"))
+    assert len(out) == 12
+
+
+class _FakeImage:
+    width = 800
+    height = 1131
+
+    @property
+    def size(self):
+        return (self.width, self.height)
