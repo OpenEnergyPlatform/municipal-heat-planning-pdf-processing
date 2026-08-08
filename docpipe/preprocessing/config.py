@@ -39,7 +39,13 @@ HYPHEN_EXCEPTIONS = (
 # Stage 2 – Layout detection (PP-DocLayoutV3)
 # ---------------------------------------------------------------------------
 PP_DOCLAYOUT_MODEL_ID = "PaddlePaddle/PP-DocLayoutV3_safetensors"
-LAYOUT_BATCH_SIZE = 30
+
+# Pages per forward pass. The model keeps a mask per query per decoder layer —
+# (batch x 6 x 300 x 200 x 200) — so the batch drives a multi-GB allocation:
+# 30 pages asked for 8 GiB in one go and blew up a third worker on a shared
+# H100. 12 keeps that under ~3.5 GiB. Throughput is unaffected: the forward
+# pass is 6% of the stage, the CPU-side rendering is the rest.
+LAYOUT_BATCH_SIZE = 12
 
 # Mixed precision for the detection forward pass: "bf16", "fp16" or "off".
 # OFF by default, from measurement: the forward pass is 4.7 of ~80 ms per page
