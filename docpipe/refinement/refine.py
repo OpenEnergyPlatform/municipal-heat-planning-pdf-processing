@@ -83,6 +83,24 @@ def _tail_text(content, n: int) -> str:
     return content[-n:] if len(content) > n else content
 
 
+# A repair turn has to tell the model that its answer was unusable — it does not
+# have to hand the whole answer back. Echoing it verbatim adds up to
+# LLM_MAX_TOKENS on top of a window that is already ~18k tokens, which is how a
+# retry, not the original request, ran into the 32k context limit.
+_ECHO_HEAD = 400
+_ECHO_TAIL = 200
+
+
+def _echo(raw_text: str) -> str:
+    """The failed answer, bounded: enough to point at the fault, not a resend."""
+    if len(raw_text) <= _ECHO_HEAD + _ECHO_TAIL:
+        return raw_text
+    dropped = len(raw_text) - _ECHO_HEAD - _ECHO_TAIL
+    return (raw_text[:_ECHO_HEAD]
+            + "\n...[%d characters omitted]...\n" % dropped
+            + raw_text[-_ECHO_TAIL:])
+
+
 def _call_llm(
     sections_window: list[dict],
     client,
@@ -177,7 +195,7 @@ def _call_llm(
                     f"'sections' key"
                 )
                 messages = base_messages + [
-                    {"role": "assistant", "content": raw_text},
+                    {"role": "assistant", "content": _echo(raw_text)},
                     {"role": "user", "content":
                         "Your JSON is valid but missing the required 'sections' "
                         "key. Please respond with a JSON object that has a "
@@ -193,7 +211,7 @@ def _call_llm(
                 f"   Attempt {attempt}/{MAX_RETRIES}: JSON parse error: {e}"
             )
             messages = base_messages + [
-                {"role": "assistant", "content": raw_text},
+                {"role": "assistant", "content": _echo(raw_text)},
                 {"role": "user", "content":
                     f"Your response was not valid JSON. The parse error was: {e}\n"
                     f"Please fix and respond with only valid JSON."},
@@ -204,6 +222,10 @@ def _call_llm(
             log.error(
                 f"   Attempt {attempt}/{MAX_RETRIES}: LLM request failed: {e}"
             )
+            # Whatever the repair turn added, it no longer fits. Anything but a
+            # fresh start would fail the same way on every remaining attempt.
+            if "maximum context length" in str(e):
+                log.warning("   Context limit hit — retrying without the repair turn")
             messages = list(base_messages)
             _backoff(attempt)
 

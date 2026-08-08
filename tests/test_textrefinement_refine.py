@@ -122,3 +122,27 @@ def test_run_refine_uses_provided_data(tmp_path):
 
 def test_run_refine_missing_input_returns_none(tmp_path):
     assert s4.run_refine(tmp_path, data=None) is None
+
+
+# ---------------------------------------------------------------------------
+# The repair turn must not resend the failed answer
+# ---------------------------------------------------------------------------
+
+def test_a_short_answer_is_echoed_whole():
+    from docpipe.refinement.refine import _echo
+
+    assert _echo("kurz und falsch") == "kurz und falsch"
+
+
+def test_a_long_answer_is_bounded_before_it_goes_back():
+    """A window is already ~18k tokens; echoing 8k more is what pushed a retry
+    past the 32k context limit — the original request never came close."""
+    from docpipe.refinement.refine import _ECHO_HEAD, _ECHO_TAIL, _echo
+
+    raw = "A" * 20000 + "ENDE"
+    out = _echo(raw)
+
+    assert len(out) < _ECHO_HEAD + _ECHO_TAIL + 80
+    assert out.startswith("A" * 100)
+    assert out.endswith("ENDE")
+    assert "characters omitted" in out
