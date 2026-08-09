@@ -152,6 +152,17 @@ def test_one_dead_convoy_link_is_reported_once(monkeypatch, usable, tmp_path, ca
         encoding="utf-8").strip().splitlines()) == 1
 
 
+def test_a_clean_run_clears_the_previous_worklists(usable, tmp_path):
+    """Left lying around, an old list reads as this run's result."""
+    for name in ("unreachable_pdfs.txt", "rejected_pdfs.txt"):
+        (tmp_path / name).write_text("7133018\tgone.pdf\tHTTP 404\t\n", encoding="utf-8")
+
+    ingest.ingest(FakeSource([_doc("a.pdf")]), tmp_path / "db.sqlite", usable, KWP)
+
+    assert not (tmp_path / "unreachable_pdfs.txt").exists()
+    assert not (tmp_path / "rejected_pdfs.txt").exists()
+
+
 def test_works_without_a_profile(usable, tmp_path):
     # no profile: core tables only, and no DocumentMeta to write into
     source = FakeSource([SourceDoc(external_id="a", filename="a.pdf",

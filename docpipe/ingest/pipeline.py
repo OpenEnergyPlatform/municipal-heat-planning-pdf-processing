@@ -88,9 +88,26 @@ def ingest(source, db_file: Path, data_dir: Path,
 
     if rejected:
         _report_rejected(rejected, db_file)
+    else:
+        _drop_stale(db_file.parent / "rejected_pdfs.txt")
     if unreachable:
         _report_unreachable(unreachable, db_file)
+    else:
+        _drop_stale(db_file.parent / "unreachable_pdfs.txt")
     return rejected
+
+
+def _drop_stale(path: Path) -> None:
+    """A worklist from an earlier run must not survive a clean one — it would
+    read as this run's result."""
+    try:
+        path.unlink()
+    except FileNotFoundError:
+        return
+    except OSError as exc:
+        log.warning("Could not remove the stale %s: %s", path.name, exc)
+        return
+    log.info("Removed %s — nothing left on it this run.", path.name)
 
 
 def _reason(exc: BaseException) -> str:

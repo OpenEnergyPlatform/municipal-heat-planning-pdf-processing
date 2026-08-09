@@ -69,11 +69,11 @@ def test_rebuild_stage3_from_cache_propagates_bbox(tmp_path):
     pg.blocks = [Block(id="p3_t0", type="text", bbox=[10, 20, 100, 40],
                        content="Hallo Welt")]
     # the Stage-1/2 cache already carries Block.bbox; only Stage 3 must re-run
-    (docdir / "pages_extracted.json").write_text(json.dumps([pg.to_dict()]),
+    (docdir / "pages.json").write_text(json.dumps([pg.to_dict()]),
                                                  encoding="utf-8")
 
     assert pp.rebuild_stage3_from_cache(tmp_path) == 1
-    out = json.loads((docdir / "structured_output.json").read_text(encoding="utf-8"))
+    out = json.loads((docdir / "sections.json").read_text(encoding="utf-8"))
     seg = [s for s in out["sections"][0]["segments"] if s["kind"] == "text"][0]
     assert seg["bbox"] == [[10, 20, 100, 40]]
 
@@ -193,7 +193,7 @@ _STAGE3 = {
 def _write_stage3(tmp_path):
     d = tmp_path / "doc" / "results"
     d.mkdir(parents=True)
-    (d / "structured_output.json").write_text(json.dumps(_STAGE3), encoding="utf-8")
+    (d / "sections.json").write_text(json.dumps(_STAGE3), encoding="utf-8")
 
 
 def test_enrich_bbox_backfills_without_touching_embeddings(kwp_db, tmp_path):

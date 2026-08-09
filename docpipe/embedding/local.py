@@ -1,11 +1,14 @@
 """
 local.py – Embeddings from a model loaded in this process.
 
-Two loading strategies, both deployment detail:
+The model stays resident: it is loaded once and kept on the GPUs. That is what
+a batch run wants — thousands of items, one load.
 
-  on_demand  load, embed, free again (a small card that also serves an app;
-             see quantized.py)
-  resident   keep the model on the GPUs for a batch run (qwen3_vl_embedding)
+The opposite case, a small card that also serves an interactive app and must
+give the memory back between queries, is deployment-specific (which
+quantization, which card, how long to wait for the lock) and lives outside
+this repository. Point EMBEDDING_BACKEND at it by import path; see
+docpipe/embedding/__init__.py.
 
 Author: Felix Vossel
 """
@@ -20,26 +23,16 @@ log = logging.getLogger(__name__)
 
 
 class LocalEmbedder:
-    def __init__(self, model: Optional[str] = None, strategy: str = "on_demand",
-                 max_length: Optional[int] = None,
-                 idle_unload_seconds: Optional[int] = None):
+    def __init__(self, model: Optional[str] = None,
+                 max_length: Optional[int] = None):
         self.model = model or config.EMBEDDING_MODEL
-        self.strategy = strategy
         self.max_length = max_length or config.EMBEDDING_MAX_TOKEN_LENGTH
-        self.idle_unload_seconds = (config.EMBED_IDLE_UNLOAD_SECONDS
-                                    if idle_unload_seconds is None else idle_unload_seconds)
         self._resident = None
 
     def embed_one(self, item: dict) -> list:
-        if self.strategy == "on_demand":
-            from .quantized import embed_query
-            return embed_query(item, self.model, self.max_length,
-                               idle_unload_seconds=self.idle_unload_seconds)
         return self.embed([item])[0]
 
     def embed(self, items: Sequence[dict]) -> list:
-        if self.strategy == "on_demand":
-            return [self.embed_one(it) for it in items]
         if self._resident is None:
             from docpipe.chunking.qwen3_vl_embedding import MultiGPUEmbedder
             self._resident = MultiGPUEmbedder(self.model, max_length=self.max_length)

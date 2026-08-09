@@ -3,7 +3,7 @@ pipeline.py – Orchestration of the PDF preprocessing pipeline (Stages 1-3).
 
   1. PyMuPDF        → Text blocks (rawdict)
   2. PP-DocLayoutV3 → Table / image crops + layout labels + caption resolution
-  3. Section assembly → structured_output.json
+  3. Section assembly → sections.json
 
 LLM-based section refinement lives in ``docpipe.refinement``.
 
@@ -22,8 +22,8 @@ from typing import Optional
 from docpipe.profile import add_profile_argument, resolve_profile
 
 from .config import (
-    CACHE_PAGES_JSON,
-    STRUCTURED_OUTPUT_JSON,
+    PAGES_JSON,
+    SECTIONS_JSON,
     clean_data,
     dump_json_atomic,
 )
@@ -40,14 +40,14 @@ log = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 def _save_pages_cache(pages: list[PageData], output_dir: Path) -> None:
-    cache_path = output_dir / CACHE_PAGES_JSON
+    cache_path = output_dir / PAGES_JSON
     cleaned = [clean_data(pg.to_dict()) for pg in pages]
     dump_json_atomic(cleaned, cache_path)
     log.info(f"Pages cached: {cache_path}")
 
 
 def _load_pages_cache(output_dir: Path) -> Optional[list[PageData]]:
-    cache_path = output_dir / CACHE_PAGES_JSON
+    cache_path = output_dir / PAGES_JSON
     if not cache_path.exists():
         return None
     log.info(f"Loading pages from cache: {cache_path}")
@@ -74,7 +74,7 @@ def run_single(
 ) -> Optional[dict]:
     """
     Processes a single PDF through Stages 1-3; returns the Stage-3 dict, or
-    None on failure. Stage 1+2 results are cached in pages_extracted.json and
+    None on failure. Stage 1+2 results are cached in pages.json and
     reused unless *force_reextract*.
     """
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -133,7 +133,7 @@ def run_single(
     )
 
     # ── Stage 3: section assembly (with cache) ─────────────────────────────
-    stage3_path = output_dir / STRUCTURED_OUTPUT_JSON
+    stage3_path = output_dir / SECTIONS_JSON
     result: Optional[dict] = None
     if stage3_path.exists() and not force_reextract:
         try:
@@ -188,7 +188,7 @@ def run_folder(
     output_dir.mkdir(parents=True, exist_ok=True)
 
     needs_extraction = force_reextract or any(
-        not (output_dir / p.relative_to(input_dir).with_suffix("") / CACHE_PAGES_JSON).exists()
+        not (output_dir / p.relative_to(input_dir).with_suffix("") / PAGES_JSON).exists()
         for p in pdf_files
     )
     if needs_extraction:
@@ -262,13 +262,13 @@ def _write_index(
 def rebuild_stage3_from_cache(output_dir: Path, column_layout: str = "auto") -> int:
     """
     Re-run ONLY Stage 3 for every doc under *output_dir* that has a readable
-    pages cache, overwriting its structured_output.json. No PDF input and no
+    pages cache, overwriting its sections.json. No PDF input and no
     layout model. Returns the number of docs rebuilt.
     """
     output_dir = Path(output_dir)
     doc_dirs = sorted(
         d for d in output_dir.iterdir()
-        if d.is_dir() and (d / CACHE_PAGES_JSON).exists()
+        if d.is_dir() and (d / PAGES_JSON).exists()
     )
     log.info("Rebuild Stage 3: %d docs with a pages cache under '%s'",
              len(doc_dirs), output_dir)
@@ -298,7 +298,7 @@ def report_columns(output_dir: Path, top: int = 20) -> dict[str, tuple[int, int]
     output_dir = Path(output_dir)
     doc_dirs = sorted(
         d for d in output_dir.iterdir()
-        if d.is_dir() and (d / CACHE_PAGES_JSON).exists()
+        if d.is_dir() and (d / PAGES_JSON).exists()
     )
     found: dict[str, tuple[int, int, int]] = {}
     total_pages = total_multi = 0
@@ -399,7 +399,7 @@ Examples:
     p.add_argument("--rebuild-stage3", action="store_true",
                    help="Re-run ONLY Stage 3 over the output dir's cached docs "
                         "(no PDF input, no layout model); rewrites "
-                        "structured_output.json from pages_extracted.json")
+                        "%s from %s" % (SECTIONS_JSON, PAGES_JSON))
     p.add_argument("--pages", nargs=2, type=int, metavar=("START", "END"),
                    help="Only process pages START..END, 0-indexed (single PDF only)")
     p.add_argument("--glob", default="*.pdf",

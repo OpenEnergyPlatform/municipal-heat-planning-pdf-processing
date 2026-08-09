@@ -9,7 +9,7 @@ from docpipe.visuals import pipeline as IP
 def _write_input(tmp_path, sections):
     (tmp_path / "results").mkdir()
     (tmp_path / "images").mkdir()
-    (tmp_path / "results" / "structured_output.json").write_text(
+    (tmp_path / "results" / "sections.json").write_text(
         json.dumps({"sections": sections}), encoding="utf-8")
     return tmp_path
 
@@ -30,7 +30,7 @@ def _fake_vllm_client_factory(reply):
 
 def test_load_source_texts(tmp_path):
     (tmp_path / "results").mkdir()
-    (tmp_path / "results" / "structured_output.json").write_text(json.dumps({"sections": [
+    (tmp_path / "results" / "sections.json").write_text(json.dumps({"sections": [
         {"tables": [{"id": "p1_tbl0", "source_text": "abc"}, {"id": "p1_tbl1"}],
          "figures": []},
     ]}), encoding="utf-8")
@@ -43,10 +43,10 @@ def test_load_source_texts_missing_file(tmp_path):
 
 def test_resolve_input_prefers_final_output(tmp_path):
     (tmp_path / "results").mkdir()
-    (tmp_path / "results" / "structured_output.json").write_text("{}", encoding="utf-8")
-    assert IP._resolve_input(tmp_path).name == "structured_output.json"
-    (tmp_path / "results" / "structured_output_final.json").write_text("{}", encoding="utf-8")
-    assert IP._resolve_input(tmp_path).name == "structured_output_final.json"
+    (tmp_path / "results" / "sections.json").write_text("{}", encoding="utf-8")
+    assert IP._resolve_input(tmp_path).name == "sections.json"
+    (tmp_path / "results" / "sections_refined.json").write_text("{}", encoding="utf-8")
+    assert IP._resolve_input(tmp_path).name == "sections_refined.json"
 
 
 def test_run_single_enriches_all_items_concurrently(tmp_path, monkeypatch):
@@ -72,7 +72,7 @@ def test_run_single_enriches_all_items_concurrently(tmp_path, monkeypatch):
     assert secs[0]["tables"][0]["caption"] == "CAP"
     assert secs[0]["figures"][0]["description"] == "DESC"
     assert secs[1]["tables"][0]["markdown"] == "MD"
-    assert (out_dir / "results" / "structured_output_images.json").exists()
+    assert (out_dir / "results" / "visuals.json").exists()
 
 
 def test_run_single_reuses_cache_on_second_run(tmp_path, monkeypatch):
@@ -117,4 +117,4 @@ def test_run_single_dry_run_writes_nothing(tmp_path):
     out_dir = _write_input(tmp_path, sections)
     res = IP.run_single(out_dir, dry_run=True)
     assert res is not None
-    assert not (out_dir / "results" / "structured_output_images.json").exists()
+    assert not (out_dir / "results" / "visuals.json").exists()

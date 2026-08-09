@@ -47,7 +47,7 @@ CHUNK_QA_SYSTEM_PROMPT = prompts.text("inference/chunk_qa")
 
 IMAGE_PHRASE_SYSTEM_PROMPT = prompts.text("inference/image_phrase")
 
-# Batched QA: the top sources are handed over together with a "bisher" partial
+# Batched QA: the top sources are handed over together with a "prior" partial
 # answer carried across batches. Every statement is tied to a source via a
 # verbatim `quote` + `index`, validated by the caller. Assembled at call time
 # with the answer-format spec spliced in, so the literal `{...}` braces here need
@@ -64,6 +64,8 @@ JSON_FORMAT_PROMPT = prompts.text("inference/json_format")
 # model answers with an action object, the caller runs it and feeds the printed
 # output back, then the model finalises.
 _COMPUTE_HINT = prompts.text("inference/compute_hint")
+# The model may ask for a crop the section text only points at; see db.request_item.
+_IMAGE_HINT = prompts.text("inference/image_hint")
 
 
 # ---------------------------------------------------------------------------
@@ -367,6 +369,24 @@ def _compute_tail(compute: list, force: bool) -> str:
     return "\n\nBereits ausgeführt:\n" + done + "\n\n" + guide
 
 
+def _requested_tail(requested: list, force: bool) -> str:
+    """
+    User-message suffix listing the crops the model asked for. Same single-turn
+    reason as _compute_tail: the images themselves ride along as message parts,
+    this only tells the model which arrived and what it may still do.
+    """
+    if not requested:
+        return ""
+    done = "\n".join(f"- [{r['block_id']}] {r.get('title') or 'ohne Bildunterschrift'}"
+                     f"{'' if r.get('delivered') else ' — Bild nicht verfügbar'}"
+                     for r in requested)
+    guide = ("Gib JETZT die finale Antwort im vorgegebenen JSON-Format (KEIN action-Objekt mehr)."
+             if force else
+             "Lies den Wert aus dem Bild ab und gib die finale Antwort — oder, nur falls "
+             'wirklich nötig, eine weitere {"action":"image","id":"..."}.')
+    return "\n\nAngeforderte Abbildungen (siehe Bilder):\n" + done + "\n\n" + guide
+
+
 def _image_part(path: str, max_side: int = None, png: bool = False) -> Optional[dict]:
     """
     Downscaled data-URL image part for a chat message, or None if unreadable.
@@ -416,7 +436,7 @@ def read_off_image(task: str, image_path: str, hint: str) -> Optional[dict]:
     answer call whose many sources and images dilute attention (observed:
     total bar height returned as a single segment's value).
 
-    Returns the parsed {"ablesung", "wert", "einheit", "sicherheit"} or None.
+    Returns the parsed {"reading", "value", "unit", "confidence"} or None.
     Never raises.
     """
     if LLM_STUB_MODE:
@@ -428,7 +448,7 @@ def read_off_image(task: str, image_path: str, hint: str) -> Optional[dict]:
     text = (f"{READOFF_PROMPT}\nAuftrag des Nutzers:\n{task}\n\n"
             f"Abzulesen (laut Vorprüfung):\n{hint}")
     # A format spec inside the task hijacks this schema too ({"amount": ...}
-    # instead of {"ablesung": ...}) — re-ask once, same cure as the envelope.
+    # instead of {"reading": ...}) — re-ask once, same cure as the envelope.
     for attempt_text in (text, f"{text}\n\n{_READOFF_CORRECTION}"):
         try:
             parsed = _chat_json(
@@ -437,16 +457,16 @@ def read_off_image(task: str, image_path: str, hint: str) -> Optional[dict]:
         except Exception as e:
             log.warning("Focused read-off failed, keeping the inline reading: %s", e)
             return None
-        reading = str(parsed.get("ablesung") or "").strip()
+        reading = str(parsed.get("reading") or "").strip()
         if reading:
-            # The model sometimes echoes the hint as "ablesung" without the
-            # number — the value then only exists in "wert" and a revision fed
+            # The model sometimes echoes the hint as "reading" without the
+            # number — the value then only exists in "value" and a revision fed
             # the bare sentence has nothing to correct with. Splice it in.
-            wert = parsed.get("wert")
-            if isinstance(wert, (int, float)) and f"{wert:g}" not in reading:
-                einheit = str(parsed.get("einheit") or "").strip()
-                reading = f"{reading} — abgelesener Wert: {wert:g} {einheit}".strip()
-                parsed["ablesung"] = reading
+            value = parsed.get("value")
+            if isinstance(value, (int, float)) and f"{value:g}" not in reading:
+                unit = str(parsed.get("unit") or "").strip()
+                reading = f"{reading} — abgelesener Wert: {value:g} {unit}".strip()
+                parsed["reading"] = reading
             return parsed
         log.warning("Read-off ignored its schema (keys: %s), retrying", sorted(parsed)[:6])
     return None
@@ -456,8 +476,8 @@ def revise_with_readings(task: str, answer_text: str, readings: list[str]) -> st
     """Fold the focused read-offs into the answer; the original on any failure."""
     if LLM_STUB_MODE or not readings:
         return answer_text
-    payload = json.dumps({"task": task, "antwort": answer_text,
-                          "ablesungen": readings}, ensure_ascii=False)
+    payload = json.dumps({"task": task, "answer": answer_text,
+                          "readings": readings}, ensure_ascii=False)
     try:
         parsed = _chat_json(
             [{"role": "user", "content": f"{REVISE_PROMPT}\n\n{payload}"}],
@@ -474,16 +494,16 @@ def visual_reading(support: dict, attached_images: set) -> Optional[str]:
     The read-off text of a valid image-based support, else None.
 
     Valid only when the cited index's crop was actually attached to the call —
-    otherwise a "bild" support could launder parametric knowledge past the
+    otherwise a "image" support could launder parametric knowledge past the
     grounding gate, which is exactly what the verbatim-quote rule exists to stop.
     """
-    if not support.get("bild"):
+    if not support.get("image"):
         return None
     try:
         idx = int(support.get("index"))
     except (TypeError, ValueError):
         return None
-    reading = str(support.get("ablesung") or "").strip()
+    reading = str(support.get("reading") or "").strip()
     if idx not in attached_images or len(reading) < 8:
         return None
     return reading
@@ -493,12 +513,13 @@ def answer_from_sources(task: str, chunk_items: list[dict],
                         prior: Optional[str] = None, as_json: bool = False,
                         code_runner=None, code_context: Optional[dict] = None,
                         max_compute: int = 0, history: Optional[list] = None,
-                        images: Optional[dict] = None) -> dict:
+                        images: Optional[dict] = None,
+                        image_requester=None, max_image_requests: int = 0) -> dict:
     """
     Answer `task` from the given batch of sources, extending an optional `prior`
     partial answer. Returns:
         {"found": bool, "complete": bool, "answer": <str|dict>,
-         "supports": [{"index", "quote"} | {"index", "bild", "ablesung"}],
+         "supports": [{"index", "quote"} | {"index", "image", "reading"}],
          "compute": [{"code", "output"}], "attached_images": [<int>, ...]}
     `complete=False` → more sources may be needed. The CALLER must validate each
     support against chunk_items (grounded_quote for text, visual_reading for
@@ -507,7 +528,7 @@ def answer_from_sources(task: str, chunk_items: list[dict],
     `images` maps an item index to a local crop path; those crops are attached
     to the call so the model can read values that exist only in a chart.
     `attached_images` lists the indices that actually made it into the request —
-    the only ones a "bild" support may legitimately cite.
+    the only ones a "image" support may legitimately cite.
 
     When `code_runner` is given and `max_compute > 0`, the model may reply with
     {"action":"python","code":...} to offload a calculation: `code_runner(code,
@@ -516,7 +537,7 @@ def answer_from_sources(task: str, chunk_items: list[dict],
     """
     if LLM_STUB_MODE:
         first = chunk_items[0] if chunk_items else {}
-        ans = {"antwort": f"[STUB] {first.get('source', 'n/a')}"} if as_json \
+        ans = {"answer": f"[STUB] {first.get('source', 'n/a')}"} if as_json \
             else f"[STUB] Antwort basierend auf: {first.get('source', 'n/a')}"
         return {"found": True, "complete": True, "answer": ans,
                 "supports": [{"index": first.get("index", 0),
@@ -528,7 +549,9 @@ def answer_from_sources(task: str, chunk_items: list[dict],
     budget = max_compute if code_runner else 0
     if budget > 0:
         prompt = prompt + _COMPUTE_HINT
-    payload = json.dumps({"task": task, "bisher": prior, "excerpt": chunk_items},
+    if image_requester and max_image_requests > 0:
+        prompt = prompt + _IMAGE_HINT
+    payload = json.dumps({"task": task, "prior": prior, "excerpt": chunk_items},
                          ensure_ascii=False)
     base = f"{prompt}{_history_context(history)}\n\n{payload}"
 
@@ -541,22 +564,48 @@ def answer_from_sources(task: str, chunk_items: list[dict],
             attached.append(idx)
 
     compute: list[dict] = []
+    requested: list[dict] = []
     parsed: dict = {}
-    for attempt in range(budget + 1):
-        force = attempt == budget                    # last allowed call → must answer
+    actions = budget + (max_image_requests if image_requester else 0)
+    for attempt in range(actions + 1):
+        force = attempt == actions                   # last allowed call → must answer
+        tail = _compute_tail(compute, force) + _requested_tail(requested, force)
         try:
             parsed = _chat_json(
-                _answer_messages(base + _compute_tail(compute, force), image_parts),
+                _answer_messages(base + tail, image_parts),
                 temperature=LLM_TEMPERATURE)
         except Exception as e:
             log.warning("answer_from_sources produced no valid JSON, treating as not-found: %s", e)
             return {"found": False, "complete": False, "compute": compute}
-        is_action = (code_runner and isinstance(parsed, dict)
-                     and parsed.get("action") == "python" and parsed.get("code"))
-        if is_action and not force:
+        action = parsed.get("action") if isinstance(parsed, dict) else None
+        if force:
+            break
+        if code_runner and action == "python" and parsed.get("code"):
             code = str(parsed["code"])
             out = code_runner(code, code_context) or {"ok": False, "error": "kein Ergebnis"}
             compute.append({"code": code, "output": out})
+            continue
+        # "image" is accepted alongside "image": the surrounding prompt is German
+        # and models translate the value they are asked to echo often enough.
+        if (image_requester and action in ("image", "image") and parsed.get("id")
+                and len(requested) < max_image_requests):
+            block_id = str(parsed["id"])
+            if any(r["block_id"] == block_id for r in requested):
+                # Asking twice for the same crop means it did not help; a third
+                # round would only burn the budget it needs to answer with.
+                log.info("Model re-requested %s — forcing the answer", block_id)
+                break
+            item = image_requester(block_id) or {}
+            part = _image_part(item.get("image_path")) if item.get("image_path") else None
+            if part is not None:
+                image_parts.append({"type": "text",
+                                    "text": f"Angefordertes Bild [{block_id}]: "
+                                            f"{item.get('title') or ''}"})
+                image_parts.append(part)
+            requested.append({"block_id": block_id, "title": item.get("title"),
+                              "delivered": part is not None,
+                              "owner_kind": item.get("owner_kind"),
+                              "owner_id": item.get("owner_id")})
             continue
         break
 
@@ -592,14 +641,15 @@ def answer_from_sources(task: str, chunk_items: list[dict],
     if not isinstance(supports, list):
         supports = []
     return {"found": True, "complete": complete, "answer": answer,
-            "supports": supports, "compute": compute, "attached_images": attached}
+            "supports": supports, "compute": compute, "attached_images": attached,
+            "requested": requested}
 
 
 def format_as_json(task: str, answer_text: str) -> str:
     """Reformat a finished text answer as a pretty JSON string (schema from the task)."""
     if LLM_STUB_MODE:
-        return json.dumps({"antwort": answer_text}, ensure_ascii=False, indent=2)
-    payload = json.dumps({"task": task, "antwort": answer_text}, ensure_ascii=False)
+        return json.dumps({"answer": answer_text}, ensure_ascii=False, indent=2)
+    payload = json.dumps({"task": task, "answer": answer_text}, ensure_ascii=False)
     messages = [{"role": "user", "content": f"{JSON_FORMAT_PROMPT}\n\n{payload}"}]
     obj = _chat_json(messages, temperature=LLM_TEMPERATURE)
     return json.dumps(obj, ensure_ascii=False, indent=2)

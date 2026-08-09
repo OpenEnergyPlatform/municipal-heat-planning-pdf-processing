@@ -29,7 +29,7 @@ from .config import (
     CAPTION_GENERATE_FIGURE_INSTRUCTION,
 )
 from .models import ProcessingStats
-from .vision import call_vision
+from .vision import call_vision, call_vision_plain
 
 log = logging.getLogger(__name__)
 
@@ -53,6 +53,26 @@ def _assess_table(markdown: str, source_text: str) -> tuple[bool, dict]:
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
+_PLAIN_HINT = (
+    "\n\nYour previous answers could not be parsed as JSON. Drop the JSON "
+    "entirely: reply with the content itself as plain text — no JSON, no code "
+    "fences, no commentary before or after it."
+)
+
+
+def _rescue_plain(client, system_prompt: str, user_prompt: str,
+                  image_path: Path, kwargs: dict, key: str) -> str | None:
+    """
+    Last resort once call_vision has exhausted its retries: ask for the content
+    as plain text. A table's Markdown and a figure's description are both text —
+    only the envelope was ever the problem, so both take the same route.
+
+    *key* is the field to unwrap should the model answer in JSON anyway.
+    """
+    return call_vision_plain(client, system_prompt, user_prompt + _PLAIN_HINT,
+                             image_path, key=key, **kwargs)
+
 
 def _truncate(text: str, max_len: int = 800) -> str:
     """Truncates text with an ellipsis if it exceeds max_len."""
@@ -125,9 +145,19 @@ def process_table(
     )
 
     if not response:
+        rescued = _rescue_plain(client, TABLE_SYSTEM_PROMPT, user_prompt,
+                                image_path, kwargs, "markdown")
         with guard:
-            stats.failed_tables += 1
-        log.error("  ✗ Table %s failed", table["id"])
+            if rescued:
+                stats.rescued_tables += 1
+            else:
+                stats.failed_tables += 1
+        if rescued:
+            result["markdown"] = rescued
+            result["vlm_status"] = "plain_text"
+            log.warning("  ~ Table %s rescued as plain text", table["id"])
+        else:
+            log.error("  ✗ Table %s failed", table["id"])
         return result
 
     raw_md = response.get("markdown", "")
@@ -232,8 +262,18 @@ def process_figure(
             stats.processed_figures += 1
         log.info("  ✓ Figure %s", figure["id"])
     else:
+        rescued = _rescue_plain(client, FIGURE_SYSTEM_PROMPT, user_prompt,
+                                image_path, kwargs, "description")
         with guard:
-            stats.failed_figures += 1
-        log.error("  ✗ Figure %s failed", figure["id"])
+            if rescued:
+                stats.rescued_figures += 1
+            else:
+                stats.failed_figures += 1
+        if rescued:
+            result["description"] = rescued
+            result["vlm_status"] = "plain_text"
+            log.warning("  ~ Figure %s rescued as plain text", figure["id"])
+        else:
+            log.error("  ✗ Figure %s failed", figure["id"])
 
     return result

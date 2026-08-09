@@ -47,6 +47,10 @@ ANSWER_IMAGE_MAX_SIDE = int(os.environ.get("ANSWER_IMAGE_MAX_SIDE", "1280"))
 # Focused single-image re-reads of the values the answer call flagged as
 # image-derived — one short call per figure, mirroring the setting in which the
 # model demonstrably reads charts correctly.
+# How often the model may ask for a crop a section only points at ([p17_img1]),
+# per answer batch. 0 turns the action off.
+REQUEST_IMAGE_MAX = int(os.environ.get("REQUEST_IMAGE_MAX", "2"))
+
 READOFF_MAX_CALLS = int(os.environ.get("READOFF_MAX_CALLS", "3"))
 READOFF_IMAGE_MAX_SIDE = int(os.environ.get("READOFF_IMAGE_MAX_SIDE", "1600"))
 
@@ -86,7 +90,7 @@ ALL_SCOPES: list[str] = [
 ]
 
 # Figure/table scopes: the query anchor switches to caption style when the
-# search targets ONLY these (see app._scopes_are_visual).
+# search targets ONLY these (see answer.scopes_are_visual).
 VISUAL_SCOPES = frozenset({SCOPE_TABLES_VL, SCOPE_TABLES_TEXT,
                            SCOPE_FIGURES_VL, SCOPE_FIGURES_TEXT})
 

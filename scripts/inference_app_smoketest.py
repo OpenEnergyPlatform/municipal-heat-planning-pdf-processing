@@ -1,8 +1,16 @@
 """
-inference_app_smoketest.py – Check that the NF4-quantized embedder loads, embeds
-text and images, and releases its VRAM. Run it on the inference server.
+inference_app_smoketest.py – Check that the configured embedding backend
+produces usable vectors. Run it on the machine that will serve the app.
 
     python scripts/inference_app_smoketest.py [--image /path/to/a/table_or_figure.png]
+    EMBEDDING_BACKEND=api python scripts/inference_app_smoketest.py
+
+What it asserts is what docpipe.embedding promises and the corpus depends on:
+the right dimension, L2-normalized vectors, image and image+text queries that
+go through, and a batch that agrees with the same items embedded singly. How
+the backend gets there — quantized, resident, over HTTP — is none of this
+test's business; whether a particular one gives its VRAM back is checked next
+to that implementation.
 
 Exit code 0 = all checks passed; non-zero = a check failed (see printed VERDICT).
 
@@ -21,38 +29,39 @@ if _REPO_ROOT not in sys.path:
     sys.path.insert(0, _REPO_ROOT)
 
 import numpy as np
-import torch
 
-from scripts.inference_app.config import EMBEDDING_MODEL, EMBEDDING_MAX_TOKEN_LENGTH
-from docpipe.embedding import quantized as qe
+from scripts.inference_app.config import EMBEDDING_BACKEND, EMBEDDING_DIM, EMBEDDING_MODEL
+from docpipe.embedding import get_embedder
 
 TEXT_A = "Wärmebedarf der Kommune im Bestand nach Sektoren"
 TEXT_B = "Potenziale für Fernwärme und Wärmepumpen im Zielszenario"
 
 
-def _gpu_free_mb(idx: int) -> float:
-    return torch.cuda.mem_get_info(idx)[0] / 1e6
-
-
-def _wait_baseline(idx: int, baseline_mb: float, tol_mb: float = 300.0,
-                   timeout_s: float = 180.0) -> float:
-    """
-    Poll until device `idx`'s free VRAM is back within `tol_mb` of baseline, or
-    `timeout_s` elapses; returns the last reading.
-
-    The driver reports a freed allocation with a lag, so a reading taken right
-    after an unload understates the real free memory.
-    """
-    deadline = time.time() + timeout_s
-    free = _gpu_free_mb(idx)
-    while baseline_mb - free > tol_mb and time.time() < deadline:
-        time.sleep(5)
-        free = _gpu_free_mb(idx)
-    return free
-
-
 def _cos(a: np.ndarray, b: np.ndarray) -> float:
     return float(np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b) + 1e-12))
+
+
+def _vec(v) -> np.ndarray:
+    """Whatever the backend returned, as a float32 numpy vector."""
+    return np.asarray(v, dtype=np.float32).reshape(-1)
+
+
+def _report_gpus() -> None:
+    """Informational only — an api backend needs no GPU at all."""
+    try:
+        import torch
+    except ImportError:
+        print("torch not importable (fine for an api backend)")
+        return
+    print(f"torch {torch.__version__}, CUDA {torch.version.cuda}")
+    if not torch.cuda.is_available():
+        print("  no CUDA device visible")
+        return
+    for i in range(torch.cuda.device_count()):
+        cap = torch.cuda.get_device_capability(i)
+        free = torch.cuda.mem_get_info(i)[0] / 1e6
+        print(f"  cuda:{i} {torch.cuda.get_device_name(i)} CC {cap[0]}.{cap[1]} "
+              f"free={free:.0f} MB")
 
 
 def main() -> int:
@@ -64,122 +73,79 @@ def main() -> int:
 
     # 1) Environment ----------------------------------------------------------
     print("=== 1. Environment ===")
-    print(f"torch {torch.__version__}, CUDA {torch.version.cuda}")
-    if not torch.cuda.is_available():
-        print("FAIL: CUDA not available.")
-        return 2
-    n = torch.cuda.device_count()
-    for i in range(n):
-        cap = torch.cuda.get_device_capability(i)
-        print(f"  cuda:{i} {torch.cuda.get_device_name(i)} CC {cap[0]}.{cap[1]} "
-              f"free={_gpu_free_mb(i):.0f} MB")
+    print(f"EMBEDDING_BACKEND={EMBEDDING_BACKEND}")
+    print(f"EMBEDDING_MODEL={EMBEDDING_MODEL}  EMBEDDING_DIM={EMBEDDING_DIM}")
+    _report_gpus()
+
+    # 2) Resolve the backend --------------------------------------------------
+    print("\n=== 2. Backend ===")
     try:
-        import bitsandbytes as bnb
-        print(f"bitsandbytes {bnb.__version__}, COMPILED_WITH_CUDA="
-              f"{getattr(bnb, 'COMPILED_WITH_CUDA', 'unknown')}")
+        embedder = get_embedder()
     except Exception as e:
-        print(f"FAIL: bitsandbytes import/CUDA problem: {e}")
+        print(f"FAIL: get_embedder() raised: {e}")
         return 2
+    print(f"{type(embedder).__module__}.{type(embedder).__name__}")
 
-    # 2) Baseline VRAM --------------------------------------------------------
-    baseline = [_gpu_free_mb(i) for i in range(n)]
-    print(f"\n=== 2. Baseline free VRAM: {['%.0f' % b for b in baseline]} MB ===")
-
-    # 3) NF4 load -------------------------------------------------------------
-    print("\n=== 3. NF4 load ===")
+    # 3) Text embed -----------------------------------------------------------
+    print("\n=== 3. Text embed ===")
     t0 = time.time()
-    text_a = text_b = img_vec = combo_vec = None
-    with qe.load_embedder(EMBEDDING_MODEL, EMBEDDING_MAX_TOKEN_LENGTH) as emb:
-        load_s = time.time() - t0
-        dev_idx = emb.model.device.index if emb.model.device.type == "cuda" else 0
-        used_mb = baseline[dev_idx] - _gpu_free_mb(dev_idx)
-        print(f"loaded in {load_s:.1f}s on cuda:{dev_idx}, using ~{used_mb:.0f} MB")
-        if used_mb > 12000:
-            failures.append("NF4 footprint exceeded ~12 GB on one card")
+    try:
+        text_a = _vec(embedder.embed_one({"text": TEXT_A}))
+        text_b = _vec(embedder.embed_one({"text": TEXT_B}))
+    except Exception as e:
+        print(f"FAIL: text embed raised: {e}")
+        return 2
+    norm = float(np.linalg.norm(text_a))
+    print(f"shape={text_a.shape}, ||v||={norm:.4f}, cos(A,B)={_cos(text_a, text_b):.4f}, "
+          f"{time.time() - t0:.1f}s for two")
+    if text_a.shape != (EMBEDDING_DIM,):
+        failures.append(f"text embedding shape {text_a.shape} != ({EMBEDDING_DIM},)")
+    if abs(norm - 1.0) > 1e-2:
+        failures.append(f"text embedding not L2-normalized (||v||={norm:.4f})")
+    if _cos(text_a, text_b) > 0.999:
+        failures.append("two different texts embed to the same vector")
 
-        # 4) Text embed -------------------------------------------------------
-        print("\n=== 4. Text embed ===")
-        text_a = emb.process([{"text": TEXT_A}])[0].to(torch.float32).cpu().numpy()
-        text_b = emb.process([{"text": TEXT_B}])[0].to(torch.float32).cpu().numpy()
-        norm = float(np.linalg.norm(text_a))
-        print(f"shape={text_a.shape}, ||v||={norm:.4f}, cos(A,B)={_cos(text_a, text_b):.4f}")
-        if text_a.shape != (4096,):
-            failures.append(f"text embedding shape {text_a.shape} != (4096,)")
-        if abs(norm - 1.0) > 1e-2:
-            failures.append(f"text embedding not L2-normalized (||v||={norm:.4f})")
+    # 4) Image embed ----------------------------------------------------------
+    if args.image:
+        print("\n=== 4. Image embed (VL) ===")
+        try:
+            img_vec = _vec(embedder.embed_one({"text": "", "image": args.image}))
+            print(f"shape={img_vec.shape}, ||v||={float(np.linalg.norm(img_vec)):.4f}")
+            if img_vec.shape != (EMBEDDING_DIM,):
+                failures.append(f"image embedding shape {img_vec.shape} != ({EMBEDDING_DIM},)")
+        except Exception as e:
+            failures.append(f"image embed raised: {e}")
+            print(f"FAIL: image embed raised: {e}")
 
-        # 5) Image embed ------------------------------------------------------
-        if args.image:
-            print("\n=== 5. Image embed (VL) ===")
-            try:
-                img_vec = emb.process([{"text": "", "image": args.image}])[0]
-                img_vec = img_vec.to(torch.float32).cpu().numpy()
-                print(f"shape={img_vec.shape}, ||v||={float(np.linalg.norm(img_vec)):.4f}")
-                if img_vec.shape != (4096,):
-                    failures.append(f"image embedding shape {img_vec.shape} != (4096,)")
-            except Exception as e:
-                failures.append(f"image embed raised: {e}")
-                print(f"FAIL: image embed raised: {e}")
+        # 5) Image + text combined -------------------------------------------
+        print("\n=== 5. Image + text embed ===")
+        try:
+            combo = _vec(embedder.embed_one({"text": TEXT_A, "image": args.image}))
+            print(f"shape={combo.shape}, ||v||={float(np.linalg.norm(combo)):.4f}")
+            if combo.shape != (EMBEDDING_DIM,):
+                failures.append(f"image+text shape {combo.shape} != ({EMBEDDING_DIM},)")
+        except Exception as e:
+            failures.append(f"image+text embed raised: {e}")
+            print(f"FAIL: image+text embed raised: {e}")
+    else:
+        print("\n=== 4/5. Image tests SKIPPED (pass --image to enable) ===")
 
-            # 6) Image + text combined ---------------------------------------
-            print("\n=== 6. Image + text embed ===")
-            try:
-                combo_vec = emb.process([{"text": TEXT_A, "image": args.image}])[0]
-                combo_vec = combo_vec.to(torch.float32).cpu().numpy()
-                print(f"shape={combo_vec.shape}, ||v||={float(np.linalg.norm(combo_vec)):.4f}")
-            except Exception as e:
-                failures.append(f"image+text embed raised: {e}")
-                print(f"FAIL: image+text embed raised: {e}")
-        else:
-            print("\n=== 5/6. Image tests SKIPPED (pass --image to enable) ===")
-
-        # 7) Batch consistency -----------------------------------------------
-        print("\n=== 7. Batch consistency ===")
-        batch = emb.process([{"text": TEXT_A}, {"text": TEXT_B},
-                             {"text": TEXT_A}, {"text": TEXT_B}])
-        batch = batch.to(torch.float32).cpu().numpy()
+    # 6) Batch consistency ----------------------------------------------------
+    # A batch that disagrees with single calls means padding or pooling leaks
+    # between items — the corpus was embedded in batches, the query is not.
+    print("\n=== 6. Batch consistency ===")
+    try:
+        batch = [_vec(v) for v in embedder.embed(
+            [{"text": TEXT_A}, {"text": TEXT_B}, {"text": TEXT_A}, {"text": TEXT_B}])]
         c = _cos(text_a, batch[0])
         print(f"cos(single A, batched A)={c:.4f}")
         if c < 0.999:
             failures.append(f"batch inconsistency: cos={c:.4f} < 0.999")
-
-    # 8) Unload → VRAM back to baseline --------------------------------------
-    print("\n=== 8. Unload / VRAM release (settling up to ~3 min) ===")
-    after = [_wait_baseline(i, baseline[i]) for i in range(n)]
-    print(f"free after unload: {['%.0f' % a for a in after]} MB "
-          f"(baseline {['%.0f' % b for b in baseline]} MB)")
-    for i in range(n):
-        if baseline[i] - after[i] > 300:
-            failures.append(f"cuda:{i} did not return to baseline "
-                            f"({baseline[i]-after[i]:.0f} MB still used)")
-
-    # 9) Repeat load/unload x3 — check for UNBOUNDED accumulation ------------
-    # Back-to-back cycling outruns the driver's free-reporting lag, so an exact
-    # baseline check false-fails here. A real leak accumulates instead, so
-    # assert that free does not shrink from round 1 to round 3.
-    print("\n=== 9. Repeat load/unload x3 (checking no unbounded accumulation) ===")
-    rounds: list[list[float]] = []
-    for r in range(3):
-        with qe.load_embedder(EMBEDDING_MODEL, EMBEDDING_MAX_TOKEN_LENGTH) as emb:
-            _ = emb.process([{"text": TEXT_A}])
-        free_now = [_gpu_free_mb(i) for i in range(n)]
-        rounds.append(free_now)
-        print(f"  round {r+1}: free={['%.0f' % f for f in free_now]} MB")
-
-    tot_first, tot_last = sum(rounds[0]), sum(rounds[-1])
-    if tot_first - tot_last > 500:
-        failures.append(
-            f"VRAM accumulating across rounds (total free {tot_first:.0f} -> "
-            f"{tot_last:.0f} MB) — genuine leak, not reporting lag"
-        )
-    for i in range(n):
-        # More than one model's footprint below baseline = >1 model stuck.
-        if baseline[i] - rounds[-1][i] > 9000:
-            failures.append(
-                f"cuda:{i} holds more than one model's footprint "
-                f"({baseline[i]-rounds[-1][i]:.0f} MB below baseline)"
-            )
-    print("  (a plateau here is this host's ~2 min free-reporting lag, not a leak)")
+        if _cos(batch[0], batch[2]) < 0.9999:
+            failures.append("the same text twice in one batch gave different vectors")
+    except Exception as e:
+        failures.append(f"batch embed raised: {e}")
+        print(f"FAIL: batch embed raised: {e}")
 
     # Verdict -----------------------------------------------------------------
     print("\n=== VERDICT ===")
@@ -188,9 +154,9 @@ def main() -> int:
             print(f"  FAIL: {f}")
         print("SMOKETEST FAILED")
         return 1
-    print("ALL CHECKS PASSED")
+    print("all checks passed")
     return 0
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    raise SystemExit(main())

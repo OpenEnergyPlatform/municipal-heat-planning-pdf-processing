@@ -678,8 +678,8 @@ def test_answer_from_sources_attaches_labelled_crops(monkeypatch):
     def fake_chat_json(messages, temperature):
         sent["content"] = messages[0]["content"]
         return {"found": True, "complete": True, "answer": "ca. 650 GWh (abgelesen)",
-                "supports": [{"index": 1, "bild": True,
-                              "ablesung": "Erdgas-Balken 2035: ca. 650 GWh/a"}]}
+                "supports": [{"index": 1, "image": True,
+                              "reading": "Erdgas-Balken 2035: ca. 650 GWh/a"}]}
 
     monkeypatch.setattr(llm, "_chat_json", fake_chat_json)
     items = [{"index": 0, "source": "s0", "text": "t0"},
@@ -689,7 +689,7 @@ def test_answer_from_sources_attaches_labelled_crops(monkeypatch):
 
     content = sent["content"]
     # Multimodal content array: text first, then per crop a label + the image,
-    # in index order — the label is what lets a "bild" support cite its index.
+    # in index order — the label is what lets a "image" support cite its index.
     assert isinstance(content, list) and content[0]["type"] == "text"
     assert [p.get("text") for p in content if p["type"] == "text"][1:] == \
            ["Bild zum Auszug index=0:", "Bild zum Auszug index=1:"]
@@ -703,12 +703,12 @@ def test_answer_from_sources_attaches_labelled_crops(monkeypatch):
 
 def test_visual_reading_requires_an_actually_attached_image():
     llm = pytest.importorskip("docpipe.inference.llm_client")
-    s = {"index": 1, "bild": True, "ablesung": "Erdgas-Balken 2035: ca. 650 GWh/a"}
+    s = {"index": 1, "image": True, "reading": "Erdgas-Balken 2035: ca. 650 GWh/a"}
     assert llm.visual_reading(s, {1}) == "Erdgas-Balken 2035: ca. 650 GWh/a"
-    # A "bild" support for a crop that was never sent could launder parametric
+    # A "image" support for a crop that was never sent could launder parametric
     # knowledge past the grounding gate — must die here.
     assert llm.visual_reading(s, {0, 2}) is None
-    assert llm.visual_reading({"index": 1, "bild": True, "ablesung": "650"}, {1}) is None
+    assert llm.visual_reading({"index": 1, "image": True, "reading": "650"}, {1}) is None
     assert llm.visual_reading({"index": 1, "quote": "text"}, {1}) is None
 
 
@@ -722,12 +722,12 @@ def test_read_off_image_returns_parsed_reading(monkeypatch):
 
     def fake_chat_json(messages, temperature):
         sent["content"] = messages[0]["content"]
-        return {"ablesung": "Erdgas-Segment 2035: ca. 600 GWh/a",
-                "wert": 600.0, "einheit": "GWh/a", "sicherheit": "hoch"}
+        return {"reading": "Erdgas-Segment 2035: ca. 600 GWh/a",
+                "value": 600.0, "unit": "GWh/a", "confidence": "hoch"}
 
     monkeypatch.setattr(llm, "_chat_json", fake_chat_json)
     ro = llm.read_off_image("Gas 2035?", "chart.png", "Erdgas-Balken 2035")
-    assert ro["wert"] == 600.0
+    assert ro["value"] == 600.0
     # Exactly ONE image in the focused call — that is the whole point.
     assert sum(1 for p in sent["content"] if p.get("type") == "image_url") == 1
 
@@ -738,14 +738,14 @@ def test_read_off_image_splices_the_value_into_an_echoed_reading(monkeypatch):
     monkeypatch.setattr(llm, "_image_part",
                         lambda path, max_side=None, png=False: {"type": "image_url",
                                                                 "image_url": {"url": "d"}})
-    # Seen live: "ablesung" just echoes the hint, the number sits only in
-    # "wert" — a revision fed the bare sentence has nothing to correct with.
+    # Seen live: "reading" just echoes the hint, the number sits only in
+    # "value" — a revision fed the bare sentence has nothing to correct with.
     monkeypatch.setattr(llm, "_chat_json",
-                        lambda m, temperature: {"ablesung": "Graues Segment 2035 in Abb. 85",
-                                                "wert": 600.0, "einheit": "GWh/a",
-                                                "sicherheit": "hoch"})
+                        lambda m, temperature: {"reading": "Graues Segment 2035 in Abb. 85",
+                                                "value": 600.0, "unit": "GWh/a",
+                                                "confidence": "hoch"})
     ro = llm.read_off_image("Gas 2035?", "c.png", "Graues Segment 2035 in Abb. 85")
-    assert "600" in ro["ablesung"] and "GWh/a" in ro["ablesung"]
+    assert "600" in ro["reading"] and "GWh/a" in ro["reading"]
 
     monkeypatch.setattr(llm, "_chat_json",
                         lambda m, temperature: (_ for _ in ()).throw(RuntimeError("down")))
@@ -764,15 +764,15 @@ def test_read_off_image_retries_when_task_schema_hijacks(monkeypatch):
         calls.append(messages[0]["content"][0]["text"])
         if len(calls) == 1:                # the task's own format spec wins
             return {"amount": 1000.0, "unit": "GWh/a"}
-        return {"ablesung": "Erdgas 2035: ca. 600 GWh/a", "wert": 600.0,
-                "einheit": "GWh/a", "sicherheit": "hoch"}
+        return {"reading": "Erdgas 2035: ca. 600 GWh/a", "value": 600.0,
+                "unit": "GWh/a", "confidence": "hoch"}
 
     monkeypatch.setattr(llm, "_chat_json", fake_chat_json)
     ro = llm.read_off_image('Gas 2035? Als JSON {"amount":float}', "c.png", "Erdgas-Balken")
     # Without the retry the hijacked reply reads as "no reading" and the wrong
     # inline value survives — the exact bug seen live.
     assert len(calls) == 2 and llm._READOFF_CORRECTION in calls[1]
-    assert ro["wert"] == 600.0
+    assert ro["value"] == 600.0
 
 
 def test_revise_with_readings_falls_back_to_the_original(monkeypatch):
@@ -799,7 +799,7 @@ def test_readoff_prompt_forbids_total_for_segment():
 def test_answer_prompt_defines_the_image_support_contract():
     llm = pytest.importorskip("docpipe.inference.llm_client")
     tail = llm._ANSWER_PROMPT_TAIL
-    assert '"bild"' in tail and '"ablesung"' in tail
+    assert '"image"' in tail and '"reading"' in tail
     # Read-off values must carry the literal marker phrase in the answer; the
     # app additionally appends a deterministic note when the model forgets.
     assert "aus der Abbildung abgelesen" in tail and "Schätzwert" in tail

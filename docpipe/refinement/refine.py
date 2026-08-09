@@ -18,8 +18,8 @@ from typing import Callable, Optional
 
 from .split import SPLIT_MAX_TOKENS, SPLIT_TEMPERATURE, split_oversized
 from .config import (
-    STRUCTURED_OUTPUT_JSON,
-    FINAL_OUTPUT_JSON,
+    SECTIONS_JSON,
+    SECTIONS_REFINED_JSON,
     LLM_MODEL,
     LLM_BASE_URL,
     LLM_API_KEY,
@@ -649,7 +649,7 @@ def refine_sections(sections: list[dict]) -> list[dict]:
         return sections
 
     # source_text is a QA reference for the downstream image processing; it
-    # stays in structured_output.json, which imageprocessing reads separately.
+    # stays in sections.json, which imageprocessing reads separately.
     _strip_table_source_text(sections)
 
     # One shared client for every call below: it is thread-safe, so the workers
@@ -776,27 +776,34 @@ def refine_sections(sections: list[dict]) -> list[dict]:
 # ---------------------------------------------------------------------------
 
 
-def run_refine(output_dir: Path, data: Optional[dict] = None) -> Optional[dict]:
+def run_refine(output_dir: Path, data: Optional[dict] = None,
+               force: bool = False) -> Optional[dict]:
     """
-    Refines the Stage-3 sections and writes structured_output_final.json under
+    Refines the Stage-3 sections and writes sections_refined.json under
     *output_dir*. An existing final output is returned from cache without
-    re-running the LLM.
+    re-running the LLM; *force* ignores it and runs the LLM again.
 
-    *data* is the Stage-3 result dict; when None, structured_output.json is read
+    *data* is the Stage-3 result dict; when None, sections.json is read
     from *output_dir* instead.
+
+    Forcing must not delete the old output first. dump_json_atomic replaces it
+    in one step at the end, so a run killed part-way — a batch timeout, a job
+    hitting its wall clock — leaves the previous refinement rather than nothing
+    at all. A document with no refined output is skipped by the merge without
+    a word, and would vanish from the database.
 
     Returns:
         The refined output dict, or None on failure.
     """
-    final_path = output_dir / FINAL_OUTPUT_JSON
+    final_path = output_dir / SECTIONS_REFINED_JSON
 
-    if final_path.exists():
+    if final_path.exists() and not force:
         log.info(f"Stage 4: cache hit → {final_path}")
         with open(final_path, encoding="utf-8") as f:
             return json.load(f)
 
     if data is None:
-        input_path = output_dir / STRUCTURED_OUTPUT_JSON
+        input_path = output_dir / SECTIONS_JSON
         if not input_path.exists():
             log.error(f"Stage 4: {input_path} not found")
             return None

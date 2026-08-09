@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Optional
 
 from .config import (
-    STRUCTURED_OUTPUT_JSON,
+    SECTIONS_JSON,
     SECTION_TITLE_CLASSES,
     HEADER_FOOTER_STRIP_ENABLE,
     HEADER_FOOTER_ZONE_FRAC,
@@ -414,7 +414,7 @@ def sections_to_dict(sections: list[Section]) -> dict:
 
 def save_output(sections: list[Section], output_dir: Path) -> Path:
     """Writes the Stage 3 JSON under *output_dir* and returns its path."""
-    out_path = output_dir / STRUCTURED_OUTPUT_JSON
+    out_path = output_dir / SECTIONS_JSON
     data     = clean_data(sections_to_dict(sections))
     dump_json_atomic(data, out_path)
     log.info(f"Stage 3: output written → {out_path}")

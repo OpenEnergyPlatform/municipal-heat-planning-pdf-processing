@@ -89,6 +89,9 @@ class ProcessingStats:
     skipped_missing: int = 0
     captions_generated: int = 0
     qa_failed_tables: int = 0  # extracted but flagged low-quality by the QA gate
+    # Answered on the plain-text attempt after the JSON path gave up.
+    rescued_tables: int = 0
+    rescued_figures: int = 0
 
     def summary(self) -> str:
         sep = "=" * 60
@@ -100,6 +103,8 @@ class ProcessingStats:
             f" ({self.failed_tables} failed, {self.qa_failed_tables} low-QA)\n"
             f"Figures: {self.processed_figures}/{self.total_figures} succeeded"
             f" ({self.failed_figures} failed)\n"
+            f"Rescued as plain text: {self.rescued_tables} tables,"
+            f" {self.rescued_figures} figures\n"
             f"Missing image files: {self.skipped_missing}\n"
             f"Captions generated:  {self.captions_generated}\n"
             f"{sep}"

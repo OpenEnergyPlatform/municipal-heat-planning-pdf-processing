@@ -4,9 +4,8 @@ config.py – Central configuration for the chunkingandembedding module.
 Author: Felix Vossel
 """
 
-FINAL_JSON = "results/structured_output_final.json"
-IMAGES_JSON = "results/structured_output_images.json"
-MERGED_JSON = "results/output.json"
+from docpipe.artifacts import (DOCUMENT_JSON,            # noqa: F401  (re-exported)
+                               SECTIONS_JSON, SECTIONS_REFINED_JSON, VISUALS_JSON)
 
 EMBEDDING_MODEL = "Qwen/Qwen3-VL-Embedding-8B"
 EMBEDDING_DIM = 4096
