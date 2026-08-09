@@ -10,6 +10,9 @@ import unicodedata
 from pathlib import Path
 from re import compile
 
+from docpipe.artifacts import (DIR_IMAGES, DIR_RESULTS,   # noqa: F401  (re-exported)
+                               PAGES_JSON, SECTIONS_JSON)
+
 # ---------------------------------------------------------------------------
 # Rendering
 # ---------------------------------------------------------------------------
@@ -248,14 +251,7 @@ TITLE_EXCLUDE_PREFIXES = (
     "tab.",
 )
 
-# ---------------------------------------------------------------------------
-# Output directories / filenames
-# ---------------------------------------------------------------------------
-DIR_IMAGES  = "images"
-DIR_RESULTS = "results"
-
-CACHE_PAGES_JSON       = f"{DIR_RESULTS}/pages_extracted.json"
-STRUCTURED_OUTPUT_JSON = f"{DIR_RESULTS}/structured_output.json"        # Stage 3 output
+# Output directories and filenames: see docpipe/artifacts.py, imported above.
 
 # ---------------------------------------------------------------------------
 # Misc

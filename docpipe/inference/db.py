@@ -102,6 +102,73 @@ def _parent_section(conn: sqlite3.Connection, section_id: int) -> tuple[Optional
         return None, None
     return row["section_number"], row["title"]
 
+_PLACEHOLDER_RE = re.compile(r"\[([a-z0-9_]+)\]")
+
+
+def section_item_captions(conn: sqlite3.Connection, section_id: int) -> dict[str, str]:
+    """block_id -> caption for every table and figure anchored in this section."""
+    out: dict[str, str] = {}
+    for table in ("Tables", "Images"):
+        for row in conn.execute(
+            f"SELECT block_id, caption FROM {table} WHERE section = ?", (section_id,)
+        ):
+            caption = (row["caption"] or "").strip()
+            if row["block_id"] and caption:
+                out[row["block_id"]] = caption
+    return out
+
+
+def annotate_placeholders(content: str, captions: dict[str, str]) -> str:
+    """
+    Name the figure a placeholder stands for: [p17_img1] → [p17_img1: Abbildung 2-3 …].
+
+    The stored content keeps the bare id, which is right for the record but
+    useless to a reader: the section says "wie Abbildung 2-3 verdeutlicht" and
+    then shows a token that could be anything. The id stays, because it is the
+    handle the model uses to ask for the picture itself (see request_item).
+    """
+    def _replacer(match: re.Match) -> str:
+        caption = captions.get(match.group(1))
+        return f"[{match.group(1)}: {caption}]" if caption else match.group(0)
+
+    return _PLACEHOLDER_RE.sub(_replacer, content or "")
+
+
+def request_item(conn: sqlite3.Connection, document_id: Optional[int],
+                 block_id: str) -> Optional[dict]:
+    """
+    Look up one table/figure by the placeholder id the model quoted.
+
+    Scoped to `document_id`: block ids are only unique within a document, and
+    p17_img1 exists in nearly every plan.
+    """
+    block_id = (block_id or "").strip().strip("[]")
+    if not block_id:
+        return None
+    for table, kind, text_col in (("Tables", "table", "markdown"),
+                                  ("Images", "figure", "description")):
+        row = conn.execute(
+            f"SELECT i.id, i.caption, i.path, i.page_number, i.{text_col} AS text, i.section "
+            f"FROM {table} i JOIN Sections s ON s.id = i.section "
+            f"WHERE i.block_id = ? AND (? IS NULL OR s.document = ?)",
+            (block_id, document_id, document_id),
+        ).fetchone()
+        if row is None:
+            continue
+        doc_id = document_id if document_id is not None else _section_document(conn, row["section"])
+        return {
+            "owner_kind": kind,
+            "owner_id": row["id"],
+            "block_id": block_id,
+            "title": row["caption"],
+            "text": row["text"] or "",
+            "page_number": row["page_number"],
+            "image_path": _asset_path(_document_folder(conn, doc_id), row["path"]),
+            "document_id": doc_id,
+        }
+    return None
+
+
 def fetch_owner_content(
     conn: sqlite3.Connection,
     owner_kind: str,
@@ -129,7 +196,8 @@ def fetch_owner_content(
             "owner_kind": "section",
             "owner_id": owner_id,
             "title": row["title"],
-            "text": row["content"] or "",
+            "text": annotate_placeholders(row["content"] or "",
+                                          section_item_captions(conn, owner_id)),
             "page_number": row["page_number"],
             "image_path": None,
             "section_number": row["section_number"],

@@ -117,7 +117,7 @@ def test_strip_table_source_text():
 def test_run_refine_uses_provided_data(tmp_path):
     out = s4.run_refine(tmp_path, data={"sections": []})
     assert out == {"sections": []}
-    assert (tmp_path / "results" / "structured_output_final.json").exists()
+    assert (tmp_path / "results" / "sections_refined.json").exists()
 
 
 def test_run_refine_missing_input_returns_none(tmp_path):

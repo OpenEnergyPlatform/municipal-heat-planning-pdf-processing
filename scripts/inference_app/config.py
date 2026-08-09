@@ -11,8 +11,8 @@ import os
 # Everything the core owns is re-exported, never redefined: two copies of
 # LLM_BASE_URL is how a deployment ends up talking to the wrong endpoint.
 from docpipe.embedding.config import (  # noqa: F401
+    BACKEND as EMBEDDING_BACKEND,
     EMBEDDING_DIM, EMBEDDING_MAX_TOKEN_LENGTH, EMBEDDING_MODEL,
-    EMBED_IDLE_UNLOAD_SECONDS, EMBED_LOCK_TIMEOUT_S,
 )
 from docpipe.inference.config import (  # noqa: F401
     ALL_SCOPES, ANSWER_CONTEXT_TOKENS, ANSWER_IMAGE_MAX_SIDE, ANSWER_MAX_IMAGES,
@@ -27,46 +27,15 @@ from docpipe.inference.config import (  # noqa: F401
 from pathlib import Path
 
 
-def _load_dotenv() -> None:
-    """
-    Populate os.environ from a .env file (`KEY=VALUE` lines).
-
-    Only keys not already set are added, so an explicit env var always wins.
-    First readable file wins: $INFERENCE_ENV_FILE, ./.env, ~/projects/embedding/.env.
-    """
-    candidates = [
-        os.environ.get("INFERENCE_ENV_FILE"),
-        ".env",
-        os.path.expanduser("~/projects/embedding/.env"),
-    ]
-    for path in candidates:
-        if not path:
-            continue
-        p = Path(path)
-        if not p.is_file():
-            continue
-        try:
-            for raw in p.read_text(encoding="utf-8").splitlines():
-                line = raw.strip()
-                if not line or line.startswith("#") or "=" not in line:
-                    continue
-                key, _, val = line.partition("=")
-                key = key.strip()
-                val = val.strip().strip('"').strip("'")
-                if key and key not in os.environ:
-                    os.environ[key] = val
-        except OSError:
-            continue
-        break  # first readable .env wins
-
-
-_load_dotenv()
+# The .env is read by docpipe/__init__.py, which the imports above already
+# triggered — early enough that every config module above saw its values.
+# Doing it here would be too late: app.py imports docpipe.inference first.
 
 # The profile decides what the corpus is about — its catalog supplies the
 # picker labels and filters, its data root the paths below. None is allowed:
 # without DOCPIPE_PROFILE the app still runs, on generic labels and the
 # historical data/ paths.
-from docpipe.profile import active_profile  # noqa: E402  (needs .env loaded)
+from docpipe.profile import active_profile
 
 PROFILE = active_profile()
 
@@ -91,12 +60,14 @@ INDEX_PATH = _path("INFERENCE_INDEX_PATH", lambda p: p.index_path, "data/faiss_i
 IMAGE_ROOT = _path("INFERENCE_IMAGE_ROOT", lambda p: p.processed_dir, "data/pdf/processed")
 
 # ---------------------------------------------------------------------------
-# Embedding model (local, NF4-quantized, loaded on demand)
+# Embedding backend
 # ---------------------------------------------------------------------------
-# Unload the model after this many idle seconds; 0 = load → embed → free on
-# every request.
-# How long a request waits for another session's embedding call (the embed lock
-# serializes GPU use) before giving up.
+# EMBEDDING_BACKEND decides where a query vector comes from: `local`, `api`, or
+# an import path to whatever the machine provides. A card that also serves this
+# app wants the model loaded on demand and freed again — that implementation is
+# deployment code and lives next to the deployment, not here; the app only ever
+# sees docpipe.embedding.get_embedder(). Its own knobs (idle window, lock
+# timeout) belong to it and are read there.
 
 # ---------------------------------------------------------------------------
 # LLM (remote, OpenAI-compatible)
@@ -163,7 +134,7 @@ PDF_ROOT = _path("INFERENCE_PDF_ROOT", lambda p: p.pdf_dir, "data/pdf")
 # Ordered list for the UI multiselect (and as the default = everything).
 
 # Figure/table scopes: the query anchor switches to caption style when the
-# search targets ONLY these (see app._scopes_are_visual).
+# search targets ONLY these (see answer.scopes_are_visual).
 
 # Which embedding types belong to each owner kind (used to split a scope
 # selection across the three UNION branches of the candidate query).

@@ -18,7 +18,8 @@ from pathlib import Path
 from typing import Optional
 
 from .config import (
-    MERGED_JSON,
+    DOCUMENT_JSON,
+    SECTIONS_JSON,
     EMBEDDING_TYPE_SECTION_TEXT,
     EMBEDDING_TYPE_SECTION_TITLE,
     EMBEDDING_TYPE_TABLE_TEXT,
@@ -293,7 +294,7 @@ def update_database(
 
     candidates = sorted(
         d for d in root_dir.iterdir()
-        if d.is_dir() and (d / MERGED_JSON).exists()
+        if d.is_dir() and (d / DOCUMENT_JSON).exists()
     )
 
     if not candidates:
@@ -322,7 +323,7 @@ def update_database(
             if force and _sections_exist(doc_id, conn):
                 _delete_document_content(doc_id, conn)
 
-            with open(pdf_dir / MERGED_JSON, "r", encoding="utf-8") as f:
+            with open(pdf_dir / DOCUMENT_JSON, "r", encoding="utf-8") as f:
                 merged_data = json.load(f)
 
             _insert_sections(doc_id, merged_data, conn)
@@ -344,8 +345,8 @@ def update_database(
 # Additive bbox backfill (non-destructive)
 # ---------------------------------------------------------------------------
 
-# Stage-3 output carries the raw, geometry-bearing sections: the source of bbox.
-_STAGE3_JSON = "results/structured_output.json"
+# SECTIONS_JSON, imported above, carries the raw geometry-bearing sections:
+# the source of bbox. Refinement rewrites the text and drops the boxes.
 
 
 def _norm_seg_text(text: Optional[str]) -> str:
@@ -382,7 +383,7 @@ def enrich_bbox(db_path: Path, root_dir: Path, *, force: bool = False) -> dict:
     Backfill the `bbox` column on existing Segments/Tables/Images rows from
     Stage-3 outputs, updating that column only — no delete, re-embed or re-chunk.
 
-    Requires Stage 3 to have been re-run so each doc's structured_output.json
+    Requires Stage 3 to have been re-run so each doc's sections.json
     carries the geometry. `force` also re-derives rows that already have a bbox;
     by default those are skipped, so a partial run resumes. Returns a stats dict
     of updated counts.
@@ -392,7 +393,7 @@ def enrich_bbox(db_path: Path, root_dir: Path, *, force: bool = False) -> dict:
 
     candidates = sorted(
         d for d in root_dir.iterdir()
-        if d.is_dir() and (d / _STAGE3_JSON).exists()
+        if d.is_dir() and (d / SECTIONS_JSON).exists()
     )
     if not candidates:
         log.warning("enrich-bbox: no Stage-3 outputs found under '%s'.", root_dir)
@@ -408,7 +409,7 @@ def enrich_bbox(db_path: Path, root_dir: Path, *, force: bool = False) -> dict:
             if doc_id is None:
                 continue
 
-            with open(pdf_dir / _STAGE3_JSON, "r", encoding="utf-8") as f:
+            with open(pdf_dir / SECTIONS_JSON, "r", encoding="utf-8") as f:
                 stage3 = json.load(f)
             media_by_id, text_by_page_text = _bbox_lookups_from_stage3(stage3)
             if not media_by_id and not text_by_page_text:

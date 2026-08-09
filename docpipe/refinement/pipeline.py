@@ -20,8 +20,8 @@ from typing import Optional
 from docpipe import prompts
 from docpipe.profile import add_profile_argument, resolve_profile
 
-from .config import (DIR_RESULTS, FINAL_OUTPUT_JSON, PROMPT_IDS,
-                     STRUCTURED_OUTPUT_JSON)
+from .config import (DIR_RESULTS, SECTIONS_REFINED_JSON, PROMPT_IDS,
+                     SECTIONS_JSON)
 from .refine import run_refine
 
 log = logging.getLogger(__name__)
@@ -33,7 +33,7 @@ DOC_PARALLEL = int(os.environ.get("DOC_PARALLEL", "8"))
 
 def _has_input(doc_dir: Path) -> bool:
     """True if the document directory carries a Stage-3 structured output."""
-    return (doc_dir / STRUCTURED_OUTPUT_JSON).exists()
+    return (doc_dir / SECTIONS_JSON).exists()
 
 
 # ---------------------------------------------------------------------------
@@ -43,15 +43,16 @@ def _has_input(doc_dir: Path) -> bool:
 def run_single(doc_dir: Path, *, force: bool = False,
                force_stale: bool = False) -> Optional[dict]:
     """
-    Refines one document directory. With ``force`` a cached
-    ``structured_output_final.json`` is deleted first so the LLM re-refines.
-    ``force_stale`` does the same, but only when the prompt has changed since
-    the cached output was written.
+    Refines one document directory. With ``force`` the cached
+    ``sections_refined.json`` is ignored and the LLM re-refines; the old file
+    stays until the new one atomically replaces it. ``force_stale`` does the
+    same, but only when the prompt has changed since the cached output was
+    written.
     Returns the refined dict, or None on failure.
     """
     doc_dir = Path(doc_dir)
     results_dir = doc_dir / DIR_RESULTS
-    final = doc_dir / FINAL_OUTPUT_JSON
+    final = doc_dir / SECTIONS_REFINED_JSON
 
     changed = prompts.check(results_dir, PROMPT_IDS) if final.exists() else []
     if changed and not force:
@@ -64,10 +65,7 @@ def run_single(doc_dir: Path, *, force: bool = False,
                         "re-run with --force-stale to redo it",
                         doc_dir.name, ", ".join(changed))
 
-    if force and final.exists():
-        final.unlink()
-
-    result = run_refine(doc_dir)
+    result = run_refine(doc_dir, force=force)
     if result is not None:
         prompts.record(results_dir, PROMPT_IDS)
     return result
@@ -91,7 +89,7 @@ def run_batch(root_dir: Path, *, force: bool = False,
     if not candidates:
         log.warning(
             "No documents with %s found under '%s'.",
-            STRUCTURED_OUTPUT_JSON, root_dir,
+            SECTIONS_JSON, root_dir,
         )
         return {}
 
@@ -193,7 +191,7 @@ Examples:
     )
     p.add_argument(
         "--force", action="store_true",
-        help="Re-refine even if structured_output_final.json already exists",
+        help="Re-refine even if %s already exists" % SECTIONS_REFINED_JSON,
     )
     add_profile_argument(p)
     p.add_argument(

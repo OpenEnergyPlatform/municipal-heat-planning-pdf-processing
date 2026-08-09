@@ -38,8 +38,34 @@ filename-and-date labels and no filters.
 | `../inference_app_smoketest.py` | Standalone embedder verification (run first). |
 
 Everything else is core: `docpipe.inference` (`answer`, `catalog`, `db`, `faiss_store`,
-`chunker`, `llm_client`, `query_cache`, `request_log`, `code_exec`) and `docpipe.embedding`
-(local or API backend).
+`chunker`, `llm_client`, `query_cache`, `request_log`, `code_exec`) and `docpipe.embedding`.
+
+## The embedding backend
+
+`docpipe.embedding.get_embedder()` returns whatever `EMBEDDING_BACKEND` names, and the app
+never learns which it got — it asks for `embed_one(item)` and receives a vector.
+
+| Value | What it is |
+| --- | --- |
+| `local` | The model is loaded in this process and stays resident. What a batch run wants. |
+| `api` | An OpenAI-compatible `/v1/embeddings` endpoint. Text-only, so no `*_vl` scopes. |
+| `package.module:Attribut` | Imported and called; anything with `embed` / `embed_one`. |
+
+The third form is how a machine binds its own implementation. A GPU that also serves this
+app cannot hold the model resident, so it loads it quantized, embeds, and frees the memory
+again — which quantization, which card, how long to hold the GPU lock are properties of that
+machine, so the code lives there and not in this repository. The inference server does:
+
+```
+EMBEDDING_BACKEND=backends.nf4:Nf4Embedder
+```
+
+Such a backend should read `EMBEDDING_MODEL` and `EMBEDDING_MAX_TOKEN_LENGTH` from
+`docpipe.embedding.config`: embed a query at a different length than the corpus was built
+with and the vectors stop being comparable.
+
+Verify one with `scripts/inference_app_smoketest.py` — it checks dimension, normalization,
+image and image+text queries, and batch consistency against whatever backend is configured.
 
 ## Code execution (calculations)
 
@@ -61,8 +87,7 @@ numpy/pandas/pymupdf are available; there is no network inside the sandbox. The 
 | `INFERENCE_INDEX_PATH` | `<profile>.index_path` | Global FAISS index. |
 | `INFERENCE_IMAGE_ROOT` | `<profile>.processed_dir` | Root for resolving table/figure PNGs. |
 | `EMBEDDING_MODEL` | `Qwen/Qwen3-VL-Embedding-8B` | HF id of the embedding model. |
-| `EMBED_IDLE_UNLOAD_SECONDS` | `600` | Unload after this many idle seconds; 0 = strict on-demand. |
-| `EMBED_LOCK_TIMEOUT_S` | `300` | Max wait for another session's embed to finish. |
+| `EMBEDDING_BACKEND` | `local` | Where a query vector comes from: `local`, `api`, or `package.module:Attribut` — see below. |
 | `LLM_BASE_URL` | `http://localhost:8000/v1` | OpenAI-compatible `/chat/completions` base URL. |
 | `LLM_MODEL` | (see `config.py`) | Answer-generating agent id. List available ids with `GET {LLM_BASE_URL}/models`. |
 | `LLM_API_KEY` / `UOS_API_KEY` | from `.env` | The key is read from a `.env` file (`UOS_API_KEY=...`); `LLM_API_KEY` overrides if set. |

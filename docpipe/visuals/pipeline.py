@@ -27,9 +27,9 @@ from .config import (
     VLM_MODEL,
     VLM_BASE_URL,
     VLM_NUM_PARALLEL,
-    FINAL_OUTPUT_JSON,
-    STRUCTURED_OUTPUT_JSON,
-    ENRICHED_OUTPUT_JSON,
+    SECTIONS_REFINED_JSON,
+    SECTIONS_JSON,
+    VISUALS_JSON,
     dump_json_atomic,
 )
 from .models import ProcessingStats
@@ -52,7 +52,7 @@ def _resolve_input(output_dir: Path) -> Optional[Path]:
     Best available input JSON inside a preprocessing output_dir: the Stage-4
     output, else the Stage-3 one. None if neither exists.
     """
-    for candidate in (FINAL_OUTPUT_JSON, STRUCTURED_OUTPUT_JSON):
+    for candidate in (SECTIONS_REFINED_JSON, SECTIONS_JSON):
         p = output_dir / candidate
         if p.exists():
             return p
@@ -64,10 +64,10 @@ def _load_source_texts(output_dir: Path) -> dict[str, str]:
     Maps table id → PyMuPDF source text, for the table QA gate. Empty if
     unreadable.
 
-    Always read from the Stage-3 structured_output.json rather than the chosen
+    Always read from the Stage-3 sections.json rather than the chosen
     input: Stage 4 does not preserve source_text.
     """
-    p = output_dir / STRUCTURED_OUTPUT_JSON
+    p = output_dir / SECTIONS_JSON
     if not p.exists():
         return {}
     try:
@@ -111,7 +111,7 @@ def run_single(
     """
     output_dir = Path(output_dir)
     model = model or VLM_MODEL
-    out_path = output_dir / ENRICHED_OUTPUT_JSON
+    out_path = output_dir / VISUALS_JSON
 
     changed = prompts.check(output_dir, PROMPT_IDS) if out_path.exists() else []
     if changed and not force:
@@ -426,7 +426,7 @@ Examples:
     )
     p.add_argument(
         "--force", action="store_true",
-        help="Re-process even if %s already exists" % ENRICHED_OUTPUT_JSON,
+        help="Re-process even if %s already exists" % VISUALS_JSON,
     )
     p.add_argument(
         "--input-json", default=None,

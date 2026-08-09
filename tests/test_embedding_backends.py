@@ -35,6 +35,39 @@ def test_backend_is_configuration_not_code(monkeypatch):
         embedding.get_embedder("telepathy")
 
 
+# ---------------------------------------------------------------------------
+# The extension point: an implementation this repository does not contain
+# ---------------------------------------------------------------------------
+
+def test_a_deployment_can_bind_its_own_implementation():
+    """The inference server loads its model quantized and frees it again. That
+    is a property of its two cards, not of the pipeline, so the code lives
+    there and is named here by import path."""
+    emb = embedding.get_embedder("tests.fake_backend:FakeEmbedder", tag="nf4")
+
+    assert emb.tag == "nf4"
+    assert emb.embed_one({"text": "abc"}) == [3.0]
+
+
+def test_the_import_path_may_name_a_function_too():
+    emb = embedding.get_embedder("tests.fake_backend:make_embedder")
+
+    assert emb.tag == "factory"
+
+
+@pytest.mark.parametrize("spec, hint", [
+    ("tests.fake_backend", "package.module:attribute"),   # no colon → not a path
+    ("tests.no_such_module:X", "tests.no_such_module"),
+    ("tests.fake_backend:Missing", "Missing"),
+])
+def test_a_broken_backend_says_which_part_broke(spec, hint):
+    """An unimportable backend is a deployment typo; the message has to name
+    the piece that failed, or the operator is left guessing."""
+    with pytest.raises(ValueError) as exc:
+        embedding.get_embedder(spec)
+    assert hint in str(exc.value)
+
+
 def test_api_backend_needs_an_endpoint(monkeypatch):
     monkeypatch.setattr("docpipe.embedding.config.EMBEDDING_BASE_URL", "")
     with pytest.raises(ValueError):

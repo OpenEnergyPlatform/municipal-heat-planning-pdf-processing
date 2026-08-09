@@ -11,13 +11,9 @@ from pathlib import Path
 from re import compile
 
 from docpipe import prompts
-
-# ---------------------------------------------------------------------------
-# Filenames (under each document's results/ directory)
-# ---------------------------------------------------------------------------
-DIR_RESULTS = "results"
-STRUCTURED_OUTPUT_JSON = f"{DIR_RESULTS}/structured_output.json"        # input  (Stage 3)
-FINAL_OUTPUT_JSON      = f"{DIR_RESULTS}/structured_output_final.json"  # output (refined)
+from docpipe.artifacts import (DIR_RESULTS,               # noqa: F401  (re-exported)
+                               SECTIONS_JSON,             # input
+                               SECTIONS_REFINED_JSON)     # output
 
 # ---------------------------------------------------------------------------
 # LLM (OpenAI-compatible API)

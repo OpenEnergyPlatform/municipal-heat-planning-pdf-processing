@@ -12,7 +12,7 @@ import os
 from pathlib import Path
 from typing import Optional
 
-from .config import FINAL_JSON, IMAGES_JSON, MERGED_JSON
+from .config import SECTIONS_REFINED_JSON, VISUALS_JSON, DOCUMENT_JSON
 from .models import MergeStats
 
 log = logging.getLogger(__name__)
@@ -47,11 +47,11 @@ def _is_cached(output_dir: Path) -> bool:
     uncached so merge_batch fails that one entry instead of the whole corpus.
     """
     try:
-        merged = (output_dir / MERGED_JSON).stat()
+        merged = (output_dir / DOCUMENT_JSON).stat()
         if merged.st_size == 0:
             return False
         inputs = [p.stat().st_mtime_ns
-                  for p in (output_dir / FINAL_JSON, output_dir / IMAGES_JSON)
+                  for p in (output_dir / SECTIONS_REFINED_JSON, output_dir / VISUALS_JSON)
                   if p.exists()]
     except OSError:
         return False
@@ -62,22 +62,22 @@ def merge_single(output_dir: Path, *, force: bool = False) -> Optional[dict]:
     """
     Merge final + images JSONs for a single PDF output directory.
 
-    Sections come from structured_output_final.json; each table/figure is
-    replaced by its enriched counterpart from structured_output_images.json,
+    Sections come from sections_refined.json; each table/figure is
+    replaced by its enriched counterpart from visuals.json,
     matched by item id. Writes output.json and returns the merged dict, or
     None if the final JSON is missing. `force` re-merges past a cached
     output.json.
     """
     output_dir = Path(output_dir)
-    merged_path = output_dir / MERGED_JSON
+    merged_path = output_dir / DOCUMENT_JSON
 
     if not force and _is_cached(output_dir):
         log.debug("Merge cache hit: %s", merged_path)
         with open(merged_path, "r", encoding="utf-8") as f:
             return json.load(f)
 
-    final_path = output_dir / FINAL_JSON
-    images_path = output_dir / IMAGES_JSON
+    final_path = output_dir / SECTIONS_REFINED_JSON
+    images_path = output_dir / VISUALS_JSON
 
     if not final_path.exists():
         log.error("Final JSON not found: %s", final_path)
@@ -154,7 +154,7 @@ def merge_batch(root_dir: Path, *, force: bool = False) -> dict[str, bool]:
 
     candidates = sorted(
         d for d in root_dir.iterdir()
-        if d.is_dir() and (d / FINAL_JSON).exists()
+        if d.is_dir() and (d / SECTIONS_REFINED_JSON).exists()
     )
 
     if not candidates:

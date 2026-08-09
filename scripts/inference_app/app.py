@@ -48,8 +48,9 @@ log = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
-# Cached resources. The embedding model is deliberately NOT cached here — see
-# quantized_embedder.load_embedder.
+# Cached resources. The embedding model is deliberately NOT among them: whether
+# it stays loaded is the backend's business, and on a card that also serves this
+# app the answer is no.
 # ---------------------------------------------------------------------------
 @st.cache_resource
 def get_index():

@@ -21,7 +21,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Optional
 
-from . import chunker, code_exec, config, llm_client, request_log
+from . import chunker, code_exec, config, db, llm_client, request_log
 from . import faiss_store
 
 log = logging.getLogger(__name__)
@@ -72,6 +72,24 @@ def _code_context(items: list, top_hits: list) -> dict:
     return out
 
 
+def _image_requester(corpus: Corpus, document_id: int):
+    """Resolve a [p17_img1] the model asked for into an item with a readable crop.
+
+    Returns None when the id is unknown or its file is missing — the caller then
+    tells the model the picture is unavailable instead of leaving it waiting.
+    """
+    def _request(block_id: str) -> Optional[dict]:
+        item = db.request_item(corpus.conn, document_id, block_id)
+        if item is None:
+            log.info("Model asked for unknown block id %r", block_id)
+            return None
+        path = corpus.resolve_image(item.get("image_path"))
+        item["image_path"] = str(path) if path is not None else None
+        return item
+
+    return _request
+
+
 def answer_question(task: str, corpus: Corpus, document_id: int, scopes: list, *,
                     image_bytes: Optional[bytes] = None, image_only: bool = False,
                     as_json: bool = False, history: Optional[list] = None,
@@ -88,7 +106,7 @@ def answer_question(task: str, corpus: Corpus, document_id: int, scopes: list, *
     result = {"answer": None, "answer_text": None, "citations": [], "n_findings": 0,
               "cache_hit": False, "n_hits": 0, "phrase": None, "as_json": as_json,
               "n_batches": 0, "compute": [], "examined": [], "recheck": False,
-              "n_excluded": 0}
+              "n_excluded": 0, "requested": []}
 
     start_time = time.time()
 
@@ -160,6 +178,7 @@ def answer_question(task: str, corpus: Corpus, document_id: int, scopes: list, *
     prior_text = None
     off_envelope = False
     examined = set()
+    requested_items: list[dict] = []
     with progress("🔍 Antwort aus den Quellen"):
         for bi, chunk in enumerate(batches, start=1):
             items = chunk.items
@@ -182,7 +201,13 @@ def answer_question(task: str, corpus: Corpus, document_id: int, scopes: list, *
                 task, items, prior=prior_text, as_json=False,
                 code_runner=(code_exec.run_code if code_exec.is_enabled() else None),
                 code_context=code_ctx, max_compute=config.CODE_EXEC_MAX_ROUNDS,
-                history=history, images=images or None)
+                history=history, images=images or None,
+                image_requester=_image_requester(corpus, document_id),
+                max_image_requests=config.REQUEST_IMAGE_MAX)
+            for req in out.get("requested") or []:
+                if req.get("delivered") and req.get("owner_kind"):
+                    requested_items.append(req)
+                    examined.add((req["owner_kind"], req["owner_id"]))
             result["compute"].extend(out.get("compute") or [])
             off_envelope = off_envelope or bool(out.get("off_envelope"))
             attached = set(out.get("attached_images") or [])
@@ -195,7 +220,7 @@ def answer_question(task: str, corpus: Corpus, document_id: int, scopes: list, *
                 it = item_by_index.get(idx)
                 if it is None or not (0 <= idx < len(top_hits)):
                     continue
-                if s.get("bild"):
+                if s.get("image"):
                     # Read off an attached crop: no verbatim quote can exist, the
                     # validated substitute is the reading + the flagged rendering.
                     quote = llm_client.visual_reading(s, attached)
@@ -218,6 +243,24 @@ def answer_question(task: str, corpus: Corpus, document_id: int, scopes: list, *
                 break     # fully answered → don't scan the remaining batches
     result["examined"] = sorted(examined)
 
+    # A crop the model asked for cannot be cited through `supports`: it carries no
+    # index in the batch it was handed to. Without a citation of its own the whole
+    # answer would count as ungrounded and be discarded below — so the request
+    # itself is the citation, and it is marked visual, which sends it through the
+    # focused read-off that turns a caption into an actual value.
+    for req in requested_items:
+        key = (req["owner_kind"], req["owner_id"])
+        if key in seen:
+            continue
+        hit = db.fetch_owner_content(corpus.conn, req["owner_kind"], req["owner_id"])
+        if hit is None:
+            continue
+        seen.add(key)
+        citations.append({**hit, "quote": (hit.get("title") or "").strip()
+                                  or (hit.get("text") or "")[:160],
+                          "visual": True, "requested": True})
+    result["requested"] = [r["block_id"] for r in requested_items]
+
     # Re-read every image-derived value in a focused single-image call and fold
     # the results into the answer. The big call above only IDENTIFIES which
     # figure carries the answer; with ten sources and several charts in one
@@ -232,8 +275,8 @@ def answer_question(task: str, corpus: Corpus, document_id: int, scopes: list, *
                     continue
                 ro = llm_client.read_off_image(task, str(img), cit["quote"])
                 if ro:
-                    cit["quote"] = ro["ablesung"]
-                    readings.append(f"{chunker.citation_label(cit)}: {ro['ablesung']}")
+                    cit["quote"] = ro["reading"]
+                    readings.append(f"{chunker.citation_label(cit)}: {ro['reading']}")
             if readings:
                 prior_text = llm_client.revise_with_readings(task, prior_text, readings)
 

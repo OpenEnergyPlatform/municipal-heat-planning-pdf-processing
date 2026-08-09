@@ -104,7 +104,7 @@ def _corpus(tmp_path, n_docs, items_per_doc):
     for d in range(n_docs):
         doc = root / ("doc%02d" % d)
         (doc / "results").mkdir(parents=True)
-        (doc / "results/output.json").write_text(
+        (doc / "results/document.json").write_text(
             json.dumps({"sections": [{"title": "T", "content": "x"}]}),
             encoding="utf-8")
     return root

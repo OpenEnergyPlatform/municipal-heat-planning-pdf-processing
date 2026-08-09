@@ -3,7 +3,7 @@ import json
 import os
 
 from docpipe.chunking import merge as M
-from docpipe.chunking.config import FINAL_JSON, IMAGES_JSON, MERGED_JSON
+from docpipe.chunking.config import SECTIONS_REFINED_JSON, VISUALS_JSON, DOCUMENT_JSON
 
 
 def _write(path, data):
@@ -25,8 +25,8 @@ def test_merge_preserves_segments_and_pages_and_enriches_media(tmp_path):
                     "caption": "T", "markdown": "| a |"}],
         "figures": [],
     }]}
-    _write(tmp_path / FINAL_JSON, final)
-    _write(tmp_path / IMAGES_JSON, images)
+    _write(tmp_path / SECTIONS_REFINED_JSON, final)
+    _write(tmp_path / VISUALS_JSON, images)
 
     merged = M.merge_single(tmp_path)
     sec = merged["sections"][0]
@@ -45,9 +45,9 @@ _FINAL = {"sections": [{"title": "T", "content": "c", "tables": [], "figures": [
 def _doc(root, name, merged=None):
     """A PDF output dir with a final JSON and, optionally, a cached merged one."""
     d = root / name
-    _write(d / FINAL_JSON, _FINAL)
+    _write(d / SECTIONS_REFINED_JSON, _FINAL)
     if merged is not None:
-        _write(d / MERGED_JSON, merged)
+        _write(d / DOCUMENT_JSON, merged)
     return d
 
 
@@ -78,7 +78,7 @@ def test_merge_batch_force_remerges_cached_dir(tmp_path, monkeypatch):
     assert M.merge_batch(tmp_path, force=True) == {"cached": True}
 
     assert len(loads) == 1
-    assert json.loads((d / MERGED_JSON).read_text(encoding="utf-8")) == _FINAL
+    assert json.loads((d / DOCUMENT_JSON).read_text(encoding="utf-8")) == _FINAL
 
 
 def _touch_newer(path, reference):
@@ -88,42 +88,42 @@ def _touch_newer(path, reference):
 
 def test_merge_batch_remerges_when_final_json_is_newer(tmp_path):
     d = _doc(tmp_path, "cached", merged={"sections": [{"title": "STALE"}]})
-    _touch_newer(d / FINAL_JSON, d / MERGED_JSON)
+    _touch_newer(d / SECTIONS_REFINED_JSON, d / DOCUMENT_JSON)
 
     M.merge_batch(tmp_path)
 
     # A re-run of Stage 4 must invalidate the cache, or its output never lands.
-    assert json.loads((d / MERGED_JSON).read_text(encoding="utf-8")) == _FINAL
+    assert json.loads((d / DOCUMENT_JSON).read_text(encoding="utf-8")) == _FINAL
 
 
 def test_merge_batch_remerges_when_images_json_is_newer(tmp_path):
     d = _doc(tmp_path, "cached", merged={"sections": [{"title": "STALE"}]})
-    _write(d / IMAGES_JSON, {"sections": []})
-    _touch_newer(d / IMAGES_JSON, d / MERGED_JSON)
+    _write(d / VISUALS_JSON, {"sections": []})
+    _touch_newer(d / VISUALS_JSON, d / DOCUMENT_JSON)
 
     M.merge_batch(tmp_path)
 
     # Stage 5 rewrites its JSON on every run, including a fully cached one. Miss
     # that and its enrichment never reaches the merge — and the section_text
     # embedding built from the un-enriched content is never rebuilt either.
-    assert json.loads((d / MERGED_JSON).read_text(encoding="utf-8")) == _FINAL
+    assert json.loads((d / DOCUMENT_JSON).read_text(encoding="utf-8")) == _FINAL
 
 
 def test_merge_batch_remerges_a_zero_byte_output(tmp_path):
     d = _doc(tmp_path, "cached", merged={"sections": [{"title": "STALE"}]})
-    (d / MERGED_JSON).write_bytes(b"")
-    _touch_newer(d / MERGED_JSON, d / FINAL_JSON)
+    (d / DOCUMENT_JSON).write_bytes(b"")
+    _touch_newer(d / DOCUMENT_JSON, d / SECTIONS_REFINED_JSON)
 
     M.merge_batch(tmp_path)
 
     # Newer than its inputs, so only the size guard can reject it.
-    assert json.loads((d / MERGED_JSON).read_text(encoding="utf-8")) == _FINAL
+    assert json.loads((d / DOCUMENT_JSON).read_text(encoding="utf-8")) == _FINAL
 
 
 def test_merge_keeps_the_previous_output_when_the_write_fails(tmp_path, monkeypatch):
     stale = {"sections": [{"title": "STALE"}]}
     d = _doc(tmp_path, "cached", merged=stale)
-    _touch_newer(d / FINAL_JSON, d / MERGED_JSON)
+    _touch_newer(d / SECTIONS_REFINED_JSON, d / DOCUMENT_JSON)
 
     def _boom(*a, **k):
         raise OSError(28, "No space left on device")
@@ -132,18 +132,18 @@ def test_merge_keeps_the_previous_output_when_the_write_fails(tmp_path, monkeypa
     M.merge_batch(tmp_path)
 
     # A failed re-merge must leave the usable cache in place and no .part behind.
-    assert json.loads((d / MERGED_JSON).read_text(encoding="utf-8")) == stale
-    assert not (d / (MERGED_JSON + ".part")).exists()
+    assert json.loads((d / DOCUMENT_JSON).read_text(encoding="utf-8")) == stale
+    assert not (d / (DOCUMENT_JSON + ".part")).exists()
 
 
 def test_merge_batch_reports_failure_for_invalid_final_json(tmp_path):
     d = tmp_path / "broken"
-    (d / FINAL_JSON).parent.mkdir(parents=True, exist_ok=True)
-    (d / FINAL_JSON).write_text("{ not json", encoding="utf-8")
+    (d / SECTIONS_REFINED_JSON).parent.mkdir(parents=True, exist_ok=True)
+    (d / SECTIONS_REFINED_JSON).write_text("{ not json", encoding="utf-8")
 
     # A single bad document must not abort the batch.
     assert M.merge_batch(tmp_path) == {"broken": False}
-    assert not (d / MERGED_JSON).exists()
+    assert not (d / DOCUMENT_JSON).exists()
 
 
 def test_merge_batch_contains_an_unreadable_cache_entry(tmp_path, monkeypatch):

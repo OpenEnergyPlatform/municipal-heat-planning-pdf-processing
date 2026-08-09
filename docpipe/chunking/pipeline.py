@@ -22,7 +22,7 @@ from .config import (
     EMBED_FLUSH_ITEMS,
     EMBED_PREPARE_WORKERS,
     EMBEDDING_MODEL,
-    MERGED_JSON,
+    DOCUMENT_JSON,
 )
 from .merge import merge_batch
 from .database import (
@@ -87,7 +87,7 @@ def run(
     evict_ids: dict[str, list[int]] = {}
     if force and "db" in steps and "embed" in steps:
         for d in sorted(p for p in data_dir.iterdir()
-                        if p.is_dir() and (p / MERGED_JSON).exists()):
+                        if p.is_dir() and (p / DOCUMENT_JSON).exists()):
             ids = get_document_faiss_ids(db_path, d.name)
             if ids:
                 evict_ids[d.name] = ids
@@ -112,7 +112,7 @@ def run(
 
         candidates = sorted(
             d for d in data_dir.iterdir()
-            if d.is_dir() and (d / MERGED_JSON).exists()
+            if d.is_dir() and (d / DOCUMENT_JSON).exists()
         )
 
         log.info("Found %d PDFs with merged output", len(candidates))
@@ -139,7 +139,7 @@ def run(
         def prepare(pdf_dir):
             pdf_name = pdf_dir.name
             existing = get_existing_embeddings(db_path, pdf_name)
-            with open(pdf_dir / MERGED_JSON, "r", encoding="utf-8") as f:
+            with open(pdf_dir / DOCUMENT_JSON, "r", encoding="utf-8") as f:
                 merged_data = json.load(f)
             return [
                 inp for inp in build_embedding_inputs(merged_data, pdf_name, pdf_dir)

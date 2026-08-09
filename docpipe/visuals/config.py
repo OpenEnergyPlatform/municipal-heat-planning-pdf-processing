@@ -9,6 +9,8 @@ import tempfile
 from pathlib import Path
 
 from docpipe import prompts
+from docpipe.artifacts import (DIR_IMAGES,                # noqa: F401  (re-exported)
+                               SECTIONS_JSON, SECTIONS_REFINED_JSON, VISUALS_JSON)
 
 
 def dump_json_atomic(data, path) -> None:
@@ -56,6 +58,27 @@ TABLE_VLM_TEMPERATURE = 0.1
 VLM_MAX_TOKENS        = 8192
 
 # ---------------------------------------------------------------------------
+# Runaway detection
+# ---------------------------------------------------------------------------
+# Sparse Gantt grids ("Zeitlicher Rahmen", "Maßnahmenzeitplan 2024–2030") make
+# the model lose count and emit empty cells until it hits VLM_MAX_TOKENS; the
+# JSON is then truncated and unparseable. Measured on the August 2026 run: runs
+# of 29 to 75 consecutive empty cells, where no real table exceeded a handful.
+# A stop sequence on the empty-cell run was tried and removed. It cut the answer
+# mid-JSON, which then had to be repaired, and it bought nothing the detector
+# below does not already do — the detector only chooses how to retry, so a
+# misjudgement there costs a differently-worded attempt rather than content.
+RUNAWAY_CELL_RUN = int(os.environ.get("VLM_RUNAWAY_CELL_RUN", "25"))
+
+# repetition_penalty for the attempt AFTER the indexed one failed, so index 0 is
+# unused: the first attempt runs clean. A table legitimately repeats pipes,
+# dashes, units and years, and a penalty blunts exactly that — hence the gentle
+# start. A harder ladder (1.4 / 1.8) was tried and reverted: at 1.8 the pipe
+# token is penalised so hard that a table is barely writable, and answers
+# broke off after ten tokens.
+RETRY_PENALTIES = [None, 1.1, 1.3]
+
+# ---------------------------------------------------------------------------
 # Table QA gate (see qa.py / process.py)
 # ---------------------------------------------------------------------------
 # Coverage is only assessed when the table has a text layer.
@@ -66,19 +89,9 @@ TABLE_QA_MIN_SOURCE_TOKENS = 8
 TABLE_QA_RETRY_TEMPERATURE = 0.4
 TABLE_QA_RETRY_PENALTY     = 1.3
 
-# ---------------------------------------------------------------------------
-# Input / output file paths (relative to a preprocessing output_dir)
-# ---------------------------------------------------------------------------
-
-# Preferred input; falls back to STRUCTURED_OUTPUT_JSON when absent.
-FINAL_OUTPUT_JSON      = "results/structured_output_final.json"
-STRUCTURED_OUTPUT_JSON = "results/structured_output.json"
-
-# Output produced by this module.
-ENRICHED_OUTPUT_JSON   = "results/structured_output_images.json"
-
-# Directory containing cropped table/figure PNGs (relative to output_dir).
-DIR_IMAGES = "images"
+# Input / output paths: see docpipe/artifacts.py, imported above. This module
+# reads SECTIONS_REFINED_JSON (falling back to SECTIONS_JSON) and writes
+# VISUALS_JSON; DIR_IMAGES holds the cropped table/figure PNGs.
 
 # ---------------------------------------------------------------------------
 # Prompts – English instructions, German output (the source documents are
