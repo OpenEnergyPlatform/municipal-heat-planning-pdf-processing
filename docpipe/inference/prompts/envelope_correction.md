@@ -1,0 +1,1 @@
+Deine letzte Ausgabe folgte dem Schema aus dem Auftrag statt der Antwortstruktur. Das Schema des Auftrags gehört NUR in "answer". Gib die gleiche Antwort jetzt als {"found": true, "complete": <bool>, "answer": ..., "supports": [{"index": <int>, "quote": "<wörtlicher Satz aus dem Auszug>"}]} zurück — oder {"found": false}, wenn die Auszüge nichts hergeben.
