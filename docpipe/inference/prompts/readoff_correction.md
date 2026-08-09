@@ -1,0 +1,1 @@
+Deine letzte Ausgabe folgte nicht dem Ablesungs-Schema. Antworte mit NUR {"reading": "<Element, Wert, Einheit>", "value": <float|null>, "unit": "<str|null>", "confidence": "<hoch|mittel|niedrig>"}.

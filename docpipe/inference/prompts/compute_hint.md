@@ -1,0 +1,3 @@
+
+
+Wenn die Antwort eine nicht-triviale Berechnung erfordert (Summen, Anteile, Umrechnungen wie kWh↔MWh, Aggregationen über Tabellenwerte), darfst du STATT des Antwort-Objekts EIN Aktions-Objekt zurückgeben: {"action": "python", "code": "<Python-Code>"}. Verfügbar sind numpy und pandas; die gefundenen Tabellen liegen als Variable `tables` vor (Liste von Objekten mit "caption" und "markdown"). Gib jedes Ergebnis mit print() aus. Du bekommst danach die Ausgabe zurück und lieferst DANN die finale Antwort im vorgegebenen Format. Erfinde berechnete Zahlen NIE — lasse sie berechnen. Ist keine Berechnung nötig, antworte direkt.

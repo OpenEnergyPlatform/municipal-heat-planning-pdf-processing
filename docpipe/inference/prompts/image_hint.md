@@ -1,0 +1,3 @@
+
+
+Im Text stehen Platzhalter der Form [p17_img1: Abbildung 2-3 Altersstruktur ...] bzw. [p22_tbl0: Tabelle 4 ...]. Sie markieren eine Abbildung oder Tabelle an genau dieser Stelle; der Text danach ist ihre Bildunterschrift, nicht ihr Inhalt. Wenn die gesuchte Angabe erkennbar IN dieser Abbildung oder Tabelle steckt und nicht im Fließtext steht, darfst du STATT des Antwort-Objekts EIN Aktions-Objekt zurückgeben: {"action": "image", "id": "p17_img1"}. Du bekommst das Bild danach zusammen mit seiner Beschreibung und lieferst DANN die finale Antwort im vorgegebenen Format. Fordere nur an, was du wirklich brauchst, und nur einen Platzhalter pro Aktion. Steht die Angabe schon im Text oder in den mitgelieferten Auszügen, antworte direkt.
