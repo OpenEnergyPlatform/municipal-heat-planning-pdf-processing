@@ -73,6 +73,14 @@ class Profile:
             raise
         return getattr(loaded, attr, None)
 
+    def require(self, module: str, attr: str):
+        """`component`, for the parts the pipeline cannot run without."""
+        value = self.component(module, attr)
+        if value is None:
+            raise LookupError(f"profile {self.name!r} provides no {module}.{attr} "
+                              f"({PROFILES_PACKAGE}/{self.name}/{module}.py)")
+        return value
+
     # -- where the profile's own files live -------------------------------
     @property
     def package_dir(self) -> Path:

@@ -36,11 +36,7 @@ def _component(attr: str, profile: Optional[Profile] = None):
     profile = profile or active_profile()
     if profile is None:
         raise LookupError(f"the answer loop needs a profile; set ${ENV_VAR}")
-    value = profile.component("inference", attr)
-    if value is None:
-        raise LookupError(f"profile {profile.name!r} provides no inference.{attr} "
-                          f"(profiles/{profile.name}/inference.py)")
-    return value
+    return profile.require("inference", attr)
 
 
 _checked: dict = {}

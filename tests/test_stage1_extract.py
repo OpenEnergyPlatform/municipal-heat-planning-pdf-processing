@@ -1,4 +1,6 @@
 """Tests for Stage 1 text helpers (hyphenation, block validity)."""
+import pytest
+
 from docpipe.preprocessing import stage1_extract as s1
 
 
@@ -7,6 +9,15 @@ def _block(*lines):
     return {"lines": [
         {"spans": [{"chars": [{"c": ch} for ch in line]}]} for line in lines
     ]}
+
+
+@pytest.fixture
+def as_profile(monkeypatch):
+    """Run the extractor as another profile would."""
+    def use(name):
+        monkeypatch.setenv("DOCPIPE_PROFILE", name)
+        monkeypatch.setattr(s1, "_hyphen_exceptions", {})
+    return use
 
 
 def test_dehyphenates_german_compound_across_line_break():
@@ -23,6 +34,41 @@ def test_keeps_hyphen_before_conjunction_exception():
 def test_no_merge_when_next_line_starts_uppercase():
     txt = s1._spans_to_text(_block("Nord-", "Süd"))
     assert "Nord-" in txt          # uppercase after the dash → kept, not joined
+
+
+# ---------------------------------------------------------------------------
+# Which words hold a hyphen open is the profile's business
+# ---------------------------------------------------------------------------
+
+def test_english_suspended_hyphenation_survives(as_profile):
+    """"short-" + "and long-term" is one construction. Under the German list
+    nothing matches, the two lines are glued, and the corpus carries
+    "shortand long-term" everywhere the phrase occurs."""
+    as_profile("ar6")
+
+    txt = s1._spans_to_text(_block("mitigation in the short-", "and long-term"))
+
+    assert "short- and long-term" in txt
+
+
+def test_the_german_list_does_not_reach_the_english_corpus(as_profile):
+    """Counterpart: "und" holds nothing open in an English paper, and a word
+    genuinely broken across the break must still be joined."""
+    as_profile("ar6")
+
+    txt = s1._spans_to_text(_block("the decarboni-", "sation pathway"))
+
+    assert "decarbonisation pathway" in txt
+
+
+def test_each_profile_gets_its_own_list(as_profile):
+    as_profile("kwp")
+    german = s1.hyphen_exceptions()
+    as_profile("ar6")
+    english = s1.hyphen_exceptions()
+
+    assert german.match("und Kälte") and not german.match("and cooling")
+    assert english.match("and cooling") and not english.match("und Kälte")
 
 
 def test_is_valid_text_block():
