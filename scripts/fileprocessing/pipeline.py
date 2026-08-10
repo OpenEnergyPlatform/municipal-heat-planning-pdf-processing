@@ -24,12 +24,16 @@ def _build_parser() -> argparse.ArgumentParser:
         description="Download and register the source PDFs of a profile",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""\
-Example:
-python -m scripts.fileprocessing --profile kwp --excel kww.xlsx --db data/kwp/kwp.db --data-dir data/kwp/pdf
+Examples:
+python -m scripts.fileprocessing --profile kwp --source kww.xlsx --db data/kwp/kwp.db --data-dir data/kwp/pdf
+python -m scripts.fileprocessing --profile ar6 --source pdf_index.json --db data/ar6/ar6.db --data-dir data/ar6/pdf
         """,
     )
-    p.add_argument("--excel", required=True,
-                   help="Path to the excel file containing the meta-data")
+    # --excel is what this was called while kwp was the only profile, and the
+    # HPC job scripts still say it.
+    p.add_argument("--source", "--excel", dest="source", required=True,
+                   help="The profile's document list (kwp: the KWW sheet, "
+                        "ar6: the crawl index)")
     p.add_argument("--db", required=True, help="Path to the SQLite database")
     p.add_argument("--data-dir", help="Directory the PDFs live in")
     p.add_argument("--backfill-meta", action="store_true",
@@ -54,7 +58,7 @@ def main() -> None:
         backfill = profile.component("source", "backfill_meta")
         if backfill is None:
             raise SystemExit(f"profile {profile.name!r} has no --backfill-meta step")
-        n = backfill(Path(args.excel), Path(args.db))
+        n = backfill(Path(args.source), Path(args.db))
         log.info("Backfilled project metadata for %d entries", n)
         return
 
@@ -64,4 +68,4 @@ def main() -> None:
                          f"(profiles/{profile.name}/source.py: SOURCE)")
     if not args.data_dir:
         raise SystemExit("--data-dir is required unless --backfill-meta is given")
-    ingest(source_class(Path(args.excel)), Path(args.db), Path(args.data_dir), profile)
+    ingest(source_class(Path(args.source)), Path(args.db), Path(args.data_dir), profile)
