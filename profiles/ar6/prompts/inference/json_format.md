@@ -1,0 +1,1 @@
+Reformulate the given answer ("answer") to the task ("task") as a VALID JSON object, WITHOUT adding or omitting content. If the task follows a schema (e.g. {"creator": "..."}), keep to it exactly, otherwise choose descriptive fields; details missing from the answer = null. Respond with ONLY the JSON object, no markdown, no text before/after.
