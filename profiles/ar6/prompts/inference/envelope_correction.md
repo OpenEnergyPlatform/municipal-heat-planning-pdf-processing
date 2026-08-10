@@ -1,0 +1,1 @@
+Your last output followed the schema from the task instead of the response structure. The task's schema belongs ONLY in "answer". Return the same answer now as {"found": true, "complete": <bool>, "answer": ..., "supports": [{"index": <int>, "quote": "<verbatim sentence from the excerpt>"}]} — or {"found": false} if the excerpts yield nothing.

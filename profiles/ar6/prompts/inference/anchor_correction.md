@@ -1,0 +1,1 @@
+Your last output was an evaluation or a refusal, NOT a search anchor. Now output exclusively one positive, concrete statement or caption of ONE hypothetical passage — no negation, no words such as 'no', 'not available', 'not contained' or 'context'. Only {"phrase": "<the statement>"}.
