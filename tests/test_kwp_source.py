@@ -174,10 +174,42 @@ def test_gate_rejects_scan_without_text(tmp_path):
 
 
 def test_gate_rejects_garbled_text(tmp_path):
-    """Symbol soup: enough characters to judge, but no letters and no umlauts."""
+    """Symbol soup on every page: enough characters to judge, and no letters."""
     p = _pdf(tmp_path / "garbled.pdf", 40, text=GARBLE, lines=8)
     ok, reason = pdf_quality.check(p)
     assert not ok and reason.startswith("BROKEN_ENCODING"), reason
+
+
+ENGLISH_TEXT = ("The scenario reaches net-zero emissions by 2050 across all sectors. "
+                "Final energy demand falls while electrification of heat accelerates.")
+NUMBERS = "2018 2019 2020 | 1.2 3.4 -0.8 | 12.5 % 7.1 % 0.3 % | 1 204 3 517 8 012 |"
+
+
+def test_a_statistical_annex_is_not_a_broken_glyph_map(tmp_path):
+    """An outlook that is mostly tables reads as symbol soup in aggregate: the
+    even sample lands in the annex and the letter ratio drops below the bar.
+    A broken glyph map is broken on every page, so one page of ordinary prose
+    acquits the document — this cost the AR6 corpus a readable 318-page report
+    while the rule still said "and no umlauts", which only ever acquitted German.
+    """
+    import fitz
+    doc = fitz.open()
+    for i in range(60):
+        page = doc.new_page()
+        text = ENGLISH_TEXT if i % 12 == 0 else NUMBERS
+        for ln in range(8):
+            page.insert_text((50, 100 + ln * 20), text, fontsize=9)
+    p = tmp_path / "outlook.pdf"
+    doc.save(str(p)); doc.close()
+
+    ok, reason = pdf_quality.check(p)
+
+    assert ok, reason
+
+
+def test_english_prose_passes_without_an_umlaut_in_sight(tmp_path):
+    ok, reason = pdf_quality.check(_pdf(tmp_path / "paper.pdf", 12, text=ENGLISH_TEXT))
+    assert ok, reason
 
 
 def test_gate_rejects_unreadable_file(tmp_path):
