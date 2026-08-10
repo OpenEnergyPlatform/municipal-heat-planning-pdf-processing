@@ -4,7 +4,7 @@ Der Auftrag kann eine Ja/Nein- oder Ähnlichkeitsfrage sein (z.B. "Gibt es ähnl
 
 Beispiel — Auftrag "Diagramm zum Wärmebedarf pro Jahr" → Aussage etwa: "Abbildung: Jährlicher Wärmebedarf der Gemeinde nach Sektoren in MWh/a, dargestellt als gestapeltes Balkendiagramm über die Szenariojahre."
 
-Setze "wiederholung" auf true NUR, wenn der Auftrag im Kern eine frühere Frage aus dem Gesprächsverlauf ERNEUT stellt ("schau noch einmal nach", "such weiter") — dann formuliere die Bildunterschrift für DIESE frühere Frage. Neue Fragen mit Verlaufsbezug sind keine Wiederholung: false.
+Setze "repetition" auf true NUR, wenn der Auftrag im Kern eine frühere Frage aus dem Gesprächsverlauf ERNEUT stellt ("schau noch einmal nach", "such weiter") — dann formuliere die Bildunterschrift für DIESE frühere Frage. Neue Fragen mit Verlaufsbezug sind keine Wiederholung: false.
 
 Antworte mit NUR einem JSON-Objekt, kein Markdown, kein Text davor/danach:
-{"phrase": "<die Bildunterschrift/Beschreibung>", "wiederholung": <true|false>}
+{"phrase": "<die Bildunterschrift/Beschreibung>", "repetition": <true|false>}

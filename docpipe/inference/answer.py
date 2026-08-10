@@ -22,7 +22,7 @@ from pathlib import Path
 from typing import Any, Callable, Optional
 
 from . import chunker, code_exec, config, db, llm_client, request_log
-from . import faiss_store
+from . import faiss_store, wording
 
 log = logging.getLogger(__name__)
 
@@ -120,14 +120,14 @@ def answer_question(task: str, corpus: Corpus, document_id: int, scopes: list, *
         phrase = None
     elif image_bytes is not None:
         mode = "image+text"
-        with progress("🔎 Suchanker (Bild+Text)"):
+        with progress("🔎 Search anchor (image+text)"):
             phrase, recheck = llm_client.make_search_phrase(task, visual=True,
                                                             history=history)
         tmp_path = _write_temp_image(image_bytes)
         item = {"text": phrase, "image": tmp_path}
     else:
         mode = "text"
-        with progress("🔎 Suchanker"):
+        with progress("🔎 Search anchor"):
             phrase, recheck = llm_client.make_search_phrase(
                 task, visual=scopes_are_visual(scopes), history=history)
         item = {"text": phrase}
@@ -158,7 +158,7 @@ def answer_question(task: str, corpus: Corpus, document_id: int, scopes: list, *
             pass
 
     # --- 3) scoped retrieval ---
-    with progress("📚 Suche"):
+    with progress("📚 Retrieval"):
         embedding_types = [t for s in scopes for t in config.SCOPE_TO_EMBEDDING_TYPES[s]]
         hits = faiss_store.retrieve(
             corpus.conn, corpus.index, corpus.id_to_pos, document_id, embedding_types,
@@ -179,7 +179,7 @@ def answer_question(task: str, corpus: Corpus, document_id: int, scopes: list, *
     off_envelope = False
     examined = set()
     requested_items: list[dict] = []
-    with progress("🔍 Antwort aus den Quellen"):
+    with progress("🔍 Answer from the sources"):
         for bi, chunk in enumerate(batches, start=1):
             items = chunk.items
             # Sources the LLM actually reads this turn; a later re-check of the
@@ -268,7 +268,7 @@ def answer_question(task: str, corpus: Corpus, document_id: int, scopes: list, *
     visual_cits = [c for c in citations if c.get("visual")]
     if visual_cits and prior_text:
         readings = []
-        with progress("🔬 Ablesung präzisieren"):
+        with progress("🔬 Refine the read-off"):
             for cit in visual_cits[: config.READOFF_MAX_CALLS]:
                 img = corpus.resolve_image(cit.get("image_path"))
                 if img is None:
@@ -283,11 +283,12 @@ def answer_question(task: str, corpus: Corpus, document_id: int, scopes: list, *
     # Deterministic marking of read-off values: the prompt asks for the phrase,
     # but only this guarantees it. In JSON output the schema may leave no room
     # for it — there the flagged citation below the answer is the channel.
+    # Marker and note are the profile's: with the wrong language the marker
+    # never matches and the note is stapled to every figure-backed answer.
+    readoff_marker, readoff_note = wording.readoff()
     if prior_text and any(c.get("visual") for c in citations) \
-            and "abgelesen" not in prior_text:
-        prior_text = (prior_text.rstrip()
-                      + "\n\n(Hinweis: Werte teilweise aus Abbildungen abgelesen "
-                        "– Schätzwerte, Ablesefehler möglich.)")
+            and readoff_marker.casefold() not in prior_text.casefold():
+        prior_text = prior_text.rstrip() + "\n\n" + readoff_note
     if not citations or not prior_text:      # nothing grounded → refuse (anti-hallucination)
         # An off-envelope reply is a model failure, not an absent fact — logging
         # both as "no citations" makes the two indistinguishable after the fact.
@@ -300,7 +301,7 @@ def answer_question(task: str, corpus: Corpus, document_id: int, scopes: list, *
     # --- 5) final answer (format to JSON once at the end, if requested) ---
     result["answer_text"] = prior_text          # prose answer, for follow-up context
     if as_json:
-        with progress("🧩 Als JSON"):
+        with progress("🧩 As JSON"):
             result["answer"] = llm_client.format_as_json(task, prior_text)
     else:
         result["answer"] = prior_text

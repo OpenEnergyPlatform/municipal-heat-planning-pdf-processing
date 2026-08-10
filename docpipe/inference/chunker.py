@@ -10,6 +10,7 @@ import logging
 from dataclasses import dataclass, field
 from typing import Optional
 
+from . import wording
 from .config import LLM_TOKENIZER_ID
 
 log = logging.getLogger(__name__)
@@ -50,24 +51,31 @@ def count_tokens(text: str, tokenizer=None) -> int:
 
 
 def citation_label(hit: dict) -> str:
-    """Human-readable source label for a retrieval hit."""
-    lq, rq = '„', '“'
+    """Human-readable source label for a retrieval hit.
+
+    Goes both ways: the user reads it under the answer and the model reads it
+    as the excerpt's `source`. So the words are the profile's, only the shape
+    is ours.
+    """
+    w = wording.phrases()
+    lq, rq = w["citation_quotes"]
     page = hit.get("page_number")
-    page_str = f'Seite {page}' if page is not None else 'Seite unbekannt'
+    page_str = (w["citation_page"].format(page=page) if page is not None
+                else w["citation_page_unknown"])
     sec_title = hit.get("section_title")
     kind = hit.get("owner_kind")
+    section = w["citation_section"]
 
     if kind == "section":
-        name = sec_title or "Abschnitt"
-        return f'Abschnitt {lq}{name}{rq}, {page_str}'
+        name = sec_title or section
+        return f'{section} {lq}{name}{rq}, {page_str}'
+    in_sec = f' ({section} {lq}{sec_title}{rq})' if sec_title else ''
     if kind == "table":
-        cap = hit.get("title") or "Tabelle"
-        in_sec = f' (Abschnitt {lq}{sec_title}{rq})' if sec_title else ''
-        return f'Tabelle {lq}{cap}{rq}{in_sec}, {page_str}'
+        cap = hit.get("title") or w["citation_table"]
+        return f'{w["citation_table"]} {lq}{cap}{rq}{in_sec}, {page_str}'
     if kind == "figure":
-        cap = hit.get("title") or "Abbildung"
-        in_sec = f' (Abschnitt {lq}{sec_title}{rq})' if sec_title else ''
-        return f'Abbildung {lq}{cap}{rq}{in_sec}, {page_str}'
+        cap = hit.get("title") or w["citation_figure"]
+        return f'{w["citation_figure"]} {lq}{cap}{rq}{in_sec}, {page_str}'
     return page_str
 
 

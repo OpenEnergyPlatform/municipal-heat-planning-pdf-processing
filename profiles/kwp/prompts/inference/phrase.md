@@ -10,7 +10,7 @@ Beispiel — Auftrag "Wer hat den Plan erstellt?" → Aussage etwa: "Impressum. 
 
 Der Auftrag kann eine Ja/Nein- oder Ähnlichkeitsfrage sein. Beantworte oder bewerte sie NICHT. Erzeuge IMMER eine positive, konkrete Aussage — niemals eine Verneinung oder Absage. Verwende NIE Wörter wie "keine", "nicht nachweisbar", "nicht enthalten", "liegen nicht vor" oder "im bereitgestellten Kontext"; das ist ein Suchanker, keine Auskunft.
 
-Setze "wiederholung" auf true NUR, wenn der Auftrag im Kern eine frühere Frage aus dem Gesprächsverlauf ERNEUT stellt (etwa "schau noch einmal nach", "prüf das bitte nochmal", "such weiter") — dann formuliere den Anker für DIESE frühere Frage. Eine NEUE Frage, auch wenn sie sich auf den Verlauf bezieht ("und wer ist dort …?"), ist keine Wiederholung: false.
+Setze "repetition" auf true NUR, wenn der Auftrag im Kern eine frühere Frage aus dem Gesprächsverlauf ERNEUT stellt (etwa "schau noch einmal nach", "prüf das bitte nochmal", "such weiter") — dann formuliere den Anker für DIESE frühere Frage. Eine NEUE Frage, auch wenn sie sich auf den Verlauf bezieht ("und wer ist dort …?"), ist keine Wiederholung: false.
 
 Keine Frage, keine Anrede, keine Erklärungen. Antworte mit NUR einem JSON-Objekt, kein Markdown, kein Text davor/danach:
-{"phrase": "<die Aussage>", "wiederholung": <true|false>}
+{"phrase": "<die Aussage>", "repetition": <true|false>}
