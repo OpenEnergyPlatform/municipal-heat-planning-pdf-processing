@@ -9,7 +9,7 @@ Tools and scripts developed to support the [MHPO development](https://github.com
 The pipeline itself is generic: `docpipe/` knows about PDFs, not about heat
 plans. What a project contributes lives in `profiles/<name>/` — where its
 documents come from (`source.py`), the tables it adds (`schema.sql`), the
-prompts it overrides (`prompts/`) and the filters its app offers.
+prompts it runs on (`prompts/<stage>/`) and the filters its app offers.
 
 Pick one per run. The profile also decides where the data lives
 (`data/<name>/`), so two projects never share a database or an index:
@@ -19,10 +19,16 @@ export DOCPIPE_PROFILE=kwp
 python -m docpipe.preprocessing            # paths come from the profile
 ```
 
-Set it in the environment rather than only passing `--profile`: a stage binds
-its prompts when it is imported, before the command line is parsed. A profile
-that overrides prompts and is named only on the command line is refused rather
-than run with the wrong ones.
+The prompts belong to the profile, all of them — the core has no defaults. A
+prompt names the corpus it was written for and the language it answers in, and
+neither is something `docpipe/` could guess; a fallback could only be some
+other project's prompt. A stage whose profile has no prompt for it says so and
+stops.
+
+Set the profile in the environment rather than only passing `--profile`: a
+stage binds its prompts when it is imported, before the command line is parsed.
+A profile that carries prompts and is named only on the command line is refused
+rather than run with the wrong ones.
 
 ## Pipeline Overview
 

@@ -1,8 +1,11 @@
 """
-prompts.py – Prompts live as Markdown next to the stage that uses them.
+prompts.py – Prompts belong to the profile, as Markdown per stage:
 
-    docpipe/<stage>/prompts/<name>.md          core default
-    profiles/<profile>/prompts/<stage>/<name>.md   project override
+    profiles/<profile>/prompts/<stage>/<name>.md
+
+There is no core default. A prompt names the corpus it is written for and the
+language it answers in, and the core knows neither — a fallback here could only
+be some other project's prompt, which is worse than a missing file.
 
 Optional YAML front matter carries the model parameters that belong to the
 prompt (temperature, max_tokens), so the two never drift apart.
@@ -22,9 +25,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable, Mapping, Optional
 
-from .profile import Profile, active_profile
+from .profile import ENV_VAR, Profile, active_profile
 
-CORE_ROOT = Path(__file__).resolve().parent
 VERSION_FILE = ".prompt_versions.json"
 _FRONT_MATTER = re.compile(r"\A---\r?\n(.*?)\r?\n---\r?\n", re.S)
 _PLACEHOLDER = re.compile(r"\{\{\s*(\w+)\s*\}\}")
@@ -56,32 +58,26 @@ class Prompt:
         return _PLACEHOLDER.sub(lambda m: str(values[m.group(1)]), self.text)
 
 
-def core_path(prompt_id: str) -> Path:
+def path_for(prompt_id: str, profile: Profile) -> Path:
     stage, _, name = prompt_id.partition("/")
     if not stage or not name:
         raise ValueError(f"prompt id must be '<stage>/<name>', got {prompt_id!r}")
-    return CORE_ROOT / stage / "prompts" / f"{name}.md"
-
-
-def override_path(prompt_id: str, profile: Profile) -> Path:
-    return profile.prompts_dir / f"{prompt_id}.md"
+    return profile.prompts_dir / stage / f"{name}.md"
 
 
 def load(prompt_id: str, profile: Optional[Profile] = None,
          use_ambient: bool = True) -> Prompt:
-    """Profile override first, core default second."""
+    """The prompt as the profile writes it."""
     if profile is None and use_ambient:
         profile = active_profile()
+    if profile is None:
+        raise LookupError(
+            f"prompt {prompt_id!r} needs a profile; set ${ENV_VAR} or pass one")
 
-    path = None
-    if profile is not None:
-        candidate = override_path(prompt_id, profile)
-        if candidate.is_file():
-            path = candidate
-    if path is None:
-        path = core_path(prompt_id)
+    path = path_for(prompt_id, profile)
     if not path.is_file():
-        raise FileNotFoundError(f"prompt {prompt_id!r} not found at {path}")
+        raise FileNotFoundError(
+            f"profile {profile.name!r} provides no prompt {prompt_id!r} ({path})")
 
     raw = path.read_text(encoding="utf-8")
     meta, body = _split(raw)

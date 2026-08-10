@@ -99,10 +99,15 @@ def test_late_profile_is_refused_when_it_overrides_prompts(monkeypatch, tmp_path
         resolve_profile(argparse.Namespace(profile="probe"))
 
 
-def test_late_profile_is_fine_without_prompt_overrides(monkeypatch):
+def test_late_profile_is_fine_without_prompts(monkeypatch, tmp_path):
+    """Stages 1-3 use no model and therefore no prompt. A profile that only
+    feeds those may be named on the command line like any other argument."""
     import argparse
 
     from docpipe.profile import resolve_profile
 
+    monkeypatch.setattr("docpipe.profile.load_profile",
+                        lambda name=None: Profile(name="probe", home=tmp_path))
     monkeypatch.delenv(ENV_VAR, raising=False)
-    assert resolve_profile(argparse.Namespace(profile="kwp")).name == "kwp"
+
+    assert resolve_profile(argparse.Namespace(profile="probe")).name == "probe"

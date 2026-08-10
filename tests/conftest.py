@@ -15,6 +15,11 @@ import pytest
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 sys.path.insert(0, ROOT)
 
+# A stage binds its prompts when it is imported, and prompts belong to a
+# profile — so importing one without a profile is an error, not a default.
+# Tests that care about another profile pass it explicitly.
+os.environ["DOCPIPE_PROFILE"] = "kwp"
+
 
 def _ensure_stub(name, attrs=None, submodules=None):
     """Install a minimal stub module under *name* only if it cannot be imported."""
