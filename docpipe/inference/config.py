@@ -66,12 +66,12 @@ CODE_EXEC_MAX_ROUNDS = int(os.environ.get("CODE_EXEC_MAX_ROUNDS", "2"))
 # ---------------------------------------------------------------------------
 # Scopes: the selectable search areas -> underlying embedding types
 # ---------------------------------------------------------------------------
-SCOPE_HEADINGS      = "Überschriften"
-SCOPE_TEXT          = "Textinhalte"
-SCOPE_TABLES_VL     = "Tabellen (Bild + Beschreibung)"
-SCOPE_TABLES_TEXT   = "Tabellen (nur Beschreibung)"
-SCOPE_FIGURES_VL    = "Bilder (Bild + Beschreibung)"
-SCOPE_FIGURES_TEXT  = "Bilder (nur Beschreibung)"
+SCOPE_HEADINGS      = "Headings"
+SCOPE_TEXT          = "Body text"
+SCOPE_TABLES_VL     = "Tables (image + description)"
+SCOPE_TABLES_TEXT   = "Tables (description only)"
+SCOPE_FIGURES_VL    = "Figures (image + description)"
+SCOPE_FIGURES_TEXT  = "Figures (description only)"
 
 SCOPE_TO_EMBEDDING_TYPES: dict[str, list[str]] = {
     SCOPE_HEADINGS:     ["section_title"],

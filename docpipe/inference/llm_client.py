@@ -35,12 +35,17 @@ from .config import (
 
 from docpipe import prompts
 
+from . import wording
+
 log = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
 # Prompts
 # ---------------------------------------------------------------------------
+# Everything the loop says around them comes from the same profile.
+_W = wording.phrases()
+
 PHRASE_SYSTEM_PROMPT = prompts.text("inference/phrase")
 
 CHUNK_QA_SYSTEM_PROMPT = prompts.text("inference/chunk_qa")
@@ -169,7 +174,7 @@ def _chat_json(messages: list, temperature: float) -> dict:
             if not raw:
                 convo = base_messages + [
                     {"role": "assistant", "content": ""},
-                    {"role": "user", "content": "Deine Antwort war leer. Antworte mit gültigem JSON."},
+                    {"role": "user", "content": _W["empty_reply"]},
                 ]
                 _backoff(attempt)
                 continue
@@ -178,7 +183,7 @@ def _chat_json(messages: list, temperature: float) -> dict:
             log.warning("LLM JSON parse failed (attempt %d/%d): %s", attempt, LLM_MAX_RETRIES, e)
             convo = base_messages + [
                 {"role": "assistant", "content": raw},
-                {"role": "user", "content": f"Parse-Fehler: {e}. Antworte mit NUR einem gültigen JSON-Objekt."},
+                {"role": "user", "content": _W["parse_error"].format(error=e)},
             ]
             _backoff(attempt)
         except Exception as e:  # transport / timeout → reset conversation, back off
@@ -210,34 +215,27 @@ def _history_context(history: Optional[list], limit: int = 5) -> str:
         return ""
     blocks = []
     for turn in history[-limit:]:
-        frage = str(turn.get("task", "")).strip()
-        if not frage:
+        task = str(turn.get("task", "")).strip()
+        if not task:
             continue
-        lines = [f"- Frage: {frage}"]
-        anker = str(turn.get("phrase", "")).strip()
-        if anker:
-            lines.append(f"  Suchanker: {anker}")
-        antwort = str(turn.get("answer", "")).strip()
-        if antwort:
-            lines.append(f"  Antwort: {antwort[:800]}")
+        lines = [f"- {_W['history_task']}: {task}"]
+        anchor = str(turn.get("phrase", "")).strip()
+        if anchor:
+            lines.append(f"  {_W['history_phrase']}: {anchor}")
+        answer = str(turn.get("answer", "")).strip()
+        if answer:
+            lines.append(f"  {_W['history_answer']}: {answer[:800]}")
         blocks.append("\n".join(lines))
     if not blocks:
         return ""
-    return ("\n\nBisheriger Gesprächsverlauf (nutze ihn NUR, um Bezüge im aktuellen Auftrag "
-            "aufzulösen — Pronomen, \"und …\", Auslassungen; KEINE Faktenquelle, Belege "
-            "ausschließlich aus den Auszügen):\n" + "\n".join(blocks))
+    return f"\n\n{_W['history_heading']}:\n" + "\n".join(blocks)
 
 
 # A search anchor is a HYPOTHETICAL, present-tense passage/caption. If the model
 # slips into evaluating or refusing instead, the string is not an anchor at all;
-# detect that and regenerate / fall back.
-_NON_ANCHOR_RE = re.compile(
-    r"(?i)(bereitgestellt\w*\s+kontext|nicht\s+nachweisbar|nicht\s+enthalten|"
-    r"nicht\s+vorhanden|nicht\s+ersichtlich|nicht\s+erkennbar|"
-    r"nicht\s+ableit\w*|nicht\s+ermittel\w*|liegen?\s+nicht\s+vor|"
-    r"lässt\s+sich\s+nicht|kann(?:st)?\s+nicht|"
-    r"keine\s+(?:ähnlich\w*|angaben|information\w*|daten|diagramm\w*|abbildung\w*))"
-)
+# detect that and regenerate / fall back. Which words give that away is a
+# property of the answer's language, so the profile supplies the pattern.
+_NON_ANCHOR_RE = wording.non_anchor()
 
 _ENVELOPE_CORRECTION = prompts.text("inference/envelope_correction")
 
@@ -276,7 +274,7 @@ def make_search_phrase(task: str, visual: bool = False,
     # rejects a second one ("System message must be at the beginning"). Fold our
     # instructions into the user turn instead.
     prompt = IMAGE_PHRASE_SYSTEM_PROMPT if visual else PHRASE_SYSTEM_PROMPT
-    base = f"{prompt}{_history_context(history)}\n\nAuftrag des Nutzers:\n{task}"
+    base = f"{prompt}{_history_context(history)}\n\n{_W['task_heading']}:\n{task}"
     messages = [{"role": "user", "content": base}]
     # If the model evaluates/denies instead of anchoring, re-ask once with a
     # correction, then fall back to the raw task.
@@ -288,7 +286,7 @@ def make_search_phrase(task: str, visual: bool = False,
             return task.strip(), False
         phrase = str(parsed.get("phrase", "")).strip()
         if phrase and not _looks_like_non_anchor(phrase):
-            return phrase, bool(parsed.get("wiederholung")) and bool(history)
+            return phrase, bool(parsed.get("repetition")) and bool(history)
         log.warning("Search phrase read as evaluation/denial, retrying: %r", phrase)
         messages = [{"role": "user", "content": f"{base}\n\n{_ANCHOR_CORRECTION}"}]
     return task.strip(), False
@@ -306,7 +304,7 @@ def ask_chunk(task: str, chunk_items: list[dict]) -> dict:
         first = chunk_items[0] if chunk_items else {}
         return {
             "found": True,
-            "answer": f"[STUB] Antwort basierend auf: {first.get('source', 'n/a')}",
+            "answer": f"[STUB] answer based on: {first.get('source', 'n/a')}",
             "quote": str(first.get("text", ""))[:120],
         }
 
@@ -345,10 +343,9 @@ def _format_exec_result(out: dict) -> str:
     """The user-turn text fed back to the model after a sandbox run."""
     if out.get("ok"):
         s = (out.get("stdout") or "").strip()
-        return "Ausführungsergebnis (stdout):\n" + (s if s else "(keine Ausgabe)")
-    err = (out.get("error") or (out.get("stderr") or "")).strip() or "unbekannter Fehler"
-    return ("Ausführung fehlgeschlagen:\n" + err[:1500] +
-            "\nKorrigiere den Code ODER antworte ohne Berechnung.")
+        return f"{_W['exec_stdout']}:\n" + (s if s else _W["exec_empty"])
+    err = (out.get("error") or (out.get("stderr") or "")).strip() or _W["exec_unknown"]
+    return f"{_W['exec_failed']}:\n" + err[:1500] + "\n" + _W["exec_recover"]
 
 
 def _compute_tail(compute: list, force: bool) -> str:
@@ -360,13 +357,10 @@ def _compute_tail(compute: list, force: bool) -> str:
     """
     if not compute:
         return ""
-    done = "\n\n".join(f"Ausgeführter Code:\n{c['code']}\n{_format_exec_result(c['output'])}"
+    done = "\n\n".join(f"{_W['code_heading']}:\n{c['code']}\n{_format_exec_result(c['output'])}"
                        for c in compute)
-    guide = ("Gib JETZT die finale Antwort im vorgegebenen JSON-Format (KEIN action-Objekt mehr)."
-             if force else
-             "Gib die finale Antwort im vorgegebenen JSON-Format — oder, nur falls unbedingt "
-             'nötig, eine weitere {"action":"python","code":...}.')
-    return "\n\nBereits ausgeführt:\n" + done + "\n\n" + guide
+    guide = _W["compute_guide_final"] if force else _W["compute_guide"]
+    return f"\n\n{_W['compute_heading']}:\n" + done + "\n\n" + guide
 
 
 def _requested_tail(requested: list, force: bool) -> str:
@@ -377,14 +371,11 @@ def _requested_tail(requested: list, force: bool) -> str:
     """
     if not requested:
         return ""
-    done = "\n".join(f"- [{r['block_id']}] {r.get('title') or 'ohne Bildunterschrift'}"
-                     f"{'' if r.get('delivered') else ' — Bild nicht verfügbar'}"
+    done = "\n".join(f"- [{r['block_id']}] {r.get('title') or _W['image_uncaptioned']}"
+                     f"{'' if r.get('delivered') else ' — ' + _W['image_unavailable']}"
                      for r in requested)
-    guide = ("Gib JETZT die finale Antwort im vorgegebenen JSON-Format (KEIN action-Objekt mehr)."
-             if force else
-             "Lies den Wert aus dem Bild ab und gib die finale Antwort — oder, nur falls "
-             'wirklich nötig, eine weitere {"action":"image","id":"..."}.')
-    return "\n\nAngeforderte Abbildungen (siehe Bilder):\n" + done + "\n\n" + guide
+    guide = _W["image_guide_final"] if force else _W["image_guide"]
+    return f"\n\n{_W['image_heading']}:\n" + done + "\n\n" + guide
 
 
 def _image_part(path: str, max_side: int = None, png: bool = False) -> Optional[dict]:
@@ -445,8 +436,8 @@ def read_off_image(task: str, image_path: str, hint: str) -> Optional[dict]:
     part = _image_part(image_path, max_side=READOFF_IMAGE_MAX_SIDE, png=True)
     if part is None:
         return None
-    text = (f"{READOFF_PROMPT}\nAuftrag des Nutzers:\n{task}\n\n"
-            f"Abzulesen (laut Vorprüfung):\n{hint}")
+    text = (f"{READOFF_PROMPT}\n{_W['task_heading']}:\n{task}\n\n"
+            f"{_W['readoff_heading']}:\n{hint}")
     # A format spec inside the task hijacks this schema too ({"amount": ...}
     # instead of {"reading": ...}) — re-ask once, same cure as the envelope.
     for attempt_text in (text, f"{text}\n\n{_READOFF_CORRECTION}"):
@@ -538,7 +529,7 @@ def answer_from_sources(task: str, chunk_items: list[dict],
     if LLM_STUB_MODE:
         first = chunk_items[0] if chunk_items else {}
         ans = {"answer": f"[STUB] {first.get('source', 'n/a')}"} if as_json \
-            else f"[STUB] Antwort basierend auf: {first.get('source', 'n/a')}"
+            else f"[STUB] answer based on: {first.get('source', 'n/a')}"
         return {"found": True, "complete": True, "answer": ans,
                 "supports": [{"index": first.get("index", 0),
                               "quote": str(first.get("text", ""))[:120]}],
@@ -559,7 +550,8 @@ def answer_from_sources(task: str, chunk_items: list[dict],
     for idx in sorted(images or {}):
         part = _image_part(images[idx])
         if part is not None:
-            image_parts.append({"type": "text", "text": f"Bild zum Auszug index={idx}:"})
+            image_parts.append({"type": "text",
+                                "text": _W["image_part"].format(index=idx) + ":"})
             image_parts.append(part)
             attached.append(idx)
 

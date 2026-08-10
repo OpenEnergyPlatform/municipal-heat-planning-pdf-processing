@@ -603,7 +603,7 @@ def test_make_search_phrase_flags_a_recheck(monkeypatch):
     monkeypatch.setattr(llm, "LLM_STUB_MODE", False)
     monkeypatch.setattr(llm, "_chat_json",
                         lambda m, temperature: {"phrase": "Impressum. Auftragnehmer: ...",
-                                                "wiederholung": True})
+                                                "repetition": True})
     hist = [{"task": "Welche Firma hat den Plan erstellt?", "answer": "(keine belegte Antwort gefunden)"}]
 
     phrase, recheck = llm.make_search_phrase("Schau bitte noch einmal nach", history=hist)
