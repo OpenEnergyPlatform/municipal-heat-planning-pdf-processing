@@ -18,14 +18,34 @@ from typing import Optional
 import fitz
 from PIL import Image
 
+from ..profile import ENV_VAR, active_profile
 from .config import (
     TEXT_BLOCK_MIN_CHARS,
-    HYPHEN_EXCEPTIONS,
     strip_private_use,
 )
 from .models import Block, PageData
 
 log = logging.getLogger(__name__)
+
+_hyphen_exceptions: dict = {}
+
+
+def hyphen_exceptions():
+    """Words that must not be pulled across a line-ending hyphen.
+
+    "Wärme-" + "und Kälteversorgung" is one construction, not one word, and so
+    is "short-" + "and long-term". Which words do that is a property of the
+    language, so the profile says so; the core would silently glue the wrong
+    corpus together.
+    """
+    profile = active_profile()
+    if profile is None:
+        raise LookupError(f"text extraction needs a profile; set ${ENV_VAR}")
+    if profile.name not in _hyphen_exceptions:
+        words = profile.require("preprocessing", "HYPHEN_EXCEPTIONS")
+        _hyphen_exceptions[profile.name] = re.compile(
+            r"^(?:" + "|".join(re.escape(w) for w in words) + r")\b", re.IGNORECASE)
+    return _hyphen_exceptions[profile.name]
 
 
 def _rect_to_bbox(rect: fitz.Rect) -> list[float]:
@@ -57,6 +77,7 @@ def _spans_to_text(block: dict) -> str:
             lines_text.append(line_str)
 
     result: list[str] = []
+    keep_the_hyphen = hyphen_exceptions()
 
     for line in lines_text:
         if not result:
@@ -69,10 +90,7 @@ def _spans_to_text(block: dict) -> str:
             before_dash = prev[-2] if len(prev) >= 2 else ""
             after_dash  = line[0]
 
-            exception_match = any(
-                re.match(rf"^{ex}\b", line, re.IGNORECASE)
-                for ex in HYPHEN_EXCEPTIONS
-            )
+            exception_match = keep_the_hyphen.match(line)
 
             if (
                 before_dash.isalpha()

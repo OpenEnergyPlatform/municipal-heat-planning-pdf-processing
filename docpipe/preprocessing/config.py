@@ -30,14 +30,6 @@ LAYOUT_DETECT_DPI = 150
 # ---------------------------------------------------------------------------
 TEXT_BLOCK_MIN_CHARS = 3
 
-HYPHEN_EXCEPTIONS = (
-    "und", "oder", "bzw", "etc", "sowie", "als", "wie", "auch", "denn",
-    "noch", "sondern", "doch", "jedoch", "allerdings", "hingegen",
-    "beziehungsweise", "insbesondere", "zum", "zur", "im", "in", "am",
-    "an", "auf", "von", "mit", "für", "über", "unter", "zwischen",
-    "ohne", "gegen", "bis", "durch", "trotz", "wegen", "während",
-)
-
 # ---------------------------------------------------------------------------
 # Stage 2 – Layout detection (PP-DocLayoutV3)
 # ---------------------------------------------------------------------------
