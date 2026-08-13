@@ -11,6 +11,7 @@ from pathlib import Path
 from re import compile
 
 from docpipe import prompts
+from docpipe.profile import active_profile
 from docpipe.artifacts import (DIR_RESULTS,               # noqa: F401  (re-exported)
                                SECTIONS_JSON,             # input
                                SECTIONS_REFINED_JSON)     # output
@@ -28,7 +29,14 @@ LLM_TIMEOUT  = float(os.environ.get("LLM_TIMEOUT", "180"))
 LLM_NUM_PARALLEL = int(os.environ.get("LLM_NUM_PARALLEL", "8"))
 
 MAX_RETRIES = 4
-WINDOW_SIZE = 3  # sections per LLM call
+
+# Sections per LLM call — the one lever that decides how much context a corpus
+# needs. It had neither an env override nor a profile hook, so a corpus with
+# long sections left only one response: make the server bigger. The profile may
+# say otherwise; without a say, three.
+WINDOW_SIZE = int(os.environ.get(
+    "REFINE_WINDOW_SIZE",
+    (active_profile() and active_profile().component("refinement", "WINDOW_SIZE")) or 3))
 
 # ── Oversized sections ─────────────────────────────────────────────────────
 # A section is one retrieval chunk and one vector. Above SECTION_MAX_WORDS it
