@@ -15,3 +15,28 @@ HYPHEN_EXCEPTIONS = (
     "for", "with", "without", "between", "within", "under", "over",
     "before", "after", "e.g", "i.e", "etc",
 )
+
+
+# Caption openers that must never be promoted to a section heading. The German
+# list would match nothing here, and every "Figure 3: ..." would open a section.
+TITLE_EXCLUDE_PREFIXES = (
+    "figure",
+    "fig.",
+    "table",
+    "tab.",
+    "box",
+    "plate",
+)
+
+# Journal and IPCC captions are not labels: panel descriptions, data sources
+# and scenario legends routinely run 60-150 words, where a municipal heat plan
+# sits at 8. Set high enough that those survive as captions instead of being
+# read as body prose.
+CAPTION_MAX_WORDS = 160
+
+# How a figure/table list entry opens ("Figure 3 Global emissions 27").
+DIRECTORY_FIGTAB_WORDS = ("Figure", "Table", r"Fig\.", r"Tab\.", "Box")
+
+# Bibliography titles → routed to the Stage-4 [LITERATURE] BibTeX path.
+BIBLIOGRAPHY_TITLE_WORDS = ("references", "bibliography", "works cited",
+                            "literature cited")

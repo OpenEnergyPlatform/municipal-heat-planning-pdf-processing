@@ -34,6 +34,8 @@ from .config import (
     clean_data,
     dump_json_atomic,
 )
+from docpipe.profile import active_profile, profile_value
+
 from .columns import sort_pages
 from .models import Block, FigureRef, PageData, Section, TableRef
 
@@ -154,17 +156,44 @@ def strip_running_headers(pages: list[PageData]) -> int:
 # ---------------------------------------------------------------------------
 
 # A figure/table list entry ("Abbildung 3: … 27") ending in a page number.
-_DIR_FIGTAB_RE = re.compile(
-    r"(?:Abbildung|Tabelle|Abb\.|Tab\.)\s*\d+\s*[:.]?\s*.{2,90}?\s\d{1,4}(?=\s|$)",
-    re.IGNORECASE,
-)
+# Which words open one is the corpus language's business: the German pattern
+# matched nothing in an English corpus, so its lists of figures were never
+# recognised and landed in the index as sections.
+_dir_figtab: dict = {}
+
+
+def _dir_figtab_re():
+    profile = active_profile()
+    name = profile.name if profile else None
+    if name not in _dir_figtab:
+        words = profile_value("preprocessing", "DIRECTORY_FIGTAB_WORDS")
+        _dir_figtab[name] = re.compile(
+            r"(?:" + "|".join(words) + r")\s*\d+\s*[:.]?\s*.{2,90}?\s\d{1,4}(?=\s|$)",
+            re.IGNORECASE,
+        )
+    return _dir_figtab[name]
+
+
 # A dot-leader entry ("Einleitung ............ 10").
 _DIR_LEADER_RE = re.compile(r".{2,90}?\.{2,}\s*\d{1,4}(?=\s|$)")
 # Real media placeholders — a section holding one references actual
 # tables/figures, so it is not a directory listing.
 _DIR_PLACEHOLDER_RE = re.compile(r"\[p\d+_(?:img|tbl)\d+\]")
-# Bibliography titles → routed to the Stage-4 [LITERATURE] BibTeX path, not dropped.
-_DIR_LIT_TITLE_RE = re.compile(r"literatur|quellen|referenz|bibliograf", re.IGNORECASE)
+# Bibliography titles → routed to the Stage-4 [LITERATURE] BibTeX path, not
+# dropped. "References" did not match the German pattern, so an English
+# bibliography was a directory listing and got thrown away.
+_dir_lit: dict = {}
+
+
+def _dir_lit_title_re():
+    profile = active_profile()
+    name = profile.name if profile else None
+    if name not in _dir_lit:
+        words = profile_value("preprocessing", "BIBLIOGRAPHY_TITLE_WORDS")
+        _dir_lit[name] = re.compile("|".join(words), re.IGNORECASE)
+    return _dir_lit[name]
+
+
 # Titles that are themselves directory headings → drop at a lower score bar.
 _DIR_TITLE_RE = re.compile(r"inhalt|verzeichnis|contents|directory", re.IGNORECASE)
 
@@ -177,7 +206,7 @@ def _directory_metrics(content: str) -> tuple[float, int, int]:
     """
     if not content or len(content) < 40:
         return 0.0, 0, len(content or "")
-    matches = list(_DIR_FIGTAB_RE.finditer(content)) + list(_DIR_LEADER_RE.finditer(content))
+    matches = list(_dir_figtab_re().finditer(content)) + list(_DIR_LEADER_RE.finditer(content))
     if not matches:
         return 0.0, 0, len(content)
     covered = bytearray(len(content))
@@ -192,7 +221,7 @@ def _is_directory_section(section: Section) -> bool:
     content = section.content or ""
     if _DIR_PLACEHOLDER_RE.search(content):        # references real media → keep
         return False
-    if _DIR_LIT_TITLE_RE.search(section.title or ""):   # bibliography → Stage-4 BibTeX
+    if _dir_lit_title_re().search(section.title or ""):   # bibliography → Stage-4 BibTeX
         return False
     score, entries, residual = _directory_metrics(content)
     if entries < DIRECTORY_MIN_ENTRIES:

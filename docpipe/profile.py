@@ -149,6 +149,26 @@ def active_profile() -> Optional[Profile]:
     return load_profile()
 
 
+_values: dict = {}
+
+
+def profile_value(module: str, attr: str):
+    """The ambient profile's *attr*, resolved once per profile.
+
+    For the facts about a corpus the core must not invent: which words open a
+    caption, how long a caption gets, how many sections fit one request. A
+    core constant looks harmless until a second corpus arrives and the value
+    is quietly wrong for it — with no error, only worse output.
+    """
+    profile = active_profile()
+    if profile is None:
+        raise LookupError(f"{module}.{attr} needs a profile; set ${ENV_VAR}")
+    key = (profile.name, module, attr)
+    if key not in _values:
+        _values[key] = profile.require(module, attr)
+    return _values[key]
+
+
 def add_profile_argument(parser) -> None:
     parser.add_argument("--profile", default=os.environ.get(ENV_VAR) or None,
                         help=f"project profile under {PROFILES_PACKAGE}/ "

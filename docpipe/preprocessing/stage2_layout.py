@@ -45,7 +45,7 @@ from .config import (
     CAPTION_MAX_DIST_PT,
     caption_like,
     CAPTION_REJECT_ACROSS_TITLE,
-    TITLE_EXCLUDE_PREFIXES,
+    title_exclude_prefixes,
     TITLE_SAME_ROW_OVERLAP_FRACTION,
     TABLE_BOX_MARGIN_PT,
     IMAGE_BOX_MARGIN_PT,
@@ -588,7 +588,7 @@ def _process_page(
                 )
                 continue
 
-            if any(title_text.lower().startswith(p) for p in TITLE_EXCLUDE_PREFIXES):
+            if any(title_text.lower().startswith(p) for p in title_exclude_prefixes()):
                 log.debug(f"Page {pg.page_number}: title rejected (excluded prefix)")
                 continue
 
@@ -764,7 +764,7 @@ def _looks_like_heading(
     n = len(text)
     if n < FONT_HEADING_MIN_CHARS or n > FONT_HEADING_MAX_CHARS:
         return False
-    if any(text.lower().startswith(p) for p in TITLE_EXCLUDE_PREFIXES):
+    if any(text.lower().startswith(p) for p in title_exclude_prefixes()):
         return False
     # Prose guard: filters bold/emphasised body lines.
     if text.endswith((".", "!", "?")):

@@ -81,3 +81,44 @@ def test_a_profile_carries_no_prompt_nobody_loads(home):
     on_disk = {f"{p.parent.name}/{p.stem}" for p in (home / "prompts").rglob("*.md")}
 
     assert on_disk - _requested_prompt_ids(CORE, home) == set()
+
+
+def _required_components(*roots) -> set:
+    """(module, attr) pairs the core demands of a profile, read from the
+    profile.require / profile_value calls themselves."""
+    wanted = set()
+    for root in roots:
+        for path in root.rglob("*.py"):
+            for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+                if not isinstance(node, ast.Call):
+                    continue
+                name = (node.func.attr if isinstance(node.func, ast.Attribute)
+                        else getattr(node.func, "id", None))
+                if name not in ("require", "profile_value") or len(node.args) < 2:
+                    continue
+                mod, attr = node.args[0], node.args[1]
+                if (isinstance(mod, ast.Constant) and isinstance(mod.value, str)
+                        and isinstance(attr, ast.Constant)
+                        and isinstance(attr.value, str)):
+                    wanted.add((mod.value, attr.value))
+    return wanted
+
+
+@pytest.mark.parametrize("home", _profile_homes(), ids=lambda p: p.name)
+def test_a_profile_provides_every_component_the_core_requires(home):
+    """Same motive as the prompt check, for everything that is not a prompt.
+
+    The core asks the profile for the facts it must not invent — which words
+    open a caption, how long one gets, which words hold a hyphen open. Missing
+    ones used to surface as a LookupError deep inside a batch job, or worse,
+    as a German default quietly applied to an English corpus.
+    """
+    from docpipe.profile import load_profile
+
+    required = _required_components(CORE)
+    assert required, "no profile.require/profile_value calls found — layout changed?"
+    profile = load_profile(home.name)
+    missing = sorted(f"{mod}.{attr}" for mod, attr in required
+                     if profile.component(mod, attr) is None)
+
+    assert not missing, f"{home.name} is missing {missing}"
