@@ -86,6 +86,7 @@ def run_single(
 
     # ── Stage 1 + 2 (with cache) ────────────────────────────────────────
     pages: Optional[list[PageData]] = None
+    n_failed = 0
     if not force_reextract:
         pages = _load_pages_cache(output_dir)
 
@@ -135,6 +136,13 @@ def run_single(
     # ── Stage 3: section assembly (with cache) ─────────────────────────────
     stage3_path = output_dir / SECTIONS_JSON
     result: Optional[dict] = None
+    # Stage 1+2 refuse to cache an incomplete extraction, but Stage 3 used to
+    # cache its sections either way — so the next run paid for the re-extraction
+    # and then loaded the sections built from the broken pages anyway.
+    if n_failed and stage3_path.exists():
+        log.warning("%s: dropping the Stage-3 cache, it was built from an "
+                    "incomplete extraction", pdf_path.name)
+        stage3_path.unlink(missing_ok=True)
     if stage3_path.exists() and not force_reextract:
         try:
             with open(stage3_path, encoding="utf-8") as f:
@@ -145,7 +153,8 @@ def run_single(
             result = None
     if result is None:
         sections = build_sections(pages, column_layout)
-        save_output(sections, output_dir)
+        if not n_failed:
+            save_output(sections, output_dir)
         result = clean_data(sections_to_dict(sections))
 
     log.info(

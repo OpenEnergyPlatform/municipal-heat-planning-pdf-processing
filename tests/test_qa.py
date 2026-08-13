@@ -18,9 +18,19 @@ def test_coverage_full_and_partial():
     assert qa.coverage(src, partial, min_source_tokens=4) < 0.8
 
 
-def test_coverage_skipped_when_too_few_source_tokens():
-    # image-only table: almost no text layer → cannot assess → 1.0
-    assert qa.coverage("12", "completely unrelated text", min_source_tokens=8) == 1.0
+def test_coverage_is_unknown_not_perfect_when_it_cannot_be_assessed():
+    """An image-only table has no text layer to compare against. That is
+    unknown, not perfect — reporting 1.0 let a scanned corpus pass every table
+    it never checked, with qa_failed_tables at 0 to prove it."""
+    assert qa.coverage("12", "completely unrelated text",
+                       min_source_tokens=8) is None
+
+
+def test_an_unassessable_table_still_passes_but_says_so():
+    passed, metrics = qa.assess("| a | b |\n| --- | --- |\n| 1 | 2 |", "12")
+    assert passed, "nothing to compare against must not fail the table"
+    assert metrics["coverage"] is None
+    assert metrics["coverage_assessed"] is False
 
 
 def test_duplication():

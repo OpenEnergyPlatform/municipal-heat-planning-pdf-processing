@@ -10,6 +10,7 @@ Author: Felix Vossel
 from __future__ import annotations
 
 import re
+from typing import Optional
 
 # Salient content tokens: numbers (incl. German decimals like "45,2") and words
 # of at least two letters. Single letters and punctuation are deliberately
@@ -35,17 +36,20 @@ def _data_rows(markdown: str) -> list[str]:
     return rows
 
 
-def coverage(source_text: str, markdown: str, min_source_tokens: int = 8) -> float:
+def coverage(source_text: str, markdown: str,
+             min_source_tokens: int = 8) -> Optional[float]:
     """
     Fraction of the source's salient tokens that also appear in the markdown.
 
-    Returns 1.0 when the source has fewer than *min_source_tokens* salient
-    tokens (e.g. an image-only table with no text layer) — too little
-    reference text to judge fairly.
+    None when the source has fewer than *min_source_tokens* salient tokens
+    (e.g. an image-only table with no text layer) — too little reference text
+    to judge fairly. Not 1.0: an unmeasurable table is unknown, not perfect,
+    and a scanned corpus would otherwise report a flawless QA pass for every
+    table nobody ever checked.
     """
     src = salient_tokens(source_text)
     if len(src) < min_source_tokens:
-        return 1.0
+        return None
     md = salient_tokens(markdown)
     return len(src & md) / len(src)
 
@@ -89,9 +93,14 @@ def assess(
     cov = coverage(source_text, markdown, min_source_tokens)
     dup = duplication(markdown)
     has_rows = bool(_data_rows(markdown))
-    passed = has_rows and dup <= max_duplication and cov >= min_coverage
+    # An unassessable coverage cannot fail the gate — there is nothing to
+    # compare against — but it is reported as unknown so a corpus that is
+    # never assessable does not read as a corpus that always passed.
+    passed = (has_rows and dup <= max_duplication
+              and (cov is None or cov >= min_coverage))
     return passed, {
-        "coverage": round(cov, 3),
+        "coverage": None if cov is None else round(cov, 3),
+        "coverage_assessed": cov is not None,
         "duplication": round(dup, 3),
         "has_rows": has_rows,
     }
