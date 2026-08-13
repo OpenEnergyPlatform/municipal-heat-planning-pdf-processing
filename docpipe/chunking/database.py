@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import logging
+from collections import Counter
 import re
 import sqlite3
 from contextlib import closing
@@ -551,8 +552,10 @@ def write_embedding_ids_batch(
     Write FAISS embedding ids to the DB in one transaction.
 
     `records` are (embedding_type, section_index, item_id, faiss_id); item_id is
-    the table/figure block id, None for sections. Records whose owner row cannot
-    be resolved are skipped silently.
+    the table/figure block id, None for sections. Records whose owner row
+    cannot be resolved are skipped and counted — the vector is already in the
+    FAISS index, so skipping one means index and database have drifted apart,
+    which is worth a line in the log rather than silence.
     """
     if not records:
         return
@@ -563,6 +566,7 @@ def write_embedding_ids_batch(
             return
 
         section_id_cache: dict[int, Optional[int]] = {}
+        unresolved: list[tuple] = []
 
         def _section_id(section_index: int) -> Optional[int]:
             if section_index not in section_id_cache:
@@ -576,6 +580,7 @@ def write_embedding_ids_batch(
         for embedding_type, section_index, item_id, faiss_id in records:
             section_db_id = _section_id(section_index)
             if section_db_id is None:
+                unresolved.append((embedding_type, item_id))
                 continue
 
             if embedding_type in _SECTION_TYPES:
@@ -598,6 +603,10 @@ def write_embedding_ids_batch(
                 continue
 
             if owner_id is None:
+                # The vector is in FAISS but has no row to hang off: a search
+                # can return it and nothing can say what it is. Counted and
+                # reported below rather than skipped in silence.
+                unresolved.append((embedding_type, item_id))
                 continue
 
             conn.execute(
@@ -606,6 +615,16 @@ def write_embedding_ids_batch(
                 "ON CONFLICT(owner_kind, owner_id, embedding_type) "
                 "DO UPDATE SET faiss_id = excluded.faiss_id",
                 (faiss_id, embedding_type, owner_kind, owner_id),
+            )
+
+        if unresolved:
+            kinds = Counter(t for t, _ in unresolved)
+            log.warning(
+                "%s: %d of %d embeddings have no owner row (%s). Those vectors "
+                "stay in the FAISS index with nothing in the database to "
+                "explain them — a search can return one and get no answer.",
+                pdf_name, len(unresolved), len(records),
+                ", ".join(f"{k}={n}" for k, n in sorted(kinds.items())),
             )
 
         conn.commit()

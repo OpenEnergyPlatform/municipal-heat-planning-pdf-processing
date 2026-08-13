@@ -164,7 +164,16 @@ def build_embedding_inputs(
                     text=table_text,
                 ))
 
-            image_path = output_dir / t.get("path", "")
+            # An item without a path would make output_dir / "" == output_dir,
+            # whose .name is the document folder — which then gets embedded as
+            # if it were the table image. Stage 4 re-emits tables and can drop
+            # the field, so this is reachable, not defensive.
+            rel_path = t.get("path") or ""
+            if not rel_path:
+                log.warning("table %s in %s has no image path — no VL vector",
+                            t.get("id"), pdf_name)
+                continue
+            image_path = output_dir / rel_path
             if image_path.name in _dir_names(image_path.parent, listings):
                 inputs.append(EmbeddingInput(
                     embedding_type=EMBEDDING_TYPE_TABLE_VL,
@@ -189,7 +198,12 @@ def build_embedding_inputs(
                     text=figure_text,
                 ))
 
-            image_path = output_dir / fig.get("path", "")
+            rel_path = fig.get("path") or ""      # same trap as tables above
+            if not rel_path:
+                log.warning("figure %s in %s has no image path — no VL vector",
+                            fig.get("id"), pdf_name)
+                continue
+            image_path = output_dir / rel_path
             if image_path.name in _dir_names(image_path.parent, listings):
                 inputs.append(EmbeddingInput(
                     embedding_type=EMBEDDING_TYPE_FIGURE_VL,

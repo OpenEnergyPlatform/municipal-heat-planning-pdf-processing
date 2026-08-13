@@ -7,9 +7,13 @@ Author: Felix Vossel
 from docpipe.artifacts import (DOCUMENT_JSON,            # noqa: F401  (re-exported)
                                SECTIONS_JSON, SECTIONS_REFINED_JSON, VISUALS_JSON)
 
-EMBEDDING_MODEL = "Qwen/Qwen3-VL-Embedding-8B"
-EMBEDDING_DIM = 4096
-MAX_TOKEN_LENGTH = 16384
+# One definition, imported — not a second copy. These were declared here as
+# literals and again in docpipe/embedding/config.py from the environment, so
+# setting EMBEDDING_MODEL in .env moved the query side and left the index
+# builder on the old model. Same dimension, different vectors, no error.
+from docpipe.embedding.config import (EMBEDDING_DIM,             # noqa: E402,F401
+                                      EMBEDDING_MODEL)
+from docpipe.embedding.config import EMBEDDING_MAX_TOKEN_LENGTH as MAX_TOKEN_LENGTH
 
 # Hard ceiling for one section's embedding text. Refinement splits sections
 # above SECTION_MAX_WORDS, so this only catches what slipped through; it sits

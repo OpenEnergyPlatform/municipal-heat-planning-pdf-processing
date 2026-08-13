@@ -173,7 +173,12 @@ def answer_question(task: str, corpus: Corpus, document_id: int, scopes: list, *
     # --- 4) answer across the top sources in context-safe batches; a further
     #        batch runs only while the answer is still incomplete ---
     top_hits = hits[: config.MAX_CHUNK_ATTEMPTS]
-    batches = chunker.pack_chunks(top_hits, config.ANSWER_CONTEXT_TOKENS, tokenizer=None)
+    # The real tokenizer, not the char/4 heuristic: German prose runs ~3.0-3.5
+    # chars per token and table markdown lower still, so a batch packed as
+    # 10k "tokens" was really 12-14k and overran the context it was sized for.
+    # get_tokenizer() falls back to the heuristic on its own when offline.
+    batches = chunker.pack_chunks(top_hits, config.ANSWER_CONTEXT_TOKENS,
+                                  tokenizer=chunker.get_tokenizer())
     citations, seen = [], set()
     prior_text = None
     off_envelope = False
