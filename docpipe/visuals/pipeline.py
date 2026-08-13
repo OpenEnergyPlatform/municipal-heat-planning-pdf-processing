@@ -22,8 +22,11 @@ from typing import Optional
 from docpipe import prompts
 from docpipe.profile import add_profile_argument, resolve_profile
 
+from docpipe.llm_preflight import assert_serving
+
 from .config import (
     PROMPT_IDS,
+    VLM_API_KEY,
     VLM_MODEL,
     VLM_BASE_URL,
     VLM_NUM_PARALLEL,
@@ -31,6 +34,7 @@ from .config import (
     SECTIONS_JSON,
     VISUALS_JSON,
     dump_json_atomic,
+    max_request_tokens,
 )
 from .models import ProcessingStats
 from .vision import create_client, check_model_available
@@ -440,6 +444,11 @@ Examples:
         "--base-url", default=None,
         help="vLLM OpenAI-compatible base URL (default: %s)" % VLM_BASE_URL,
     )
+    p.add_argument(
+        "--print-context-budget", action="store_true",
+        help="Print the worst-case tokens one request needs, then exit "
+             "(feed it to the server's --max-model-len)",
+    )
     add_profile_argument(p)
     p.add_argument(
         "--log-level", default="INFO",
@@ -460,6 +469,13 @@ def main() -> None:
     )
 
     profile = resolve_profile(args)
+
+    # Lets the job script derive --max-model-len from the code instead of
+    # restating it in a comment that nothing checks.
+    if args.print_context_budget:
+        print(max_request_tokens())
+        sys.exit(0)
+
     if args.input is None:
         if profile is None:
             raise SystemExit("give an input path or a --profile to take it from")
@@ -477,6 +493,12 @@ def main() -> None:
         common["input_json"] = args.input_json
 
     try:
+        # The CLI may point at another server than the config default, so the
+        # check has to use what run_* will actually talk to.
+        if not args.dry_run:
+            assert_serving(args.base_url or VLM_BASE_URL, VLM_API_KEY,
+                           args.model or VLM_MODEL, max_request_tokens(),
+                           what="image enrichment")
         if args.batch:
             results = run_batch(Path(args.input), **common)
             ok = sum(1 for v in results.values() if v)

@@ -61,6 +61,26 @@ LLM_MAX_TOKENS = int(os.environ.get("LLM_MAX_TOKENS",
                                     _REFINE.meta.get("max_tokens", 8192)))
 
 # ---------------------------------------------------------------------------
+# Context budget
+# ---------------------------------------------------------------------------
+# What one request can cost the server, so a serving flag can be checked
+# against this number instead of guessed from a comment. Deliberately an
+# over-estimate: too large costs a bit of KV cache, too small costs the run.
+TOKENS_PER_WORD = 3.0
+
+
+def max_request_tokens() -> int:
+    """Worst case for one window: prompt + a full window of maximum-size
+    sections + the reply we ask for.
+
+    Rests on split.py holding SECTION_MAX_WORDS on its output. The one case it
+    cannot hold — a single segment longer than the limit — is logged there.
+    """
+    system = len(SYSTEM_PROMPT.split()) * TOKENS_PER_WORD
+    window = WINDOW_SIZE * SECTION_MAX_WORDS * TOKENS_PER_WORD
+    return int(system + window + LLM_MAX_TOKENS)
+
+# ---------------------------------------------------------------------------
 # Unicode cleaning + atomic JSON I/O
 # ---------------------------------------------------------------------------
 def clean_unicode(s: str) -> str:
