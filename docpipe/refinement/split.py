@@ -212,20 +212,62 @@ def split_section(section: dict, ask: Optional[Callable] = None) -> list:
     return parts
 
 
+def _enforce_max(part: dict, max_words: int) -> list:
+    """Cut *part* down until every piece fits *max_words*.
+
+    The model is asked for readable boundaries, not for a bound, and it does
+    return parts over the limit — an 11596-word section came back as 10 parts
+    with one of 2392. Without this, max_words is a suggestion, and any context
+    budget resting on it (config.max_request_tokens) is fiction.
+    """
+    # Aim below the limit, not at it: a cut lands on a segment boundary, so the
+    # piece is the target plus whatever the straddling segment adds.
+    target = min(SECTION_TARGET_WORDS, max(1, max_words // 2))
+    out, queue = [], [part]
+    while queue:
+        piece = queue.pop(0)
+        if not needs_split(piece, max_words):
+            out.append(piece)
+            continue
+        cuts = (_sanitize(_even_cuts(piece, target=target),
+                          len(piece.get("segments") or []), piece)
+                if _rebuild_matches(piece) else [])
+        if not cuts:
+            # One segment carries the overflow, or the segments no longer
+            # rebuild the content. Either way there is nothing to cut on — say
+            # so, this is the one case the budget cannot bound.
+            log.warning(
+                "Section %r stays at %d words (limit %d): no segment boundary "
+                "to cut on, its window will be oversized.",
+                piece.get("title"), word_count(piece.get("content")), max_words)
+            out.append(piece)
+            continue
+        queue.extend(apply_cuts(piece, cuts))
+    return out
+
+
 def split_oversized(sections: list, ask: Optional[Callable] = None,
                     max_words: int = SECTION_MAX_WORDS) -> list:
     """Split every section longer than *max_words*; returns the new list."""
     if not SECTION_SPLIT_ENABLE:
         return sections
-    out, n_split = [], 0
+    out, n_split, n_recut = [], 0, 0
     for section in sections:
         if needs_split(section, max_words):
             parts = split_section(section, ask)
             n_split += len(parts) > 1
-            out.extend(parts)
+            bounded = []
+            for part in parts:
+                pieces = _enforce_max(part, max_words)
+                n_recut += len(pieces) > 1
+                bounded.extend(pieces)
+            out.extend(bounded)
         else:
             out.append(section)
     if n_split:
         log.info("Stage 4: split %d oversized section(s) → %d sections",
                  n_split, len(out))
+    if n_recut:
+        log.info("Stage 4: re-cut %d part(s) the model left over the limit",
+                 n_recut)
     return out
