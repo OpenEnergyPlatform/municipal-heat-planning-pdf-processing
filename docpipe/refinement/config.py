@@ -64,16 +64,16 @@ SURROGATES = compile(r"[\uD800-\uDFFF]")
 # paying output tokens, the expensive kind, to retype its own input.
 # Off by default: the two modes use different prompts, so switching marks every
 # cached document stale (correctly — its output came from the other prompt).
-REFINE_EDIT_MODE = os.environ.get(
-    "REFINE_EDIT_MODE", "0").strip().lower() in ("1", "true", "yes", "on")
+REFINE_RETURN_CORRECTIONS = os.environ.get(
+    "REFINE_RETURN_CORRECTIONS", "0").strip().lower() in ("1", "true", "yes", "on")
 
 # Only the prompt actually in use is versioned, or merely having the second one
 # on disk would count as a change against every stored result.
-PROMPT_IDS = (("refinement/refine_edits" if REFINE_EDIT_MODE
+PROMPT_IDS = (("refinement/refine_corrections" if REFINE_RETURN_CORRECTIONS
                else "refinement/refine"), "refinement/split")
 
 # Both spelled out, so the architecture test can still find them by AST.
-_REFINE = (prompts.load("refinement/refine_edits") if REFINE_EDIT_MODE
+_REFINE = (prompts.load("refinement/refine_corrections") if REFINE_RETURN_CORRECTIONS
            else prompts.load("refinement/refine"))
 SYSTEM_PROMPT = _REFINE.text
 # Sampling belongs to the prompt, so both travel together in the .md front matter.
@@ -104,11 +104,12 @@ def reply_tokens(user_words: int) -> int:
     """The max_tokens for one request, from what that request actually asks
     the model to write. LLM_MAX_TOKENS stays the floor for small windows.
 
-    In edit mode it does not scale at all: the reply is a list of corrections,
-    so its size follows the number of artefacts, not the length of the section.
-    That is the entire saving.
+    When the model returns corrections it does not scale at all: the reply is a
+    list of find/replace pairs, so its size follows the number of artefacts and
+    not the length of the section. That is the entire saving. The budget still
+    has to cover a bibliography, which is the one case that writes text out.
     """
-    if REFINE_EDIT_MODE:
+    if REFINE_RETURN_CORRECTIONS:
         return LLM_MAX_TOKENS
     wanted = int(user_words * TOKENS_PER_WORD * REPLY_HEADROOM)
     return max(LLM_MAX_TOKENS, min(wanted, REPLY_TOKENS_CEILING))
@@ -123,7 +124,7 @@ def max_request_tokens() -> int:
     """
     system = len(SYSTEM_PROMPT.split()) * TOKENS_PER_WORD
     window = WINDOW_SIZE * SECTION_MAX_WORDS * TOKENS_PER_WORD
-    reply = LLM_MAX_TOKENS if REFINE_EDIT_MODE else REPLY_TOKENS_CEILING
+    reply = LLM_MAX_TOKENS if REFINE_RETURN_CORRECTIONS else REPLY_TOKENS_CEILING
     return int(system + window + reply)
 
 # ---------------------------------------------------------------------------

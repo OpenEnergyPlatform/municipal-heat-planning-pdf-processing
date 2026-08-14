@@ -16,7 +16,7 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Callable, Optional
 
-from .edits import apply_edits
+from .corrections import apply_corrections
 from .split import SPLIT_MAX_TOKENS, SPLIT_TEMPERATURE, split_oversized
 from .config import (
     SECTIONS_JSON,
@@ -28,7 +28,7 @@ from .config import (
     LLM_NUM_PARALLEL,
     LLM_TEMPERATURE,
     LLM_MAX_TOKENS,
-    REFINE_EDIT_MODE,
+    REFINE_RETURN_CORRECTIONS,
     reply_tokens,
     MAX_RETRIES,
     WINDOW_SIZE,
@@ -104,7 +104,7 @@ def _echo(raw_text: str) -> str:
             + raw_text[-_ECHO_TAIL:])
 
 
-def _materialise_edits(reply: list, window: list) -> list:
+def _materialise_corrections(reply: list, window: list) -> list:
     """Rebuild full sections from an edit-mode reply.
 
     Everything the model was not asked to change is taken from the ORIGINAL,
@@ -112,7 +112,7 @@ def _materialise_edits(reply: list, window: list) -> list:
     id, path and page_number never make the round trip, so they cannot come
     back altered or missing, which is how they used to be lost.
 
-    A section whose edits do not survive apply_edits keeps whatever could be
+    A section whose edits do not survive apply_corrections keeps whatever could be
     verified; nothing is applied on the model's word alone.
     """
     out = []
@@ -148,7 +148,7 @@ def _materialise_edits(reply: list, window: list) -> list:
             # to be written out in full.
             built["content"] = sec.get("content", original.get("content"))
         else:
-            text, report = apply_edits(original.get("content"), sec.get("edits") or [])
+            text, report = apply_corrections(original.get("content"), sec.get("corrections") or [])
             if report.rejected:
                 log.warning(
                     "   section %d: %d edit(s) applied, %d refused (%s)",
@@ -180,7 +180,7 @@ def _call_llm(
         {k: v for k, v in s.items() if k not in ("segments", "pages")}
         for s in sections_window
     ]
-    if REFINE_EDIT_MODE:
+    if REFINE_RETURN_CORRECTIONS:
         # The reply carries no text, so it needs a handle back to its section.
         # Media keeps only id and caption: the model must not restate a path or
         # a page number it is forbidden to change (and used to drop).
@@ -274,8 +274,8 @@ def _call_llm(
                 _backoff(attempt)
                 continue
 
-            if REFINE_EDIT_MODE:
-                return _materialise_edits(parsed["sections"], sections_window)
+            if REFINE_RETURN_CORRECTIONS:
+                return _materialise_corrections(parsed["sections"], sections_window)
             return parsed["sections"]
 
         except json.JSONDecodeError as e:

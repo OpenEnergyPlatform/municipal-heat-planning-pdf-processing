@@ -38,7 +38,7 @@ MAX_SHRINK = 0.30
 
 
 @dataclass
-class EditReport:
+class CorrectionReport:
     applied: int = 0
     rejected: list = field(default_factory=list)   # (find, reason)
 
@@ -51,10 +51,10 @@ def _placeholders(text: str) -> list:
     return PLACEHOLDER_RE.findall(text or "")
 
 
-def apply_edits(original: str, edits) -> tuple:
-    """(text, EditReport). *original* is returned unchanged for any edit that
+def apply_corrections(original: str, edits) -> tuple:
+    """(text, CorrectionReport). *original* is returned unchanged for any edit that
     fails its check — the caller decides what to do about a non-empty report."""
-    report = EditReport()
+    report = CorrectionReport()
     if not isinstance(original, str):
         report.rejected.append((None, "section content is not text"))
         return original, report
