@@ -42,14 +42,16 @@ def test_split_holds_its_own_limit():
     assert not oversized, f"{len(oversized)} part(s) still over {limit} words"
 
 
-def test_split_gives_up_loudly_on_one_huge_segment(caplog):
-    """A single segment over the limit cannot be cut — that is the one case
-    the budget cannot bound, so it has to be said out loud."""
-    section = _section(1500, n_segments=1)
+def test_split_gives_up_loudly_when_provenance_no_longer_lines_up(caplog):
+    """The only remaining case that cannot be cut: the segments no longer
+    rebuild the content, so any cut position would attach text to the wrong
+    page. Leaving it whole is right — saying nothing is not."""
+    section = _section(1500, n_segments=4)
+    section["content"] = "something else entirely " * 400   # provenance broken
     out = split_oversized([section], ask=None,
                           max_words=refine_config.SECTION_MAX_WORDS)
     assert len(out) == 1
-    assert "no segment boundary" in caplog.text, "the unbounded case must warn"
+    assert "no longer rebuild" in caplog.text, "the unbounded case must warn"
 
 
 # ---------------------------------------------------------------------------
@@ -146,3 +148,42 @@ def test_the_budget_covers_the_largest_reply_it_would_ask_for():
     worst_window_words = (refine_config.WINDOW_SIZE
                           * refine_config.SECTION_MAX_WORDS)
     assert budget >= refine_config.reply_tokens(worst_window_words)
+
+
+# ---------------------------------------------------------------------------
+# The case that used to escape the bound entirely
+# ---------------------------------------------------------------------------
+
+def test_one_huge_segment_is_subdivided_not_surrendered():
+    """A section whose whole text sits in ONE segment has no boundary to be cut
+    on, and used to stay oversized however often it was asked — 51 of them in
+    one ar6 run, up to 1409 words against a 1000 limit. Three in a window is
+    what the model then had to hand back through an 8192-token door."""
+    limit = refine_config.SECTION_MAX_WORDS
+    out = split_oversized([_section(3000, n_segments=1)], ask=None,
+                          max_words=limit)
+    assert len(out) > 1, "one long segment must not defeat the limit"
+    oversized = [s for s in out if len(s["content"].split()) > limit]
+    assert not oversized, f"{len(oversized)} part(s) still over {limit} words"
+
+
+def test_subdividing_a_segment_keeps_its_page_and_kind():
+    """Splitting inside a segment must not cost provenance: both halves come
+    from the same page and are still text."""
+    section = _section(3000, n_segments=1)
+    section["segments"][0]["page"] = 7
+    out = split_oversized([section], ask=None,
+                          max_words=refine_config.SECTION_MAX_WORDS)
+    segs = [seg for part in out for seg in part["segments"]]
+    assert len(segs) > 1
+    assert {seg["page"] for seg in segs} == {7}
+    assert {seg["kind"] for seg in segs} == {"text"}
+
+
+def test_a_placeholder_segment_is_never_subdivided():
+    """A table/figure reference has no text to divide."""
+    from docpipe.refinement.split import _subdivide_segments
+    section = {"title": "S", "content": "[p1_tbl0]",
+               "segments": [{"page": 1, "kind": "table", "ref": "p1_tbl0"}]}
+    assert _subdivide_segments(section, target=5) is False
+    assert len(section["segments"]) == 1

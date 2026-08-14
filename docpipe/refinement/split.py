@@ -212,6 +212,37 @@ def split_section(section: dict, ask: Optional[Callable] = None) -> list:
     return parts
 
 
+def _subdivide_segments(section: dict, target: int) -> bool:
+    """Cut text segments longer than *target* into smaller ones, in place.
+
+    Sections are cut at segment boundaries, so a section whose text sits in one
+    long segment has nowhere to be cut and stays oversized however often it is
+    asked — 51 sections in one ar6 run, up to 1409 words against a 1000 limit,
+    and three of those in a window is what the model then had to hand back.
+
+    A text segment's page and kind are unchanged by the cut, so provenance is
+    not lost here; it only gets finer. Placeholders (a table or figure ref)
+    have no text to divide and are left alone.
+    """
+    segments = section.get("segments") or []
+    if not segments:
+        return False
+    out, changed = [], False
+    for seg in segments:
+        words = (seg.get("text") or "").split() if seg.get("kind") == "text" else []
+        if len(words) <= target:
+            out.append(seg)
+            continue
+        for i in range(0, len(words), target):
+            piece = dict(seg)
+            piece["text"] = " ".join(words[i:i + target])
+            out.append(piece)
+        changed = True
+    if changed:
+        section["segments"] = out
+    return changed
+
+
 def _enforce_max(part: dict, max_words: int) -> list:
     """Cut *part* down until every piece fits *max_words*.
 
@@ -229,16 +260,22 @@ def _enforce_max(part: dict, max_words: int) -> list:
         if not needs_split(piece, max_words):
             out.append(piece)
             continue
+        rebuildable = _rebuild_matches(piece)
         cuts = (_sanitize(_even_cuts(piece, target=target),
                           len(piece.get("segments") or []), piece)
-                if _rebuild_matches(piece) else [])
+                if rebuildable else [])
+        if not cuts and rebuildable and _subdivide_segments(piece, target):
+            # No boundary to cut on because one segment carries the overflow.
+            # Give it boundaries, then ask again.
+            cuts = _sanitize(_even_cuts(piece, target=target),
+                             len(piece.get("segments") or []), piece)
         if not cuts:
-            # One segment carries the overflow, or the segments no longer
-            # rebuild the content. Either way there is nothing to cut on — say
-            # so, this is the one case the budget cannot bound.
+            # Left only when the segments no longer rebuild the content —
+            # refinement rewrote it, and cutting at a guessed position would
+            # attach text to the wrong page.
             log.warning(
-                "Section %r stays at %d words (limit %d): no segment boundary "
-                "to cut on, its window will be oversized.",
+                "Section %r stays at %d words (limit %d): its segments no "
+                "longer rebuild its content, so there is no safe cut.",
                 piece.get("title"), word_count(piece.get("content")), max_words)
             out.append(piece)
             continue
