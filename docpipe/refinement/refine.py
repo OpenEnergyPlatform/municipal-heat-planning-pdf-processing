@@ -27,6 +27,7 @@ from .config import (
     LLM_NUM_PARALLEL,
     LLM_TEMPERATURE,
     LLM_MAX_TOKENS,
+    reply_tokens,
     MAX_RETRIES,
     WINDOW_SIZE,
     SYSTEM_PROMPT,
@@ -160,7 +161,10 @@ def _call_llm(
                 messages=messages,
                 response_format={"type": "json_object"},
                 temperature=LLM_TEMPERATURE,
-                max_tokens=LLM_MAX_TOKENS,
+                # Sized to THIS window, not a flat cap: the reply is the
+                # window handed back refined, so a big window needs a big
+                # answer. The flat 8192 cut the JSON mid-string.
+                max_tokens=reply_tokens(len(user_content.split())),
                 # Reasoning models must not spend the token budget on a <think>
                 # block; that truncates the JSON answer.
                 extra_body={"chat_template_kwargs": {"enable_thinking": False}},

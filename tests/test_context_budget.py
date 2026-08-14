@@ -64,12 +64,17 @@ def test_budget_covers_a_full_window_plus_the_reply():
 
 
 def test_budget_reacts_to_the_knobs_it_names():
-    """If a knob moves and the number does not, the number is decoration."""
+    """If a knob moves and the number does not, the number is decoration.
+
+    The reply side is the ceiling, not the flat default: max_tokens is chosen
+    per request now, so what the server must be able to hold is the largest
+    reply we would ever ask for.
+    """
     base = refine_config.max_request_tokens()
     with patch.object(refine_config, "WINDOW_SIZE", refine_config.WINDOW_SIZE + 1):
         assert refine_config.max_request_tokens() > base
-    with patch.object(refine_config, "LLM_MAX_TOKENS",
-                      refine_config.LLM_MAX_TOKENS + 1000):
+    with patch.object(refine_config, "REPLY_TOKENS_CEILING",
+                      refine_config.REPLY_TOKENS_CEILING + 1000):
         assert refine_config.max_request_tokens() == base + 1000
 
 
@@ -112,3 +117,32 @@ def test_preflight_reports_an_unreachable_server_as_such():
         with pytest.raises(PreflightError) as e:
             assert_serving("http://x/v1", "EMPTY", "m", 1000)
     assert "is the server up" in str(e.value)
+
+
+# ---------------------------------------------------------------------------
+# The reply budget
+# ---------------------------------------------------------------------------
+
+def test_reply_budget_grows_with_the_window():
+    """A flat max_tokens truncated the answer mid-string on big windows — 24 of
+    1030 in the ar6 book run. The reply echoes the window, so it has to follow
+    the window's size."""
+    small = refine_config.reply_tokens(300)
+    big = refine_config.reply_tokens(3 * 1400)
+    assert small == refine_config.LLM_MAX_TOKENS, "small windows keep the floor"
+    assert big > small, "a window three times larger must get more room"
+
+
+def test_reply_budget_is_capped():
+    """One runaway window must not demand a context nobody serves."""
+    assert (refine_config.reply_tokens(10 ** 6)
+            == refine_config.REPLY_TOKENS_CEILING)
+
+
+def test_the_budget_covers_the_largest_reply_it_would_ask_for():
+    """Otherwise the preflight passes and the request is still rejected."""
+    budget = refine_config.max_request_tokens()
+    assert budget >= refine_config.REPLY_TOKENS_CEILING
+    worst_window_words = (refine_config.WINDOW_SIZE
+                          * refine_config.SECTION_MAX_WORDS)
+    assert budget >= refine_config.reply_tokens(worst_window_words)

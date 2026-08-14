@@ -76,17 +76,33 @@ LLM_MAX_TOKENS = int(os.environ.get("LLM_MAX_TOKENS",
 # over-estimate: too large costs a bit of KV cache, too small costs the run.
 TOKENS_PER_WORD = 3.0
 
+# The reply is the window handed back refined, so it is about as long as the
+# window plus JSON scaffolding — a refined sentence is rarely shorter than the
+# original. A flat max_tokens truncated the answer mid-string on big windows:
+# 24 of 1030 in the ar6 book run, every one "Unterminated string".
+REPLY_HEADROOM = 1.35
+# Ceiling, so one runaway window cannot demand a context nobody has. The
+# preflight checks the server against this, not against the flat default.
+REPLY_TOKENS_CEILING = int(os.environ.get("REFINE_REPLY_CEILING", "16384"))
+
+
+def reply_tokens(user_words: int) -> int:
+    """The max_tokens for one request, from what that request actually asks
+    the model to echo. LLM_MAX_TOKENS stays the floor for small windows."""
+    wanted = int(user_words * TOKENS_PER_WORD * REPLY_HEADROOM)
+    return max(LLM_MAX_TOKENS, min(wanted, REPLY_TOKENS_CEILING))
+
 
 def max_request_tokens() -> int:
     """Worst case for one window: prompt + a full window of maximum-size
-    sections + the reply we ask for.
+    sections + the largest reply we would ever ask for.
 
     Rests on split.py holding SECTION_MAX_WORDS on its output. The one case it
     cannot hold — a single segment longer than the limit — is logged there.
     """
     system = len(SYSTEM_PROMPT.split()) * TOKENS_PER_WORD
     window = WINDOW_SIZE * SECTION_MAX_WORDS * TOKENS_PER_WORD
-    return int(system + window + LLM_MAX_TOKENS)
+    return int(system + window + REPLY_TOKENS_CEILING)
 
 # ---------------------------------------------------------------------------
 # Unicode cleaning + atomic JSON I/O
