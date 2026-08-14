@@ -16,6 +16,7 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Callable, Optional
 
+from .edits import apply_edits
 from .split import SPLIT_MAX_TOKENS, SPLIT_TEMPERATURE, split_oversized
 from .config import (
     SECTIONS_JSON,
@@ -27,6 +28,7 @@ from .config import (
     LLM_NUM_PARALLEL,
     LLM_TEMPERATURE,
     LLM_MAX_TOKENS,
+    REFINE_EDIT_MODE,
     reply_tokens,
     MAX_RETRIES,
     WINDOW_SIZE,
@@ -102,6 +104,61 @@ def _echo(raw_text: str) -> str:
             + raw_text[-_ECHO_TAIL:])
 
 
+def _materialise_edits(reply: list, window: list) -> list:
+    """Rebuild full sections from an edit-mode reply.
+
+    Everything the model was not asked to change is taken from the ORIGINAL,
+    not from the reply — that is the whole point of asking for edits. A table's
+    id, path and page_number never make the round trip, so they cannot come
+    back altered or missing, which is how they used to be lost.
+
+    A section whose edits do not survive apply_edits keeps whatever could be
+    verified; nothing is applied on the model's word alone.
+    """
+    out = []
+    for position, sec in enumerate(reply):
+        if not isinstance(sec, dict):
+            log.warning("   edit reply %d is not an object, section dropped", position)
+            continue
+        index = sec.get("index", position)
+        if not isinstance(index, int) or not 0 <= index < len(window):
+            log.warning("   edit reply names index %r, outside this window", index)
+            continue
+        original = window[index]
+        action = sec.get("_action", "keep")
+
+        built = dict(original)
+        built["_action"] = action
+        title = sec.get("title")
+        if isinstance(title, str) and title.strip():
+            built["title"] = title
+
+        captions = sec.get("captions") if isinstance(sec.get("captions"), dict) else {}
+        for key in ("tables", "figures"):
+            items = []
+            for media in (original.get(key) or []):
+                media = dict(media)
+                if media.get("id") in captions:
+                    media["caption"] = captions[media["id"]]
+                items.append(media)
+            built[key] = items
+
+        if action == "replace":
+            # The one real conversion: text becomes a BibTeX array, so it has
+            # to be written out in full.
+            built["content"] = sec.get("content", original.get("content"))
+        else:
+            text, report = apply_edits(original.get("content"), sec.get("edits") or [])
+            if report.rejected:
+                log.warning(
+                    "   section %d: %d edit(s) applied, %d refused (%s)",
+                    index, report.applied, len(report.rejected),
+                    "; ".join(f"{reason}" for _, reason in report.rejected[:3]))
+            built["content"] = text
+        out.append(built)
+    return out
+
+
 def _call_llm(
     sections_window: list[dict],
     client,
@@ -123,6 +180,15 @@ def _call_llm(
         {k: v for k, v in s.items() if k not in ("segments", "pages")}
         for s in sections_window
     ]
+    if REFINE_EDIT_MODE:
+        # The reply carries no text, so it needs a handle back to its section.
+        # Media keeps only id and caption: the model must not restate a path or
+        # a page number it is forbidden to change (and used to drop).
+        for i, sec in enumerate(stripped):
+            sec["index"] = i
+            for key in ("tables", "figures"):
+                sec[key] = [{"id": m.get("id"), "caption": m.get("caption")}
+                            for m in (sec.get(key) or [])]
     user_payload = json.dumps(
         {"sections": stripped},
         ensure_ascii=False,
@@ -208,6 +274,8 @@ def _call_llm(
                 _backoff(attempt)
                 continue
 
+            if REFINE_EDIT_MODE:
+                return _materialise_edits(parsed["sections"], sections_window)
             return parsed["sections"]
 
         except json.JSONDecodeError as e:
