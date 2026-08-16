@@ -159,3 +159,27 @@ def test_bibliography_still_carries_its_own_text():
     }], _window())
     assert out[0]["content"] == ["@article{smith2021, title = {X}}"]
     assert out[0]["_action"] == "replace"
+
+
+# ---------------------------------------------------------------------------
+# Telling a quoting habit apart from an invention
+# ---------------------------------------------------------------------------
+
+def test_a_whitespace_only_miss_is_named_as_such():
+    """The model retyping a quote tends to collapse double spaces and line
+    breaks. That refusal and a hallucinated quote both read as 'not found',
+    and they call for opposite fixes — a tolerant match versus a better
+    prompt. The reason has to separate them."""
+    text = "the  decarbonisation\npathway is described"
+    out, rep = apply_corrections(
+        text, [{"find": "the decarbonisation pathway", "replace": "X"}])
+    assert out == text, "still refused — this is diagnosis, not a new behaviour"
+    assert "whitespace-only miss" in rep.rejected[0][1]
+
+
+def test_a_genuine_invention_is_named_as_absent():
+    out, rep = apply_corrections(
+        TEXT, [{"find": "a sentence that was never in the document",
+                "replace": "x"}])
+    assert out == TEXT
+    assert "absent even loosely" in rep.rejected[0][1]
