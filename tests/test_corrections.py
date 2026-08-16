@@ -144,11 +144,28 @@ def test_a_refused_edit_leaves_that_text_alone():
     assert out[0]["content"] == before
 
 
-def test_a_reply_naming_a_section_outside_the_window_is_dropped():
-    """Otherwise an off-by-one would write one section's edits onto another."""
-    out = _materialise_corrections([{"index": 7, "_action": "keep", "corrections": []}],
-                             _window())
-    assert out == []
+def test_a_reply_naming_a_section_outside_the_window_changes_nothing():
+    """The edit is refused — an off-by-one would otherwise write one section's
+    edits onto another — but the section it was aimed at still comes back."""
+    window = _window()
+    out = _materialise_corrections(
+        [{"index": 7, "_action": "keep", "corrections": []}], window)
+    assert [s["content"] for s in out] == [window[0]["content"]]
+
+
+def test_a_section_the_reply_never_mentions_survives():
+    """A reply that answers about two of three sections is ordinary. Emitting
+    only the sections it named cost this corpus 123 sections in one document
+    and 237 in another — text that was in the PDF and not in the output."""
+    window = [
+        {"title": "A", "content": "First.", "tables": [], "figures": []},
+        {"title": "B", "content": "Second.", "tables": [], "figures": []},
+        {"title": "C", "content": "Third.", "tables": [], "figures": []},
+    ]
+    out = _materialise_corrections(
+        [{"index": 1, "_action": "keep", "corrections": []}], window)
+    assert [s["title"] for s in out] == ["A", "B", "C"]
+    assert [s["content"] for s in out] == ["First.", "Second.", "Third."]
 
 
 def test_bibliography_still_carries_its_own_text():
