@@ -47,8 +47,22 @@ class CorrectionReport:
         return not self.rejected
 
 
+_WS_RE = re.compile(r"\s+")
+
+
 def _placeholders(text: str) -> list:
     return PLACEHOLDER_RE.findall(text or "")
+
+
+def _loose_hits(text: str, find: str) -> int:
+    """How often *find* occurs when runs of whitespace are treated as equal.
+
+    Purely diagnostic. A model that retypes a quote tends to normalise double
+    spaces and line breaks on the way, and a literal lookup then misses a
+    passage that is plainly there. Counting those separately is what tells us
+    whether the refusals are a quoting habit or an invention.
+    """
+    return _WS_RE.sub(" ", text).count(_WS_RE.sub(" ", find))
 
 
 def apply_corrections(original: str, edits) -> tuple:
@@ -81,7 +95,16 @@ def apply_corrections(original: str, edits) -> tuple:
         hits = text.count(find)
         if hits == 0:
             # The single most likely failure: the model quoted from memory.
-            report.rejected.append((find, "not found in the section"))
+            # Say WHY, not just that: a miss that a whitespace-insensitive
+            # search would have found is a quoting habit and calls for a
+            # tolerant match; a miss that stays missing is invention and calls
+            # for a better prompt or a better model. Diagnosis only — the
+            # loose match is counted, never applied.
+            loose = _loose_hits(text, find)
+            detail = ("whitespace-only miss" if loose == 1 else
+                      f"whitespace-only miss but {loose} loose hits" if loose > 1
+                      else "absent even loosely")
+            report.rejected.append((find, f"not found in the section, {detail}"))
             continue
         if hits > 1:
             report.rejected.append((find, f"ambiguous, {hits} occurrences"))

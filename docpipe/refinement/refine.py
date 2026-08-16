@@ -150,10 +150,16 @@ def _materialise_corrections(reply: list, window: list) -> list:
         else:
             text, report = apply_corrections(original.get("content"), sec.get("corrections") or [])
             if report.rejected:
+                # One line per refusal, WITH the string the model quoted. The
+                # previous version logged the reason only, which made refusals
+                # countable and undiagnosable at the same time: 1440 of them in
+                # one run and no way to ask afterwards what they had quoted.
+                for find, reason in report.rejected:
+                    log.warning("   section %d: refused (%s): %r",
+                                index, reason, (find or "")[:100])
                 log.warning(
-                    "   section %d: %d edit(s) applied, %d refused (%s)",
-                    index, report.applied, len(report.rejected),
-                    "; ".join(f"{reason}" for _, reason in report.rejected[:3]))
+                    "   section %d: %d correction(s) applied, %d refused",
+                    index, report.applied, len(report.rejected))
             built["content"] = text
         out.append(built)
     return out
