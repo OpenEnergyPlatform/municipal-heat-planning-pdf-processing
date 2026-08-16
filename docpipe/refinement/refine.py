@@ -147,13 +147,14 @@ def _materialise_corrections(reply: list, window: list) -> list:
     A section whose edits do not survive apply_corrections keeps whatever could be
     verified; nothing is applied on the model's word alone.
     """
-    # Every section of the window starts as itself. A section the reply forgets
-    # to mention then keeps its original text instead of disappearing from the
-    # document — and a correction relocated onto it has somewhere to land.
+    # Every section of the window starts as itself and every one of them is
+    # returned. A reply that mentions two of three sections is the ordinary
+    # case, not permission to drop the third: this book lost 123 of its 2697
+    # sections that way, and the 27B run 237. What the reply does supply is
+    # laid over the originals; what it omits stays as it was.
     built_by_index: dict = {
         i: {**original, "_action": "keep"} for i, original in enumerate(window)
     }
-    order: list = []
     pending: dict = {}
     for position, sec in enumerate(reply):
         if not isinstance(sec, dict):
@@ -193,17 +194,13 @@ def _materialise_corrections(reply: list, window: list) -> list:
                 pending.setdefault(target, []).extend(group)
 
         built_by_index[index] = built
-        if index not in order:
-            order.append(index)
 
     # Pass two: apply, now that every correction sits at the section its own
     # text says it belongs to.
     for index, corrections in pending.items():
-        built = built_by_index.get(index)
-        if built is None or built.get("_action") == "replace":
+        built = built_by_index[index]
+        if built.get("_action") == "replace":
             continue
-        if index not in order:            # relocated onto a section the reply
-            order.append(index)           # never named; keep it, corrected
         text, report = apply_corrections(window[index].get("content"), corrections)
         if report.rejected:
             # One line per refusal, WITH the string the model quoted. The
@@ -217,7 +214,7 @@ def _materialise_corrections(reply: list, window: list) -> list:
                         index, report.applied, len(report.rejected))
         built["content"] = text
 
-    return [built_by_index[i] for i in sorted(order)]
+    return [built_by_index[i] for i in range(len(window))]
 
 
 def _call_llm(
