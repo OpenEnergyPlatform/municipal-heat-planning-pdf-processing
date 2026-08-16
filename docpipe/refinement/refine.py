@@ -104,6 +104,38 @@ def _echo(raw_text: str) -> str:
             + raw_text[-_ECHO_TAIL:])
 
 
+def _relocate(corrections: list, window: list, claimed: int) -> dict:
+    """Sort a section's corrections by the section they actually belong to.
+
+    A window carries up to WINDOW_SIZE sections and the reply names which one
+    each correction is for. That name is wrong often enough to dominate
+    everything else: of the corrections refused as "not found", 56% quoted text
+    that does exist — one section over. The model reads the passage correctly
+    and misfiles it.
+
+    So the quote decides, not the label. A correction whose text is absent from
+    the section it names but present in exactly one other section of the window
+    is moved there. Ambiguity is not resolved by guessing: if two sections could
+    match, it stays where it was claimed and is refused as before.
+    """
+    by_index: dict = {}
+    for c in corrections:
+        target = claimed
+        find = c.get("find") if isinstance(c, dict) else None
+        if isinstance(find, str) and find:
+            here = window[claimed].get("content")
+            if not (isinstance(here, str) and find in here):
+                hits = [i for i, s in enumerate(window)
+                        if isinstance(s.get("content"), str)
+                        and find in s["content"]]
+                if len(hits) == 1:
+                    target = hits[0]
+                    log.debug("   correction moved from section %d to %d",
+                              claimed, target)
+        by_index.setdefault(target, []).append(c)
+    return by_index
+
+
 def _materialise_corrections(reply: list, window: list) -> list:
     """Rebuild full sections from an edit-mode reply.
 
@@ -115,14 +147,21 @@ def _materialise_corrections(reply: list, window: list) -> list:
     A section whose edits do not survive apply_corrections keeps whatever could be
     verified; nothing is applied on the model's word alone.
     """
-    out = []
+    # Every section of the window starts as itself. A section the reply forgets
+    # to mention then keeps its original text instead of disappearing from the
+    # document — and a correction relocated onto it has somewhere to land.
+    built_by_index: dict = {
+        i: {**original, "_action": "keep"} for i, original in enumerate(window)
+    }
+    order: list = []
+    pending: dict = {}
     for position, sec in enumerate(reply):
         if not isinstance(sec, dict):
-            log.warning("   edit reply %d is not an object, section dropped", position)
+            log.warning("   reply %d is not an object, section dropped", position)
             continue
         index = sec.get("index", position)
         if not isinstance(index, int) or not 0 <= index < len(window):
-            log.warning("   edit reply names index %r, outside this window", index)
+            log.warning("   reply names index %r, outside this window", index)
             continue
         original = window[index]
         action = sec.get("_action", "keep")
@@ -148,21 +187,37 @@ def _materialise_corrections(reply: list, window: list) -> list:
             # to be written out in full.
             built["content"] = sec.get("content", original.get("content"))
         else:
-            text, report = apply_corrections(original.get("content"), sec.get("corrections") or [])
-            if report.rejected:
-                # One line per refusal, WITH the string the model quoted. The
-                # previous version logged the reason only, which made refusals
-                # countable and undiagnosable at the same time: 1440 of them in
-                # one run and no way to ask afterwards what they had quoted.
-                for find, reason in report.rejected:
-                    log.warning("   section %d: refused (%s): %r",
-                                index, reason, (find or "")[:100])
-                log.warning(
-                    "   section %d: %d correction(s) applied, %d refused",
-                    index, report.applied, len(report.rejected))
-            built["content"] = text
-        out.append(built)
-    return out
+            built["content"] = original.get("content")
+            for target, group in _relocate(
+                    sec.get("corrections") or [], window, index).items():
+                pending.setdefault(target, []).extend(group)
+
+        built_by_index[index] = built
+        if index not in order:
+            order.append(index)
+
+    # Pass two: apply, now that every correction sits at the section its own
+    # text says it belongs to.
+    for index, corrections in pending.items():
+        built = built_by_index.get(index)
+        if built is None or built.get("_action") == "replace":
+            continue
+        if index not in order:            # relocated onto a section the reply
+            order.append(index)           # never named; keep it, corrected
+        text, report = apply_corrections(window[index].get("content"), corrections)
+        if report.rejected:
+            # One line per refusal, WITH the string the model quoted. The
+            # previous version logged the reason only, which made refusals
+            # countable and undiagnosable at the same time: 1440 of them in
+            # one run and no way to ask afterwards what they had quoted.
+            for find, reason in report.rejected:
+                log.warning("   section %d: refused (%s): %r",
+                            index, reason, (find or "")[:100])
+            log.warning("   section %d: %d correction(s) applied, %d refused",
+                        index, report.applied, len(report.rejected))
+        built["content"] = text
+
+    return [built_by_index[i] for i in sorted(order)]
 
 
 def _call_llm(
