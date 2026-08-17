@@ -61,16 +61,48 @@ def test_a_wholesale_deletion_is_refused():
     assert f"{100 * MAX_SHRINK:.0f}%" in rep.rejected[-1][1]
 
 
-def test_edits_are_checked_against_the_running_text_not_the_original():
-    """The second edit must see what the first one did, or an edit pair that
-    overlaps would apply twice."""
+def test_edits_are_checked_against_the_text_the_model_was_given():
+    """Each quote is verified against the section as the model received it —
+    the only text it can honestly be quoting. Checking against the text left
+    by earlier edits meant a correction could be refused for quoting a passage
+    that WAS there until its predecessor rewrote it."""
     filler = " padding" * 40          # keep the shrink guard out of this test
     out, rep = apply_corrections(
         "alpha beta gamma" + filler,
-        [{"find": "alpha beta", "replace": "alpha"},
-         {"find": "alpha gamma", "replace": "done"}])
-    assert out == "done" + filler
+        [{"find": "beta", "replace": "BETA"},
+         {"find": "gamma", "replace": "GAMMA"}])
+    assert out == "alpha BETA GAMMA" + filler
     assert rep.applied == 2 and rep.ok
+
+
+def test_two_corrections_to_one_sentence_keep_the_longer_one():
+    """The prompt asks for whole-sentence quotes so that a quote is unique,
+    which makes two fixes to one sentence overlap by construction. The longer
+    quote's replacement is that whole passage as it should read, so it already
+    carries the shorter one's fix."""
+    filler = " padding" * 40
+    text = "The decarboni- sation of indus- try rests on it." + filler
+    out, rep = apply_corrections(text, [
+        {"find": "indus- try", "replace": "industry"},
+        {"find": "The decarboni- sation of indus- try rests on it.",
+         "replace": "The decarbonisation of industry rests on it."},
+    ])
+    assert out == "The decarbonisation of industry rests on it." + filler
+    assert rep.applied == 1
+    assert "overlaps a longer correction" in rep.rejected[0][1]
+    assert rep.rejected[0][0] == "indus- try", "the shorter one is the one dropped"
+
+
+def test_disjoint_corrections_all_apply_whatever_their_order():
+    """Splicing from the end keeps the offsets of the earlier ones valid."""
+    filler = " padding" * 40
+    out, rep = apply_corrections("one two three four" + filler, [
+        {"find": "three", "replace": "C"},
+        {"find": "one", "replace": "A"},
+        {"find": "two", "replace": "B"},
+    ])
+    assert out == "A B C four" + filler
+    assert rep.applied == 3 and rep.ok
 
 
 def test_one_bad_edit_does_not_discard_the_good_ones_but_is_reported():
