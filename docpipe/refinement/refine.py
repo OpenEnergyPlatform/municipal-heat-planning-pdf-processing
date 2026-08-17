@@ -898,7 +898,69 @@ def refine_sections(sections: list[dict]) -> list[dict]:
             s["title"] = _normalize_title(s.get("title", ""))
 
     log.info(f"Stage 4: {len(refined)} sections final")
+    _report_dropped_text(sections, refined)
     return refined
+
+
+def _shingles(text: str, width: int = 5) -> set:
+    """Hashes of every *width*-word run, so survival can be tested in O(1).
+
+    Substring search would be the obvious way and is unusable here: 3000
+    sections times 8 probes against seven megabytes of output is hundreds of
+    gigabytes of scanning at the end of a stage that already took an hour.
+    """
+    words = text.split()
+    return {hash(" ".join(words[i:i + width]))
+            for i in range(max(0, len(words) - width + 1))}
+
+
+def _report_dropped_text(before: list, after: list) -> None:
+    """Say which sections did not make it into the output, and how big they were.
+
+    Two bugs got through this stage unnoticed because nothing here said what
+    came out of it. Both were section loss: one dropped any section a reply
+    failed to mention, the other filed corrections under the wrong section.
+    Counts alone hid them, because the count legitimately falls — a book's
+    index and its list of abbreviations are meant to be removed here.
+
+    So this reports the removals in full instead of judging them. A healthy
+    run names its front and back matter, and 'Index', 'A', 'C' in that list
+    reads very differently from a chapter title. The judgement is the
+    reader's; the facts are no longer missing.
+    """
+    try:
+        kept = set()
+        for section in after:
+            kept |= _shingles(_text_of(section))
+        dropped, words = [], 0
+        for section in before:
+            body = _text_of(section)
+            if len(body.split()) < 6:
+                continue
+            probes = list(_shingles(body))[:24]
+            if probes and not any(p in kept for p in probes):
+                dropped.append((len(body.split()), section.get("title") or "?"))
+                words += len(body.split())
+        total = sum(len(_text_of(s).split()) for s in before)
+        log.info("Stage 4: %d words in, %d out (%+.2f%%)", total,
+                 sum(len(_text_of(s).split()) for s in after),
+                 100 * (sum(len(_text_of(s).split()) for s in after) - total)
+                 / max(1, total))
+        if not dropped:
+            return
+        log.info("Stage 4: %d section(s) removed entirely, %d words (%.1f%%); "
+                 "largest: %s", len(dropped), words, 100 * words / max(1, total),
+                 ", ".join(f"{title!r} ({n} words)"
+                           for n, title in sorted(dropped, reverse=True)[:6]))
+    except Exception as exc:                      # a report may never break a run
+        log.debug("Stage 4: could not report dropped text: %s", exc)
+
+
+def _text_of(section: dict) -> str:
+    content = section.get("content")
+    if isinstance(content, list):                 # [LITERATURE] holds BibTeX
+        return "\n".join(str(part) for part in content)
+    return content if isinstance(content, str) else ""
 
 
 # ---------------------------------------------------------------------------
