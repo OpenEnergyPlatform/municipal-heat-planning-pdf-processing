@@ -10,19 +10,51 @@ You will receive a JSON object with a "sections" array containing 1–3 sections
 
 HOW TO QUOTE A "find" STRING — this is the part that decides whether your correction survives:
 
-Each "find" is looked up verbatim in the section and must appear there EXACTLY ONCE. A string that is absent, or that occurs twice, is thrown away and that artefact stays uncorrected. Two rules follow:
+A "find" is located by literal character-by-character comparison against the section text you were given, and must occur there EXACTLY ONCE. If it is absent, or occurs twice, the correction is discarded and the artefact stays in the document. This is where corrections are lost — not on the "replace" side.
 
-- **Quote long.** Do not quote the broken word alone. Extend the string to both sides until it could not possibly match anywhere else in the section — as a rule of thumb take the whole sentence, or at least eight to ten words around the change. A longer "find" costs a few tokens; a "find" that matches twice costs the correction.
-- **Quote exactly.** Copy the characters as they stand, including punctuation, digits, double spaces and the broken word itself. Never tidy it up while quoting, never reproduce it from memory. The lookup is literal — one differing character and the correction is lost.
+Follow exactly this procedure for every "find", and no other:
+
+1. Locate the first character of the passage in the section text above.
+2. Copy every character from there onward, in order, leaving nothing out — punctuation, digits, double spaces, stray single letters and the broken word itself included.
+3. Stop at the end of the passage. Do not carry on into a passage elsewhere in the section that reads similarly.
+
+Five rules follow.
+
+**One unbroken run of characters.** Never join two pieces of text that do not stand next to each other. Extraction turns list bullets into stray letters, so a section often contains several items that begin and end alike — and these documents are full of such lists, one per Quartier or per Maßnahme. Jumping from one item to the next is the single most common way to lose a correction.
+
+  Section text: "... e Sanierung der Bestandsgebäude senkt den Wärme- bedarf um 30 bis 50 Prozent; e Neubauten werden an das Netz angeschlossen; e der Ausbau der Wärme- pumpen erfolgt ab 2027 ..."
+  WRONG {"find": "Wärme- bedarf um 30 bis 50 Prozent; e der Ausbau", ...}
+        — the first half ends the first item, "e der Ausbau" begins the third. Those characters never stand together.
+  RIGHT {"find": "Sanierung der Bestandsgebäude senkt den Wärme- bedarf", "replace": "Sanierung der Bestandsgebäude senkt den Wärmebedarf"}
+
+**Leave nothing out in the middle.** Never shorten, summarise or step over a stretch you consider irrelevant — a leaked running head or footer least of all. If one sits inside the passage, that is exactly the text you are here to remove, so it belongs INSIDE the "find" and is left out of the "replace".
+
+  Section text: "... der Anschluss- grad steigt, die Investitionen verteilen sich über zwölf Jahre und die Fördermittel sind gesichert ..."
+  WRONG {"find": "der Anschluss- grad steigt und die Fördermittel", ...}     — 60 Zeichen stillschweigend übersprungen
+  RIGHT {"find": "der Anschluss- grad steigt, die Investitionen", "replace": "der Anschlussgrad steigt, die Investitionen"}
+
+  Section text: "... beschlossen wurde. Kommunale Wärmeplanung Stadt Musterstadt 14 Die Eignungsprüfung ergibt ..."
+  WRONG {"find": "beschlossen wurde. Die Eignungsprüfung ergibt", ...}       — überspringt den Kolumnentitel
+  RIGHT {"find": "beschlossen wurde. Kommunale Wärmeplanung Stadt Musterstadt 14 Die Eignungsprüfung", "replace": "beschlossen wurde. Die Eignungsprüfung"}
+
+**Copy, do not tidy.** Quoting is transcription, never correction. Typographic quotation marks, en and em dashes, non-breaking spaces and double spaces stay exactly as they are in the "find"; the tidying belongs in the "replace".
+
+  Section text: "... die sogenannten „grünen“ Gase – soweit verfügbar – deckenden ..."
+  WRONG {"find": "die sogenannten \"grünen\" Gase - soweit verfügbar", ...}
+  RIGHT {"find": "die sogenannten „grünen“ Gase – soweit verfügbar", ...}
+
+**Long enough to be unique, and no longer.** Do not quote the broken word alone; extend to both sides until the string could not match anywhere else in the section — as a rule of thumb the whole sentence, or at least eight to ten words around the change. Where the passage sits in a list of similar items, include that item's own distinctive words, not just the words the items share.
+
+  Too short — "sorgung" occurs in three other words in the same section:
+    {"find": "sorgung", "replace": "sorgung"}
+  Too short — the broken word alone may well appear twice:
+    {"find": "Wärme- versorgung", "replace": "Wärmeversorgung"}
+  Long enough — the surrounding sentence makes it unique:
+    {"find": "Die Wärme- versorgung stützt sich auf", "replace": "Die Wärmeversorgung stützt sich auf"}
+
+**One correction per passage.** Do not send two corrections that cover the same sentence. Where they overlap, only the longer one is applied and the other is discarded, so put both fixes into a single pair.
 
 Both strings must contain the change: "find" holds the text as it is now, "replace" holds the same passage as it should read. Everything you quote in "find" and do not alter in "replace" is text you are handing back unchanged, so keep the quote long enough to be unique but no longer.
-
-Too short — "sorgung" occurs in three other words in the same section, so this is discarded:
-  {"find": "sorgung", "replace": "sorgung"}
-Too short — the broken word alone may well appear twice:
-  {"find": "Wärme- versorgung", "replace": "Wärmeversorgung"}
-Long enough — the surrounding sentence makes it unique:
-  {"find": "Die Wärme- versorgung stützt sich auf", "replace": "Die Wärmeversorgung stützt sich auf"}
 
 Apply the following tasks to each section:
 
