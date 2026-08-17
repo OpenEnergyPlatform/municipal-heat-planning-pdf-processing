@@ -13,10 +13,20 @@ is checked against the original first. A find/replace the model half-remembered
 would otherwise rewrite a sentence nobody asked it to touch, or match in two
 places and change the wrong one. Nothing here is applied on trust:
 
-  * the text to find must be present, exactly once, in the text as it stands
-    after the previous edits;
+  * the text to find must be present, exactly once, in the section AS THE MODEL
+    RECEIVED IT — the only text it can honestly be quoting;
+  * where two corrections cover the same passage, the longer one wins and the
+    other is reported as overlapping;
   * an edit may not add, drop or alter a [pN_tblM] / [pN_imgM] placeholder;
   * the edits together may not remove more than MAX_SHRINK of the section.
+
+The first two rules used to be one: each find was looked up in the text left by
+its predecessors. That quietly punished the prompt for working. The model is
+told to quote whole sentences so that a quote is unique, which makes two fixes
+to one sentence overlap by construction — and the second then failed to find an
+anchor its predecessor had just rewritten, and was reported as text that was
+never in the document. It was; it had been edited away moments earlier. Of 4828
+corrections on one book, 1144 were refused that way.
 
 A rejected edit is dropped and reported, never guessed at. If the caller sees
 anything in `rejected`, the honest move is to keep the original section — the
@@ -76,7 +86,7 @@ def apply_corrections(original: str, edits) -> tuple:
         report.rejected.append((None, f"edits is {type(edits).__name__}, not a list"))
         return original, report
 
-    text = original
+    located = []
     for edit in edits:
         if not isinstance(edit, dict):
             report.rejected.append((None, "edit is not an object"))
@@ -92,15 +102,15 @@ def apply_corrections(original: str, edits) -> tuple:
             report.rejected.append((find, "replace is not text"))
             continue
 
-        hits = text.count(find)
+        hits = original.count(find)
         if hits == 0:
-            # The single most likely failure: the model quoted from memory.
-            # Say WHY, not just that: a miss that a whitespace-insensitive
-            # search would have found is a quoting habit and calls for a
-            # tolerant match; a miss that stays missing is invention and calls
-            # for a better prompt or a better model. Diagnosis only — the
-            # loose match is counted, never applied.
-            loose = _loose_hits(text, find)
+            # The model quoted something the section does not contain. Say WHY,
+            # not just that: a miss that a whitespace-insensitive search would
+            # have found is a quoting habit and calls for a tolerant match; a
+            # miss that stays missing is invention and calls for a better prompt
+            # or a better model. Diagnosis only — the loose match is counted,
+            # never applied.
+            loose = _loose_hits(original, find)
             detail = ("whitespace-only miss" if loose == 1 else
                       f"whitespace-only miss but {loose} loose hits" if loose > 1
                       else "absent even loosely")
@@ -118,7 +128,27 @@ def apply_corrections(original: str, edits) -> tuple:
                        f"added {sorted(gained)})"))
             continue
 
-        text = text.replace(find, replace, 1)
+        start = original.index(find)
+        located.append((start, start + len(find), find, replace))
+
+    # Longest first, so that when two corrections cover the same sentence the
+    # one that quoted more of it survives. Its "replace" is that whole passage
+    # as it should read, so it carries the shorter one's fix as well.
+    located.sort(key=lambda span: (span[0] - span[1], span[0]))
+    taken = []
+    for start, end, find, replace in located:
+        clash = next(((s, e) for s, e, _ in taken if start < e and s < end), None)
+        if clash:
+            report.rejected.append(
+                (find, f"overlaps a longer correction to the same passage "
+                       f"(chars {clash[0]}-{clash[1]})"))
+            continue
+        taken.append((start, end, replace))
+
+    # Back to front: splicing from the end keeps every remaining offset valid.
+    text = original
+    for start, end, replace in sorted(taken, reverse=True):
+        text = text[:start] + replace + text[end:]
         report.applied += 1
 
     if _placeholders(text) != _placeholders(original):
