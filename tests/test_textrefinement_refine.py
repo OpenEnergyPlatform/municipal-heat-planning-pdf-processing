@@ -146,3 +146,48 @@ def test_a_long_answer_is_bounded_before_it_goes_back():
     assert out.startswith("A" * 100)
     assert out.endswith("ENDE")
     assert "characters omitted" in out
+
+
+# ---------------------------------------------------------------------------
+# Saying out loud what the stage threw away
+# ---------------------------------------------------------------------------
+
+def _prose(word: str, n: int = 40) -> str:
+    return " ".join(f"{word}{i}" for i in range(n))
+
+
+def test_the_stage_names_the_sections_it_dropped(caplog):
+    """Two bugs shipped because nothing reported what came out of this stage,
+    and a falling section count is normal here — a book's index is meant to be
+    removed. So the titles are reported and the judgement is left to the
+    reader: 'Index' and a chapter heading read very differently."""
+    from docpipe.refinement.refine import _report_dropped_text
+
+    before = [{"title": "Index", "content": _prose("entry")},
+              {"title": "3.2 Heat demand", "content": _prose("demand")},
+              {"title": "3.3 Supply", "content": _prose("supply")}]
+    with caplog.at_level("INFO"):
+        _report_dropped_text(before, before[1:])
+    text = caplog.text
+    assert "1 section(s) removed entirely" in text
+    assert "'Index'" in text
+    assert "3.2 Heat demand" not in text, "only what is gone is named"
+
+
+def test_an_edited_section_does_not_count_as_dropped(caplog):
+    """The check has to survive the corrections the stage exists to apply."""
+    from docpipe.refinement.refine import _report_dropped_text
+
+    before = [{"title": "A", "content": "Die Wärme- versorgung " + _prose("x")}]
+    after = [{"title": "A", "content": "Die Wärmeversorgung " + _prose("x")}]
+    with caplog.at_level("INFO"):
+        _report_dropped_text(before, after)
+    assert "removed entirely" not in caplog.text
+
+
+def test_the_report_never_breaks_the_run(caplog):
+    """It runs after an hour of GPU time; it may not be the thing that fails."""
+    from docpipe.refinement.refine import _report_dropped_text
+
+    _report_dropped_text([{"content": None}, {}, {"content": ["bibtex"]}],
+                         [None])
