@@ -36,7 +36,8 @@ def test_core_imports_neither_profiles_nor_streamlit(path):
 
 
 def _requested_prompt_ids(*roots):
-    """The prompt ids the source asks for, read out of the calls themselves."""
+    """The prompt ids the source asks for: literal load()/text() arguments
+    plus `*_PROMPT_ID = "stage/name"` constants (loaded through the name)."""
     ids = set()
     for root in roots:
         for path in root.rglob("*.py"):
@@ -49,7 +50,30 @@ def _requested_prompt_ids(*roots):
                         and isinstance(node.args[0].value, str)
                         and _PROMPT_ID.match(node.args[0].value)):
                     ids.add(node.args[0].value)
+                elif (isinstance(node, ast.Assign)
+                        and isinstance(node.value, ast.Constant)
+                        and isinstance(node.value.value, str)
+                        and _PROMPT_ID.match(node.value.value)
+                        and any(isinstance(t, ast.Name)
+                                and t.id.endswith("_PROMPT_ID")
+                                for t in node.targets)):
+                    ids.add(node.value.value)
     return ids
+
+
+# Stages a profile opts into via a component; their prompts are required
+# exactly when the profile provides that component.
+OPTIONAL_STAGES = {"extraction": ("extraction", "SPEC_PATH")}
+
+
+def _required_for(profile, requested):
+    out = set()
+    for pid in requested:
+        opt = OPTIONAL_STAGES.get(pid.split("/", 1)[0])
+        if opt and profile.component(*opt) is None:
+            continue
+        out.add(pid)
+    return out
 
 
 def _profile_homes():
@@ -68,7 +92,7 @@ def test_a_profile_provides_every_prompt_the_core_loads(home):
     requested = _requested_prompt_ids(CORE)
     assert requested, "no prompt calls found — did the layout change?"
     profile = load_profile(home.name)
-    missing = sorted(pid for pid in requested
+    missing = sorted(pid for pid in _required_for(profile, requested)
                      if not prompts.path_for(pid, profile).is_file())
 
     assert not missing, f"{home.name} is missing {missing}"

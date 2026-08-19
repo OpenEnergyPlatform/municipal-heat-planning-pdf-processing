@@ -2,7 +2,8 @@
 serialize.py – From harvested tuples to the profile's target graph.
 
 The core walks the JSONL harvest and hands each document's accepted tuples to
-a serializer the profile provides (profiles/<name>/kg.py, SERIALIZER). What a
+a serializer the profile provides (profiles/<name>/kg.py exposes
+make_serializer(db_path), the runner's --serialize calls it). What a
 serializer emits — TTL with project IRI rules, LinkML YAML, anything — is
 entirely its business; the core only guarantees the walk, the grouping and
 that refusal rows never reach it.

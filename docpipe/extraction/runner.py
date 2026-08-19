@@ -375,6 +375,9 @@ def main(argv: Optional[list] = None) -> int:
     parser.add_argument("--print-context-budget", action="store_true",
                         help="Print the tokens one harvest request needs and "
                              "exit — job scripts feed this to --max-model-len")
+    parser.add_argument("--serialize", type=Path, default=None, metavar="TTL",
+                        help="No harvest: hand the JSONL in OUT to the "
+                             "profile's kg.make_serializer and write TTL")
     add_profile_argument(parser)
     args = parser.parse_args(argv)
     logging.basicConfig(level=args.log_level,
@@ -382,6 +385,17 @@ def main(argv: Optional[list] = None) -> int:
                         datefmt="%H:%M:%S")
 
     profile = resolve_profile(args)
+    if args.serialize is not None:
+        factory = profile.component("kg", "make_serializer")
+        if factory is None:
+            parser.error(f"profile {profile.name!r} provides no "
+                         f"kg.make_serializer (profiles/{profile.name}/kg.py)")
+        from .serialize import run as serialize_run
+        counts = serialize_run(args.out, args.serialize, factory(args.db))
+        log.info("serialize: %d tuple(s) from %d document(s) -> %s",
+                 sum(counts.values()), len(counts), args.serialize)
+        return 0
+
     # component, not require: extraction is an optional stage. A profile that
     # does not do OBIE (ar6 today) must stay loadable everywhere else and only
     # fail here, when someone actually asks it to extract.
