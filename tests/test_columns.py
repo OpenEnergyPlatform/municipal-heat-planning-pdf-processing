@@ -177,3 +177,39 @@ def test_report_columns_takes_the_path_from_either_positional(monkeypatch, argv,
         assert seen["root"].name == "processed"       # the profile's own
     else:
         assert seen["root"] == Path(expected)
+
+
+# ---------------------------------------------------------------------------
+# a column that carries a list
+# ---------------------------------------------------------------------------
+
+def test_a_bulleted_column_is_still_a_column():
+    """A list is typeset on two left edges — the bullet line and the indent its
+    continuation takes. Demanding a single edge rejected the page, which was
+    then read across the gutter and interleaved the two columns line by line."""
+    blocks = []
+    for i in range(10):
+        y = 100.0 + i * 30.0
+        blocks.append(_block(f"L{i}", y, LEFT))
+        # every third right-hand block opens a bullet, the rest are indented
+        x0 = RIGHT[0] if i % 3 == 0 else RIGHT[0] + 11.0
+        blocks.append(_block(f"R{i}", y, (x0, RIGHT[1])))
+    assert columns.find_gutters(blocks, WIDTH), "the gutter is plainly there"
+
+
+def test_labels_scattered_around_a_chart_are_not_a_column():
+    """The check still has to reject what it was written for: text that leaves
+    clean vertical gaps without being typeset in a column."""
+    blocks = [_block(f"L{i}", 100.0 + i * 30.0, LEFT) for i in range(10)]
+    for i in range(10):
+        x0 = RIGHT[0] + i * 9.0            # every label at its own indent
+        blocks.append(_block(f"R{i}", 100.0 + i * 30.0, (x0, x0 + 60.0)))
+    assert columns.find_gutters(blocks, WIDTH) == []
+
+
+def test_two_edges_a_hair_apart_are_one_edge():
+    """round(x / 4) put 306.0 and 306.4 into different buckets and counted the
+    same indent twice."""
+    column = [_block("a", 0.0, (306.0, 400.0)), _block("b", 0.0, (306.4, 400.0)),
+              _block("c", 0.0, (305.8, 400.0))]
+    assert columns._edge_clusters(column) == [3]
