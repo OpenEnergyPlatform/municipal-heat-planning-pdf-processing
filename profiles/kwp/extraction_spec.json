@@ -41,14 +41,42 @@
       "example": {
         "source": "| Energieträger | Industrie Endenergie in kWh/a | GHD/Kommune Endenergie in kWh/a | Private Haushalte Endenergie in kWh/a |\n| --- | --- | --- | --- |\n| Wärmenetze | 24.611.469 | 222.660.349 | 281.939.715 |\n| Erdgas | 126.656.132 | 520.465.057 | 1.036.767.833 |\n| Heizöl | 1.440.048 | 28.116.204 | 203.458.519 |",
         "tuples": [
+          {"value": 24611469, "unit_raw": "kWh/a", "carrier": "Wärmenetze",
+           "sector": "Industrie", "year": null, "scenario": "unknown",
+           "spatial_scope": "unknown", "indicator_label_raw": "Endenergie",
+           "quote": "| Wärmenetze | 24.611.469 | 222.660.349 | 281.939.715 |"},
+          {"value": 222660349, "unit_raw": "kWh/a", "carrier": "Wärmenetze",
+           "sector": "GHD/Kommune", "year": null, "scenario": "unknown",
+           "spatial_scope": "unknown", "indicator_label_raw": "Endenergie",
+           "quote": "| Wärmenetze | 24.611.469 | 222.660.349 | 281.939.715 |"},
+          {"value": 281939715, "unit_raw": "kWh/a", "carrier": "Wärmenetze",
+           "sector": "Private Haushalte", "year": null, "scenario": "unknown",
+           "spatial_scope": "unknown", "indicator_label_raw": "Endenergie",
+           "quote": "| Wärmenetze | 24.611.469 | 222.660.349 | 281.939.715 |"},
           {"value": 126656132, "unit_raw": "kWh/a", "carrier": "Erdgas",
            "sector": "Industrie", "year": null, "scenario": "unknown",
+           "spatial_scope": "unknown", "indicator_label_raw": "Endenergie",
+           "quote": "| Erdgas | 126.656.132 | 520.465.057 | 1.036.767.833 |"},
+          {"value": 520465057, "unit_raw": "kWh/a", "carrier": "Erdgas",
+           "sector": "GHD/Kommune", "year": null, "scenario": "unknown",
            "spatial_scope": "unknown", "indicator_label_raw": "Endenergie",
            "quote": "| Erdgas | 126.656.132 | 520.465.057 | 1.036.767.833 |"},
           {"value": 1036767833, "unit_raw": "kWh/a", "carrier": "Erdgas",
            "sector": "Private Haushalte", "year": null, "scenario": "unknown",
            "spatial_scope": "unknown", "indicator_label_raw": "Endenergie",
-           "quote": "| Erdgas | 126.656.132 | 520.465.057 | 1.036.767.833 |"}
+           "quote": "| Erdgas | 126.656.132 | 520.465.057 | 1.036.767.833 |"},
+          {"value": 1440048, "unit_raw": "kWh/a", "carrier": "Heizöl",
+           "sector": "Industrie", "year": null, "scenario": "unknown",
+           "spatial_scope": "unknown", "indicator_label_raw": "Endenergie",
+           "quote": "| Heizöl | 1.440.048 | 28.116.204 | 203.458.519 |"},
+          {"value": 28116204, "unit_raw": "kWh/a", "carrier": "Heizöl",
+           "sector": "GHD/Kommune", "year": null, "scenario": "unknown",
+           "spatial_scope": "unknown", "indicator_label_raw": "Endenergie",
+           "quote": "| Heizöl | 1.440.048 | 28.116.204 | 203.458.519 |"},
+          {"value": 203458519, "unit_raw": "kWh/a", "carrier": "Heizöl",
+           "sector": "Private Haushalte", "year": null, "scenario": "unknown",
+           "spatial_scope": "unknown", "indicator_label_raw": "Endenergie",
+           "quote": "| Heizöl | 1.440.048 | 28.116.204 | 203.458.519 |"}
         ]
       }
     },
@@ -97,6 +125,16 @@
            "sector": "Private Haushalte", "year": null, "scenario": "unknown",
            "spatial_scope": "sub_area",
            "indicator_label_raw": "Primärenergieverbrauch",
+           "quote": "| Gebäude Wärme | 44.985 | 7.953 | 22.766 |"},
+          {"value": 7953, "unit_raw": "MWh/a", "carrier": null,
+           "sector": "Wirtschaftlich genutzte Gebäude", "year": null,
+           "scenario": "unknown", "spatial_scope": "sub_area",
+           "indicator_label_raw": "Primärenergieverbrauch",
+           "quote": "| Gebäude Wärme | 44.985 | 7.953 | 22.766 |"},
+          {"value": 22766, "unit_raw": "MWh/a", "carrier": null,
+           "sector": "Öffentliche Gebäude", "year": null, "scenario": "unknown",
+           "spatial_scope": "sub_area",
+           "indicator_label_raw": "Primärenergieverbrauch",
            "quote": "| Gebäude Wärme | 44.985 | 7.953 | 22.766 |"}
         ]
       }
@@ -109,7 +147,9 @@
       "unit_target": "OEO_00010137",
       "units_accepted": {
         "t/a": 1.0, "t": 1.0, "kt/a": 1000.0, "kt": 1000.0,
-        "t CO2/a": 1.0, "t CO2-eq/a": 1.0
+        "t CO2/a": 1.0, "t CO2-eq/a": 1.0, "t CO2e/a": 1.0, "t CO2e": 1.0,
+        "tCO2/a": 1.0, "t CO2-Äq./a": 1.0, "t CO2-Äq/a": 1.0,
+        "t CO2-Äquivalente/a": 1.0, "kt CO2/a": 1000.0, "kt CO2-Äq./a": 1000.0
       },
       "axes": {
         "carrier": {
@@ -144,6 +184,16 @@
         "tuples": [
           {"value": 10123, "unit_raw": "t/a", "carrier": null,
            "sector": "Private Haushalte", "year": null, "scenario": "unknown",
+           "spatial_scope": "sub_area",
+           "indicator_label_raw": "Treibhausgasemissionen",
+           "quote": "| Gebäude Wärme | 10.123 | 1.843 | 5.292 |"},
+          {"value": 1843, "unit_raw": "t/a", "carrier": null,
+           "sector": "Wirtschaftlich genutzte Gebäude", "year": null,
+           "scenario": "unknown", "spatial_scope": "sub_area",
+           "indicator_label_raw": "Treibhausgasemissionen",
+           "quote": "| Gebäude Wärme | 10.123 | 1.843 | 5.292 |"},
+          {"value": 5292, "unit_raw": "t/a", "carrier": null,
+           "sector": "Öffentliche Gebäude", "year": null, "scenario": "unknown",
            "spatial_scope": "sub_area",
            "indicator_label_raw": "Treibhausgasemissionen",
            "quote": "| Gebäude Wärme | 10.123 | 1.843 | 5.292 |"}
