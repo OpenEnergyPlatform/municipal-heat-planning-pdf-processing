@@ -311,7 +311,15 @@ def main(argv: Optional[list] = None) -> int:
                         datefmt="%H:%M:%S")
 
     profile = resolve_profile(args)
-    spec_path = Path(profile.require("extraction", "SPEC_PATH"))
+    # component, not require: extraction is an optional stage. A profile that
+    # does not do OBIE (ar6 today) must stay loadable everywhere else and only
+    # fail here, when someone actually asks it to extract.
+    raw_spec_path = profile.component("extraction", "SPEC_PATH")
+    if raw_spec_path is None:
+        parser.error(f"profile {profile.name!r} does not configure the "
+                     f"extraction stage (profiles/{profile.name}/extraction.py "
+                     f"with SPEC_PATH)")
+    spec_path = Path(raw_spec_path)
     spec = load_spec(spec_path)
     import hashlib
     spec_sha = hashlib.sha256(spec_path.read_bytes()).hexdigest()
