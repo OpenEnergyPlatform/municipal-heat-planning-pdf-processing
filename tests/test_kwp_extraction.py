@@ -1,0 +1,170 @@
+"""The kwp extraction profile: spec, prompts, and the MHPKG serializer."""
+import re
+import sqlite3
+
+import pytest
+
+from docpipe.extraction.queries import expand
+from docpipe.extraction.spec import load
+from docpipe.extraction.verify import Verified, verify_tuple
+from docpipe.profile import load_profile
+from profiles.kwp import kg
+from profiles.kwp.extraction import SPEC_PATH
+
+SPEC = load(SPEC_PATH)
+UUID5 = r"[0-9a-f]{8}-[0-9a-f]{4}-5[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}"
+
+
+# --- spec ------------------------------------------------------------------
+
+def test_the_spec_carries_the_three_mail_parameters():
+    assert [p.uri for p in SPEC.parameters] == [
+        "OEO_00050016", "OEO_00050018", "OEO_00340066"]
+
+
+@pytest.mark.parametrize("parameter", SPEC.parameters, ids=lambda p: p.uri)
+def test_every_example_verifies_against_its_own_source(parameter):
+    """The example doubles as the golden test: a spec whose own few-shot
+    would be refused by verify_tuple teaches the model a refusable habit."""
+    for raw in parameter.example["tuples"]:
+        outcome = verify_tuple(dict(raw), parameter, parameter.example["source"])
+        assert isinstance(outcome, Verified), getattr(outcome, "reason", outcome)
+        assert not outcome.flags, "example labels must map into the vocabulary"
+
+
+# --- prompts ---------------------------------------------------------------
+
+def _profile():
+    return load_profile("kwp")
+
+
+def test_query_templates_expand_for_every_parameter():
+    from docpipe import prompts
+    prompt = prompts.load("extraction/queries", _profile())
+    templates = [line for line in prompt.text.splitlines()
+                 if line.strip() and not line.lstrip().startswith("#")]
+    assert templates
+    for parameter in SPEC.parameters:
+        probes = expand(templates, parameter)
+        assert len(probes) > len(templates), "the carrier axis must fan out"
+        assert len(set(probes)) == len(probes)
+        assert not any("{" in p for p in probes)
+
+
+def test_the_harvest_prompt_states_the_contract():
+    from docpipe import prompts
+    prompt = prompts.load("extraction/harvest", _profile())
+    assert prompt.meta.get("max_tokens")
+    for needle in ('"tuples"', '"quote"', '"unit_raw"', '"indicator_label_raw"'):
+        assert needle in prompt.text, f"prompt never names {needle}"
+
+
+# --- IRI minting against the published reference ---------------------------
+
+def test_value_minting_matches_the_schema_repo_reference():
+    """mint_slice.py's exact coordinate string must yield its exact UUID —
+    proves the whole uuid5 chain, namespace derivation included. Their
+    kassel_valid.ttl carries a878a3a1-… instead, which mint_slice.py cannot
+    produce from any plausible coordinate variant: a stale hand-typed UUID
+    on the schema side, reported, not reproduced."""
+    heatplan = f"{kg.BASE}heatplan/AGS_06611000_2024-03-15"
+    coordinates = "|".join([heatplan, f"{kg.OEO}OEO_00050016",
+                            f"{kg.OEO}OEO_00000292", "2030",
+                            f"{kg.OEO}OEO_00140070"])
+    assert kg.mint("value", coordinates).endswith(
+        "78153046-c4c2-5cae-a61c-56c70e57e5a5")
+
+
+def test_normalise_and_organisation_minting_match_the_reference():
+    for label in ("Kassel Wärme Ingenieurbüro",
+                  "  kassel   wärme  ingenieurbüro  ",
+                  "Kassel Wärme Ingenieurbüro GmbH"):
+        assert kg.mint("organisation", kg.normalise(label)).endswith(
+            "2d4f4ae8-ea0f-575c-9a76-8dcf377042af"), label
+    stripped = kg.mint("organisation", kg.normalise("Kassel Warme Ingenieurburo"))
+    assert not stripped.endswith("2d4f4ae8-ea0f-575c-9a76-8dcf377042af")
+
+
+# --- indicator mapping (D6) -------------------------------------------------
+
+def test_unclear_beats_accept_and_no_label_is_unclear():
+    assert kg.accepted_indicator("OEO_00050016", "Endenergieverbrauch")
+    assert not kg.accepted_indicator("OEO_00050016", "Endenergiebedarf")
+    assert not kg.accepted_indicator(
+        "OEO_00050016", "witterungskorrigierter Endenergieverbrauch")
+    assert not kg.accepted_indicator("OEO_00340066", "THG-Emissionen")
+    assert not kg.accepted_indicator("OEO_00050016", None)
+
+
+# --- serializer -------------------------------------------------------------
+
+def _database(tmp_path):
+    db = tmp_path / "kwp.db"
+    conn = sqlite3.connect(db)
+    conn.executescript("""
+        CREATE TABLE Documents (id INTEGER PRIMARY KEY, filename TEXT,
+                                published TEXT, is_current INTEGER);
+        CREATE TABLE DocumentMeta (document INTEGER, municipality_ags TEXT);
+        CREATE TABLE Municipalities (ags TEXT, name TEXT);
+        INSERT INTO Documents VALUES (857, 'waermeplan_kassel_20240315.pdf',
+                                      '2024-03-15', 1);
+        INSERT INTO DocumentMeta VALUES (857, '06611000');
+        INSERT INTO Municipalities VALUES ('06611000', 'Kassel');
+    """)
+    conn.commit()
+    conn.close()
+    return db
+
+
+def _row(**overrides):
+    row = {"kind": "tuple", "parameter": "OEO_00050016", "value": 241000,
+           "value_target": 241.0, "unit_raw": "kWh/a",
+           "carrier": "OEO_00000292", "sector": None, "year": 2030,
+           "scenario": "target", "spatial_scope": "municipality",
+           "indicator_label_raw": "Endenergieverbrauch",
+           "tier": "pdf_verified", "provenance": {"document_id": 857}}
+    row.update(overrides)
+    return row
+
+
+def test_the_serializer_emits_only_the_target_scenario_slice(tmp_path):
+    serializer = kg.make_serializer(_database(tmp_path))
+    ttl = serializer("waermeplan_kassel_20240315", [
+        _row(),
+        _row(scenario="status_quo"),
+        _row(spatial_scope="sub_area"),
+        _row(indicator_label_raw="Endenergiebedarf"),
+        _row(year=None),
+    ])
+    assert f"<{kg.BASE}heatplan/AGS_06611000_2024-03-15>" in ttl
+    assert re.search(rf"{kg.BASE}value/{UUID5}", ttl)
+    assert '"241.0"^^xsd:float' in ttl
+    assert '"2030"^^xsd:integer' in ttl
+    assert "oeo:OEO_00000523 oeo:OEO_00000292" in ttl
+    assert ttl.count("a oeo:OEO_00050016") == 1, "the four skipped rows never arrive"
+    assert "Kommunale Wärmeplanung Kassel 2024" in ttl
+
+
+def test_a_value_conflict_on_one_coordinate_drops_every_claimant(tmp_path):
+    serializer = kg.make_serializer(_database(tmp_path))
+    ttl = serializer("waermeplan_kassel_20240315", [
+        _row(), _row(value_target=242.0), _row(),
+        _row(sector="OEO_00000214", value_target=99.0),
+    ])
+    assert ttl.count("a oeo:OEO_00050016") == 1, "only the sectored value survives"
+    assert '"99.0"^^xsd:float' in ttl and '"241.0"' not in ttl
+
+
+def test_documents_without_target_tuples_or_identity_yield_none(tmp_path):
+    serializer = kg.make_serializer(_database(tmp_path))
+    assert serializer("waermeplan_kassel_20240315",
+                      [_row(scenario="status_quo")]) is None
+    assert serializer("unknown_plan", [_row()]) is None
+
+
+def test_the_prefix_block_is_emitted_once_per_run(tmp_path):
+    serializer = kg.make_serializer(_database(tmp_path))
+    first = serializer("waermeplan_kassel_20240315", [_row()])
+    second = serializer("waermeplan_kassel_20240315", [_row()])
+    assert first.startswith("@prefix rdfs:")
+    assert "@prefix" not in second
