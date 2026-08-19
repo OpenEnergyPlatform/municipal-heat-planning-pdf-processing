@@ -53,6 +53,10 @@ def _claim(**overrides):
     ("1,036,767.8", "1036767.8"),       # international
     ("1.234,5", "1234.5"),              # German decimal
     ("1.234", "1234"),                  # lone separator + 3 digits = grouping
+    ("1.234,567", "1234.567"),          # mixed kinds: rightmost is decimal
+    ("1,234.567", "1234.567"),
+    ("1.036.767,833", "1036767.833"),   # 3 decimal digits, still decimal
+    ("45 000", "45000"),                # space grouping
     ("42", "42"),
     (1036767833, "1036767833"),
     (1234.50, "1234.5"),
@@ -60,6 +64,16 @@ def _claim(**overrides):
 ])
 def test_canonical_number(raw, expected):
     assert canonical_number(raw) == expected
+
+
+def test_adjacent_numbers_never_merge_into_one_token():
+    """'betrug 2020 45.000 MWh' is a year and a value, not 202045000; a
+    merged token would refuse the correct claim of 45000."""
+    from docpipe.extraction.verify import _numbers_in
+    numbers = _numbers_in("Der Endenergieverbrauch betrug 2020 45.000 MWh")
+    assert {"2020", "45000"} <= numbers
+    assert "202045000" not in numbers
+    assert "45000" in _numbers_in("betrug 45 000 MWh im Jahr")
 
 
 # ---------------------------------------------------------------------------
@@ -96,6 +110,7 @@ def test_an_unknown_label_is_kept_but_flagged_not_refused():
                        _parameter(), SOURCE)
     assert isinstance(out, Verified)
     assert out.tuple["carrier"] is None
+    assert out.tuple["carrier_raw"] == "Klärgas", "the raw label survives"
     assert "unmapped:carrier:Klärgas" in out.flags
 
 

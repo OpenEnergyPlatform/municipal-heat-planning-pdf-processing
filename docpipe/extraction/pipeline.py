@@ -127,6 +127,10 @@ def _harvest_one(source: Source, parameter, harvest: Callable,
             continue
         row = dict(outcome.tuple)
         row["tier"] = outcome.tier
+        if outcome.flags:
+            # The flags ride on the row itself: a vocabulary review works
+            # from the harvest files, not from a log line's count.
+            row["flags"] = outcome.flags
         row["provenance"] = {
             **source.provenance,
             "owner_kind": source.owner_kind,
