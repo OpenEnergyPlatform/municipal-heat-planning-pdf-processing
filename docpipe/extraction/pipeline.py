@@ -54,6 +54,11 @@ class DocumentReport:
     flags: list = field(default_factory=list)
     owners_harvested: int = 0
     sweep_rounds: dict = field(default_factory=dict)   # parameter uri -> rounds
+    # parameter uri -> {"candidates": n, "leftover": m}. The running quality
+    # metric of the retrieval sweep: how much of the deterministic candidate
+    # set retrieval never surfaced. A growing leftover means the probes (or
+    # the vocabularies they expand from) have a blind spot.
+    fallback: dict = field(default_factory=dict)
 
 
 def harvest_document(
@@ -64,6 +69,7 @@ def harvest_document(
     retrieve: Callable,                   # (query, document_id, exclude) -> [Source]
     harvest: Callable,                    # (Source, Parameter) -> [claim dict]
     pdf_text: Optional[Callable] = None,  # (Source) -> Optional[str]
+    candidates: Optional[Callable] = None,  # (document_id, Parameter) -> [Source]
     max_rounds: int = MAX_SWEEP_ROUNDS,
 ) -> DocumentReport:
     report = DocumentReport(document_id=document_id)
@@ -86,28 +92,48 @@ def harvest_document(
                 break
             for source in new_sources:
                 report.owners_harvested += 1
-                for claim in harvest(source, parameter) or []:
-                    lookup = (lambda s=source: pdf_text(s)) if pdf_text else None
-                    outcome = verify_tuple(
-                        claim, parameter, source.text,
-                        pdf_text=lookup, readoff=source.readoff)
-                    if isinstance(outcome, Refusal):
-                        report.refusals.append(
-                            {"parameter": parameter.uri, "reason": outcome.reason,
-                             "claim": outcome.raw,
-                             "owner": [source.owner_kind, source.owner_id]})
-                        continue
-                    row = dict(outcome.tuple)
-                    row["tier"] = outcome.tier
-                    row["provenance"] = {
-                        **source.provenance,
-                        "owner_kind": source.owner_kind,
-                        "owner_id": source.owner_id,
-                    }
-                    report.tuples.append(row)
-                    report.flags.extend(outcome.flags)
+                _harvest_one(source, parameter, harvest, pdf_text, report)
         report.sweep_rounds[parameter.uri] = rounds
+
+        if candidates is not None:
+            # The decided division of labour: retrieval is the primary
+            # harvest, the deterministic candidate set is the floor under it.
+            # Whatever the probes never surfaced is harvested now and counted
+            # loudly - the audit stays one sentence: every owner was either
+            # seen by retrieval or processed by the fallback.
+            pool = candidates(document_id, parameter) or []
+            leftover = [s for s in pool
+                        if (s.owner_kind, s.owner_id) not in seen]
+            report.fallback[parameter.uri] = {
+                "candidates": len(pool), "leftover": len(leftover)}
+            for source in leftover:
+                seen.add((source.owner_kind, source.owner_id))
+                report.owners_harvested += 1
+                _harvest_one(source, parameter, harvest, pdf_text, report)
     return report
+
+
+def _harvest_one(source: Source, parameter, harvest: Callable,
+                 pdf_text: Optional[Callable], report: DocumentReport) -> None:
+    for claim in harvest(source, parameter) or []:
+        lookup = (lambda s=source: pdf_text(s)) if pdf_text else None
+        outcome = verify_tuple(claim, parameter, source.text,
+                               pdf_text=lookup, readoff=source.readoff)
+        if isinstance(outcome, Refusal):
+            report.refusals.append(
+                {"parameter": parameter.uri, "reason": outcome.reason,
+                 "claim": outcome.raw,
+                 "owner": [source.owner_kind, source.owner_id]})
+            continue
+        row = dict(outcome.tuple)
+        row["tier"] = outcome.tier
+        row["provenance"] = {
+            **source.provenance,
+            "owner_kind": source.owner_kind,
+            "owner_id": source.owner_id,
+        }
+        report.tuples.append(row)
+        report.flags.extend(outcome.flags)
 
 
 def write_report(report: DocumentReport, out_path: Path) -> None:
@@ -128,9 +154,12 @@ def write_report(report: DocumentReport, out_path: Path) -> None:
                                     ensure_ascii=False) + "\n")
         temp = Path(handle.name)
     temp.replace(out_path)
+    leftovers = {k.rsplit("/", 1)[-1]: v["leftover"]
+                 for k, v in report.fallback.items()}
     log.info(
         "extraction: document %s -> %d tuple(s), %d refusal(s), %d flag(s), "
-        "%d owner(s) harvested, sweep rounds %s",
+        "%d owner(s) harvested, sweep rounds %s, fallback leftovers %s",
         report.document_id, len(report.tuples), len(report.refusals),
         len(report.flags), report.owners_harvested,
-        {k.rsplit("/", 1)[-1]: v for k, v in report.sweep_rounds.items()})
+        {k.rsplit("/", 1)[-1]: v for k, v in report.sweep_rounds.items()},
+        leftovers or "-")
