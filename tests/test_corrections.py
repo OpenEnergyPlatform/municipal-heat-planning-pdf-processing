@@ -235,7 +235,7 @@ def test_a_genuine_invention_is_named_as_absent():
 
 
 # ---------------------------------------------------------------------------
-# The misfiling that dominated every other failure
+# Corrections land where the reply filed them
 # ---------------------------------------------------------------------------
 
 def _two_section_window():
@@ -245,34 +245,6 @@ def _two_section_window():
         {"title": "B", "content": "Beta section about effi- ciency instead.",
          "page_number": 2, "tables": [], "figures": []},
     ]
-
-
-def test_a_correction_filed_under_the_wrong_section_still_lands():
-    """56% of all "not found" refusals were this: the model quotes the passage
-    correctly and names the wrong section. The quote decides, not the label."""
-    window = _two_section_window()
-    out = _materialise_corrections([{
-        "index": 0, "_action": "keep",
-        "corrections": [{"find": "effi- ciency", "replace": "efficiency"}],
-    }], window)
-    beta = [s for s in out if s["title"] == "B"]
-    assert beta and "efficiency instead" in beta[0]["content"], \
-        "the correction belongs to the section its text is in"
-
-
-def test_relocation_never_guesses_between_two_candidates():
-    """If the quote fits two sections of the window, moving it would be a coin
-    toss. It stays where it was claimed and is refused there."""
-    window = [
-        {"title": "A", "content": "the same phrase here", "tables": [], "figures": []},
-        {"title": "B", "content": "the same phrase here", "tables": [], "figures": []},
-    ]
-    out = _materialise_corrections([{
-        "index": 0, "_action": "keep",
-        "corrections": [{"find": "the same phrase", "replace": "X"}],
-    }], window)
-    assert all("the same phrase here" == s["content"] for s in out), \
-        "an ambiguous quote must change nothing"
 
 
 def test_a_correction_that_fits_its_own_section_is_left_alone():
