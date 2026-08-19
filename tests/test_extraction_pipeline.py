@@ -94,6 +94,24 @@ def test_refusals_are_reported_not_dropped():
     assert report.refusals and "does not occur" in report.refusals[0]["reason"]
 
 
+def test_unmapped_labels_ride_on_the_row_itself():
+    """The vocabulary review works from the harvest files: the flag and the
+    raw label must survive into the tuple row, not just a log line."""
+    def retrieve(query, document_id, exclude):
+        return [s for s in _sources()[:1]
+                if ("table", s.owner_id) not in exclude]
+
+    def harvest(source, parameter):
+        return [{"value": 42005, "unit_raw": "MWh/a", "carrier": "Klärgas",
+                 "quote": "Erdgas | 42.005"}]
+
+    report = harvest_document(7, SPEC, TEMPLATES,
+                              retrieve=retrieve, harvest=harvest)
+    row = report.tuples[0]
+    assert row["flags"] == ["unmapped:carrier:Klärgas"]
+    assert row["carrier_raw"] == "Klärgas" and row["carrier"] is None
+
+
 def test_a_figure_claim_carries_the_readoff_tier():
     def retrieve(query, document_id, exclude):
         return [s for s in _sources()

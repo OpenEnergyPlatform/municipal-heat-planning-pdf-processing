@@ -30,8 +30,11 @@ TIER_READOFF = "readoff"
 
 _WS = re.compile(r"\s+")
 # A number as it appears in running text: digits with optional grouping and
-# one decimal part, German or international.
-_NUMBER = re.compile(r"\d(?:[\d.,   ]*\d)?")
+# one decimal part, German or international. Whitespace never joins two
+# numbers into one token ('2020 45.000' is two numbers); space-grouped forms
+# ('45 000') are collected separately.
+_NUMBER = re.compile(r"\d(?:[\d.,]*\d)?")
+_SPACE_GROUPED = re.compile(r"\d{1,3}(?:[   ]\d{3})+(?:[.,]\d+)?")
 
 
 def canonical_number(raw) -> Optional[str]:
@@ -49,17 +52,18 @@ def canonical_number(raw) -> Optional[str]:
     s = raw.strip().replace(" ", "").replace(" ", "").replace(" ", "")
     if not s or not re.fullmatch(r"[\d.,]+", s):
         return None
-    # The rightmost separator with 1-2 trailing digits is the decimal mark;
-    # a separator followed by exactly 3 digits is grouping. Ambiguity like
-    # '1.234' (one thousand or 1.234?) is resolved as grouping, which is how
-    # these documents write it.
+    # Mixed separator kinds are unambiguous: the rightmost kind is the
+    # decimal mark ('1.234,567' is 1234.567). With one kind only, several
+    # separators are all grouping, and a single one followed by exactly
+    # 3 digits ('1.234') is grouping — how these documents write thousands.
     last_dot, last_comma = s.rfind("."), s.rfind(",")
     decimal_pos = max(last_dot, last_comma)
-    if decimal_pos != -1 and len(s) - decimal_pos - 1 == 3 and \
-            s.count(".") + s.count(",") == 1 and decimal_pos == min(
-                p for p in (last_dot, last_comma) if p != -1):
-        decimal_pos = -1                       # single grouping separator
-    if decimal_pos != -1 and len(s) - decimal_pos - 1 != 3:
+    if decimal_pos != -1:
+        mixed = last_dot != -1 and last_comma != -1
+        tail = len(s) - decimal_pos - 1
+        if not mixed and (s.count(s[decimal_pos]) > 1 or tail == 3):
+            decimal_pos = -1
+    if decimal_pos != -1:
         integer = re.sub(r"[.,]", "", s[:decimal_pos])
         fraction = s[decimal_pos + 1:]
         if not fraction.isdigit():
@@ -70,7 +74,10 @@ def canonical_number(raw) -> Optional[str]:
 
 
 def _numbers_in(text: str) -> set:
-    return {canonical_number(m.group(0)) for m in _NUMBER.finditer(text or "")}
+    found = {canonical_number(m.group(0)) for m in _NUMBER.finditer(text or "")}
+    found.update(canonical_number(m.group(0))
+                 for m in _SPACE_GROUPED.finditer(text or ""))
+    return found
 
 
 def quote_in(source: str, quote: str) -> bool:
@@ -138,6 +145,7 @@ def verify_tuple(raw: dict, parameter: Parameter, source_text: str, *,
                     return Refusal(raw, f"axis {name!r}: {given!r} not in "
                                         f"vocabulary and axis is required")
                 resolved[name] = None
+                resolved[f"{name}_raw"] = given
                 flags.append(f"unmapped:{name}:{given}")
             else:
                 resolved[name] = uri
