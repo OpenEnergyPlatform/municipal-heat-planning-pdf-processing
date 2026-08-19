@@ -304,7 +304,9 @@ def make_pdf_text(db_path: Path, pdf_root: Optional[Path]) -> Optional[Callable]
 # ---------------------------------------------------------------------------
 
 def _stamp_current(spec_sha: str) -> dict:
-    return {"spec": spec_sha, **prompts.versions(PROMPT_IDS)}
+    # The model is part of the stamp: tuples harvested by another model are
+    # not "current" any more than tuples harvested with another prompt.
+    return {"spec": spec_sha, "model": LLM_MODEL, **prompts.versions(PROMPT_IDS)}
 
 
 def stale(stamp_path: Path, current: dict) -> list:
