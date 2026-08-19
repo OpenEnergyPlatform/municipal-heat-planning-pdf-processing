@@ -104,38 +104,6 @@ def _echo(raw_text: str) -> str:
             + raw_text[-_ECHO_TAIL:])
 
 
-def _relocate(corrections: list, window: list, claimed: int) -> dict:
-    """Sort a section's corrections by the section they actually belong to.
-
-    A window carries up to WINDOW_SIZE sections and the reply names which one
-    each correction is for. That name is wrong often enough to dominate
-    everything else: of the corrections refused as "not found", 56% quoted text
-    that does exist — one section over. The model reads the passage correctly
-    and misfiles it.
-
-    So the quote decides, not the label. A correction whose text is absent from
-    the section it names but present in exactly one other section of the window
-    is moved there. Ambiguity is not resolved by guessing: if two sections could
-    match, it stays where it was claimed and is refused as before.
-    """
-    by_index: dict = {}
-    for c in corrections:
-        target = claimed
-        find = c.get("find") if isinstance(c, dict) else None
-        if isinstance(find, str) and find:
-            here = window[claimed].get("content")
-            if not (isinstance(here, str) and find in here):
-                hits = [i for i, s in enumerate(window)
-                        if isinstance(s.get("content"), str)
-                        and find in s["content"]]
-                if len(hits) == 1:
-                    target = hits[0]
-                    log.debug("   correction moved from section %d to %d",
-                              claimed, target)
-        by_index.setdefault(target, []).append(c)
-    return by_index
-
-
 def _materialise_corrections(reply: list, window: list) -> list:
     """Rebuild full sections from an edit-mode reply.
 
@@ -189,14 +157,11 @@ def _materialise_corrections(reply: list, window: list) -> list:
             built["content"] = sec.get("content", original.get("content"))
         else:
             built["content"] = original.get("content")
-            for target, group in _relocate(
-                    sec.get("corrections") or [], window, index).items():
-                pending.setdefault(target, []).extend(group)
+            pending.setdefault(index, []).extend(sec.get("corrections") or [])
 
         built_by_index[index] = built
 
-    # Pass two: apply, now that every correction sits at the section its own
-    # text says it belongs to.
+    # Pass two: apply the corrections gathered per section.
     for index, corrections in pending.items():
         built = built_by_index[index]
         if built.get("_action") == "replace":
