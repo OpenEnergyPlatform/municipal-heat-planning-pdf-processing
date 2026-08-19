@@ -119,6 +119,12 @@ def _value_iri(heatplan: str, row: dict) -> str:
 def make_serializer(db_path: Path):
     """(document name, accepted tuple rows) -> TTL string or None."""
     header_pending = [True]
+    # (ags, published) -> document name. Value IRIs are pure functions of
+    # these coordinates, so two documents claiming one identity would merge
+    # their numbers onto shared nodes — e.g. a stale JSONL left behind by a
+    # register-link rename. The first claimant wins, the rest are refused
+    # whole, loudly.
+    claimed: dict = {}
 
     def serializer(name: str, rows: list):
         skipped: dict = {}
@@ -150,6 +156,12 @@ def make_serializer(db_path: Path):
                         "not serialized", name, len(kept))
             return None
         ags, published, municipality = identity
+        owner = claimed.setdefault((ags, published), name)
+        if owner != name:
+            log.error("kg: %s claims AGS %s / %s already serialized for %s — "
+                      "%d tuple(s) refused (stale duplicate harvest?)",
+                      name, ags, published, owner, len(kept))
+            return None
         heatplan = f"{BASE}heatplan/AGS_{ags}_{published}"
         scenario_iri = f"{BASE}targetscenario/AGS_{ags}_{published}"
         municipality_iri = f"{BASE}municipality/AGS_{ags}"

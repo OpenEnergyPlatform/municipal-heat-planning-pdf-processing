@@ -13,7 +13,7 @@ Gib ausschließlich ein JSON-Objekt in dieser Form zurück:
 
 {"tuples": [{"value": 126656132, "unit_raw": "kWh/a", "carrier": "Erdgas", "sector": "Industrie", "year": 2020, "scenario": "status_quo", "spatial_scope": "municipality", "indicator_label_raw": "Endenergie", "quote": "| Erdgas | 126.656.132 | 520.465.057 | 1.036.767.833 |"}]}
 
-Ein Tupel pro Zahl. Eine leere Liste {"tuples": []} ist ein normales Ergebnis, wenn die Quelle keinen Wert des gesuchten Parameters enthält.
+Ein Tupel pro Zahl, und zwar VOLLSTÄNDIG: jede Zahl des gesuchten Parameters in der Quelle bekommt ihr Tupel — jede Zeile und jede Spalte, auch wenn deren Label nicht unter axes.labels steht (dann das Label wörtlich übernehmen). Eine leere Liste {"tuples": []} ist nur dann das Ergebnis, wenn die Quelle wirklich keinen Wert des gesuchten Parameters enthält.
 
 Jedes Tupel wird maschinell und wörtlich gegen die Quelle geprüft; was die Prüfung nicht besteht, wird verworfen. Deshalb gelten diese Regeln:
 
@@ -21,7 +21,7 @@ Jedes Tupel wird maschinell und wörtlich gegen die Quelle geprüft; was die Pr�
    FALSCH: 126.656.132 und 520.465.057 addieren und die Summe ausgeben — die Summe steht nirgends in der Quelle.
    FALSCH: 126.656.132 kWh/a in 126656.132 MWh/a umrechnen — ausgegeben wird die gedruckte Zahl mit der gedruckten Einheit.
 
-2. "unit_raw": die Einheit, wie sie in der Quelle steht. Steht sie nur im Spaltenkopf, in einer Blocküberschrift wie "Endenergieverbrauch [MWh/a]" oder in der Caption, gilt sie für alle zugehörigen Zellen. Nur Einheiten aus "units_accepted" — trägt eine Zahl eine andere Einheit, lass ihr Tupel weg.
+2. "unit_raw": die Einheit EXAKT, wie sie in der Quelle steht. Steht sie nur im Spaltenkopf, in einer Blocküberschrift wie "Endenergieverbrauch [MWh/a]" oder in der Caption, gilt sie für alle zugehörigen Zellen. Gib das Tupel auch dann aus, wenn die Einheit nicht in "units_accepted" steht — es wird dann geprüft und mit Begründung abgelehnt, statt unsichtbar zu fehlen. Nur Zahlen ganz ohne erkennbare Einheit lässt du weg.
 
 3. "quote": eine wörtliche, zusammenhängende Zeichenkette aus source.text (mindestens 8 Zeichen), die die Zahl EXAKT wie gedruckt enthält — am besten die komplette Tabellenzeile. Zeichen für Zeichen kopieren, nichts umformatieren, nichts auslassen.
    FALSCH: "Erdgas: 126656132 kWh/a" — umformatiert, steht so nicht in der Quelle.

@@ -29,7 +29,26 @@ def test_every_example_verifies_against_its_own_source(parameter):
     for raw in parameter.example["tuples"]:
         outcome = verify_tuple(dict(raw), parameter, parameter.example["source"])
         assert isinstance(outcome, Verified), getattr(outcome, "reason", outcome)
-        assert not outcome.flags, "example labels must map into the vocabulary"
+
+
+@pytest.mark.parametrize("parameter", SPEC.parameters, ids=lambda p: p.uri)
+def test_the_examples_teach_exhaustive_extraction(parameter):
+    """Every value cell in the example source has its tuple — a few-shot
+    that extracts a subset teaches the model to under-harvest, and off-
+    vocabulary columns are the lesson, not the exception."""
+    import re as re_mod
+    from docpipe.extraction.verify import canonical_number
+    claimed = {canonical_number(t["value"]) for t in parameter.example["tuples"]}
+    quoted_rows = {t["quote"] for t in parameter.example["tuples"]}
+    for row in quoted_rows:
+        cells = [c.strip() for c in row.strip().strip("|").split("|")]
+        for cell in cells[1:]:
+            if re_mod.fullmatch(r"[\d.,]+", cell):
+                assert canonical_number(cell) in claimed, f"{cell} has no tuple"
+    outcomes = [verify_tuple(dict(t), parameter, parameter.example["source"])
+                for t in parameter.example["tuples"]]
+    assert any(o.flags for o in outcomes), \
+        "at least one example tuple keeps an off-vocab label verbatim"
 
 
 # --- prompts ---------------------------------------------------------------
@@ -109,6 +128,9 @@ def _database(tmp_path):
         INSERT INTO Documents VALUES (857, 'waermeplan_kassel_20240315.pdf',
                                       '2024-03-15', 1);
         INSERT INTO DocumentMeta VALUES (857, '06611000');
+        INSERT INTO Documents VALUES (858, 'waermeplan_kassel_alt.pdf',
+                                      '2024-03-15', 0);
+        INSERT INTO DocumentMeta VALUES (858, '06611000');
         INSERT INTO Municipalities VALUES ('06611000', 'Kassel');
     """)
     conn.commit()
@@ -160,6 +182,16 @@ def test_documents_without_target_tuples_or_identity_yield_none(tmp_path):
     assert serializer("waermeplan_kassel_20240315",
                       [_row(scenario="status_quo")]) is None
     assert serializer("unknown_plan", [_row()]) is None
+
+
+def test_a_second_document_claiming_the_same_identity_is_refused(tmp_path):
+    """A stale duplicate harvest (register-link rename) mints the same value
+    IRIs; merging it would put two magnitudes on one node."""
+    serializer = kg.make_serializer(_database(tmp_path))
+    assert serializer("waermeplan_kassel_20240315", [_row()]) is not None
+    assert serializer("waermeplan_kassel_alt",
+                      [_row(value_target=999.0,
+                            provenance={"document_id": 858})]) is None
 
 
 def test_the_prefix_block_is_emitted_once_per_run(tmp_path):
