@@ -102,3 +102,27 @@ def test_a_source_the_model_never_answered_is_a_visible_hole(tmp_path, monkeypat
             (tmp_path / "plan_y.jsonl").read_text(encoding="utf-8").splitlines()]
     assert rows and rows[0]["kind"] == "refusal"
     assert rows[0]["claim"]["_harvest_failed"] is True
+
+
+def test_candidate_tokens_cover_units_label_and_vocabulary():
+    from docpipe.extraction.runner import _candidate_tokens
+    tokens = _candidate_tokens(SPEC.parameters[0])
+    assert {"MWh/a", "Endenergieverbrauch", "Erdgas", "Gas"} <= set(tokens)
+
+
+def test_serialize_walks_only_accepted_tuples(tmp_path):
+    from docpipe.extraction.serialize import run
+    (tmp_path / "plan_a.jsonl").write_text(
+        '{"kind": "tuple", "value": 1}\n{"kind": "refusal", "reason": "x"}\n',
+        encoding="utf-8")
+    (tmp_path / "plan_b.jsonl").write_text("", encoding="utf-8")
+    seen = {}
+
+    def serializer(name, rows):
+        seen[name] = rows
+        return f"# {name}: {len(rows)}" if rows else None
+
+    counts = run(tmp_path, tmp_path / "out.ttl", serializer)
+    assert counts == {"plan_a": 1}, "refusals and empty plans stay outside"
+    assert seen["plan_a"][0]["value"] == 1
+    assert (tmp_path / "out.ttl").read_text(encoding="utf-8") == "# plan_a: 1"

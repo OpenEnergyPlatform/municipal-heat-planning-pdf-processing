@@ -102,6 +102,71 @@ def make_retrieve(conn: sqlite3.Connection, index, id_to_pos: dict,
 
 
 # ---------------------------------------------------------------------------
+# Fallback: the deterministic candidate floor under the retrieval sweep
+# ---------------------------------------------------------------------------
+
+def _candidate_tokens(parameter) -> list:
+    """Everything a value-bearing source could literally contain."""
+    tokens = set(parameter.units_accepted)
+    tokens.add(parameter.label)
+    for axis in parameter.axes.values():
+        for labels in (axis.vocabulary or {}).values():
+            tokens.update(labels)
+    return sorted(t for t in tokens if len(t) >= 2)
+
+
+def make_candidates(db_path: Path) -> Callable:
+    """Token-filtered owners of one document, straight from SQL.
+
+    LIKE over the stored text is deliberately dumb: it is the *floor*, not
+    the harvest. Retrieval finds what wording variance hides from tokens;
+    this finds what ranking hides from retrieval. Own connection per call -
+    the callable runs inside worker threads.
+    """
+    from docpipe.inference import db as inference_db
+
+    def candidates(document_id: int, parameter) -> list:
+        tokens = _candidate_tokens(parameter)
+        like = lambda column: " OR ".join([f"{column} LIKE ?"] * len(tokens))
+        params = [f"%{t}%" for t in tokens]
+        conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
+        conn.row_factory = sqlite3.Row
+        try:
+            owners: list = []
+            owners += [("table", int(r[0])) for r in conn.execute(
+                f"SELECT t.id FROM Tables t JOIN Sections s ON t.section = s.id "
+                f"WHERE s.document = ? AND ({like('t.markdown')} OR {like('t.caption')})",
+                [document_id, *params, *params])]
+            owners += [("section", int(r[0])) for r in conn.execute(
+                f"SELECT id FROM Sections WHERE document = ? AND ({like('content')})",
+                [document_id, *params])]
+            owners += [("figure", int(r[0])) for r in conn.execute(
+                f"SELECT i.id FROM Images i JOIN Sections s ON i.section = s.id "
+                f"WHERE s.document = ? AND ({like('i.description')})",
+                [document_id, *params])]
+            sources = []
+            for owner_kind, owner_id in owners:
+                hit = inference_db.fetch_owner_content(conn, owner_kind, owner_id)
+                if hit is None:
+                    continue
+                sources.append(Source(
+                    owner_kind=owner_kind, owner_id=owner_id,
+                    text=hit.get("text") or "",
+                    provenance={"document_id": hit.get("document_id"),
+                                "page": hit.get("page_number"),
+                                "section_number": hit.get("section_number"),
+                                "section_title": hit.get("section_title"),
+                                "title": hit.get("title"),
+                                "via": "fallback"},
+                    readoff=owner_kind == "figure"))
+            return sources
+        finally:
+            conn.close()
+
+    return candidates
+
+
+# ---------------------------------------------------------------------------
 # Harvest: one source + one parameter -> the model's claimed tuples
 # ---------------------------------------------------------------------------
 
@@ -272,6 +337,7 @@ def run_document(document_id: int, name: str, out_dir: Path, spec: Spec,
                               retrieve=deps["retrieve"],
                               harvest=deps["harvest"],
                               pdf_text=deps.get("pdf_text"),
+                              candidates=deps.get("candidates"),
                               max_rounds=MAX_ROUNDS)
     failed = [r for r in report.refusals
               if r.get("claim", {}).get("_harvest_failed")]
@@ -304,6 +370,9 @@ def main(argv: Optional[list] = None) -> int:
     parser.add_argument("--force-stale", action="store_true")
     parser.add_argument("--log-level", default="INFO",
                         choices=["DEBUG", "INFO", "WARNING", "ERROR"])
+    parser.add_argument("--print-context-budget", action="store_true",
+                        help="Print the tokens one harvest request needs and "
+                             "exit — job scripts feed this to --max-model-len")
     add_profile_argument(parser)
     args = parser.parse_args(argv)
     logging.basicConfig(level=args.log_level,
@@ -331,40 +400,62 @@ def main(argv: Optional[list] = None) -> int:
     required = int(len(harvest_prompt.text.split()) * 3
                    + 6000                                  # largest source, generous
                    + int(harvest_prompt.meta.get("max_tokens", 4096)))
+    if args.print_context_budget:
+        print(required)
+        return 0
     assert_serving(LLM_BASE_URL, LLM_API_KEY, LLM_MODEL, required,
                    what="extraction", flag="--max-model-len")
 
-    from docpipe.inference import faiss_store, query_cache
-    conn = sqlite3.connect(f"file:{args.db}?mode=ro", uri=True,
-                           check_same_thread=False)
-    conn.row_factory = sqlite3.Row
-    index, id_to_pos = faiss_store.load_global_index(args.index)
-    cache_conn = query_cache.connect(args.out / "query_cache.db")
-    deps = {
-        "retrieve": make_retrieve(conn, index, id_to_pos, cache_conn),
-        "harvest": make_harvester(),
-        "pdf_text": make_pdf_text(args.db, args.pdf_root),
-    }
+    from concurrent.futures import ThreadPoolExecutor, as_completed
 
-    documents = _documents(conn)
+    from docpipe.inference import faiss_store, query_cache
+    index, id_to_pos = faiss_store.load_global_index(args.index)
+    args.out.mkdir(parents=True, exist_ok=True)
+    harvest = make_harvester()                    # OpenAI client is thread-safe
+    pdf_text = make_pdf_text(args.db, args.pdf_root)
+    candidates = make_candidates(args.db)
+
+    with sqlite3.connect(f"file:{args.db}?mode=ro", uri=True) as listing:
+        documents = _documents(listing)
     if args.document is not None:
         documents = [d for d in documents if d[0] == args.document]
         if not documents:
             log.error("document %s not found or not current", args.document)
             return 1
-    args.out.mkdir(parents=True, exist_ok=True)
+
+    doc_parallel = int(os.environ.get("EXTRACT_DOC_PARALLEL", "4"))
     log.info("extraction: %d document(s), %d parameter(s), top_k=%d, "
-             "max_rounds=%d", len(documents), len(spec.parameters),
-             TOP_K, MAX_ROUNDS)
-    failures = 0
-    for document_id, filename in documents:
-        name = Path(filename).stem
+             "max_rounds=%d, doc_parallel=%d", len(documents),
+             len(spec.parameters), TOP_K, MAX_ROUNDS, doc_parallel)
+
+    def work(document_id: int, filename: str) -> Optional[str]:
+        # SQLite connections are not shared across threads: every task opens
+        # its own pair. The probes are identical across documents, so after
+        # the first document the embedding cache answers nearly everything
+        # and the per-task cache connection stays cheap.
+        conn = sqlite3.connect(f"file:{args.db}?mode=ro", uri=True)
+        conn.row_factory = sqlite3.Row
+        cache_conn = query_cache.connect(args.out / "query_cache.db")
         try:
-            run_document(document_id, name, args.out, spec, spec_sha,
-                         templates, deps,
+            deps = {"retrieve": make_retrieve(conn, index, id_to_pos, cache_conn),
+                    "harvest": harvest, "pdf_text": pdf_text,
+                    "candidates": candidates}
+            run_document(document_id, Path(filename).stem, args.out, spec,
+                         spec_sha, templates, deps,
                          force=args.force, force_stale=args.force_stale)
-        except Exception:
-            failures += 1
-            log.exception("extraction: %s failed", name)
+            return None
+        finally:
+            conn.close()
+            cache_conn.close()
+
+    failures = 0
+    with ThreadPoolExecutor(max_workers=doc_parallel) as pool:
+        futures = {pool.submit(work, did, fn): fn for did, fn in documents}
+        for future in as_completed(futures):
+            try:
+                future.result()
+            except Exception:
+                failures += 1
+                log.exception("extraction: %s failed", futures[future])
     log.info("extraction: done, %d failure(s)", failures)
     return 1 if failures else 0

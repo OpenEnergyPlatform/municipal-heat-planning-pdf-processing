@@ -131,3 +131,26 @@ def test_the_report_file_is_the_audit_trail(tmp_path):
     accepted = [r for r in rows if r["kind"] == "tuple"][0]
     assert accepted["provenance"]["owner_id"] == 1
     assert accepted["provenance"]["page"] == 31
+
+
+def test_the_fallback_harvests_only_what_retrieval_never_saw():
+    """D1's division of labour: retrieval is the harvest, the deterministic
+    candidate set is the floor. The leftover count is the standing quality
+    metric of the probes."""
+    def retrieve(query, document_id, exclude):
+        return [s for s in _sources()[:1]
+                if ("table", s.owner_id) not in exclude]
+
+    def candidates(document_id, parameter):
+        return _sources()[:2]              # table 1 (seen) + table 2 (missed)
+
+    harvested = []
+
+    def harvest(source, parameter):
+        harvested.append(source.owner_id)
+        return []
+
+    report = harvest_document(7, SPEC, TEMPLATES, retrieve=retrieve,
+                              harvest=harvest, candidates=candidates)
+    assert harvested == [1, 2], "the seen table is not harvested twice"
+    assert report.fallback["OEO_00050016"] == {"candidates": 2, "leftover": 1}
