@@ -1,18 +1,28 @@
 """
-verify.py – No tuple enters the output on the model's word.
+verify.py – No claim enters the output on the model's word.
 
-The extraction reply claims a value with a quote. Before anything is written,
-every claim is checked against things the model does not control: the spec's
-closed vocabularies, the source text the quote must literally sit in, and —
-where a lookup is provided — the source PDF itself. A tuple that fails is
-refused with a named reason, never repaired by guessing; a tuple that passes
-carries a verification tier saying how far down the chain it was confirmed.
+The extraction reply states something and cites the passage it read it in.
+Before anything is written, the claim is checked against what the model does
+not control: the spec's closed vocabularies, and the source text the quote
+must literally sit in. What survives carries an evidence tier saying how the
+claim is backed:
 
-The tiers exist because the corpus text for tables is itself a model output
-(the VLM's transcription). Matching a number against it is model-vs-model;
-only the PDF lookup breaks that circle. Per project decision the tier does
-not gate anything — everything is exported, the tier and the provenance make
-each value checkable by a human.
+  TIER_TEXT   The quote sits in the document's refined section text, and the
+              passage was located in the source PDF, so the value can be
+              shown highlighted on its page. The strongest evidence there is.
+  TIER_VISUAL The quote sits in a table transcription, a caption, or a figure
+              description, or the model read it off the image itself. The
+              evidence is the page and that image. It cannot be confirmed
+              automatically: the transcription is a model output too, so
+              checking a claim against it would be model against model. A
+              human confirms it by looking at the picture.
+  (refusal)   The claim is backed by neither. It is recorded with a reason
+              and never reaches the output.
+
+Values are not only numbers. An ontology asks for categories and for plain
+statements just as often, and those are evidenced the same way — by the
+passage they stand in. What differs is only how a value is compared to its
+quote: digits for a number, text for everything else.
 
 Author: Felix Vossel
 """
@@ -24,9 +34,12 @@ from typing import Callable, Optional
 
 from .spec import Parameter
 
-TIER_PDF = "pdf_verified"
-TIER_SOURCE = "source_only"
-TIER_READOFF = "readoff"
+TIER_TEXT = "text_located"
+TIER_VISUAL = "visual_source"
+
+# The owner kinds whose text is the document's own prose. Everything else is
+# a model's reading of a picture.
+TEXT_KINDS = ("section",)
 
 _WS = re.compile(r"\s+")
 # A number as it appears in running text: digits with optional grouping and
@@ -80,11 +93,15 @@ def _numbers_in(text: str) -> set:
     return found
 
 
+def _flat(text: str) -> str:
+    return _WS.sub(" ", text or "").strip()
+
+
 def quote_in(source: str, quote: str) -> bool:
     """Whitespace-collapsed literal containment — corrections.py semantics."""
     if not quote or not source:
         return False
-    return _WS.sub(" ", quote).strip() in _WS.sub(" ", source)
+    return _flat(quote) in _flat(source)
 
 
 @dataclass
@@ -92,6 +109,7 @@ class Verified:
     tuple: dict
     tier: str
     flags: list = field(default_factory=list)   # non-fatal findings
+    rects: Optional[list] = None                # highlight boxes, tier TEXT
 
 
 @dataclass
@@ -100,29 +118,62 @@ class Refusal:
     reason: str
 
 
+def _check_value(raw: dict, parameter: Parameter, flags: list):
+    """The value itself: type, unit, vocabulary. Returns (resolved, refusal)."""
+    value = raw.get("value")
+    out: dict = {}
+
+    if parameter.is_numeric:
+        if not isinstance(value, (int, float)) or isinstance(value, bool):
+            return None, Refusal(raw, "value is not a number")
+        unit = raw.get("unit_raw")
+        if unit not in parameter.units_accepted:
+            return None, Refusal(raw, f"unit {unit!r} not in units_accepted "
+                                      f"({', '.join(parameter.units_accepted)})")
+        out["value_target"] = round(
+            float(value) * float(parameter.units_accepted[unit]), 6)
+        return out, None
+
+    if not isinstance(value, str) or not value.strip():
+        return None, Refusal(raw, f"a {parameter.value_type} parameter needs a "
+                                  f"non-empty string value")
+    if parameter.value_type == "category":
+        uri = parameter.value_to_uri().get(value.strip().casefold())
+        if uri is None:
+            # Same rule as an out-of-vocabulary axis: a wording the spec does
+            # not know yet is a mapping gap to review, not a reason to drop
+            # the finding. The raw wording stays on the tuple.
+            flags.append(f"unmapped:value:{value.strip()}")
+        out["value_uri"] = uri
+    return out, None
+
+
+def _value_in_quote(raw: dict, parameter: Parameter, quote: str) -> bool:
+    """Is the claimed value actually in the passage it cites?"""
+    if parameter.is_numeric:
+        return canonical_number(raw.get("value")) in _numbers_in(quote)
+    return _flat(str(raw.get("value"))).casefold() in _flat(quote).casefold()
+
+
 def verify_tuple(raw: dict, parameter: Parameter, source_text: str, *,
-                 pdf_text: Optional[Callable[[], Optional[str]]] = None,
-                 readoff: bool = False):
+                 owner_kind: str = "section",
+                 locate: Optional[Callable[[str], Optional[list]]] = None):
     """One claimed tuple against everything the model does not control.
 
-    Returns Verified or Refusal. *pdf_text* is a lazy lookup for the native
-    PDF text behind the source (bbox extraction) — lazy because opening the
-    PDF is the expensive step and a tuple refused earlier never needs it.
+    Returns Verified or Refusal. *owner_kind* decides the tier: prose gets
+    TIER_TEXT, a table or figure gets TIER_VISUAL. *locate* is a lazy lookup
+    that maps the quote to highlight rectangles in the source PDF — lazy
+    because opening the PDF is the expensive step and a claim refused earlier
+    never needs it.
     """
     if not isinstance(raw, dict):
         return Refusal(raw={}, reason="tuple is not an object")
 
-    value = raw.get("value")
-    if not isinstance(value, (int, float)) or isinstance(value, bool):
-        return Refusal(raw, "value is not a number")
-    canonical = canonical_number(value)
-
-    unit = raw.get("unit_raw")
-    if unit not in parameter.units_accepted:
-        return Refusal(raw, f"unit {unit!r} not in units_accepted "
-                            f"({', '.join(parameter.units_accepted)})")
-
     flags: list = []
+    value_fields, refusal = _check_value(raw, parameter, flags)
+    if refusal is not None:
+        return refusal
+
     resolved: dict = {}
     for name, axis in parameter.axes.items():
         given = raw.get(name)
@@ -173,21 +224,24 @@ def verify_tuple(raw: dict, parameter: Parameter, source_text: str, *,
         return Refusal(raw, "quote missing or too short to identify anything")
     if not quote_in(source_text, quote):
         return Refusal(raw, "quote not found in the source it cites")
-    if canonical not in _numbers_in(quote):
-        return Refusal(raw, f"value {canonical} does not occur in the quote")
+    if not _value_in_quote(raw, parameter, quote):
+        return Refusal(raw, f"value {raw.get('value')!r} does not occur in the quote")
 
-    tier = TIER_READOFF if readoff else TIER_SOURCE
-    if not readoff and pdf_text is not None:
-        native = pdf_text()
-        if native and canonical in _numbers_in(native):
-            tier = TIER_PDF
-        # No native text (scan) or number absent: stays source_only. The
-        # distinction between "scan" and "VLM transcribed a different digit"
-        # is exactly what the tier reports to a human.
+    rects = None
+    if owner_kind in TEXT_KINDS:
+        tier = TIER_TEXT
+        if locate is not None:
+            rects = locate(quote)
+            if not rects:
+                # The passage is in the document's own text but could not be
+                # placed on the page — the reader gets the page, not the
+                # highlight. Worth counting, not worth dropping a finding for.
+                flags.append("not_located")
+    else:
+        tier = TIER_VISUAL
 
     out = dict(raw)
     out.update(resolved)
-    out["value_target"] = round(
-        float(value) * float(parameter.units_accepted[unit]), 6)
+    out.update(value_fields)
     out["parameter"] = parameter.uri
-    return Verified(tuple=out, tier=tier, flags=flags)
+    return Verified(tuple=out, tier=tier, flags=flags, rects=rects)
