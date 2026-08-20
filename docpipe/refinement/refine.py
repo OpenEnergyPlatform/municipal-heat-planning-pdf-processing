@@ -19,6 +19,7 @@ from typing import Callable, Optional
 from .corrections import apply_corrections
 from .split import SPLIT_MAX_TOKENS, SPLIT_TEMPERATURE, split_oversized
 from .config import (
+    REFINEMENT_REPORT_JSON,
     SECTIONS_JSON,
     SECTIONS_REFINED_JSON,
     LLM_MODEL,
@@ -732,13 +733,15 @@ def _make_splitter(client) -> Callable[[str, str], str]:
     return ask
 
 
-def refine_sections(sections: list[dict]) -> list[dict]:
+def refine_sections(sections: list[dict],
+                    report: Optional[dict] = None) -> list[dict]:
     """
     Processes all sections through the LLM in windows of WINDOW_SIZE, dispatched
     in parallel but assembled in order (merge/split semantics are positional).
 
     Mutates *sections* in place (source_text is stripped); returns the refined
-    list.
+    list. When *report* is given, it is filled with what this pass could not
+    refine — see refine_document, which writes it next to the output.
     """
     if not sections:
         return sections
@@ -811,11 +814,26 @@ def refine_sections(sections: list[dict]) -> list[dict]:
     # ── Sequential assembly (order matters for merge_into_previous) ──────
     refined: list[dict] = []
     previous_kept: Optional[dict] = None
+    # A failed window keeps its original text, which is indistinguishable in
+    # the output from a window that needed no change — so the only place this
+    # can be recorded is here, while it happens. Without it, "what is still
+    # unrefined?" can only be guessed at from the output, and a guess
+    # calibrated for one refinement mode reads the other one backwards.
+    failed: list[dict] = []
+
+    def _note_failure(win_idx: int, window: list, reason: str) -> None:
+        failed.append({
+            "window": win_idx + 1,
+            "reason": reason,
+            "sections": [win_idx * WINDOW_SIZE + n for n in range(len(window))],
+            "titles": [str(s.get("title") or "")[:80] for s in window],
+        })
 
     for win_idx in range(total_windows):
         llm_result, window = ordered_results[win_idx]
 
         if llm_result is None:
+            _note_failure(win_idx, window, "no usable reply")
             log.warning(
                 f"  Stage 4: window {win_idx + 1}/{total_windows} failed, "
                 f"keeping originals"
@@ -829,6 +847,7 @@ def refine_sections(sections: list[dict]) -> list[dict]:
             # belongs; drop those before provenance threading.
             llm_result = [s for s in llm_result if isinstance(s, dict)]
             if not llm_result:
+                _note_failure(win_idx, window, "no usable sections")
                 log.warning(
                     f"  Stage 4: window {win_idx + 1}/{total_windows} returned "
                     f"no usable sections, keeping originals"
@@ -864,6 +883,12 @@ def refine_sections(sections: list[dict]) -> list[dict]:
 
     log.info(f"Stage 4: {len(refined)} sections final")
     _report_dropped_text(sections, refined)
+    if report is not None:
+        report["total_windows"] = total_windows
+        report["failed_windows"] = failed
+        if failed:
+            log.warning("Stage 4: %d of %d window(s) kept their original text",
+                        len(failed), total_windows)
     return refined
 
 
@@ -971,12 +996,29 @@ def run_refine(output_dir: Path, data: Optional[dict] = None,
     sections = data.get("sections", [])
     log.info(f"Stage 4: {len(sections)} sections loaded")
 
-    refined = refine_sections(sections)
+    report: dict = {}
+    refined = refine_sections(sections, report)
 
     result = {"sections": refined}
     result = clean_data(result)
 
     dump_json_atomic(result, final_path)
     log.info(f"Stage 4: refined output written → {final_path}")
+    _write_report(report, output_dir)
 
     return result
+
+
+def _write_report(report: dict, output_dir: Path) -> None:
+    """The stage's own account of what it could not refine.
+
+    Written on every run, failures or none: an empty list means "this pass
+    checked and nothing failed", while a missing file means "nobody has
+    looked" — a distinction the output files themselves cannot make. Wrapped,
+    because a bookkeeping file must never end a refinement run that produced
+    its actual output a line earlier.
+    """
+    try:
+        dump_json_atomic(report, output_dir / REFINEMENT_REPORT_JSON)
+    except Exception as exc:                       # pragma: no cover - defensive
+        log.warning("Stage 4: could not write the refinement report (%s)", exc)

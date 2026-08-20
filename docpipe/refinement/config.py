@@ -13,6 +13,7 @@ from re import compile
 from docpipe import prompts
 from docpipe.profile import active_profile
 from docpipe.artifacts import (DIR_RESULTS,               # noqa: F401  (re-exported)
+                               REFINEMENT_REPORT_JSON,    # output (what failed)
                                SECTIONS_JSON,             # input
                                SECTIONS_REFINED_JSON)     # output
 
