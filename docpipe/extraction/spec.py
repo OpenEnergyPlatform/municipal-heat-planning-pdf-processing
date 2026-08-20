@@ -18,7 +18,12 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional, Union
 
-VALUE_TYPES = ("float", "int")
+# What a parameter's value IS. Numbers were the first case, not the only one:
+# an ontology asks for categories (a class from a vocabulary) and for plain
+# statements of fact just as often, and those are evidenced exactly like a
+# number — by the passage they stand in.
+NUMERIC_TYPES = ("float", "int")
+VALUE_TYPES = NUMERIC_TYPES + ("text", "category")
 SCENARIOS = ("status_quo", "trend", "target", "unknown")
 
 
@@ -54,10 +59,23 @@ class Parameter:
     label: str
     description: str
     value_type: str
-    unit_target: str
-    units_accepted: dict                   # unit string -> factor to target
     axes: dict                             # name -> Axis
     example: dict                          # {"source": str, "tuples": [...]}
+    unit_target: Optional[str] = None      # numeric parameters only
+    units_accepted: dict = field(default_factory=dict)  # unit -> factor
+    vocabulary: Optional[dict] = None      # category parameters: uri -> labels
+
+    @property
+    def is_numeric(self) -> bool:
+        return self.value_type in NUMERIC_TYPES
+
+    def value_to_uri(self) -> dict:
+        """Corpus label (casefolded) -> URI, for a category parameter."""
+        out: dict = {}
+        for uri, labels in (self.vocabulary or {}).items():
+            for label in labels:
+                out[label.casefold()] = uri
+        return out
 
 
 @dataclass
@@ -103,7 +121,8 @@ def _validate_axis(path: str, name: str, raw) -> Axis:
                 enum=enum, required=bool(raw.get("required", False)))
 
 
-def _validate_example(path: str, raw, units_accepted: dict) -> dict:
+def _validate_example(path: str, raw, value_type: str,
+                      units_accepted: dict) -> dict:
     if not isinstance(raw, dict):
         _fail(path, "example is required: a real corpus snippet plus the "
                     "tuples it must yield (it becomes the prompt's few-shot "
@@ -114,9 +133,17 @@ def _validate_example(path: str, raw, units_accepted: dict) -> dict:
     tuples = raw.get("tuples")
     if not isinstance(tuples, list) or not tuples:
         _fail(f"{path}.tuples", "must be a non-empty list")
+    numeric = value_type in NUMERIC_TYPES
     for i, t in enumerate(tuples):
-        if not isinstance(t, dict) or not isinstance(t.get("value"), (int, float)):
-            _fail(f"{path}.tuples[{i}]", "each tuple needs a numeric 'value'")
+        if not isinstance(t, dict):
+            _fail(f"{path}.tuples[{i}]", "each tuple must be an object")
+        value = t.get("value")
+        if numeric:
+            if not isinstance(value, (int, float)) or isinstance(value, bool):
+                _fail(f"{path}.tuples[{i}]", "each tuple needs a numeric 'value'")
+        elif not isinstance(value, str) or not value.strip():
+            _fail(f"{path}.tuples[{i}]",
+                  f"a {value_type} parameter needs a non-empty string 'value'")
         unit = t.get("unit_raw")
         if unit is not None and unit not in units_accepted:
             _fail(f"{path}.tuples[{i}].unit_raw",
@@ -127,7 +154,7 @@ def _validate_example(path: str, raw, units_accepted: dict) -> dict:
 def _validate_parameter(path: str, raw) -> Parameter:
     if not isinstance(raw, dict):
         _fail(path, "parameter must be an object")
-    for key in ("uri", "label", "description", "unit_target"):
+    for key in ("uri", "label", "description"):
         if not isinstance(raw.get(key), str) or not raw[key].strip():
             _fail(f"{path}.{key}", "required, non-empty string")
     if len(raw["description"].split()) < 8:
@@ -138,21 +165,57 @@ def _validate_parameter(path: str, raw) -> Parameter:
     value_type = raw.get("value_type", "float")
     if value_type not in VALUE_TYPES:
         _fail(f"{path}.value_type", f"must be one of {VALUE_TYPES}")
-    units = raw.get("units_accepted")
-    if not isinstance(units, dict) or not units or \
-            not all(isinstance(f, (int, float)) and f > 0 for f in units.values()):
-        _fail(f"{path}.units_accepted",
-              "non-empty object of unit string -> positive factor")
+
+    # A unit belongs to a measured quantity, a vocabulary to a category.
+    # Demanding either from the other kind was what kept this contract
+    # numbers-only.
+    units: dict = {}
+    unit_target = raw.get("unit_target")
+    vocabulary = raw.get("vocabulary")
+    if value_type in NUMERIC_TYPES:
+        if not isinstance(unit_target, str) or not unit_target.strip():
+            _fail(f"{path}.unit_target",
+                  "required for a numeric parameter, non-empty string")
+        units = raw.get("units_accepted")
+        if not isinstance(units, dict) or not units or \
+                not all(isinstance(f, (int, float)) and f > 0 for f in units.values()):
+            _fail(f"{path}.units_accepted",
+                  "non-empty object of unit string -> positive factor")
+    else:
+        if unit_target is not None or raw.get("units_accepted") is not None:
+            _fail(f"{path}.unit_target",
+                  f"a {value_type} parameter carries no unit")
+        if value_type == "category":
+            if not isinstance(vocabulary, dict) or not vocabulary:
+                _fail(f"{path}.vocabulary",
+                      "a category parameter needs a vocabulary of uri -> labels")
+            seen: dict = {}
+            for uri, labels in vocabulary.items():
+                if not isinstance(labels, list) or not labels or \
+                        not all(isinstance(l, str) and l.strip() for l in labels):
+                    _fail(f"{path}.vocabulary.{uri}",
+                          "labels must be a non-empty list of strings")
+                for label in labels:
+                    other = seen.get(label.casefold())
+                    if other and other != uri:
+                        _fail(f"{path}.vocabulary.{uri}",
+                              f"label {label!r} already maps to {other}")
+                    seen[label.casefold()] = uri
+        elif vocabulary is not None:
+            _fail(f"{path}.vocabulary",
+                  "only a category parameter carries a value vocabulary")
+
     axes_raw = raw.get("axes")
     if not isinstance(axes_raw, dict) or not axes_raw:
         _fail(f"{path}.axes", "required, non-empty object")
     axes = {name: _validate_axis(f"{path}.axes.{name}", name, a)
             for name, a in axes_raw.items()}
-    example = _validate_example(f"{path}.example", raw.get("example"), units)
+    example = _validate_example(f"{path}.example", raw.get("example"),
+                                value_type, units)
     return Parameter(uri=raw["uri"], label=raw["label"],
                      description=raw["description"], value_type=value_type,
-                     unit_target=raw["unit_target"], units_accepted=units,
-                     axes=axes, example=example)
+                     unit_target=unit_target, units_accepted=units,
+                     vocabulary=vocabulary, axes=axes, example=example)
 
 
 def load(source: Union[Path, str, dict]) -> Spec:

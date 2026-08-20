@@ -30,7 +30,7 @@ def _sources():
         Source("table", 1, "| Erdgas | 42.005 | MWh/a |", {"page": 31}),
         Source("table", 2, "| Heizöl | 17.300 | MWh/a |", {"page": 32}),
         Source("figure", 3, "Balkendiagramm: Erdgas etwa 42.000 MWh/a",
-               {"page": 33}, readoff=True),
+               {"page": 33}, image_path="p33_img0.png"),
     ]
 
 
@@ -112,7 +112,7 @@ def test_unmapped_labels_ride_on_the_row_itself():
     assert row["carrier_raw"] == "Klärgas" and row["carrier"] is None
 
 
-def test_a_figure_claim_carries_the_readoff_tier():
+def test_a_figure_claim_carries_the_visual_tier():
     def retrieve(query, document_id, exclude):
         return [s for s in _sources()
                 if (s.owner_kind, s.owner_id) not in exclude]
@@ -125,7 +125,9 @@ def test_a_figure_claim_carries_the_readoff_tier():
 
     report = harvest_document(7, SPEC, TEMPLATES,
                               retrieve=retrieve, harvest=harvest)
-    assert [t["tier"] for t in report.tuples] == ["readoff"]
+    assert [t["tier"] for t in report.tuples] == ["visual_source"]
+    assert report.tuples[0]["provenance"]["image"] == "p33_img0.png", (
+        "the picture is the evidence, so it has to be in the provenance")
 
 
 def test_the_report_file_is_the_audit_trail(tmp_path):

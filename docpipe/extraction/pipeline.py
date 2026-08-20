@@ -11,10 +11,10 @@ query-overlap. Every claimed tuple then passes verify_tuple; refusals are
 kept alongside the accepted, because a harvest that cannot say what it threw
 away reads as complete when it is not.
 
-The three expensive dependencies — retrieval, the harvesting LLM call, the
-native-PDF text lookup — are injected callables. The loop's correctness is a
-pure-code property and is tested without a GPU; the wiring to the live
-inference stack lives with the CLI, not here.
+The three expensive dependencies — retrieval, the harvesting LLM call, and
+locating a quote on its PDF page — are injected callables. The loop's
+correctness is a pure-code property and is tested without a GPU; the wiring
+to the live inference stack lives with the CLI, not here.
 
 Author: Felix Vossel
 """
@@ -43,7 +43,7 @@ class Source:
     owner_id: int
     text: str                             # what the model will read
     provenance: dict = field(default_factory=dict)
-    readoff: bool = False                 # figure descriptions / chart reads
+    image_path: Optional[str] = None      # the crop, for tables and figures
 
 
 @dataclass
@@ -68,7 +68,7 @@ def harvest_document(
     *,
     retrieve: Callable,                   # (query, document_id, exclude) -> [Source]
     harvest: Callable,                    # (Source, Parameter) -> [claim dict]
-    pdf_text: Optional[Callable] = None,  # (Source) -> Optional[str]
+    locate: Optional[Callable] = None,    # (Source, quote) -> rects | None
     candidates: Optional[Callable] = None,  # (document_id, Parameter) -> [Source]
     max_rounds: int = MAX_SWEEP_ROUNDS,
 ) -> DocumentReport:
@@ -92,7 +92,7 @@ def harvest_document(
                 break
             for source in new_sources:
                 report.owners_harvested += 1
-                _harvest_one(source, parameter, harvest, pdf_text, report)
+                _harvest_one(source, parameter, harvest, locate, report)
         report.sweep_rounds[parameter.uri] = rounds
 
         if candidates is not None:
@@ -109,16 +109,17 @@ def harvest_document(
             for source in leftover:
                 seen.add((source.owner_kind, source.owner_id))
                 report.owners_harvested += 1
-                _harvest_one(source, parameter, harvest, pdf_text, report)
+                _harvest_one(source, parameter, harvest, locate, report)
     return report
 
 
 def _harvest_one(source: Source, parameter, harvest: Callable,
-                 pdf_text: Optional[Callable], report: DocumentReport) -> None:
+                 locate: Optional[Callable], report: DocumentReport) -> None:
     for claim in harvest(source, parameter) or []:
-        lookup = (lambda s=source: pdf_text(s)) if pdf_text else None
+        finder = ((lambda quote, s=source: locate(s, quote))
+                  if locate is not None else None)
         outcome = verify_tuple(claim, parameter, source.text,
-                               pdf_text=lookup, readoff=source.readoff)
+                               owner_kind=source.owner_kind, locate=finder)
         if isinstance(outcome, Refusal):
             report.refusals.append(
                 {"parameter": parameter.uri, "reason": outcome.reason,
@@ -136,6 +137,12 @@ def _harvest_one(source: Source, parameter, harvest: Callable,
             "owner_kind": source.owner_kind,
             "owner_id": source.owner_id,
         }
+        # What a reader needs to check this value: the rectangles to highlight
+        # for a passage in the text, the image itself for a table or figure.
+        if outcome.rects:
+            row["provenance"]["rects"] = outcome.rects
+        if source.image_path:
+            row["provenance"]["image"] = source.image_path
         report.tuples.append(row)
         report.flags.extend(outcome.flags)
 

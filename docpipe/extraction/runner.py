@@ -3,8 +3,8 @@ runner.py – Wiring the harvest loop to the live stack.
 
 pipeline.py owns the loop and is pure; this module supplies its three
 callables from the real world — FAISS retrieval with owner exclusion, the
-harvesting LLM call, the native-PDF text behind a source — plus resume
-stamps and the CLI. Heavy imports (faiss, torch-backed embedders, fitz)
+harvesting LLM call, and locating a quote on its page in the source PDF —
+plus resume stamps and the CLI. Heavy imports (faiss, torch-backed embedders, fitz)
 happen inside functions: importing this module must stay cheap, or every
 test that touches the package pays for a GPU stack it never uses.
 
@@ -44,6 +44,14 @@ LLM_TIMEOUT = int(os.environ.get("LLM_TIMEOUT", "180"))
 TOP_K = int(os.environ.get("EXTRACT_TOP_K", "8"))
 MAX_ROUNDS = int(os.environ.get("EXTRACT_MAX_ROUNDS", "4"))
 MAX_RETRIES = 3
+# Tables and figures go to the model as pictures as well as text: the
+# transcription IS a reading of that picture, and a model that can see both
+# can notice when they disagree.
+ATTACH_IMAGES = os.environ.get("EXTRACT_ATTACH_IMAGES", "1") != "0"
+IMAGE_MAX_SIDE = int(os.environ.get("EXTRACT_IMAGE_MAX_SIDE", "1280"))
+# A section can run over a page break; how many of its pages to try before
+# giving up on placing the quote.
+LOCATE_MAX_PAGES = int(os.environ.get("EXTRACT_LOCATE_MAX_PAGES", "3"))
 
 HARVEST_PROMPT_ID = "extraction/harvest"
 QUERIES_PROMPT_ID = "extraction/queries"
@@ -94,7 +102,7 @@ def make_retrieve(conn: sqlite3.Connection, index, id_to_pos: dict,
                     "section_title": hit.get("section_title"),
                     "title": hit.get("title"),
                 },
-                readoff=hit["owner_kind"] == "figure",
+                image_path=hit.get("image_path"),
             ))
         return sources
 
@@ -158,7 +166,7 @@ def make_candidates(db_path: Path) -> Callable:
                                 "section_title": hit.get("section_title"),
                                 "title": hit.get("title"),
                                 "via": "fallback"},
-                    readoff=owner_kind == "figure"))
+                    image_path=hit.get("image_path")))
             return sources
         finally:
             conn.close()
@@ -198,13 +206,45 @@ def _parameter_payload(parameter) -> dict:
             axes[name] = {"type": "int"}
         else:
             axes[name] = {"enum": list(axis.enum or ())}
-    return {"uri": parameter.uri, "label": parameter.label,
-            "description": parameter.description,
-            "units_accepted": sorted(parameter.units_accepted),
-            "axes": axes, "example": parameter.example}
+    payload = {"uri": parameter.uri, "label": parameter.label,
+               "description": parameter.description,
+               "value_type": parameter.value_type,
+               "axes": axes, "example": parameter.example}
+    # Only what applies to this kind of value: a unit list in front of a
+    # category would invite the model to invent one.
+    if parameter.is_numeric:
+        payload["units_accepted"] = sorted(parameter.units_accepted)
+    elif parameter.vocabulary:
+        payload["value_labels"] = sorted(
+            {label for labels in parameter.vocabulary.values() for label in labels})
+    return payload
 
 
-def make_harvester() -> Callable:
+def _image_part(path: str) -> Optional[dict]:
+    """A table or figure crop as a chat message part, or None if unreadable.
+
+    PNG, not JPEG: these crops are synthetic graphics with thin rules and
+    small axis labels, exactly what JPEG artefacts blur first — and a blurred
+    digit is the failure this whole stage exists to avoid. Deliberately not
+    imported from llm_client, which binds the QA prompts at import time.
+    """
+    import base64
+    import io
+    try:
+        from PIL import Image
+        img = Image.open(path)
+        if max(img.size) > IMAGE_MAX_SIDE:
+            img.thumbnail((IMAGE_MAX_SIDE, IMAGE_MAX_SIDE))
+        buf = io.BytesIO()
+        img.save(buf, format="PNG")
+    except Exception as exc:
+        log.warning("   crop not attachable (%s): %s", path, exc)
+        return None
+    url = "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode()
+    return {"type": "image_url", "image_url": {"url": url}}
+
+
+def make_harvester(image_root: Optional[Path] = None) -> Callable:
     from openai import OpenAI
     prompt = prompts.load(HARVEST_PROMPT_ID)
     client = OpenAI(base_url=LLM_BASE_URL, api_key=LLM_API_KEY,
@@ -220,13 +260,22 @@ def make_harvester() -> Callable:
                         "section": source.provenance.get("section_title"),
                         "text": source.text}},
             ensure_ascii=False, indent=2)
+        # The crop rides along for tables and figures: the transcription is a
+        # reading of that picture, and the model should be able to check it
+        # against the picture rather than trust it.
+        content: object = payload
+        if source.image_path and ATTACH_IMAGES:
+            part = _image_part(str(image_root / source.image_path)
+                               if image_root else source.image_path)
+            if part is not None:
+                content = [{"type": "text", "text": payload}, part]
         for attempt in range(1, MAX_RETRIES + 1):
             try:
                 response = client.chat.completions.create(
                     model=LLM_MODEL, temperature=temperature,
                     max_tokens=max_tokens,
                     messages=[{"role": "system", "content": prompt.text},
-                              {"role": "user", "content": payload}])
+                              {"role": "user", "content": content}])
                 tuples = _parse_tuples(response.choices[0].message.content)
                 if tuples is not None:
                     return tuples
@@ -245,31 +294,39 @@ def make_harvester() -> Callable:
 
 
 # ---------------------------------------------------------------------------
-# Native PDF text behind a source
+# Where a quote sits in the source PDF
 # ---------------------------------------------------------------------------
 
-def make_pdf_text(db_path: Path, pdf_root: Optional[Path]) -> Optional[Callable]:
+def make_locate(db_path: Path, pdf_root: Optional[Path]) -> Optional[Callable]:
+    """(Source, quote) -> highlight rects in the source PDF, or None.
+
+    Uses the same alignment the app highlights with, so a value's recorded
+    provenance and the box a reader sees are produced by one implementation.
+    A section can run over a page break, so the section's other pages are
+    tried too - bounded, because this opens the PDF each time.
+    """
     if pdf_root is None:
         return None
+    from docpipe.inference.pdf_locate import quote_rects
 
-    def lookup(source: Source) -> Optional[str]:
-        try:
-            import fitz
-        except ImportError:
-            return None
-        page_number = source.provenance.get("page")
+    def locate(source: Source, quote: str) -> Optional[list]:
         document_id = source.provenance.get("document_id")
-        if not page_number or not document_id:
+        first_page = source.provenance.get("page")
+        if not document_id:
             return None
         # Own connection: lookups run inside worker threads.
         conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
         try:
             row = conn.execute("SELECT filename FROM Documents WHERE id = ?",
                                (document_id,)).fetchone()
-            bbox_row = None
-            if source.owner_kind == "table":
-                bbox_row = conn.execute("SELECT bbox FROM Tables WHERE id = ?",
-                                        (source.owner_id,)).fetchone()
+            pages = []
+            if source.owner_kind == "section":
+                try:
+                    pages = [int(r[0]) for r in conn.execute(
+                        "SELECT page_number FROM SectionPages WHERE section = ? "
+                        "ORDER BY page_number", (source.owner_id,))]
+                except sqlite3.OperationalError:
+                    pages = []
         finally:
             conn.close()
         if row is None:
@@ -277,26 +334,14 @@ def make_pdf_text(db_path: Path, pdf_root: Optional[Path]) -> Optional[Callable]
         pdf_path = pdf_root / row[0]
         if not pdf_path.is_file():
             return None
-        try:
-            doc = fitz.open(str(pdf_path))
-            try:
-                page = doc.load_page(int(page_number) - 1)
-                rects = None
-                if bbox_row and bbox_row[0]:
-                    try:
-                        rects = json.loads(bbox_row[0])
-                    except (TypeError, json.JSONDecodeError):
-                        rects = None
-                if rects:
-                    return " ".join(
-                        page.get_text(clip=fitz.Rect(*r)) for r in rects)
-                return page.get_text()
-            finally:
-                doc.close()
-        except Exception:
-            return None
+        candidates = ([int(first_page)] if first_page else []) +                      [p for p in pages if p != first_page]
+        for page in candidates[:LOCATE_MAX_PAGES]:
+            rects = quote_rects(pdf_path, page, quote)
+            if rects:
+                return rects
+        return None
 
-    return lookup
+    return locate
 
 
 # ---------------------------------------------------------------------------
@@ -338,7 +383,7 @@ def run_document(document_id: int, name: str, out_dir: Path, spec: Spec,
     report = harvest_document(document_id, spec, templates,
                               retrieve=deps["retrieve"],
                               harvest=deps["harvest"],
-                              pdf_text=deps.get("pdf_text"),
+                              locate=deps.get("locate"),
                               candidates=deps.get("candidates"),
                               max_rounds=MAX_ROUNDS)
     failed = [r for r in report.refusals
@@ -364,6 +409,9 @@ def main(argv: Optional[list] = None) -> int:
     parser.add_argument("db", type=Path, help="SQLite corpus database")
     parser.add_argument("index", type=Path, help="FAISS index")
     parser.add_argument("out", type=Path, help="Output directory (JSONL per document)")
+    parser.add_argument("--image-root", type=Path, default=None,
+                        help="Processed root holding the table/figure crops "
+                             "(default: the profile's processed dir)")
     parser.add_argument("--pdf-root", type=Path, default=None,
                         help="PDF directory for the digit-exact native check")
     parser.add_argument("--document", type=int, default=None,
@@ -396,6 +444,9 @@ def main(argv: Optional[list] = None) -> int:
                  sum(counts.values()), len(counts), args.serialize)
         return 0
 
+    if args.image_root is None:
+        args.image_root = profile.processed_dir
+
     # component, not require: extraction is an optional stage. A profile that
     # does not do OBIE (ar6 today) must stay loadable everywhere else and only
     # fail here, when someone actually asks it to extract.
@@ -427,8 +478,8 @@ def main(argv: Optional[list] = None) -> int:
     from docpipe.inference import faiss_store, query_cache
     index, id_to_pos = faiss_store.load_global_index(args.index)
     args.out.mkdir(parents=True, exist_ok=True)
-    harvest = make_harvester()                    # OpenAI client is thread-safe
-    pdf_text = make_pdf_text(args.db, args.pdf_root)
+    harvest = make_harvester(args.image_root)     # OpenAI client is thread-safe
+    locate = make_locate(args.db, args.pdf_root)
     candidates = make_candidates(args.db)
 
     with sqlite3.connect(f"file:{args.db}?mode=ro", uri=True) as listing:
@@ -454,7 +505,7 @@ def main(argv: Optional[list] = None) -> int:
         cache_conn = query_cache.connect(args.out / "query_cache.db")
         try:
             deps = {"retrieve": make_retrieve(conn, index, id_to_pos, cache_conn),
-                    "harvest": harvest, "pdf_text": pdf_text,
+                    "harvest": harvest, "locate": locate,
                     "candidates": candidates}
             run_document(document_id, Path(filename).stem, args.out, spec,
                          spec_sha, templates, deps,
