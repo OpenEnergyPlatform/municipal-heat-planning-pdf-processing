@@ -431,6 +431,14 @@ def main() -> None:
     )
 
     profile = resolve_profile(args)
+    # A rebuild takes no PDF input, so the one path anybody types is the
+    # processed root — as the epilog shows it. Reading it as *input* left the
+    # output on the profile default, which either does not exist (a corpus in
+    # a legacy layout: a job that dies) or is a DIFFERENT corpus that gets
+    # rebuilt instead (a job that succeeds at the wrong thing). Both have
+    # happened. --report-columns below does the same reasoning.
+    if args.rebuild_stage3 and args.input is not None and args.output is None:
+        args.input, args.output = None, args.input
     explicit_output = args.output is not None
     if args.output is None:
         if profile is None:
