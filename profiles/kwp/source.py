@@ -14,7 +14,6 @@ import sqlite3
 from datetime import datetime
 from pathlib import Path
 from typing import Any
-from urllib.parse import urlparse
 
 import pandas as pd
 
@@ -26,6 +25,7 @@ from .config import (
     MUNICIPALITY_META_COLUMNS,
     PDF_OVERRIDES,
     SHARED_FILE_OWNERS,
+    link_filename,
 )
 
 log = logging.getLogger(__name__)
@@ -91,8 +91,7 @@ def filename_for(row: dict) -> str:
     """The local file name a register row resolves to (override or KWW link)."""
     ags = int(row["Gemeindeschlüssel"])
     override = PDF_OVERRIDES.get(ags)
-    link = override if override else str(row["Link Wärmeplan"]).strip()
-    return Path(urlparse(link.lower()).path).name.lower()
+    return link_filename(override if override else row["Link Wärmeplan"])
 
 
 def group_keys_by_filename(rows: list) -> dict:
