@@ -102,6 +102,36 @@ def test_a_quote_the_source_never_contained_is_refused():
     assert "not found in the source" in out.reason
 
 
+def test_the_model_maps_a_source_wording_onto_a_class():
+    """The mapping is the model's job: no plan writes the class names, so an
+    exact-string table would drop most of the corpus. The wording it read
+    rides along, and the flag makes every such decision reviewable."""
+    out = verify_tuple(_claim(carrier="Erdgas", carrier_raw="Gas H"),
+                       _parameter(), SOURCE)
+    assert isinstance(out, Verified), getattr(out, "reason", out)
+    assert out.tuple["carrier"] == "OEO_00000292"
+    assert out.tuple["carrier_raw"] == "Gas H", "how the document said it"
+    assert "mapped:carrier:Gas H->OEO_00000292" in out.flags
+
+
+def test_a_wording_the_spec_already_lists_is_no_decision_and_no_flag():
+    out = verify_tuple(_claim(carrier="Erdgas", carrier_raw="Erdgas"),
+                       _parameter(), SOURCE)
+    assert out.tuple["carrier"] == "OEO_00000292"
+    assert not out.flags, "an exact hit needed no judgement"
+
+
+def test_a_label_that_fits_no_class_keeps_its_wording_instead_of_a_bare_null():
+    """'Sonstige' or 'Summe' belong to no class, and the model is told to
+    answer null rather than guess. The row still has to say what it saw."""
+    out = verify_tuple(_claim(carrier=None, carrier_raw="Sonstige"),
+                       _parameter(), SOURCE)
+    assert isinstance(out, Verified)
+    assert out.tuple["carrier"] is None
+    assert out.tuple["carrier_raw"] == "Sonstige"
+    assert "unmapped:carrier:Sonstige" in out.flags
+
+
 def test_an_unknown_label_is_kept_but_flagged_not_refused():
     """Out-of-vocabulary is a mapping gap to review, not model misconduct;
     refusing would silently shrink the harvest for every wording variant."""
@@ -206,6 +236,21 @@ def test_a_category_wording_the_spec_lacks_is_kept_and_flagged():
     assert out.tuple["value_uri"] is None
     assert out.tuple["value"] == "Prüfgebiet", "the wording survives review"
     assert "unmapped:value:Prüfgebiet" in out.flags
+
+
+def test_a_category_maps_to_its_class_and_is_evidenced_by_the_wording():
+    """The class name almost never appears verbatim in the plan. Checking the
+    quote against the class instead of against the wording would refuse every
+    mapping the model gets right."""
+    out = verify_tuple({"value": "Wärmenetzgebiet",
+                        "value_raw": "Wärmeversorgungsgebiet mit Netz",
+                        "quote": "Nordstadt: Wärmeversorgungsgebiet mit Netz"},
+                       _category_parameter(),
+                       "Die Nordstadt: Wärmeversorgungsgebiet mit Netz.")
+    assert isinstance(out, Verified), getattr(out, "reason", out)
+    assert out.tuple["value_uri"] == "MHPO_00020032"
+    assert out.tuple["value_raw"] == "Wärmeversorgungsgebiet mit Netz"
+    assert "mapped:value:Wärmeversorgungsgebiet mit Netz->MHPO_00020032"         in out.flags
 
 
 def test_a_category_claim_absent_from_its_quote_is_refused():

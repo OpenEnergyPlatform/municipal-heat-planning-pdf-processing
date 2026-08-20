@@ -140,11 +140,16 @@ def _check_value(raw: dict, parameter: Parameter, flags: list):
     if parameter.value_type == "category":
         uri = parameter.value_to_uri().get(value.strip().casefold())
         if uri is None:
-            # Same rule as an out-of-vocabulary axis: a wording the spec does
-            # not know yet is a mapping gap to review, not a reason to drop
-            # the finding. The raw wording stays on the tuple.
+            # The model was handed the closed class list and still found
+            # nothing that fits. That is a mapping gap to review, not a
+            # reason to drop the finding: the wording stays on the tuple.
             flags.append(f"unmapped:value:{value.strip()}")
         out["value_uri"] = uri
+        wording = raw.get("value_raw")
+        if isinstance(wording, str) and wording.strip():
+            out["value_raw"] = wording.strip()
+            if wording.strip().casefold() not in parameter.value_to_uri():
+                flags.append(f"mapped:value:{wording.strip()}->{uri}")
     return out, None
 
 
@@ -152,7 +157,12 @@ def _value_in_quote(raw: dict, parameter: Parameter, quote: str) -> bool:
     """Is the claimed value actually in the passage it cites?"""
     if parameter.is_numeric:
         return canonical_number(raw.get("value")) in _numbers_in(quote)
-    return _flat(str(raw.get("value"))).casefold() in _flat(quote).casefold()
+    # For a category the tuple carries two things: the class the model mapped
+    # to and, in *_raw, how the document worded it. The evidence check is
+    # about the document, so it runs against the wording, never against the
+    # class name the mapping produced.
+    wording = raw.get("value_raw") or raw.get("value")
+    return _flat(str(wording)).casefold() in _flat(quote).casefold()
 
 
 def verify_tuple(raw: dict, parameter: Parameter, source_text: str, *,
@@ -178,28 +188,47 @@ def verify_tuple(raw: dict, parameter: Parameter, source_text: str, *,
     for name, axis in parameter.axes.items():
         given = raw.get(name)
         if axis.vocabulary is not None:
+            wording = raw.get(f"{name}_raw")
+            wording = wording.strip() if isinstance(wording, str) else None
             if given is None:
                 if axis.required:
                     return Refusal(raw, f"required axis {name!r} missing")
                 resolved[name] = None
+                if wording:
+                    # The model read a label here and found no class it fits.
+                    # That is the single most useful line for vocabulary
+                    # review, so it survives with its wording instead of
+                    # collapsing into an indistinguishable null.
+                    resolved[f"{name}_raw"] = wording
+                    flags.append(f"unmapped:{name}:{wording}")
                 continue
             if given in axis.vocabulary:           # already a URI
-                resolved[name] = given
-                continue
-            uri = axis.label_to_uri().get(str(given).casefold())
+                uri = given
+            else:
+                uri = axis.label_to_uri().get(str(given).casefold())
             if uri is None:
-                # Out-of-vocabulary is a mapping gap, not model misconduct:
-                # the raw label stays on the tuple and the flag feeds the
-                # vocabulary review. Refusing here would silently shrink the
-                # harvest every time a plan words a label differently.
+                # The model chooses the class from the list it was given, so
+                # a value outside that list means it found nothing fitting
+                # (or answered off-contract). Either way the harvest keeps
+                # the finding: the wording stays on the tuple and the flag
+                # feeds the vocabulary review, because refusing here would
+                # silently shrink the yield on every unforeseen wording.
                 if axis.required:
                     return Refusal(raw, f"axis {name!r}: {given!r} not in "
                                         f"vocabulary and axis is required")
                 resolved[name] = None
-                resolved[f"{name}_raw"] = given
+                resolved[f"{name}_raw"] = wording or given
                 flags.append(f"unmapped:{name}:{given}")
             else:
                 resolved[name] = uri
+                if wording:
+                    # How the document said it, next to the class it was
+                    # mapped to. A wording the spec does not list means the
+                    # model made a judgement call, and those are flagged so
+                    # a review sees every mapping the table did not decide.
+                    resolved[f"{name}_raw"] = wording
+                    if wording.casefold() not in axis.label_to_uri():
+                        flags.append(f"mapped:{name}:{wording}->{uri}")
         elif axis.type == "int":
             if given is None:
                 if axis.required:
