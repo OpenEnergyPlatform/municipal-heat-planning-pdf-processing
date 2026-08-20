@@ -2,8 +2,19 @@
 Constants for the fileprocessing module. The schema lives in docpipe/store
 plus profiles/<name>/schema.sql.
 """
+from pathlib import Path
+from urllib.parse import urlparse
 
 EXCEL_SHEET = "Datensatz Status quo KWP"
+
+
+def link_filename(link) -> str:
+    """A KWW "Link Wärmeplan" reduced to the local file name it becomes.
+
+    Ingest names documents this way and the catalog looks them up this way, so
+    the two must not drift: whoever changes it changes both at once.
+    """
+    return Path(urlparse(str(link).strip().lower()).path).name.lower()
 
 # Municipalities whose KWW PDF link is broken and for which a correct PDF was
 # sourced by hand. Keyed by Gemeindeschlüssel → the local filename to use

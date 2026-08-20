@@ -16,6 +16,8 @@ from typing import Optional
 
 from docpipe.inference.catalog import Catalog, format_published
 
+from .config import PDF_OVERRIDES, link_filename
+
 # Filename prefixes that are not a place name (convoy plans are named after
 # their lead municipality, behind one of these).
 _KONVOI_DROP_PREFIX = {"waermeplan", "waermepaln", "wärmeplan", "energiekonzept", "kwp"}
@@ -129,8 +131,10 @@ def _covered_names(
     Municipalities a plan covers, derived from OU membership (`ou_members` maps
     ags→name).
 
-    The only per-document municipality link in the schema is the single
-    `municipality_ags`; full membership lives in the OrganisationUnit. Rule:
+    The fallback for a corpus whose register metadata was never imported. The
+    only per-document municipality link in the schema is the single
+    `municipality_ags`, so membership has to be guessed from the
+    OrganisationUnit, which misses convoys spanning several units. Rule:
       * OU with ONE plan → it covers ALL that OU's municipalities.
       * OU with SEVERAL plans → a standalone plan covers only its own
         municipality; a convoy plan additionally takes the OU members that no
@@ -153,13 +157,41 @@ def _covered_names(
     return names
 
 
+def _register_members(conn: sqlite3.Connection) -> dict:
+    """file name → {ags: municipality name}, straight from the KWW register.
+
+    Which municipalities a plan covers is not something to infer. The export
+    carries one row per municipality with that municipality's plan link, and
+    several rows on one link IS the convoy. Its own convoy id agrees.
+    """
+    try:
+        rows = conn.execute("""
+            SELECT m.ags AS ags, m.name AS name, mm.link_waermeplan AS link
+            FROM MunicipalityMeta mm
+            JOIN Municipalities m ON m.ags = mm.ags
+            WHERE mm.link_waermeplan IS NOT NULL AND mm.link_waermeplan != ''
+        """).fetchall()
+    except sqlite3.OperationalError:      # corpus imported without the register
+        return {}
+    out: dict = {}
+    for row in rows:
+        ags = int(row["ags"])
+        # Same resolution ingest used to name the file, override included.
+        name = link_filename(PDF_OVERRIDES.get(ags) or row["link"])
+        out.setdefault(name, {})[ags] = row["name"]
+    return out
+
+
 def municipality_coverage(conn: sqlite3.Connection, documents) -> dict:
     """
     Map each document id → the sorted list of municipalities it covers.
 
-    Computed over the SAME `documents` set passed in, so sibling-plan claims match
-    what the picker shows. The rule itself is `_covered_names`.
+    The register decides: every municipality whose plan link resolves to this
+    document's file. Only a corpus without imported register metadata falls
+    back to `_covered_names`, computed over the SAME `documents` set passed in
+    so sibling-plan claims match what the picker shows.
     """
+    register = _register_members(conn)
     ou_members: dict = {}
     for r in conn.execute("SELECT organisation_unit, ags, name FROM Municipalities"):
         ou_members.setdefault(r["organisation_unit"], {})[r["ags"]] = r["name"]
@@ -170,6 +202,10 @@ def municipality_coverage(conn: sqlite3.Connection, documents) -> dict:
 
     out: dict = {}
     for d in documents:
+        members = register.get((d["filename"] or "").lower())
+        if members:
+            out[d["id"]] = sorted(members.values())
+            continue
         siblings = by_ou.get(d["organisation_unit"], [])
         claimed = {s["municipality_ags"] for s in siblings}
         out[d["id"]] = _covered_names(
