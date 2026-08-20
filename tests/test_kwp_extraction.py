@@ -47,8 +47,20 @@ def test_the_examples_teach_exhaustive_extraction(parameter):
                 assert canonical_number(cell) in claimed, f"{cell} has no tuple"
     outcomes = [verify_tuple(dict(t), parameter, parameter.example["source"])
                 for t in parameter.example["tuples"]]
-    assert any(o.flags for o in outcomes), \
-        "at least one example tuple keeps an off-vocab label verbatim"
+    flags = [f for o in outcomes for f in o.flags]
+    assert any(f.startswith("mapped:") for f in flags),         "the example must show a source wording being mapped onto a class"
+
+
+def test_the_examples_show_both_mapping_and_refusing_to_map():
+    """The two lessons the few-shot has to teach at once: a wording the class
+    list does not contain still gets mapped when it clearly fits, and a label
+    that fits no class stays empty instead of being forced into one."""
+    flags = [f for parameter in SPEC.parameters
+             for t in parameter.example["tuples"]
+             for f in verify_tuple(dict(t), parameter,
+                                   parameter.example["source"]).flags]
+    assert any(f.startswith("mapped:") for f in flags)
+    assert any(f.startswith("unmapped:") for f in flags)
 
 
 # --- prompts ---------------------------------------------------------------
@@ -74,7 +86,8 @@ def test_the_harvest_prompt_states_the_contract():
     from docpipe import prompts
     prompt = prompts.load("extraction/harvest", _profile())
     assert prompt.meta.get("max_tokens")
-    for needle in ('"tuples"', '"quote"', '"unit_raw"', '"indicator_label_raw"'):
+    for needle in ('"tuples"', '"quote"', '"unit_raw"', '"indicator_label_raw"',
+                   '"carrier_raw"', 'classes'):
         assert needle in prompt.text, f"prompt never names {needle}"
 
 

@@ -36,10 +36,12 @@ def test_parse_refuses_a_reply_without_a_tuples_list():
     assert _parse_tuples("kein JSON") is None
 
 
-def test_parameter_payload_flattens_vocab_to_labels_only():
-    """The model chooses among corpus labels; URIs are the verifier's side."""
+def test_parameter_payload_offers_classes_not_a_flat_label_list():
+    """The model has to map a wording onto ONE class, so it is shown the
+    classes with the spellings already known for each. URIs stay on the
+    verifier's side: they mean nothing to a reader of German plans."""
     payload = _parameter_payload(SPEC.parameters[0])
-    assert payload["axes"]["carrier"] == {"labels": ["Erdgas", "Gas"]}
+    assert payload["axes"]["carrier"] == {"classes": {"Erdgas": ["Gas"]}}
     assert "example" in payload and payload["units_accepted"] == ["MWh/a"]
 
 

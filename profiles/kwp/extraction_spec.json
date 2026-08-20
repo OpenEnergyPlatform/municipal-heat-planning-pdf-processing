@@ -7,76 +7,217 @@
       "value_type": "float",
       "unit_target": "OEO_00050008",
       "units_accepted": {
-        "kWh/a": 0.001, "MWh/a": 1.0, "GWh/a": 1000.0,
-        "kWh": 0.001, "MWh": 1.0, "GWh": 1000.0
+        "kWh/a": 0.001,
+        "MWh/a": 1.0,
+        "GWh/a": 1000.0,
+        "kWh": 0.001,
+        "MWh": 1.0,
+        "GWh": 1000.0
       },
       "axes": {
         "carrier": {
           "vocabulary": {
-            "OEO_00000292": ["Erdgas", "Gas"],
-            "OEO_00000211": ["Heizöl", "Öl"],
-            "OEO_00000132": ["Fernwärme", "Wärmenetze", "Wärmenetz"],
-            "OEO_00000139": ["Strom", "Elektrizität"],
-            "OEO_00000449": ["Holz", "Holzpellets", "Pellets"],
-            "OEO_00000074": ["Biogas"],
-            "OEO_00000388": ["Solarthermie"],
-            "OEO_00000251": ["Braunkohle"],
-            "OEO_00320011": ["Flüssiggas"],
-            "OEO_00000220": ["Wasserstoff"],
-            "OEO_00000204": ["Steinkohle"]
+            "OEO_00000292": [
+              "Erdgas",
+              "Gas"
+            ],
+            "OEO_00000211": [
+              "Heizöl",
+              "Öl"
+            ],
+            "OEO_00000132": [
+              "Fernwärme",
+              "Wärmenetze",
+              "Wärmenetz"
+            ],
+            "OEO_00000139": [
+              "Strom",
+              "Elektrizität"
+            ],
+            "OEO_00000449": [
+              "Holz",
+              "Holzpellets",
+              "Pellets"
+            ],
+            "OEO_00000074": [
+              "Biogas"
+            ],
+            "OEO_00000388": [
+              "Solarthermie"
+            ],
+            "OEO_00000251": [
+              "Braunkohle"
+            ],
+            "OEO_00320011": [
+              "Flüssiggas"
+            ],
+            "OEO_00000220": [
+              "Wasserstoff"
+            ],
+            "OEO_00000204": [
+              "Steinkohle"
+            ]
           }
         },
         "sector": {
           "vocabulary": {
-            "OEO_00000214": ["Private Haushalte", "Haushalte", "Privathaushalte"],
-            "OEO_00000405": ["GHD", "Gewerbe, Handel, Dienstleistungen", "Gewerbe/Handel/Dienstleistungen"],
-            "OEO_00000227": ["Industrie"],
-            "OEO_00000422": ["Verkehr"]
+            "OEO_00000214": [
+              "Private Haushalte",
+              "Haushalte",
+              "Privathaushalte"
+            ],
+            "OEO_00000405": [
+              "GHD",
+              "Gewerbe, Handel, Dienstleistungen",
+              "Gewerbe/Handel/Dienstleistungen"
+            ],
+            "OEO_00000227": [
+              "Industrie"
+            ],
+            "OEO_00000422": [
+              "Verkehr"
+            ]
           }
         },
-        "year": {"type": "int"},
-        "scenario": {"enum": ["status_quo", "trend", "target", "unknown"]},
-        "spatial_scope": {"enum": ["municipality", "sub_area", "unknown"]}
+        "year": {
+          "type": "int"
+        },
+        "scenario": {
+          "enum": [
+            "status_quo",
+            "trend",
+            "target",
+            "unknown"
+          ]
+        },
+        "spatial_scope": {
+          "enum": [
+            "municipality",
+            "sub_area",
+            "unknown"
+          ]
+        }
       },
       "example": {
         "source": "| Energieträger | Industrie Endenergie in kWh/a | GHD/Kommune Endenergie in kWh/a | Private Haushalte Endenergie in kWh/a |\n| --- | --- | --- | --- |\n| Wärmenetze | 24.611.469 | 222.660.349 | 281.939.715 |\n| Erdgas | 126.656.132 | 520.465.057 | 1.036.767.833 |\n| Heizöl | 1.440.048 | 28.116.204 | 203.458.519 |",
         "tuples": [
-          {"value": 24611469, "unit_raw": "kWh/a", "carrier": "Wärmenetze",
-           "sector": "Industrie", "year": null, "scenario": "unknown",
-           "spatial_scope": "unknown", "indicator_label_raw": "Endenergie",
-           "quote": "| Wärmenetze | 24.611.469 | 222.660.349 | 281.939.715 |"},
-          {"value": 222660349, "unit_raw": "kWh/a", "carrier": "Wärmenetze",
-           "sector": "GHD/Kommune", "year": null, "scenario": "unknown",
-           "spatial_scope": "unknown", "indicator_label_raw": "Endenergie",
-           "quote": "| Wärmenetze | 24.611.469 | 222.660.349 | 281.939.715 |"},
-          {"value": 281939715, "unit_raw": "kWh/a", "carrier": "Wärmenetze",
-           "sector": "Private Haushalte", "year": null, "scenario": "unknown",
-           "spatial_scope": "unknown", "indicator_label_raw": "Endenergie",
-           "quote": "| Wärmenetze | 24.611.469 | 222.660.349 | 281.939.715 |"},
-          {"value": 126656132, "unit_raw": "kWh/a", "carrier": "Erdgas",
-           "sector": "Industrie", "year": null, "scenario": "unknown",
-           "spatial_scope": "unknown", "indicator_label_raw": "Endenergie",
-           "quote": "| Erdgas | 126.656.132 | 520.465.057 | 1.036.767.833 |"},
-          {"value": 520465057, "unit_raw": "kWh/a", "carrier": "Erdgas",
-           "sector": "GHD/Kommune", "year": null, "scenario": "unknown",
-           "spatial_scope": "unknown", "indicator_label_raw": "Endenergie",
-           "quote": "| Erdgas | 126.656.132 | 520.465.057 | 1.036.767.833 |"},
-          {"value": 1036767833, "unit_raw": "kWh/a", "carrier": "Erdgas",
-           "sector": "Private Haushalte", "year": null, "scenario": "unknown",
-           "spatial_scope": "unknown", "indicator_label_raw": "Endenergie",
-           "quote": "| Erdgas | 126.656.132 | 520.465.057 | 1.036.767.833 |"},
-          {"value": 1440048, "unit_raw": "kWh/a", "carrier": "Heizöl",
-           "sector": "Industrie", "year": null, "scenario": "unknown",
-           "spatial_scope": "unknown", "indicator_label_raw": "Endenergie",
-           "quote": "| Heizöl | 1.440.048 | 28.116.204 | 203.458.519 |"},
-          {"value": 28116204, "unit_raw": "kWh/a", "carrier": "Heizöl",
-           "sector": "GHD/Kommune", "year": null, "scenario": "unknown",
-           "spatial_scope": "unknown", "indicator_label_raw": "Endenergie",
-           "quote": "| Heizöl | 1.440.048 | 28.116.204 | 203.458.519 |"},
-          {"value": 203458519, "unit_raw": "kWh/a", "carrier": "Heizöl",
-           "sector": "Private Haushalte", "year": null, "scenario": "unknown",
-           "spatial_scope": "unknown", "indicator_label_raw": "Endenergie",
-           "quote": "| Heizöl | 1.440.048 | 28.116.204 | 203.458.519 |"}
+          {
+            "value": 24611469,
+            "unit_raw": "kWh/a",
+            "carrier": "Fernwärme",
+            "carrier_raw": "Wärmenetze",
+            "sector": "Industrie",
+            "sector_raw": "Industrie",
+            "year": null,
+            "scenario": "unknown",
+            "spatial_scope": "unknown",
+            "indicator_label_raw": "Endenergie",
+            "quote": "| Wärmenetze | 24.611.469 | 222.660.349 | 281.939.715 |"
+          },
+          {
+            "value": 222660349,
+            "unit_raw": "kWh/a",
+            "carrier": "Fernwärme",
+            "carrier_raw": "Wärmenetze",
+            "sector": "GHD",
+            "sector_raw": "GHD/Kommune",
+            "year": null,
+            "scenario": "unknown",
+            "spatial_scope": "unknown",
+            "indicator_label_raw": "Endenergie",
+            "quote": "| Wärmenetze | 24.611.469 | 222.660.349 | 281.939.715 |"
+          },
+          {
+            "value": 281939715,
+            "unit_raw": "kWh/a",
+            "carrier": "Fernwärme",
+            "carrier_raw": "Wärmenetze",
+            "sector": "Private Haushalte",
+            "sector_raw": "Private Haushalte",
+            "year": null,
+            "scenario": "unknown",
+            "spatial_scope": "unknown",
+            "indicator_label_raw": "Endenergie",
+            "quote": "| Wärmenetze | 24.611.469 | 222.660.349 | 281.939.715 |"
+          },
+          {
+            "value": 126656132,
+            "unit_raw": "kWh/a",
+            "carrier": "Erdgas",
+            "carrier_raw": "Erdgas",
+            "sector": "Industrie",
+            "sector_raw": "Industrie",
+            "year": null,
+            "scenario": "unknown",
+            "spatial_scope": "unknown",
+            "indicator_label_raw": "Endenergie",
+            "quote": "| Erdgas | 126.656.132 | 520.465.057 | 1.036.767.833 |"
+          },
+          {
+            "value": 520465057,
+            "unit_raw": "kWh/a",
+            "carrier": "Erdgas",
+            "carrier_raw": "Erdgas",
+            "sector": "GHD",
+            "sector_raw": "GHD/Kommune",
+            "year": null,
+            "scenario": "unknown",
+            "spatial_scope": "unknown",
+            "indicator_label_raw": "Endenergie",
+            "quote": "| Erdgas | 126.656.132 | 520.465.057 | 1.036.767.833 |"
+          },
+          {
+            "value": 1036767833,
+            "unit_raw": "kWh/a",
+            "carrier": "Erdgas",
+            "carrier_raw": "Erdgas",
+            "sector": "Private Haushalte",
+            "sector_raw": "Private Haushalte",
+            "year": null,
+            "scenario": "unknown",
+            "spatial_scope": "unknown",
+            "indicator_label_raw": "Endenergie",
+            "quote": "| Erdgas | 126.656.132 | 520.465.057 | 1.036.767.833 |"
+          },
+          {
+            "value": 1440048,
+            "unit_raw": "kWh/a",
+            "carrier": "Heizöl",
+            "carrier_raw": "Heizöl",
+            "sector": "Industrie",
+            "sector_raw": "Industrie",
+            "year": null,
+            "scenario": "unknown",
+            "spatial_scope": "unknown",
+            "indicator_label_raw": "Endenergie",
+            "quote": "| Heizöl | 1.440.048 | 28.116.204 | 203.458.519 |"
+          },
+          {
+            "value": 28116204,
+            "unit_raw": "kWh/a",
+            "carrier": "Heizöl",
+            "carrier_raw": "Heizöl",
+            "sector": "GHD",
+            "sector_raw": "GHD/Kommune",
+            "year": null,
+            "scenario": "unknown",
+            "spatial_scope": "unknown",
+            "indicator_label_raw": "Endenergie",
+            "quote": "| Heizöl | 1.440.048 | 28.116.204 | 203.458.519 |"
+          },
+          {
+            "value": 203458519,
+            "unit_raw": "kWh/a",
+            "carrier": "Heizöl",
+            "carrier_raw": "Heizöl",
+            "sector": "Private Haushalte",
+            "sector_raw": "Private Haushalte",
+            "year": null,
+            "scenario": "unknown",
+            "spatial_scope": "unknown",
+            "indicator_label_raw": "Endenergie",
+            "quote": "| Heizöl | 1.440.048 | 28.116.204 | 203.458.519 |"
+          }
         ]
       }
     },
@@ -87,55 +228,136 @@
       "value_type": "float",
       "unit_target": "OEO_00050008",
       "units_accepted": {
-        "kWh/a": 0.001, "MWh/a": 1.0, "GWh/a": 1000.0,
-        "kWh": 0.001, "MWh": 1.0, "GWh": 1000.0
+        "kWh/a": 0.001,
+        "MWh/a": 1.0,
+        "GWh/a": 1000.0,
+        "kWh": 0.001,
+        "MWh": 1.0,
+        "GWh": 1000.0
       },
       "axes": {
         "carrier": {
           "vocabulary": {
-            "OEO_00000292": ["Erdgas", "Gas"],
-            "OEO_00000211": ["Heizöl", "Öl"],
-            "OEO_00000132": ["Fernwärme", "Wärmenetze", "Wärmenetz"],
-            "OEO_00000139": ["Strom", "Elektrizität"],
-            "OEO_00000449": ["Holz", "Holzpellets", "Pellets"],
-            "OEO_00000074": ["Biogas"],
-            "OEO_00000388": ["Solarthermie"],
-            "OEO_00000251": ["Braunkohle"],
-            "OEO_00320011": ["Flüssiggas"],
-            "OEO_00000220": ["Wasserstoff"],
-            "OEO_00000204": ["Steinkohle"]
+            "OEO_00000292": [
+              "Erdgas",
+              "Gas"
+            ],
+            "OEO_00000211": [
+              "Heizöl",
+              "Öl"
+            ],
+            "OEO_00000132": [
+              "Fernwärme",
+              "Wärmenetze",
+              "Wärmenetz"
+            ],
+            "OEO_00000139": [
+              "Strom",
+              "Elektrizität"
+            ],
+            "OEO_00000449": [
+              "Holz",
+              "Holzpellets",
+              "Pellets"
+            ],
+            "OEO_00000074": [
+              "Biogas"
+            ],
+            "OEO_00000388": [
+              "Solarthermie"
+            ],
+            "OEO_00000251": [
+              "Braunkohle"
+            ],
+            "OEO_00320011": [
+              "Flüssiggas"
+            ],
+            "OEO_00000220": [
+              "Wasserstoff"
+            ],
+            "OEO_00000204": [
+              "Steinkohle"
+            ]
           }
         },
         "sector": {
           "vocabulary": {
-            "OEO_00000214": ["Private Haushalte", "Haushalte", "Privathaushalte"],
-            "OEO_00000405": ["GHD", "Gewerbe, Handel, Dienstleistungen", "Gewerbe/Handel/Dienstleistungen"],
-            "OEO_00000227": ["Industrie"],
-            "OEO_00000422": ["Verkehr"]
+            "OEO_00000214": [
+              "Private Haushalte",
+              "Haushalte",
+              "Privathaushalte"
+            ],
+            "OEO_00000405": [
+              "GHD",
+              "Gewerbe, Handel, Dienstleistungen",
+              "Gewerbe/Handel/Dienstleistungen"
+            ],
+            "OEO_00000227": [
+              "Industrie"
+            ],
+            "OEO_00000422": [
+              "Verkehr"
+            ]
           }
         },
-        "year": {"type": "int"},
-        "scenario": {"enum": ["status_quo", "trend", "target", "unknown"]},
-        "spatial_scope": {"enum": ["municipality", "sub_area", "unknown"]}
+        "year": {
+          "type": "int"
+        },
+        "scenario": {
+          "enum": [
+            "status_quo",
+            "trend",
+            "target",
+            "unknown"
+          ]
+        },
+        "spatial_scope": {
+          "enum": [
+            "municipality",
+            "sub_area",
+            "unknown"
+          ]
+        }
       },
       "example": {
         "source": "Tabelle 5-11: Übersicht der sektoralen Energieverbräuche im Fokusgebiet Eicken\n| Sektoren | Private Haushalte | Wirtschaftlich genutzte Gebäude | Öffentliche Gebäude |\n| --- | --- | --- | --- |\n| **Endenergieverbrauch [MWh/a]** | | | |\n| Gebäude Wärme | 42.005 | 7.285 | 20.548 |\n| **Primärenergieverbrauch [MWh/a]** | | | |\n| Gebäude Wärme | 44.985 | 7.953 | 22.766 |",
         "tuples": [
-          {"value": 44985, "unit_raw": "MWh/a", "carrier": null,
-           "sector": "Private Haushalte", "year": null, "scenario": "unknown",
-           "spatial_scope": "sub_area",
-           "indicator_label_raw": "Primärenergieverbrauch",
-           "quote": "| Gebäude Wärme | 44.985 | 7.953 | 22.766 |"},
-          {"value": 7953, "unit_raw": "MWh/a", "carrier": null,
-           "sector": "Wirtschaftlich genutzte Gebäude", "year": null,
-           "scenario": "unknown", "spatial_scope": "sub_area",
-           "indicator_label_raw": "Primärenergieverbrauch",
-           "quote": "| Gebäude Wärme | 44.985 | 7.953 | 22.766 |"},
-          {"value": 22766, "unit_raw": "MWh/a", "carrier": null,
-           "sector": "Öffentliche Gebäude", "year": null, "scenario": "unknown",
-           "spatial_scope": "sub_area",
-           "indicator_label_raw": "Primärenergieverbrauch",
-           "quote": "| Gebäude Wärme | 44.985 | 7.953 | 22.766 |"}
+          {
+            "value": 44985,
+            "unit_raw": "MWh/a",
+            "carrier": null,
+            "sector": "Private Haushalte",
+            "sector_raw": "Private Haushalte",
+            "year": null,
+            "scenario": "unknown",
+            "spatial_scope": "sub_area",
+            "indicator_label_raw": "Primärenergieverbrauch",
+            "quote": "| Gebäude Wärme | 44.985 | 7.953 | 22.766 |"
+          },
+          {
+            "value": 7953,
+            "unit_raw": "MWh/a",
+            "carrier": null,
+            "sector": "GHD",
+            "sector_raw": "Wirtschaftlich genutzte Gebäude",
+            "year": null,
+            "scenario": "unknown",
+            "spatial_scope": "sub_area",
+            "indicator_label_raw": "Primärenergieverbrauch",
+            "quote": "| Gebäude Wärme | 44.985 | 7.953 | 22.766 |"
+          },
+          {
+            "value": 22766,
+            "unit_raw": "MWh/a",
+            "carrier": null,
+            "sector": null,
+            "sector_raw": "Öffentliche Gebäude",
+            "year": null,
+            "scenario": "unknown",
+            "spatial_scope": "sub_area",
+            "indicator_label_raw": "Primärenergieverbrauch",
+            "quote": "| Gebäude Wärme | 44.985 | 7.953 | 22.766 |"
+          }
         ]
       }
     },
@@ -146,73 +368,181 @@
       "value_type": "float",
       "unit_target": "OEO_00010137",
       "units_accepted": {
-        "t/a": 1.0, "t": 1.0, "kt/a": 1000.0, "kt": 1000.0,
-        "t CO2/a": 1.0, "t CO2-eq/a": 1.0, "t CO2e/a": 1.0, "t CO2e": 1.0,
-        "tCO2/a": 1.0, "t CO2-Äq./a": 1.0, "t CO2-Äq/a": 1.0,
-        "t CO2-Äquivalente/a": 1.0, "kt CO2/a": 1000.0, "kt CO2-Äq./a": 1000.0
+        "t/a": 1.0,
+        "t": 1.0,
+        "kt/a": 1000.0,
+        "kt": 1000.0,
+        "t CO2/a": 1.0,
+        "t CO2-eq/a": 1.0,
+        "t CO2e/a": 1.0,
+        "t CO2e": 1.0,
+        "tCO2/a": 1.0,
+        "t CO2-Äq./a": 1.0,
+        "t CO2-Äq/a": 1.0,
+        "t CO2-Äquivalente/a": 1.0,
+        "kt CO2/a": 1000.0,
+        "kt CO2-Äq./a": 1000.0
       },
       "axes": {
         "carrier": {
           "vocabulary": {
-            "OEO_00000292": ["Erdgas", "Gas"],
-            "OEO_00000211": ["Heizöl", "Öl"],
-            "OEO_00000132": ["Fernwärme", "Wärmenetze", "Wärmenetz"],
-            "OEO_00000139": ["Strom", "Elektrizität"],
-            "OEO_00000449": ["Holz", "Holzpellets", "Pellets"],
-            "OEO_00000074": ["Biogas"],
-            "OEO_00000388": ["Solarthermie"],
-            "OEO_00000251": ["Braunkohle"],
-            "OEO_00320011": ["Flüssiggas"],
-            "OEO_00000220": ["Wasserstoff"],
-            "OEO_00000204": ["Steinkohle"]
+            "OEO_00000292": [
+              "Erdgas",
+              "Gas"
+            ],
+            "OEO_00000211": [
+              "Heizöl",
+              "Öl"
+            ],
+            "OEO_00000132": [
+              "Fernwärme",
+              "Wärmenetze",
+              "Wärmenetz"
+            ],
+            "OEO_00000139": [
+              "Strom",
+              "Elektrizität"
+            ],
+            "OEO_00000449": [
+              "Holz",
+              "Holzpellets",
+              "Pellets"
+            ],
+            "OEO_00000074": [
+              "Biogas"
+            ],
+            "OEO_00000388": [
+              "Solarthermie"
+            ],
+            "OEO_00000251": [
+              "Braunkohle"
+            ],
+            "OEO_00320011": [
+              "Flüssiggas"
+            ],
+            "OEO_00000220": [
+              "Wasserstoff"
+            ],
+            "OEO_00000204": [
+              "Steinkohle"
+            ]
           }
         },
         "sector": {
           "vocabulary": {
-            "OEO_00000214": ["Private Haushalte", "Haushalte", "Privathaushalte"],
-            "OEO_00000405": ["GHD", "Gewerbe, Handel, Dienstleistungen", "Gewerbe/Handel/Dienstleistungen"],
-            "OEO_00000227": ["Industrie"],
-            "OEO_00000422": ["Verkehr"]
+            "OEO_00000214": [
+              "Private Haushalte",
+              "Haushalte",
+              "Privathaushalte"
+            ],
+            "OEO_00000405": [
+              "GHD",
+              "Gewerbe, Handel, Dienstleistungen",
+              "Gewerbe/Handel/Dienstleistungen"
+            ],
+            "OEO_00000227": [
+              "Industrie"
+            ],
+            "OEO_00000422": [
+              "Verkehr"
+            ]
           }
         },
-        "year": {"type": "int"},
-        "scenario": {"enum": ["status_quo", "trend", "target", "unknown"]},
-        "spatial_scope": {"enum": ["municipality", "sub_area", "unknown"]}
+        "year": {
+          "type": "int"
+        },
+        "scenario": {
+          "enum": [
+            "status_quo",
+            "trend",
+            "target",
+            "unknown"
+          ]
+        },
+        "spatial_scope": {
+          "enum": [
+            "municipality",
+            "sub_area",
+            "unknown"
+          ]
+        }
       },
       "example": {
         "source": "Tabelle 5-11: Übersicht der sektoralen Energieverbräuche im Fokusgebiet Eicken\n| Sektoren | Private Haushalte | Wirtschaftlich genutzte Gebäude | Öffentliche Gebäude |\n| --- | --- | --- | --- |\n| **Treibhausgasemissionen [t/a]** | | | |\n| Gebäude Wärme | 10.123 | 1.843 | 5.292 |",
         "tuples": [
-          {"value": 10123, "unit_raw": "t/a", "carrier": null,
-           "sector": "Private Haushalte", "year": null, "scenario": "unknown",
-           "spatial_scope": "sub_area",
-           "indicator_label_raw": "Treibhausgasemissionen",
-           "quote": "| Gebäude Wärme | 10.123 | 1.843 | 5.292 |"},
-          {"value": 1843, "unit_raw": "t/a", "carrier": null,
-           "sector": "Wirtschaftlich genutzte Gebäude", "year": null,
-           "scenario": "unknown", "spatial_scope": "sub_area",
-           "indicator_label_raw": "Treibhausgasemissionen",
-           "quote": "| Gebäude Wärme | 10.123 | 1.843 | 5.292 |"},
-          {"value": 5292, "unit_raw": "t/a", "carrier": null,
-           "sector": "Öffentliche Gebäude", "year": null, "scenario": "unknown",
-           "spatial_scope": "sub_area",
-           "indicator_label_raw": "Treibhausgasemissionen",
-           "quote": "| Gebäude Wärme | 10.123 | 1.843 | 5.292 |"}
+          {
+            "value": 10123,
+            "unit_raw": "t/a",
+            "carrier": null,
+            "sector": "Private Haushalte",
+            "sector_raw": "Private Haushalte",
+            "year": null,
+            "scenario": "unknown",
+            "spatial_scope": "sub_area",
+            "indicator_label_raw": "Treibhausgasemissionen",
+            "quote": "| Gebäude Wärme | 10.123 | 1.843 | 5.292 |"
+          },
+          {
+            "value": 1843,
+            "unit_raw": "t/a",
+            "carrier": null,
+            "sector": "GHD",
+            "sector_raw": "Wirtschaftlich genutzte Gebäude",
+            "year": null,
+            "scenario": "unknown",
+            "spatial_scope": "sub_area",
+            "indicator_label_raw": "Treibhausgasemissionen",
+            "quote": "| Gebäude Wärme | 10.123 | 1.843 | 5.292 |"
+          },
+          {
+            "value": 5292,
+            "unit_raw": "t/a",
+            "carrier": null,
+            "sector": null,
+            "sector_raw": "Öffentliche Gebäude",
+            "year": null,
+            "scenario": "unknown",
+            "spatial_scope": "sub_area",
+            "indicator_label_raw": "Treibhausgasemissionen",
+            "quote": "| Gebäude Wärme | 10.123 | 1.843 | 5.292 |"
+          }
         ]
       }
     }
   ],
   "indicator_mapping": {
     "OEO_00050016": {
-      "accept": ["endenergieverbrauch", "endenergie"],
-      "unclear": ["bedarf", "witterungskorrigiert"]
+      "accept": [
+        "endenergieverbrauch",
+        "endenergie"
+      ],
+      "unclear": [
+        "bedarf",
+        "witterungskorrigiert"
+      ]
     },
     "OEO_00050018": {
-      "accept": ["primärenergieverbrauch", "primärenergie"],
-      "unclear": ["bedarf", "witterungskorrigiert"]
+      "accept": [
+        "primärenergieverbrauch",
+        "primärenergie"
+      ],
+      "unclear": [
+        "bedarf",
+        "witterungskorrigiert"
+      ]
     },
     "OEO_00340066": {
-      "accept": ["co2-emissionen", "kohlendioxid"],
-      "unclear": ["treibhausgas", "thg", "co2-äq", "äquivalent", "co2-eq"]
+      "accept": [
+        "co2-emissionen",
+        "kohlendioxid"
+      ],
+      "unclear": [
+        "treibhausgas",
+        "thg",
+        "co2-äq",
+        "äquivalent",
+        "co2-eq"
+      ]
     }
   }
 }

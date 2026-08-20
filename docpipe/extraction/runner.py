@@ -200,8 +200,13 @@ def _parameter_payload(parameter) -> dict:
     axes = {}
     for name, axis in parameter.axes.items():
         if axis.vocabulary is not None:
-            axes[name] = {"labels": sorted(
-                {label for labels in axis.vocabulary.values() for label in labels})}
+            # Grouped by class, not a flat label list: the model has to pick
+            # ONE of these classes for the wording it read, so it needs to
+            # see which spellings already belong together. The first label
+            # is the class name it answers with; the rest are what the
+            # corpus has been seen to call it.
+            axes[name] = {"classes": {labels[0]: list(labels[1:])
+                                      for labels in axis.vocabulary.values()}}
         elif axis.type == "int":
             axes[name] = {"type": "int"}
         else:
@@ -215,8 +220,8 @@ def _parameter_payload(parameter) -> dict:
     if parameter.is_numeric:
         payload["units_accepted"] = sorted(parameter.units_accepted)
     elif parameter.vocabulary:
-        payload["value_labels"] = sorted(
-            {label for labels in parameter.vocabulary.values() for label in labels})
+        payload["value_classes"] = {labels[0]: list(labels[1:])
+                                    for labels in parameter.vocabulary.values()}
     return payload
 
 
