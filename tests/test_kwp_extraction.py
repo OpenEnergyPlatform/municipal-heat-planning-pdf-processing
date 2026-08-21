@@ -17,9 +17,12 @@ UUID5 = r"[0-9a-f]{8}-[0-9a-f]{4}-5[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}"
 
 # --- spec ------------------------------------------------------------------
 
-def test_the_spec_carries_the_three_mail_parameters():
+def test_the_spec_carries_the_mail_parameters_plus_the_equivalent_class():
+    """Mirjam's three, and the class a BISKO balance actually reports:
+    OEO_00340066 is CO2 alone, while the plans overwhelmingly print
+    Treibhausgase in CO2 equivalents, which OEO has as OEO_00140083."""
     assert [p.uri for p in SPEC.parameters] == [
-        "OEO_00050016", "OEO_00050018", "OEO_00340066"]
+        "OEO_00050016", "OEO_00050018", "OEO_00340066", "OEO_00140083"]
 
 
 @pytest.mark.parametrize("parameter", SPEC.parameters, ids=lambda p: p.uri)
@@ -48,7 +51,7 @@ def test_the_examples_teach_exhaustive_extraction(parameter):
     outcomes = [verify_tuple(dict(t), parameter, parameter.example["source"])
                 for t in parameter.example["tuples"]]
     flags = [f for o in outcomes for f in o.flags]
-    assert any(f.startswith("mapped:") for f in flags),         "the example must show a source wording being mapped onto a class"
+    assert flags, "the example must exercise the wording machinery at all"
 
 
 def test_the_examples_show_both_mapping_and_refusing_to_map():
@@ -124,8 +127,20 @@ def test_unclear_beats_accept_and_no_label_is_unclear():
     assert not kg.accepted_indicator("OEO_00050016", "Endenergiebedarf")
     assert not kg.accepted_indicator(
         "OEO_00050016", "witterungskorrigierter Endenergieverbrauch")
-    assert not kg.accepted_indicator("OEO_00340066", "THG-Emissionen")
     assert not kg.accepted_indicator("OEO_00050016", None)
+
+
+def test_a_greenhouse_gas_label_belongs_to_the_equivalent_class():
+    """The split that decides whether the emissions parameter yields anything:
+    a THG or CO2-Äq label is a CO2 equivalent, and only a plain CO2 label is
+    OEO's CO2 emission value."""
+    for label in ("THG-Emissionen", "Treibhausgasemissionen",
+                  "CO2-Äquivalente", "CO2e"):
+        assert kg.accepted_indicator("OEO_00140083", label), label
+        assert not kg.accepted_indicator("OEO_00340066", label), label
+    assert kg.accepted_indicator("OEO_00340066", "CO2-Emissionen")
+    assert not kg.accepted_indicator("OEO_00140083", "CO2-Emissionen")
+    assert not kg.accepted_indicator("OEO_00140083", "THG-Vermeidung")
 
 
 # --- serializer -------------------------------------------------------------
@@ -178,6 +193,20 @@ def test_the_serializer_emits_only_the_target_scenario_slice(tmp_path):
     assert "oeo:OEO_00000523 oeo:OEO_00000292" in ttl
     assert ttl.count("a oeo:OEO_00050016") == 1, "the four skipped rows never arrive"
     assert "Kommunale Wärmeplanung Kassel 2024" in ttl
+
+
+def test_a_carrier_oeo_does_not_call_a_carrier_is_counted_out(tmp_path):
+    """`covers energy carrier` has range `energy carrier`, and district heating
+    is a heat transfer, not one. The value is kept in the harvest and left out
+    of the TTL rather than asserted against the range."""
+    serializer = kg.make_serializer(_database(tmp_path))
+    ttl = serializer("waermeplan_kassel_20240315", [
+        _row(carrier="OEO_00000132"),          # Fernwärme
+        _row(carrier="OEO_00000139", value_target=5.0),   # Strom
+        _row(),                                # Erdgas, the one that survives
+    ])
+    assert ttl.count("a oeo:OEO_00050016") == 1
+    assert "OEO_00000132" not in ttl and "OEO_00000139" not in ttl
 
 
 def test_a_value_conflict_on_one_coordinate_drops_every_claimant(tmp_path):

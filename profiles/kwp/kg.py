@@ -28,6 +28,20 @@ BASE = "https://openenergyplatform.org/id/mhpkg/"
 OEO = "https://openenergyplatform.org/ontology/oeo/"
 NS_MHPKG = uuid.uuid5(uuid.NAMESPACE_URL, BASE)
 AGGREGATION_INTEGRAL = "OEO_00140070"
+
+# `covers energy carrier` (OEO_00000523) has range `energy carrier`
+# (OEO_00020039), checked in oeo-closure.owl. Three classes the plans name in
+# their carrier column are NOT under it: district heating is a grid-bound heat
+# transfer, electrical energy sits under energy and commodity, solar thermal
+# energy under thermal energy. Asserting them as carriers would contradict the
+# TBox, so those rows are counted out of the TTL instead of quietly widening a
+# range. They stay in the JSONL harvest, and the count is the argument for the
+# carrier axioms the ontology side is currently adding.
+NOT_AN_ENERGY_CARRIER = {
+    "OEO_00000132": "district heating",
+    "OEO_00000139": "electrical energy",
+    "OEO_00000388": "solar thermal energy",
+}
 LEGAL = r"(gmbh\s*&\s*co\.?\s*kg|gmbh|mbh|ag|kg|ohg|e\.?\s*v\.?|gbr|se|ug)"
 
 _SPEC = json.loads(
@@ -143,6 +157,9 @@ def make_serializer(db_path: Path):
             elif not accepted_indicator(row.get("parameter"),
                                         row.get("indicator_label_raw")):
                 skip("indicator")
+            elif row.get("carrier") in NOT_AN_ENERGY_CARRIER:
+                skip(f"carrier_not_in_oeo:"
+                     f"{NOT_AN_ENERGY_CARRIER[row['carrier']]}")
             else:
                 kept.append(row)
         if not kept:
