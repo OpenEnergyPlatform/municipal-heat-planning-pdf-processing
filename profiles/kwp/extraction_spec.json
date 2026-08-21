@@ -363,8 +363,162 @@
     },
     {
       "uri": "OEO_00340066",
-      "label": "Treibhausgasemissionen",
-      "description": "Treibhausgasemissionen (CO2 emission value): jährlich emittierte Masse CO2 bzw. CO2-Äquivalente, je Energieträger und/oder Sektor, wie in der Emissionsbilanz (meist BISKO) des Wärmeplans ausgewiesen.",
+      "label": "CO2-Emissionen",
+      "description": "CO2-Emissionen (CO2 emission value): jährlich emittierte Masse Kohlendioxid, je Energieträger und/oder Sektor, wie im Wärmeplan ausgewiesen. Nur reines CO2, Bilanzen in CO2-Äquivalenten gehören zu OEO_00140083.",
+      "value_type": "float",
+      "unit_target": "OEO_00010137",
+      "units_accepted": {
+        "t/a": 1.0,
+        "t": 1.0,
+        "kt/a": 1000.0,
+        "kt": 1000.0,
+        "t CO2/a": 1.0,
+        "tCO2/a": 1.0,
+        "kt CO2/a": 1000.0,
+        "Mio. t CO2/a": 1000000.0
+      },
+      "axes": {
+        "carrier": {
+          "vocabulary": {
+            "OEO_00000292": [
+              "Erdgas",
+              "Gas"
+            ],
+            "OEO_00000211": [
+              "Heizöl",
+              "Öl"
+            ],
+            "OEO_00000132": [
+              "Fernwärme",
+              "Wärmenetze",
+              "Wärmenetz"
+            ],
+            "OEO_00000139": [
+              "Strom",
+              "Elektrizität"
+            ],
+            "OEO_00000449": [
+              "Holz",
+              "Holzpellets",
+              "Pellets"
+            ],
+            "OEO_00000074": [
+              "Biogas"
+            ],
+            "OEO_00000388": [
+              "Solarthermie"
+            ],
+            "OEO_00000251": [
+              "Braunkohle"
+            ],
+            "OEO_00320011": [
+              "Flüssiggas"
+            ],
+            "OEO_00000220": [
+              "Wasserstoff"
+            ],
+            "OEO_00000204": [
+              "Steinkohle"
+            ]
+          }
+        },
+        "sector": {
+          "vocabulary": {
+            "OEO_00000214": [
+              "Private Haushalte",
+              "Haushalte",
+              "Privathaushalte"
+            ],
+            "OEO_00000405": [
+              "GHD",
+              "Gewerbe, Handel, Dienstleistungen",
+              "Gewerbe/Handel/Dienstleistungen"
+            ],
+            "OEO_00000227": [
+              "Industrie"
+            ],
+            "OEO_00000422": [
+              "Verkehr"
+            ]
+          }
+        },
+        "year": {
+          "type": "int"
+        },
+        "scenario": {
+          "enum": [
+            "status_quo",
+            "trend",
+            "target",
+            "unknown"
+          ]
+        },
+        "spatial_scope": {
+          "enum": [
+            "municipality",
+            "sub_area",
+            "unknown"
+          ]
+        }
+      },
+      "example": {
+        "source": "| CO2-Emissionen | |\n| --- | --- |\n| Sektor | CO2-Emissionen [t/a] |\n| Kommunale und öffentlichgenutzte Gebäude | 7.142 |\n| GHD und Industrie | 9.044 |\n| Private Haushalte | 86.543 |\n| Sonstiges | 3.353 |",
+        "tuples": [
+          {
+            "value": 7142,
+            "unit_raw": "t/a",
+            "carrier": null,
+            "sector": null,
+            "sector_raw": "Kommunale und öffentlichgenutzte Gebäude",
+            "year": null,
+            "scenario": "unknown",
+            "spatial_scope": "unknown",
+            "indicator_label_raw": "CO2-Emissionen",
+            "quote": "| Kommunale und öffentlichgenutzte Gebäude | 7.142 |"
+          },
+          {
+            "value": 9044,
+            "unit_raw": "t/a",
+            "carrier": null,
+            "sector": null,
+            "sector_raw": "GHD und Industrie",
+            "year": null,
+            "scenario": "unknown",
+            "spatial_scope": "unknown",
+            "indicator_label_raw": "CO2-Emissionen",
+            "quote": "| GHD und Industrie | 9.044 |"
+          },
+          {
+            "value": 86543,
+            "unit_raw": "t/a",
+            "carrier": null,
+            "sector": "Private Haushalte",
+            "sector_raw": "Private Haushalte",
+            "year": null,
+            "scenario": "unknown",
+            "spatial_scope": "unknown",
+            "indicator_label_raw": "CO2-Emissionen",
+            "quote": "| Private Haushalte | 86.543 |"
+          },
+          {
+            "value": 3353,
+            "unit_raw": "t/a",
+            "carrier": null,
+            "sector": null,
+            "sector_raw": "Sonstiges",
+            "year": null,
+            "scenario": "unknown",
+            "spatial_scope": "unknown",
+            "indicator_label_raw": "CO2-Emissionen",
+            "quote": "| Sonstiges | 3.353 |"
+          }
+        ]
+      }
+    },
+    {
+      "uri": "OEO_00140083",
+      "label": "Treibhausgasemissionen in CO2-Äquivalenten",
+      "description": "Treibhausgasemissionen in CO2-Äquivalenten (carbon dioxide equivalent quantity value): jährlich emittierte Masse aller Treibhausgase, umgerechnet auf die klimawirksam gleiche Menge CO2, je Energieträger und/oder Sektor, wie in der Emissionsbilanz des Wärmeplans ausgewiesen (in der Regel nach BISKO).",
       "value_type": "float",
       "unit_target": "OEO_00010137",
       "units_accepted": {
@@ -534,14 +688,33 @@
     "OEO_00340066": {
       "accept": [
         "co2-emissionen",
+        "co2-ausstoß",
         "kohlendioxid"
       ],
       "unclear": [
+        "äquivalent",
+        "co2-äq",
+        "co2äq",
+        "co2-eq",
+        "co2e",
+        "treibhausgas",
+        "thg"
+      ]
+    },
+    "OEO_00140083": {
+      "accept": [
         "treibhausgas",
         "thg",
         "co2-äq",
-        "äquivalent",
-        "co2-eq"
+        "co2äq",
+        "co2-eq",
+        "co2e",
+        "äquivalent"
+      ],
+      "unclear": [
+        "vermeidung",
+        "einsparung",
+        "minderung"
       ]
     }
   }
