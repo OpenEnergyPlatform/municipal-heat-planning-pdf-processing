@@ -49,6 +49,22 @@ from .embedding import (
 log = logging.getLogger(__name__)
 
 
+def peak_rss_gb() -> float:
+    """Peak resident memory of this process in GB, 0.0 where unavailable.
+
+    Logged per flush so a memory trend is visible in the log while it grows.
+    The run this was added for died at 194 GB with nothing in the log but the
+    kill message, which said what happened and nothing about the approach.
+    """
+    try:
+        import resource
+    except ImportError:                      # not POSIX
+        return 0.0
+    peak = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+    # Linux reports KB, macOS bytes.
+    return round(peak / (1024 ** 2 if sys.platform != "darwin" else 1024 ** 3), 1)
+
+
 def prepared_ahead(pool, items, work, ahead=EMBED_PREPARE_AHEAD):
     """Yield work(item) in order, with at most `ahead` items in flight.
 
@@ -201,6 +217,10 @@ def run(
                         index_path=index_path,
                     )
                     pending = []
+                    log.info("%d/%d docs prepared, %d items embedded, "
+                             "peak RSS %.1f GB",
+                             docs_with_inputs, len(candidates), embedded,
+                             peak_rss_gb())
 
         if pending:
             embedded += len(pending)
