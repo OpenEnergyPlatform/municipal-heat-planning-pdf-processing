@@ -528,6 +528,40 @@ def get_document_faiss_ids(db_path: Path, pdf_name: str) -> list[int]:
         return _document_faiss_ids(doc_id, conn)
 
 
+def drop_embeddings_missing_from_index(db_path: Path, known_ids) -> int:
+    """Delete Embeddings rows whose vector is not in the index. Returns the count.
+
+    A DB row is written per batch, the index is persisted per flush chunk, so a
+    crash between the two (an OOM kill, a node failure, a timeout) leaves rows
+    pointing at vectors that never reached the file. The next run reads those
+    rows as "already embedded" and skips the item forever: the DB says it is
+    searchable, the index has nothing, and no error is ever raised. Reconciling
+    at startup turns that silent hole into re-work.
+
+    An EMPTY index is not treated as "nothing is embedded" — that is what a
+    mistyped index path looks like, and it would delete every row in the
+    database. It is refused loudly instead.
+    """
+    known = {int(i) for i in known_ids}
+    if not known:
+        log.warning("index holds no vectors — skipping the embedding "
+                    "reconciliation instead of dropping every row")
+        return 0
+    with closing(connect(db_path)) as conn:
+        conn.execute("CREATE TEMP TABLE known_ids (faiss_id INTEGER PRIMARY KEY)")
+        conn.executemany("INSERT OR IGNORE INTO known_ids VALUES (?)",
+                         ((i,) for i in known))
+        dropped = conn.execute(
+            "DELETE FROM Embeddings WHERE faiss_id NOT IN "
+            "(SELECT faiss_id FROM known_ids)").rowcount
+        conn.commit()
+    if dropped:
+        log.warning("%d embedding row(s) had no vector in the index (a crash "
+                    "between the DB write and the index save) — cleared, they "
+                    "will be embedded again", dropped)
+    return int(dropped)
+
+
 def next_faiss_id(db_path: Path) -> int:
     """
     Smallest FAISS id not currently claimed by any Embeddings row.

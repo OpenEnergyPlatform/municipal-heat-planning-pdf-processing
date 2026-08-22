@@ -44,6 +44,22 @@ def load_or_create_index(index_path: Path) -> tuple[faiss.Index, int]:
     return index, 0
 
 
+def index_ids(index: faiss.Index) -> list:
+    """Every FAISS id the index currently holds.
+
+    ntotal counts vectors, this names them. Needed because ids are allocated
+    from a high-water mark and because a DB row is only trustworthy if its
+    vector is really in the index.
+    """
+    id_map = getattr(index, "id_map", None)
+    if id_map is None:                       # a plain, non-IDMap index
+        return []
+    try:
+        return [int(i) for i in faiss.vector_to_array(id_map)]
+    except Exception:                        # a test double, or an empty map
+        return [int(i) for i in id_map]
+
+
 def save_index(index: faiss.Index, index_path: Path) -> None:
     """Save the FAISS index to disk."""
     index_path.parent.mkdir(parents=True, exist_ok=True)
