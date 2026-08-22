@@ -13,6 +13,7 @@ import json
 import logging
 import sys
 from pathlib import Path
+from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from typing import Optional
 
@@ -20,6 +21,7 @@ from docpipe.profile import add_profile_argument, resolve_profile
 
 from .config import (
     EMBED_FLUSH_ITEMS,
+    EMBED_PREPARE_AHEAD,
     EMBED_PREPARE_WORKERS,
     EMBEDDING_MODEL,
     DOCUMENT_JSON,
@@ -30,12 +32,14 @@ from .database import (
     enrich_bbox,
     get_existing_embeddings,
     clear_embedding_ids,
+    drop_embeddings_missing_from_index,
     get_document_faiss_ids,
     next_faiss_id,
 )
 from .chunking import build_embedding_inputs
 from .embedding import (
     load_or_create_index,
+    index_ids,
     save_index,
     remove_ids_from_index,
     create_embeddings,
@@ -43,6 +47,26 @@ from .embedding import (
 )
 
 log = logging.getLogger(__name__)
+
+
+def prepared_ahead(pool, items, work, ahead=EMBED_PREPARE_AHEAD):
+    """Yield work(item) in order, with at most `ahead` items in flight.
+
+    Executor.map submits EVERY item immediately and makes only the consumption
+    lazy (measured on the cluster's 3.11: after the first result was taken, all
+    500 tasks had already run). With preparation far faster than embedding, the
+    finished results pile up until the whole corpus is resident - a million
+    section texts for 1078 plans, which is what the OOM kill at 194 GB was. A
+    sliding window keeps the overlap that made this a pool and bounds what is
+    resident to a constant.
+    """
+    in_flight: deque = deque()
+    for item in items:
+        in_flight.append(pool.submit(work, item))
+        if len(in_flight) >= ahead:
+            yield in_flight.popleft().result()
+    while in_flight:
+        yield in_flight.popleft().result()
 
 
 def run(
@@ -106,8 +130,18 @@ def run(
         log.info(sep)
 
         index, next_id = load_or_create_index(index_path)
-        # The DB is the id source of truth; index.ntotal alone can reuse an id.
-        next_id = max(next_id, next_faiss_id(db_path))
+        # Every id the index holds, read once: it settles both questions below.
+        held = index_ids(index)
+        # A run that died between a batch's DB write and the chunk's index save
+        # leaves rows whose vector is not in the file. Unreconciled they read as
+        # "already embedded" on the resume and the item is never searchable
+        # again, without a single error line. This is the resume's first act.
+        drop_embeddings_missing_from_index(db_path, held)
+        # The DB is the id source of truth, but an id still living in the index
+        # must not be handed out either: ntotal is a count, not a high-water
+        # mark, and dips below one after an eviction.
+        next_id = max(next_id, next_faiss_id(db_path),
+                      (max(held) + 1) if held else 0)
         embedder = load_embedder(EMBEDDING_MODEL)
 
         candidates = sorted(
@@ -155,7 +189,7 @@ def run(
         embedded = 0
 
         with ThreadPoolExecutor(max_workers=EMBED_PREPARE_WORKERS) as pool:
-            for inputs in pool.map(prepare, candidates):
+            for inputs in prepared_ahead(pool, candidates, prepare):
                 if not inputs:
                     continue
                 docs_with_inputs += 1

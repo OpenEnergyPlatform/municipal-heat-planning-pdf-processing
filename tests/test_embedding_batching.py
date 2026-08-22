@@ -164,3 +164,93 @@ def test_every_document_is_embedded_exactly_once_across_the_chunks(tmp_path, mon
     pl.run(root, tmp_path / "db.sqlite", tmp_path / "idx", step="embed")
 
     assert sum(seen) == 10 * 700
+
+
+class _RecordingPool:
+    """A pool that runs the work at once and counts what was submitted."""
+
+    def __init__(self):
+        self.submitted = 0
+
+    def submit(self, fn, item):
+        self.submitted += 1
+        value = fn(item)
+
+        class _Done:
+            def result(self_inner):
+                return value
+        return _Done()
+
+
+def test_preparation_never_runs_the_whole_corpus_ahead_of_the_gpus():
+    """The OOM that killed the 1078-plan run at 194 GB. Executor.map submits
+    EVERY item immediately and makes only the consumption lazy (verified on the
+    cluster's 3.11: after taking the first result, all 500 tasks had already
+    run). Preparation is far faster than embedding, so the finished inputs of
+    the whole corpus stay resident - about a million section texts. What is
+    held has to depend on the window, not on how many plans there are."""
+    from docpipe.chunking.pipeline import prepared_ahead
+
+    pool = _RecordingPool()
+    consumed = []
+    stream = prepared_ahead(pool, range(1000), lambda i: i, ahead=32)
+    for _ in range(5):                      # the GPUs are still on the first chunks
+        consumed.append(next(stream))
+    assert consumed == [0, 1, 2, 3, 4], "documents must arrive in order"
+    assert pool.submitted <= 32 + 5, (
+        f"{pool.submitted} of 1000 documents prepared while 5 were consumed")
+
+
+def test_the_window_still_yields_every_item_exactly_once():
+    from docpipe.chunking.pipeline import prepared_ahead
+    pool = _RecordingPool()
+    assert list(prepared_ahead(pool, range(70), lambda i: i * 2, ahead=8)) ==         [i * 2 for i in range(70)]
+    assert pool.submitted == 70
+
+
+# ---------------------------------------------------------------------------
+# crash reconciliation: a DB row whose vector never reached the index file
+# ---------------------------------------------------------------------------
+
+def _seed_embedding_rows(con, faiss_ids):
+    """One Section per faiss id on Document 1, each with its own Embeddings row
+    (the UNIQUE(owner_kind, owner_id, embedding_type) forbids sharing one)."""
+    for n, fid in enumerate(faiss_ids):
+        con.execute("INSERT INTO Sections (id, document, section_number, title) "
+                    "VALUES (?, 1, ?, 'S')", (n + 1, n))
+        con.execute("INSERT INTO Embeddings (faiss_id, embedding_type, "
+                    "owner_kind, owner_id) VALUES (?, 'section_text', "
+                    "'section', ?)", (fid, n + 1))
+    con.commit()
+
+
+def test_rows_without_a_vector_in_the_index_are_dropped(kwp_db):
+    """The OOM/timeout failure mode: a batch's rows were written, the chunk's
+    index save never ran. Those rows must not survive to be read as
+    'already embedded'."""
+    from docpipe.chunking.database import drop_embeddings_missing_from_index
+    db_path, con = kwp_db
+    _seed_embedding_rows(con, [10, 11, 12, 13])
+    # The index only made it to disk with 10 and 11.
+    dropped = drop_embeddings_missing_from_index(db_path, [10, 11])
+    assert dropped == 2
+    survivors = {r[0] for r in con.execute("SELECT faiss_id FROM Embeddings")}
+    assert survivors == {10, 11}
+
+
+def test_an_empty_index_never_wipes_the_table(kwp_db):
+    """An empty id list is a mistyped index path, not 'nothing is embedded'.
+    Deleting every row on that basis would be the worse failure."""
+    from docpipe.chunking.database import drop_embeddings_missing_from_index
+    db_path, con = kwp_db
+    _seed_embedding_rows(con, [10, 11])
+    assert drop_embeddings_missing_from_index(db_path, []) == 0
+    assert con.execute("SELECT COUNT(*) FROM Embeddings").fetchone()[0] == 2
+
+
+def test_a_clean_run_drops_nothing(kwp_db):
+    from docpipe.chunking.database import drop_embeddings_missing_from_index
+    db_path, con = kwp_db
+    _seed_embedding_rows(con, [10, 11, 12])
+    assert drop_embeddings_missing_from_index(db_path, [10, 11, 12, 13]) == 0
+    assert con.execute("SELECT COUNT(*) FROM Embeddings").fetchone()[0] == 3

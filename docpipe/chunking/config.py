@@ -29,6 +29,13 @@ EMBEDDING_BATCH_SIZE = 32
 # prepared before the first batch went out.
 EMBED_PREPARE_WORKERS = 8
 
+# Documents allowed to sit prepared and unconsumed. Preparation is far faster
+# than embedding, so an unbounded queue holds the WHOLE corpus in memory:
+# roughly a million EmbeddingInputs, each carrying its section text. That is
+# what killed the 1078-plan run at 194 GB. With a window, resident memory is a
+# property of this constant instead of the corpus size.
+EMBED_PREPARE_AHEAD = 32
+
 # Items collected before a chunk goes to the GPUs. Large enough that sorting by
 # length still fills batches with comparable sequences, small enough that the
 # GPUs start long before the last document is read.
