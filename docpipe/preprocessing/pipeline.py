@@ -360,7 +360,7 @@ def _fill_missing_page_text(pdf_path, output_dir, pages, *, profile=None) -> dic
     """
     import json as _json
 
-    from .page_text_fallback import (fill_missing_page_text,
+    from .page_text_fallback import (PAGE_WORKERS, fill_missing_page_text,
                                      make_page_renderer, make_transcriber)
 
     if profile is None:
@@ -371,6 +371,7 @@ def _fill_missing_page_text(pdf_path, output_dir, pages, *, profile=None) -> dic
         pages,
         render=make_page_renderer(pdf_path, output_dir),
         transcribe=make_transcriber(profile),
+        workers=PAGE_WORKERS,
     )
     # Written even when nothing needed doing: an empty report is
     # checked-and-clean, a missing one means nobody looked.

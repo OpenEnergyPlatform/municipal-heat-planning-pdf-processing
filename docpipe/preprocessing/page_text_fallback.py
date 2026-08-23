@@ -26,7 +26,9 @@ Author: Felix Vossel
 from __future__ import annotations
 
 import logging
+import os
 import re
+from concurrent.futures import ThreadPoolExecutor
 from typing import Callable, Optional
 
 from .models import Block, PageData
@@ -38,6 +40,11 @@ log = logging.getLogger(__name__)
 # copyright line from a digital overlay, which is text by the letter and
 # nothing by the meaning.
 MIN_PAGE_CHARS = 60
+
+# Pages read concurrently. The server batches requests, and a document with no
+# text layer needs EVERY page read: serially that is an idle GPU and hours of
+# wall clock for a plan the size of Leipzig.
+PAGE_WORKERS = int(os.environ.get("PAGE_TRANSCRIBE_WORKERS", "8"))
 
 # Where synthesized blocks are placed on the page, as a fraction of page height
 # and width. A transcription has no coordinates, so the boxes are stacked down
@@ -141,6 +148,7 @@ def fill_missing_page_text(
     *,
     min_chars: int = MIN_PAGE_CHARS,
     max_pages: Optional[int] = None,
+    workers: int = 1,
 ) -> dict:
     """Transcribe every page whose text layer is missing. Mutates *pages*.
 
@@ -169,14 +177,24 @@ def fill_missing_page_text(
             len(candidates), max_pages, max_pages)
         candidates = candidates[:max_pages]
 
-    for page in candidates:
+    def read(page) -> Optional[str]:
         try:
             image = render(page.page_number)
-            markdown = transcribe(image, page.page_number) if image is not None else None
+            return transcribe(image, page.page_number) if image is not None else None
         except Exception as e:                       # one page must not end the run
             log.error("page transcription: page %d failed: %s",
                       page.page_number, e)
-            markdown = None
+            return None
+
+    if workers > 1:
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            replies = list(pool.map(read, candidates))
+    else:
+        replies = [read(page) for page in candidates]
+
+    # Applied in page order regardless of the order they came back in: the
+    # result of a run must not depend on which page the server finished first.
+    for page, markdown in zip(candidates, replies):
         if not markdown or not markdown.strip():
             report["pages_failed"] += 1
             continue
