@@ -128,6 +128,7 @@ def test_the_gpus_start_before_the_last_document_is_read(tmp_path, monkeypatch):
 
     monkeypatch.setattr(pl, "build_embedding_inputs", fake_prepare_inputs)
     monkeypatch.setattr(pl, "create_embeddings", fake_create)
+    monkeypatch.setattr(pl, "document_id", lambda db, name: 1)
     monkeypatch.setattr(pl, "get_existing_embeddings", lambda db, name: set())
     monkeypatch.setattr(pl, "load_or_create_index", lambda p: (_FakeIndex(), 0))
     monkeypatch.setattr(pl, "next_faiss_id", lambda p: 0)
@@ -155,6 +156,7 @@ def test_every_document_is_embedded_exactly_once_across_the_chunks(tmp_path, mon
     monkeypatch.setattr(pl, "create_embeddings",
                         lambda inputs, index, next_id, db, **kw: (
                             seen.append(len(inputs)) or next_id + len(inputs)))
+    monkeypatch.setattr(pl, "document_id", lambda db, name: 1)
     monkeypatch.setattr(pl, "get_existing_embeddings", lambda db, name: set())
     monkeypatch.setattr(pl, "load_or_create_index", lambda p: (_FakeIndex(), 0))
     monkeypatch.setattr(pl, "next_faiss_id", lambda p: 0)
@@ -254,3 +256,54 @@ def test_a_clean_run_drops_nothing(kwp_db):
     _seed_embedding_rows(con, [10, 11, 12])
     assert drop_embeddings_missing_from_index(db_path, [10, 11, 12, 13]) == 0
     assert con.execute("SELECT COUNT(*) FROM Embeddings").fetchone()[0] == 3
+
+
+# ---------------------------------------------------------------------------
+# a document the database does not know must never reach the GPUs
+# ---------------------------------------------------------------------------
+
+def test_a_directory_without_a_documents_row_is_skipped_not_embedded(
+        tmp_path, monkeypatch):
+    """Measured on the live corpus: two processed directories had no Documents
+    row. Every run embedded them, the vectors entered the FAISS index, and the
+    DB write returned silently because no owner could be resolved - 1096 dead
+    vectors per run, growing, with nothing in the log."""
+    from docpipe.chunking import pipeline as pl
+
+    root = _corpus(tmp_path, 3, 1)
+    known = {"doc00", "doc02"}
+    embedded = []
+
+    monkeypatch.setattr(pl, "document_id",
+                        lambda db, name: 1 if name in known else None)
+    monkeypatch.setattr(
+        pl, "build_embedding_inputs",
+        lambda merged, name, d: [EmbeddingInput(
+            embedding_type="section_text", pdf_name=name, section_index=0,
+            item_id=None, text="x" * 50)])
+    monkeypatch.setattr(pl, "create_embeddings",
+                        lambda inputs, index, next_id, db, **kw: (
+                            embedded.extend(i.pdf_name for i in inputs)
+                            or next_id + len(inputs)))
+    monkeypatch.setattr(pl, "get_existing_embeddings", lambda db, name: set())
+    monkeypatch.setattr(pl, "load_or_create_index", lambda p: (_FakeIndex(), 0))
+    monkeypatch.setattr(pl, "next_faiss_id", lambda p: 0)
+    monkeypatch.setattr(pl, "load_embedder", lambda name: None)
+    monkeypatch.setattr(pl, "save_index", lambda index, path: None)
+
+    pl.run(root, tmp_path / "db.sqlite", tmp_path / "idx", step="embed")
+
+    assert "doc01" not in embedded, "the unregistered document reached the GPUs"
+    assert set(embedded) == known, "the registered ones were embedded"
+
+
+def test_the_writer_shouts_instead_of_returning_in_silence(kwp_db, caplog):
+    """The backstop. If it is ever reached, the vectors are already in the
+    index, so silence is the one unacceptable answer."""
+    import logging
+    from docpipe.chunking.database import write_embedding_ids_batch
+    db_path, _con = kwp_db
+    with caplog.at_level(logging.ERROR):
+        write_embedding_ids_batch(db_path, "a_document_nobody_registered",
+                                  [("section_text", 0, None, 4711)])
+    assert any("no Documents row" in r.getMessage() for r in caplog.records)
