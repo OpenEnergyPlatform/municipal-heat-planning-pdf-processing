@@ -210,3 +210,29 @@ def test_the_report_is_written_even_when_nothing_needed_doing(tmp_path,
         encoding="utf-8"))
     assert written == report
     assert written["pages_missing_text"] == 0
+
+
+def test_concurrent_reading_still_applies_pages_in_order(monkeypatch):
+    """The GPU is only busy if pages go out together, but the result must not
+    depend on which page the server happened to finish first."""
+    pages = [_page(n, texts=()) for n in range(1, 6)]
+    report = fill_missing_page_text(
+        pages, render=lambda n: f"img-{n}",
+        transcribe=lambda img, n: f"Seite {n}.", workers=4)
+    assert report["pages_transcribed"] == 5
+    assert [p.blocks[0].content for p in pages] == \
+        [f"Seite {n}." for n in range(1, 6)]
+
+
+def test_one_failing_page_does_not_take_the_others_down_when_concurrent():
+    pages = [_page(n, texts=()) for n in range(1, 5)]
+
+    def transcribe(img, n):
+        if n == 2:
+            raise RuntimeError("timeout")
+        return f"Seite {n}."
+
+    report = fill_missing_page_text(pages, render=lambda n: "img",
+                                    transcribe=transcribe, workers=4)
+    assert report["pages_transcribed"] == 3 and report["pages_failed"] == 1
+    assert pages[1].blocks == []
