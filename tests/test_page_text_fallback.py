@@ -63,12 +63,35 @@ def test_a_heading_always_starts_its_own_block():
     assert blocks == ["# Bestandsanalyse", "Erster Absatz.", "Zweiter."]
 
 
-def test_headings_become_the_font_signal_stage_three_reads():
+def test_headings_carry_the_label_stage_three_opens_sections_on():
+    """Stage 3 opens a section on layout_label in SECTION_TITLE_CLASSES, NOT on
+    the font size. Without the label every transcribed page lands back in one
+    pseudo-section, which is the failure this module exists to end. Measured on
+    a real document before the label was set: 48 synthesized blocks, still 1
+    section."""
+    from docpipe.preprocessing.config import SECTION_TITLE_CLASSES
+
     page = _page(texts=())
     blocks = synthesize_blocks(page, "# Titel\n\nFliesstext hier.\n\n## Unterpunkt")
     assert [b.content for b in blocks] == ["Titel", "Fliesstext hier.", "Unterpunkt"]
+    assert blocks[0].layout_label in SECTION_TITLE_CLASSES
+    assert blocks[2].layout_label in SECTION_TITLE_CLASSES
+    assert blocks[1].layout_label == "text", "body text must not open a section"
     assert blocks[0].font_bold and blocks[0].font_size > blocks[2].font_size
-    assert not blocks[1].font_bold, "body text is not a heading"
+
+
+def test_stage_three_really_splits_a_transcribed_page_into_sections():
+    """The end-to-end property, checked against Stage 3 itself rather than a
+    stand-in for it."""
+    from docpipe.preprocessing.stage3_structure import build_sections
+
+    page = _page(texts=())
+    page.blocks = synthesize_blocks(
+        page, "# Bestandsanalyse\n\nDer Verbrauch lag bei 45.000 MWh.\n\n"
+              "# Zielszenario\n\nBis 2040 sinkt er auf 20.000 MWh.")
+    sections = build_sections([page], column_layout="auto")
+    titles = [s.title for s in sections]
+    assert "Bestandsanalyse" in titles and "Zielszenario" in titles, titles
 
 
 def test_every_synthesized_box_says_it_was_not_measured():
