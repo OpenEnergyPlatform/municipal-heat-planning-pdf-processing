@@ -35,6 +35,11 @@ class Block:
     # serialised, so it is absent on blocks loaded from the pages cache.
     font_size: Optional[float] = None
     font_bold: Optional[bool] = None
+    # True when the box was not measured but stacked: a page with no text layer
+    # whose text came from the model. Serialised, unlike the font fields,
+    # because nothing downstream may present such a rectangle as a located
+    # line — it points at the right page and region and no further.
+    bbox_approx: bool = False
 
     def to_dict(self) -> dict:
         d: dict = {"id": self.id, "type": self.type, "bbox": self.bbox}
@@ -44,6 +49,7 @@ class Block:
         if self.confidence  is not None: d["confidence"]   = round(self.confidence, 3)
         if self.layout_label is not None: d["layout_label"] = self.layout_label
         if self.source_text is not None: d["source_text"]  = self.source_text
+        if self.bbox_approx:             d["bbox_approx"]   = True
         return d
 
     @classmethod
@@ -58,6 +64,7 @@ class Block:
             confidence=d.get("confidence"),
             layout_label=d.get("layout_label"),
             source_text=d.get("source_text"),
+            bbox_approx=bool(d.get("bbox_approx", False)),
         )
 
 

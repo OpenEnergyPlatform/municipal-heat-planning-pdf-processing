@@ -373,8 +373,20 @@ def _apply_actions(
         action = sec.pop("_action", "keep")
 
         if action == "remove":
-            log.debug(f"  Removing section: {sec.get('title', '?')}")
-            continue
+            # A removal may not take tables or figures with it. They are Stage-2
+            # artefacts with their own transcriptions, not the model's to throw
+            # away, and a section whose body is nothing but [pNN_tbl0] markers
+            # looks empty to a reader of the text alone. Eleven plans lost this
+            # way: no text layer, so every section was markers, "remove" looked
+            # right, and 1270 transcribed tables and figures went with them.
+            if sec.get("tables") or sec.get("figures"):
+                log.warning(
+                    "  Refusing to remove '%s': it carries %d table(s) and "
+                    "%d figure(s)", sec.get("title", "?"),
+                    len(sec.get("tables") or []), len(sec.get("figures") or []))
+            else:
+                log.debug(f"  Removing section: {sec.get('title', '?')}")
+                continue
 
         if action == "merge_into_previous":
             target = result[-1] if result else previous_kept
