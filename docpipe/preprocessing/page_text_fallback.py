@@ -28,6 +28,7 @@ from __future__ import annotations
 import logging
 import os
 import re
+from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor
 from typing import Callable, Optional
 
@@ -102,9 +103,12 @@ def synthesize_blocks(page: PageData, markdown: str,
     which is what a reader needs, but it is not a located line and must never
     be counted as one.
 
-    Markdown heading levels become font sizes, largest for `#`, because that is
-    the signal Stage 3 uses to find section titles and a transcription has no
-    fonts of its own.
+    A markdown heading becomes a block labelled `paragraph_title`, because that
+    label - not the font size - is what Stage 3 opens a section on
+    (SECTION_TITLE_CLASSES). Sizes and boldness are set as well, for the rules
+    further up that read them, but the label is the part that decides. Getting
+    this wrong put every transcribed page back into one pseudo-section, which
+    is the exact failure this module exists to end.
     """
     texts = split_into_blocks(markdown)
     if not texts:
@@ -130,9 +134,8 @@ def synthesize_blocks(page: PageData, markdown: str,
             type="text",
             bbox=[x0, round(cursor, 2), x1, round(cursor + height, 2)],
             content=re.sub(r"^\s{0,3}#{1,6}\s+", "", text).strip(),
-            # Stage 3 reads size and boldness to find titles. `#` is the
-            # biggest, each further level one step smaller, body text is body
-            # text.
+            # The label decides, the font only supports it.
+            layout_label="paragraph_title" if level else "text",
             font_size=(20.0 - 2.0 * (level - 1)) if level else 10.0,
             font_bold=bool(level),
             bbox_approx=True,
@@ -178,6 +181,7 @@ def fill_missing_page_text(
         candidates = candidates[:max_pages]
 
     def read(page) -> Optional[str]:
+        image = None
         try:
             image = render(page.page_number)
             return transcribe(image, page.page_number) if image is not None else None
@@ -185,6 +189,14 @@ def fill_missing_page_text(
             log.error("page transcription: page %d failed: %s",
                       page.page_number, e)
             return None
+        finally:
+            # A megabyte per page, and a document that needs this needs it for
+            # every page. Held only as long as the call takes.
+            try:
+                if image is not None:
+                    Path(image).unlink(missing_ok=True)
+            except Exception:
+                pass
 
     if workers > 1:
         with ThreadPoolExecutor(max_workers=workers) as pool:
@@ -231,13 +243,18 @@ PAGE_TRANSCRIBE_PROMPT_ID = "preprocessing/page_transcribe"
 RENDER_DPI = 200
 
 
-def make_page_renderer(pdf_path, output_dir):
+def make_page_renderer(pdf_path, output_dir=None, scratch_dir=None):
     """render(page_number) -> path of the rendered page PNG.
 
-    Written to disk rather than passed in memory: the call layer takes a path,
-    and the rendered page is the audit trail for text that has no PDF text
-    layer to check it against.
+    Written to disk rather than held in memory: the call layer takes a path.
+    Into scratch by default, NOT next to the document: a full page at
+    RENDER_DPI is about a megabyte, and a corpus-wide run would leave gigabytes
+    of them behind for nothing. The page is reproducible from the PDF at any
+    time, so the transcription is what is worth keeping, not the picture.
+
+    $TMPDIR is respected, which on the cluster is the job's own tmpfs.
     """
+    import tempfile
     from pathlib import Path
 
     import fitz
@@ -246,7 +263,9 @@ def make_page_renderer(pdf_path, output_dir):
     from .stage1_extract import _render_page_to_pil
 
     pdf_path = Path(pdf_path)
-    pages_dir = Path(output_dir) / "images"
+    if scratch_dir is None:
+        scratch_dir = tempfile.mkdtemp(prefix="pagetext_")
+    pages_dir = Path(scratch_dir)
     pages_dir.mkdir(parents=True, exist_ok=True)
     doc = fitz.open(pdf_path)
 
