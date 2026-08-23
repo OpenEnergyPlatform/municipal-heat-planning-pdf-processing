@@ -11,6 +11,7 @@ from pathlib import Path
 from re import compile
 
 from docpipe.artifacts import (DIR_IMAGES, DIR_RESULTS,   # noqa: F401  (re-exported)
+                               PAGE_TRANSCRIPTION_REPORT_JSON,
                                PAGES_JSON, SECTIONS_JSON)
 from docpipe.profile import profile_value
 

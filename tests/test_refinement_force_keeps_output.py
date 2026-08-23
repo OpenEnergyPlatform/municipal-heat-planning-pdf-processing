@@ -112,3 +112,30 @@ def test_a_clean_run_records_an_empty_list_not_a_missing_file(doc, monkeypatch):
     report = json.loads(
         (doc / "results" / "refinement_report.json").read_text(encoding="utf-8"))
     assert report == {"total_windows": 1, "failed_windows": []}
+
+
+# ---------------------------------------------------------------------------
+# a removal may not take the visual content with it
+# ---------------------------------------------------------------------------
+
+def test_remove_is_refused_for_a_section_that_carries_media():
+    """Eleven plans have no text layer, so every section body is nothing but
+    [pNN_tbl0] markers. The model reads that as empty and answers "remove",
+    and the tables it never saw go with it. 1270 transcribed tables and
+    figures were lost exactly this way."""
+    from docpipe.refinement.refine import _apply_actions
+
+    section = {"title": "Dokument", "content": "[p5_tbl0] [p6_img0]",
+               "tables": [{"id": "p5_tbl0", "markdown": "| a |"}],
+               "figures": [{"id": "p6_img0", "description": "Karte"}],
+               "_action": "remove"}
+    kept, _ = _apply_actions([section], None)
+    assert len(kept) == 1, "the section survived with its media"
+    assert kept[0]["tables"] and kept[0]["figures"]
+
+
+def test_remove_still_works_for_a_genuinely_empty_section():
+    from docpipe.refinement.refine import _apply_actions
+    kept, _ = _apply_actions(
+        [{"title": "Impressum", "content": "", "_action": "remove"}], None)
+    assert kept == []
