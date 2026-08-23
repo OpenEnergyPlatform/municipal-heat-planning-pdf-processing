@@ -528,6 +528,17 @@ def get_document_faiss_ids(db_path: Path, pdf_name: str) -> list[int]:
         return _document_faiss_ids(doc_id, conn)
 
 
+def document_id(db_path: Path, pdf_name: str) -> Optional[int]:
+    """The Documents row id for this processed directory, or None.
+
+    Asked BEFORE embedding: a directory whose document was never registered
+    (renamed in the register, an import that failed, a leftover from an older
+    corpus) produces perfectly good vectors that no row can ever point at.
+    """
+    with closing(connect(db_path)) as conn:
+        return _resolve_document_id(pdf_name, conn)
+
+
 def drop_embeddings_missing_from_index(db_path: Path, known_ids) -> int:
     """Delete Embeddings rows whose vector is not in the index. Returns the count.
 
@@ -597,6 +608,17 @@ def write_embedding_ids_batch(
     with closing(connect(db_path)) as conn:
         doc_id = _resolve_document_id(pdf_name, conn)
         if doc_id is None:
+            # This return used to be silent, and it cost 1096 vectors on every
+            # single run: the batch is already IN the FAISS index by the time
+            # this is called, so dropping its rows leaves that many vectors
+            # nothing can resolve, and the next run embeds the same document
+            # again. The embed step now skips such documents up front; this
+            # stays as the backstop and says so out loud.
+            log.error(
+                "%s: no Documents row — %d embedding(s) already in the FAISS "
+                "index have no row to hang off and cannot be found again. "
+                "Register the document or remove its processed directory.",
+                pdf_name, len(records))
             return
 
         section_id_cache: dict[int, Optional[int]] = {}

@@ -29,6 +29,7 @@ from .config import (
 from .merge import merge_batch
 from .database import (
     update_database,
+    document_id,
     enrich_bbox,
     get_existing_embeddings,
     clear_embedding_ids,
@@ -186,8 +187,17 @@ def run(
         # every GPU idle, because all 800 documents were prepared before the
         # first batch was embedded. Prepared in a pool, the work overlaps with
         # the embedding instead of preceding it.
+        unregistered: list = []
+
         def prepare(pdf_dir):
             pdf_name = pdf_dir.name
+            if document_id(db_path, pdf_name) is None:
+                # Embedding it would burn GPU time on vectors whose DB write
+                # cannot resolve an owner: they enter the index, nothing points
+                # at them, and the next run does it again. Two such directories
+                # put 1096 dead vectors into the heat-plan index per run.
+                unregistered.append(pdf_name)
+                return []
             existing = get_existing_embeddings(db_path, pdf_name)
             with open(pdf_dir / DOCUMENT_JSON, "r", encoding="utf-8") as f:
                 merged_data = json.load(f)
@@ -233,6 +243,13 @@ def run(
             "Embedded %d new items across %d/%d docs",
             embedded, docs_with_inputs, len(candidates),
         )
+        if unregistered:
+            log.warning(
+                "%d processed director(ies) have no Documents row and were "
+                "skipped: %s. They are output without a corpus entry — either "
+                "register them or remove the directory.",
+                len(unregistered), ", ".join(sorted(unregistered)[:5])
+                + (" …" if len(unregistered) > 5 else ""))
 
         save_index(index, index_path)
         log.info("Embedding complete: %d total vectors in index", index.ntotal)
