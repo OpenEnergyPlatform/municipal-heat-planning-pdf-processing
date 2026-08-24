@@ -28,8 +28,14 @@ from .models import SourceDoc, UnusablePDF
 log = logging.getLogger(__name__)
 
 
-def register(doc: SourceDoc, connection: sqlite3.Connection, data_dir: Path) -> bool:
-    """Fetch and register one document. False if it was already in the DB."""
+def register(doc: SourceDoc, connection: sqlite3.Connection, data_dir: Path,
+             *, scans: Optional[dict] = None) -> bool:
+    """Fetch and register one document. False if it was already in the DB.
+
+    `scans` collects the documents that carry no text layer, keyed by filename.
+    They ARE registered: preprocessing reads their pages with the model. They are
+    collected so the run can say which documents depend on that.
+    """
     if docs.document_exists(doc.filename, connection):
         return False
 
@@ -39,11 +45,16 @@ def register(doc: SourceDoc, connection: sqlite3.Connection, data_dir: Path) -> 
                 f"{doc.external_id}: file missing in {data_dir}: {doc.filename}")
         doc.filename = download_pdf(doc.url, data_dir)
 
-    # Gate before any DB write: a scanned or garbled PDF yields empty/garbage
-    # sections downstream, so refuse it loudly instead of carrying it along.
+    # Gate before any DB write. Garbled text is useless at every later stage, so
+    # it is refused. A missing text layer is not the same thing: the pages are
+    # there to be read, and preprocessing --transcribe-missing-text reads them.
+    # Refusing those too is what kept eleven complete plans out of the corpus.
     usable, reason = pdf_quality.check(data_dir / doc.filename)
     if not usable:
-        raise UnusablePDF(f"{doc.filename}: {reason}")
+        if not pdf_quality.is_missing_text_layer(reason):
+            raise UnusablePDF(f"{doc.filename}: {reason}")
+        if scans is not None:
+            scans[doc.filename] = reason
 
     docs.add_document(doc.filename, doc.external_id, doc.group_key, doc.published,
                       get_num_pages(doc.filename, data_dir),
@@ -59,6 +70,7 @@ def ingest(source, db_file: Path, data_dir: Path,
 
     rejected: dict = {}
     unreachable: dict = {}
+    scans: dict = {}
     with sqlite3.connect(db_file) as connection:
         schema.apply(connection, profile)
         try:
@@ -67,7 +79,7 @@ def ingest(source, db_file: Path, data_dir: Path,
             total = None
         for doc in tqdm(source.documents(connection), desc="Registering", total=total):
             try:
-                register(doc, connection, data_dir)
+                register(doc, connection, data_dir, scans=scans)
             except UnusablePDF as exc:
                 filename, _, reason = str(exc).partition(": ")
                 if filename not in rejected:   # one PDF can serve many entries
@@ -94,6 +106,10 @@ def ingest(source, db_file: Path, data_dir: Path,
         _report_unreachable(unreachable, db_file)
     else:
         _drop_stale(db_file.parent / "unreachable_pdfs.txt")
+    if scans:
+        _report_scans(scans, db_file)
+    else:
+        _drop_stale(db_file.parent / "scanned_pdfs.txt")
     return rejected
 
 
@@ -137,6 +153,28 @@ def _report_unreachable(unreachable: dict, db_file: Path) -> None:
         log.error("Worklist written to %s", out)
     except OSError as exc:
         log.error("Could not write %s: %s", out, exc)
+
+
+def _report_scans(scans: dict, db_file: Path) -> None:
+    """The documents that are in the corpus but have nothing for Stage 1 to read.
+
+    Not an error and not a worklist for a human: a worklist for the next step.
+    Preprocess these with --transcribe-missing-text, or they become documents of
+    empty sections and refinement deletes them.
+    """
+    out = db_file.parent / "scanned_pdfs.txt"
+    log.warning("%d PDF(s) have NO TEXT LAYER. They are registered, and their "
+                "text has to come from the model: preprocess with "
+                "--transcribe-missing-text.", len(scans))
+    for filename, reason in sorted(scans.items()):
+        log.warning("  %-60s %s", filename, reason)
+    try:
+        out.write_text("".join(f"{fn}\t{reason}\n"
+                               for fn, reason in sorted(scans.items())),
+                       encoding="utf-8")
+        log.warning("List written to %s", out)
+    except OSError as exc:
+        log.warning("Could not write %s: %s", out, exc)
 
 
 def _report_rejected(rejected: dict, db_file: Path) -> None:
