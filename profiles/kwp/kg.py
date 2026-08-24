@@ -88,6 +88,23 @@ def accepted_indicator(parameter_uri: str, label_raw) -> bool:
     return any(a in label for a in rules.get("accept", ()))
 
 
+def _iso_date(raw) -> str:
+    """`published` as the IRI policy spells it: YYYY-MM-DD.
+
+    Ingest writes it as YYYYMMDD (source.py, strftime("%Y%m%d")), the same way
+    the corpus writes it into file names. mint_slice.py and therefore every
+    minted IRI speak the dashed form. One place converts, and it takes both so
+    that a corpus written either way serializes.
+
+    Without this the serializer produced an empty graph for the whole corpus
+    while its tests passed: the fixture wrote the dashed form the DB never has.
+    """
+    text = str(raw or "").strip()
+    if re.fullmatch(r"\d{8}", text):
+        return f"{text[:4]}-{text[4:6]}-{text[6:]}"
+    return text[:10]
+
+
 def _document_identity(db_path: Path, name: str):
     """(ags 8-digit, published YYYY-MM-DD, municipality name) or None."""
     conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
@@ -110,7 +127,7 @@ def _document_identity(db_path: Path, name: str):
     finally:
         conn.close()
     ags = str(meta[0]).strip() if meta and meta[0] is not None else ""
-    published = str(published or "")[:10]
+    published = _iso_date(published)
     if not ags.isdigit() or not re.fullmatch(r"\d{4}-\d{2}-\d{2}", published):
         return None
     return ags.zfill(8), published, (meta[1] if meta else None)
