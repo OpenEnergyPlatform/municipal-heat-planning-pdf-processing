@@ -235,14 +235,28 @@ def test_gate_samples_across_the_document(tmp_path):
 
 
 def test_refuses_unusable_pdf(monkeypatch, tmp_path):
-    """A scan raises UnusablePDF and leaves nothing in the DB."""
+    """Garbled text raises UnusablePDF and leaves nothing in the DB."""
+    con = _db()
+    _pdf(tmp_path / "garbled.pdf", 40, text=GARBLE, lines=8)
+    monkeypatch.setattr(ingest, "download_pdf", lambda url, d: "garbled.pdf")
+    with pytest.raises(ingest.UnusablePDF):
+        _process(_row(7654321, "https://kww/x/garbled.pdf"), con, tmp_path)
+    assert con.execute("SELECT COUNT(*) FROM Documents").fetchone()[0] == 0
+    assert con.execute("SELECT COUNT(*) FROM Municipalities").fetchone()[0] == 0
+
+
+def test_a_scan_reaches_the_register_and_its_municipality_with_it(monkeypatch,
+                                                                  tmp_path):
+    """Grevesmühlen and Kronshagen: complete plans, no text layer, refused at
+    the door. The municipality lost its plan AND its register row with it."""
     con = _db()
     _pdf(tmp_path / "scan.pdf", 12, text=None)
     monkeypatch.setattr(ingest, "download_pdf", lambda url, d: "scan.pdf")
-    with pytest.raises(ingest.UnusablePDF):
-        _process(_row(7654321, "https://kww/x/scan.pdf"), con, tmp_path)
-    assert con.execute("SELECT COUNT(*) FROM Documents").fetchone()[0] == 0
-    assert con.execute("SELECT COUNT(*) FROM Municipalities").fetchone()[0] == 0
+
+    _process(_row(7654321, "https://kww/x/scan.pdf"), con, tmp_path)
+
+    assert con.execute("SELECT filename FROM Documents").fetchall() ==         [("scan.pdf",)]
+    assert con.execute("SELECT ags FROM Municipalities").fetchall() == [(7654321,)]
 
 
 # ---------------------------------------------------------------------------
@@ -395,4 +409,29 @@ def test_the_three_pasted_links_are_resolved_by_their_own_plans():
     for ags, fn in owners.items():
         assert keys[fn] == str(ags), "and the real owner keeps its plan"
     # the pin stays as a guard: it names the owner if the paste ever returns
-    assert set(SHARED_FILE_OWNERS.values()) == set(owners)
+    assert set(owners) <= set(SHARED_FILE_OWNERS.values())
+
+
+def test_a_victim_without_a_plan_of_its_own_is_still_named(caplog):
+    """These three each got their own file in the end. Hofstetten (Oberbayern)
+    did not: its KWW row points at the Kinzigtal report and no plan of its own
+    exists, so the entry is all that keeps the coverage honest. The convoy
+    marking on the OTHER row is why nothing warned about it."""
+    from profiles.kwp.config import SHARED_FILE_OWNERS
+    from profiles.kwp.source import group_keys_by_filename
+
+    shared = "waermeplan_hofstetten_20251101.pdf"
+    assert SHARED_FILE_OWNERS[shared] == 8317046
+
+    baden = _row(8317046, "https://k/Waermeplan_Hofstetten_20260401.pdf")
+    baden["Konvoi ID"] = "BW Haslach im Kinzigtal"
+    oberbayern = _row(9181124, "https://k/" + shared)
+    oberbayern["Konvoi ID"] = float("nan")
+
+    with caplog.at_level("WARNING"):
+        keys = group_keys_by_filename([baden, oberbayern])
+    # The override puts Baden on the shared file, so the owner rule decides it.
+    assert keys[shared] == "8317046"
+    assert "no convoy between them" not in caplog.text, (
+        "one member's convoy id silences the warning for the whole file — the "
+        "reason this pairing went unnoticed")

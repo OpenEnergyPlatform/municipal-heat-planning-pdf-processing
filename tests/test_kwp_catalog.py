@@ -195,3 +195,28 @@ def test_without_register_links_the_unit_rule_still_answers(conn):
     conn.commit()
     docs = KwpCatalog().rows(conn)
     assert municipality_coverage(conn, docs)[1] == ["Musterstadt"]
+
+
+def test_a_pasted_link_does_not_hand_a_plan_to_another_municipality(conn):
+    """Two rows on one file is a convoy only when the file really covers both.
+    KWW also pastes one town's link into another town's row: the register then
+    said a Kinzigtal report covers Hofstetten in Oberbayern, 600 km away and
+    not named in it once. SHARED_FILE_OWNERS settles those, and coverage has to
+    read it or the picker repeats the claim."""
+    from profiles.kwp.config import SHARED_FILE_OWNERS
+
+    filename, owner = next(iter(SHARED_FILE_OWNERS.items()))
+    conn.executescript(f"""
+        UPDATE Documents SET filename = '{filename}' WHERE id = 1;
+        INSERT INTO Municipalities (id, name, ags, organisation_unit)
+            VALUES (4, 'Eigentuemerin', {owner}, 1);
+        INSERT INTO MunicipalityMeta (ags, link_waermeplan)
+            VALUES ({owner}, 'https://kww.de/{filename}');
+        INSERT INTO Municipalities (id, name, ags, organisation_unit)
+            VALUES (5, 'Fremde Gemeinde', 9999999, 1);
+        INSERT INTO MunicipalityMeta (ags, link_waermeplan)
+            VALUES (9999999, 'https://kww.de/{filename}');
+    """)
+    conn.commit()
+    docs = KwpCatalog().rows(conn)
+    assert municipality_coverage(conn, docs)[1] == ["Eigentuemerin"]
