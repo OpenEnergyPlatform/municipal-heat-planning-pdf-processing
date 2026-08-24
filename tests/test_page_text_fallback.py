@@ -161,10 +161,32 @@ def test_a_failed_page_keeps_an_empty_text_layer_rather_than_an_invented_one():
     assert pages[0].blocks == [], "nothing was invented for the failed page"
 
 
-def test_an_empty_reply_counts_as_a_failure_not_as_a_blank_page():
+def test_a_page_with_nothing_on_it_is_not_a_failed_page():
+    """The prompt tells the model to answer "" for a page that is one large
+    map, and a heat plan is full of those. Booking that as a failure reported
+    106 broken calls for a run in which not one call broke."""
     report = fill_missing_page_text([_page(1, texts=())], render=lambda n: "img",
                                     transcribe=lambda img, n: "   ")
-    assert report["pages_failed"] == 1 and report["pages_transcribed"] == 0
+    assert report["pages_empty"] == 1
+    assert report["pages_failed"] == 0
+    assert report["pages_transcribed"] == 0
+
+
+def test_a_broken_call_and_an_empty_page_are_counted_apart():
+    """Both leave the page without text, and only one of them is a problem."""
+    pages = [_page(n, texts=()) for n in range(1, 4)]
+
+    def transcribe(img, n):
+        if n == 1:
+            raise RuntimeError("model timed out")
+        return "" if n == 2 else "# Bestand\n\nDer Verbrauch."
+
+    report = fill_missing_page_text(pages, render=lambda n: "img",
+                                    transcribe=transcribe)
+    assert (report["pages_failed"], report["pages_empty"],
+            report["pages_transcribed"]) == (1, 1, 1)
+    assert pages[0].blocks == [] and pages[1].blocks == []
+    assert report["pages_missing_text"] == 3, "the total still adds up"
 
 
 def test_a_corpus_wide_run_is_capped_rather_than_spending_the_night():

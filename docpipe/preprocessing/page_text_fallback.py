@@ -157,16 +157,24 @@ def fill_missing_page_text(
 
     `render(page_number)` returns whatever the transcriber takes (a PIL image
     in the live wiring), `transcribe(image, page_number)` returns the page as
-    markdown or None if the call failed. A failed page keeps its empty text
-    layer rather than an invented one, and is counted.
+    markdown, an empty string if the page carries no prose, or None if the call
+    failed. A page that yielded nothing keeps its empty text layer rather than
+    an invented one.
 
-    Returns a report: how many pages needed text, how many got it, and how many
-    blocks were synthesized. The counts are the honest answer to "how much of
-    this document is model-read rather than PDF-read".
+    Returns a report: how many pages needed text, how many got it, how many had
+    nothing to give, how many broke, and how many blocks were synthesized. The
+    counts are the honest answer to "how much of this document is model-read
+    rather than PDF-read".
+
+    `pages_empty` and `pages_failed` are counted apart on purpose. A heat plan
+    is full of pages that are one large map, and the prompt tells the model to
+    return an empty string for those. Booking them as failures said 106 broken
+    calls for a run in which not one call broke.
     """
     candidates = [p for p in pages if needs_transcription(p, min_chars)]
     report = {"pages_total": len(pages), "pages_missing_text": len(candidates),
-              "pages_transcribed": 0, "pages_failed": 0, "blocks_added": 0}
+              "pages_transcribed": 0, "pages_empty": 0, "pages_failed": 0,
+              "blocks_added": 0}
     if not candidates:
         return report
 
@@ -207,12 +215,14 @@ def fill_missing_page_text(
     # Applied in page order regardless of the order they came back in: the
     # result of a run must not depend on which page the server finished first.
     for page, markdown in zip(candidates, replies):
-        if not markdown or not markdown.strip():
+        # None is the only failure: the call raised, or the reply had no usable
+        # field. An answer of "" is an ANSWER — the page holds no prose.
+        if markdown is None:
             report["pages_failed"] += 1
             continue
         blocks = synthesize_blocks(page, markdown)
         if not blocks:
-            report["pages_failed"] += 1
+            report["pages_empty"] += 1
             continue
         # Stage 2 keys its own ids off the same prefix, so the synthesized text
         # blocks replace the (empty or junk) text layer rather than joining it.
@@ -222,10 +232,15 @@ def fill_missing_page_text(
         report["blocks_added"] += len(blocks)
 
     log.info("page transcription: %d/%d page(s) had no text layer, %d "
-             "transcribed, %d failed, %d block(s) added",
+             "transcribed, %d without prose, %d failed, %d block(s) added",
              report["pages_missing_text"], report["pages_total"],
-             report["pages_transcribed"], report["pages_failed"],
-             report["blocks_added"])
+             report["pages_transcribed"], report["pages_empty"],
+             report["pages_failed"], report["blocks_added"])
+    if report["pages_failed"]:
+        # Rare enough to be worth a line of its own: an empty page is expected,
+        # a broken call is not.
+        log.warning("page transcription: %d page(s) could not be read at all",
+                    report["pages_failed"])
     return report
 
 
