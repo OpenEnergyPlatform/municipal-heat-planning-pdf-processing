@@ -407,6 +407,21 @@ def _documents(conn: sqlite3.Connection) -> list:
                 "ORDER BY filename")]
 
 
+def select_documents(documents: list, wanted: Optional[list]) -> tuple:
+    """(chosen, missing) for a --document restriction; no restriction = all.
+
+    `missing` is what was asked for and is not on offer, which for this corpus
+    means superseded rather than absent: `_documents` lists current versions
+    only. A pilot has to hear about that instead of quietly being smaller than
+    it was meant to be.
+    """
+    if not wanted:
+        return documents, []
+    ids = set(wanted)
+    chosen = [d for d in documents if d[0] in ids]
+    return chosen, sorted(ids - {d[0] for d in chosen})
+
+
 def main(argv: Optional[list] = None) -> int:
     parser = argparse.ArgumentParser(
         prog="python -m docpipe.extraction",
@@ -419,8 +434,12 @@ def main(argv: Optional[list] = None) -> int:
                              "(default: the profile's processed dir)")
     parser.add_argument("--pdf-root", type=Path, default=None,
                         help="PDF directory for the digit-exact native check")
-    parser.add_argument("--document", type=int, default=None,
-                        help="One document id instead of the whole corpus")
+    parser.add_argument("--document", type=int, action="append", default=None,
+                        metavar="ID",
+                        help="Restrict the run to this document id. Repeatable, "
+                             "so a pilot names its set instead of running the "
+                             "corpus or paying for the index and the embedder "
+                             "once per document")
     parser.add_argument("--force", action="store_true")
     parser.add_argument("--force-stale", action="store_true")
     parser.add_argument("--log-level", default="INFO",
@@ -489,11 +508,11 @@ def main(argv: Optional[list] = None) -> int:
 
     with sqlite3.connect(f"file:{args.db}?mode=ro", uri=True) as listing:
         documents = _documents(listing)
-    if args.document is not None:
-        documents = [d for d in documents if d[0] == args.document]
-        if not documents:
-            log.error("document %s not found or not current", args.document)
-            return 1
+    documents, missing = select_documents(documents, args.document)
+    if missing:
+        log.error("%d named document(s) not found or not current: %s",
+                  len(missing), ", ".join(str(m) for m in missing))
+        return 1
 
     doc_parallel = int(os.environ.get("EXTRACT_DOC_PARALLEL", "4"))
     log.info("extraction: %d document(s), %d parameter(s), top_k=%d, "
