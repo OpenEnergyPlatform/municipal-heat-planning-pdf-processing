@@ -1,9 +1,15 @@
 """
-pdf_quality.py – Reject source PDFs whose text layer is missing or garbled.
+pdf_quality.py – What a source PDF's text layer is worth.
 
-The pipeline reads text with PyMuPDF, never OCR, so a scanned PDF yields empty
-sections and a PDF with a broken ToUnicode map yields symbol garbage — both are
-silently useless downstream. `check()` gates them at download time.
+Stage 1 reads text with PyMuPDF, never OCR. A PDF with a broken ToUnicode map
+yields symbol garbage, which is useless at every later stage; a PDF with no text
+layer at all yields nothing, which preprocessing can now make good by rendering
+the page and having the model read it (page_text_fallback).
+
+`check()` reports the fact and nothing more. What to do about it is policy and
+lives in the ingest pipeline: garbage is refused, a scan is registered and put on
+a worklist. Keeping the two apart is the point — this module used to decide both,
+and its verdict on a scan cost the corpus eleven complete plans.
 """
 from __future__ import annotations
 
@@ -21,6 +27,20 @@ MIN_ALPHA_RATIO = 0.5      # prose is ~0.7-0.8; garbled text is punctuation
 PROSE_PAGE_CHARS = 200     # below this a page says nothing about the glyph map
 
 CID_RE = re.compile(r"\(cid:\d+\)")
+
+# Verdict prefixes. NO_TEXT is the one that is not fatal: the document is
+# readable, just not by PyMuPDF alone.
+NO_TEXT = "NO_TEXT"
+
+
+def is_missing_text_layer(reason: str) -> bool:
+    """True if check() withheld a file only because it carries no text layer.
+
+    Such a file is a scan, not garbage: preprocessing renders each page and the
+    model transcribes it, so it belongs in the corpus. Anything else check()
+    reports is a file nothing downstream can repair.
+    """
+    return str(reason).startswith(NO_TEXT)
 
 
 def _sample_page_numbers(page_count: int, limit: int = SAMPLE_PAGES) -> list[int]:
@@ -73,7 +93,7 @@ def check(pdf_path: Path, limit: int = SAMPLE_PAGES) -> tuple[bool, str]:
 
     empty_frac = m["empty"] / m["sampled"]
     if empty_frac > MAX_EMPTY_FRACTION:
-        return False, (f"NO_TEXT: {m['empty']}/{m['sampled']} sampled pages empty "
+        return False, (f"{NO_TEXT}: {m['empty']}/{m['sampled']} sampled pages empty "
                        f"({empty_frac:.0%}) – scan without OCR")
 
     if m["cid"]:
