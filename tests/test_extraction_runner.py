@@ -128,3 +128,42 @@ def test_serialize_walks_only_accepted_tuples(tmp_path):
     assert counts == {"plan_a": 1}, "refusals and empty plans stay outside"
     assert seen["plan_a"][0]["value"] == 1
     assert (tmp_path / "out.ttl").read_text(encoding="utf-8") == "# plan_a: 1"
+
+
+# ---------------------------------------------------------------------------
+# picking the documents a run covers
+# ---------------------------------------------------------------------------
+
+def test_no_restriction_means_the_whole_corpus():
+    from docpipe.extraction.runner import select_documents
+
+    docs = [(1, "a.pdf"), (2, "b.pdf")]
+    assert select_documents(docs, None) == (docs, [])
+    assert select_documents(docs, []) == (docs, [])
+
+
+def test_a_pilot_names_its_set_and_keeps_the_corpus_order():
+    from docpipe.extraction.runner import select_documents
+
+    docs = [(1, "a.pdf"), (2, "b.pdf"), (3, "c.pdf")]
+    chosen, missing = select_documents(docs, [3, 1])
+    assert chosen == [(1, "a.pdf"), (3, "c.pdf")]
+    assert missing == []
+
+
+def test_a_named_document_that_is_not_current_is_reported_not_dropped():
+    """`_documents` lists current versions only, so a superseded id simply is
+    not on offer. A pilot of sixteen that silently runs fourteen is worse than
+    one that refuses: the missing two are exactly the interesting ones."""
+    from docpipe.extraction.runner import select_documents
+
+    chosen, missing = select_documents([(1, "a.pdf")], [1, 1081, 26])
+    assert chosen == [(1, "a.pdf")]
+    assert missing == [26, 1081], "sorted, so the message is stable"
+
+
+def test_the_same_id_twice_is_one_document():
+    from docpipe.extraction.runner import select_documents
+
+    chosen, missing = select_documents([(7, "x.pdf")], [7, 7])
+    assert chosen == [(7, "x.pdf")] and missing == []
