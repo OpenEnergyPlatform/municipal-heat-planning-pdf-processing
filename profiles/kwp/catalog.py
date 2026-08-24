@@ -16,7 +16,7 @@ from typing import Optional
 
 from docpipe.inference.catalog import Catalog, format_published
 
-from .config import PDF_OVERRIDES, link_filename
+from .config import PDF_OVERRIDES, SHARED_FILE_OWNERS, link_filename
 
 # Filename prefixes that are not a place name (convoy plans are named after
 # their lead municipality, behind one of these).
@@ -163,6 +163,12 @@ def _register_members(conn: sqlite3.Connection) -> dict:
     Which municipalities a plan covers is not something to infer. The export
     carries one row per municipality with that municipality's plan link, and
     several rows on one link IS the convoy. Its own convoy id agrees.
+
+    Except where the sharing is a register error rather than a convoy: KWW
+    pastes one town's link into another town's row, and then the register says
+    a Kinzigtal report covers a municipality in Oberbayern. SHARED_FILE_OWNERS
+    names the municipality such a document really belongs to, read off the
+    document, and there the register is not believed.
     """
     try:
         rows = conn.execute("""
@@ -178,6 +184,9 @@ def _register_members(conn: sqlite3.Connection) -> dict:
         ags = int(row["ags"])
         # Same resolution ingest used to name the file, override included.
         name = link_filename(PDF_OVERRIDES.get(ags) or row["link"])
+        owner = SHARED_FILE_OWNERS.get(name)
+        if owner is not None and owner != ags:
+            continue
         out.setdefault(name, {})[ags] = row["name"]
     return out
 

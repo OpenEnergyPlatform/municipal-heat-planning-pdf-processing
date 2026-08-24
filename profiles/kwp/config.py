@@ -295,9 +295,11 @@ PDF_OVERRIDES = {
     9173147: "waermeplan_wolfratshausen_20260708.pdf",           # Wolfratshausen
     # KWW link 404s; the Endfassung is on the municipality's own site.
     9181121: "waermeplan_fuchstal_20250901.pdf",                 # Fuchstal
-    # KWW link 404s. Careful: the register gives the SAME link to both
-    # Hofstetten (Baden) and Hofstetten (Oberbayern); the document is the
-    # Kinzigtal one, so only the Baden ags gets the override.
+    # KWW link 404s. The August 2026 export has since split the two links
+    # (Baden 20260401, Oberbayern 20251101), but both still serve the SAME
+    # bytes, and those bytes are the Kinzigtal report. We keep the file the
+    # corpus already holds; Oberbayern's claim on it is settled in
+    # SHARED_FILE_OWNERS.
     8317046: "waermeplan_hofstetten_20251101.pdf",               # Hofstetten (Baden)
     # KWW link 404s; the plan is on the municipality's own site.
     9181140: "waermeplan_schwifting_20251030.pdf",               # Schwifting
@@ -451,6 +453,10 @@ SHARED_FILE_OWNERS = {
     # Weingarten 190x, Ravensburg 63x, Karlsruhe 0x → the Württemberg one,
     # not Weingarten (Baden) (8215090).
     "waermeplan_weingarten_20231113.pdf": 8436082,     # Weingarten (Ravensburg)
+    # "Gemeinde Hofstetten im Kinzigtal", Konvoiführer Haslach i.K. — Baden.
+    # Hofstetten (Oberbayern) (9181124) is 600 km away and is not named in it;
+    # its KWW row simply points at this file. It has no plan of its own here.
+    "waermeplan_hofstetten_20251101.pdf": 8317046,     # Hofstetten (Baden)
 }
 
 # KWW Excel columns carried into the MunicipalityMeta table, as
