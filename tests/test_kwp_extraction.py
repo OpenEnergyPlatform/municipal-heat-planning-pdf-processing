@@ -242,3 +242,55 @@ def test_the_prefix_block_is_emitted_once_per_run(tmp_path):
     second = serializer("waermeplan_kassel_20240315", [_row()])
     assert first.startswith("@prefix rdfs:")
     assert "@prefix" not in second
+
+
+# --- the date the corpus actually stores -------------------------------------
+
+def _database_corpus_format(tmp_path):
+    """Like _database, but with `published` as INGEST writes it: YYYYMMDD.
+
+    The fixture above writes the dashed form, which no row of the real corpus
+    has. That divergence let the serializer pass its tests while producing an
+    empty graph for all 1079 documents.
+    """
+    db = tmp_path / "kwp_corpus.db"
+    conn = sqlite3.connect(db)
+    conn.executescript("""
+        CREATE TABLE Documents (id INTEGER PRIMARY KEY, filename TEXT,
+                                published TEXT, is_current INTEGER);
+        CREATE TABLE DocumentMeta (document INTEGER, municipality_ags TEXT);
+        CREATE TABLE Municipalities (ags TEXT, name TEXT);
+        INSERT INTO Documents VALUES (857, 'waermeplan_kassel_20240315.pdf',
+                                      '20240315', 1);
+        INSERT INTO DocumentMeta VALUES (857, '06611000');
+        INSERT INTO Municipalities VALUES ('06611000', 'Kassel');
+    """)
+    conn.commit()
+    conn.close()
+    return db
+
+
+def test_the_corpus_date_format_serializes_at_all(tmp_path):
+    serializer = kg.make_serializer(_database_corpus_format(tmp_path))
+    ttl = serializer("waermeplan_kassel_20240315", [_row()])
+    assert ttl, "an empty graph is what the whole corpus produced"
+    assert "06611000" in ttl
+
+
+def test_both_date_spellings_mint_the_same_iris(tmp_path):
+    """The dashed form is what mint_slice.py was verified against, so the
+    conversion must land on it exactly — a different spelling would mint a
+    different heat plan and quietly fork the graph."""
+    dashed = kg.make_serializer(_database(tmp_path))(
+        "waermeplan_kassel_20240315", [_row()])
+    plain = kg.make_serializer(_database_corpus_format(tmp_path))(
+        "waermeplan_kassel_20240315", [_row()])
+    assert plain == dashed
+
+
+def test_the_date_converter_takes_both_and_refuses_neither_silently():
+    assert kg._iso_date("20240315") == "2024-03-15"
+    assert kg._iso_date("2024-03-15") == "2024-03-15"
+    assert kg._iso_date("2024-03-15T00:00:00") == "2024-03-15"
+    assert kg._iso_date(None) == ""
+    assert kg._iso_date("Fruehjahr") == "Fruehjahr", "left for the guard to reject"
