@@ -734,14 +734,18 @@ def main(argv: Optional[list] = None) -> int:
              len(documents), len(spec.parameters), TOP_K, MAX_ROUNDS,
              PLAN_PARALLEL, LLM_PARALLEL, group_size)
 
-    cache_conn = query_cache.connect(args.out / "query_cache.db")
-    prime_probe_cache(cache_conn, spec, templates)
+    cache_path = args.out / "query_cache.db"
+    primer = query_cache.connect(cache_path)
+    prime_probe_cache(primer, spec, templates)
+    primer.close()
 
     def plan(document_id: int, filename: str) -> tuple:
-        # Own SQLite connection per thread; the query cache is shared and
-        # opened check_same_thread=False, and after priming it is read-only.
+        # Both connections per thread, cache included. Sharing one across the
+        # pool would rest on SQLite being built serialized, and the priming
+        # above already means every read here is a hit.
         conn = sqlite3.connect(f"file:{args.db}?mode=ro", uri=True)
         conn.row_factory = sqlite3.Row
+        cache_conn = query_cache.connect(cache_path)
         try:
             items, report = plan_document(
                 document_id, spec, templates,
@@ -750,6 +754,7 @@ def main(argv: Optional[list] = None) -> int:
             return Path(filename).stem, split_long_sources(items), report
         finally:
             conn.close()
+            cache_conn.close()
 
     def verify(entry: tuple) -> None:
         name, items, report, answers = entry
@@ -796,7 +801,6 @@ def main(argv: Optional[list] = None) -> int:
                     failures += 1
                     log.exception("extraction: %s failed", futures[future])
 
-    cache_conn.close()
     log.info("extraction: done in %.0f s, %d failure(s)",
              time.time() - started, failures)
     return 1 if failures else 0
