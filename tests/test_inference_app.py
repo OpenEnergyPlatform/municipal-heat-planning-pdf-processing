@@ -840,3 +840,18 @@ def test_answer_from_sources_no_action_no_compute(monkeypatch):
     out = llm.answer_from_sources("x", [{"index": 0, "source": "s", "text": "t"}])
     assert out["answer"] == "direkt"
     assert out["compute"] == []
+
+
+def test_fetching_a_table_owner_costs_one_statement(corpus):
+    """A harvest fetches over a thousand owners per document off an
+    NFS-hosted database. This used to be four statements per table — the row,
+    then the same Sections row twice, then the document's filename."""
+    conn = db.connect_readonly(corpus)
+    statements = []
+    conn.set_trace_callback(statements.append)
+    content = db.fetch_owner_content(conn, "table", 1)
+    conn.set_trace_callback(None)
+
+    assert content["section_title"] == "Wärmebedarf"
+    assert content["image_path"] == "doc/images/p12_tbl0.png"
+    assert len(statements) == 1, statements
