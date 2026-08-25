@@ -35,8 +35,6 @@ def _fixture(monkeypatch):
     monkeypatch.setattr(db, "fetch_owner_content",
                         lambda conn, kind, oid: {"owner_kind": kind,
                                                  "owner_id": oid, "text": "t"})
-    _, id_to_pos = faiss_store.load_global_index_from(index) \
-        if hasattr(faiss_store, "load_global_index_from") else (None, None)
     id_to_pos = {int(fid): pos for pos, fid in enumerate(ids)}
     probes = rng.normal(size=(6, EMBEDDING_DIM)).astype("float32")
     probes /= np.linalg.norm(probes, axis=1, keepdims=True)
