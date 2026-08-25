@@ -23,6 +23,7 @@ import logging
 import os
 import re
 import sqlite3
+import threading
 import time
 from pathlib import Path
 from typing import Callable, Optional
@@ -66,6 +67,31 @@ _FENCE_CLOSE = re.compile(r"\s*```$")
 # Retrieval: probe text -> ranked unseen owners of one document
 # ---------------------------------------------------------------------------
 
+_EMBEDDER = None
+_EMBEDDER_LOCK = threading.Lock()
+
+
+def embedder():
+    """The one resident embedding model this run uses.
+
+    `get_embedder()` CONSTRUCTS a backend, it does not return a shared one, and
+    this call used to sit inside the per-probe `embed()`. With
+    EXTRACT_DOC_PARALLEL threads each asking for its own probes, every probe
+    loaded another copy of the 8B model onto the same card: five fit into 80 GB,
+    the sixth died of CUDA OOM, and with it all sixteen documents.
+
+    The double check is not decoration — eight threads reach this together on
+    the first probe, and without the lock they would each build one.
+    """
+    global _EMBEDDER
+    if _EMBEDDER is None:
+        with _EMBEDDER_LOCK:
+            if _EMBEDDER is None:
+                from docpipe.embedding import get_embedder
+                _EMBEDDER = get_embedder()
+    return _EMBEDDER
+
+
 def make_retrieve(conn: sqlite3.Connection, index, id_to_pos: dict,
                   cache_conn) -> Callable:
     from docpipe.inference import db as inference_db
@@ -80,8 +106,7 @@ def make_retrieve(conn: sqlite3.Connection, index, id_to_pos: dict,
         cached = query_cache.get(cache_conn, key)
         if cached is not None:
             return cached
-        from docpipe.embedding import get_embedder
-        vec = get_embedder().embed_one({"text": probe})
+        vec = embedder().embed_one({"text": probe})
         query_cache.put(cache_conn, key, vec)
         return vec
 

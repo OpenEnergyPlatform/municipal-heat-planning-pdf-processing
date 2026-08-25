@@ -1,4 +1,5 @@
 """The runner's pure parts: reply parsing, staleness, resume."""
+import time
 import json
 
 from docpipe.extraction import runner
@@ -167,3 +168,61 @@ def test_the_same_id_twice_is_one_document():
 
     chosen, missing = select_documents([(7, "x.pdf")], [7, 7])
     assert chosen == [(7, "x.pdf")] and missing == []
+
+
+# ---------------------------------------------------------------------------
+# one model, however many threads ask for it
+# ---------------------------------------------------------------------------
+
+def test_the_embedder_is_built_once_however_many_threads_ask(monkeypatch):
+    """get_embedder() CONSTRUCTS a backend rather than returning a shared one,
+    and the call sat inside the per-probe embed(). Every probe loaded another
+    copy of the 8B model onto one card; five fit, the sixth was CUDA OOM and
+    the pilot lost all sixteen documents."""
+    import threading
+
+    from docpipe.extraction import runner
+
+    built = []
+    start = threading.Barrier(8)
+
+    def slow_factory():
+        built.append(1)
+        time.sleep(0.05)               # the window the race needs
+        return object()
+
+    monkeypatch.setattr(runner, "_EMBEDDER", None)
+    monkeypatch.setattr("docpipe.embedding.get_embedder", slow_factory)
+
+    seen = []
+
+    def ask():
+        start.wait()
+        seen.append(runner.embedder())
+
+    threads = [threading.Thread(target=ask) for _ in range(8)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+
+    assert len(built) == 1, f"{len(built)} models loaded instead of one"
+    assert len(set(map(id, seen))) == 1, "every thread must get the same one"
+
+
+def test_the_local_backend_guards_its_lazy_load():
+    """The runner holds one LocalEmbedder and eight threads call .embed() on it
+    at once. A second replica of an 8B model is 16 GB of card nothing gives
+    back, so the lazy init has to be guarded.
+
+    Asserted on the guard itself: a timing test for this passed with and
+    without the lock, and a test that cannot fail is worse than none.
+    """
+    import contextlib
+    import threading
+
+    from docpipe.embedding.local import LocalEmbedder
+
+    embedder = LocalEmbedder(model="m")
+    assert isinstance(embedder._lock, type(threading.Lock())),         "the lazy load in .embed() must sit behind a real lock"
+    assert not isinstance(embedder._lock, contextlib.nullcontext)
