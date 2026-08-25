@@ -382,6 +382,17 @@ class Qwen3VLEmbedder:
         return embeddings
 
 
+def _input_size(item: Dict[str, Any]) -> int:
+    """Rough token cost of one item, for balancing shards.
+
+    Text length stands in for tokens: the ratio is near enough constant
+    within a corpus, and only the ORDER matters here. An image is worth a
+    fixed surcharge because a crop costs far more than its caption.
+    """
+    size = len(item.get("text") or "")
+    return size + (4000 if item.get("image") is not None else 0)
+
+
 class MultiGPUEmbedder:
     """Data-parallel wrapper: one Qwen3VLEmbedder replica per visible GPU.
 
@@ -425,8 +436,17 @@ class MultiGPUEmbedder:
         if n == 1 or len(inputs) <= 1:
             return self.replicas[0].process(inputs, normalize).to("cpu")
 
-        # Replica r handles inputs[r], inputs[r+n], inputs[r+2n], ...
-        shards = [inputs[r::n] for r in range(n)]
+        # Shards are balanced by length, not by position. The processor pads
+        # every shard to its own longest member and the threads join at the
+        # end, so one 16k-token item dealt into a shard of 50-token items pads
+        # that shard to 16k and every other GPU waits for it. Dealing the
+        # longest out first keeps the shard totals close.
+        order = sorted(range(len(inputs)), key=lambda i: _input_size(inputs[i]),
+                       reverse=True)
+        places: List[List[int]] = [[] for _ in range(n)]
+        for rank, i in enumerate(order):
+            places[rank % n].append(i)
+        shards = [[inputs[i] for i in place] for place in places]
         outs: List[Optional[torch.Tensor]] = [None] * n
         errs: List[Optional[BaseException]] = [None] * n
 
@@ -446,14 +466,13 @@ class MultiGPUEmbedder:
             if exc is not None:
                 raise exc
 
-        # Re-interleave: shard r, row k -> original position r + k * n.
+        # Back into the caller's order: one indexed copy per shard instead of
+        # a Python iteration and a separate 4096-element copy per item.
         sample = next(o for o in outs if o is not None)
-        total = len(inputs)
-        result = torch.empty((total, sample.shape[1]), dtype=sample.dtype)
-        for r in range(n):
+        result = torch.empty((len(inputs), sample.shape[1]), dtype=sample.dtype)
+        for r, place in enumerate(places):
             out = outs[r]
             if out is None:
                 continue
-            for k in range(out.shape[0]):
-                result[r + k * n] = out[k]
+            result[torch.tensor(place, dtype=torch.long)] = out
         return result
