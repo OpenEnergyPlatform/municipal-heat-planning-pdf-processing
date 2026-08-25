@@ -34,12 +34,24 @@ def quote_rects(pdf_path, page_number: int, quote: str,
     missing, the file or page is unavailable, or the best match scores under
     *min_score*.
     """
+    words = page_words(pdf_path, page_number)
+    if not words:
+        return None
+    return rects_from_words(words, quote, min_score=min_score,
+                            max_lines=max_lines)
+
+
+def page_words(pdf_path, page_number: int) -> Optional[list]:
+    """PyMuPDF's word tuples for one (1-based) page, or None.
+
+    Split out so a caller placing many quotes on the same page can open the
+    file once. The extraction stage places several hundred quotes per
+    document, and opening a PDF over NFS per quote costs far more than the
+    matching does.
+    """
     try:
         import fitz
-        from rapidfuzz import fuzz
     except ImportError:
-        return None
-    if not (quote or "").strip():
         return None
     try:
         doc = fitz.open(str(pdf_path))
@@ -48,12 +60,22 @@ def quote_rects(pdf_path, page_number: int, quote: str,
     try:
         if not (1 <= int(page_number) <= doc.page_count):
             return None
-        words = doc.load_page(int(page_number) - 1).get_text("words")
+        return doc.load_page(int(page_number) - 1).get_text("words")
     except Exception:
         return None
     finally:
         doc.close()
-    if not words:
+
+
+def rects_from_words(words: list, quote: str,
+                     min_score: float = MIN_SCORE,
+                     max_lines: int = MAX_LINES) -> Optional[list]:
+    """The matching itself: no file access, only the page's words and a quote."""
+    try:
+        from rapidfuzz import fuzz
+    except ImportError:
+        return None
+    if not (quote or "").strip() or not words:
         return None
 
     # Rebuild the page text as space-joined words, tracking each word's char

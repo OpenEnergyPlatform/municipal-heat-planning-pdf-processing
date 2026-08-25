@@ -18,6 +18,7 @@ Author: Felix Vossel
 from __future__ import annotations
 
 import argparse
+import functools
 import json
 import logging
 import os
@@ -107,8 +108,48 @@ def embedder():
     return _EMBEDDER
 
 
+def _source_of(hit: dict, via: Optional[str] = None) -> Source:
+    provenance = {"document_id": hit.get("document_id"),
+                  "page": hit.get("page_number"),
+                  "section_number": hit.get("section_number"),
+                  "section_title": hit.get("section_title"),
+                  "title": hit.get("title")}
+    if via:
+        provenance["via"] = via
+    return Source(owner_kind=hit["owner_kind"], owner_id=hit["owner_id"],
+                  text=hit.get("text") or "", provenance=provenance,
+                  image_path=hit.get("image_path"))
+
+
+def make_content_fetcher() -> Callable:
+    """fetch_owner_content, but each owner is read from SQLite once.
+
+    A sweep meets the same section again in the next round, and again for the
+    next parameter: four parameters times four rounds is the same row read up
+    to sixteen times over NFS. One planning thread owns one of these, so it
+    needs no lock.
+    """
+    from docpipe.inference import db as inference_db
+
+    seen: dict = {}
+
+    def fetch(conn, owner_kind: str, owner_id: int):
+        key = (owner_kind, owner_id)
+        if key not in seen:
+            seen[key] = inference_db.fetch_owner_content(conn, owner_kind, owner_id)
+        return seen[key]
+
+    return fetch
+
+
 def make_retrieve(conn: sqlite3.Connection, index, id_to_pos: dict,
-                  cache_conn) -> Callable:
+                  cache_conn, content_fetcher: Optional[Callable] = None) -> Callable:
+    """(probes, document_id, exclude) -> one Source list per probe.
+
+    Takes every probe of a sweep round at once. One sub-index for the document
+    instead of one per probe, and one FAISS search over a query matrix instead
+    of sixty-four searches.
+    """
     from docpipe.inference import db as inference_db
     from docpipe.inference import faiss_store, query_cache
 
@@ -125,26 +166,12 @@ def make_retrieve(conn: sqlite3.Connection, index, id_to_pos: dict,
         query_cache.put(cache_conn, key, vec)
         return vec
 
-    def retrieve(probe: str, document_id: int, exclude: set) -> list:
-        hits = faiss_store.retrieve(
+    def retrieve(probes: list, document_id: int, exclude: set) -> list:
+        answers = faiss_store.retrieve_many(
             conn, index, id_to_pos, document_id, all_types,
-            embed(probe), TOP_K, exclude=exclude)
-        sources = []
-        for hit in hits:
-            sources.append(Source(
-                owner_kind=hit["owner_kind"],
-                owner_id=hit["owner_id"],
-                text=hit.get("text") or "",
-                provenance={
-                    "document_id": hit.get("document_id"),
-                    "page": hit.get("page_number"),
-                    "section_number": hit.get("section_number"),
-                    "section_title": hit.get("section_title"),
-                    "title": hit.get("title"),
-                },
-                image_path=hit.get("image_path"),
-            ))
-        return sources
+            [embed(p) for p in probes], TOP_K,
+            content_fetcher=content_fetcher, exclude=exclude)
+        return [[_source_of(hit) for hit in hits] for hits in answers]
 
     return retrieve
 
@@ -199,53 +226,53 @@ def _candidate_tokens(parameter) -> list:
     return sorted(t for t in tokens if len(t) >= 2)
 
 
-def make_candidates(db_path: Path) -> Callable:
+_TOKENS: dict = {}
+_TOKENS_LOCK = threading.Lock()
+
+
+def make_candidates(conn: sqlite3.Connection,
+                    content_fetcher: Optional[Callable] = None) -> Callable:
     """Token-filtered owners of one document, straight from SQL.
 
     LIKE over the stored text is deliberately dumb: it is the *floor*, not
     the harvest. Retrieval finds what wording variance hides from tokens;
-    this finds what ranking hides from retrieval. Own connection per call -
-    the callable runs inside worker threads.
+    this finds what ranking hides from retrieval.
+
+    Bound to the caller's connection. It used to open its own for every call,
+    which on an NFS-backed database is a file open, a header read and a schema
+    parse per document and parameter.
     """
     from docpipe.inference import db as inference_db
 
+    fetch = content_fetcher or inference_db.fetch_owner_content
+
     def candidates(document_id: int, parameter) -> list:
-        tokens = _candidate_tokens(parameter)
+        with _TOKENS_LOCK:
+            tokens = _TOKENS.get(parameter.uri)
+            if tokens is None:
+                tokens = _TOKENS[parameter.uri] = _candidate_tokens(parameter)
         like = lambda column: " OR ".join([f"{column} LIKE ?"] * len(tokens))
         params = [f"%{t}%" for t in tokens]
-        conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
-        conn.row_factory = sqlite3.Row
-        try:
-            owners: list = []
-            owners += [("table", int(r[0])) for r in conn.execute(
-                f"SELECT t.id FROM Tables t JOIN Sections s ON t.section = s.id "
-                f"WHERE s.document = ? AND ({like('t.markdown')} OR {like('t.caption')})",
-                [document_id, *params, *params])]
-            owners += [("section", int(r[0])) for r in conn.execute(
-                f"SELECT id FROM Sections WHERE document = ? AND ({like('content')})",
-                [document_id, *params])]
-            owners += [("figure", int(r[0])) for r in conn.execute(
-                f"SELECT i.id FROM Images i JOIN Sections s ON i.section = s.id "
-                f"WHERE s.document = ? AND ({like('i.description')})",
-                [document_id, *params])]
-            sources = []
-            for owner_kind, owner_id in owners:
-                hit = inference_db.fetch_owner_content(conn, owner_kind, owner_id)
-                if hit is None:
-                    continue
-                sources.append(Source(
-                    owner_kind=owner_kind, owner_id=owner_id,
-                    text=hit.get("text") or "",
-                    provenance={"document_id": hit.get("document_id"),
-                                "page": hit.get("page_number"),
-                                "section_number": hit.get("section_number"),
-                                "section_title": hit.get("section_title"),
-                                "title": hit.get("title"),
-                                "via": "fallback"},
-                    image_path=hit.get("image_path")))
-            return sources
-        finally:
-            conn.close()
+        owners: list = []
+        owners += [("table", int(r[0])) for r in conn.execute(
+            f"SELECT t.id FROM Tables t JOIN Sections s ON t.section = s.id "
+            f"WHERE s.document = ? AND ({like('t.markdown')} OR {like('t.caption')})",
+            [document_id, *params, *params])]
+        owners += [("section", int(r[0])) for r in conn.execute(
+            f"SELECT id FROM Sections WHERE document = ? AND ({like('content')})",
+            [document_id, *params])]
+        owners += [("figure", int(r[0])) for r in conn.execute(
+            f"SELECT i.id FROM Images i JOIN Sections s ON i.section = s.id "
+            f"WHERE s.document = ? AND ({like('i.description')})",
+            [document_id, *params])]
+        sources = []
+        for owner_kind, owner_id in owners:
+            hit = fetch(conn, owner_kind, owner_id)
+            if hit is None:
+                continue
+            sources.append(_source_of({**hit, "owner_kind": owner_kind,
+                                       "owner_id": owner_id}, via="fallback"))
+        return sources
 
     return candidates
 
@@ -301,8 +328,13 @@ def _parameter_payload(parameter) -> dict:
     return payload
 
 
-def _image_part(path: str) -> Optional[dict]:
-    """A table or figure crop as a chat message part, or None if unreadable.
+@functools.lru_cache(maxsize=192)
+def _image_data_url(path: str) -> Optional[str]:
+    """The crop, read, downscaled and base64'd — once per file per run.
+
+    Every parameter asks the same table again, so the same PNG used to be
+    reopened, resampled and re-encoded once per parameter. Bounded because a
+    corpus run meets thousands of crops and each one is a megabyte of base64.
 
     PNG, not JPEG: these crops are synthetic graphics with thin rules and
     small axis labels, exactly what JPEG artefacts blur first — and a blurred
@@ -321,8 +353,13 @@ def _image_part(path: str) -> Optional[dict]:
     except Exception as exc:
         log.warning("   crop not attachable (%s): %s", path, exc)
         return None
-    url = "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode()
-    return {"type": "image_url", "image_url": {"url": url}}
+    return "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode()
+
+
+def _image_part(path: str) -> Optional[dict]:
+    """A table or figure crop as a chat message part, or None if unreadable."""
+    url = _image_data_url(str(path))
+    return None if url is None else {"type": "image_url", "image_url": {"url": url}}
 
 
 def make_harvester(image_root: Optional[Path] = None) -> Callable:
@@ -464,36 +501,62 @@ def make_locate(db_path: Path, pdf_root: Optional[Path]) -> Optional[Callable]:
     """
     if pdf_root is None:
         return None
-    from docpipe.inference.pdf_locate import quote_rects
+    from docpipe.inference.pdf_locate import page_words, rects_from_words
+
+    # Both caches exist for the same reason: a document yields several hundred
+    # located quotes, and the old path opened the PDF *and* a SQLite connection
+    # for every single one of them — a file open, an xref parse and a page
+    # layout per quote, over NFS. Bounded, so a corpus run cannot grow into
+    # them: a page's words are some tens of kilobytes.
+    words_of = functools.lru_cache(maxsize=512)(page_words)
+    lock = threading.Lock()
+    documents: dict = {}
+    section_pages: dict = {}
+
+    def _lookup(document_id: int, owner_kind: str, owner_id: int) -> tuple:
+        with lock:
+            known = document_id in documents
+            filename = documents.get(document_id)
+            pages = section_pages.get((owner_kind, owner_id))
+        if known and (owner_kind != "section" or pages is not None):
+            return filename, pages or []
+        conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
+        try:
+            if not known:
+                row = conn.execute(
+                    "SELECT filename FROM Documents WHERE id = ?",
+                    (document_id,)).fetchone()
+                filename = row[0] if row else None
+            if owner_kind == "section" and pages is None:
+                try:
+                    pages = [int(r[0]) for r in conn.execute(
+                        "SELECT page_number FROM SectionPages WHERE section = ? "
+                        "ORDER BY page_number", (owner_id,))]
+                except sqlite3.OperationalError:
+                    pages = []
+        finally:
+            conn.close()
+        with lock:
+            documents[document_id] = filename
+            if owner_kind == "section":
+                section_pages[(owner_kind, owner_id)] = pages or []
+        return filename, pages or []
 
     def locate(source: Source, quote: str) -> Optional[list]:
         document_id = source.provenance.get("document_id")
         first_page = source.provenance.get("page")
         if not document_id:
             return None
-        # Own connection: lookups run inside worker threads.
-        conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
-        try:
-            row = conn.execute("SELECT filename FROM Documents WHERE id = ?",
-                               (document_id,)).fetchone()
-            pages = []
-            if source.owner_kind == "section":
-                try:
-                    pages = [int(r[0]) for r in conn.execute(
-                        "SELECT page_number FROM SectionPages WHERE section = ? "
-                        "ORDER BY page_number", (source.owner_id,))]
-                except sqlite3.OperationalError:
-                    pages = []
-        finally:
-            conn.close()
-        if row is None:
+        filename, pages = _lookup(document_id, source.owner_kind, source.owner_id)
+        if filename is None:
             return None
-        pdf_path = pdf_root / row[0]
+        pdf_path = pdf_root / filename
         if not pdf_path.is_file():
             return None
-        candidates = ([int(first_page)] if first_page else []) +                      [p for p in pages if p != first_page]
+        candidates = ([int(first_page)] if first_page else []) + \
+                     [p for p in pages if p != first_page]
         for page in candidates[:LOCATE_MAX_PAGES]:
-            rects = quote_rects(pdf_path, page, quote)
+            rects = rects_from_words(words_of(pdf_path, page), quote)
             if rects:
                 return rects
         return None
@@ -707,7 +770,6 @@ def main(argv: Optional[list] = None) -> int:
                      f"from the transcriptions alone")
     harvest = make_harvester(args.image_root)     # OpenAI client is thread-safe
     locate = make_locate(args.db, args.pdf_root)
-    candidates = make_candidates(args.db)
 
     with sqlite3.connect(f"file:{args.db}?mode=ro", uri=True) as listing:
         documents = _documents(listing)
@@ -747,10 +809,13 @@ def main(argv: Optional[list] = None) -> int:
         conn.row_factory = sqlite3.Row
         cache_conn = query_cache.connect(cache_path)
         try:
+            # One memo per document: retrieval and the fallback floor meet the
+            # same section in every round and for every parameter.
+            fetch = make_content_fetcher()
             items, report = plan_document(
                 document_id, spec, templates,
-                retrieve=make_retrieve(conn, index, id_to_pos, cache_conn),
-                candidates=candidates, max_rounds=MAX_ROUNDS)
+                retrieve=make_retrieve(conn, index, id_to_pos, cache_conn, fetch),
+                candidates=make_candidates(conn, fetch), max_rounds=MAX_ROUNDS)
             return Path(filename).stem, split_long_sources(items), report
         finally:
             conn.close()

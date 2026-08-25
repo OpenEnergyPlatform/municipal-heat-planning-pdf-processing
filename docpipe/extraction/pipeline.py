@@ -74,7 +74,7 @@ def plan_document(
     spec: Spec,
     templates: list,
     *,
-    retrieve: Callable,                   # (query, document_id, exclude) -> [Source]
+    retrieve: Callable,                   # (probes, document_id, exclude) -> [[Source]]
     candidates: Optional[Callable] = None,  # (document_id, Parameter) -> [Source]
     max_rounds: int = MAX_SWEEP_ROUNDS,
 ) -> tuple:
@@ -96,8 +96,12 @@ def plan_document(
         while rounds < max_rounds:
             rounds += 1
             new_sources: list = []
-            for query in probes:
-                for source in retrieve(query, document_id, set(seen)):
+            # Every probe of the round in one call: retrieval builds the
+            # document's sub-index once and searches the probes as one matrix.
+            # It grows the excluded set from probe to probe itself, which is
+            # what the loop used to do by handing each probe a fresh snapshot.
+            for sources in retrieve(probes, document_id, set(seen)):
+                for source in sources:
                     key = (source.owner_kind, source.owner_id)
                     if key in seen:
                         continue
@@ -133,7 +137,7 @@ def harvest_document(
     spec: Spec,
     templates: list,
     *,
-    retrieve: Callable,                   # (query, document_id, exclude) -> [Source]
+    retrieve: Callable,                   # (probes, document_id, exclude) -> [[Source]]
     harvest: Callable,                    # (Source, Parameter) -> [claim dict]
     locate: Optional[Callable] = None,    # (Source, quote) -> rects | None
     candidates: Optional[Callable] = None,  # (document_id, Parameter) -> [Source]

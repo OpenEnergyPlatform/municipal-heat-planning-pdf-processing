@@ -57,6 +57,26 @@ def test_only_the_changed_version_is_stale(tmp_path):
     assert stale(stamp, {"a": "1", "b": "NEW"}) == ["b"]
 
 
+def _per_probe(fn):
+    """Adapt a one-probe stub to the batched contract retrieval now has.
+
+    plan_document hands every probe of a round over in one call, because the
+    real implementation builds the document's sub-index once and searches the
+    probes as a matrix. Exclusion still grows from probe to probe — that is
+    what this reproduces, and what the sequential version did by rebuilding
+    the snapshot each time.
+    """
+    def retrieve(probes, document_id, exclude):
+        taken = set(exclude)
+        out = []
+        for probe in probes:
+            found = list(fn(probe, document_id, set(taken)))
+            taken.update((s.owner_kind, s.owner_id) for s in found)
+            out.append(found)
+        return out
+    return retrieve
+
+
 def test_run_document_writes_then_skips_then_redoes_on_stale(tmp_path, monkeypatch):
     monkeypatch.setattr(runner.prompts, "versions",
                         lambda ids: {i: "v1" for i in ids})
@@ -71,7 +91,7 @@ def test_run_document_writes_then_skips_then_redoes_on_stale(tmp_path, monkeypat
         return [{"value": 42005, "unit_raw": "MWh/a", "carrier": "Erdgas",
                  "quote": "Erdgas | 42.005"}]
 
-    deps = {"retrieve": retrieve, "harvest": harvest}
+    deps = {"retrieve": _per_probe(retrieve), "harvest": harvest}
     args = (7, "plan_x", tmp_path, SPEC, "sha-1", ["{label}"], deps)
 
     runner.run_document(*args)
@@ -98,7 +118,7 @@ def test_a_source_the_model_never_answered_is_a_visible_hole(tmp_path, monkeypat
         return [] if ("table", 1) in exclude else \
             [Source("table", 1, "| Erdgas | 42.005 |", {"page": 3})]
 
-    deps = {"retrieve": retrieve,
+    deps = {"retrieve": _per_probe(retrieve),
             "harvest": lambda s, p: [{"_harvest_failed": True}]}
     runner.run_document(7, "plan_y", tmp_path, SPEC, "sha", ["{label}"], deps)
     rows = [json.loads(l) for l in
@@ -305,13 +325,15 @@ def test_planning_never_calls_the_model():
 
     calls = []
 
-    def retrieve(query, document_id, exclude):
-        calls.append(query)
+    def retrieve(probes, document_id, exclude):
+        calls.append(list(probes))
         if len(calls) > 1:
-            return []
-        return [_source("Erdgas 42.005 MWh/a im Jahr 2020")]
+            return [[] for _ in probes]
+        return [[_source("Erdgas 42.005 MWh/a im Jahr 2020")] for _ in probes]
 
     items, report = plan_document(7, SPEC, ["{label}"], retrieve=retrieve)
+    assert calls[0] == ["Endenergieverbrauch"], (
+        "every probe of a round goes over in one call, not one call per probe")
     assert len(items) == 1 and items[0].source.owner_id == 1
     assert report.owners_harvested == 1
     assert report.tuples == [] and report.refusals == []
