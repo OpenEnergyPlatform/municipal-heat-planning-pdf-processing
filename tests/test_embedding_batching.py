@@ -37,10 +37,23 @@ def _inp(n_chars, i, kind="section_text"):
 
 @pytest.fixture
 def written(monkeypatch):
+    """Intercepts the DB writeback; collects (pdf_name, records) per write."""
     calls = []
-    monkeypatch.setattr(emb, "write_embedding_ids_batch",
-                        lambda db, doc, records: calls.append((doc, records)))
-    monkeypatch.setattr(emb, "save_index", lambda index, path: None)
+
+    class _FakeWriter:
+        def __init__(self, db_path):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+        def write(self, pdf_name, records):
+            calls.append((pdf_name, records))
+
+    monkeypatch.setattr(emb, "EmbeddingWriter", _FakeWriter)
     return calls
 
 
@@ -94,6 +107,53 @@ def test_text_and_image_inputs_stay_in_separate_batches(written, tmp_path):
     assert [len(b) for b in embedder.batches] == [2, 1]
 
 
+def _merged(n_sections):
+    """A merged document of n plain sections, each with one table."""
+    return {"sections": [
+        {"title": "S%d" % i, "content": "c", "page_number": 1, "pages": [1],
+         "segments": [],
+         "tables": [{"id": "s%d_tbl0" % i, "path": "", "page_number": 1}],
+         "figures": []}
+        for i in range(n_sections)]}
+
+
+def test_the_db_writeback_opens_one_connection_for_the_whole_call(
+        kwp_db, tmp_path, monkeypatch):
+    """Batches are packed by text length across documents, so a 32-item batch
+    routinely straddles many: a connection per (batch, document) pair was close
+    to one connect, two PRAGMAs and a document lookup per embedding."""
+    from docpipe.chunking import database as DB
+
+    db_path, con = kwp_db
+    con.execute("INSERT INTO Documents (id, filename, num_pages) VALUES (2, 'other.pdf', 9)")
+    DB._insert_sections(1, _merged(32), con)
+    DB._insert_sections(2, _merged(32), con)
+    con.commit()
+
+    inputs = []
+    for section in range(32):                 # interleaved: every batch straddles
+        for name in ("doc", "other"):
+            inputs.append(EmbeddingInput(
+                embedding_type="table_text", pdf_name=name, section_index=section,
+                item_id="s%d_tbl0" % section, text="x" * 100))
+
+    opened = []
+    real_connect = DB.connect
+    monkeypatch.setattr(DB, "connect",
+                        lambda p: (opened.append(str(p)), real_connect(p))[1])
+
+    emb.create_embeddings(inputs, _FakeIndex(), 0, db_path,
+                          embedder=_RecordingEmbedder(), batch_size=32)
+
+    assert len(opened) == 1, f"{len(opened)} connections for one call"
+    # and every record still found its owner, in the right document
+    rows = con.execute(
+        "SELECT s.document, COUNT(*) FROM Embeddings e "
+        "JOIN Tables t ON e.owner_id = t.id JOIN Sections s ON t.section = s.id "
+        "WHERE e.owner_kind = 'table' GROUP BY s.document").fetchall()
+    assert rows == [(1, 32), (2, 32)]
+
+
 # ---------------------------------------------------------------------------
 # The pipeline's embed step: preparation must overlap the embedding
 # ---------------------------------------------------------------------------
@@ -129,7 +189,8 @@ def test_the_gpus_start_before_the_last_document_is_read(tmp_path, monkeypatch):
     monkeypatch.setattr(pl, "build_embedding_inputs", fake_prepare_inputs)
     monkeypatch.setattr(pl, "create_embeddings", fake_create)
     monkeypatch.setattr(pl, "document_id", lambda db, name: 1)
-    monkeypatch.setattr(pl, "get_existing_embeddings", lambda db, name: set())
+    monkeypatch.setattr(pl, "get_existing_embeddings",
+                        lambda db, name, doc_id=None: set())
     monkeypatch.setattr(pl, "load_or_create_index", lambda p: (_FakeIndex(), 0))
     monkeypatch.setattr(pl, "next_faiss_id", lambda p: 0)
     monkeypatch.setattr(pl, "load_embedder", lambda name: None)
@@ -157,7 +218,8 @@ def test_every_document_is_embedded_exactly_once_across_the_chunks(tmp_path, mon
                         lambda inputs, index, next_id, db, **kw: (
                             seen.append(len(inputs)) or next_id + len(inputs)))
     monkeypatch.setattr(pl, "document_id", lambda db, name: 1)
-    monkeypatch.setattr(pl, "get_existing_embeddings", lambda db, name: set())
+    monkeypatch.setattr(pl, "get_existing_embeddings",
+                        lambda db, name, doc_id=None: set())
     monkeypatch.setattr(pl, "load_or_create_index", lambda p: (_FakeIndex(), 0))
     monkeypatch.setattr(pl, "next_faiss_id", lambda p: 0)
     monkeypatch.setattr(pl, "load_embedder", lambda name: None)
@@ -166,6 +228,73 @@ def test_every_document_is_embedded_exactly_once_across_the_chunks(tmp_path, mon
     pl.run(root, tmp_path / "db.sqlite", tmp_path / "idx", step="embed")
 
     assert sum(seen) == 10 * 700
+
+
+def test_the_index_is_not_written_once_per_flush(written, tmp_path, monkeypatch):
+    """A million 4096-dim vectors is a ~16 GB file, rewritten whole. Saving it
+    at the end of every embed call was ~244 rewrites over a build, each one with
+    the GPUs idle. Counted wherever the save lives — this runs the real
+    create_embeddings, which used to do it itself."""
+    from docpipe.chunking import pipeline as pl
+
+    root = _corpus(tmp_path, 40, 1)
+    index = _FakeIndex()
+    saves = []
+
+    def record(idx, path):
+        saves.append(idx.ntotal)
+
+    monkeypatch.setattr(pl, "build_embedding_inputs",
+                        lambda merged, name, d: [_inp(50, 0)] * 1000)
+    monkeypatch.setattr(pl, "document_id", lambda db, name: 1)
+    monkeypatch.setattr(pl, "get_existing_embeddings",
+                        lambda db, name, doc_id=None: set())
+    monkeypatch.setattr(pl, "load_or_create_index", lambda p: (index, 0))
+    monkeypatch.setattr(pl, "next_faiss_id", lambda p: 0)
+    monkeypatch.setattr(pl, "load_embedder", lambda name: _RecordingEmbedder())
+    monkeypatch.setattr(pl, "save_index", record)
+    monkeypatch.setattr(emb, "save_index", record)
+    monkeypatch.setattr(pl, "EMBED_SAVE_VECTORS", 20_000)
+
+    pl.run(root, tmp_path / "db.sqlite", tmp_path / "idx", step="embed")
+
+    # 40 docs x 1000 items = 40k vectors, flushed in chunks of 5000: eight embed
+    # calls, insurance every 20k vectors, plus the save that ends the run.
+    assert index.ntotal == 40_000
+    assert 0 < len(saves) <= 4, f"{len(saves)} index writes for 8 flushes"
+    assert saves[-1] == 40_000, "the finished index was not saved"
+
+
+def test_a_crash_mid_run_never_loses_more_than_the_insurance_interval(
+        tmp_path, monkeypatch):
+    """The save is rarer, not gone: it fires on vectors added since the last
+    save, so a killed run re-embeds a bounded amount whatever the flush size."""
+    from docpipe.chunking import pipeline as pl
+
+    root = _corpus(tmp_path, 12, 1)
+    index = _FakeIndex()
+    saves = []
+
+    def fake_create(inputs, idx, next_id, db_path, **kw):
+        idx.ids.extend(range(next_id, next_id + len(inputs)))
+        return next_id + len(inputs)
+
+    monkeypatch.setattr(pl, "build_embedding_inputs",
+                        lambda merged, name, d: [_inp(50, 0)] * 5000)
+    monkeypatch.setattr(pl, "create_embeddings", fake_create)
+    monkeypatch.setattr(pl, "document_id", lambda db, name: 1)
+    monkeypatch.setattr(pl, "get_existing_embeddings",
+                        lambda db, name, doc_id=None: set())
+    monkeypatch.setattr(pl, "load_or_create_index", lambda p: (index, 0))
+    monkeypatch.setattr(pl, "next_faiss_id", lambda p: 0)
+    monkeypatch.setattr(pl, "load_embedder", lambda name: None)
+    monkeypatch.setattr(pl, "save_index", lambda i, path: saves.append(i.ntotal))
+    monkeypatch.setattr(pl, "EMBED_SAVE_VECTORS", 10_000)
+
+    pl.run(root, tmp_path / "db.sqlite", tmp_path / "idx", step="embed")
+
+    gaps = [b - a for a, b in zip([0] + saves, saves)]
+    assert max(gaps) <= 10_000 + 4096, f"up to {max(gaps)} vectors unsaved"
 
 
 class _RecordingPool:
@@ -285,7 +414,8 @@ def test_a_directory_without_a_documents_row_is_skipped_not_embedded(
                         lambda inputs, index, next_id, db, **kw: (
                             embedded.extend(i.pdf_name for i in inputs)
                             or next_id + len(inputs)))
-    monkeypatch.setattr(pl, "get_existing_embeddings", lambda db, name: set())
+    monkeypatch.setattr(pl, "get_existing_embeddings",
+                        lambda db, name, doc_id=None: set())
     monkeypatch.setattr(pl, "load_or_create_index", lambda p: (_FakeIndex(), 0))
     monkeypatch.setattr(pl, "next_faiss_id", lambda p: 0)
     monkeypatch.setattr(pl, "load_embedder", lambda name: None)
