@@ -393,3 +393,37 @@ def test_a_refused_request_is_not_retried(monkeypatch):
     harvest = runner.make_harvester(None)
     assert harvest(_source("x"), SPEC.parameters[0]) == [{"_harvest_failed": True}]
     assert len(attempts) == 1, f"{len(attempts)} attempts for a 400"
+
+
+def test_the_document_index_is_built_once_and_searched_once_per_probe_set(monkeypatch):
+    """A sweep asks the same probes again in every round and only the exclusion
+    grows, so the sub-index and the score matrix are invariant across rounds.
+    Rebuilding both for four parameters times four rounds was sixteen times the
+    work of doing it once per document and once per parameter."""
+    from docpipe.inference import faiss_store, query_cache
+
+    prepared_for = []
+    searched = []
+
+    def prepare(conn, index, id_to_pos, document_id, types):
+        prepared_for.append(document_id)
+        return {"document": document_id}
+
+    def search(prepared, vecs):
+        searched.append(len(list(vecs)))
+        return [], []
+
+    monkeypatch.setattr(faiss_store, "prepare_document", prepare)
+    monkeypatch.setattr(faiss_store, "search_prepared", search)
+    monkeypatch.setattr(faiss_store, "rank_prepared",
+                        lambda conn, prepared, s, p, k, **kw: [])
+    monkeypatch.setattr(query_cache, "get", lambda conn, key: [0.1, 0.2])
+
+    retrieve = runner.make_retrieve(None, None, {}, None)
+    retrieve(["a", "b"], 7, set())                 # parameter one, round one
+    retrieve(["a", "b"], 7, {("section", 1)})      # round two: same probes
+    retrieve(["c"], 7, set())                      # parameter two
+    retrieve(["a", "b"], 9, set())                 # next document
+
+    assert prepared_for == [7, 9], "one sub-index per document, not per round"
+    assert searched == [2, 1, 2], "round two reuses round one's search"

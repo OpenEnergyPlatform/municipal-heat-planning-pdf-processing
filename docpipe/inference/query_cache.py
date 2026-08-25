@@ -24,10 +24,18 @@ CREATE TABLE IF NOT EXISTS query_cache (
 """
 
 
-def connect(path: Path) -> sqlite3.Connection:
-    """Open (creating if needed) the query cache database."""
+def connect(path: Path, create: bool = True) -> sqlite3.Connection:
+    """Open the query cache database.
+
+    `create=False` skips the DDL and its commit. That commit takes a write
+    lock on a file every planning thread is reading, and a batch run opens one
+    of these per document: the schema needs creating once, not a thousand
+    times.
+    """
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
+    if not create:
+        return sqlite3.connect(path, check_same_thread=False)
     conn = sqlite3.connect(path, check_same_thread=False)
     conn.execute(_SCHEMA)
     conn.commit()
@@ -63,9 +71,17 @@ def get(conn: sqlite3.Connection, key: str) -> Optional[np.ndarray]:
 
 def put(conn: sqlite3.Connection, key: str, vector: np.ndarray) -> None:
     """Store `vector` under `key` (idempotent; overwrites on repeat)."""
-    blob = np.asarray(vector, dtype="float32").tobytes()
-    conn.execute(
+    put_many(conn, [(key, vector)])
+
+
+def put_many(conn: sqlite3.Connection, pairs) -> None:
+    """Store many vectors in one transaction — one fsync, not one per vector."""
+    rows = [(key, np.asarray(vector, dtype="float32").tobytes())
+            for key, vector in pairs]
+    if not rows:
+        return
+    conn.executemany(
         "INSERT OR REPLACE INTO query_cache (query_key, vector) VALUES (?, ?)",
-        (key, blob),
+        rows,
     )
     conn.commit()
