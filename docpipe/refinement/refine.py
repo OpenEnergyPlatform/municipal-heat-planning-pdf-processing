@@ -70,6 +70,20 @@ def _backoff(attempt: int) -> None:
         time.sleep(min(2 * attempt, 10))
 
 
+def _client_error_status(exc: Exception) -> Optional[int]:
+    """The 4xx behind an API error, if the server refused the request itself.
+
+    429 and 5xx are the server asking for time; a 4xx is this request being
+    wrong, and every identical retry is refused identically.
+    """
+    status = getattr(exc, "status_code", None)
+    if status is None:
+        status = getattr(getattr(exc, "response", None), "status_code", None)
+    if isinstance(status, int) and 400 <= status < 500 and status != 429:
+        return status
+    return None
+
+
 def _strip_table_source_text(sections: list) -> None:
     """Remove the QA-only ``source_text`` field from every table, in place."""
     for sec in sections:
@@ -193,7 +207,9 @@ def _call_llm(
 
     *prev_context* (the previous window's last section) is passed read-only so
     the model can judge whether the first section is a continuation that should
-    be merged across the window boundary. Retries up to MAX_RETRIES times.
+    be merged across the window boundary. Retries up to MAX_RETRIES times —
+    except on a 4xx, where the window is abandoned at once: the server refused
+    the request itself, so a retry of it is refused too.
 
     Returns:
         Parsed list of section dicts with "_action" fields, or None on failure.
@@ -314,14 +330,27 @@ def _call_llm(
             ]
             _backoff(attempt)
         except Exception as e:
+            status = _client_error_status(e)
+            if status is not None:
+                if "maximum context length" in str(e):
+                    # The window does not fit and will not start fitting. Said
+                    # loudly because the caller keeps such a window as raw text,
+                    # which reads exactly like a window that needed no change.
+                    log.error(
+                        "   Window ABANDONED — it exceeds the model's context "
+                        "and stays unrefined. %d section(s): %s | %s",
+                        len(sections_window),
+                        "; ".join(str(s.get("title") or "?")[:60]
+                                  for s in sections_window),
+                        e,
+                    )
+                else:
+                    log.error("   LLM rejected the request (HTTP %d): %s", status, e)
+                return None
             # Covers connection errors and the request timeout.
             log.error(
                 f"   Attempt {attempt}/{MAX_RETRIES}: LLM request failed: {e}"
             )
-            # Whatever the repair turn added, it no longer fits. Anything but a
-            # fresh start would fail the same way on every remaining attempt.
-            if "maximum context length" in str(e):
-                log.warning("   Context limit hit — retrying without the repair turn")
             messages = list(base_messages)
             _backoff(attempt)
 

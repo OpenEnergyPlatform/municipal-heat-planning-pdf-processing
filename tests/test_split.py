@@ -1,5 +1,7 @@
 """Cutting an oversized section: the LLM says where, the code does it."""
 import json
+import re
+import threading
 
 import pytest
 
@@ -171,3 +173,64 @@ def test_split_oversized_leaves_the_short_ones_in_place():
     out = split.split_oversized([short, long], ask=lambda s, u: '{"cuts": [{"at": 1}]}')
     assert len(out) == 3
     assert out[0] is short
+
+
+# ---------------------------------------------------------------------------
+# the split calls of a document go out together
+# ---------------------------------------------------------------------------
+def test_the_split_calls_go_out_together(monkeypatch):
+    """Serially this phase held exactly one request in flight per document, and
+    it finishes before the first refinement window is dispatched. The barrier
+    only clears if the calls overlap."""
+    monkeypatch.setattr(split, "LLM_NUM_PARALLEL", 4)
+    sections = [_section([_text(700), _text(700)], f"Lang {i}") for i in range(4)]
+    barrier = threading.Barrier(len(sections), timeout=5)
+
+    def ask(system, user):
+        barrier.wait()
+        return json.dumps({"first_title": "Erstes",
+                           "cuts": [{"at": 1, "title": "Zweites"}]})
+
+    out = split.split_oversized(sections, ask=ask)
+
+    assert not barrier.broken
+    # A mechanical fallback would cut these in two as well — only the titles
+    # say the model's answer was used.
+    assert [p["title"] for p in out] == ["Erstes", "Zweites"] * 4
+
+
+def test_the_replies_land_on_the_section_they_describe(monkeypatch):
+    """Under a pool the answers come back out of order — here in reverse, on
+    purpose. The cuts still have to be the serial ones, in the serial order."""
+    monkeypatch.setattr(split, "LLM_NUM_PARALLEL", 4)
+    sections = [_section([_text(400) for _ in range(3)], f"S{i}") for i in range(4)]
+    answered = [threading.Event() for _ in sections]
+
+    def ask(system, user):
+        i = int(re.search(r"TITLE: S(\d+)", user).group(1))
+        if i + 1 < len(sections):
+            answered[i + 1].wait(5)     # the last section answers first
+        answered[i].set()
+        return json.dumps({"first_title": f"S{i}a",
+                           "cuts": [{"at": 2, "title": f"S{i}b"}]})
+
+    parallel = split.split_oversized(sections, ask=ask)
+    # Every event is set by now, so the reference run answers straight away.
+    serial = [p for s in sections for p in split.split_section(s, ask)]
+
+    assert [p["title"] for p in parallel] == [f"S{i}{c}" for i in range(4)
+                                              for c in ("a", "b")]
+    assert [(p["title"], p["content"]) for p in parallel] \
+        == [(p["title"], p["content"]) for p in serial]
+
+
+def test_a_section_that_cannot_be_cut_is_not_asked_about(monkeypatch):
+    """Its segments no longer rebuild its content, so no answer could be used."""
+    monkeypatch.setattr(split, "LLM_NUM_PARALLEL", 4)
+    sec = _section([_text(600), _text(600)])
+    sec["content"] = "etwas ganz anderes"
+    asked = []
+
+    split.split_oversized([sec], ask=lambda s, u: asked.append(u) or "{}")
+
+    assert asked == []
