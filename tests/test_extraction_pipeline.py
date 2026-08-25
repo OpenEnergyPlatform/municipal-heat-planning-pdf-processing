@@ -41,6 +41,26 @@ def test_queries_expand_per_vocabulary_entry():
                       "Endenergieverbrauch Heizöl"]
 
 
+def _per_probe(fn):
+    """Adapt a one-probe stub to the batched contract retrieval now has.
+
+    plan_document hands every probe of a round over in one call, because the
+    real implementation builds the document's sub-index once and searches the
+    probes as a matrix. Exclusion still grows from probe to probe — that is
+    what this reproduces, and what the sequential version did by rebuilding
+    the snapshot each time.
+    """
+    def retrieve(probes, document_id, exclude):
+        taken = set(exclude)
+        out = []
+        for probe in probes:
+            found = list(fn(probe, document_id, set(taken)))
+            taken.update((s.owner_kind, s.owner_id) for s in found)
+            out.append(found)
+        return out
+    return retrieve
+
+
 def test_an_owner_found_by_two_queries_is_harvested_once():
     """Query overlap is the rule, not the exception — dedup is one rule:
     one harvest per (owner, parameter)."""
@@ -56,7 +76,7 @@ def test_an_owner_found_by_two_queries_is_harvested_once():
                  "quote": "Erdgas | 42.005"}]
 
     report = harvest_document(7, SPEC, TEMPLATES,
-                              retrieve=retrieve, harvest=harvest)
+                              retrieve=_per_probe(retrieve), harvest=harvest)
     assert calls == [1], "three queries hit the same table; one harvest"
     assert len(report.tuples) == 1
 
@@ -73,7 +93,7 @@ def test_the_sweep_stops_when_a_round_finds_nothing_new():
         return []
 
     report = harvest_document(7, SPEC, TEMPLATES,
-                              retrieve=retrieve, harvest=harvest)
+                              retrieve=_per_probe(retrieve), harvest=harvest)
     # 3 probes find everything in round one; round two adds nothing and stops.
     assert report.sweep_rounds["OEO_00050016"] == 1
     assert report.owners_harvested == 3
@@ -89,7 +109,7 @@ def test_refusals_are_reported_not_dropped():
                  "quote": "Erdgas | 42.005"}]          # value not in quote
 
     report = harvest_document(7, SPEC, TEMPLATES,
-                              retrieve=retrieve, harvest=harvest)
+                              retrieve=_per_probe(retrieve), harvest=harvest)
     assert not report.tuples
     assert report.refusals and "does not occur" in report.refusals[0]["reason"]
 
@@ -106,7 +126,7 @@ def test_unmapped_labels_ride_on_the_row_itself():
                  "quote": "Erdgas | 42.005"}]
 
     report = harvest_document(7, SPEC, TEMPLATES,
-                              retrieve=retrieve, harvest=harvest)
+                              retrieve=_per_probe(retrieve), harvest=harvest)
     row = report.tuples[0]
     assert row["flags"] == ["unmapped:carrier:Klärgas"]
     assert row["carrier_raw"] == "Klärgas" and row["carrier"] is None
@@ -124,7 +144,7 @@ def test_a_figure_claim_carries_the_visual_tier():
                  "quote": "Erdgas etwa 42.000 MWh/a"}]
 
     report = harvest_document(7, SPEC, TEMPLATES,
-                              retrieve=retrieve, harvest=harvest)
+                              retrieve=_per_probe(retrieve), harvest=harvest)
     assert [t["tier"] for t in report.tuples] == ["visual_source"]
     assert report.tuples[0]["provenance"]["image"] == "p33_img0.png", (
         "the picture is the evidence, so it has to be in the provenance")
@@ -142,7 +162,7 @@ def test_the_report_file_is_the_audit_trail(tmp_path):
         return [{"value": 1, "unit_raw": "MWh/a", "quote": "Heizöl | 17.300"}]
 
     report = harvest_document(7, SPEC, TEMPLATES,
-                              retrieve=retrieve, harvest=harvest)
+                              retrieve=_per_probe(retrieve), harvest=harvest)
     out = tmp_path / "doc7.jsonl"
     write_report(report, out)
     rows = [json.loads(l) for l in out.read_text(encoding="utf-8").splitlines()]
@@ -170,7 +190,7 @@ def test_the_fallback_harvests_only_what_retrieval_never_saw():
         harvested.append(source.owner_id)
         return []
 
-    report = harvest_document(7, SPEC, TEMPLATES, retrieve=retrieve,
+    report = harvest_document(7, SPEC, TEMPLATES, retrieve=_per_probe(retrieve),
                               harvest=harvest, candidates=candidates)
     assert harvested == [1, 2], "the seen table is not harvested twice"
     assert report.fallback["OEO_00050016"] == {"candidates": 2, "leftover": 1}

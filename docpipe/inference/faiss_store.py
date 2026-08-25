@@ -91,6 +91,82 @@ def search_subindex(
     return sub_index.search(q, k)
 
 
+def retrieve_many(
+    conn: sqlite3.Connection,
+    global_index: faiss.Index,
+    id_to_pos: dict[int, int],
+    document_id: int,
+    embedding_types: list[str],
+    query_vecs,
+    top_k: int,
+    content_fetcher: Optional[Callable[[sqlite3.Connection, str, int], Optional[dict]]] = None,
+    exclude: Optional[set] = None,
+) -> list[list[dict]]:
+    """Many probes against ONE sub-index. Same results as retrieve() per probe.
+
+    build_subindex reconstructs every candidate vector of the document, and a
+    sweep asks that document some sixty questions per round: rebuilding the
+    same sub-index for each of them was the whole cost of planning a document.
+    Here the candidate ids are read once, the sub-index is built once, and FAISS
+    is handed the probes as one query matrix — which is what its search() has
+    always taken.
+
+    The per-probe exclusion is reproduced exactly, not approximated. Callers
+    ran the probes in order and grew the excluded set as each one answered, so
+    that is what happens here, inside one call: `taken` starts as `exclude` and
+    every probe's answers join it. Searching the unfiltered sub-index and
+    skipping excluded rows afterwards gives the same rows as filtering first,
+    because dropping rows from an exact flat index cannot reorder the rest.
+    """
+    fetch = content_fetcher or db.fetch_owner_content
+
+    rows = db.get_candidate_faiss_ids(conn, document_id, embedding_types)
+    rows = [r for r in rows if r[0] in id_to_pos]
+    probes = list(query_vecs)
+    if not rows or not probes:
+        return [[] for _ in probes]
+
+    faiss_ids = [r[0] for r in rows]
+    id_to_owner: dict[int, tuple[str, int]] = {r[0]: (r[2], r[3]) for r in rows}
+    sub_index = build_subindex(global_index, id_to_pos, faiss_ids)
+
+    queries = np.asarray(probes, dtype="float32").reshape(len(probes), -1)
+    # The full ranking, not top_k: a later probe has to be able to reach past
+    # everything the earlier ones took. On a flat index every score is computed
+    # anyway, so asking for all of them costs the sort, not the search.
+    scores, positions = sub_index.search(queries, sub_index.ntotal)
+
+    taken: set = set(exclude or ())
+    out: list[list[dict]] = []
+    for row_scores, row_positions in zip(scores.tolist(), positions.tolist()):
+        best: dict[tuple[str, int], float] = {}
+        kept = 0
+        for score, pos in zip(row_scores, row_positions):
+            if pos < 0:
+                continue
+            owner = id_to_owner[faiss_ids[pos]]
+            if owner in taken:
+                continue
+            # Dedup happens POST-search on the owner: table_text and table_vl
+            # point at one Table row, and which scores higher is not known
+            # until the search is done.
+            if owner not in best or score > best[owner]:
+                best[owner] = float(score)
+            kept += 1
+            if kept == top_k:
+                break
+        hits: list[dict] = []
+        for (owner_kind, owner_id), score in sorted(
+                best.items(), key=lambda kv: kv[1], reverse=True):
+            content = fetch(conn, owner_kind, owner_id)
+            if content is None:
+                continue
+            hits.append({"score": score, **content})
+        taken.update(best)
+        out.append(hits)
+    return out
+
+
 def retrieve(
     conn: sqlite3.Connection,
     global_index: faiss.Index,
