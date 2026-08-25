@@ -166,10 +166,25 @@ def make_retrieve(conn: sqlite3.Connection, index, id_to_pos: dict,
         query_cache.put(cache_conn, key, vec)
         return vec
 
+    # A sweep calls this once per parameter and per round with the same probe
+    # list, and only `exclude` differs between rounds. Without these two the
+    # document's sub-index is rebuilt and the identical score matrix recomputed
+    # sixteen times over — four parameters by four rounds.
+    document: list = [None, None]         # document_id, prepared
+    search: list = [None, None]           # probe key, (scores, positions)
+
     def retrieve(probes: list, document_id: int, exclude: set) -> list:
-        answers = faiss_store.retrieve_many(
-            conn, index, id_to_pos, document_id, all_types,
-            [embed(p) for p in probes], TOP_K,
+        if document[0] != document_id:
+            document[:] = [document_id, faiss_store.prepare_document(
+                conn, index, id_to_pos, document_id, all_types)]
+            search[:] = [None, None]
+        key = (document_id, tuple(probes))
+        if search[0] != key:
+            search[:] = [key, faiss_store.search_prepared(
+                document[1], [embed(p) for p in probes])]
+        scores, positions = search[1]
+        answers = faiss_store.rank_prepared(
+            conn, document[1], scores, positions, TOP_K,
             content_fetcher=content_fetcher, exclude=exclude)
         return [[_source_of(hit) for hit in hits] for hits in answers]
 
@@ -205,8 +220,8 @@ def prime_probe_cache(cache_conn, spec: Spec, templates: list) -> int:
     missing = [p for p in probes if query_cache.get(cache_conn, keys[p]) is None]
     if missing:
         vectors = embedder().embed([{"text": p} for p in missing])
-        for probe, vector in zip(missing, vectors):
-            query_cache.put(cache_conn, keys[probe], vector)
+        query_cache.put_many(cache_conn,
+                             [(keys[p], v) for p, v in zip(missing, vectors)])
     log.info("extraction: %d probe(s), %d embedded in one batch, %d cached",
              len(probes), len(missing), len(probes) - len(missing))
     return len(probes)
@@ -807,7 +822,7 @@ def main(argv: Optional[list] = None) -> int:
         # above already means every read here is a hit.
         conn = sqlite3.connect(f"file:{args.db}?mode=ro", uri=True)
         conn.row_factory = sqlite3.Row
-        cache_conn = query_cache.connect(cache_path)
+        cache_conn = query_cache.connect(cache_path, create=False)
         try:
             # One memo per document: retrieval and the fallback floor meet the
             # same section in every round and for every parameter.

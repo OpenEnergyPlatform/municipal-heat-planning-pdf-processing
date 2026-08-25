@@ -71,9 +71,13 @@ def build_subindex(
     sub = faiss.IndexFlatIP(EMBEDDING_DIM)
     if not faiss_ids:
         return sub
-    vectors = np.vstack(
-        [reconstruct_vector(global_index, id_to_pos, fid) for fid in faiss_ids]
-    ).astype("float32")
+    # Straight into the destination: vstack built one temporary per vector and
+    # then astype copied the whole block again, though FAISS already stores
+    # float32.
+    inner = getattr(global_index, "index", global_index)
+    vectors = np.empty((len(faiss_ids), EMBEDDING_DIM), dtype="float32")
+    for i, fid in enumerate(faiss_ids):
+        vectors[i] = inner.reconstruct(int(id_to_pos[int(fid)]))
     sub.add(vectors)
     return sub
 
@@ -118,33 +122,85 @@ def retrieve_many(
     skipping excluded rows afterwards gives the same rows as filtering first,
     because dropping rows from an exact flat index cannot reorder the rest.
     """
-    fetch = content_fetcher or db.fetch_owner_content
+    prepared = prepare_document(conn, global_index, id_to_pos, document_id,
+                                embedding_types)
+    scores, positions = search_prepared(prepared, query_vecs)
+    return rank_prepared(conn, prepared, scores, positions, top_k,
+                         content_fetcher=content_fetcher, exclude=exclude)
 
+
+def prepare_document(conn: sqlite3.Connection, global_index: faiss.Index,
+                     id_to_pos: dict[int, int], document_id: int,
+                     embedding_types: list[str]) -> dict:
+    """One document's candidate vectors, ready to search.
+
+    Everything here depends on the document and not on the probe: the
+    candidate-id join and the reconstruction of a few hundred vectors are the
+    expensive half of a sweep and are identical for every parameter and every
+    round. Kept separate so a caller can build it once and search it many
+    times.
+    """
     rows = db.get_candidate_faiss_ids(conn, document_id, embedding_types)
     rows = [r for r in rows if r[0] in id_to_pos]
-    probes = list(query_vecs)
-    if not rows or not probes:
-        return [[] for _ in probes]
-
     faiss_ids = [r[0] for r in rows]
-    id_to_owner: dict[int, tuple[str, int]] = {r[0]: (r[2], r[3]) for r in rows}
-    sub_index = build_subindex(global_index, id_to_pos, faiss_ids)
+    owner_of = {r[0]: (r[2], r[3]) for r in rows}
+    rows_per_owner: dict = {}
+    for owner in owner_of.values():
+        rows_per_owner[owner] = rows_per_owner.get(owner, 0) + 1
+    return {"faiss_ids": faiss_ids, "owner_of": owner_of,
+            "rows_per_owner": rows_per_owner,
+            "index": build_subindex(global_index, id_to_pos, faiss_ids)}
 
+
+def search_prepared(prepared: dict, query_vecs) -> tuple:
+    """Every probe against a prepared document, in one search.
+
+    The full ranking, not top_k: a later probe has to reach past everything
+    the earlier ones took. On a flat index every score is computed anyway, so
+    asking for all of them costs the sort, not the search.
+    """
+    sub_index = prepared["index"]
+    probes = list(query_vecs)
+    if not probes or sub_index.ntotal == 0:
+        return (np.empty((len(probes), 0), dtype="float32"),
+                np.empty((len(probes), 0), dtype="int64"))
     queries = np.asarray(probes, dtype="float32").reshape(len(probes), -1)
-    # The full ranking, not top_k: a later probe has to be able to reach past
-    # everything the earlier ones took. On a flat index every score is computed
-    # anyway, so asking for all of them costs the sort, not the search.
-    scores, positions = sub_index.search(queries, sub_index.ntotal)
+    return sub_index.search(queries, sub_index.ntotal)
+
+
+def rank_prepared(conn: sqlite3.Connection, prepared: dict, scores, positions,
+                  top_k: int,
+                  content_fetcher: Optional[Callable] = None,
+                  exclude: Optional[set] = None) -> list[list[dict]]:
+    """Walk one search result into per-probe hit lists.
+
+    `taken` starts as the caller's exclusion and grows as each probe answers,
+    which is what the sweep used to do by handing every probe a fresh snapshot
+    and searching a filtered index.
+    """
+    fetch = content_fetcher or db.fetch_owner_content
+    faiss_ids = prepared["faiss_ids"]
+    owner_of = prepared["owner_of"]
+    rows_per_owner = prepared["rows_per_owner"]
 
     taken: set = set(exclude or ())
+    rows_taken = sum(rows_per_owner.get(o, 0) for o in taken)
+    total = len(faiss_ids)
     out: list[list[dict]] = []
-    for row_scores, row_positions in zip(scores.tolist(), positions.tolist()):
+    for i in range(len(scores)):
+        # Only the leading slice is turned into Python objects. At most
+        # rows_taken of those rows are excluded, so top_k + rows_taken of them
+        # always hold top_k that are not — the same rows a pre-filtered search
+        # would have returned.
+        window = min(total, top_k + rows_taken)
+        row_scores = scores[i][:window].tolist()
+        row_positions = positions[i][:window].tolist()
         best: dict[tuple[str, int], float] = {}
         kept = 0
         for score, pos in zip(row_scores, row_positions):
             if pos < 0:
                 continue
-            owner = id_to_owner[faiss_ids[pos]]
+            owner = owner_of[faiss_ids[pos]]
             if owner in taken:
                 continue
             # Dedup happens POST-search on the owner: table_text and table_vl
@@ -163,6 +219,7 @@ def retrieve_many(
                 continue
             hits.append({"score": score, **content})
         taken.update(best)
+        rows_taken += sum(rows_per_owner.get(o, 0) for o in best)
         out.append(hits)
     return out
 
