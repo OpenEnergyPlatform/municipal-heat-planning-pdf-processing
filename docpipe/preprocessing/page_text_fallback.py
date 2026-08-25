@@ -29,6 +29,7 @@ import logging
 import os
 import re
 from pathlib import Path
+import threading
 from concurrent.futures import ThreadPoolExecutor
 from typing import Callable, Optional
 
@@ -42,10 +43,18 @@ log = logging.getLogger(__name__)
 # nothing by the meaning.
 MIN_PAGE_CHARS = 60
 
-# Pages read concurrently. The server batches requests, and a document with no
-# text layer needs EVERY page read: serially that is an idle GPU and hours of
-# wall clock for a plan the size of Leipzig.
-PAGE_WORKERS = int(os.environ.get("PAGE_TRANSCRIBE_WORKERS", "8"))
+# Pages read concurrently. The server batches requests continuously, so this
+# is the number in flight at it and the only throughput lever this stage has:
+# documents are processed one at a time (the layout model is not thread-safe),
+# so unlike refinement there is no second factor multiplying it. Eight was
+# eight requests against four H100s.
+PAGE_WORKERS = int(os.environ.get("PAGE_TRANSCRIBE_WORKERS", "64"))
+
+# Renders in flight. Rendering a page at RENDER_DPI is a PyMuPDF rasterise and
+# a PIL PNG encode — CPU work holding the GIL, and it used to sit in the same
+# slot as the model call, so raising the transcription count alone would just
+# have added threads fighting over the encoder.
+PAGE_RENDER_WORKERS = int(os.environ.get("PAGE_RENDER_WORKERS", "4"))
 
 # Where synthesized blocks are placed on the page, as a fraction of page height
 # and width. A transcription has no coordinates, so the boxes are stacked down
@@ -152,6 +161,7 @@ def fill_missing_page_text(
     min_chars: int = MIN_PAGE_CHARS,
     max_pages: Optional[int] = None,
     workers: int = 1,
+    render_workers: int = PAGE_RENDER_WORKERS,
 ) -> dict:
     """Transcribe every page whose text layer is missing. Mutates *pages*.
 
@@ -188,10 +198,16 @@ def fill_missing_page_text(
             len(candidates), max_pages, max_pages)
         candidates = candidates[:max_pages]
 
+    # Render and transcribe are different resources: the render is CPU under
+    # the GIL, the transcription is a request the server wants many of. The
+    # semaphore bounds the first without bounding the second.
+    render_slots = threading.Semaphore(max(render_workers, 1))
+
     def read(page) -> Optional[str]:
         image = None
         try:
-            image = render(page.page_number)
+            with render_slots:
+                image = render(page.page_number)
             return transcribe(image, page.page_number) if image is not None else None
         except Exception as e:                       # one page must not end the run
             log.error("page transcription: page %d failed: %s",
@@ -258,7 +274,7 @@ PAGE_TRANSCRIBE_PROMPT_ID = "preprocessing/page_transcribe"
 RENDER_DPI = 200
 
 
-def make_page_renderer(pdf_path, output_dir=None, scratch_dir=None):
+def make_page_renderer(pdf_path, scratch_dir=None):
     """render(page_number) -> path of the rendered page PNG.
 
     Written to disk rather than held in memory: the call layer takes a path.
@@ -282,12 +298,21 @@ def make_page_renderer(pdf_path, output_dir=None, scratch_dir=None):
         scratch_dir = tempfile.mkdtemp(prefix="pagetext_")
     pages_dir = Path(scratch_dir)
     pages_dir.mkdir(parents=True, exist_ok=True)
-    doc = fitz.open(pdf_path)
+    # One Document per thread. PyMuPDF does not support concurrent access to
+    # one, and every worker of the transcription pool called this.
+    local = threading.local()
+
+    def _doc():
+        doc = getattr(local, "doc", None)
+        if doc is None:
+            doc = local.doc = fitz.open(pdf_path)
+        return doc
 
     def render(page_number: int):
         out = pages_dir / f"p{page_number - 1}_page.png"
         if not out.exists():
-            image: Image.Image = _render_page_to_pil(doc[page_number - 1], RENDER_DPI)
+            image: Image.Image = _render_page_to_pil(_doc()[page_number - 1],
+                                                     RENDER_DPI)
             image.save(out, format="PNG")
         return out
 

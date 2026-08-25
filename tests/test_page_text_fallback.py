@@ -243,7 +243,7 @@ def test_the_report_is_written_even_when_nothing_needed_doing(tmp_path,
     from docpipe.preprocessing import pipeline as pl
     from docpipe.preprocessing import page_text_fallback as fb
 
-    monkeypatch.setattr(fb, "make_page_renderer", lambda pdf, out: (lambda n: None))
+    monkeypatch.setattr(fb, "make_page_renderer", lambda pdf: (lambda n: None))
     monkeypatch.setattr(fb, "make_transcriber", lambda profile: (lambda img, n: None))
 
     out = tmp_path / "out"
@@ -281,3 +281,52 @@ def test_one_failing_page_does_not_take_the_others_down_when_concurrent():
                                     transcribe=transcribe, workers=4)
     assert report["pages_transcribed"] == 3 and report["pages_failed"] == 1
     assert pages[1].blocks == []
+
+
+def test_rendering_is_bounded_but_transcription_is_not():
+    """Render and transcribe used to share one slot, so eight workers meant
+    eight requests at a server that schedules hundreds — and every one of them
+    spent part of its slot in PyMuPDF and the PNG encoder holding the GIL.
+
+    Not timing-based: the barrier only clears if four transcriptions are in
+    flight at once, and the render counter is read while renders are blocked.
+    (conftest patches time.sleep globally, so a sleep here would prove
+    nothing.)
+    """
+    import threading
+
+    from docpipe.preprocessing.page_text_fallback import fill_missing_page_text
+
+    lock = threading.Lock()
+    live = 0
+    peak = 0
+    blocked = threading.Event()          # never set: Event.wait is a real wait
+    together = threading.Barrier(4, timeout=10)
+    cleared = []
+
+    def render(page_number):
+        nonlocal live, peak
+        with lock:
+            live += 1
+            peak = max(peak, live)
+        blocked.wait(0.05)
+        with lock:
+            live -= 1
+        return f"page{page_number}.png"
+
+    def transcribe(image, page_number):
+        try:
+            together.wait()
+            cleared.append(page_number)
+        except threading.BrokenBarrierError:
+            pass
+        return "Ein Satz mit genug Text."
+
+    pages = [_page(n) for n in range(1, 33)]
+    fill_missing_page_text(pages, render, transcribe, workers=16,
+                           render_workers=2)
+
+    assert peak <= 2, f"{peak} renders at once, limit was 2"
+    assert len(cleared) >= 4, (
+        "four transcriptions never overlapped — the model call is still held "
+        "to the render limit")
