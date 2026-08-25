@@ -369,7 +369,7 @@ def _fill_missing_page_text(pdf_path, output_dir, pages, *, profile=None) -> dic
 
     report = fill_missing_page_text(
         pages,
-        render=make_page_renderer(pdf_path, output_dir),
+        render=make_page_renderer(pdf_path),
         transcribe=make_transcriber(profile),
         workers=PAGE_WORKERS,
     )
