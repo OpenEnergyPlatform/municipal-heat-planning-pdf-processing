@@ -93,28 +93,21 @@ def get_candidate_faiss_ids(
         for r in conn.execute(sql, params).fetchall()
     ]
 
-def _parent_section(conn: sqlite3.Connection, section_id: int) -> tuple[Optional[int], Optional[str]]:
-    """(section_number, title) of the owning Section, for table/figure citations."""
-    row = conn.execute(
-        "SELECT section_number, title FROM Sections WHERE id = ?", (section_id,)
-    ).fetchone()
-    if row is None:
-        return None, None
-    return row["section_number"], row["title"]
-
 _PLACEHOLDER_RE = re.compile(r"\[([a-z0-9_]+)\]")
 
 
 def section_item_captions(conn: sqlite3.Connection, section_id: int) -> dict[str, str]:
     """block_id -> caption for every table and figure anchored in this section."""
     out: dict[str, str] = {}
-    for table in ("Tables", "Images"):
-        for row in conn.execute(
-            f"SELECT block_id, caption FROM {table} WHERE section = ?", (section_id,)
-        ):
-            caption = (row["caption"] or "").strip()
-            if row["block_id"] and caption:
-                out[row["block_id"]] = caption
+    for row in conn.execute(
+        "SELECT block_id, caption FROM Tables WHERE section = ? "
+        "UNION ALL "
+        "SELECT block_id, caption FROM Images WHERE section = ?",
+        (section_id, section_id),
+    ):
+        caption = (row["caption"] or "").strip()
+        if row["block_id"] and caption:
+            out[row["block_id"]] = caption
     return out
 
 
@@ -205,48 +198,35 @@ def fetch_owner_content(
             "document_id": row["document"],
         }
 
-    if owner_kind == "table":
+    # Tables and figures: one join, not four statements. The section number,
+    # the section title, the owning document and that document's asset folder
+    # all hang off the same two rows, and reading them apart meant four NFS
+    # round trips per owner, two of them the same Sections row twice.
+    if owner_kind in ("table", "figure"):
+        table, body = (("Tables", "markdown") if owner_kind == "table"
+                       else ("Images", "description"))
         row = conn.execute(
-            "SELECT caption, markdown, page_number, path, section "
-            "FROM Tables WHERE id = ?",
+            f"SELECT o.caption, o.{body} AS body, o.page_number, o.path, "
+            f"       s.section_number, s.title AS section_title, s.document, "
+            f"       d.filename "
+            f"FROM {table} o "
+            f"JOIN Sections s ON o.section = s.id "
+            f"LEFT JOIN Documents d ON s.document = d.id "
+            f"WHERE o.id = ?",
             (owner_id,),
         ).fetchone()
         if row is None:
             return None
-        sec_num, sec_title = _parent_section(conn, row["section"])
-        doc_id = _section_document(conn, row["section"])
         return {
-            "owner_kind": "table",
+            "owner_kind": owner_kind,
             "owner_id": owner_id,
             "title": row["caption"],
-            "text": row["markdown"] or "",
+            "text": row["body"] or "",
             "page_number": row["page_number"],
-            "image_path": _asset_path(_document_folder(conn, doc_id), row["path"]),
-            "section_number": sec_num,
-            "section_title": sec_title,
-            "document_id": doc_id,
-        }
-
-    if owner_kind == "figure":
-        row = conn.execute(
-            "SELECT caption, description, page_number, path, section "
-            "FROM Images WHERE id = ?",
-            (owner_id,),
-        ).fetchone()
-        if row is None:
-            return None
-        sec_num, sec_title = _parent_section(conn, row["section"])
-        doc_id = _section_document(conn, row["section"])
-        return {
-            "owner_kind": "figure",
-            "owner_id": owner_id,
-            "title": row["caption"],
-            "text": row["description"] or "",
-            "page_number": row["page_number"],
-            "image_path": _asset_path(_document_folder(conn, doc_id), row["path"]),
-            "section_number": sec_num,
-            "section_title": sec_title,
-            "document_id": doc_id,
+            "image_path": _asset_path(_folder_name(row["filename"]), row["path"]),
+            "section_number": row["section_number"],
+            "section_title": row["section_title"],
+            "document_id": row["document"],
         }
 
     raise ValueError(f"unknown owner_kind: {owner_kind!r}")
@@ -336,10 +316,16 @@ def _document_folder(conn: sqlite3.Connection, document_id: Optional[int]) -> Op
     row = conn.execute(
         "SELECT filename FROM Documents WHERE id = ?", (document_id,)
     ).fetchone()
-    if row is None or not row["filename"]:
+    return _folder_name(row["filename"] if row else None)
+
+
+def _folder_name(filename: Optional[str]) -> Optional[str]:
+    """The asset folder a stored PDF filename names: the same string without
+    its `.pdf`. Split out so a query that already read `filename` in a join
+    does not have to read it again."""
+    if not filename:
         return None
-    fn = row["filename"]
-    return fn[:-4] if fn.lower().endswith(".pdf") else fn
+    return filename[:-4] if filename.lower().endswith(".pdf") else filename
 
 def _asset_path(folder: Optional[str], stored_path: Optional[str]) -> Optional[str]:
     """
