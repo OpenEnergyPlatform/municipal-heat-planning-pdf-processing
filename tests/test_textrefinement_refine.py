@@ -191,3 +191,75 @@ def test_the_report_never_breaks_the_run(caplog):
 
     _report_dropped_text([{"content": None}, {}, {"content": ["bibtex"]}],
                          [None])
+
+
+# ---------------------------------------------------------------------------
+# A refused request is a verdict, not a bad moment
+# ---------------------------------------------------------------------------
+
+class _Refused(Exception):
+    """What the SDK raises on a 4xx: an error carrying the HTTP status."""
+
+    def __init__(self, message, status_code=400):
+        super().__init__(message)
+        self.status_code = status_code
+
+
+_TOO_LONG = ("This model's maximum context length is 32768 tokens, however you "
+             "requested 41210 tokens")
+
+
+@pytest.fixture
+def slept(monkeypatch):
+    """Every sleep _backoff asks for, in seconds."""
+    seconds = []
+    monkeypatch.setattr(s4.time, "sleep", lambda s: seconds.append(s))
+    return seconds
+
+
+def test_an_oversized_window_is_abandoned_not_retried(
+        make_client, seq_responder, slept, caplog):
+    """The window that does not fit does not start fitting: the old loop sent
+    it three more times, unchanged, with ~12 s of backoff in between."""
+    rec = []
+    client = make_client(seq_responder([_Refused(_TOO_LONG)]), recorder=rec)
+
+    with caplog.at_level("ERROR"):
+        result = s4._call_llm([{"title": "3.2 Wärmebedarf", "content": "x"}], client)
+
+    assert result is None
+    assert len(rec) == 1 and slept == []
+
+
+def test_the_abandoned_window_is_named_out_loud(make_client, seq_responder, caplog):
+    """The caller keeps such a window as raw text, which in the output is
+    indistinguishable from a window that needed no change — so the hole exists
+    only if this says so."""
+    client = make_client(seq_responder([_Refused(_TOO_LONG)]))
+
+    with caplog.at_level("ERROR"):
+        s4._call_llm([{"title": "3.2 Wärmebedarf", "content": "x"},
+                      {"title": "3.3 Versorgung", "content": "y"}], client)
+
+    assert "ABANDONED" in caplog.text
+    assert "3.2 Wärmebedarf" in caplog.text and "3.3 Versorgung" in caplog.text
+
+
+def test_any_other_client_error_also_stops_at_once(
+        make_client, seq_responder, slept):
+    rec = []
+    client = make_client(seq_responder([_Refused("unknown parameter", 400)]),
+                         recorder=rec)
+
+    assert s4._call_llm([{"t": 1}], client) is None
+    assert len(rec) == 1 and slept == []
+
+
+@pytest.mark.parametrize("status", [429, 500, 503])
+def test_a_busy_or_broken_server_is_still_retried(
+        make_client, seq_responder, status):
+    """429 and 5xx are the server asking for time, not refusing the request."""
+    client = make_client(seq_responder([_Refused("later", status),
+                                        '{"sections": []}']))
+
+    assert s4._call_llm([{"t": 1}], client) == []

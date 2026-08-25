@@ -19,11 +19,13 @@ from __future__ import annotations
 import json
 import logging
 import re
+from concurrent.futures import ThreadPoolExecutor
 from typing import Callable, Optional
 
 from docpipe import prompts
 
 from .config import (
+    LLM_NUM_PARALLEL,
     SECTION_MAX_WORDS,
     SECTION_OUTLINE_WORDS,
     SECTION_SPLIT_ENABLE,
@@ -31,6 +33,10 @@ from .config import (
 )
 
 log = logging.getLogger(__name__)
+
+# "nobody has asked the model yet", as against a call that came back with
+# nothing. Only the first may still place a call.
+_UNASKED = object()
 
 _SPLIT = prompts.load("refinement/split")
 SPLIT_PROMPT = _SPLIT.text
@@ -172,11 +178,27 @@ def apply_cuts(section: dict, cuts: list, first_title: Optional[str] = None) -> 
     return parts or [section]
 
 
-def split_section(section: dict, ask: Optional[Callable] = None) -> list:
+def _ask_cuts(section: dict, ask: Callable):
+    """Where the model would cut *section*, as its raw reply; None if it failed.
+
+    The whole blocking part of a split, and it depends on nothing but this one
+    section — which is what lets split_oversized run them together.
+    """
+    try:
+        return ask(prompts.text("refinement/split", target=SECTION_TARGET_WORDS),
+                   f"TITLE: {section.get('title') or ''}\n\nOUTLINE:\n{outline(section)}")
+    except Exception as e:                           # any failure → mechanical
+        log.warning("Split call failed for %r: %s", section.get("title"), e)
+        return None
+
+
+def split_section(section: dict, ask: Optional[Callable] = None,
+                  reply=_UNASKED) -> list:
     """
     Split one oversized section. *ask* takes the rendered prompt and returns the
     model's raw reply; without it (or when the reply is unusable) the section is
-    cut mechanically at even intervals.
+    cut mechanically at even intervals. *reply* hands in an answer fetched
+    earlier (see split_oversized); then *ask* is not called at all.
     """
     if not _rebuild_matches(section):
         log.warning(
@@ -188,15 +210,15 @@ def split_section(section: dict, ask: Optional[Callable] = None) -> list:
 
     n = len(section.get("segments") or [])
     cuts, first_title = [], None
-    if ask is not None:
+    if reply is _UNASKED:
+        reply = _ask_cuts(section, ask) if ask is not None else None
+    if reply is not None:
         try:
-            reply = ask(prompts.text("refinement/split", target=SECTION_TARGET_WORDS),
-                        f"TITLE: {section.get('title') or ''}\n\nOUTLINE:\n{outline(section)}")
             parsed = json.loads(reply) if isinstance(reply, str) else (reply or {})
             cuts = _sanitize(parsed.get("cuts"), n, section)
             first_title = (parsed.get("first_title") or "").strip() or None
         except Exception as e:                       # any failure → mechanical
-            log.warning("Split call failed for %r: %s", section.get("title"), e)
+            log.warning("Split reply unusable for %r: %s", section.get("title"), e)
 
     if not cuts:
         cuts = _sanitize(_even_cuts(section), n, section)
@@ -283,15 +305,36 @@ def _enforce_max(part: dict, max_words: int) -> list:
     return out
 
 
+def _ask_all_cuts(sections: list, ask: Optional[Callable],
+                  max_words: int) -> dict:
+    """Every split call the document needs, at once; replies by section index.
+
+    Asked serially this phase held exactly one request in flight per document,
+    and it runs to completion before the windows are dispatched. A section that
+    cannot be cut along its segments is skipped rather than asked about.
+    """
+    if ask is None:
+        return {}
+    todo = [i for i, s in enumerate(sections)
+            if needs_split(s, max_words) and _rebuild_matches(s)]
+    if not todo:
+        return {}
+    with ThreadPoolExecutor(max_workers=min(LLM_NUM_PARALLEL, len(todo))) as pool:
+        return dict(zip(todo, pool.map(lambda i: _ask_cuts(sections[i], ask), todo)))
+
+
 def split_oversized(sections: list, ask: Optional[Callable] = None,
                     max_words: int = SECTION_MAX_WORDS) -> list:
     """Split every section longer than *max_words*; returns the new list."""
     if not SECTION_SPLIT_ENABLE:
         return sections
+    replies = _ask_all_cuts(sections, ask, max_words)
     out, n_split, n_recut = [], 0, 0
-    for section in sections:
+    for i, section in enumerate(sections):
         if needs_split(section, max_words):
-            parts = split_section(section, ask)
+            # The cuts are applied in the original order, so the outcome is the
+            # one the serial version produced.
+            parts = split_section(section, ask, reply=replies.get(i, _UNASKED))
             n_split += len(parts) > 1
             bounded = []
             for part in parts:
