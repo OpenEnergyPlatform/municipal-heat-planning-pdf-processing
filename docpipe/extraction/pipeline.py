@@ -47,6 +47,14 @@ class Source:
 
 
 @dataclass
+class WorkItem:
+    """One harvest request: read THIS source for THAT parameter."""
+    document_id: int
+    parameter: object
+    source: Source
+
+
+@dataclass
 class DocumentReport:
     document_id: int
     tuples: list = field(default_factory=list)
@@ -61,18 +69,26 @@ class DocumentReport:
     fallback: dict = field(default_factory=dict)
 
 
-def harvest_document(
+def plan_document(
     document_id: int,
     spec: Spec,
     templates: list,
     *,
     retrieve: Callable,                   # (query, document_id, exclude) -> [Source]
-    harvest: Callable,                    # (Source, Parameter) -> [claim dict]
-    locate: Optional[Callable] = None,    # (Source, quote) -> rects | None
     candidates: Optional[Callable] = None,  # (document_id, Parameter) -> [Source]
     max_rounds: int = MAX_SWEEP_ROUNDS,
-) -> DocumentReport:
+) -> tuple:
+    """(work items, report skeleton) — the retrieval half, no model involved.
+
+    The sweep's `seen` set is fed by retrieval alone: no round has ever
+    depended on what the harvest replied. So the whole plan, for the whole
+    corpus, can be built before the first request goes out — which is the
+    point. One request at a time keeps a 4-GPU server idle; the batch path
+    plans every document first and then hands vLLM thousands of requests to
+    schedule at once.
+    """
     report = DocumentReport(document_id=document_id)
+    items: list = []
     for parameter in spec.parameters:
         probes = queries_mod.expand(templates, parameter)
         seen: set = set()
@@ -90,9 +106,8 @@ def harvest_document(
             if not new_sources:
                 rounds -= 1               # the empty pass is not a round of work
                 break
-            for source in new_sources:
-                report.owners_harvested += 1
-                _harvest_one(source, parameter, harvest, locate, report)
+            items.extend(WorkItem(document_id, parameter, s)
+                         for s in new_sources)
         report.sweep_rounds[parameter.uri] = rounds
 
         if candidates is not None:
@@ -108,14 +123,43 @@ def harvest_document(
                 "candidates": len(pool), "leftover": len(leftover)}
             for source in leftover:
                 seen.add((source.owner_kind, source.owner_id))
-                report.owners_harvested += 1
-                _harvest_one(source, parameter, harvest, locate, report)
+                items.append(WorkItem(document_id, parameter, source))
+    report.owners_harvested = len(items)
+    return items, report
+
+
+def harvest_document(
+    document_id: int,
+    spec: Spec,
+    templates: list,
+    *,
+    retrieve: Callable,                   # (query, document_id, exclude) -> [Source]
+    harvest: Callable,                    # (Source, Parameter) -> [claim dict]
+    locate: Optional[Callable] = None,    # (Source, quote) -> rects | None
+    candidates: Optional[Callable] = None,  # (document_id, Parameter) -> [Source]
+    max_rounds: int = MAX_SWEEP_ROUNDS,
+) -> DocumentReport:
+    """Plan and harvest one document, one request after another.
+
+    The serial path: it keeps the loop's semantics in one readable piece and
+    is what the tests own. Real runs go through plan_document + fold_claims,
+    which do the same work with every request in flight at once.
+    """
+    items, report = plan_document(document_id, spec, templates,
+                                  retrieve=retrieve, candidates=candidates,
+                                  max_rounds=max_rounds)
+    for item in items:
+        fold_claims(item, harvest(item.source, item.parameter), report,
+                    locate=locate)
     return report
 
 
-def _harvest_one(source: Source, parameter, harvest: Callable,
-                 locate: Optional[Callable], report: DocumentReport) -> None:
-    for claim in harvest(source, parameter) or []:
+def fold_claims(item: WorkItem, claims: Optional[list],
+                report: DocumentReport, *,
+                locate: Optional[Callable] = None) -> None:
+    """Verify one source's claims into the report — the pure half of a harvest."""
+    source, parameter = item.source, item.parameter
+    for claim in claims or []:
         finder = ((lambda quote, s=source: locate(s, quote))
                   if locate is not None else None)
         outcome = verify_tuple(claim, parameter, source.text,

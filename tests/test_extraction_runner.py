@@ -226,3 +226,148 @@ def test_the_local_backend_guards_its_lazy_load():
     embedder = LocalEmbedder(model="m")
     assert isinstance(embedder._lock, type(threading.Lock())),         "the lazy load in .embed() must sit behind a real lock"
     assert not isinstance(embedder._lock, contextlib.nullcontext)
+
+
+# ---------------------------------------------------------------------------
+# The batch path: plan everything, then send everything
+# ---------------------------------------------------------------------------
+
+def _source(text, owner_id=1, kind="section"):
+    return Source(owner_kind=kind, owner_id=owner_id, text=text,
+                  provenance={"document_id": 7})
+
+
+def _item(source):
+    from docpipe.extraction.pipeline import WorkItem
+    return WorkItem(7, SPEC.parameters[0], source)
+
+
+def test_a_source_that_fits_is_not_split():
+    items = [_item(_source("kurz"))]
+    assert runner.split_long_sources(items, max_chars=100) is not items
+    assert [i.source.text for i in runner.split_long_sources(items, 100)] == ["kurz"]
+
+
+def test_a_long_source_becomes_overlapping_windows_of_the_same_owner():
+    """A section over the window used to be sent whole, rejected with a 400 and
+    written off — its values were never read. Windows overlap so a number
+    cannot be cut in half at the seam, and both carry the owner they came from,
+    which is what provenance and dedup hang on."""
+    text = "".join(f"{i:04d} " for i in range(1000))       # 5000 chars
+    windows = runner.split_long_sources([_item(_source(text))], max_chars=2000)
+
+    assert len(windows) > 1
+    assert all(len(w.source.text) <= 2000 for w in windows)
+    assert {w.source.owner_id for w in windows} == {1}
+    assert "".join(w.source.text for w in windows) != text, "windows overlap"
+    # Nothing is lost: every window is a slice of the original, and together
+    # they cover it end to end.
+    assert windows[0].source.text == text[:2000]
+    assert text.endswith(windows[-1].source.text)
+    covered = set()
+    for w in windows:
+        start = text.index(w.source.text)
+        covered.update(range(start, start + len(w.source.text)))
+    assert len(covered) == len(text)
+
+
+def test_harvest_batch_answers_in_the_caller_order_not_the_server_order():
+    """A 40-token table comes back long before a 6000-token section. The report
+    must not depend on that: results are placed by index."""
+    items = [_item(_source(f"s{i}", owner_id=i)) for i in range(20)]
+
+    def harvest(source, parameter):
+        if source.owner_id % 2:
+            time.sleep(0.01)                               # the slow half
+        return [{"value": source.owner_id}]
+
+    got = runner.harvest_batch(items, harvest, workers=8)
+    assert [g[0]["value"] for g in got] == list(range(20))
+
+
+def test_a_request_that_raises_becomes_a_visible_hole():
+    items = [_item(_source("a", owner_id=1)), _item(_source("b", owner_id=2))]
+
+    def harvest(source, parameter):
+        if source.owner_id == 2:
+            raise RuntimeError("server gone")
+        return [{"value": 1}]
+
+    got = runner.harvest_batch(items, harvest, workers=2)
+    assert got[0] == [{"value": 1}]
+    assert got[1] == [{"_harvest_failed": True}], "a hole must stay countable"
+
+
+def test_planning_never_calls_the_model():
+    """The sweep's rounds are fed by retrieval alone. That is what lets the
+    whole corpus be planned before the first request goes out."""
+    from docpipe.extraction.pipeline import plan_document
+
+    calls = []
+
+    def retrieve(query, document_id, exclude):
+        calls.append(query)
+        if len(calls) > 1:
+            return []
+        return [_source("Erdgas 42.005 MWh/a im Jahr 2020")]
+
+    items, report = plan_document(7, SPEC, ["{label}"], retrieve=retrieve)
+    assert len(items) == 1 and items[0].source.owner_id == 1
+    assert report.owners_harvested == 1
+    assert report.tuples == [] and report.refusals == []
+
+
+def test_the_image_root_follows_the_pdf_root():
+    """The crops sit next to the PDFs they were cut from. A run that names its
+    PDF root has already said where they are; the profile default pointed at
+    data/<profile>/pdf/processed, which this deployment does not have."""
+    from pathlib import Path
+
+    assert runner.resolve_image_root(Path("data/pdf"), Path("data/kwp/pdf/processed")) \
+        == Path("data/pdf/processed")
+    assert runner.resolve_image_root(None, Path("data/kwp/pdf/processed")) \
+        == Path("data/kwp/pdf/processed")
+
+
+def test_the_context_budget_holds_a_full_window_and_a_crop():
+    """The number goes to --max-model-len as a floor. It has to cover the
+    largest request the run can actually build, or the server rejects it."""
+    class Prompt:
+        text = "wort " * 500
+        meta = {"max_tokens": 4096}
+
+    budget = runner.context_budget(Prompt())
+    assert budget > runner.MAX_SOURCE_CHARS // 3 + 4096
+    assert budget > 1200, "the crop counts too"
+
+
+def test_a_refused_request_is_not_retried(monkeypatch):
+    """A 400 is a 400 three times over. The last run spent three tries and
+    eight seconds of sleep on every over-long section."""
+    import openai
+
+    attempts = []
+
+    class Error(Exception):
+        status_code = 400
+
+    class Client:
+        def __init__(self, **kw):
+            self.chat = self
+
+        @property
+        def completions(self):
+            return self
+
+        def create(self, **kw):
+            attempts.append(kw)
+            raise Error("context length")
+
+    monkeypatch.setattr(openai, "OpenAI", Client)
+    monkeypatch.setattr(runner.prompts, "load",
+                        lambda _id: type("P", (), {"text": "sys", "meta": {}})())
+    monkeypatch.setattr(runner.time, "sleep", lambda *_: None)
+
+    harvest = runner.make_harvester(None)
+    assert harvest(_source("x"), SPEC.parameters[0]) == [{"_harvest_failed": True}]
+    assert len(attempts) == 1, f"{len(attempts)} attempts for a 400"
