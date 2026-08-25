@@ -11,7 +11,6 @@ from __future__ import annotations
 import logging
 from collections import defaultdict
 from pathlib import Path
-from typing import Optional
 
 import faiss
 import torch
@@ -19,7 +18,7 @@ import numpy as np
 
 from .config import EMBEDDING_MODEL, EMBEDDING_DIM, EMBEDDING_BATCH_SIZE, MAX_TOKEN_LENGTH
 from .chunking import EmbeddingInput
-from .database import write_embedding_ids_batch
+from .database import EmbeddingWriter
 
 log = logging.getLogger(__name__)
 
@@ -105,8 +104,6 @@ def create_embeddings(
     *,
     model_name: str = EMBEDDING_MODEL,
     batch_size: int = EMBEDDING_BATCH_SIZE,
-    index_path: Optional[Path] = None,
-    save_every: int = 1000,
 ) -> int:
     """
     Embed `inputs` (which may mix pdf_names), add the vectors to `index`, and
@@ -116,8 +113,8 @@ def create_embeddings(
     ``batch_size`` batches across documents; each input's ``pdf_name`` keeps the
     DB writeback grouped per document. A failed batch is logged and skipped.
 
-    With ``index_path``, the index is rewritten whole every ``save_every``
-    batches (crash insurance, not per-batch durability) and once at the end.
+    Persisting the index is the caller's: this is called once per flush chunk,
+    and the index is one file rewritten whole.
     """
     if not inputs:
         return next_id
@@ -129,71 +126,65 @@ def create_embeddings(
     vl_inputs = [inp for inp in inputs if inp.image is not None]
 
     start_id = next_id
-    saved_batches = 0
 
-    for group_label, group in [("text", text_inputs), ("vl", vl_inputs)]:
-        if not group:
-            continue
-
-        # Batches pad to their longest member. Unsorted, a section title of five
-        # tokens rides in the same batch as an 1800-word section and costs the
-        # same — sorting by length puts short with short, so the padding a batch
-        # carries is bounded by its own spread instead of the corpus-wide max.
-        # Order is free: a vector's identity comes from the (type, section,
-        # item) triple written alongside its FAISS id, not from its position.
-        group = sorted(group, key=lambda inp: len(inp.text or ""))
-
-        total_batches = (len(group) + batch_size - 1) // batch_size
-        log.info("Processing %d %s inputs in %d batches", len(group), group_label, total_batches)
-
-        for batch_idx, batch_start in enumerate(range(0, len(group), batch_size)):
-            batch = group[batch_start : batch_start + batch_size]
-
-            model_inputs = []
-            for inp in batch:
-                item: dict = {"text": inp.text}
-                if inp.image:
-                    item["image"] = inp.image
-                model_inputs.append(item)
-
-            try:
-                embeddings = embedder.process(model_inputs)
-            except Exception as e:
-                log.error(
-                    "[%s] Batch %d/%d failed (items %d-%d): %s",
-                    group_label, batch_idx + 1, total_batches,
-                    batch_start, batch_start + len(batch), e,
-                )
+    with EmbeddingWriter(db_path) as writer:
+        for group_label, group in [("text", text_inputs), ("vl", vl_inputs)]:
+            if not group:
                 continue
 
-            vectors = embeddings.detach().to(torch.float32).cpu().numpy()
+            # Batches pad to their longest member. Unsorted, a section title of
+            # five tokens rides in the same batch as an 1800-word section and
+            # costs the same — sorting by length puts short with short, so the
+            # padding a batch carries is bounded by its own spread instead of the
+            # corpus-wide max. Order is free: a vector's identity comes from the
+            # (type, section, item) triple written alongside its FAISS id, not
+            # from its position.
+            group = sorted(group, key=lambda inp: len(inp.text or ""))
 
-            ids = np.arange(next_id, next_id + len(vectors), dtype=np.int64)
-            index.add_with_ids(vectors, ids)
+            total_batches = (len(group) + batch_size - 1) // batch_size
+            log.info("Processing %d %s inputs in %d batches", len(group), group_label, total_batches)
 
-            # The batch may straddle several documents.
-            records_by_doc: dict[str, list[tuple]] = defaultdict(list)
-            for i, inp in enumerate(batch):
-                records_by_doc[inp.pdf_name].append(
-                    (inp.embedding_type, inp.section_index, inp.item_id, int(ids[i]))
+            for batch_idx, batch_start in enumerate(range(0, len(group), batch_size)):
+                batch = group[batch_start : batch_start + batch_size]
+
+                model_inputs = []
+                for inp in batch:
+                    item: dict = {"text": inp.text}
+                    if inp.image:
+                        item["image"] = inp.image
+                    model_inputs.append(item)
+
+                try:
+                    embeddings = embedder.process(model_inputs)
+                except Exception as e:
+                    log.error(
+                        "[%s] Batch %d/%d failed (items %d-%d): %s",
+                        group_label, batch_idx + 1, total_batches,
+                        batch_start, batch_start + len(batch), e,
+                    )
+                    continue
+
+                vectors = embeddings.detach().to(torch.float32).cpu().numpy()
+
+                ids = np.arange(next_id, next_id + len(vectors), dtype=np.int64)
+                index.add_with_ids(vectors, ids)
+
+                # The batch may straddle several documents.
+                records_by_doc: dict[str, list[tuple]] = defaultdict(list)
+                for i, inp in enumerate(batch):
+                    records_by_doc[inp.pdf_name].append(
+                        (inp.embedding_type, inp.section_index, inp.item_id, int(ids[i]))
+                    )
+                for doc_name, db_records in records_by_doc.items():
+                    writer.write(doc_name, db_records)
+
+                next_id += len(vectors)
+
+                log.info(
+                    "[%s] Batch %d/%d done – %d items, %d doc(s) (ids %d-%d)",
+                    group_label, batch_idx + 1, total_batches,
+                    len(batch), len(records_by_doc), int(ids[0]), int(ids[-1]),
                 )
-            for doc_name, db_records in records_by_doc.items():
-                write_embedding_ids_batch(db_path, doc_name, db_records)
-
-            next_id += len(vectors)
-            saved_batches += 1
-
-            if index_path is not None and save_every and saved_batches % save_every == 0:
-                save_index(index, index_path)
-
-            log.info(
-                "[%s] Batch %d/%d done – %d items, %d doc(s) (ids %d-%d)",
-                group_label, batch_idx + 1, total_batches,
-                len(batch), len(records_by_doc), int(ids[0]), int(ids[-1]),
-            )
-
-    if index_path is not None:
-        save_index(index, index_path)
 
     created = next_id - start_id
     log.info("Created %d/%d embeddings, index now has %d vectors", created, len(inputs), index.ntotal)

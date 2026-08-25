@@ -41,6 +41,13 @@ EMBED_PREPARE_AHEAD = 32
 # GPUs start long before the last document is read.
 EMBED_FLUSH_ITEMS = 4096
 
+# Vectors added before the FAISS index is written out again. The index is a
+# single file rewritten whole — about 16 GB at a million 4096-dim vectors — so
+# saving it once per flush chunk was ~244 full rewrites over a build, with the
+# GPUs idle for every one. This is crash insurance, not durability: a run that
+# dies re-embeds at most this many vectors plus the current chunk.
+EMBED_SAVE_VECTORS = 50_000
+
 FAISS_INDEX_FILE = "faiss_index.bin"
 
 EMBEDDING_TYPE_SECTION_TEXT = "section_text"

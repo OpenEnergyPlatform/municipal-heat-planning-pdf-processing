@@ -23,6 +23,7 @@ from .config import (
     EMBED_FLUSH_ITEMS,
     EMBED_PREPARE_AHEAD,
     EMBED_PREPARE_WORKERS,
+    EMBED_SAVE_VECTORS,
     EMBEDDING_MODEL,
     DOCUMENT_JSON,
 )
@@ -191,14 +192,15 @@ def run(
 
         def prepare(pdf_dir):
             pdf_name = pdf_dir.name
-            if document_id(db_path, pdf_name) is None:
+            doc_id = document_id(db_path, pdf_name)
+            if doc_id is None:
                 # Embedding it would burn GPU time on vectors whose DB write
                 # cannot resolve an owner: they enter the index, nothing points
                 # at them, and the next run does it again. Two such directories
                 # put 1096 dead vectors into the heat-plan index per run.
                 unregistered.append(pdf_name)
                 return []
-            existing = get_existing_embeddings(db_path, pdf_name)
+            existing = get_existing_embeddings(db_path, pdf_name, doc_id=doc_id)
             with open(pdf_dir / DOCUMENT_JSON, "r", encoding="utf-8") as f:
                 merged_data = json.load(f)
             return [
@@ -213,6 +215,10 @@ def run(
         pending: list = []
         docs_with_inputs = 0
         embedded = 0
+        # The index is one file rewritten whole, so it is saved on vectors
+        # added since the last save — not per chunk, which was a ~16 GB write
+        # every 4096 items with the GPUs waiting for it.
+        saved_ntotal = index.ntotal
 
         with ThreadPoolExecutor(max_workers=EMBED_PREPARE_WORKERS) as pool:
             for inputs in prepared_ahead(pool, candidates, prepare):
@@ -224,9 +230,11 @@ def run(
                     embedded += len(pending)
                     next_id = create_embeddings(
                         pending, index, next_id, db_path, embedder=embedder,
-                        index_path=index_path,
                     )
                     pending = []
+                    if index.ntotal - saved_ntotal >= EMBED_SAVE_VECTORS:
+                        save_index(index, index_path)
+                        saved_ntotal = index.ntotal
                     log.info("%d/%d docs prepared, %d items embedded, "
                              "peak RSS %.1f GB",
                              docs_with_inputs, len(candidates), embedded,
@@ -236,7 +244,6 @@ def run(
             embedded += len(pending)
             next_id = create_embeddings(
                 pending, index, next_id, db_path, embedder=embedder,
-                index_path=index_path,
             )
 
         log.info(

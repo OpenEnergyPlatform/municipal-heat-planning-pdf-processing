@@ -48,6 +48,53 @@ def test_insert_sections_writes_pages_segments_sectionpages(kwp_db):
     ).fetchone() == ("Bestandsanalyse", "Absatz [p5_tbl0] Folge", 5)
 
 
+class _CountingConnection:
+    """Delegates to a real connection and counts the statements it is given."""
+
+    def __init__(self, connection):
+        self._connection = connection
+        self.executes = 0
+        self.executemanys = 0
+
+    def execute(self, *args):
+        self.executes += 1
+        return self._connection.execute(*args)
+
+    def executemany(self, *args):
+        self.executemanys += 1
+        return self._connection.executemany(*args)
+
+
+def _big_section(n_children):
+    return {"sections": [{
+        "title": "T", "content": "c", "page_number": 1, "pages": [1],
+        "segments": [{"page": 1, "kind": "text", "text": "t%d" % i}
+                     for i in range(n_children)],
+        "tables": [{"id": "tbl%d" % i, "path": "", "page_number": 1}
+                   for i in range(n_children)],
+        "figures": [{"id": "img%d" % i, "path": "", "page_number": 1}
+                    for i in range(n_children)],
+    }]}
+
+
+def test_section_children_go_out_per_statement_not_per_row(kwp_db):
+    """The corpus holds 134k sections and far more segments; one execute() per
+    row is that many round trips into sqlite for nothing."""
+    _, con = kwp_db
+    counting = _CountingConnection(con)
+
+    DB._insert_sections(1, _big_section(50), counting)
+    con.commit()
+
+    assert con.execute("SELECT count(*) FROM Segments").fetchone()[0] == 50
+    assert con.execute("SELECT count(*) FROM Tables").fetchone()[0] == 50
+    assert con.execute("SELECT count(*) FROM Images").fetchone()[0] == 50
+    # The section row and the one page's get-or-create; the 150 children ride
+    # along in four executemany calls.
+    assert counting.executes <= 4, counting.executes
+    assert counting.executemanys == 4
+
+
 def test_embeddings_roundtrip_and_clear(kwp_db):
     db, con = kwp_db
     DB._insert_sections(1, _MERGED, con)
@@ -163,6 +210,48 @@ def test_existing_embeddings_covers_all_types_of_one_document_only(kwp_db):
     # skips work that was never done.
     assert DB.get_existing_embeddings(db, "doc") == set(_ALL_TYPES)
     assert sorted(DB.get_document_faiss_ids(db, "doc")) == [100, 101, 102, 103, 104, 105]
+
+
+def test_one_writer_keeps_two_documents_block_ids_apart(kwp_db):
+    """The writer caches each document's block ids for the whole chunk, and two
+    plans share block ids as a matter of course ('p5_tbl0' is a position, not a
+    name). A cache that leaked across documents would file one plan's table
+    under the other's row."""
+    db, con = kwp_db
+    con.execute("INSERT INTO Documents (id, filename, num_pages) VALUES (2, 'other.pdf', 9)")
+    DB._insert_sections(1, _MERGED, con)
+    DB._insert_sections(2, _MERGED, con)
+    con.commit()
+
+    with DB.EmbeddingWriter(db) as writer:
+        writer.write("doc", [(C.EMBEDDING_TYPE_TABLE_TEXT, 0, "p5_tbl0", 300)])
+        writer.write("other", [(C.EMBEDDING_TYPE_TABLE_TEXT, 0, "p5_tbl0", 301)])
+
+    owners = dict(con.execute(
+        "SELECT e.faiss_id, s.document FROM Embeddings e "
+        "JOIN Tables t ON e.owner_id = t.id JOIN Sections s ON t.section = s.id "
+        "WHERE e.owner_kind = 'table'"))
+    assert owners == {300: 1, 301: 2}
+
+
+def test_a_prepare_worker_asks_both_questions_over_one_connection(kwp_db, monkeypatch):
+    """document_id() and get_existing_embeddings() are called back to back per
+    document from the prepare pool; a connection (plus PRAGMAs) each was most of
+    what preparing a document cost."""
+    db, con = kwp_db
+    DB._insert_sections(1, _MERGED, con)
+    con.commit()
+
+    opened = []
+    real_connect = DB.connect
+    monkeypatch.setattr(DB, "connect",
+                        lambda p: (opened.append(str(p)), real_connect(p))[1])
+
+    for _ in range(3):
+        doc_id = DB.document_id(db, "doc")
+        assert DB.get_existing_embeddings(db, "doc", doc_id=doc_id) == set()
+
+    assert len(opened) == 1, f"{len(opened)} connections for 6 lookups"
 
 
 def test_existing_embeddings_resolves_document_without_pdf_suffix(kwp_db):
