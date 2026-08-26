@@ -432,7 +432,16 @@ def make_harvester(image_root: Optional[Path] = None) -> Callable:
                     model=LLM_MODEL, temperature=temperature,
                     max_tokens=max_tokens,
                     messages=[{"role": "system", "content": prompt.text},
-                              {"role": "user", "content": content}])
+                              {"role": "user", "content": content}],
+                    # Refinement and the vision path have said this for
+                    # longer than this stage has existed: a reasoning model
+                    # must not spend the token budget on a think block,
+                    # because that truncates the JSON answer. Extraction was
+                    # the one stage that did not say it, and the pilot lost
+                    # 1093 of 16102 harvests to replies with no 'tuples' in
+                    # them, HTTP 200 every one.
+                    extra_body={"chat_template_kwargs": {"enable_thinking": False}},
+                )
                 reply = response.choices[0]
                 tuples = _parse_tuples(reply.message.content)
                 if tuples is None:
@@ -574,11 +583,20 @@ def make_locate(db_path: Path, pdf_root: Optional[Path]) -> Optional[Callable]:
                     (document_id,)).fetchone()
                 filename = row[0] if row else None
             if owner_kind == "section" and pages is None:
+                # SectionPages.page is a foreign key to Pages.id, not a page
+                # number. The old query asked SectionPages for page_number,
+                # raised "no such column" every single time, and the except
+                # below booked it as "this schema has no SectionPages" — so a
+                # section that runs over a page break only ever had its first
+                # page tried.
                 try:
                     pages = [int(r[0]) for r in conn.execute(
-                        "SELECT page_number FROM SectionPages WHERE section = ? "
-                        "ORDER BY page_number", (owner_id,))]
-                except sqlite3.OperationalError:
+                        "SELECT pg.page_number FROM SectionPages sp "
+                        "JOIN Pages pg ON sp.page = pg.id "
+                        "WHERE sp.section = ? ORDER BY pg.page_number",
+                        (owner_id,))]
+                except sqlite3.OperationalError as exc:
+                    log.warning("section pages unavailable (%s)", exc)
                     pages = []
         finally:
             conn.close()

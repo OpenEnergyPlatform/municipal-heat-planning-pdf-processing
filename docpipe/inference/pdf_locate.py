@@ -16,10 +16,42 @@ Author: Felix Vossel
 """
 from __future__ import annotations
 
+import logging
 from typing import Optional
+
+log = logging.getLogger(__name__)
 
 MIN_SCORE = 55.0
 MAX_LINES = 10
+
+
+_MISSING: Optional[str] = None
+
+
+def _have_deps() -> bool:
+    """True when PyMuPDF and rapidfuzz are both importable, said out loud once.
+
+    Both imports used to sit in a `except ImportError: return None`, which
+    made an uninstalled dependency indistinguishable from a quote that is
+    genuinely not on the page. rapidfuzz is declared only in the inference
+    app's requirements, so on the cluster every call returned None and every
+    extracted value came out with no rectangles and a not_located flag — a
+    whole evidence chain missing, without one line of log.
+    """
+    global _MISSING
+    if _MISSING is not None:
+        return _MISSING == ""
+    try:
+        import fitz            # noqa: F401
+        from rapidfuzz import fuzz    # noqa: F401
+    except ImportError as exc:
+        _MISSING = str(exc)
+        log.error("quote location is OFF for this whole run: %s. Every value "
+                  "will be recorded without the rectangles that show where it "
+                  "came from. pip install rapidfuzz pymupdf", exc)
+        return False
+    _MISSING = ""
+    return True
 
 
 def quote_rects(pdf_path, page_number: int, quote: str,
@@ -49,10 +81,9 @@ def page_words(pdf_path, page_number: int) -> Optional[list]:
     document, and opening a PDF over NFS per quote costs far more than the
     matching does.
     """
-    try:
-        import fitz
-    except ImportError:
+    if not _have_deps():
         return None
+    import fitz
     try:
         doc = fitz.open(str(pdf_path))
     except Exception:
@@ -71,10 +102,9 @@ def rects_from_words(words: list, quote: str,
                      min_score: float = MIN_SCORE,
                      max_lines: int = MAX_LINES) -> Optional[list]:
     """The matching itself: no file access, only the page's words and a quote."""
-    try:
-        from rapidfuzz import fuzz
-    except ImportError:
+    if not _have_deps():
         return None
+    from rapidfuzz import fuzz
     if not (quote or "").strip() or not words:
         return None
 

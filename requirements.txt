@@ -144,6 +144,7 @@ pyxnat==1.6.4
 PyYAML==6.0.3
 pyzmq==27.1.0
 qwen-vl-utils==0.0.14
+rapidfuzz
 rdflib==7.6.0
 referencing==0.37.0
 regex==2026.2.28
