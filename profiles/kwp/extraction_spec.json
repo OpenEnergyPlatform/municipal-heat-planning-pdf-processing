@@ -12,7 +12,9 @@
         "GWh/a": 1000.0,
         "kWh": 0.001,
         "MWh": 1.0,
-        "GWh": 1000.0
+        "GWh": 1000.0,
+        "TWh": 1000000.0,
+        "TWh/a": 1000000.0
       },
       "axes": {
         "carrier": {
@@ -233,7 +235,9 @@
         "GWh/a": 1000.0,
         "kWh": 0.001,
         "MWh": 1.0,
-        "GWh": 1000.0
+        "GWh": 1000.0,
+        "TWh": 1000000.0,
+        "TWh/a": 1000000.0
       },
       "axes": {
         "carrier": {
@@ -375,7 +379,25 @@
         "t CO2/a": 1.0,
         "tCO2/a": 1.0,
         "kt CO2/a": 1000.0,
-        "Mio. t CO2/a": 1000000.0
+        "Mio. t CO2/a": 1000000.0,
+        "t CO2": 1.0,
+        "tCO2": 1.0,
+        "t CO2e": 1.0,
+        "t CO2eq": 1.0,
+        "t CO2eq/a": 1.0,
+        "t CO2-eq./a": 1.0,
+        "t CO2äq": 1.0,
+        "t CO2äq.": 1.0,
+        "t CO2-Äquivalent": 1.0,
+        "Tonnen": 1.0,
+        "Tonnen pro Jahr": 1.0,
+        "Tonnen CO2": 1.0,
+        "Tonnen CO2 pro Jahr": 1.0,
+        "Tonnen CO2 jährlich": 1.0,
+        "Tonnen CO2 im Jahr": 1.0,
+        "Tonnen CO2äquivalent": 1.0,
+        "kt/a CO2": 1000.0,
+        "kt CO2 pro Jahr": 1000.0
       },
       "axes": {
         "carrier": {
@@ -535,7 +557,24 @@
         "t CO2-Äq/a": 1.0,
         "t CO2-Äquivalente/a": 1.0,
         "kt CO2/a": 1000.0,
-        "kt CO2-Äq./a": 1000.0
+        "kt CO2-Äq./a": 1000.0,
+        "t CO2": 1.0,
+        "tCO2": 1.0,
+        "t CO2eq": 1.0,
+        "t CO2eq/a": 1.0,
+        "t CO2-eq./a": 1.0,
+        "t CO2äq": 1.0,
+        "t CO2äq.": 1.0,
+        "t CO2-Äquivalent": 1.0,
+        "Tonnen": 1.0,
+        "Tonnen pro Jahr": 1.0,
+        "Tonnen CO2": 1.0,
+        "Tonnen CO2 pro Jahr": 1.0,
+        "Tonnen CO2 jährlich": 1.0,
+        "Tonnen CO2 im Jahr": 1.0,
+        "Tonnen CO2äquivalent": 1.0,
+        "kt/a CO2": 1000.0,
+        "kt CO2 pro Jahr": 1000.0
       },
       "axes": {
         "carrier": {
