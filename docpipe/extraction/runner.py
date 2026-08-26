@@ -835,8 +835,12 @@ def main(argv: Optional[list] = None) -> int:
     harvest = make_harvester(args.image_root)     # OpenAI client is thread-safe
     locate = make_locate(args.db, args.pdf_root)
 
-    with sqlite3.connect(f"file:{args.db}?mode=ro", uri=True) as listing:
+    listing = sqlite3.connect(f"file:{args.db}?mode=ro", uri=True)
+    try:
+        # `with` on a connection commits, it does not close.
         documents = _documents(listing)
+    finally:
+        listing.close()
     documents, missing = select_documents(documents, args.document)
     if missing:
         log.error("%d named document(s) not found or not current: %s",

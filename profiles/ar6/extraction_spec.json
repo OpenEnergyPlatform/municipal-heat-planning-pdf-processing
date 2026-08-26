@@ -1,18 +1,20 @@
 {
   "_comment": [
-    "The OEKG shapes ask a scenario bundle and its study report for metadata,",
-    "not for measured quantities. Every field here is therefore a text",
-    "parameter: what is verified is that the string the model reports sits",
-    "literally in the passage it cites, and the passage is located on its PDF",
-    "page. DocumentMeta already holds title, year and doi from the crawl, but",
-    "those come with the crawl's licence; a value that is to be published in",
-    "the graph is extracted from the document itself and carries its own",
-    "evidence. The crawl values become the cross-check, not the source.",
+    "The OEKG shapes ask a scenario bundle, its study report and its scenario",
+    "factsheets for metadata, not for measured quantities. Every field here is",
+    "therefore a text parameter: what is verified is that the string the model",
+    "reports sits literally in the passage it cites, and the passage is located",
+    "on its PDF page. DocumentMeta already holds title, year and doi from the",
+    "crawl, but those come with the crawl's licence; a value that is to be",
+    "published in the graph is extracted from the document itself and carries",
+    "its own evidence. The crawl values become the cross-check, not the source.",
     "",
-    "Scenario-scope fields (per-scenario name, acronym, region, projected",
-    "years, abstract) are NOT here. They need a value to belong to a scenario",
-    "rather than to a document, and a publication documents up to 146 of",
-    "them. See profiles/ar6/kg.py for what that would take."
+    "The scenario-scope fields carry a `scenario` axis: a text coordinate, the",
+    "scenario name AS THE DOCUMENT WRITES IT. It is a text axis and not a",
+    "vocabulary because the closed list is per document — one publication",
+    "documents up to 146 AR6 scenarios — and the spec is one file for the whole",
+    "corpus. kg.py resolves the wording against Scenarios.name for that",
+    "document and counts what it cannot place."
   ],
   "parameters": [
     {
@@ -154,6 +156,101 @@
           {
             "value": "ENGAGE",
             "quote": "This report was prepared within the project Enabling Ambitious Climate Policy Assessment (ENGAGE), funded under Horizon 2020."
+          }
+        ]
+      }
+    },
+    {
+      "uri": "scenario_label",
+      "label": "Name des Szenarios",
+      "description": "Der Name eines im Dokument beschriebenen Szenarios, wörtlich wie dort geschrieben — als Kurzname, Kürzel oder ausgeschriebener Name. Ein Tupel je Szenario. Nicht der Name des Modells und nicht der Name der Studie.",
+      "value_type": "text",
+      "example": {
+        "source": "We analyse three pathways: the Current Policies scenario (CurPol), the Nationally Determined Contributions scenario (NDC-LTT) and a 1.5C-compatible pathway.",
+        "tuples": [
+          {
+            "value": "CurPol",
+            "quote": "We analyse three pathways: the Current Policies scenario (CurPol), the Nationally Determined Contributions scenario (NDC-LTT) and a 1.5C-compatible pathway."
+          },
+          {
+            "value": "NDC-LTT",
+            "quote": "We analyse three pathways: the Current Policies scenario (CurPol), the Nationally Determined Contributions scenario (NDC-LTT) and a 1.5C-compatible pathway."
+          }
+        ]
+      }
+    },
+    {
+      "uri": "scenario_abstract",
+      "label": "Kurzbeschreibung eines Szenarios",
+      "description": "Die Beschreibung, was ein einzelnes Szenario annimmt oder abbildet, wörtlich aus dem Dokument. Nur wenn sich der Satz eindeutig auf ein benanntes Szenario bezieht, dessen Name in derselben Passage steht.",
+      "value_type": "text",
+      "axes": {
+        "scenario": {
+          "type": "text",
+          "required": true
+        }
+      },
+      "example": {
+        "source": "The CurPol scenario assumes that no additional climate policies are introduced beyond those already legislated by the end of 2021.",
+        "tuples": [
+          {
+            "value": "assumes that no additional climate policies are introduced beyond those already legislated by the end of 2021",
+            "scenario": "CurPol",
+            "quote": "The CurPol scenario assumes that no additional climate policies are introduced beyond those already legislated by the end of 2021."
+          }
+        ]
+      }
+    },
+    {
+      "uri": "scenario_region",
+      "label": "Betrachtete Region eines Szenarios",
+      "description": "Ein Land, eine Ländergruppe oder eine Weltregion, die ein Szenario abbildet, wörtlich wie im Dokument geschrieben. Ein Tupel je Region. Nur Regionen, die als Betrachtungsraum genannt sind, nicht jede im Text erwähnte Region.",
+      "value_type": "text",
+      "axes": {
+        "scenario": {
+          "type": "text",
+          "required": true
+        }
+      },
+      "example": {
+        "source": "The NDC-LTT scenario covers the EU27, China, India and the United States at national resolution.",
+        "tuples": [
+          {
+            "value": "EU27",
+            "scenario": "NDC-LTT",
+            "quote": "The NDC-LTT scenario covers the EU27, China, India and the United States at national resolution."
+          },
+          {
+            "value": "China",
+            "scenario": "NDC-LTT",
+            "quote": "The NDC-LTT scenario covers the EU27, China, India and the United States at national resolution."
+          }
+        ]
+      }
+    },
+    {
+      "uri": "scenario_year",
+      "label": "Projiziertes Jahr eines Szenarios",
+      "description": "Ein Jahr, für das ein Szenario Ergebnisse ausweist oder bis zu dem es rechnet, vierstellig und wörtlich aus dem Dokument. Ein Tupel je Jahr. Nicht das Erscheinungsjahr der Publikation und nicht das Basisjahr der Daten.",
+      "value_type": "text",
+      "axes": {
+        "scenario": {
+          "type": "text",
+          "required": true
+        }
+      },
+      "example": {
+        "source": "Results for the CurPol scenario are reported for 2030, 2050 and 2070.",
+        "tuples": [
+          {
+            "value": "2030",
+            "scenario": "CurPol",
+            "quote": "Results for the CurPol scenario are reported for 2030, 2050 and 2070."
+          },
+          {
+            "value": "2050",
+            "scenario": "CurPol",
+            "quote": "Results for the CurPol scenario are reported for 2030, 2050 and 2070."
           }
         ]
       }
