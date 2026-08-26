@@ -11,7 +11,7 @@ Du bekommst ein JSON-Objekt mit zwei Feldern:
 
 Gib ausschließlich ein JSON-Objekt in dieser Form zurück:
 
-{"tuples": [{"value": 126656132, "unit_raw": "kWh/a", "carrier": "Erdgas", "carrier_raw": "Gas H", "sector": "Industrie", "sector_raw": "Industrie", "year": 2020, "scenario": "status_quo", "spatial_scope": "municipality", "indicator_label_raw": "Endenergie", "quote": "| Gas H | 126.656.132 | 520.465.057 | 1.036.767.833 |"}]}
+{"tuples": [{"value": 126656132, "unit_raw": "kWh/a", "carrier": "Erdgas", "carrier_raw": "Gas H", "sector": "Industrie", "sector_raw": "Industrie", "year": 2020, "scenario": "status_quo", "spatial_scope": "municipality", "quantity": "final energy consumption value", "quantity_raw": "Endenergie", "quote": "| Gas H | 126.656.132 | 520.465.057 | 1.036.767.833 |"}]}
 
 Ein Tupel pro Zahl, und zwar VOLLSTÄNDIG: jede Zahl des gesuchten Parameters in der Quelle bekommt ihr Tupel — jede Zeile und jede Spalte, auch wenn deren Bezeichnung zu keiner Klasse passt (dann die Klasse null und die Bezeichnung in "_raw"). Eine leere Liste {"tuples": []} ist nur dann das Ergebnis, wenn die Quelle wirklich keinen Wert des gesuchten Parameters enthält.
 
@@ -38,6 +38,12 @@ Jedes Tupel wird maschinell und wörtlich gegen die Quelle geprüft; was die Pr�
 
 7. "spatial_scope": "sub_area", wenn sich die Werte auf ein Fokusgebiet, Teilgebiet, Quartier oder einen Stadtteil beziehen — auch wenn das nur im Titel oder in der Caption steht; "municipality" bei Gesamtstadt oder Gemeinde; sonst "unknown".
 
-8. "indicator_label_raw": die wörtliche Bezeichnung der Kennzahl aus der Quelle, z. B. "Endenergieverbrauch", "Endenergiebedarf", "witterungskorrigierter Endenergieverbrauch", "THG-Emissionen". Pflichtfeld — die Unterscheidung Bedarf/Verbrauch oder CO2/CO2-Äquivalente triffst nicht du, sondern eine Mapping-Tabelle, die dieses Label liest.
+8. "quantity" und "quantity_raw": WELCHE GRÖSSE die Zahl ist. Das ist die wichtigste Entscheidung des ganzen Tupels, denn sie bestimmt, als welche Klasse der Wert im Knowledge Graph steht.
+   - "quantity": genau EIN Klassenname aus axes.quantity.classes. Die Beschreibung des Parameters nennt zu jeder Klasse ihre Definition aus der Ontologie. Entscheide danach, nicht nach der Ähnlichkeit der Wörter.
+   - "quantity_raw": die wörtliche Bezeichnung der Kennzahl aus der Quelle, aus Zeile, Spaltenkopf, Blocküberschrift oder Caption. Pflichtfeld, auch wenn du eine Klasse gewählt hast.
+   Passt keine Klasse, lässt du "quantity" leer und füllst nur "quantity_raw". Das ist ein brauchbares Ergebnis und wird ausgewertet. Diese Fälle sind häufig und richtig: ein Bedarf ist kein Verbrauch (Wärmebedarf, Nutzwärmebedarf, Endenergiebedarf), ein Potenzial ist keiner, eine Erzeugung, eine Einsparung, eine Abscheidung und ein Anteil in Prozent auch nicht.
+   RICHTIG: Zeile "Wärmeverbrauch", Klasse "final energy consumption value" — die Definition lautet "the energy delivered to and consumed by end users", und genau das ist ein Wärmeverbrauch.
+   RICHTIG: Zeile "Wärmebedarf", "quantity" leer, "quantity_raw": "Wärmebedarf".
+   FALSCH: eine Klasse wählen, weil das Wort ähnlich klingt.
 
 9. Nichts erfinden: nur Zahlen, die wörtlich in source.text stehen. Das gilt auch für Diagrammbeschreibungen — was dort nicht beziffert ist, existiert nicht. Was du aus Kontextwissen ergänzen müsstest, gehört nicht in die Liste.

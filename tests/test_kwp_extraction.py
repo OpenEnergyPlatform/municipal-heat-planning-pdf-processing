@@ -17,12 +17,22 @@ UUID5 = r"[0-9a-f]{8}-[0-9a-f]{4}-5[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}"
 
 # --- spec ------------------------------------------------------------------
 
-def test_the_spec_carries_the_mail_parameters_plus_the_equivalent_class():
-    """Mirjam's three, and the class a BISKO balance actually reports:
-    OEO_00340066 is CO2 alone, while the plans overwhelmingly print
+NUMERIC = [p for p in SPEC.parameters if p.is_numeric]
+
+
+def test_the_class_is_the_models_choice_not_a_table_of_german_spellings():
+    """Two parameters, split by unit family, and inside each the model picks
+    the OEO class from the list with the ontology's definitions in front of it.
+    Mirjam's three classes are in there, plus the one a BISKO balance actually
+    reports: OEO_00340066 is CO2 alone, while the plans overwhelmingly print
     Treibhausgase in CO2 equivalents, which OEO has as OEO_00140083."""
     assert [p.uri for p in SPEC.parameters] == [
-        "OEO_00050016", "OEO_00050018", "OEO_00340066", "OEO_00140083"]
+        "energy_consumption", "emission", "planning_organisation"]
+    classes = {uri for p in NUMERIC for uri in p.axes["quantity"].vocabulary}
+    assert classes == {"OEO_00050016", "OEO_00050018",
+                       "OEO_00340066", "OEO_00140083"}
+    for parameter in NUMERIC:
+        assert not parameter.axes["quantity"].required,             "a number that fits no class keeps its wording and is counted"
 
 
 @pytest.mark.parametrize("parameter", SPEC.parameters, ids=lambda p: p.uri)
@@ -34,7 +44,7 @@ def test_every_example_verifies_against_its_own_source(parameter):
         assert isinstance(outcome, Verified), getattr(outcome, "reason", outcome)
 
 
-@pytest.mark.parametrize("parameter", SPEC.parameters, ids=lambda p: p.uri)
+@pytest.mark.parametrize("parameter", NUMERIC, ids=lambda p: p.uri)
 def test_the_examples_teach_exhaustive_extraction(parameter):
     """Every value cell in the example source has its tuple — a few-shot
     that extracts a subset teaches the model to under-harvest, and off-
@@ -80,7 +90,8 @@ def test_query_templates_expand_for_every_parameter():
     assert templates
     for parameter in SPEC.parameters:
         probes = expand(templates, parameter)
-        assert len(probes) > len(templates), "the carrier axis must fan out"
+        if parameter.is_numeric:
+            assert len(probes) > len(templates), "the carrier axis must fan out"
         assert len(set(probes)) == len(probes)
         assert not any("{" in p for p in probes)
 
@@ -89,7 +100,7 @@ def test_the_harvest_prompt_states_the_contract():
     from docpipe import prompts
     prompt = prompts.load("extraction/harvest", _profile())
     assert prompt.meta.get("max_tokens")
-    for needle in ('"tuples"', '"quote"', '"unit_raw"', '"indicator_label_raw"',
+    for needle in ('"tuples"', '"quote"', '"unit_raw"', '"quantity"',
                    '"carrier_raw"', 'classes'):
         assert needle in prompt.text, f"prompt never names {needle}"
 
@@ -120,29 +131,6 @@ def test_normalise_and_organisation_minting_match_the_reference():
     assert not stripped.endswith("2d4f4ae8-ea0f-575c-9a76-8dcf377042af")
 
 
-# --- indicator mapping (D6) -------------------------------------------------
-
-def test_unclear_beats_accept_and_no_label_is_unclear():
-    assert kg.accepted_indicator("OEO_00050016", "Endenergieverbrauch")
-    assert not kg.accepted_indicator("OEO_00050016", "Endenergiebedarf")
-    assert not kg.accepted_indicator(
-        "OEO_00050016", "witterungskorrigierter Endenergieverbrauch")
-    assert not kg.accepted_indicator("OEO_00050016", None)
-
-
-def test_a_greenhouse_gas_label_belongs_to_the_equivalent_class():
-    """The split that decides whether the emissions parameter yields anything:
-    a THG or CO2-Äq label is a CO2 equivalent, and only a plain CO2 label is
-    OEO's CO2 emission value."""
-    for label in ("THG-Emissionen", "Treibhausgasemissionen",
-                  "CO2-Äquivalente", "CO2e"):
-        assert kg.accepted_indicator("OEO_00140083", label), label
-        assert not kg.accepted_indicator("OEO_00340066", label), label
-    assert kg.accepted_indicator("OEO_00340066", "CO2-Emissionen")
-    assert not kg.accepted_indicator("OEO_00140083", "CO2-Emissionen")
-    assert not kg.accepted_indicator("OEO_00140083", "THG-Vermeidung")
-
-
 # --- serializer -------------------------------------------------------------
 
 def _database(tmp_path):
@@ -167,11 +155,11 @@ def _database(tmp_path):
 
 
 def _row(**overrides):
-    row = {"kind": "tuple", "parameter": "OEO_00050016", "value": 241000,
+    row = {"kind": "tuple", "parameter": "energy_consumption", "value": 241000,
            "value_target": 241.0, "unit_raw": "kWh/a",
+           "quantity": "OEO_00050016", "quantity_raw": "Endenergieverbrauch",
            "carrier": "OEO_00000292", "sector": None, "year": 2030,
            "scenario": "target", "spatial_scope": "municipality",
-           "indicator_label_raw": "Endenergieverbrauch",
            "tier": "pdf_verified", "provenance": {"document_id": 857}}
     row.update(overrides)
     return row
@@ -183,7 +171,7 @@ def test_the_serializer_emits_only_the_target_scenario_slice(tmp_path):
         _row(),
         _row(scenario="status_quo"),
         _row(spatial_scope="sub_area"),
-        _row(indicator_label_raw="Endenergiebedarf"),
+        _row(quantity=None, quantity_raw="Endenergiebedarf"),
         _row(year=None),
     ])
     assert f"<{kg.BASE}heatplan/AGS_06611000_2024-03-15>" in ttl
@@ -294,3 +282,95 @@ def test_the_date_converter_takes_both_and_refuses_neither_silently():
     assert kg._iso_date("2024-03-15T00:00:00") == "2024-03-15"
     assert kg._iso_date(None) == ""
     assert kg._iso_date("Fruehjahr") == "Fruehjahr", "left for the guard to reject"
+
+
+# --- the acceptance test: is the output kassel_valid.ttl? -------------------
+
+# https://github.com/OpenEnergyPlatform/oekg/blob/production/mhpkg/schema/
+#   examples/kassel_valid.ttl — the shape one heat plan has to come out as.
+# Its own value IRI is left out of the comparison: that node is hand-typed
+# upstream (a878a3a1-…), and mint_slice.py's coordinate string yields
+# 78153046-… instead, which the minting test above pins.
+KASSEL_VALID = """
+heatplan/AGS_06611000_2024-03-15 | a | mhpo:MHPO_00020003
+heatplan/AGS_06611000_2024-03-15 | rdfs:label | "Kommunale Wärmeplanung Kassel 2024"
+heatplan/AGS_06611000_2024-03-15 | oeo:OEO_00390096 | "2024-03-15"^^xsd:date
+heatplan/AGS_06611000_2024-03-15 | oeo:OEO_00000510 | organisation/2d4f4ae8-ea0f-575c-9a76-8dcf377042af
+heatplan/AGS_06611000_2024-03-15 | obo:BFO_0000051 | targetscenario/AGS_06611000_2024-03-15
+targetscenario/AGS_06611000_2024-03-15 | a | mhpo:MHPO_00020007
+targetscenario/AGS_06611000_2024-03-15 | rdfs:label | "Zielszenario Kassel 2024"
+VALUE | a | oeo:OEO_00050016
+VALUE | oeo:OEO_00140178 | "241.0"^^xsd:float
+VALUE | oeo:OEO_00040010 | oeo:OEO_00050008
+VALUE | oeo:OEO_00000523 | oeo:OEO_00000292
+VALUE | oeo:OEO_00000505 | oeo:OEO_00000214
+VALUE | oeo:OEO_00020440 | "2030"^^xsd:integer
+VALUE | oeo:OEO_00390023 | oeo:OEO_00140070
+organisation/2d4f4ae8-ea0f-575c-9a76-8dcf377042af | a | oeo:OEO_00030022
+organisation/2d4f4ae8-ea0f-575c-9a76-8dcf377042af | rdfs:label | "Kassel Wärme Ingenieurbüro"
+municipality/AGS_06611000 | a | mhpo:MHPO_00020017
+municipality/AGS_06611000 | rdfs:label | "Gemeindegebiet Kassel"
+"""
+
+
+def _triples(ttl: str) -> set:
+    """Turtle to a set of `subject | predicate | object`, IRIs shortened.
+
+    A small subset is enough here: no blank nodes, no nesting, `;` and `,` as
+    the only abbreviations.
+    """
+    body = re.sub(r"(?m)^\s*(#.*|@prefix.*)$", "", ttl)
+    out = set()
+    for statement in body.split(" .\n"):
+        statement = statement.strip().rstrip(".").strip()
+        if not statement:
+            continue
+        subject, _, rest = statement.partition("\n")
+        subject = _short(subject.strip())
+        for clause in rest.split(";"):
+            clause = clause.strip()
+            if not clause:
+                continue
+            predicate, _, objects = clause.partition(" ")
+            for obj in objects.split(","):
+                out.add(f"{subject} | {predicate.strip()} | "
+                        f"{_short(obj.strip())}")
+    return out
+
+
+def _short(term: str) -> str:
+    term = term.strip().strip("<>")
+    if term.startswith(kg.BASE):
+        rest = term[len(kg.BASE):]
+        return "VALUE" if rest.startswith("value/") else rest
+    return term
+
+
+def test_one_heat_plan_comes_out_as_the_published_example(tmp_path):
+    """The whole point of the pilot, as one assertion: feed the serializer what
+    Kassel's plan says and the output is the schema repo's kassel_valid.ttl —
+    every node, every predicate, both directions."""
+    rows = [
+        {"kind": "tuple", "parameter": "energy_consumption",
+         "value": 241.0, "value_target": 241.0, "unit_raw": "MWh",
+         "quantity": "OEO_00050016", "quantity_raw": "Endenergieverbrauch",
+         "carrier": "OEO_00000292", "sector": "OEO_00000214", "year": 2030,
+         "scenario": "target", "spatial_scope": "municipality",
+         "provenance": {"document_id": 857}},
+        {"kind": "tuple", "parameter": "planning_organisation",
+         "value": "Kassel Wärme Ingenieurbüro GmbH",
+         "quote": "Auftragnehmer: Kassel Wärme Ingenieurbüro GmbH",
+         "provenance": {"document_id": 857}},
+    ]
+    ttl = kg.make_serializer(_database(tmp_path))(
+        "waermeplan_kassel_20240315", rows)
+    ours = _triples(ttl)
+    # The value node's IRI is ours to mint, so its identity is compared as
+    # VALUE; that the scenario points at it is asserted separately.
+    ours = {t for t in ours
+            if not t.startswith("targetscenario/AGS_06611000_2024-03-15 | "
+                                "oeo:OEO_00140002")}
+    theirs = {line.strip() for line in KASSEL_VALID.strip().splitlines()}
+    assert ours == theirs, (
+        f"\nfehlt : {sorted(theirs - ours)}\nzuviel: {sorted(ours - theirs)}")
+    assert re.search(rf"oeo:OEO_00140002 <{kg.BASE}value/{UUID5}>", ttl)

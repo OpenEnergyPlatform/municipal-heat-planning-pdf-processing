@@ -6,3 +6,5 @@
 {label} Bilanz gesamtes Stadtgebiet
 {label} Zielszenario Entwicklung bis 2045
 {label} Fokusgebiet Teilgebiet
+{label} Impressum Auftragnehmer
+{label} Titelseite erstellt durch Bearbeitung
