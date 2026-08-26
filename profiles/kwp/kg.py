@@ -47,8 +47,16 @@ LEGAL = r"(gmbh\s*&\s*co\.?\s*kg|gmbh|mbh|ag|kg|ohg|e\.?\s*v\.?|gbr|se|ug)"
 
 _SPEC = json.loads(
     Path(__file__).with_name("extraction_spec.json").read_text(encoding="utf-8"))
-INDICATOR_MAPPING = _SPEC.get("indicator_mapping", {})
-UNIT_TARGET = {p["uri"]: p["unit_target"] for p in _SPEC["parameters"]}
+# Zielgroesse je OEO-Klasse, nicht je Parameter: welche Klasse ein Wert ist,
+# entscheidet das Modell auf der Achse `quantity`, und die Einheit haengt an
+# der Klasse.
+UNIT_TARGET = {uri: par["unit_target"]
+               for par in _SPEC["parameters"]
+               if par.get("unit_target")
+               for uri in par["axes"]["quantity"]["vocabulary"]}
+ORGANISATION = "planning_organisation"
+CLS_ORGANISATION = "OEO_00030022"        # organisation
+P_ORGANISATION = "OEO_00000510"          # has organisation
 
 PREFIXES = """\
 @prefix rdfs:  <http://www.w3.org/2000/01/rdf-schema#> .
@@ -73,62 +81,18 @@ def normalise(label: str) -> str:
     return s.strip()
 
 
+def display_name(label: str) -> str:
+    """The name as the graph shows it: the document's own spelling, minus the
+    legal form. `normalise` decides identity and casefolds for that; a label a
+    reader sees must keep its capitals, and kassel_valid.ttl shows the
+    stripped form."""
+    s = re.sub(r"\s+", " ", str(label)).strip()
+    return re.sub(rf"[\s,]+{LEGAL}\.?$", "", s, flags=re.I).strip(" ,")
+
+
 def mint(collection: str, name: str) -> str:
     """Tier 3: UUIDv5 over the identifying name. Never v4 — v4 is random."""
     return f"{BASE}{collection}/{uuid.uuid5(ns(collection), name)}"
-
-
-_UMLAUT = str.maketrans({"ä": "ae", "ö": "oe", "ü": "ue", "ß": "ss"})
-_SEPARATOR = re.compile(r"[\s\-_/.,;:()\[\]]+")
-
-
-def indicator_text(label_raw) -> str:
-    """One spelling for an indicator label, so the table can name the concept.
-
-    The corpus writes CO2 with a subscript two in a hundred places, hyphenates
-    where the table does not, and spells umlauts both ways. Matching those as
-    written meant a table of spellings that missed exactly the spellings the
-    documents use.
-    """
-    text = unicodedata.normalize("NFKC", str(label_raw or "")).casefold()
-    return _SEPARATOR.sub(" ", text.translate(_UMLAUT)).strip()
-
-
-def accepted_indicator(parameter_uri: str, label_raw) -> bool:
-    """Does this label name the quantity the OEO class is defined as?
-
-    The terms come from the class definitions in oeo-closure.owl, not from
-    guessing: final energy consumption is "the energy delivered to and consumed
-    by end users", so a Waermeverbrauch is one and a Waermebedarf is not. An
-    unclear term beats an accepted one, and no match at all is unclear.
-    """
-    rules = INDICATOR_MAPPING.get(parameter_uri)
-    label = indicator_text(label_raw)
-    if not rules or not label:
-        return False
-    if any(u in label for u in rules.get("unclear", ())):
-        return False
-    return any(a in label for a in rules.get("accept", ()))
-
-
-def route_indicator(label_raw, claimed: str = "") -> Optional[str]:
-    """The parameter this indicator label actually belongs to, or None.
-
-    The harvest asks every parameter of every source, so the model regularly
-    answers the primary-energy question with the final-energy figure standing
-    in the same table. The value is right and so is its quote; only the filing
-    is wrong. Measured on the 16-document pilot: of the 218 findings the
-    indicator filter dropped, 122 carried a label that exactly one other
-    parameter accepts, and not one carried a label two of them accept.
-    Dropping those threw away good readings over a filing mistake.
-    """
-    fits = [uri for uri in INDICATOR_MAPPING
-            if accepted_indicator(uri, label_raw)]
-    if len(fits) == 1:
-        return fits[0]
-    # Two parameters claiming one label is a mapping question, not a routing
-    # decision: the row keeps its own class if that is one of them.
-    return claimed if claimed in fits else None
 
 
 def _iso_date(raw) -> str:
@@ -181,7 +145,7 @@ def _value_iri(heatplan: str, row: dict) -> str:
     # absent coordinates are empty segments so the arity never varies.
     coordinates = "|".join([
         heatplan,
-        f"{OEO}{row['parameter']}",
+        f"{OEO}{row['quantity']}",
         f"{OEO}{row['carrier']}" if row.get("carrier") else "",
         f"{OEO}{row['sector']}" if row.get("sector") else "",
         str(row["year"]),
@@ -206,34 +170,32 @@ def make_serializer(db_path: Path):
         def skip(reason: str) -> None:
             skipped[reason] = skipped.get(reason, 0) + 1
 
+        offices: dict = {}
         kept = []
-        rerouted = 0
         for row in rows:
-            target = route_indicator(row.get("indicator_label_raw"),
-                                     row.get("parameter") or "")
+            if row.get("parameter") == ORGANISATION:
+                label = row.get("value")
+                if isinstance(label, str) and normalise(label):
+                    offices.setdefault(normalise(label), display_name(label))
+                continue
+            # Which OEO class this number is, the model chose from the class
+            # list with the ontology's own definitions in front of it. What it
+            # could not place keeps its wording and is counted, instead of
+            # being guessed at from a table of German spellings.
+            quantity = row.get("quantity")
             if row.get("scenario") != "target":
                 skip("scenario")
             elif row.get("spatial_scope") != "municipality":
                 skip("spatial_scope")
             elif not isinstance(row.get("year"), int):
                 skip("year")
-            elif target is None:
-                skip("indicator")
+            elif quantity not in UNIT_TARGET:
+                skip(f"not_a_class:{row.get('quantity_raw') or '?'}")
             elif row.get("carrier") in NOT_AN_ENERGY_CARRIER:
                 skip(f"carrier_not_in_oeo:"
                      f"{NOT_AN_ENERGY_CARRIER[row['carrier']]}")
             else:
-                if target != row.get("parameter"):
-                    # Both energy parameters share a unit target and so do both
-                    # emission parameters, so value_target carries over.
-                    row = dict(row, parameter=target,
-                               parameter_claimed=row.get("parameter"))
-                    rerouted += 1
                 kept.append(row)
-        if rerouted:
-            log.info("kg: %s: %d value(s) filed under the parameter their "
-                     "indicator names, not the one they were harvested for",
-                     name, rerouted)
         if not kept:
             if skipped:
                 log.info("kg: %s: nothing serializable (skipped %s)", name, skipped)
@@ -279,6 +241,16 @@ def make_serializer(db_path: Path):
             log.info("kg: %s: %d value(s) serialized, skipped %s",
                      name, len(values), skipped)
 
+        # Das beauftragte Planungsbuero, ueber den normalisierten Namen
+        # gepraegt: "Kassel Wärme Ingenieurbüro GmbH" und dieselbe Schreibweise
+        # ohne Rechtsform ergeben einen Knoten, nicht zwei.
+        office_iris = {mint("organisation", key): label
+                       for key, label in offices.items()}
+        office_edge = ""
+        if office_iris:
+            refs = " ,\n        ".join(f"<{i}>" for i in office_iris)
+            office_edge = f"\n    oeo:{P_ORGANISATION} {refs} ;"
+
         parts = []
         if header_pending[0]:
             header_pending[0] = False
@@ -287,7 +259,7 @@ def make_serializer(db_path: Path):
 <{heatplan}>
     a mhpo:MHPO_00020003 ;
     rdfs:label "Kommunale Wärmeplanung {place} {published[:4]}" ;
-    oeo:OEO_00390096 "{published}"^^xsd:date ;
+    oeo:OEO_00390096 "{published}"^^xsd:date ;{office_edge}
     obo:BFO_0000051 <{scenario_iri}> .
 """)
         value_refs = " ,\n        ".join(f"<{iri}>" for iri in values)
@@ -299,9 +271,9 @@ def make_serializer(db_path: Path):
 """)
         for iri, row in values.items():
             lines = [f"<{iri}>",
-                     f"    a oeo:{row['parameter']} ;",
+                     f"    a oeo:{row['quantity']} ;",
                      f"    oeo:OEO_00140178 \"{float(row['value_target'])!r}\"^^xsd:float ;",
-                     f"    oeo:OEO_00040010 oeo:{UNIT_TARGET[row['parameter']]} ;"]
+                     f"    oeo:OEO_00040010 oeo:{UNIT_TARGET[row['quantity']]} ;"]
             if row.get("carrier"):
                 lines.append(f"    oeo:OEO_00000523 oeo:{row['carrier']} ;")
             if row.get("sector"):
@@ -309,6 +281,10 @@ def make_serializer(db_path: Path):
             lines.append(f"    oeo:OEO_00020440 \"{row['year']}\"^^xsd:integer ;")
             lines.append(f"    oeo:OEO_00390023 oeo:{AGGREGATION_INTEGRAL} .")
             parts.append("\n".join(lines) + "\n")
+        for iri, label in office_iris.items():
+            parts.append(f"<{iri}>\n"
+                         f"    a oeo:{CLS_ORGANISATION} ;\n"
+                         f"    rdfs:label \"{label}\" .\n")
         parts.append(f"""\
 <{municipality_iri}>
     a mhpo:MHPO_00020017 ;

@@ -33,6 +33,11 @@ def expand(templates: list, parameter: Parameter) -> list:
             continue
         template = template.strip()
         axis_names = _AXIS.findall(template)
+        if axis_names and not parameter.axes:
+            # A parameter with no coordinates at all — a document's title, the
+            # office that wrote it — cannot fan out along one. The template is
+            # simply not about this parameter.
+            continue
         for name in axis_names:
             axis = parameter.axes.get(name)
             if axis is None or axis.vocabulary is None:

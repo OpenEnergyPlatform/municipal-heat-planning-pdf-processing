@@ -1,9 +1,25 @@
 {
+  "_comment": [
+    "Zwei Messgroessen und eine Beteiligte. Welche OEO-Klasse ein Wert ist,",
+    "waehlt das Modell auf der Achse `quantity` aus der Liste, mit der",
+    "Definition aus oeo-closure.owl vor sich. Vorher stand hier je Klasse ein",
+    "eigener Parameter und danach eine Stichworttabelle, die deutsche",
+    "Indikatorbezeichnungen auf die Klassen abbildete. Die Tabelle traf die",
+    "Schreibweisen des Korpus nicht, und der Harvest fragte jede Quelle",
+    "viermal, was das Modell einlud, die CO2-Frage mit einer Energiezahl zu",
+    "beantworten: 95 der 218 an dieser Stelle verworfenen Werte waren",
+    "Endenergie unter Primaerenergie abgelegt.",
+    "",
+    "Die Einheit trennt die beiden Parameter, nicht das Modell: MWh gegen t.",
+    "Innerhalb der Einheitenfamilie waehlt das Modell die Klasse.",
+    "`quantity` ist NICHT required: was in keine Klasse passt, behaelt seinen",
+    "Wortlaut in quantity_raw und wird gezaehlt, statt verworfen zu werden."
+  ],
   "parameters": [
     {
-      "uri": "OEO_00050016",
-      "label": "Endenergieverbrauch",
-      "description": "Endenergieverbrauch (final energy consumption value): jährlich am Ort des Verbrauchs bilanzierte Energiemenge, je Energieträger und/oder Sektor, wie in der Bestands- oder Szenarienbilanz des Wärmeplans ausgewiesen.",
+      "uri": "energy_consumption",
+      "label": "Energieverbrauch",
+      "description": "Eine im Wärmeplan bilanzierte Energiemenge, je Energieträger, Sektor und Jahr. Welche Klasse es ist, wählst du in \"quantity\" aus der Liste. Die beiden Klassen sind in der Ontologie so definiert: final energy consumption value ist \"the energy delivered to and consumed by end users\", also die beim Endverbraucher ankommende und dort verbrauchte Energie, gleich ob das Dokument sie Endenergieverbrauch oder Wärmeverbrauch nennt. primary energy consumption value ist \"the total consumption of energy in a spatial region excluding the non-energetic use of fuels\", also die Bilanz vor der Umwandlung. Kein Tupel, wenn die Zahl etwas anderes ist als diese Klassen: ein Bedarf (Wärmebedarf, Nutzwärmebedarf, Endenergiebedarf) ist kein Verbrauch, ein Potenzial ist keiner, eine Erzeugung, eine Einsparung und ein Anteil in Prozent auch nicht. Trage dann nichts in \"quantity\" ein und schreibe nur die Bezeichnung des Dokuments in \"quantity_raw\".",
       "value_type": "float",
       "unit_target": "OEO_00050008",
       "units_accepted": {
@@ -18,6 +34,25 @@
         "TWh/a": 1000000.0
       },
       "axes": {
+        "quantity": {
+          "vocabulary": {
+            "OEO_00050016": [
+              "final energy consumption value",
+              "Endenergieverbrauch",
+              "Endenergie",
+              "Wärmeverbrauch",
+              "Fernwärmeverbrauch",
+              "Stromverbrauch",
+              "Erdgasverbrauch"
+            ],
+            "OEO_00050018": [
+              "primary energy consumption value",
+              "Primärenergieverbrauch",
+              "Primärenergie"
+            ]
+          },
+          "required": false
+        },
         "carrier": {
           "vocabulary": {
             "OEO_00000292": [
@@ -107,6 +142,8 @@
           {
             "value": 24611469,
             "unit_raw": "kWh/a",
+            "quantity": "final energy consumption value",
+            "quantity_raw": "Endenergie",
             "carrier": "Fernwärme",
             "carrier_raw": "Wärmenetze",
             "sector": "Industrie",
@@ -114,12 +151,13 @@
             "year": null,
             "scenario": "unknown",
             "spatial_scope": "unknown",
-            "indicator_label_raw": "Endenergie",
             "quote": "| Wärmenetze | 24.611.469 | 222.660.349 | 281.939.715 |"
           },
           {
             "value": 222660349,
             "unit_raw": "kWh/a",
+            "quantity": "final energy consumption value",
+            "quantity_raw": "Endenergie",
             "carrier": "Fernwärme",
             "carrier_raw": "Wärmenetze",
             "sector": "GHD",
@@ -127,12 +165,13 @@
             "year": null,
             "scenario": "unknown",
             "spatial_scope": "unknown",
-            "indicator_label_raw": "Endenergie",
             "quote": "| Wärmenetze | 24.611.469 | 222.660.349 | 281.939.715 |"
           },
           {
             "value": 281939715,
             "unit_raw": "kWh/a",
+            "quantity": "final energy consumption value",
+            "quantity_raw": "Endenergie",
             "carrier": "Fernwärme",
             "carrier_raw": "Wärmenetze",
             "sector": "Private Haushalte",
@@ -140,12 +179,13 @@
             "year": null,
             "scenario": "unknown",
             "spatial_scope": "unknown",
-            "indicator_label_raw": "Endenergie",
             "quote": "| Wärmenetze | 24.611.469 | 222.660.349 | 281.939.715 |"
           },
           {
             "value": 126656132,
             "unit_raw": "kWh/a",
+            "quantity": "final energy consumption value",
+            "quantity_raw": "Endenergie",
             "carrier": "Erdgas",
             "carrier_raw": "Erdgas",
             "sector": "Industrie",
@@ -153,12 +193,13 @@
             "year": null,
             "scenario": "unknown",
             "spatial_scope": "unknown",
-            "indicator_label_raw": "Endenergie",
             "quote": "| Erdgas | 126.656.132 | 520.465.057 | 1.036.767.833 |"
           },
           {
             "value": 520465057,
             "unit_raw": "kWh/a",
+            "quantity": "final energy consumption value",
+            "quantity_raw": "Endenergie",
             "carrier": "Erdgas",
             "carrier_raw": "Erdgas",
             "sector": "GHD",
@@ -166,12 +207,13 @@
             "year": null,
             "scenario": "unknown",
             "spatial_scope": "unknown",
-            "indicator_label_raw": "Endenergie",
             "quote": "| Erdgas | 126.656.132 | 520.465.057 | 1.036.767.833 |"
           },
           {
             "value": 1036767833,
             "unit_raw": "kWh/a",
+            "quantity": "final energy consumption value",
+            "quantity_raw": "Endenergie",
             "carrier": "Erdgas",
             "carrier_raw": "Erdgas",
             "sector": "Private Haushalte",
@@ -179,12 +221,13 @@
             "year": null,
             "scenario": "unknown",
             "spatial_scope": "unknown",
-            "indicator_label_raw": "Endenergie",
             "quote": "| Erdgas | 126.656.132 | 520.465.057 | 1.036.767.833 |"
           },
           {
             "value": 1440048,
             "unit_raw": "kWh/a",
+            "quantity": "final energy consumption value",
+            "quantity_raw": "Endenergie",
             "carrier": "Heizöl",
             "carrier_raw": "Heizöl",
             "sector": "Industrie",
@@ -192,12 +235,13 @@
             "year": null,
             "scenario": "unknown",
             "spatial_scope": "unknown",
-            "indicator_label_raw": "Endenergie",
             "quote": "| Heizöl | 1.440.048 | 28.116.204 | 203.458.519 |"
           },
           {
             "value": 28116204,
             "unit_raw": "kWh/a",
+            "quantity": "final energy consumption value",
+            "quantity_raw": "Endenergie",
             "carrier": "Heizöl",
             "carrier_raw": "Heizöl",
             "sector": "GHD",
@@ -205,12 +249,13 @@
             "year": null,
             "scenario": "unknown",
             "spatial_scope": "unknown",
-            "indicator_label_raw": "Endenergie",
             "quote": "| Heizöl | 1.440.048 | 28.116.204 | 203.458.519 |"
           },
           {
             "value": 203458519,
             "unit_raw": "kWh/a",
+            "quantity": "final energy consumption value",
+            "quantity_raw": "Endenergie",
             "carrier": "Heizöl",
             "carrier_raw": "Heizöl",
             "sector": "Private Haushalte",
@@ -218,341 +263,15 @@
             "year": null,
             "scenario": "unknown",
             "spatial_scope": "unknown",
-            "indicator_label_raw": "Endenergie",
             "quote": "| Heizöl | 1.440.048 | 28.116.204 | 203.458.519 |"
           }
         ]
       }
     },
     {
-      "uri": "OEO_00050018",
-      "label": "Primärenergieverbrauch",
-      "description": "Primärenergieverbrauch (primary energy consumption value): jährliche Energiemenge einschließlich der Vorketten von Gewinnung und Umwandlung, je Energieträger und/oder Sektor, wie im Wärmeplan bilanziert.",
-      "value_type": "float",
-      "unit_target": "OEO_00050008",
-      "units_accepted": {
-        "kWh": 0.001,
-        "kWh/a": 0.001,
-        "MWh": 1.0,
-        "MWh/a": 1.0,
-        "GWh": 1000.0,
-        "GWh/a": 1000.0,
-        "Mrd. kWh": 1000000.0,
-        "TWh": 1000000.0,
-        "TWh/a": 1000000.0
-      },
-      "axes": {
-        "carrier": {
-          "vocabulary": {
-            "OEO_00000292": [
-              "Erdgas",
-              "Gas"
-            ],
-            "OEO_00000211": [
-              "Heizöl",
-              "Öl"
-            ],
-            "OEO_00000132": [
-              "Fernwärme",
-              "Wärmenetze",
-              "Wärmenetz"
-            ],
-            "OEO_00000139": [
-              "Strom",
-              "Elektrizität"
-            ],
-            "OEO_00000449": [
-              "Holz",
-              "Holzpellets",
-              "Pellets"
-            ],
-            "OEO_00000074": [
-              "Biogas"
-            ],
-            "OEO_00000388": [
-              "Solarthermie"
-            ],
-            "OEO_00000251": [
-              "Braunkohle"
-            ],
-            "OEO_00320011": [
-              "Flüssiggas"
-            ],
-            "OEO_00000220": [
-              "Wasserstoff"
-            ],
-            "OEO_00000204": [
-              "Steinkohle"
-            ]
-          }
-        },
-        "sector": {
-          "vocabulary": {
-            "OEO_00000214": [
-              "Private Haushalte",
-              "Haushalte",
-              "Privathaushalte"
-            ],
-            "OEO_00000405": [
-              "GHD",
-              "Gewerbe, Handel, Dienstleistungen",
-              "Gewerbe/Handel/Dienstleistungen"
-            ],
-            "OEO_00000227": [
-              "Industrie"
-            ],
-            "OEO_00000422": [
-              "Verkehr"
-            ]
-          }
-        },
-        "year": {
-          "type": "int"
-        },
-        "scenario": {
-          "enum": [
-            "status_quo",
-            "trend",
-            "target",
-            "unknown"
-          ]
-        },
-        "spatial_scope": {
-          "enum": [
-            "municipality",
-            "sub_area",
-            "unknown"
-          ]
-        }
-      },
-      "example": {
-        "source": "Tabelle 5-11: Übersicht der sektoralen Energieverbräuche im Fokusgebiet Eicken\n| Sektoren | Private Haushalte | Wirtschaftlich genutzte Gebäude | Öffentliche Gebäude |\n| --- | --- | --- | --- |\n| **Endenergieverbrauch [MWh/a]** | | | |\n| Gebäude Wärme | 42.005 | 7.285 | 20.548 |\n| **Primärenergieverbrauch [MWh/a]** | | | |\n| Gebäude Wärme | 44.985 | 7.953 | 22.766 |",
-        "tuples": [
-          {
-            "value": 44985,
-            "unit_raw": "MWh/a",
-            "carrier": null,
-            "sector": "Private Haushalte",
-            "sector_raw": "Private Haushalte",
-            "year": null,
-            "scenario": "unknown",
-            "spatial_scope": "sub_area",
-            "indicator_label_raw": "Primärenergieverbrauch",
-            "quote": "| Gebäude Wärme | 44.985 | 7.953 | 22.766 |"
-          },
-          {
-            "value": 7953,
-            "unit_raw": "MWh/a",
-            "carrier": null,
-            "sector": "GHD",
-            "sector_raw": "Wirtschaftlich genutzte Gebäude",
-            "year": null,
-            "scenario": "unknown",
-            "spatial_scope": "sub_area",
-            "indicator_label_raw": "Primärenergieverbrauch",
-            "quote": "| Gebäude Wärme | 44.985 | 7.953 | 22.766 |"
-          },
-          {
-            "value": 22766,
-            "unit_raw": "MWh/a",
-            "carrier": null,
-            "sector": null,
-            "sector_raw": "Öffentliche Gebäude",
-            "year": null,
-            "scenario": "unknown",
-            "spatial_scope": "sub_area",
-            "indicator_label_raw": "Primärenergieverbrauch",
-            "quote": "| Gebäude Wärme | 44.985 | 7.953 | 22.766 |"
-          }
-        ]
-      }
-    },
-    {
-      "uri": "OEO_00340066",
-      "label": "CO2-Emissionen",
-      "description": "CO2-Emissionen (CO2 emission value): jährlich emittierte Masse Kohlendioxid, je Energieträger und/oder Sektor, wie im Wärmeplan ausgewiesen. Nur reines CO2, Bilanzen in CO2-Äquivalenten gehören zu OEO_00140083.",
-      "value_type": "float",
-      "unit_target": "OEO_00010137",
-      "units_accepted": {
-        "Tonnen": 1.0,
-        "Tonnen CO2": 1.0,
-        "Tonnen CO2 im Jahr": 1.0,
-        "Tonnen CO2 jährlich": 1.0,
-        "Tonnen CO2 pro Jahr": 1.0,
-        "Tonnen CO2eq/a": 1.0,
-        "Tonnen CO2äquivalent": 1.0,
-        "Tonnen pro Jahr": 1.0,
-        "t": 1.0,
-        "t CO2": 1.0,
-        "t CO2-eq./a": 1.0,
-        "t CO2-Äquivalent": 1.0,
-        "t CO2/a": 1.0,
-        "t CO2e": 1.0,
-        "t CO2eq": 1.0,
-        "t CO2eq/a": 1.0,
-        "t CO2äq": 1.0,
-        "t CO2äq.": 1.0,
-        "t/a": 1.0,
-        "t/a CO2eq": 1.0,
-        "tCO2": 1.0,
-        "tCO2/a": 1.0,
-        "Tsd. t": 1000.0,
-        "Tsd. t/a": 1000.0,
-        "kt": 1000.0,
-        "kt CO2 pro Jahr": 1000.0,
-        "kt CO2/a": 1000.0,
-        "kt CO2eq": 1000.0,
-        "kt CO2eq/a": 1000.0,
-        "kt/a": 1000.0,
-        "kt/a CO2": 1000.0,
-        "Mio. t CO2/a": 1000000.0,
-        "Mio. t CO2eq": 1000000.0,
-        "Mio. t CO2eq/a": 1000000.0,
-        "Mt": 1000000.0,
-        "Mt/a": 1000000.0
-      },
-      "axes": {
-        "carrier": {
-          "vocabulary": {
-            "OEO_00000292": [
-              "Erdgas",
-              "Gas"
-            ],
-            "OEO_00000211": [
-              "Heizöl",
-              "Öl"
-            ],
-            "OEO_00000132": [
-              "Fernwärme",
-              "Wärmenetze",
-              "Wärmenetz"
-            ],
-            "OEO_00000139": [
-              "Strom",
-              "Elektrizität"
-            ],
-            "OEO_00000449": [
-              "Holz",
-              "Holzpellets",
-              "Pellets"
-            ],
-            "OEO_00000074": [
-              "Biogas"
-            ],
-            "OEO_00000388": [
-              "Solarthermie"
-            ],
-            "OEO_00000251": [
-              "Braunkohle"
-            ],
-            "OEO_00320011": [
-              "Flüssiggas"
-            ],
-            "OEO_00000220": [
-              "Wasserstoff"
-            ],
-            "OEO_00000204": [
-              "Steinkohle"
-            ]
-          }
-        },
-        "sector": {
-          "vocabulary": {
-            "OEO_00000214": [
-              "Private Haushalte",
-              "Haushalte",
-              "Privathaushalte"
-            ],
-            "OEO_00000405": [
-              "GHD",
-              "Gewerbe, Handel, Dienstleistungen",
-              "Gewerbe/Handel/Dienstleistungen"
-            ],
-            "OEO_00000227": [
-              "Industrie"
-            ],
-            "OEO_00000422": [
-              "Verkehr"
-            ]
-          }
-        },
-        "year": {
-          "type": "int"
-        },
-        "scenario": {
-          "enum": [
-            "status_quo",
-            "trend",
-            "target",
-            "unknown"
-          ]
-        },
-        "spatial_scope": {
-          "enum": [
-            "municipality",
-            "sub_area",
-            "unknown"
-          ]
-        }
-      },
-      "example": {
-        "source": "| CO2-Emissionen | |\n| --- | --- |\n| Sektor | CO2-Emissionen [t/a] |\n| Kommunale und öffentlichgenutzte Gebäude | 7.142 |\n| GHD und Industrie | 9.044 |\n| Private Haushalte | 86.543 |\n| Sonstiges | 3.353 |",
-        "tuples": [
-          {
-            "value": 7142,
-            "unit_raw": "t/a",
-            "carrier": null,
-            "sector": null,
-            "sector_raw": "Kommunale und öffentlichgenutzte Gebäude",
-            "year": null,
-            "scenario": "unknown",
-            "spatial_scope": "unknown",
-            "indicator_label_raw": "CO2-Emissionen",
-            "quote": "| Kommunale und öffentlichgenutzte Gebäude | 7.142 |"
-          },
-          {
-            "value": 9044,
-            "unit_raw": "t/a",
-            "carrier": null,
-            "sector": null,
-            "sector_raw": "GHD und Industrie",
-            "year": null,
-            "scenario": "unknown",
-            "spatial_scope": "unknown",
-            "indicator_label_raw": "CO2-Emissionen",
-            "quote": "| GHD und Industrie | 9.044 |"
-          },
-          {
-            "value": 86543,
-            "unit_raw": "t/a",
-            "carrier": null,
-            "sector": "Private Haushalte",
-            "sector_raw": "Private Haushalte",
-            "year": null,
-            "scenario": "unknown",
-            "spatial_scope": "unknown",
-            "indicator_label_raw": "CO2-Emissionen",
-            "quote": "| Private Haushalte | 86.543 |"
-          },
-          {
-            "value": 3353,
-            "unit_raw": "t/a",
-            "carrier": null,
-            "sector": null,
-            "sector_raw": "Sonstiges",
-            "year": null,
-            "scenario": "unknown",
-            "spatial_scope": "unknown",
-            "indicator_label_raw": "CO2-Emissionen",
-            "quote": "| Sonstiges | 3.353 |"
-          }
-        ]
-      }
-    },
-    {
-      "uri": "OEO_00140083",
-      "label": "Treibhausgasemissionen in CO2-Äquivalenten",
-      "description": "Treibhausgasemissionen in CO2-Äquivalenten (carbon dioxide equivalent quantity value): jährlich emittierte Masse aller Treibhausgase, umgerechnet auf die klimawirksam gleiche Menge CO2, je Energieträger und/oder Sektor, wie in der Emissionsbilanz des Wärmeplans ausgewiesen (in der Regel nach BISKO).",
+      "uri": "emission",
+      "label": "Emissionen",
+      "description": "Eine im Wärmeplan bilanzierte Emissionsmenge, je Energieträger, Sektor und Jahr. Welche Klasse es ist, wählst du in \"quantity\" aus der Liste. Die beiden Klassen sind in der Ontologie so definiert: CO2 emission value ist \"a greenhouse gas emission value that quantifies a CO2 emission rate and has a mass unit\", also reines Kohlendioxid. carbon dioxide equivalent quantity value ist \"the combined effect of all emitted greenhouse gases by giving an equivalent amount of CO2\", also alle Treibhausgase in CO2-Äquivalenten umgerechnet. Die Einheit verrät es meist: t CO2 gegen t CO2-Äq. Kein Tupel, wenn die Zahl etwas anderes ist als diese Klassen: ein Bedarf (Wärmebedarf, Nutzwärmebedarf, Endenergiebedarf) ist kein Verbrauch, ein Potenzial ist keiner, eine Erzeugung, eine Einsparung und ein Anteil in Prozent auch nicht. Trage dann nichts in \"quantity\" ein und schreibe nur die Bezeichnung des Dokuments in \"quantity_raw\".",
       "value_type": "float",
       "unit_target": "OEO_00010137",
       "units_accepted": {
@@ -600,6 +319,24 @@
         "Mt/a": 1000000.0
       },
       "axes": {
+        "quantity": {
+          "vocabulary": {
+            "OEO_00340066": [
+              "CO2 emission value",
+              "CO2-Emissionen",
+              "Kohlendioxidemissionen",
+              "CO2-Ausstoß"
+            ],
+            "OEO_00140083": [
+              "carbon dioxide equivalent quantity value",
+              "Treibhausgasemissionen",
+              "THG-Emissionen",
+              "CO2-Äquivalente",
+              "CO2e-Emissionen"
+            ]
+          },
+          "required": false
+        },
         "carrier": {
           "vocabulary": {
             "OEO_00000292": [
@@ -689,212 +426,59 @@
           {
             "value": 10123,
             "unit_raw": "t/a",
+            "quantity": "carbon dioxide equivalent quantity value",
+            "quantity_raw": "Treibhausgasemissionen",
             "carrier": null,
             "sector": "Private Haushalte",
             "sector_raw": "Private Haushalte",
             "year": null,
             "scenario": "unknown",
             "spatial_scope": "sub_area",
-            "indicator_label_raw": "Treibhausgasemissionen",
             "quote": "| Gebäude Wärme | 10.123 | 1.843 | 5.292 |"
           },
           {
             "value": 1843,
             "unit_raw": "t/a",
+            "quantity": "carbon dioxide equivalent quantity value",
+            "quantity_raw": "Treibhausgasemissionen",
             "carrier": null,
             "sector": "GHD",
             "sector_raw": "Wirtschaftlich genutzte Gebäude",
             "year": null,
             "scenario": "unknown",
             "spatial_scope": "sub_area",
-            "indicator_label_raw": "Treibhausgasemissionen",
             "quote": "| Gebäude Wärme | 10.123 | 1.843 | 5.292 |"
           },
           {
             "value": 5292,
             "unit_raw": "t/a",
+            "quantity": "carbon dioxide equivalent quantity value",
+            "quantity_raw": "Treibhausgasemissionen",
             "carrier": null,
             "sector": null,
             "sector_raw": "Öffentliche Gebäude",
             "year": null,
             "scenario": "unknown",
             "spatial_scope": "sub_area",
-            "indicator_label_raw": "Treibhausgasemissionen",
             "quote": "| Gebäude Wärme | 10.123 | 1.843 | 5.292 |"
           }
         ]
       }
+    },
+    {
+      "uri": "planning_organisation",
+      "label": "Beauftragtes Planungsbüro",
+      "description": "Das Ingenieur-, Planungs- oder Beratungsbüro, das die Wärmeplanung im Auftrag der Kommune erstellt hat. Ein Tupel je Büro, in der Schreibweise des Dokuments, ohne Rechtsform. Zu finden im Impressum, auf der Titelseite, unter Auftragnehmer, Bearbeitung, Erstellt durch oder Verfasser. NICHT die Kommune selbst, die ist die Auftraggeberin. NICHT Fördermittelgeber, Datenlieferanten, Netzbetreiber oder im Text erwähnte Firmen.",
+      "value_type": "text",
+      "example": {
+        "source": "Auftraggeber: Stadt Kassel, Der Magistrat. Auftragnehmer: Kassel Wärme Ingenieurbüro GmbH, Bearbeitung: Dipl.-Ing. M. Wagner.",
+        "tuples": [
+          {
+            "value": "Kassel Wärme Ingenieurbüro",
+            "quote": "Auftragnehmer: Kassel Wärme Ingenieurbüro GmbH, Bearbeitung: Dipl.-Ing. M. Wagner."
+          }
+        ]
+      }
     }
-  ],
-  "indicator_mapping": {
-    "OEO_00050016": {
-      "accept": [
-        "endenergieverbrauch",
-        "endenergieverbraeuche",
-        "endenergiemenge",
-        "endenergie",
-        "waermeverbrauch",
-        "fernwaermeverbrauch",
-        "energieverbrauch",
-        "stromverbrauch",
-        "gasverbrauch",
-        "erdgasverbrauch",
-        "oelverbrauch",
-        "verbrauch"
-      ],
-      "unclear": [
-        "primaerenergie",
-        "bedarf",
-        "nachfrage",
-        "nutzenergie",
-        "nutzwaerme",
-        "witterungskorrigiert",
-        "potenzial",
-        "potential",
-        "erzeugung",
-        "produktion",
-        "bereitstellung",
-        "absatz",
-        "ertrag",
-        "jahresarbeit",
-        "abwaerme",
-        "verfuegbar",
-        "ausbau",
-        "anteil",
-        "spezifisch",
-        "je einwohner",
-        "pro kopf",
-        "pro einwohner",
-        "einsparung",
-        "reduzierung",
-        "reduktion",
-        "minderung",
-        "vermeidung",
-        "kumuliert",
-        "kumulativ",
-        "gesamtemission"
-      ]
-    },
-    "OEO_00050018": {
-      "accept": [
-        "primaerenergieverbrauch",
-        "primaerenergie"
-      ],
-      "unclear": [
-        "bedarf",
-        "nachfrage",
-        "nutzenergie",
-        "nutzwaerme",
-        "witterungskorrigiert",
-        "potenzial",
-        "potential",
-        "erzeugung",
-        "produktion",
-        "bereitstellung",
-        "absatz",
-        "ertrag",
-        "jahresarbeit",
-        "abwaerme",
-        "verfuegbar",
-        "ausbau",
-        "anteil",
-        "spezifisch",
-        "je einwohner",
-        "pro kopf",
-        "pro einwohner",
-        "einsparung",
-        "reduzierung",
-        "reduktion",
-        "minderung",
-        "vermeidung",
-        "kumuliert",
-        "kumulativ",
-        "gesamtemission"
-      ]
-    },
-    "OEO_00340066": {
-      "accept": [
-        "co2 emission",
-        "co2emission",
-        "co2 ausstoss",
-        "kohlendioxid"
-      ],
-      "unclear": [
-        "aequivalent",
-        "co2 aeq",
-        "co2aeq",
-        "co2 eq",
-        "co2eq",
-        "co2e",
-        "treibhausgas",
-        "thg",
-        "abscheidung",
-        "speicherung",
-        "potenzial",
-        "potential",
-        "erzeugung",
-        "produktion",
-        "bereitstellung",
-        "absatz",
-        "ertrag",
-        "jahresarbeit",
-        "abwaerme",
-        "verfuegbar",
-        "ausbau",
-        "anteil",
-        "spezifisch",
-        "je einwohner",
-        "pro kopf",
-        "pro einwohner",
-        "einsparung",
-        "reduzierung",
-        "reduktion",
-        "minderung",
-        "vermeidung",
-        "kumuliert",
-        "kumulativ",
-        "gesamtemission"
-      ]
-    },
-    "OEO_00140083": {
-      "accept": [
-        "treibhausgas",
-        "thg",
-        "co2 aeq",
-        "co2aeq",
-        "co2 eq",
-        "co2eq",
-        "co2e",
-        "aequivalent"
-      ],
-      "unclear": [
-        "abscheidung",
-        "speicherung",
-        "potenzial",
-        "potential",
-        "erzeugung",
-        "produktion",
-        "bereitstellung",
-        "absatz",
-        "ertrag",
-        "jahresarbeit",
-        "abwaerme",
-        "verfuegbar",
-        "ausbau",
-        "anteil",
-        "spezifisch",
-        "je einwohner",
-        "pro kopf",
-        "pro einwohner",
-        "einsparung",
-        "reduzierung",
-        "reduktion",
-        "minderung",
-        "vermeidung",
-        "kumuliert",
-        "kumulativ",
-        "gesamtemission"
-      ]
-    }
-  }
+  ]
 }
