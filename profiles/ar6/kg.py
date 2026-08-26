@@ -33,6 +33,7 @@ import sqlite3
 import unicodedata
 import uuid
 from pathlib import Path
+from typing import Optional
 
 log = logging.getLogger(__name__)
 
@@ -133,13 +134,37 @@ def uuid_of(iri: str) -> str:
     return iri.rsplit("/", 1)[-1]
 
 
-def scenario_key(row: dict) -> tuple:
+def _squeeze(text) -> str:
+    return re.sub(r"[^a-z0-9]", "", str(text or "").casefold())
+
+
+def ambiguous(wording, known: dict) -> bool:
+    """Does this wording fit more than one AR6 run of this publication?
+
+    Measured on the 146-scenario pilot document: the paper writes "NPi" and
+    "NDC", and the database has EN_NPi2020_300f, EN_NPi2020_400 and
+    EN_NPi2020_3000. Those are three runs, and "NPi" names the family, not one
+    of them. A model handed the list picks one anyway, which is a guess
+    dressed as a link — so a wording that fits several is treated as fitting
+    none, and the wording alone survives.
+    """
+    needle = _squeeze(wording)
+    if not needle:
+        return False
+    hits = [name for name in known.values() if needle in _squeeze(name)]
+    if len(hits) < 2:
+        return False
+    return not any(_squeeze(name) == needle for name in hits)
+
+
+def scenario_key(row: dict, known: Optional[dict] = None) -> tuple:
     """(identity, label) for the scenario a row belongs to.
 
     The model picks the AR6 run from this publication's own list and keeps the
     document's wording beside it. The run identifier is the identity whenever
     there is one, because that is what links to the AR6 database; the wording
-    is what a reader recognises. With no match the wording is both.
+    is what a reader recognises. With no match, and with a wording that fits
+    several runs equally, the wording is both.
     """
     if row.get("parameter") == "scenario_label":
         resolved, wording = row.get("value_uri"), row.get("value_raw")
@@ -147,6 +172,8 @@ def scenario_key(row: dict) -> tuple:
         resolved, wording = row.get("scenario"), row.get("scenario_raw")
     wording = wording or (row.get("value") if row.get("parameter") ==
                           "scenario_label" else row.get("scenario"))
+    if resolved and known and ambiguous(wording, known):
+        resolved = None
     return (resolved or wording or None), (wording or resolved or None)
 
 
@@ -320,7 +347,7 @@ def make_serializer(db_path: Path):
                 if value is not None and row.get("value") != value:
                     continue
                 if scenario is not None and \
-                        normalise(scenario_key(row)[0] or "") != scenario:
+                        normalise(scenario_key(row, known)[0] or "") != scenario:
                     continue
                 out.append(row)
             return out
@@ -379,7 +406,7 @@ def make_serializer(db_path: Path):
         wanted: dict = {}
         for key in ("scenario_label",) + SCENARIO_FIELDS:
             for row in by_param.get(key, ()):
-                ident, label = scenario_key(dict(row, parameter=key))
+                ident, label = scenario_key(dict(row, parameter=key), known)
                 if ident:
                     wanted.setdefault(normalise(ident), (ident, label))
 
