@@ -36,11 +36,27 @@ from pathlib import Path
 
 log = logging.getLogger(__name__)
 
-# OPEN QUESTION for Mirjam and JH: the instance IRI base for the OEKG. The
-# shapes only fix the ontology prefixes, not where individuals live. This is a
-# placeholder that must be confirmed before anything is pushed to staging.
-BASE = os.environ.get("OEKG_ID_BASE", "https://openenergyplatform.org/id/oekg/")
+# Where individuals live. The shapes only fix the ontology prefixes, so this
+# was read off the running graph instead (13700 triples over the SPARQL
+# endpoint): every collection below is the one the OEKG already uses for that
+# class. Still to confirm with Mirjam is the *local part* — the OEKG's own
+# UUIDs are random, ours are UUIDv5 over the identifying name so that two runs
+# over one document mint one IRI and a re-run does not duplicate the graph.
+BASE = os.environ.get("OEKG_ID_BASE", "https://openenergyplatform.org/ontology/oekg/")
 NS_OEKG = uuid.uuid5(uuid.NAMESPACE_URL, BASE)
+
+# Class -> path segment, as the live OEKG has them. A study report sits under
+# publication/, a factsheet under scenario/, and a bundle, author, organisation
+# or funder directly under the base with no segment at all.
+COLLECTIONS = {
+    "studyreport": "publication",
+    "scenariofactsheet": "scenario",
+    "scenariobundle": "",
+    "author": "",
+    "organisation": "",
+    "funder": "",
+    "studyregion": "region",
+}
 
 # Classes the shapes require at the end of each path.
 CLS_BUNDLE = "OEO_00020227"        # scenario bundle (StudyShape target)
@@ -73,7 +89,8 @@ SINGLE = ("publication_title", "publication_date", "publication_doi",
           "publication_abstract", "study_project_name", "study_acronym")
 # Scenario-scope fields. Everything but the label carries a `scenario` axis
 # naming, in the document's own words, which scenario it belongs to.
-SCENARIO_FIELDS = ("scenario_abstract", "scenario_region", "scenario_year")
+SCENARIO_FIELDS = ("scenario_type", "scenario_abstract",
+                   "scenario_region", "scenario_year")
 # What the shapes demand at least once (sh:minCount 1). A document missing one
 # of these produces a node that will fail validation, so it is reported.
 REQUIRED = ("publication_title", "publication_date", "publication_author")
@@ -107,11 +124,30 @@ def ns(collection: str) -> uuid.UUID:
 def mint(collection: str, name: str) -> str:
     """UUIDv5 over the identifying name. Never v4 — v4 is random, and two runs
     over one document must mint the same IRI."""
-    return f"{BASE}{collection}/{uuid.uuid5(ns(collection), normalise(name))}"
+    segment = COLLECTIONS.get(collection, collection)
+    prefix = f"{BASE}{segment}/" if segment else BASE
+    return f"{prefix}{uuid.uuid5(ns(collection), normalise(name))}"
 
 
 def uuid_of(iri: str) -> str:
     return iri.rsplit("/", 1)[-1]
+
+
+def scenario_key(row: dict) -> tuple:
+    """(identity, label) for the scenario a row belongs to.
+
+    The model picks the AR6 run from this publication's own list and keeps the
+    document's wording beside it. The run identifier is the identity whenever
+    there is one, because that is what links to the AR6 database; the wording
+    is what a reader recognises. With no match the wording is both.
+    """
+    if row.get("parameter") == "scenario_label":
+        resolved, wording = row.get("value_uri"), row.get("value_raw")
+    else:
+        resolved, wording = row.get("scenario"), row.get("scenario_raw")
+    wording = wording or (row.get("value") if row.get("parameter") ==
+                          "scenario_label" else row.get("scenario"))
+    return (resolved or wording or None), (wording or resolved or None)
 
 
 def literal(text: str) -> str:
@@ -284,7 +320,7 @@ def make_serializer(db_path: Path):
                 if value is not None and row.get("value") != value:
                     continue
                 if scenario is not None and \
-                        normalise(row.get("scenario") or "") != scenario:
+                        normalise(scenario_key(row)[0] or "") != scenario:
                     continue
                 out.append(row)
             return out
@@ -341,29 +377,40 @@ def make_serializer(db_path: Path):
         # that says which scenario it belongs to. Both are the document's own
         # wording; `known` is the AR6 list it is matched against.
         wanted: dict = {}
-        for row in by_param.get("scenario_label", ()):
-            wanted.setdefault(normalise(row["value"]), row["value"])
-        for key in SCENARIO_FIELDS:
+        for key in ("scenario_label",) + SCENARIO_FIELDS:
             for row in by_param.get(key, ()):
-                if row.get("scenario"):
-                    wanted.setdefault(normalise(row["scenario"]), row["scenario"])
+                ident, label = scenario_key(dict(row, parameter=key))
+                if ident:
+                    wanted.setdefault(normalise(ident), (ident, label))
 
         scenario_links: list = []
         scenario_nodes: list = []
         unplaced: list = []
-        for norm, label in wanted.items():
+        for norm, (ident, label) in wanted.items():
             if known and norm not in known:
                 unplaced.append(label)
-            iri = mint("scenariofactsheet", f"{title}|{label}")
+            iri = mint("scenariofactsheet", f"{title}|{ident}")
             scenario_links.append(f"<{iri}>")
             block = [f"<{iri}>", f"    a oeo:{CLS_SCENARIO} ;",
                      f"    oeo:{P_UUID} {literal(uuid_of(iri))} ;"]
             block += evidence_for(iri, "rdfs:label",
-                                  rows_for("scenario_label", value=label))
+                                  rows_for("scenario_label", scenario=norm))
             # Mirjam: with no long name beside the acronym, both carry the same
             # string. That is the usual case in this corpus.
-            block.append(f"    rdfs:label {literal(known.get(norm, label))} ;")
-            block.append(f"    dc:acronym {literal(label)} ;")
+            block.append(f"    rdfs:label {literal(known.get(norm, ident))} ;")
+            block.append(f"    dc:acronym {literal(label or ident)} ;")
+
+            # The types the model chose from the shapes' own list, each with
+            # the passage it read them in. On top of that Mirjam asks every IAM
+            # scenario to carry OEO_00020517, which the release does not have
+            # yet — see the note on IAM_SCENARIO.
+            types: dict = {}
+            for row in rows_for("scenario_type", scenario=norm):
+                if row.get("value_uri"):
+                    types.setdefault(row["value_uri"], []).append(row)
+            for type_iri, sources in types.items():
+                block += evidence_for(iri, f"oeo:{P_SCENARIO_TYPE}", sources)
+                block.append(f"    oeo:{P_SCENARIO_TYPE} <{type_iri}> ;")
             block.append(f"    oeo:{P_SCENARIO_TYPE} oeo:{IAM_SCENARIO} ;")
 
             described = rows_for("scenario_abstract", scenario=norm)
@@ -374,15 +421,21 @@ def make_serializer(db_path: Path):
                                                scenario=norm))
                 block.append(f"    dc:abstract {literal(best)} ;")
 
+            # A region the model picked already exists in the OEKG under
+            # its own IRI (oekg/region/Germany), so it is referenced, not
+            # minted. Only a wording that matched nothing gets an IRI of ours,
+            # and that one is a finding to review rather than a node to trust.
             regions: dict = {}
             for row in rows_for("scenario_region", scenario=norm):
-                regions.setdefault(normalise(row["value"]), row["value"])
-            for region in regions.values():
-                region_iri = mint("studyregion", region)
+                region_iri = row.get("value_uri") or mint("studyregion",
+                                                          row["value"])
+                regions.setdefault(region_iri, (row["value"], []))[1].append(row)
+            for region_iri, (canonical, sources) in regions.items():
+                block += evidence_for(iri, f"oeo:{P_STUDY_REGION}", sources)
                 block.append(f"    oeo:{P_STUDY_REGION} <{region_iri}> ;")
                 scenario_nodes.append(
                     f"<{region_iri}>{NL}    a oeo:{CLS_REGION} ;{NL}"
-                    f"    rdfs:label {literal(region)} .{NL}")
+                    f"    rdfs:label {literal(canonical)} .{NL}")
 
             years = sorted({re.search(r"\d{4}", str(r["value"])).group(0)
                             for r in rows_for("scenario_year", scenario=norm)

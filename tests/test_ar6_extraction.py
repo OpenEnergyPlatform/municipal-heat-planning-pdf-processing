@@ -46,23 +46,41 @@ def _ttl(rows, name="geco_2023"):
 # The spec
 # ---------------------------------------------------------------------------
 
-def test_every_field_is_text_because_none_of_them_is_a_measurement(spec):
+def test_no_field_is_a_measurement(spec):
     """The shapes ask for a title, an author, a DOI. None of those has a unit,
     and calling them numbers would have meant inventing one."""
-    assert {p.value_type for p in spec.parameters} == {"text"}
+    assert {p.value_type for p in spec.parameters} == {"text", "category"}
     assert all(not p.units_accepted and p.unit_target is None
                for p in spec.parameters)
+
+
+def test_a_field_with_a_finite_answer_set_is_a_choice_not_a_wording(spec):
+    """Three fields have a list of correct answers, so the model picks from it
+    instead of writing one. Two of the lists are only closed once a document is
+    named, which is what vocabulary_dynamic marks."""
+    by_uri = {p.uri: p for p in spec.parameters}
+    assert by_uri["scenario_label"].vocabulary_dynamic
+    assert by_uri["scenario_region"].vocabulary_dynamic
+    # The scenario types are the same 17 classes for the whole corpus, so that
+    # list sits in the spec and is checked against the shapes below.
+    assert by_uri["scenario_type"].vocabulary
+    assert not by_uri["scenario_type"].vocabulary_dynamic
 
 
 def test_a_document_field_carries_no_axes_and_a_scenario_field_carries_one(spec):
     """A title does not vary along anything — the core used to demand a
     non-empty axes object from every parameter. A scenario's region does vary:
-    along which scenario it belongs to, in the document's own words."""
+    along which scenario it belongs to."""
     by_uri = {p.uri: p for p in spec.parameters}
     assert by_uri["publication_title"].axes == {}
-    for key in ("scenario_abstract", "scenario_region", "scenario_year"):
+    for key in ("scenario_type", "scenario_abstract", "scenario_region",
+                "scenario_year"):
         axis = by_uri[key].axes["scenario"]
-        assert axis.type == "text" and axis.required, key
+        assert axis.dynamic, key
+        # Not required: the AR6 names are run identifiers and the documents
+        # write prose, so refusing what the model cannot map would delete the
+        # one measurement that says how far apart the two vocabularies are.
+        assert not axis.required, key
 
 
 def test_the_spec_covers_exactly_the_fields_the_shapes_ask_of_us(spec):
@@ -70,8 +88,23 @@ def test_the_spec_covers_exactly_the_fields_the_shapes_ask_of_us(spec):
         "publication_title", "publication_author", "publication_date",
         "publication_doi", "publication_abstract", "study_organisation",
         "study_funder", "study_project_name", "study_acronym",
-        "scenario_label", "scenario_abstract", "scenario_region",
-        "scenario_year"}
+        "scenario_label", "scenario_type", "scenario_abstract",
+        "scenario_region", "scenario_year"}
+
+
+def test_the_scenario_types_are_the_ones_the_shapes_accept(spec):
+    """`has scenario type` is sh:in with 17 classes in
+    oekg_shapes_commentsMS_20260817.ttl. A class outside that list makes the
+    node invalid, so the list is copied, not summarised."""
+    by_uri = {p.uri: p for p in spec.parameters}
+    shapes = {
+        "OEO_00000364", "OEO_00020247", "OEO_00020248", "OEO_00020309",
+        "OEO_00020310", "OEO_00020311", "OEO_00020312", "OEO_00020314",
+        "OEO_00020317", "OEO_00020321", "OEO_00020345", "OEO_00020411",
+        "OEO_00020412", "OEO_00030007", "OEO_00030008", "OEO_00030009",
+        "OEO_00030010"}
+    assert {u.rsplit("/", 1)[-1]
+            for u in by_uri["scenario_type"].vocabulary} == shapes
 
 
 def test_every_example_would_survive_its_own_verifier(spec):
@@ -329,3 +362,212 @@ def test_the_evidence_can_be_switched_off_for_a_closed_shape_run(monkeypatch):
     monkeypatch.setattr(kg, "EVIDENCE", False)
     ttl = _ttl(_scenario_rows())
     assert "oekgprov:" not in ttl.split("@prefix")[-1].split("\n", 1)[1]
+
+
+# ---------------------------------------------------------------------------
+# The lists that are only closed once a document is named
+# ---------------------------------------------------------------------------
+
+def _corpus_db(sections=(), tables=(), figures=(), scenarios=()):
+    """A document with text in all three places a harvest can quote from."""
+    import sqlite3
+    conn = sqlite3.connect(":memory:")
+    conn.executescript("""
+        CREATE TABLE Documents (id INTEGER PRIMARY KEY, filename TEXT);
+        CREATE TABLE Sections (id INTEGER PRIMARY KEY, document INTEGER,
+                               content TEXT);
+        CREATE TABLE Tables (id INTEGER PRIMARY KEY, section INTEGER,
+                             markdown TEXT);
+        CREATE TABLE Images (id INTEGER PRIMARY KEY, section INTEGER,
+                             description TEXT);
+        CREATE TABLE Scenarios (id INTEGER PRIMARY KEY, ar6_id INTEGER,
+                                name TEXT);
+        CREATE TABLE DocumentScenarios (document INTEGER, scenario INTEGER);
+        INSERT INTO Documents VALUES (1, 'a.pdf'), (2, 'b.pdf');
+        INSERT INTO Sections VALUES (1, 1, ''), (2, 2, '');
+    """)
+    for i, text in enumerate(sections):
+        conn.execute("INSERT INTO Sections VALUES (?, 1, ?)", (10 + i, text))
+    for i, text in enumerate(tables):
+        conn.execute("INSERT INTO Tables VALUES (?, 1, ?)", (10 + i, text))
+    for i, text in enumerate(figures):
+        conn.execute("INSERT INTO Images VALUES (?, 1, ?)", (10 + i, text))
+    for i, (doc, name) in enumerate(scenarios):
+        conn.execute("INSERT INTO Scenarios VALUES (?, ?, ?)", (10 + i, 900 + i, name))
+        conn.execute("INSERT INTO DocumentScenarios VALUES (?, ?)", (doc, 10 + i))
+    conn.commit()
+    return conn
+
+
+def test_the_scenario_list_is_this_publications_own():
+    """One publication documents up to 146 of the corpus's 1389 scenarios. The
+    model is asked to pick from its own, not from all of them."""
+    from profiles.ar6 import extraction
+
+    conn = _corpus_db(scenarios=[(1, "EN_NPi2100"), (1, "EN_INDCi2030_300f"),
+                                 (2, "SSP2_BASE")])
+    assert extraction.document_scenarios(conn, 1) == {
+        "EN_NPi2100": ["EN_NPi2100"],
+        "EN_INDCi2030_300f": ["EN_INDCi2030_300f"]}
+    assert extraction.document_scenarios(conn, 2) == {"SSP2_BASE": ["SSP2_BASE"]}
+
+
+def test_the_region_list_is_narrowed_to_what_the_document_names():
+    """249 study regions is a long list to put in front of every request. The
+    narrowing is safe because a claim has to quote its source verbatim, so a
+    country the document never writes could never have been answered."""
+    from profiles.ar6 import extraction
+
+    conn = _corpus_db(sections=["The scenario covers Germany and Poland."],
+                      tables=["| Country | 2030 |\n| France | 12 |"],
+                      figures=["Emissions in Japan by sector"])
+    regions = extraction.document_regions(conn, 1)
+    names = {labels[0] for labels in regions.values()}
+    assert {"Germany", "Poland", "France", "Japan"} <= names
+    assert "Uzbekistan" not in names
+
+
+def test_a_two_letter_country_is_matched_as_a_word():
+    """'US' hides inside 'thus' and 'UK' inside 'Ukraine'. A false entry in the
+    list only wastes a line of prompt, but it is still wrong."""
+    from profiles.ar6 import extraction
+
+    hidden = _corpus_db(sections=["Thus the trend continues in Ukraine."])
+    assert "United States of America" not in {
+        v[0] for v in extraction.document_regions(hidden, 1).values()}
+
+    named = _corpus_db(sections=["Emissions in the US fall after 2030."])
+    assert "United States of America" in {
+        v[0] for v in extraction.document_regions(named, 1).values()}
+
+
+def test_document_axes_feeds_both_the_coordinate_and_the_value():
+    """The scenario is a coordinate on other fields and the value of
+    scenario_label. One list, both places."""
+    from profiles.ar6 import extraction
+
+    conn = _corpus_db(sections=["A study of Norway."],
+                      scenarios=[(1, "EN_NPi2100")])
+    axes = extraction.document_axes(conn, 1)
+    assert axes["scenario"] == {"EN_NPi2100": ["EN_NPi2100"]}
+    assert axes["scenario_label"] == axes["scenario"]
+    assert "Norway" in {v[0] for v in axes["scenario_region"].values()}
+
+
+def test_filling_turns_the_markers_into_a_real_choice(spec):
+    from docpipe.extraction.runner import fill_dynamic_axes
+
+    filled = fill_dynamic_axes(spec, {
+        "scenario": {"EN_NPi2100": ["EN_NPi2100"]},
+        "scenario_label": {"EN_NPi2100": ["EN_NPi2100"]},
+        "scenario_region": {"x/Norway": ["Norway"]}})
+    by_uri = {p.uri: p for p in filled.parameters}
+    assert by_uri["scenario_label"].value_to_uri() == {"en_npi2100": "EN_NPi2100"}
+    assert by_uri["scenario_region"].value_to_uri() == {"norway": "x/Norway"}
+    assert by_uri["scenario_year"].axes["scenario"].vocabulary == {
+        "EN_NPi2100": ["EN_NPi2100"]}
+    # Untouched: the spec object the run started from is reused per document.
+    assert {p.uri: p.vocabulary for p in spec.parameters}["scenario_label"] is None
+
+
+def test_a_wording_the_list_does_not_hold_survives_with_a_flag(spec):
+    """The model is told to leave the class out rather than force one. If that
+    answer were refused, the mapping gap would be invisible."""
+    from docpipe.extraction.verify import verify_tuple, Refusal
+
+    parameter = {p.uri: p for p in spec.parameters}["scenario_region"]
+    quote = "The pathway is computed for the whole of Sub-Saharan Africa."
+    outcome = verify_tuple({"value_raw": "Sub-Saharan Africa", "quote": quote},
+                           parameter, quote, owner_kind="section")
+    assert not isinstance(outcome, Refusal)
+    assert outcome.tuple["value_raw"] == "Sub-Saharan Africa"
+    assert outcome.tuple["value_uri"] is None
+    assert "unmapped:value:Sub-Saharan Africa" in outcome.flags
+
+
+# ---------------------------------------------------------------------------
+# What the serializer does with a choice
+# ---------------------------------------------------------------------------
+
+def test_the_individuals_live_where_the_oekg_puts_them():
+    """Read off the running graph, not guessed: a study report sits under
+    publication/, a factsheet under scenario/, a region under region/, and a
+    bundle, author or organisation directly under the base."""
+    from profiles.ar6 import kg
+
+    base = "https://openenergyplatform.org/ontology/oekg/"
+    assert kg.mint("studyreport", "x").startswith(base + "publication/")
+    assert kg.mint("scenariofactsheet", "x").startswith(base + "scenario/")
+    assert kg.mint("studyregion", "x").startswith(base + "region/")
+    for collection in ("scenariobundle", "author", "organisation", "funder"):
+        rest = kg.mint(collection, "x")[len(base):]
+        assert "/" not in rest, collection
+
+
+def test_a_scenario_is_identified_by_the_ar6_run_and_labelled_by_the_document():
+    """The run identifier is what links to the AR6 database; the wording is
+    what a reader recognises. The factsheet carries both."""
+    rows = _rows() + [
+        {"parameter": "scenario_label", "value": "EN_NPi2100",
+         "value_uri": "EN_NPi2100", "value_raw": "CurPol",
+         "quote": "the CurPol scenario", "provenance": {}},
+        {"parameter": "scenario_year", "value": "2050",
+         "scenario": "EN_NPi2100", "scenario_raw": "CurPol",
+         "quote": "CurPol runs to 2050", "provenance": {}},
+    ]
+    ttl = _ttl(rows)
+    assert "dc:acronym \"CurPol\"" in ttl
+    assert "\"EN_NPi2100\"" in ttl
+    # One factsheet, not two: the year row and the label row name the same run.
+    assert ttl.count("a oeo:OEO_00000365") == 1
+    assert "2050-01-01T00:00:00" in ttl
+
+
+def test_a_scenario_the_model_could_not_place_is_still_serialized():
+    """Refusing it would lose the value AND the measurement of how often the
+    run identifiers and the documents' wording fail to meet."""
+    rows = _rows() + [
+        {"parameter": "scenario_year", "value": "2050", "scenario": None,
+         "scenario_raw": "unser 1,5-Grad-Pfad",
+         "quote": "unser 1,5-Grad-Pfad bis 2050", "provenance": {}},
+    ]
+    ttl = _ttl(rows)
+    assert "unser 1,5-Grad-Pfad" in ttl
+    assert ttl.count("a oeo:OEO_00000365") == 1
+
+
+def test_a_region_is_referenced_by_its_existing_oekg_iri():
+    """oekg/region/Germany already exists. Minting a second IRI for the same
+    country would put a duplicate country in the graph."""
+    rows = _rows() + [
+        {"parameter": "scenario_label", "value": "EN_NPi2100",
+         "value_uri": "EN_NPi2100", "value_raw": "CurPol",
+         "quote": "the CurPol scenario", "provenance": {}},
+        {"parameter": "scenario_region", "value": "Germany",
+         "value_uri": "https://openenergyplatform.org/ontology/oekg/region/Germany",
+         "value_raw": "Deutschland", "scenario": "EN_NPi2100",
+         "scenario_raw": "CurPol", "quote": "CurPol betrachtet Deutschland",
+         "provenance": {}},
+    ]
+    ttl = _ttl(rows)
+    assert ("oeo:OEO_00020220 <https://openenergyplatform.org/ontology/oekg/"
+            "region/Germany>") in ttl
+    assert "rdfs:label \"Germany\"" in ttl
+
+
+def test_the_scenario_types_the_model_chose_reach_the_graph():
+    rows = _rows() + [
+        {"parameter": "scenario_label", "value": "EN_NPi2100",
+         "value_uri": "EN_NPi2100", "value_raw": "CurPol",
+         "quote": "the CurPol scenario", "provenance": {}},
+        {"parameter": "scenario_type", "value": "with existing measures scenario",
+         "value_uri": "https://openenergyplatform.org/ontology/oeo/OEO_00020311",
+         "value_raw": "adopted and implemented", "scenario": "EN_NPi2100",
+         "scenario_raw": "CurPol", "quote": "policies adopted and implemented",
+         "provenance": {}},
+    ]
+    ttl = _ttl(rows)
+    assert ("oeo:OEO_00390073 <https://openenergyplatform.org/ontology/oeo/"
+            "OEO_00020311>") in ttl
+    # Mirjam's blanket IAM annotation stays alongside it.
+    assert "oeo:OEO_00390073 oeo:OEO_00020517" in ttl

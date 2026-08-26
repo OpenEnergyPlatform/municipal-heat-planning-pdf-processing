@@ -1,0 +1,801 @@
+{
+ "https://openenergyplatform.org/ontology/oekg/region/Afghanistan": [
+  "Afghanistan"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/AlandIslands": [
+  "land Islands"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Albania": [
+  "Albania"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Algeria": [
+  "Algeria"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/AmericanSamoa": [
+  "American Samoa"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Andorra": [
+  "Andorra"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Angola": [
+  "Angola"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Anguilla": [
+  "Anguilla"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Antarctica": [
+  "Antarctica"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/AntiguaAndBarbuda": [
+  "Antigua and Barbuda"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Argentina": [
+  "Argentina"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Armenia": [
+  "Armenia"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Aruba": [
+  "Aruba"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Australia": [
+  "Australia"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Austria": [
+  "Austria"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Azerbaijan": [
+  "Azerbaijan"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Bahamas": [
+  "Bahamas",
+  "Bahamas (the)"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Bahrain": [
+  "Bahrain"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Bangladesh": [
+  "Bangladesh"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Barbados": [
+  "Barbados"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Belarus": [
+  "Belarus"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Belgium": [
+  "Belgium"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Belize": [
+  "Belize"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Benin": [
+  "Benin"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Bermuda": [
+  "Bermuda"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Bhutan": [
+  "Bhutan"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Bolivia": [
+  "Bolivia (Plurinational State of)"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Bonaire": [
+  "Bonaire, Sint Eustatius and Saba"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/BosniaAndHerzegovina": [
+  "Bosnia and Herzegovina"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Botswana": [
+  "Botswana"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/BouvetIsland": [
+  "Bouvet Island"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Brazil": [
+  "Brazil"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/BritishIndianOceanTerritory": [
+  "British Indian Ocean Territory",
+  "British Indian Ocean Territory (the)"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/BruneiDarussalam": [
+  "Brunei Darussalam",
+  "Brunei"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Bulgaria": [
+  "Bulgaria"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/BurkinaFaso": [
+  "Burkina Faso"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Burundi": [
+  "Burundi"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/CaboVerde": [
+  "Cabo Verde",
+  "Cape Verde"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Cambodia": [
+  "Cambodia"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Cameroon": [
+  "Cameroon"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Canada": [
+  "Canada"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/CaymanIslands": [
+  "Cayman Islands",
+  "Cayman Islands (the)"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/CentralAfricanRepublic": [
+  "Central African Republic",
+  "Central African Republic (the)"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Chad": [
+  "Chad"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Chile": [
+  "Chile"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/China": [
+  "China"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/ChristmasIsland": [
+  "Christmas Island"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/CocosKeelingIslands": [
+  "Cocos Keeling Islands"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Colombia": [
+  "Colombia"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Comoros": [
+  "Comoros",
+  "Comoros (the)"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Congo": [
+  "Congo",
+  "Congo (the)"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/CongoDemocraticRepublicOf": [
+  "Congo Democratic Republic Of"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/CookIslands": [
+  "Cook Islands",
+  "Cook Islands (the)"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/CostaRica": [
+  "Costa Rica"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/CoteDIvoire": [
+  "Cte d Ivoire",
+  "Ivory Coast",
+  "Côte d'Ivoire"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Croatia": [
+  "Croatia"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Cuba": [
+  "Cuba"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Curacao": [
+  "Curaao"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Cyprus": [
+  "Cyprus"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Czechia": [
+  "Czechia",
+  "Czech Republic"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Denmark": [
+  "Denmark"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Djibouti": [
+  "Djibouti"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Dominica": [
+  "Dominica"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/DominicanRepublic": [
+  "Dominican Republic",
+  "Dominican Republic (the)"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Ecuador": [
+  "Ecuador"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Egypt": [
+  "Egypt"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/ElSalvador": [
+  "El Salvador"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/EquatorialGuinea": [
+  "Equatorial Guinea"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Eritrea": [
+  "Eritrea"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Estonia": [
+  "Estonia"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Eswatini": [
+  "Eswatini",
+  "Swaziland"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Ethiopia": [
+  "Ethiopia"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/FalklandIslands": [
+  "Falkland Islands (the) Malvinas"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/FaroeIslands": [
+  "Faroe Islands",
+  "Faroe Islands (the)"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Fiji": [
+  "Fiji"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Finland": [
+  "Finland"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/France": [
+  "France"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/FrenchGuiana": [
+  "French Guiana"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/FrenchPolynesia": [
+  "French Polynesia"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/FrenchSouthernTerritories": [
+  "French Southern Territories",
+  "French Southern Territories (the)"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Gabon": [
+  "Gabon"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Gambia": [
+  "Gambia",
+  "Gambia (the)"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Georgia": [
+  "Georgia"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Germany": [
+  "Germany"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Ghana": [
+  "Ghana"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Gibraltar": [
+  "Gibraltar"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Greece": [
+  "Greece"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Greenland": [
+  "Greenland"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Grenada": [
+  "Grenada"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Guadeloupe": [
+  "Guadeloupe"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Guam": [
+  "Guam"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Guatemala": [
+  "Guatemala"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Guernsey": [
+  "Guernsey"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Guinea": [
+  "Guinea"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Guinea-Bissau": [
+  "Guinea-Bissau"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Guyana": [
+  "Guyana"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Haiti": [
+  "Haiti"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/HeardIslandAndMcDonaldIslands": [
+  "Heard Island and McDonald Islands"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/HolySee": [
+  "Holy See",
+  "Vatican",
+  "Vatican City",
+  "Holy See (the)"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Honduras": [
+  "Honduras"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/HongKong": [
+  "Hong Kong"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Hungary": [
+  "Hungary"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Iceland": [
+  "Iceland"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/India": [
+  "India"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Indonesia": [
+  "Indonesia"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Iran": [
+  "Iran (Islamic Republic of)"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Iraq": [
+  "Iraq"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Ireland": [
+  "Ireland"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/IsleOfMan": [
+  "Isle of Man"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Israel": [
+  "Israel"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Italy": [
+  "Italy"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Jamaica": [
+  "Jamaica"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Japan": [
+  "Japan"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Jersey": [
+  "Jersey"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Jordan": [
+  "Jordan"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Kazakhstan": [
+  "Kazakhstan"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Kenya": [
+  "Kenya"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Kiribati": [
+  "Kiribati"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/KoreaDemocraticPeoplesRepublicOf": [
+  "Korea Democratic Peoples Republic Of"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/KoreaRepublicOf": [
+  "Korea Republic Of"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Kuwait": [
+  "Kuwait"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Kyrgyzstan": [
+  "Kyrgyzstan"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/LaoPeoplesDemocraticRepublic": [
+  "Lao People 's Democratic Republic",
+  "Laos",
+  "Lao People 's Democratic Republic (the)"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Latvia": [
+  "Latvia"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Lebanon": [
+  "Lebanon"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Lesotho": [
+  "Lesotho"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Liberia": [
+  "Liberia"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Libya": [
+  "Libya"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Liechtenstein": [
+  "Liechtenstein"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Lithuania": [
+  "Lithuania"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Luxembourg": [
+  "Luxembourg"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Macao": [
+  "Macao"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Macedonia": [
+  "Macedonia (the former Yugoslav Republic of)",
+  "North Macedonia"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Madagascar": [
+  "Madagascar"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Malawi": [
+  "Malawi"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Malaysia": [
+  "Malaysia"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Maldives": [
+  "Maldives"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Mali": [
+  "Mali"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Malta": [
+  "Malta"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/MarshallIslands": [
+  "Marshall Islands",
+  "Marshall Islands (the)"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Martinique": [
+  "Martinique"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Mauritania": [
+  "Mauritania"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Mauritius": [
+  "Mauritius"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Mayotte": [
+  "Mayotte"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Mexico": [
+  "Mexico"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Micronesia": [
+  "Micronesia (Federated States of)"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Moldova": [
+  "Moldova (the Republic of)"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Monaco": [
+  "Monaco"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Mongolia": [
+  "Mongolia"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Montenegro": [
+  "Montenegro"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Montserrat": [
+  "Montserrat"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Morocco": [
+  "Morocco"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Mozambique": [
+  "Mozambique"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Myanmar": [
+  "Myanmar",
+  "Burma"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Namibia": [
+  "Namibia"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Nauru": [
+  "Nauru"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Nepal": [
+  "Nepal"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Netherlands": [
+  "Netherlands",
+  "the Netherlands",
+  "Holland",
+  "Netherlands (the)"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/NewCaledonia": [
+  "New Caledonia"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/NewZealand": [
+  "New Zealand"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Nicaragua": [
+  "Nicaragua"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Niger": [
+  "Niger",
+  "Niger (the)"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Nigeria": [
+  "Nigeria"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Niue": [
+  "Niue"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/NorfolkIsland": [
+  "Norfolk Island"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/NorthernMarianaIslands": [
+  "Northern Mariana Islands",
+  "Northern Mariana Islands (the)"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Norway": [
+  "Norway"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Oman": [
+  "Oman"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Pakistan": [
+  "Pakistan"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Palau": [
+  "Palau"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Palestine": [
+  "Palestine, State of"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Panama": [
+  "Panama"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/PapuaNewGuinea": [
+  "Papua New Guinea"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Paraguay": [
+  "Paraguay"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Peru": [
+  "Peru"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Philippines": [
+  "Philippines",
+  "Philippines (the)"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Pitcairn": [
+  "Pitcairn"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Poland": [
+  "Poland"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Portugal": [
+  "Portugal"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/PuertoRico": [
+  "Puerto Rico"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Qatar": [
+  "Qatar"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Reunion": [
+  "Runion"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Romania": [
+  "Romania"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/RussianFederation": [
+  "Russian Federation",
+  "Russia",
+  "Russian Federation (the)"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Rwanda": [
+  "Rwanda"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/SaintBarthelemy": [
+  "Saint Barthlemy"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/SaintHelena": [
+  "Saint Helena, Ascension and Tristan da Cunha"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/SaintKittsAndNevis": [
+  "Saint Kitts and Nevis"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/SaintLucia": [
+  "Saint Lucia"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/SaintMartin": [
+  "Saint Martin (French part)"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/SaintPierreAndMiquelon": [
+  "Saint Pierre and Miquelon"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/SaintVincentAndTheGrenadines": [
+  "Saint Vincent and the Grenadines"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Samoa": [
+  "Samoa"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/SanMarino": [
+  "San Marino"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/SaoTomeAndPrincipe": [
+  "Sao Tome and Principe"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/SaudiArabia": [
+  "Saudi Arabia"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Senegal": [
+  "Senegal"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Serbia": [
+  "Serbia"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Seychelles": [
+  "Seychelles"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/SierraLeone": [
+  "Sierra Leone"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Singapore": [
+  "Singapore"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/SintMaarten": [
+  "Sint Maarten (Dutch part)"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Slovakia": [
+  "Slovakia",
+  "Slovak Republic"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Slovenia": [
+  "Slovenia"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/SolomonIslands": [
+  "Solomon Islands"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Somalia": [
+  "Somalia"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/SouthAfrica": [
+  "South Africa"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/SouthGeorgiaAndTheSouthSandwichIslands": [
+  "South Georgia and the South Sandwich Islands"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/SouthSudan": [
+  "South Sudan"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Spain": [
+  "Spain"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/SriLanka": [
+  "Sri Lanka"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Sudan": [
+  "Sudan",
+  "Sudan (the)"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Suriname": [
+  "Suriname"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/SvalbardAndJanMayen": [
+  "Svalbard and Jan Mayen"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Sweden": [
+  "Sweden"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Switzerland": [
+  "Switzerland"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/SyrianArabRepublic": [
+  "Syrian Arab Republic",
+  "Syria"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Taiwan": [
+  "Taiwan (Province of China)"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Tajikistan": [
+  "Tajikistan"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Tanzania": [
+  "Tanzania, United Republic of"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Thailand": [
+  "Thailand"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Timor-Leste": [
+  "Timor-Leste"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Togo": [
+  "Togo"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Tokelau": [
+  "Tokelau"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Tonga": [
+  "Tonga"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/TrinidadAndTobago": [
+  "Trinidad and Tobago"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Tunisia": [
+  "Tunisia"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Turkey": [
+  "Turkey",
+  "Turkiye",
+  "Türkiye"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Turkmenistan": [
+  "Turkmenistan"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/TurksAndCaicosIslands": [
+  "Turks and Caicos Islands",
+  "Turks and Caicos Islands (the)"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Tuvalu": [
+  "Tuvalu"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Uganda": [
+  "Uganda"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Ukraine": [
+  "Ukraine"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/UnitedArabEmirates": [
+  "United Arab Emirates",
+  "United Arab Emirates (the)"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/UnitedKingdomOfGreatBritainAndNorthernIreland": [
+  "United Kingdom of Great Britain and Northern Ireland",
+  "United Kingdom",
+  "UK",
+  "Great Britain",
+  "Britain",
+  "United Kingdom of Great Britain and Northern Ireland (the)"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/UnitedStatesMinorOutlyingIslands": [
+  "United States Minor Outlying Islands",
+  "United States Minor Outlying Islands (the)"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/UnitedStatesOfAmerica": [
+  "United States of America",
+  "United States",
+  "USA",
+  "US",
+  "U.S.",
+  "United States of America (the)"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Uruguay": [
+  "Uruguay"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Uzbekistan": [
+  "Uzbekistan"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Vanuatu": [
+  "Vanuatu"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Venezuela": [
+  "Venezuela (Bolivarian Republic of)"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/VietNam": [
+  "Viet Nam",
+  "Vietnam"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/VirginIslandsBritish": [
+  "Virgin Islands British"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/VirginIslandsUS": [
+  "Virgin Islands US"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/WallisAndFutuna": [
+  "Wallis and Futuna"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/WesternSahara": [
+  "Western Sahara"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Yemen": [
+  "Yemen"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Zambia": [
+  "Zambia"
+ ],
+ "https://openenergyplatform.org/ontology/oekg/region/Zimbabwe": [
+  "Zimbabwe"
+ ]
+}
