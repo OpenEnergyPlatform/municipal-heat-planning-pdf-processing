@@ -134,7 +134,16 @@ def _check_value(raw: dict, parameter: Parameter, flags: list):
             float(value) * float(parameter.units_accepted[unit]), 6)
         return out, None
 
+    wording = raw.get("value_raw")
+    wording = wording.strip() if isinstance(wording, str) else ""
     if not isinstance(value, str) or not value.strip():
+        # A category whose class list held nothing fitting. The model was told
+        # to leave the class out rather than force one, so the wording alone is
+        # the finding — the same rule an unmapped axis already follows, and the
+        # only way the mapping gap is ever measurable.
+        if parameter.value_type == "category" and wording:
+            flags.append(f"unmapped:value:{wording}")
+            return {"value": wording, "value_raw": wording, "value_uri": None}, None
         return None, Refusal(raw, f"a {parameter.value_type} parameter needs a "
                                   f"non-empty string value")
     if parameter.value_type == "category":
@@ -145,11 +154,10 @@ def _check_value(raw: dict, parameter: Parameter, flags: list):
             # reason to drop the finding: the wording stays on the tuple.
             flags.append(f"unmapped:value:{value.strip()}")
         out["value_uri"] = uri
-        wording = raw.get("value_raw")
-        if isinstance(wording, str) and wording.strip():
-            out["value_raw"] = wording.strip()
-            if wording.strip().casefold() not in parameter.value_to_uri():
-                flags.append(f"mapped:value:{wording.strip()}->{uri}")
+        if wording:
+            out["value_raw"] = wording
+            if wording.casefold() not in parameter.value_to_uri():
+                flags.append(f"mapped:value:{wording}->{uri}")
     return out, None
 
 
@@ -229,10 +237,11 @@ def verify_tuple(raw: dict, parameter: Parameter, source_text: str, *,
                     resolved[f"{name}_raw"] = wording
                     if wording.casefold() not in axis.label_to_uri():
                         flags.append(f"mapped:{name}:{wording}->{uri}")
-        elif axis.type == "text":
+        elif axis.type == "text" or axis.dynamic:
             # No list to check against, so nothing to refuse: the coordinate
-            # is a wording, and whether it names something real is settled by
-            # the profile that owns the list.
+            # is a wording. A dynamic axis lands here when the profile had no
+            # list for this document — then the wording is all there is, and
+            # dropping it would be worse than carrying it unresolved.
             if given is None:
                 if axis.required:
                     return Refusal(raw, f"required axis {name!r} missing")

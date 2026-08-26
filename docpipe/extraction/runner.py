@@ -191,6 +191,37 @@ def make_retrieve(conn: sqlite3.Connection, index, id_to_pos: dict,
     return retrieve
 
 
+def fill_dynamic_axes(spec: Spec, vocabularies: Optional[dict]) -> Spec:
+    """A copy of *spec* whose dynamic axes carry THIS document's list.
+
+    The AR6 scenario names are run identifiers — EN_INDCi2030_300f — and two
+    of 328 of them occur verbatim in the text they were extracted from. The
+    document says "the Current Policies scenario". Nothing but the model can
+    bridge that, and it can only do so if it is shown the list it may choose
+    from; the mapping then arrives flagged, like every other judgement call
+    the harvest records.
+    """
+    if not vocabularies:
+        return spec
+    parameters = []
+    changed = False
+    for parameter in spec.parameters:
+        axes = dict(parameter.axes)
+        for name, axis in parameter.axes.items():
+            if axis.dynamic and vocabularies.get(name):
+                axes[name] = replace(axis, vocabulary=vocabularies[name])
+                changed = True
+        # A category parameter whose VALUE is the choice takes the list named
+        # after the parameter itself.
+        values = vocabularies.get(parameter.uri)
+        if parameter.vocabulary_dynamic and values:
+            parameters.append(replace(parameter, axes=axes, vocabulary=values))
+            changed = True
+        else:
+            parameters.append(replace(parameter, axes=axes))
+    return Spec(parameters=parameters) if changed else spec
+
+
 def probe_texts(spec: Spec, templates: list) -> list:
     """Every retrieval probe the run will ever send, once, order-stable."""
     seen: set = set()
@@ -236,6 +267,11 @@ def _candidate_tokens(parameter) -> list:
     tokens = set(parameter.units_accepted)
     tokens.add(parameter.label)
     for axis in parameter.axes.values():
+        if axis.dynamic:
+            # A per-document list is not corpus vocabulary: adding 146 scenario
+            # identifiers here would put 146 LIKE patterns in front of every
+            # candidate query for words that occur in no document.
+            continue
         for labels in (axis.vocabulary or {}).values():
             tokens.update(labels)
     return sorted(t for t in tokens if len(t) >= 2)
@@ -349,10 +385,13 @@ def _parameter_payload(parameter) -> dict:
             # corpus has been seen to call it.
             axes[name] = {"classes": {labels[0]: list(labels[1:])
                                       for labels in axis.vocabulary.values()}}
-        elif axis.type == "int":
-            axes[name] = {"type": "int"}
+        elif axis.enum:
+            axes[name] = {"enum": list(axis.enum)}
         else:
-            axes[name] = {"enum": list(axis.enum or ())}
+            # A wording axis, or a dynamic one the profile had no list for.
+            # It used to render as {"enum": []}, which reads as "no value is
+            # allowed here" — the opposite of what it means.
+            axes[name] = {"type": axis.type or "text"}
     payload = {"uri": parameter.uri, "label": parameter.label,
                "description": parameter.description,
                "value_type": parameter.value_type,
@@ -708,7 +747,14 @@ def resolve_image_root(pdf_root: Optional[Path],
     return (Path(pdf_root) / "processed") if pdf_root else Path(fallback)
 
 
-def context_budget(prompt) -> int:
+# A choice list the profile fills per document is not in the spec file, so it
+# cannot be measured there. This is its ceiling: the widest such list in this
+# corpus is one publication's 146 AR6 scenarios beside the ~250 OEKG study
+# regions, and both together stay well inside it.
+DYNAMIC_LIST_TOKENS = 4000
+
+
+def context_budget(prompt, spec=None) -> int:
     """Tokens one harvest request needs at worst — a floor for the server.
 
     Counted, not guessed: system prompt, parameter payload and JSON envelope,
@@ -716,11 +762,25 @@ def context_budget(prompt) -> int:
     The estimate this replaces allowed 6000 tokens for "largest source,
     generous" and no image at all, and the job script served that number as
     --max-model-len; every section over it came back as a 400.
+
+    The payload term is measured off the spec when there is one: a parameter
+    that hands the model a class list to choose from is many times the size of
+    one that asks for a wording, and a flat allowance for both underserves the
+    first.
     """
+    payload = 2000
+    if spec is not None:
+        widest = max((len(json.dumps(_parameter_payload(p), ensure_ascii=False))
+                      for p in spec.parameters), default=0)
+        dynamic = any(p.vocabulary_dynamic or
+                      any(a.dynamic for a in p.axes.values())
+                      for p in spec.parameters)
+        payload = max(payload, widest // 3 + 600
+                      + (DYNAMIC_LIST_TOKENS if dynamic else 0))
     return int(len(prompt.text.split()) * 3
                + MAX_SOURCE_CHARS // 3                      # a bounded window
                + (1200 if ATTACH_IMAGES else 0)             # a 1280 px crop
-               + 2000                                       # payload + envelope
+               + payload                                    # payload + envelope
                + int(prompt.meta.get("max_tokens", 4096)))
 
 
@@ -811,8 +871,11 @@ def main(argv: Optional[list] = None) -> int:
     templates = [line for line in
                  prompts.load(QUERIES_PROMPT_ID).text.splitlines()
                  if line.strip() and not line.lstrip().startswith("#")]
+    # Optional: (connection, document_id) -> {axis name: {uri: [labels]}} for
+    # the axes the spec declares dynamic.
+    document_axes = profile.component("extraction", "document_axes")
 
-    required = context_budget(prompts.load(HARVEST_PROMPT_ID))
+    required = context_budget(prompts.load(HARVEST_PROMPT_ID), spec)
     if args.print_context_budget:
         print(required)
         return 0
@@ -880,8 +943,21 @@ def main(argv: Optional[list] = None) -> int:
             # One memo per document: retrieval and the fallback floor meet the
             # same section in every round and for every parameter.
             fetch = make_content_fetcher()
+            # A dynamic axis only becomes a closed list here, where the
+            # document is known.
+            doc_spec = spec
+            if document_axes is not None:
+                lists = document_axes(conn, document_id)
+                doc_spec = fill_dynamic_axes(spec, lists)
+                if lists:
+                    # The one line that says whether the model was given a
+                    # choice at all: an empty list means it was asked to pick
+                    # from nothing and every answer will come back unmapped.
+                    log.info("extract: %s: choice lists %s", Path(filename).stem,
+                             ", ".join(f"{k}={len(v)}"
+                                       for k, v in sorted(lists.items())))
             items, report = plan_document(
-                document_id, spec, templates,
+                document_id, doc_spec, templates,
                 retrieve=make_retrieve(conn, index, id_to_pos, cache_conn, fetch),
                 candidates=make_candidates(conn, fetch), max_rounds=MAX_ROUNDS)
             return Path(filename).stem, split_long_sources(items), report
