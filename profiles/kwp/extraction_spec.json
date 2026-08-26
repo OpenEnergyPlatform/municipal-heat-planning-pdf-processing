@@ -760,7 +760,10 @@
         "co2-eq",
         "co2e",
         "treibhausgas",
-        "thg"
+        "thg",
+        "kumuliert",
+        "kumulativ",
+        "gesamtemission"
       ]
     },
     "OEO_00140083": {
@@ -776,7 +779,10 @@
       "unclear": [
         "vermeidung",
         "einsparung",
-        "minderung"
+        "minderung",
+        "kumuliert",
+        "kumulativ",
+        "gesamtemission"
       ]
     }
   }

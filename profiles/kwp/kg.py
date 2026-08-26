@@ -21,6 +21,7 @@ import sqlite3
 import unicodedata
 import uuid
 from pathlib import Path
+from typing import Optional
 
 log = logging.getLogger(__name__)
 
@@ -86,6 +87,26 @@ def accepted_indicator(parameter_uri: str, label_raw) -> bool:
     if any(u in label for u in rules.get("unclear", ())):
         return False
     return any(a in label for a in rules.get("accept", ()))
+
+
+def route_indicator(label_raw, claimed: str = "") -> Optional[str]:
+    """The parameter this indicator label actually belongs to, or None.
+
+    The harvest asks every parameter of every source, so the model regularly
+    answers the primary-energy question with the final-energy figure standing
+    in the same table. The value is right and so is its quote; only the filing
+    is wrong. Measured on the 16-document pilot: of the 218 findings the
+    indicator filter dropped, 122 carried a label that exactly one other
+    parameter accepts, and not one carried a label two of them accept.
+    Dropping those threw away good readings over a filing mistake.
+    """
+    fits = [uri for uri in INDICATOR_MAPPING
+            if accepted_indicator(uri, label_raw)]
+    if len(fits) == 1:
+        return fits[0]
+    # Two parameters claiming one label is a mapping question, not a routing
+    # decision: the row keeps its own class if that is one of them.
+    return claimed if claimed in fits else None
 
 
 def _iso_date(raw) -> str:
@@ -164,21 +185,33 @@ def make_serializer(db_path: Path):
             skipped[reason] = skipped.get(reason, 0) + 1
 
         kept = []
+        rerouted = 0
         for row in rows:
+            target = route_indicator(row.get("indicator_label_raw"),
+                                     row.get("parameter") or "")
             if row.get("scenario") != "target":
                 skip("scenario")
             elif row.get("spatial_scope") != "municipality":
                 skip("spatial_scope")
             elif not isinstance(row.get("year"), int):
                 skip("year")
-            elif not accepted_indicator(row.get("parameter"),
-                                        row.get("indicator_label_raw")):
+            elif target is None:
                 skip("indicator")
             elif row.get("carrier") in NOT_AN_ENERGY_CARRIER:
                 skip(f"carrier_not_in_oeo:"
                      f"{NOT_AN_ENERGY_CARRIER[row['carrier']]}")
             else:
+                if target != row.get("parameter"):
+                    # Both energy parameters share a unit target and so do both
+                    # emission parameters, so value_target carries over.
+                    row = dict(row, parameter=target,
+                               parameter_claimed=row.get("parameter"))
+                    rerouted += 1
                 kept.append(row)
+        if rerouted:
+            log.info("kg: %s: %d value(s) filed under the parameter their "
+                     "indicator names, not the one they were harvested for",
+                     name, rerouted)
         if not kept:
             if skipped:
                 log.info("kg: %s: nothing serializable (skipped %s)", name, skipped)
