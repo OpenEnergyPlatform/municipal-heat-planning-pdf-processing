@@ -205,9 +205,12 @@ def _validate_parameter(path: str, raw) -> Parameter:
             _fail(f"{path}.vocabulary",
                   "only a category parameter carries a value vocabulary")
 
-    axes_raw = raw.get("axes")
-    if not isinstance(axes_raw, dict) or not axes_raw:
-        _fail(f"{path}.axes", "required, non-empty object")
+    # Axes are what a measured value varies along — carrier, sector, year.
+    # A document's title varies along nothing, and demanding an axis from it
+    # would mean inventing one. Empty is allowed; a wrong shape is not.
+    axes_raw = raw.get("axes") or {}
+    if not isinstance(axes_raw, dict):
+        _fail(f"{path}.axes", "must be an object of axis name -> definition")
     axes = {name: _validate_axis(f"{path}.axes.{name}", name, a)
             for name, a in axes_raw.items()}
     example = _validate_example(f"{path}.example", raw.get("example"),

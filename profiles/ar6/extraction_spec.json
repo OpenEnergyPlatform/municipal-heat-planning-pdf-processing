@@ -1,0 +1,162 @@
+{
+  "_comment": [
+    "The OEKG shapes ask a scenario bundle and its study report for metadata,",
+    "not for measured quantities. Every field here is therefore a text",
+    "parameter: what is verified is that the string the model reports sits",
+    "literally in the passage it cites, and the passage is located on its PDF",
+    "page. DocumentMeta already holds title, year and doi from the crawl, but",
+    "those come with the crawl's licence; a value that is to be published in",
+    "the graph is extracted from the document itself and carries its own",
+    "evidence. The crawl values become the cross-check, not the source.",
+    "",
+    "Scenario-scope fields (per-scenario name, acronym, region, projected",
+    "years, abstract) are NOT here. They need a value to belong to a scenario",
+    "rather than to a document, and a publication documents up to 146 of",
+    "them. See profiles/ar6/kg.py for what that would take."
+  ],
+  "parameters": [
+    {
+      "uri": "publication_title",
+      "label": "Titel der Publikation",
+      "description": "Der vollständige Titel des Dokuments, wie er auf der Titelseite oder im Kopf der ersten Seite steht. Nicht der Kolumnentitel, nicht der Name der Reihe, nicht der Name des Verlags.",
+      "value_type": "text",
+      "example": {
+        "source": "Global Energy and Climate Outlook 2023: Transforming Energy Systems for a Net Zero Future. JRC Science for Policy Report.",
+        "tuples": [
+          {
+            "value": "Global Energy and Climate Outlook 2023: Transforming Energy Systems for a Net Zero Future",
+            "quote": "Global Energy and Climate Outlook 2023: Transforming Energy Systems for a Net Zero Future. JRC Science for Policy Report."
+          }
+        ]
+      }
+    },
+    {
+      "uri": "publication_author",
+      "label": "Autorin oder Autor",
+      "description": "Eine einzelne Person, die als Verfasserin oder Verfasser des Dokuments genannt ist. Ein Tupel je Person, in der Schreibweise der Titelseite. Keine Institutionen, keine Herausgeber, keine Danksagungsempfänger.",
+      "value_type": "text",
+      "example": {
+        "source": "Keramidas, K., Fosse, F., Diaz Vazquez, A., Dowling, P., Garaffa, R., Després, J.",
+        "tuples": [
+          {
+            "value": "Keramidas, K.",
+            "quote": "Keramidas, K., Fosse, F., Diaz Vazquez, A., Dowling, P., Garaffa, R., Després, J."
+          },
+          {
+            "value": "Fosse, F.",
+            "quote": "Keramidas, K., Fosse, F., Diaz Vazquez, A., Dowling, P., Garaffa, R., Després, J."
+          }
+        ]
+      }
+    },
+    {
+      "uri": "publication_date",
+      "label": "Erscheinungsjahr",
+      "description": "Das Jahr, in dem das Dokument veröffentlicht wurde, vierstellig und genau so, wie es im Dokument steht — Impressum, Titelseite oder Zitationshinweis. Nicht das Jahr der Daten, nicht ein im Text projiziertes Jahr.",
+      "value_type": "text",
+      "example": {
+        "source": "Publications Office of the European Union, Luxembourg, 2023, doi:10.2760/58255, JRC135619.",
+        "tuples": [
+          {
+            "value": "2023",
+            "quote": "Publications Office of the European Union, Luxembourg, 2023, doi:10.2760/58255, JRC135619."
+          }
+        ]
+      }
+    },
+    {
+      "uri": "publication_doi",
+      "label": "DOI",
+      "description": "Der Digital Object Identifier des Dokuments, wie er im Impressum oder im Zitationshinweis steht. Nur die DOI selbst, ohne das Präfix doi: und ohne die URL davor.",
+      "value_type": "text",
+      "example": {
+        "source": "Publications Office of the European Union, Luxembourg, 2023, doi:10.2760/58255, JRC135619.",
+        "tuples": [
+          {
+            "value": "10.2760/58255",
+            "quote": "Publications Office of the European Union, Luxembourg, 2023, doi:10.2760/58255, JRC135619."
+          }
+        ]
+      }
+    },
+    {
+      "uri": "publication_abstract",
+      "label": "Abstract",
+      "description": "Die Zusammenfassung des Dokuments, wörtlich und vollständig, so wie sie unter der Überschrift Abstract, Summary, Zusammenfassung oder Executive Summary steht. Keine eigene Zusammenfassung schreiben.",
+      "value_type": "text",
+      "example": {
+        "source": "Abstract This report presents the results of the 2023 edition of the Global Energy and Climate Outlook, which assesses the implications of current climate pledges for the global energy system.",
+        "tuples": [
+          {
+            "value": "This report presents the results of the 2023 edition of the Global Energy and Climate Outlook, which assesses the implications of current climate pledges for the global energy system.",
+            "quote": "Abstract This report presents the results of the 2023 edition of the Global Energy and Climate Outlook, which assesses the implications of current climate pledges for the global energy system."
+          }
+        ]
+      }
+    },
+    {
+      "uri": "study_organisation",
+      "label": "Beteiligte Institution",
+      "description": "Eine Institution, die an der Erstellung des Dokuments beteiligt war: die Affiliation einer Autorin, das herausgebende Institut, die beauftragte Einrichtung. Ein Tupel je Institution, in der Schreibweise des Dokuments.",
+      "value_type": "text",
+      "example": {
+        "source": "European Commission, Joint Research Centre (JRC), Seville, Spain, and Potsdam Institute for Climate Impact Research (PIK).",
+        "tuples": [
+          {
+            "value": "Joint Research Centre",
+            "quote": "European Commission, Joint Research Centre (JRC), Seville, Spain, and Potsdam Institute for Climate Impact Research (PIK)."
+          },
+          {
+            "value": "Potsdam Institute for Climate Impact Research",
+            "quote": "European Commission, Joint Research Centre (JRC), Seville, Spain, and Potsdam Institute for Climate Impact Research (PIK)."
+          }
+        ]
+      }
+    },
+    {
+      "uri": "study_funder",
+      "label": "Fördermittelgeber",
+      "description": "Eine Einrichtung, die die Arbeit finanziert hat, genannt in einem Abschnitt zu Funding, Förderung, Acknowledgements oder Danksagung. Nur wer zahlt, nicht wer inhaltlich beigetragen hat.",
+      "value_type": "text",
+      "example": {
+        "source": "This work was funded by the German Federal Ministry of Education and Research under grant 01LA1809A.",
+        "tuples": [
+          {
+            "value": "German Federal Ministry of Education and Research",
+            "quote": "This work was funded by the German Federal Ministry of Education and Research under grant 01LA1809A."
+          }
+        ]
+      }
+    },
+    {
+      "uri": "study_project_name",
+      "label": "Projektname",
+      "description": "Der ausgeschriebene Name des Forschungsprojekts, in dessen Rahmen die Studie oder die Szenarien entstanden sind. Nur wenn das Dokument ein Projekt ausdrücklich als seinen Rahmen nennt, nicht der Titel des Dokuments.",
+      "value_type": "text",
+      "example": {
+        "source": "This report was prepared within the project Enabling Ambitious Climate Policy Assessment (ENGAGE), funded under Horizon 2020.",
+        "tuples": [
+          {
+            "value": "Enabling Ambitious Climate Policy Assessment",
+            "quote": "This report was prepared within the project Enabling Ambitious Climate Policy Assessment (ENGAGE), funded under Horizon 2020."
+          }
+        ]
+      }
+    },
+    {
+      "uri": "study_acronym",
+      "label": "Projektakronym",
+      "description": "Das Kürzel des Forschungsprojekts, meist in Klammern hinter dem ausgeschriebenen Projektnamen oder als Kopfzeile. Nur das Akronym des Projekts, nicht das eines Modells und nicht das einer Institution.",
+      "value_type": "text",
+      "example": {
+        "source": "This report was prepared within the project Enabling Ambitious Climate Policy Assessment (ENGAGE), funded under Horizon 2020.",
+        "tuples": [
+          {
+            "value": "ENGAGE",
+            "quote": "This report was prepared within the project Enabling Ambitious Climate Policy Assessment (ENGAGE), funded under Horizon 2020."
+          }
+        ]
+      }
+    }
+  ]
+}
