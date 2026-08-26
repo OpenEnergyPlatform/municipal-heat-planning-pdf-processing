@@ -1,20 +1,31 @@
 {
   "_comment": [
     "The OEKG shapes ask a scenario bundle, its study report and its scenario",
-    "factsheets for metadata, not for measured quantities. Every field here is",
-    "therefore a text parameter: what is verified is that the string the model",
+    "factsheets for metadata, not for measured quantities. Most fields here are",
+    "therefore text parameters: what is verified is that the string the model",
     "reports sits literally in the passage it cites, and the passage is located",
     "on its PDF page. DocumentMeta already holds title, year and doi from the",
     "crawl, but those come with the crawl's licence; a value that is to be",
     "published in the graph is extracted from the document itself and carries",
     "its own evidence. The crawl values become the cross-check, not the source.",
     "",
-    "The scenario-scope fields carry a `scenario` axis: a text coordinate, the",
-    "scenario name AS THE DOCUMENT WRITES IT. It is a text axis and not a",
-    "vocabulary because the closed list is per document — one publication",
-    "documents up to 146 AR6 scenarios — and the spec is one file for the whole",
-    "corpus. kg.py resolves the wording against Scenarios.name for that",
-    "document and counts what it cannot place."
+    "Where a finite list of correct answers exists, the model chooses from it",
+    "instead of writing one. Three fields are of that kind:",
+    "  scenario_label   the AR6 scenarios this publication documents (per",
+    "                   document, from DocumentScenarios)",
+    "  scenario_region  the 249 study regions the OEKG uses, narrowed to those",
+    "                   the document names (per document, from regions.json)",
+    "  scenario_type    the 17 classes the OEKG shapes accept for `has scenario",
+    "                   type` (corpus-wide, listed below)",
+    "The first two are marked `vocabulary_dynamic` and filled by",
+    "profiles/ar6/extraction.py:document_axes before the harvest starts. In every",
+    "case the document's own wording stays on the tuple in `value_raw` or",
+    "`<axis>_raw`, so a choice is never a substitute for the evidence.",
+    "",
+    "The `scenario` axis is dynamic for the same reason and NOT required: the",
+    "AR6 names are run identifiers (EN_INDCi2030_300f) and a publication writes",
+    "'the NDC scenario'. Refusing what the model cannot map would delete the one",
+    "measurement that tells us how far apart those two vocabularies are."
   ],
   "parameters": [
     {
@@ -163,18 +174,119 @@
     {
       "uri": "scenario_label",
       "label": "Name des Szenarios",
-      "description": "Der Name eines im Dokument beschriebenen Szenarios, wörtlich wie dort geschrieben — als Kurzname, Kürzel oder ausgeschriebener Name. Ein Tupel je Szenario. Nicht der Name des Modells und nicht der Name der Studie.",
-      "value_type": "text",
+      "description": "Das Szenario der AR6-Datenbank, das an dieser Stelle beschrieben wird. Waehle es aus value_classes aus; die Klassennamen sind die Lauf-Kennungen der AR6-Datenbank fuer genau diese Publikation. In value_raw traegst du ein, wie das Dokument das Szenario nennt, woertlich. Ein Tupel je Szenario. Passt kein Eintrag der Liste, lass value weg und trage die Bezeichnung des Dokuments trotzdem in value_raw ein.",
+      "value_type": "category",
       "example": {
         "source": "We analyse three pathways: the Current Policies scenario (CurPol), the Nationally Determined Contributions scenario (NDC-LTT) and a 1.5C-compatible pathway.",
         "tuples": [
           {
-            "value": "CurPol",
+            "value": "EN_NPi2100",
+            "value_raw": "CurPol",
             "quote": "We analyse three pathways: the Current Policies scenario (CurPol), the Nationally Determined Contributions scenario (NDC-LTT) and a 1.5C-compatible pathway."
           },
           {
-            "value": "NDC-LTT",
+            "value": "EN_INDCi2030_1000f",
+            "value_raw": "NDC-LTT",
             "quote": "We analyse three pathways: the Current Policies scenario (CurPol), the Nationally Determined Contributions scenario (NDC-LTT) and a 1.5C-compatible pathway."
+          }
+        ]
+      },
+      "vocabulary_dynamic": true
+    },
+    {
+      "uri": "scenario_type",
+      "label": "Art des Szenarios",
+      "description": "Die Art eines Szenarios, gewaehlt aus value_classes. Das sind die Klassen, die der OEKG fuer dieses Feld zulaesst. Nimm die spezifischste Klasse, die der Text belegt: steht dort, dass ein Szenario nur bereits beschlossene Massnahmen enthaelt, ist das 'with existing measures scenario' und nicht blosses 'policy scenario'. Die allgemeine Klasse 'scenario' nur, wenn der Text keine engere Aussage traegt. In value_raw kommt die Formulierung des Dokuments. Ein Tupel je Szenario und Klasse; ein Szenario darf mehrere Klassen tragen, wenn der Text sie belegt.",
+      "value_type": "category",
+      "vocabulary": {
+        "https://openenergyplatform.org/ontology/oeo/OEO_00020309": [
+          "policy scenario"
+        ],
+        "https://openenergyplatform.org/ontology/oeo/OEO_00020310": [
+          "without measures scenario",
+          "WOM",
+          "without measures"
+        ],
+        "https://openenergyplatform.org/ontology/oeo/OEO_00020311": [
+          "with existing measures scenario",
+          "WEM",
+          "with existing measures"
+        ],
+        "https://openenergyplatform.org/ontology/oeo/OEO_00020312": [
+          "with additional measures scenario",
+          "WAM",
+          "with additional measures"
+        ],
+        "https://openenergyplatform.org/ontology/oeo/OEO_00020314": [
+          "reference scenario",
+          "baseline scenario",
+          "baseline",
+          "reference case"
+        ],
+        "https://openenergyplatform.org/ontology/oeo/OEO_00020247": [
+          "target driven scenario",
+          "normative scenario",
+          "backcasting scenario"
+        ],
+        "https://openenergyplatform.org/ontology/oeo/OEO_00020248": [
+          "explorative scenario",
+          "exploratory scenario"
+        ],
+        "https://openenergyplatform.org/ontology/oeo/OEO_00020345": [
+          "sufficiency scenario"
+        ],
+        "https://openenergyplatform.org/ontology/oeo/OEO_00020411": [
+          "robust system scenario"
+        ],
+        "https://openenergyplatform.org/ontology/oeo/OEO_00020412": [
+          "statistically robust scenario"
+        ],
+        "https://openenergyplatform.org/ontology/oeo/OEO_00030007": [
+          "climate scenario"
+        ],
+        "https://openenergyplatform.org/ontology/oeo/OEO_00030008": [
+          "economic scenario"
+        ],
+        "https://openenergyplatform.org/ontology/oeo/OEO_00030009": [
+          "emission scenario",
+          "emissions scenario"
+        ],
+        "https://openenergyplatform.org/ontology/oeo/OEO_00020317": [
+          "greenhouse gas emission scenario",
+          "GHG emission scenario"
+        ],
+        "https://openenergyplatform.org/ontology/oeo/OEO_00020321": [
+          "CO2 emission scenario"
+        ],
+        "https://openenergyplatform.org/ontology/oeo/OEO_00030010": [
+          "energy scenario"
+        ],
+        "https://openenergyplatform.org/ontology/oeo/OEO_00000364": [
+          "scenario"
+        ]
+      },
+      "axes": {
+        "scenario": {
+          "dynamic": true,
+          "required": false
+        }
+      },
+      "example": {
+        "source": "The CurPol scenario includes only those climate policies that had been adopted and implemented by the end of 2021, and reports greenhouse gas emission trajectories to 2100.",
+        "tuples": [
+          {
+            "value": "with existing measures scenario",
+            "value_raw": "includes only those climate policies that had been adopted and implemented",
+            "scenario": "EN_NPi2100",
+            "scenario_raw": "CurPol",
+            "quote": "The CurPol scenario includes only those climate policies that had been adopted and implemented by the end of 2021, and reports greenhouse gas emission trajectories to 2100."
+          },
+          {
+            "value": "greenhouse gas emission scenario",
+            "value_raw": "reports greenhouse gas emission trajectories",
+            "scenario": "EN_NPi2100",
+            "scenario_raw": "CurPol",
+            "quote": "The CurPol scenario includes only those climate policies that had been adopted and implemented by the end of 2021, and reports greenhouse gas emission trajectories to 2100."
           }
         ]
       }
@@ -186,8 +298,8 @@
       "value_type": "text",
       "axes": {
         "scenario": {
-          "type": "text",
-          "required": true
+          "dynamic": true,
+          "required": false
         }
       },
       "example": {
@@ -195,7 +307,7 @@
         "tuples": [
           {
             "value": "assumes that no additional climate policies are introduced beyond those already legislated by the end of 2021",
-            "scenario": "CurPol",
+            "scenario_raw": "CurPol",
             "quote": "The CurPol scenario assumes that no additional climate policies are introduced beyond those already legislated by the end of 2021."
           }
         ]
@@ -204,29 +316,34 @@
     {
       "uri": "scenario_region",
       "label": "Betrachtete Region eines Szenarios",
-      "description": "Ein Land, eine Ländergruppe oder eine Weltregion, die ein Szenario abbildet, wörtlich wie im Dokument geschrieben. Ein Tupel je Region. Nur Regionen, die als Betrachtungsraum genannt sind, nicht jede im Text erwähnte Region.",
-      "value_type": "text",
+      "description": "Das Land oder Gebiet, das ein Szenario abbildet. Waehle es aus value_classes aus - das sind die Studienregionen des OEKG, gefiltert auf die, die dieses Dokument nennt. Ein Tupel je Region: eine Studie ueber die EU27 ergibt 27 Tupel, sofern die Laender einzeln genannt sind. In value_raw traegst du ein, wie das Dokument die Region nennt. Nur Regionen, die als Betrachtungsraum genannt sind, nicht jede erwaehnte.",
+      "value_type": "category",
       "axes": {
         "scenario": {
-          "type": "text",
-          "required": true
+          "dynamic": true,
+          "required": false
         }
       },
       "example": {
         "source": "The NDC-LTT scenario covers the EU27, China, India and the United States at national resolution.",
         "tuples": [
           {
-            "value": "EU27",
-            "scenario": "NDC-LTT",
+            "value": "China",
+            "value_raw": "China",
+            "scenario": "EN_INDCi2030_1000f",
+            "scenario_raw": "NDC-LTT",
             "quote": "The NDC-LTT scenario covers the EU27, China, India and the United States at national resolution."
           },
           {
-            "value": "China",
-            "scenario": "NDC-LTT",
+            "value": "United States of America",
+            "value_raw": "the United States",
+            "scenario": "EN_INDCi2030_1000f",
+            "scenario_raw": "NDC-LTT",
             "quote": "The NDC-LTT scenario covers the EU27, China, India and the United States at national resolution."
           }
         ]
-      }
+      },
+      "vocabulary_dynamic": true
     },
     {
       "uri": "scenario_year",
@@ -235,8 +352,8 @@
       "value_type": "text",
       "axes": {
         "scenario": {
-          "type": "text",
-          "required": true
+          "dynamic": true,
+          "required": false
         }
       },
       "example": {
@@ -244,12 +361,12 @@
         "tuples": [
           {
             "value": "2030",
-            "scenario": "CurPol",
+            "scenario_raw": "CurPol",
             "quote": "Results for the CurPol scenario are reported for 2030, 2050 and 2070."
           },
           {
             "value": "2050",
-            "scenario": "CurPol",
+            "scenario_raw": "CurPol",
             "quote": "Results for the CurPol scenario are reported for 2030, 2050 and 2070."
           }
         ]
