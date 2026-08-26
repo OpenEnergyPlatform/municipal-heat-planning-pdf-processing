@@ -127,11 +127,16 @@ def _check_value(raw: dict, parameter: Parameter, flags: list):
         if not isinstance(value, (int, float)) or isinstance(value, bool):
             return None, Refusal(raw, "value is not a number")
         unit = raw.get("unit_raw")
-        if unit not in parameter.units_accepted:
+        factor = parameter.unit_factor(unit)
+        if factor is None:
             return None, Refusal(raw, f"unit {unit!r} not in units_accepted "
                                       f"({', '.join(parameter.units_accepted)})")
-        out["value_target"] = round(
-            float(value) * float(parameter.units_accepted[unit]), 6)
+        if unit not in parameter.units_accepted:
+            # The spec did not list this spelling but means this unit. Worth a
+            # flag, not a refusal: a spelling that keeps turning up belongs in
+            # the list, and the flag is how it gets noticed.
+            flags.append(f"unit_spelling:{unit}")
+        out["value_target"] = round(float(value) * float(factor), 6)
         return out, None
 
     wording = raw.get("value_raw")
@@ -171,6 +176,75 @@ def _value_in_quote(raw: dict, parameter: Parameter, quote: str) -> bool:
     # class name the mapping produced.
     wording = raw.get("value_raw") or raw.get("value")
     return _flat(str(wording)).casefold() in _flat(quote).casefold()
+
+
+# A full stop, not a list separator. Figure descriptions separate items with
+# semicolons and colons ("EWS: 41; EWK: 20"), and cutting the passage there
+# leaves a fragment that proves nothing.
+_TERMINATOR = re.compile(r"[.!?\n]")
+# Below this a passage is not evidence. A table cell and a figure description
+# are each one long sentence, so falling back to the plain window is right.
+_MIN_PASSAGE = 40
+
+
+def _occurrences(raw: dict, parameter: Parameter, source: str) -> list:
+    """Every place in the source this value could be read, as (start, end)."""
+    if parameter.is_numeric:
+        wanted = canonical_number(raw.get("value"))
+        if wanted is None:
+            return []
+        spans = [m.span() for m in _NUMBER.finditer(source)
+                 if canonical_number(m.group(0)) == wanted]
+        spans += [m.span() for m in _SPACE_GROUPED.finditer(source)
+                  if canonical_number(m.group(0)) == wanted]
+        return sorted(set(spans))
+    wording = raw.get("value_raw") or raw.get("value")
+    if not isinstance(wording, str) or len(wording.strip()) < 2:
+        return []
+    needle, hay = wording.strip().casefold(), source.casefold()
+    spans, at = [], hay.find(needle)
+    while at != -1:
+        spans.append((at, at + len(needle)))
+        at = hay.find(needle, at + 1)
+    return spans
+
+
+def _sentence_around(source: str, start: int, end: int, span: int = 320) -> str:
+    """The passage the value stands in, cut at sentence ends where there are any.
+
+    A cut that leaves less than _MIN_PASSAGE characters is no evidence, so the
+    window is kept instead: a table cell is a whole "sentence" and a figure
+    description is one long one.
+    """
+    lo, hi = max(0, start - span), min(len(source), end + span)
+    cut_lo, cut_hi = lo, hi
+    before = list(_TERMINATOR.finditer(source, lo, start))
+    if before:
+        cut_lo = before[-1].end()
+    after = _TERMINATOR.search(source, end, hi)
+    if after:
+        cut_hi = after.end()
+    passage = source[cut_lo:cut_hi].strip()
+    return passage if len(passage) >= _MIN_PASSAGE else source[lo:hi].strip()
+
+
+def _repair_quote(raw: dict, parameter: Parameter, source: str) -> Optional[str]:
+    """The passage the source itself gives for this value, or None.
+
+    A model that abridges its quote — "...zeigen sukzessive sinkende Werte:
+    79.499.951 kWh (2035)" for a sentence that also lists 2030 and 2040 — has
+    stated something true and cited it wrongly. Refusing that loses the
+    finding; taking the model's wording on trust loses the guarantee that the
+    evidence is literally in the document. So the quote is rebuilt from the
+    source, and only where the source leaves no choice: the value has to occur
+    in it exactly once. Measured on the 16-document pilot, that is 303 of 377
+    such refusals, against 8 where the value was not in the source at all.
+    """
+    spans = _occurrences(raw, parameter, source)
+    if len(spans) != 1:
+        return None
+    passage = _sentence_around(source, *spans[0])
+    return passage if len(passage) >= 8 else None
 
 
 def verify_tuple(raw: dict, parameter: Parameter, source_text: str, *,
@@ -277,7 +351,12 @@ def verify_tuple(raw: dict, parameter: Parameter, source_text: str, *,
     if not isinstance(quote, str) or len(quote) < 8:
         return Refusal(raw, "quote missing or too short to identify anything")
     if not quote_in(source_text, quote):
-        return Refusal(raw, "quote not found in the source it cites")
+        repaired = _repair_quote(raw, parameter, source_text)
+        if repaired is None:
+            return Refusal(raw, "quote not found in the source it cites")
+        raw = dict(raw, quote=repaired)
+        quote = repaired
+        flags.append("quote_repaired")
     if not _value_in_quote(raw, parameter, quote):
         return Refusal(raw, f"value {raw.get('value')!r} does not occur in the quote")
 

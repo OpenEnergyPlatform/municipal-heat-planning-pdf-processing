@@ -96,10 +96,59 @@ def test_a_transposed_digit_is_refused():
     assert "does not occur in the quote" in out.reason
 
 
-def test_a_quote_the_source_never_contained_is_refused():
-    out = verify_tuple(_claim(quote="Fernwärme | 999.999"), _parameter(), SOURCE)
+def test_a_value_the_source_never_contained_is_refused():
+    """The quote may be repaired; the value may not. If the source does not
+    hold the number, there is nothing to build evidence out of."""
+    out = verify_tuple(_claim(value=999999, quote="Fernwärme | 999.999"),
+                       _parameter(), SOURCE)
     assert isinstance(out, Refusal)
     assert "not found in the source" in out.reason
+
+
+def test_a_retyped_quote_is_rebuilt_from_the_source():
+    """The model reads "Heizöl (Dunkelgrau) folgt mit 39.26 GWh/a" and cites
+    "Heizöl: 39.26". The finding is true and the citation is not literal.
+    Refusing it loses the finding; trusting the wording loses the guarantee.
+    So the passage is taken from the source, and the flag says so. Measured on
+    the 16-document pilot: 303 of 377 such refusals, against 8 where the value
+    was not in the source at all."""
+    out = verify_tuple(_claim(quote="Erdgas: 1.036.767.833"),
+                       _parameter(), SOURCE)
+    assert isinstance(out, Verified), getattr(out, "reason", out)
+    assert "quote_repaired" in out.flags
+    assert out.tuple["quote"] in SOURCE
+    assert "1.036.767.833" in out.tuple["quote"]
+
+
+def test_a_value_the_source_holds_twice_is_not_repaired():
+    """Repair is only safe where the source leaves no choice. Two occurrences
+    mean two possible passages, and picking one would attach the claim to a
+    row nobody checked."""
+    twice = SOURCE + " | Fernwärme | 1.036.767.833 |"
+    out = verify_tuple(_claim(quote="Erdgas: 1.036.767.833"),
+                       _parameter(), twice)
+    assert isinstance(out, Refusal)
+    assert "not found in the source" in out.reason
+
+
+def test_a_unit_spelled_another_way_is_still_that_unit():
+    """The spec lists "kWh/a"; the document writes "kWh pro Jahr". Enumerating
+    spellings does not converge, so the comparison normalises instead — and
+    the flag keeps the new spelling visible for the list."""
+    out = verify_tuple(_claim(unit_raw="kWh pro Jahr"), _parameter(), SOURCE)
+    assert isinstance(out, Verified), getattr(out, "reason", out)
+    assert out.tuple["value_target"] == 1036767.833
+    assert "unit_spelling:kWh pro Jahr" in out.flags
+
+
+def test_a_unit_of_another_quantity_is_still_refused():
+    """Per square metre and per capita are not the same quantity as the total,
+    and a normaliser that merged them would put a specific demand into a
+    column of absolute ones."""
+    for unit in ("kWh/(m²*a)", "kWh/EW", "%"):
+        out = verify_tuple(_claim(unit_raw=unit), _parameter(), SOURCE)
+        assert isinstance(out, Refusal), unit
+        assert "units_accepted" in out.reason
 
 
 def test_the_model_maps_a_source_wording_onto_a_class():
