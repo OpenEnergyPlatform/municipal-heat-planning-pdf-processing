@@ -14,6 +14,8 @@ Author: Felix Vossel
 from __future__ import annotations
 
 import json
+import re
+import unicodedata
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional, Union
@@ -25,6 +27,38 @@ from typing import Optional, Union
 NUMERIC_TYPES = ("float", "int")
 VALUE_TYPES = NUMERIC_TYPES + ("text", "category")
 SCENARIOS = ("status_quo", "trend", "target", "unknown")
+
+
+# One unit, written the way a German planning document happens to write it.
+# The lists in a spec name the unit; these three patterns absorb the spelling.
+# Measured on the 16-document pilot: 661 findings were refused for their unit,
+# and 302 of them carried a unit the spec already accepts under another
+# spelling — a subscript two, "pro Jahr" instead of "/a", "Äquivalent" instead
+# of "eq". Enumerating spellings does not converge; this does.
+_EQUIVALENT = re.compile(r"(?:ä|ae)q(?:uivalent(?:e|en)?|u?i?)\.?"
+                         r"|(?<=co2)\s*[-_ ]?\s*eq", re.I)
+_PER_YEAR = re.compile(r"pro\s*jahr|/\s*jahr|jährlich|jaehrlich|im\s*jahr"
+                       r"|p\.?\s?a\.?$", re.I)
+# Punctuation that only ever separates: spaces, dots in "Mio.", the hyphen in
+# "CO2-Äq", the underscore in "t_CO2_äq", brackets, and every dash the corpus
+# uses. A slash is NOT here: "t CO2/a" and "t CO2/Kopf" are different things.
+_SEPARATORS = re.compile(r"[\s.\-_()\[\]‐-―]+")
+
+
+def normalise_unit(raw) -> str:
+    """One spelling for a unit, so a list of units need not list them all.
+
+    Conservative on purpose. It removes what only ever separates and unifies
+    the two words German writes many ways, and it touches nothing else: per
+    capita, per square metre and per kilowatt-hour stay distinct from the
+    plain rate, because those are other quantities and accepting them would
+    put a heat demand per square metre into a column of absolute demands.
+    """
+    s = unicodedata.normalize("NFKC", str(raw)).casefold()
+    s = _EQUIVALENT.sub("eq", s)
+    s = _PER_YEAR.sub("/a", s)
+    s = _SEPARATORS.sub("", s)
+    return re.sub(r"co2e(?!q)", "co2eq", s)
 
 
 class SpecError(ValueError):
@@ -80,6 +114,22 @@ class Parameter:
     @property
     def is_numeric(self) -> bool:
         return self.value_type in NUMERIC_TYPES
+
+    def unit_factor(self, raw) -> Optional[float]:
+        """Factor onto unit_target for a unit as the document writes it.
+
+        Exact spelling first, so a spec stays in charge of its own list; the
+        normalised form only decides what the list could not have foreseen.
+        """
+        if raw in self.units_accepted:
+            return self.units_accepted[raw]
+        if not isinstance(raw, str):
+            return None
+        wanted = normalise_unit(raw)
+        for unit, factor in self.units_accepted.items():
+            if normalise_unit(unit) == wanted:
+                return factor
+        return None
 
     def value_to_uri(self) -> dict:
         """Corpus label (casefolded) -> URI, for a category parameter."""
@@ -204,6 +254,19 @@ def _validate_parameter(path: str, raw) -> Parameter:
         if unit_target is not None or raw.get("units_accepted") is not None:
             _fail(f"{path}.unit_target",
                   f"a {value_type} parameter carries no unit")
+        # Two spellings of one unit are the point; two spellings that mean
+        # different amounts and normalise alike would silently multiply a
+        # value by a thousand, so that is a load error.
+        collisions: dict = {}
+        for unit, factor in units.items():
+            key = normalise_unit(unit)
+            if key in collisions and collisions[key][1] != factor:
+                _fail(f"{path}.units_accepted",
+                      f"{unit!r} and {collisions[key][0]!r} are the same "
+                      f"spelling to the verifier but carry {factor} and "
+                      f"{collisions[key][1]}")
+            collisions[key] = (unit, factor)
+
         if value_type == "category":
             if vocabulary_dynamic:
                 if vocabulary is not None:
