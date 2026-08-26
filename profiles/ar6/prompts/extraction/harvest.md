@@ -28,4 +28,8 @@ Jedes Tupel wird maschinell und wörtlich gegen die Quelle geprüft; was die Pr�
 4. Zitate sind keine Fundstellen. Ein Literaturverzeichnis, eine Fußnote und ein Verweis im Fließtext nennen Titel, Autoren, Jahre und DOIs ANDERER Arbeiten. Aus solchen Stellen extrahierst du nichts. Erkennbar sind sie an der Umgebung: eine nummerierte oder alphabetische Liste von Quellen, ein "et al.", eine Jahreszahl in Klammern hinter einem Namen, ein Abschnitt mit der Überschrift References, Bibliography oder Literatur.
    FALSCH: aus "as shown by Riahi et al. (2017)" das Jahr 2017 als Erscheinungsjahr melden.
 
-5. Nichts erfinden: nur, was wörtlich in source.text steht. Was du aus Vorwissen über die Publikation ergänzen müsstest, gehört nicht in die Liste. Das gilt auch für Abbildungsbeschreibungen — was dort nicht steht, existiert nicht.
+5. "scenario": nur bei den Feldern, die im Parameter eine Achse "scenario" haben. Dort trägst du den Namen des Szenarios ein, auf das sich der Wert bezieht — wörtlich so, wie das Dokument ihn schreibt, und er muss in derselben "quote" stehen wie der Wert. Steht in der Passage kein Szenarioname, gehört der Wert nicht in die Liste: ein Wert ohne Szenario ist an dieser Stelle wertlos, weil er später keinem Szenario zugeordnet werden kann.
+   FALSCH: "scenario": "das erste Szenario" — das ist kein Name aus dem Dokument.
+   FALSCH: einen Szenarionamen aus einem anderen Absatz ergänzen, der nicht in der Quelle steht.
+
+6. Nichts erfinden: nur, was wörtlich in source.text steht. Was du aus Vorwissen über die Publikation ergänzen müsstest, gehört nicht in die Liste. Das gilt auch für Abbildungsbeschreibungen — was dort nicht steht, existiert nicht.

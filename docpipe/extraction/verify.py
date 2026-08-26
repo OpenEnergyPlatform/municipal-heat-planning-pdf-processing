@@ -229,6 +229,22 @@ def verify_tuple(raw: dict, parameter: Parameter, source_text: str, *,
                     resolved[f"{name}_raw"] = wording
                     if wording.casefold() not in axis.label_to_uri():
                         flags.append(f"mapped:{name}:{wording}->{uri}")
+        elif axis.type == "text":
+            # No list to check against, so nothing to refuse: the coordinate
+            # is a wording, and whether it names something real is settled by
+            # the profile that owns the list.
+            if given is None:
+                if axis.required:
+                    return Refusal(raw, f"required axis {name!r} missing")
+                resolved[name] = None
+            else:
+                text = str(given).strip()
+                if not text:
+                    if axis.required:
+                        return Refusal(raw, f"required axis {name!r} is empty")
+                    resolved[name] = None
+                else:
+                    resolved[name] = text
         elif axis.type == "int":
             if given is None:
                 if axis.required:

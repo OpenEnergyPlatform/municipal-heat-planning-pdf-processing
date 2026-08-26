@@ -1,13 +1,17 @@
 """
 kg.py – Harvested publication metadata to OEKG Turtle.
 
-What the shapes ask of a scenario bundle and its study report, and nothing
-else: ex:StudyShape and ex:PublicationShape are `sh:closed true`, so a triple
-the shape does not name makes the node invalid. That has one consequence
-worth stating out loud: the evidence for a value — the quote, its page, the
-rectangles on that page — CANNOT hang off these nodes. It stays in the JSONL
-harvest, which is where the licence argument for extracting metadata that the
-crawl already knew is settled anyway.
+What the shapes ask of a scenario bundle, its study report and its scenario
+factsheets — plus the evidence for every value.
+
+That last part is PROVISIONAL. The shapes are `sh:closed true` today, which
+would make an evidence triple invalidate the node; whether they stay closed
+is being decided on the ontology side, and this is written as if they will
+not. The whole point of reading metadata out of the PDF rather than taking
+the crawl's copy is that each value can name the passage it came from, so a
+graph that drops the passage gives up the reason it was built this way. One
+evidence node per value, linked with `oekgprov:hasEvidence`; set
+OEKG_EVIDENCE=0 to emit the bare shape-conformant graph instead.
 
 Cardinality is enforced here rather than in the verifier, because the
 verifier sees one claim at a time and `exactly one title` is a property of a
@@ -44,6 +48,8 @@ CLS_REPORT = "OEO_00020012"        # study report (PublicationShape target)
 CLS_AUTHOR = "OEO_00000064"        # author
 CLS_ORGANISATION = "OEO_00030022"  # organisation
 CLS_FUNDER = "OEO_00090001"        # funder
+CLS_SCENARIO = "OEO_00000365"      # scenario factsheet (ScenarioShape target)
+CLS_REGION = "OEO_00020032"        # study region
 
 # Paths, from the shapes file.
 P_UUID = "OEO_00390095"            # has uuid
@@ -53,10 +59,21 @@ P_DOI = "OEO_00390098"             # has doi
 P_ORGANISATION = "OEO_00000510"    # has organisation
 P_FUNDER = "OEO_00000509"          # has funding source
 P_HAS_PART = "BFO_0000051"         # has part
+P_SCENARIO_TYPE = "OEO_00390073"   # has scenario type
+P_STUDY_REGION = "OEO_00020220"    # has study region
+P_SCENARIO_YEAR = "OEO_00020440"   # has scenario year value
+
+# Mirjam: "alle IAM scenarios bekommen erst mal die Annotation". JH notes it is
+# not in the release nor in the shape's sh:in list yet, so a graph written
+# today will fail that constraint until it is.
+IAM_SCENARIO = "OEO_00020517"
 
 # What the shapes allow at most once. Everything else may repeat.
 SINGLE = ("publication_title", "publication_date", "publication_doi",
           "publication_abstract", "study_project_name", "study_acronym")
+# Scenario-scope fields. Everything but the label carries a `scenario` axis
+# naming, in the document's own words, which scenario it belongs to.
+SCENARIO_FIELDS = ("scenario_abstract", "scenario_region", "scenario_year")
 # What the shapes demand at least once (sh:minCount 1). A document missing one
 # of these produces a node that will fail validation, so it is reported.
 REQUIRED = ("publication_title", "publication_date", "publication_author")
@@ -67,9 +84,11 @@ PREFIXES = """\
 @prefix dc:   <http://purl.org/dc/terms/> .
 @prefix obo:  <http://purl.obolibrary.org/obo/> .
 @prefix oeo:  <https://openenergyplatform.org/ontology/oeo/> .
+@prefix oekgprov: <https://openenergyplatform.org/ontology/oekg/provenance/> .
 """
 
 _LEGAL = r"(gmbh|mbh|ag|kg|ohg|e\.?\s*v\.?|gbr|se|ug|inc|ltd|llc)"
+NL = "\n"
 
 
 def normalise(label: str) -> str:
@@ -155,6 +174,49 @@ def _crosscheck(conn, name: str, chosen: dict) -> None:
                         name, key, got, crawled)
 
 
+# Provisional, see the module docstring: emitting the evidence assumes the
+# shapes will not stay closed. Off gives a graph that validates today.
+EVIDENCE = os.environ.get("OEKG_EVIDENCE", "1") != "0"
+
+
+def _known_scenarios(conn, name: str) -> dict:
+    """{normalised AR6 scenario name: name as the AR6 database writes it}."""
+    rows = conn.execute(
+        "SELECT s.name FROM Scenarios s "
+        "JOIN DocumentScenarios ds ON ds.scenario = s.id "
+        "JOIN Documents d ON ds.document = d.id "
+        "WHERE d.filename LIKE ?", (f"{name}.%",)).fetchall()
+    return {normalise(r[0]): r[0] for r in rows}
+
+
+def _evidence(subject: str, predicate: str, row: dict, document: str) -> tuple:
+    """(link line, node block) for one value's passage.
+
+    The quote is what makes the value citable, and the page and rectangles are
+    what let a reader see it on the page. All three come from the harvest, none
+    from the model's word alone: the quote was checked against the source and
+    located in the PDF before it ever got here.
+    """
+    provenance = row.get("provenance") or {}
+    iri = mint("evidence", f"{subject}|{predicate}|{row.get('value')}|"
+                           f"{provenance.get('owner_kind')}|"
+                           f"{provenance.get('owner_id')}")
+    node = [f"<{iri}>", "    a oekgprov:ExtractionEvidence ;",
+            f"    oekgprov:aboutProperty {predicate} ;",
+            f"    oekgprov:extractedValue {literal(row.get('value'))} ;",
+            f"    oekgprov:quote {literal(row.get('quote') or '')} ;",
+            f"    oekgprov:sourceDocument {literal(document)} ;",
+            f"    oekgprov:evidenceTier {literal(row.get('tier') or '')} ;"]
+    if provenance.get("page"):
+        node.append(f'    oekgprov:page "{int(provenance["page"])}"^^xsd:integer ;')
+    for rect in provenance.get("rects") or ():
+        node.append("    oekgprov:region "
+                    f"{literal(' '.join(str(round(v, 2)) for v in rect))} ;")
+    node[-1] = node[-1].rstrip(" ;") + " ."
+    return (f"    oekgprov:hasEvidence <{iri}> ;",
+            NL.join(node) + NL)
+
+
 def make_serializer(db_path: Path):
     """(document name, accepted tuple rows) -> TTL string or None."""
     header_pending = [True]
@@ -180,45 +242,158 @@ def make_serializer(db_path: Path):
 
         # A diagnostic, never a precondition: the graph does not depend on the
         # crawl, so an unreachable DocumentMeta must not stop the serialization.
+        # The AR6 scenario list is read in the same breath — it is not a source
+        # either, it is what a scenario name extracted from the PDF is matched
+        # against, and an empty list simply means nothing can be matched.
+        known: dict = {}
+        conn = None
         try:
-            with sqlite3.connect(f"file:{db_path}?mode=ro", uri=True) as conn:
-                _crosscheck(conn, name, chosen)
+            # `with sqlite3.connect(...)` commits a transaction, it does not
+            # close the connection — one leaked handle per document, and on
+            # Windows a file nobody can delete afterwards.
+            conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
+            _crosscheck(conn, name, chosen)
+            known = _known_scenarios(conn, name)
         except sqlite3.Error as exc:
             log.warning("kg: %s: no cross-check against the crawl (%s)", name, exc)
+        finally:
+            if conn is not None:
+                conn.close()
 
         title = chosen["publication_title"]
         report = mint("studyreport", title)
         bundle = mint("scenariobundle",
                       chosen.get("study_project_name") or title)
 
+        evidence_nodes: list = []
+
+        def evidence_for(subject: str, predicate: str, sources: list) -> list:
+            """Link lines for one value's passages; the nodes are collected."""
+            if not EVIDENCE:
+                return []
+            links = []
+            for row in sources:
+                link, node = _evidence(subject, predicate, row, name)
+                links.append(link)
+                evidence_nodes.append(node)
+            return links
+
+        def rows_for(key: str, value=None, scenario=None) -> list:
+            out = []
+            for row in by_param.get(key, ()):
+                if value is not None and row.get("value") != value:
+                    continue
+                if scenario is not None and \
+                        normalise(row.get("scenario") or "") != scenario:
+                    continue
+                out.append(row)
+            return out
+
         def entities(key: str, collection: str, cls: str) -> tuple:
+            """Distinct named things of one kind, each as its own node."""
             seen: dict = {}
             for row in by_param.get(key, ()):
                 seen.setdefault(normalise(row["value"]), row["value"])
-            out = [(mint(collection, v), v) for v in seen.values()]
-            return out, [f"<{iri}>\n    a oeo:{cls} ;\n"
-                         f"    rdfs:label {literal(label)} .\n"
-                         for iri, label in out]
+            links, nodes = [], []
+            for label in seen.values():
+                iri = mint(collection, label)
+                links.append(f"<{iri}>")
+                block = [f"<{iri}>", f"    a oeo:{cls} ;"]
+                block += evidence_for(iri, "rdfs:label",
+                                      rows_for(key, value=label))
+                block.append(f"    rdfs:label {literal(label)} .")
+                nodes.append(NL.join(block) + NL)
+            return links, nodes
 
-        authors, author_nodes = entities("publication_author", "author", CLS_AUTHOR)
-        orgs, org_nodes = entities("study_organisation", "organisation",
-                                   CLS_ORGANISATION)
-        funders, funder_nodes = entities("study_funder", "funder", CLS_FUNDER)
+        author_links, author_nodes = entities("publication_author", "author",
+                                              CLS_AUTHOR)
+        org_links, org_nodes = entities("study_organisation", "organisation",
+                                        CLS_ORGANISATION)
+        funder_links, funder_nodes = entities("study_funder", "funder",
+                                              CLS_FUNDER)
 
+        # ---- the study report ---------------------------------------------
         pub: list = [f"<{report}>", f"    a oeo:{CLS_REPORT} ;",
-                     f"    oeo:{P_UUID} {literal(uuid_of(report))} ;",
-                     f"    rdfs:label {literal(title)} ;"]
-        if authors:
+                     f"    oeo:{P_UUID} {literal(uuid_of(report))} ;"]
+        pub += evidence_for(report, "rdfs:label",
+                            rows_for("publication_title", value=title))
+        pub.append(f"    rdfs:label {literal(title)} ;")
+        if author_links:
             pub.append(f"    oeo:{P_AUTHOR} " +
-                       " ,\n        ".join(f"<{iri}>" for iri, _ in authors) + " ;")
+                       " ,\n        ".join(author_links) + " ;")
         if chosen.get("publication_date"):
             stamp = _publication_date(chosen["publication_date"])
             if stamp:
+                pub += evidence_for(
+                    report, f"oeo:{P_PUBDATE}",
+                    rows_for("publication_date",
+                             value=chosen["publication_date"]))
                 pub.append(f'    oeo:{P_PUBDATE} "{stamp}"^^xsd:dateTime ;')
         if chosen.get("publication_doi"):
+            pub += evidence_for(report, f"oeo:{P_DOI}",
+                                rows_for("publication_doi",
+                                         value=chosen["publication_doi"]))
             pub.append(f"    oeo:{P_DOI} {literal(chosen['publication_doi'])} ;")
         pub[-1] = pub[-1].rstrip(" ;") + " ."
 
+        # ---- the scenarios --------------------------------------------------
+        # A scenario is named by scenario_label, or by any scenario-scope value
+        # that says which scenario it belongs to. Both are the document's own
+        # wording; `known` is the AR6 list it is matched against.
+        wanted: dict = {}
+        for row in by_param.get("scenario_label", ()):
+            wanted.setdefault(normalise(row["value"]), row["value"])
+        for key in SCENARIO_FIELDS:
+            for row in by_param.get(key, ()):
+                if row.get("scenario"):
+                    wanted.setdefault(normalise(row["scenario"]), row["scenario"])
+
+        scenario_links: list = []
+        scenario_nodes: list = []
+        unplaced: list = []
+        for norm, label in wanted.items():
+            if known and norm not in known:
+                unplaced.append(label)
+            iri = mint("scenariofactsheet", f"{title}|{label}")
+            scenario_links.append(f"<{iri}>")
+            block = [f"<{iri}>", f"    a oeo:{CLS_SCENARIO} ;",
+                     f"    oeo:{P_UUID} {literal(uuid_of(iri))} ;"]
+            block += evidence_for(iri, "rdfs:label",
+                                  rows_for("scenario_label", value=label))
+            # Mirjam: with no long name beside the acronym, both carry the same
+            # string. That is the usual case in this corpus.
+            block.append(f"    rdfs:label {literal(known.get(norm, label))} ;")
+            block.append(f"    dc:acronym {literal(label)} ;")
+            block.append(f"    oeo:{P_SCENARIO_TYPE} oeo:{IAM_SCENARIO} ;")
+
+            described = rows_for("scenario_abstract", scenario=norm)
+            if described:
+                best, _ = _pick_one(described)
+                block += evidence_for(iri, "dc:abstract",
+                                      rows_for("scenario_abstract", value=best,
+                                               scenario=norm))
+                block.append(f"    dc:abstract {literal(best)} ;")
+
+            regions: dict = {}
+            for row in rows_for("scenario_region", scenario=norm):
+                regions.setdefault(normalise(row["value"]), row["value"])
+            for region in regions.values():
+                region_iri = mint("studyregion", region)
+                block.append(f"    oeo:{P_STUDY_REGION} <{region_iri}> ;")
+                scenario_nodes.append(
+                    f"<{region_iri}>{NL}    a oeo:{CLS_REGION} ;{NL}"
+                    f"    rdfs:label {literal(region)} .{NL}")
+
+            years = sorted({re.search(r"\d{4}", str(r["value"])).group(0)
+                            for r in rows_for("scenario_year", scenario=norm)
+                            if re.search(r"\d{4}", str(r["value"]))})
+            for year in years:
+                block.append(f'    oeo:{P_SCENARIO_YEAR} '
+                             f'"{year}-01-01T00:00:00"^^xsd:dateTime ;')
+            block[-1] = block[-1].rstrip(" ;") + " ."
+            scenario_nodes.append(NL.join(block) + NL)
+
+        # ---- the bundle -----------------------------------------------------
         std: list = [f"<{bundle}>", f"    a oeo:{CLS_BUNDLE} ;",
                      f"    oeo:{P_UUID} {literal(uuid_of(bundle))} ;",
                      f"    rdfs:label "
@@ -226,24 +401,34 @@ def make_serializer(db_path: Path):
         if chosen.get("study_acronym"):
             std.append(f"    dc:acronym {literal(chosen['study_acronym'])} ;")
         if chosen.get("publication_abstract"):
+            std += evidence_for(bundle, "dc:abstract",
+                                rows_for("publication_abstract",
+                                         value=chosen["publication_abstract"]))
             std.append(f"    dc:abstract "
                        f"{literal(chosen['publication_abstract'])} ;")
-        if orgs:
+        if org_links:
             std.append(f"    oeo:{P_ORGANISATION} " +
-                       " ,\n        ".join(f"<{iri}>" for iri, _ in orgs) + " ;")
-        if funders:
+                       " ,\n        ".join(org_links) + " ;")
+        if funder_links:
             std.append(f"    oeo:{P_FUNDER} " +
-                       " ,\n        ".join(f"<{iri}>" for iri, _ in funders) + " ;")
-        std.append(f"    obo:{P_HAS_PART} <{report}> .")
+                       " ,\n        ".join(funder_links) + " ;")
+        for part in [f"<{report}>"] + scenario_links:
+            std.append(f"    obo:{P_HAS_PART} {part} ;")
+        std[-1] = std[-1].rstrip(" ;") + " ."
 
-        log.info("kg: %s: 1 report, 1 bundle, %d author(s), %d organisation(s), "
-                 "%d funder(s)%s%s", name, len(authors), len(orgs), len(funders),
+        log.info("kg: %s: 1 report, 1 bundle, %d scenario(s), %d author(s), "
+                 "%d organisation(s), %d funder(s)%s%s%s", name,
+                 len(scenario_links), len(author_links), len(org_links),
+                 len(funder_links),
                  f", contested {contested}" if contested else "",
-                 f", MISSING REQUIRED {missing}" if missing else "")
+                 f", MISSING REQUIRED {missing}" if missing else "",
+                 f", {len(unplaced)} scenario name(s) not in the AR6 list "
+                 f"{unplaced[:5]}" if unplaced else "")
 
-        parts = ["\n".join(pub) + "\n", "\n".join(std) + "\n"]
-        parts += author_nodes + org_nodes + funder_nodes
-        body = "\n".join(parts)
+        parts = [NL.join(pub) + NL, NL.join(std) + NL]
+        parts += scenario_nodes + author_nodes + org_nodes + funder_nodes
+        parts += evidence_nodes
+        body = NL.join(parts)
         if header_pending[0]:
             header_pending[0] = False
             return PREFIXES + "\n" + body

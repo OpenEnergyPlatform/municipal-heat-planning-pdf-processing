@@ -111,7 +111,11 @@ def _validate_axis(path: str, name: str, raw) -> Axis:
                     # coin toss; better to refuse the spec than to guess later.
                     _fail(f"{path}.{uri}", f"label {label!r} already maps to {other}")
                 seen[label.casefold()] = uri
-    if axis_type is not None and axis_type != "int":
+    # "text" is what a coordinate looks like when the closed list lives
+    # somewhere the spec cannot reach — the scenarios of ONE publication, for
+    # instance, which differ per document. The wording is carried through and
+    # resolved against that list where it is known; here it is just a string.
+    if axis_type is not None and axis_type not in ("int", "text"):
         _fail(path, f"unsupported axis type {axis_type!r}")
     if enum is not None:
         if not isinstance(enum, list) or not all(isinstance(e, str) for e in enum):
