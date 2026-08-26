@@ -313,6 +313,30 @@ def _parse_tuples(raw_text: str) -> Optional[list]:
     return tuples if isinstance(tuples, list) else None
 
 
+_UNPARSABLE_SHOWN = 0
+_UNPARSABLE_LIMIT = int(os.environ.get("EXTRACT_SHOW_UNPARSABLE", "20"))
+
+
+def _unparsable(reply) -> str:
+    """Why a reply could not be read, for the first few that happen.
+
+    A pilot lost 1093 of 16102 harvests to "reply carried no 'tuples' list"
+    and the log could not say whether the model answered something else, was
+    cut off mid-reasoning, or returned nothing at all. Bounded: the point is a
+    handful of examples, not a second copy of the run in the log.
+    """
+    global _UNPARSABLE_SHOWN
+    if _UNPARSABLE_SHOWN >= _UNPARSABLE_LIMIT:
+        return ""
+    _UNPARSABLE_SHOWN += 1
+    message = getattr(reply, "message", None)
+    content = (getattr(message, "content", None) or "")
+    reasoning = (getattr(message, "reasoning_content", None) or "")
+    return (f" [finish={getattr(reply, 'finish_reason', '?')} "
+            f"content={len(content)}ch {content[:160]!r} "
+            f"reasoning={len(reasoning)}ch {reasoning[-160:]!r}]")
+
+
 def _parameter_payload(parameter) -> dict:
     """What the model needs to know about the target — straight from the spec."""
     axes = {}
@@ -409,12 +433,19 @@ def make_harvester(image_root: Optional[Path] = None) -> Callable:
                     max_tokens=max_tokens,
                     messages=[{"role": "system", "content": prompt.text},
                               {"role": "user", "content": content}])
-                tuples = _parse_tuples(response.choices[0].message.content)
+                reply = response.choices[0]
+                tuples = _parse_tuples(reply.message.content)
+                if tuples is None:
+                    # A reasoning parser puts the chain in reasoning_content
+                    # and leaves content empty when the generation stopped
+                    # inside it. The answer, if there is one, is in there.
+                    tuples = _parse_tuples(
+                        getattr(reply.message, "reasoning_content", None))
                 if tuples is not None:
                     return tuples
                 log.warning("   harvest %s/%s attempt %d: reply carried no "
-                            "'tuples' list", source.owner_kind,
-                            source.owner_id, attempt)
+                            "'tuples' list%s", source.owner_kind,
+                            source.owner_id, attempt, _unparsable(reply))
             except Exception as exc:
                 log.warning("   harvest %s/%s attempt %d failed: %s",
                             source.owner_kind, source.owner_id, attempt, exc)
