@@ -78,10 +78,32 @@ def mint(collection: str, name: str) -> str:
     return f"{BASE}{collection}/{uuid.uuid5(ns(collection), name)}"
 
 
+_UMLAUT = str.maketrans({"ä": "ae", "ö": "oe", "ü": "ue", "ß": "ss"})
+_SEPARATOR = re.compile(r"[\s\-_/.,;:()\[\]]+")
+
+
+def indicator_text(label_raw) -> str:
+    """One spelling for an indicator label, so the table can name the concept.
+
+    The corpus writes CO2 with a subscript two in a hundred places, hyphenates
+    where the table does not, and spells umlauts both ways. Matching those as
+    written meant a table of spellings that missed exactly the spellings the
+    documents use.
+    """
+    text = unicodedata.normalize("NFKC", str(label_raw or "")).casefold()
+    return _SEPARATOR.sub(" ", text.translate(_UMLAUT)).strip()
+
+
 def accepted_indicator(parameter_uri: str, label_raw) -> bool:
-    """The D6 mapping table: unclear beats accept, no match is unclear."""
+    """Does this label name the quantity the OEO class is defined as?
+
+    The terms come from the class definitions in oeo-closure.owl, not from
+    guessing: final energy consumption is "the energy delivered to and consumed
+    by end users", so a Waermeverbrauch is one and a Waermebedarf is not. An
+    unclear term beats an accepted one, and no match at all is unclear.
+    """
     rules = INDICATOR_MAPPING.get(parameter_uri)
-    label = (label_raw or "").casefold()
+    label = indicator_text(label_raw)
     if not rules or not label:
         return False
     if any(u in label for u in rules.get("unclear", ())):
