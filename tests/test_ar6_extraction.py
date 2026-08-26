@@ -571,3 +571,22 @@ def test_the_scenario_types_the_model_chose_reach_the_graph():
             "OEO_00020311>") in ttl
     # Mirjam's blanket IAM annotation stays alongside it.
     assert "oeo:OEO_00390073 oeo:OEO_00020517" in ttl
+
+
+def test_a_scenario_wording_that_fits_several_runs_links_to_none():
+    """The pilot document names 146 AR6 runs and the paper writes "NPi". The
+    database has EN_NPi2020_300f, _400 and _3000 — three runs, one family. A
+    model handed the list picks one anyway; that is a guess dressed as a link,
+    so the wording survives alone and the factsheet stays unlinked."""
+    from profiles.ar6 import kg
+
+    known = {kg.normalise(n): n for n in
+             ("EN_NPi2020_300f", "EN_NPi2020_400", "EN_NPi2020_3000")}
+    assert kg.ambiguous("NPi", known)
+    assert not kg.ambiguous("EN_NPi2020_400", known), "an exact name is not a family"
+
+    row = {"parameter": "scenario_label", "value_uri": "EN_NPi2020_400",
+           "value_raw": "NPi"}
+    assert kg.scenario_key(row, known) == ("NPi", "NPi")
+    assert kg.scenario_key(row, None) == ("EN_NPi2020_400", "NPi"), \
+        "without the list there is nothing to call ambiguous"
