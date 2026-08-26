@@ -37,12 +37,21 @@ def _fail(path: str, message: str) -> None:
 
 @dataclass
 class Axis:
-    """One dimension of a value: a closed vocabulary, an int, or an enum."""
+    """One dimension of a value: a closed vocabulary, an int, an enum — or a
+    vocabulary that only exists per document (`dynamic`).
+
+    Dynamic is for a coordinate whose closed list is real but not corpus-wide:
+    the AR6 scenarios of ONE publication, for instance. The profile supplies
+    that list per document and the runner fills `vocabulary` in before the
+    harvest; where no profile does, the axis behaves like a text axis and the
+    wording is simply carried through.
+    """
     name: str
     vocabulary: Optional[dict] = None      # target URI -> corpus labels
-    type: Optional[str] = None             # "int" for years
+    type: Optional[str] = None             # "int" for years, "text" for wording
     enum: Optional[tuple] = None
     required: bool = False
+    dynamic: bool = False
 
     def label_to_uri(self) -> dict:
         """Corpus label (casefolded) -> URI. Built once, used per tuple."""
@@ -64,6 +73,9 @@ class Parameter:
     unit_target: Optional[str] = None      # numeric parameters only
     units_accepted: dict = field(default_factory=dict)  # unit -> factor
     vocabulary: Optional[dict] = None      # category parameters: uri -> labels
+    # A category whose closed list is real but per document, filled in by the
+    # profile before the harvest. Same rule as a dynamic axis, one level up.
+    vocabulary_dynamic: bool = False
 
     @property
     def is_numeric(self) -> bool:
@@ -93,9 +105,10 @@ def _validate_axis(path: str, name: str, raw) -> Axis:
     vocabulary = raw.get("vocabulary")
     axis_type = raw.get("type")
     enum = raw.get("enum")
-    kinds = sum(x is not None for x in (vocabulary, axis_type, enum))
+    dynamic = bool(raw.get("dynamic", False))
+    kinds = sum(x is not None for x in (vocabulary, axis_type, enum)) + int(dynamic)
     if kinds != 1:
-        _fail(path, "an axis is exactly one of: vocabulary, type, enum")
+        _fail(path, "an axis is exactly one of: vocabulary, type, enum, dynamic")
     if vocabulary is not None:
         if not isinstance(vocabulary, dict) or not vocabulary:
             _fail(path, "vocabulary must be a non-empty object of uri -> labels")
@@ -122,7 +135,8 @@ def _validate_axis(path: str, name: str, raw) -> Axis:
             _fail(path, "enum must be a list of strings")
         enum = tuple(enum)
     return Axis(name=name, vocabulary=vocabulary, type=axis_type,
-                enum=enum, required=bool(raw.get("required", False)))
+                enum=enum, required=bool(raw.get("required", False)),
+                dynamic=dynamic)
 
 
 def _validate_example(path: str, raw, value_type: str,
@@ -176,6 +190,7 @@ def _validate_parameter(path: str, raw) -> Parameter:
     units: dict = {}
     unit_target = raw.get("unit_target")
     vocabulary = raw.get("vocabulary")
+    vocabulary_dynamic = bool(raw.get("vocabulary_dynamic", False))
     if value_type in NUMERIC_TYPES:
         if not isinstance(unit_target, str) or not unit_target.strip():
             _fail(f"{path}.unit_target",
@@ -190,11 +205,17 @@ def _validate_parameter(path: str, raw) -> Parameter:
             _fail(f"{path}.unit_target",
                   f"a {value_type} parameter carries no unit")
         if value_type == "category":
-            if not isinstance(vocabulary, dict) or not vocabulary:
+            if vocabulary_dynamic:
+                if vocabulary is not None:
+                    _fail(f"{path}.vocabulary",
+                          "a dynamic category carries no vocabulary in the spec")
+            elif not isinstance(vocabulary, dict) or not vocabulary:
                 _fail(f"{path}.vocabulary",
-                      "a category parameter needs a vocabulary of uri -> labels")
+                      "a category parameter needs a vocabulary of uri -> labels, "
+                      "or vocabulary_dynamic for a list the profile supplies "
+                      "per document")
             seen: dict = {}
-            for uri, labels in vocabulary.items():
+            for uri, labels in (vocabulary or {}).items():
                 if not isinstance(labels, list) or not labels or \
                         not all(isinstance(l, str) and l.strip() for l in labels):
                     _fail(f"{path}.vocabulary.{uri}",
@@ -205,7 +226,7 @@ def _validate_parameter(path: str, raw) -> Parameter:
                         _fail(f"{path}.vocabulary.{uri}",
                               f"label {label!r} already maps to {other}")
                     seen[label.casefold()] = uri
-        elif vocabulary is not None:
+        elif vocabulary is not None or vocabulary_dynamic:
             _fail(f"{path}.vocabulary",
                   "only a category parameter carries a value vocabulary")
 
@@ -222,7 +243,9 @@ def _validate_parameter(path: str, raw) -> Parameter:
     return Parameter(uri=raw["uri"], label=raw["label"],
                      description=raw["description"], value_type=value_type,
                      unit_target=unit_target, units_accepted=units,
-                     vocabulary=vocabulary, axes=axes, example=example)
+                     vocabulary=vocabulary,
+                     vocabulary_dynamic=vocabulary_dynamic,
+                     axes=axes, example=example)
 
 
 def load(source: Union[Path, str, dict]) -> Spec:
