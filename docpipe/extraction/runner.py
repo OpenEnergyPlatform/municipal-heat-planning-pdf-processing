@@ -66,7 +66,11 @@ BATCH_SOURCES = int(os.environ.get("EXTRACT_BATCH_SOURCES", "6"))
 BATCH_CHARS = int(os.environ.get("EXTRACT_BATCH_CHARS", "14000"))
 # What the model is told it already has, so it does not hand back the same
 # value from a neighbouring passage.
-PRIOR_MAX = int(os.environ.get("EXTRACT_PRIOR_MAX", "40"))
+PRIOR_MAX = int(os.environ.get("EXTRACT_PRIOR_MAX", "24"))
+# What one prior entry actually costs, measured on real tuples from the pilot
+# corpus: 40 entries came to 11071 characters, about 110 tokens each. The
+# placeholder here was 60, which is the one direction a budget must not err in.
+PRIOR_TOKENS = 110
 # How often a chain may answer "there is more here, look for this" and get
 # fresh passages for it. Bounded: the model can always ask again.
 FOLLOWUP_ROUNDS = int(os.environ.get("EXTRACT_FOLLOWUP_ROUNDS", "1"))
@@ -498,6 +502,96 @@ def _parse_tuples(raw_text: str) -> Optional[list]:
     return tuples if isinstance(tuples, list) else None
 
 
+# What a `defaults` block may NOT carry. Stated as the exclusion, not as a
+# list of axis names: the axes are the profile's business and the core has no
+# opinion on them. These two are different in kind — they are the evidence
+# pair, one number and the words it was read from, and a shared one would
+# hand every tuple in the reply the same evidence, which is the one thing
+# this stage exists to prevent. Underscore keys are ours, not the model's.
+NOT_DEFAULTABLE = frozenset({"value", "quote", "compute"})
+
+_TUPLES_KEY = re.compile(r'"tuples"\s*:\s*\[')
+_DEFAULTS_KEY = re.compile(r'"defaults"\s*:\s*\{')
+_DECODER = json.JSONDecoder()
+
+
+def _strip_wrapping(raw_text: str) -> str:
+    text = _THINK_RE.sub("", raw_text or "").strip()
+    return _FENCE_CLOSE.sub("", _FENCE_OPEN.sub("", text)).strip()
+
+
+def expand_defaults(defaults: Optional[dict], tuples: list) -> list:
+    """Fold the reply's shared coordinates into every tuple that omits them.
+
+    Measured on the one table that truncated in three consecutive pilots: of
+    the sixteen keys a tuple carries, ten are identical across all 39 of its
+    tuples, and rewriting them costs 52% of the whole answer. So the model
+    writes them once. A tuple's own key always wins, and a key in
+    NOT_DEFAULTABLE is dropped however the model labelled it.
+    """
+    if not isinstance(defaults, dict) or not defaults:
+        return tuples
+    shared = {k: v for k, v in defaults.items()
+              if isinstance(k, str) and k not in NOT_DEFAULTABLE
+              and not k.startswith("_")}
+    if not shared:
+        return tuples
+    out = []
+    for claim in tuples:
+        if not isinstance(claim, dict):
+            out.append(claim)
+            continue
+        merged = dict(shared)
+        merged.update(claim)          # what the tuple says about itself wins
+        out.append(merged)
+    return out
+
+
+def rescue_reply(raw_text: str) -> Optional[dict]:
+    """Every complete tuple in an answer the generation cut short.
+
+    A reply that hits the token ceiling stops mid-key, never on a boundary,
+    so the JSON is unparsable — but the tuples written before the cut are
+    whole, and each of them is quote-checked downstream like any other. The
+    walk uses the standard decoder rather than counting braces, because the
+    quotes are lifted verbatim from the plans and the plans contain BibTeX:
+    15 of 1936 sections in the pilot set are `@misc{...}` dumps, and a
+    quote-sized window of those is almost never brace-balanced. Only a real
+    JSON scanner knows which brace is structure and which is evidence.
+    """
+    text = _strip_wrapping(raw_text)
+    if not text:
+        return None
+    defaults = None
+    head = _DEFAULTS_KEY.search(text)
+    if head is not None:
+        try:
+            obj, _ = _DECODER.raw_decode(text, head.end() - 1)
+            defaults = obj if isinstance(obj, dict) else None
+        except ValueError:
+            defaults = None
+    match = _TUPLES_KEY.search(text)
+    if match is None:
+        return None
+    tuples: list = []
+    pos = match.end()
+    while True:
+        while pos < len(text) and text[pos] in " \t\r\n,":
+            pos += 1
+        if pos >= len(text) or text[pos] != "{":
+            break
+        try:
+            obj, pos = _DECODER.raw_decode(text, pos)
+        except ValueError:
+            break                     # the half-written tail, dropped on purpose
+        if isinstance(obj, dict):
+            tuples.append(obj)
+    if not tuples:
+        return None
+    return {"tuples": expand_defaults(defaults, tuples),
+            "status": "truncated", "need_more": []}
+
+
 def _parse_reply(raw_text: str) -> Optional[dict]:
     """The whole answer object, not just its tuples.
 
@@ -513,7 +607,7 @@ def _parse_reply(raw_text: str) -> Optional[dict]:
     data = _loads_object(raw_text) or {}
     status = data.get("status")
     need = data.get("need_more")
-    return {"tuples": tuples,
+    return {"tuples": expand_defaults(data.get("defaults"), tuples),
             "status": status if status in ("complete", "partial") else "partial",
             "need_more": [q for q in (need or []) if isinstance(q, str) and q.strip()]}
 
@@ -673,6 +767,62 @@ def _batch_payload(batch, prior: list) -> dict:
     return payload
 
 
+_USAGE = {"n": 0, "prompt_max": 0, "prompt_sum": 0, "completion_max": 0}
+_USAGE_LOCK = threading.Lock()
+
+
+def _observe_usage(usage) -> None:
+    """What a request really cost, from the server's own count.
+
+    context_budget is a formula with estimated constants, and it feeds
+    --max-model-len. Nobody had ever checked it against reality: it claimed
+    22900 prompt tokens where the measured mean was 10081, and its `prior`
+    term was low by 40%. The server reports the true number on every reply,
+    so from now on the run says what it actually used and the next budget can
+    be calibrated instead of guessed.
+    """
+    prompt = getattr(usage, "prompt_tokens", None)
+    completion = getattr(usage, "completion_tokens", None)
+    if not isinstance(prompt, int):
+        return
+    with _USAGE_LOCK:
+        _USAGE["n"] += 1
+        _USAGE["prompt_sum"] += prompt
+        _USAGE["prompt_max"] = max(_USAGE["prompt_max"], prompt)
+        if isinstance(completion, int):
+            _USAGE["completion_max"] = max(_USAGE["completion_max"], completion)
+
+
+def log_usage(budget: Optional[int] = None) -> None:
+    """One line at the end of a run: what the window was really asked for."""
+    with _USAGE_LOCK:
+        seen = dict(_USAGE)
+    if not seen["n"]:
+        return
+    log.info("harvest tokens: %d request(s), prompt mean %d / max %d, "
+             "completion max %d, budget said %s",
+             seen["n"], seen["prompt_sum"] // seen["n"], seen["prompt_max"],
+             seen["completion_max"], budget if budget is not None else "-")
+
+
+def _holes(batch, rescued: list) -> list:
+    """Sentinels for the sources a cut-off reply never got to.
+
+    Without this the rescue would trade a loud hole for a silent one. A dead
+    batch writes one sentinel per source today, which is exactly how the
+    truncation was measurable in the finished pilots at all; a rescued batch
+    that simply returned fewer tuples would leave the sources after the cut
+    indistinguishable from "read, and there was nothing in them". The model
+    writes in source order, so the loss is always the tail of the batch.
+    """
+    answered = {claim.get("source") for claim in rescued
+                if isinstance(claim, dict)}
+    return [{"_harvest_failed": True, "source": batch.label(i),
+             "_cut_off": True}
+            for i in range(len(batch.items))
+            if batch.label(i) not in answered]
+
+
 def make_harvester(image_root: Optional[Path] = None) -> Callable:
     prompt = prompts.load(HARVEST_PROMPT_ID)
     client = _client()
@@ -726,6 +876,7 @@ def make_harvester(image_root: Optional[Path] = None) -> Callable:
                     extra_body={"chat_template_kwargs": {"enable_thinking": False}},
                 )
                 reply = response.choices[0]
+                _observe_usage(getattr(response, "usage", None))
                 # An action object instead of an answer: the model wants the
                 # sandbox. A value it works out itself would be a number with
                 # no evidence; a value the sandbox works out carries the code
@@ -754,6 +905,27 @@ def make_harvester(image_root: Optional[Path] = None) -> Callable:
                     # inside it. The answer, if there is one, is in there.
                     answer = _parse_reply(
                         getattr(reply.message, "reasoning_content", None))
+                if (answer is None
+                        and getattr(reply, "finish_reason", None) == "length"):
+                    # The generation hit the token ceiling. Retrying is
+                    # pointless — measured 31 times over one pilot, five
+                    # attempts each, zero recoveries — and the tuples written
+                    # before the cut are whole. Take them and stop.
+                    answer = rescue_reply(reply.message.content)
+                    if answer is not None:
+                        answer["tuples"].extend(_holes(batch, answer["tuples"]))
+                        log.warning(
+                            "   harvest %s/%s+%d cut off at the token ceiling: "
+                            "%d tuple(s) rescued", first.owner_kind,
+                            first.owner_id, len(batch.items) - 1,
+                            len(answer["tuples"]))
+                    else:
+                        log.warning(
+                            "   harvest %s/%s+%d cut off at the token ceiling "
+                            "before the first tuple%s", first.owner_kind,
+                            first.owner_id, len(batch.items) - 1,
+                            _unparsable(reply))
+                        break
                 if answer is not None:
                     if compute:
                         for t in answer["tuples"]:
@@ -1071,9 +1243,46 @@ def context_budget(prompt, spec=None) -> int:
     return int(len(prompt.text.split()) * 3
                + max(BATCH_CHARS, MAX_SOURCE_CHARS) // 3    # the batch's text
                + (1200 * BATCH_SOURCES if ATTACH_IMAGES else 0)   # its crops
-               + PRIOR_MAX * 60                             # what we have already
+               + PRIOR_MAX * PRIOR_TOKENS                   # what we have already
                + payload                                    # payload + envelope
                + int(prompt.meta.get("max_tokens", 4096)))
+
+
+# How many tuples one source yields when it yields at all, at the 90th
+# percentile — measured over the finished pilots' own output, grouped by
+# (owner, parameter). Sizing on the median would truncate half the fat
+# tables; sizing on the maximum would make the batch pointless. The tail past
+# p90 is what rescue_reply is for.
+TUPLES_PER_SOURCE_P90 = 12
+# Characters per output token, from the truncated replies themselves: they
+# stopped at exactly max_tokens, so content length over max_tokens is the
+# measurement. It came out between 2.62 and 2.82; the low end is conservative.
+CHARS_PER_TOKEN = 2.62
+
+
+def fit_batch_sources(prompt, spec, wanted: int = BATCH_SOURCES) -> int:
+    """The largest batch this profile can be ANSWERED for, at most *wanted*.
+
+    The two numbers that killed a pilot lived in different files and nobody
+    ever compared them: how many sources one request reads is set here, and
+    how much the model may write about them is set in the prompt's
+    frontmatter. Six sources of kwp tuples fit in 8192 tokens; six sources of
+    ar6 tuples, whose quotes are whole sentences, need 11000 and would be cut
+    off — every time, deterministically, on five GPUs.
+
+    So the batch follows the answer budget rather than a hand-picked
+    constant, and what one tuple costs comes from the profile's own example,
+    which is the very contract the prompt shows the model.
+    """
+    widest = max((len(json.dumps(t, ensure_ascii=False))
+                  for parameter in spec.parameters
+                  for t in (parameter.example or {}).get("tuples", ())),
+                 default=0)
+    if not widest:
+        return wanted
+    per_source = TUPLES_PER_SOURCE_P90 * widest / CHARS_PER_TOKEN
+    allowed = int(int(prompt.meta.get("max_tokens", 4096)) // per_source)
+    return max(1, min(wanted, allowed))
 
 
 def _documents(conn: sqlite3.Connection) -> list:
@@ -1187,6 +1396,18 @@ def main(argv: Optional[list] = None) -> int:
                      f"every table and figure crop would be missing. Pass "
                      f"--image-root, or EXTRACT_ATTACH_IMAGES=0 to harvest "
                      f"from the transcriptions alone")
+    # The batch follows what the model is allowed to say about it, not the
+    # other way round. Said out loud, because a run that quietly reads three
+    # sources where the constant says six is a run whose numbers mean
+    # something else than the last one's.
+    global BATCH_SOURCES
+    fitted = fit_batch_sources(prompts.load(HARVEST_PROMPT_ID), spec)
+    if fitted != BATCH_SOURCES:
+        log.info("extraction: %d source(s) per request, not %d — that is what "
+                 "max_tokens allows this profile to answer for",
+                 fitted, BATCH_SOURCES)
+        BATCH_SOURCES = fitted
+
     harvest = make_harvester(args.image_root)     # OpenAI client is thread-safe
     locate = make_locate(args.db, args.pdf_root)
 
@@ -1319,6 +1540,7 @@ def main(argv: Optional[list] = None) -> int:
                     failures += 1
                     log.exception("extraction: %s failed", futures[future])
 
+    log_usage(context_budget(prompts.load(HARVEST_PROMPT_ID), spec))
     log.info("extraction: done in %.0f s, %d failure(s)",
              time.time() - started, failures)
     return 1 if failures else 0
