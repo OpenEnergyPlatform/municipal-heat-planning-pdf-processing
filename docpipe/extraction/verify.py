@@ -126,16 +126,31 @@ def _check_value(raw: dict, parameter: Parameter, flags: list):
     if parameter.is_numeric:
         if not isinstance(value, (int, float)) or isinstance(value, bool):
             return None, Refusal(raw, "value is not a number")
-        unit = raw.get("unit_raw")
+        # units_accepted is a closed list, so the unit is a choice: the model
+        # picks one and writes the document's own spelling beside it. The
+        # spelling is evidence, never the thing looked up — mapping free text
+        # onto a factor was a table of German spellings that never converged.
+        chosen = raw.get("unit")
+        wording = raw.get("unit_raw")
+        unit = chosen if isinstance(chosen, str) and chosen.strip() else None
+        if unit is None:
+            # No choice made. The spelling is all there is, so it is looked up
+            # and the tuple carries a flag saying the unit was not chosen.
+            unit = wording
+            if parameter.unit_factor(unit) is not None:
+                flags.append(f"unit_not_chosen:{wording}")
         factor = parameter.unit_factor(unit)
         if factor is None:
             return None, Refusal(raw, f"unit {unit!r} not in units_accepted "
                                       f"({', '.join(parameter.units_accepted)})")
         if unit not in parameter.units_accepted:
-            # The spec did not list this spelling but means this unit. Worth a
-            # flag, not a refusal: a spelling that keeps turning up belongs in
-            # the list, and the flag is how it gets noticed.
+            # A choice retyped slightly, or a spelling the list does not hold.
+            # Worth a flag, not a refusal: a spelling that keeps turning up
+            # belongs in the list, and the flag is how it gets noticed.
             flags.append(f"unit_spelling:{unit}")
+        if isinstance(wording, str) and wording.strip() and wording != unit:
+            out["unit_raw"] = wording.strip()
+        out["unit"] = unit
         out["value_target"] = round(float(value) * float(factor), 6)
         return out, None
 
