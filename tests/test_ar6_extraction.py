@@ -6,6 +6,7 @@ invalidates the node; and every value must be able to point at the passage it
 was read in, which is why nothing here is taken from DocumentMeta.
 """
 import logging
+import re
 from pathlib import Path
 
 import pytest
@@ -178,7 +179,8 @@ def test_a_closed_shape_run_still_says_where_every_value_was_read(monkeypatch):
     ttl = _ttl(rows)
     assert "# “Keramidas, K., Fosse, F., Diaz Vazquez, A.”" in ttl
     assert "# geco_2023.pdf, p. 3, section, text_located" in ttl
-    assert "oekgprov:hasEvidence" not in ttl, "no triple, only the comment"
+    body = ttl.split("@prefix")[-1].split(chr(10), 1)[1]
+    assert "oekgprov:" not in body, "no evidence triple, only the comment"
 
 
 def test_a_quote_with_a_line_break_cannot_break_the_comment(monkeypatch):
@@ -390,14 +392,20 @@ def test_the_evidence_can_be_switched_off_for_a_closed_shape_run(monkeypatch):
     import profiles.ar6.kg as kg
     monkeypatch.setattr(kg, "EVIDENCE", False)
     ttl = _ttl(_scenario_rows())
-    assert "oekgprov:hasEvidence" not in ttl, "no triple, only the comment".split("@prefix")[-1].split("\n", 1)[1]
+    body = ttl.split("@prefix")[-1].split(chr(10), 1)[1]
+    assert "oekgprov:" not in body, "no evidence triple, only the comment"
 
 
 # ---------------------------------------------------------------------------
 # The lists that are only closed once a document is named
 # ---------------------------------------------------------------------------
 
-def _corpus_db(sections=(), tables=(), figures=(), scenarios=()):
+def _at(seq, i):
+    return seq[i] if i < len(seq) else None
+
+
+def _corpus_db(sections=(), tables=(), figures=(), scenarios=(),
+               table_captions=(), figure_captions=()):
     """A document with text in all three places a harvest can quote from."""
     import sqlite3
     conn = sqlite3.connect(":memory:")
@@ -406,9 +414,9 @@ def _corpus_db(sections=(), tables=(), figures=(), scenarios=()):
         CREATE TABLE Sections (id INTEGER PRIMARY KEY, document INTEGER,
                                content TEXT);
         CREATE TABLE Tables (id INTEGER PRIMARY KEY, section INTEGER,
-                             markdown TEXT);
+                             markdown TEXT, caption TEXT);
         CREATE TABLE Images (id INTEGER PRIMARY KEY, section INTEGER,
-                             description TEXT);
+                             description TEXT, caption TEXT);
         CREATE TABLE Scenarios (id INTEGER PRIMARY KEY, ar6_id INTEGER,
                                 name TEXT);
         CREATE TABLE DocumentScenarios (document INTEGER, scenario INTEGER);
@@ -418,9 +426,11 @@ def _corpus_db(sections=(), tables=(), figures=(), scenarios=()):
     for i, text in enumerate(sections):
         conn.execute("INSERT INTO Sections VALUES (?, 1, ?)", (10 + i, text))
     for i, text in enumerate(tables):
-        conn.execute("INSERT INTO Tables VALUES (?, 1, ?)", (10 + i, text))
+        conn.execute("INSERT INTO Tables VALUES (?, 1, ?, ?)",
+                     (10 + i, text, _at(table_captions, i)))
     for i, text in enumerate(figures):
-        conn.execute("INSERT INTO Images VALUES (?, 1, ?)", (10 + i, text))
+        conn.execute("INSERT INTO Images VALUES (?, 1, ?, ?)",
+                     (10 + i, text, _at(figure_captions, i)))
     for i, (doc, name) in enumerate(scenarios):
         conn.execute("INSERT INTO Scenarios VALUES (?, ?, ?)", (10 + i, 900 + i, name))
         conn.execute("INSERT INTO DocumentScenarios VALUES (?, ?)", (doc, 10 + i))
@@ -470,6 +480,57 @@ def test_a_two_letter_country_is_matched_as_a_word():
         v[0] for v in extraction.document_regions(named, 1).values()}
 
 
+def test_every_region_class_name_is_a_name_a_publication_would_write():
+    """labels[0] is two things at once: the class name the model is told to
+    copy character for character, and the rdfs:label kg.py would attach. An
+    ISO long form is neither — no paper writes "Macedonia (the former Yugoslav
+    Republic of)", and stamping it onto the OEKG's own individual asserts a
+    name retired in 2019."""
+    from profiles.ar6 import extraction
+
+    for iri, labels in extraction._regions().items():
+        name = labels[0]
+        assert name == name.strip() and name
+        assert "(" not in name and ")" not in name, iri
+        assert "," not in name, iri
+        assert name.isascii() or any(label.isascii() for label in labels[1:]),             f"{iri}: no spelling a plain keyboard can produce"
+
+
+def test_the_two_congos_and_the_two_koreas_are_each_offered_under_their_own_name():
+    """"Congo" alone is Brazzaville, a different country from the DRC, and the
+    list used to offer the DRC only as "Congo Democratic Republic Of"."""
+    from profiles.ar6 import extraction
+
+    conn = _corpus_db(sections=["We model the Democratic Republic of the Congo "
+                                "and South Korea to 2050."])
+    names = {labels[0] for labels in extraction.document_regions(conn, 1).values()}
+    assert "Democratic Republic of the Congo" in names
+    assert "South Korea" in names
+
+
+def test_a_country_named_only_in_a_caption_is_still_offered():
+    """The harvest quotes a caption as readily as a cell. A region the
+    narrowing never saw is one the model has no class for, so it answers with
+    a wording — and a wording is what puts a duplicate country in the graph."""
+    from profiles.ar6 import extraction
+
+    conn = _corpus_db(tables=["| year | value |"],
+                      table_captions=["Table 3: Emissions in India by sector"],
+                      figures=["a stacked bar chart"],
+                      figure_captions=["Figure 2: Primary energy in Brazil"])
+    names = {labels[0] for labels in extraction.document_regions(conn, 1).values()}
+    assert {"India", "Brazil"} <= names
+
+
+def test_an_acronym_is_matched_with_its_capitals():
+    """"US" casefolds onto the English pronoun, and these papers are English."""
+    from profiles.ar6 import extraction
+
+    pronoun = _corpus_db(sections=["The model gives us robust results."])
+    assert "United States of America" not in {
+        v[0] for v in extraction.document_regions(pronoun, 1).values()}
+
+
 def test_document_axes_feeds_both_the_coordinate_and_the_value():
     """The scenario is a coordinate on other fields and the value of
     scenario_label. One list, both places."""
@@ -502,15 +563,45 @@ def test_every_list_offers_a_way_to_say_none_of_these_fit():
                 if not k.startswith(extraction.NOT_IN_GRAPH)]
 
 
-def test_the_out_entries_read_as_answers_a_model_can_pick():
-    """The model is shown the first label, not the key, so the label has to be
-    a sentence someone could choose — not a slug."""
+def test_the_out_entries_are_short_enough_to_be_retyped_without_a_slip():
+    """The model is shown labels[0] and told to copy it character for
+    character, and a value that is not retyped exactly arrives as an unmapped
+    wording — which is the thing these entries exist to prevent. So the answer
+    token is short and the explanation is an alternate; value_to_uri() maps
+    every label, so both resolve."""
     from profiles.ar6 import extraction
 
     for vocabulary in (extraction.REGION_OUT, extraction.SCENARIO_OUT):
         for key, labels in vocabulary.items():
             assert key.startswith(extraction.NOT_IN_GRAPH)
-            assert labels and len(labels[0]) > 20, key
+            assert labels[0] and len(labels[0]) <= 20, key
+            assert len(labels) > 1, f"{key} has no explanation to fall back on"
+
+
+def test_the_prompt_quotes_the_out_entries_exactly_as_the_list_spells_them():
+    """A sentinel printed in the prompt in a spelling the vocabulary does not
+    hold is worse than no sentinel: the model copies the prompt, the exact
+    lookup misses, and the gloss itself is published as a scenario name or a
+    region name. Both halves are checked — every entry is named, and the
+    paragraph that names them quotes nothing else."""
+    from pathlib import Path
+
+    from profiles.ar6 import extraction
+
+    prompt = Path("profiles/ar6/prompts/extraction/harvest.md").read_text(
+        encoding="utf-8")
+    known = {label.casefold()
+             for vocabulary in (extraction.REGION_OUT, extraction.SCENARIO_OUT)
+             for labels in vocabulary.values() for label in labels}
+    for vocabulary in (extraction.REGION_OUT, extraction.SCENARIO_OUT):
+        for key, labels in vocabulary.items():
+            assert f'"{labels[0]}"' in prompt, f"{key} is not named in the prompt"
+
+    paragraph = [line for line in prompt.splitlines()
+                 if "KEINE Klasse sind" in line]
+    assert paragraph, "the paragraph that introduces the entries moved"
+    for quoted in re.findall(r'"([^"]+)"', paragraph[0]):
+        assert quoted.casefold() in known, f"{quoted!r} is in no vocabulary"
 
 
 def test_filling_turns_the_markers_into_a_real_choice(spec):

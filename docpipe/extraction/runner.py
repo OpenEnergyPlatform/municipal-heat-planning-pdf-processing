@@ -34,8 +34,9 @@ from docpipe import prompts
 from docpipe.llm_preflight import assert_serving
 from docpipe.profile import add_profile_argument, resolve_profile
 
-from .pipeline import (Source, WorkItem, fold_claims, harvest_document,
-                       plan_document, write_report)
+from .pipeline import (Source, WorkItem, build_chains, fold_batch,
+                       group_items, harvest_document, plan_document, run_chain,
+                       write_report)
 from .queries import expand as expand_queries
 from .spec import Spec, load as load_spec
 
@@ -57,6 +58,18 @@ LLM_PARALLEL = int(os.environ.get("EXTRACT_LLM_PARALLEL", "128"))
 # output as evidence; without the sandbox the model would have to work the
 # number out itself, and that number would have no evidence at all.
 CODE_ROUNDS = int(os.environ.get("EXTRACT_CODE_ROUNDS", "2"))
+# How many sources share one request, and how much text they may bring. The
+# ceiling is the model's window minus the parameter payload, which
+# context_budget measures: at 17.5k tokens of spec for kwp, six sources of
+# 14k characters together leave the answer room to be written.
+BATCH_SOURCES = int(os.environ.get("EXTRACT_BATCH_SOURCES", "6"))
+BATCH_CHARS = int(os.environ.get("EXTRACT_BATCH_CHARS", "14000"))
+# What the model is told it already has, so it does not hand back the same
+# value from a neighbouring passage.
+PRIOR_MAX = int(os.environ.get("EXTRACT_PRIOR_MAX", "40"))
+# How often a chain may answer "there is more here, look for this" and get
+# fresh passages for it. Bounded: the model can always ask again.
+FOLLOWUP_ROUNDS = int(os.environ.get("EXTRACT_FOLLOWUP_ROUNDS", "1"))
 # Threads for the two cheap halves: retrieval planning (FAISS + SQL) and
 # verification (PyMuPDF quote location). Neither talks to the LLM server.
 PLAN_PARALLEL = int(os.environ.get("EXTRACT_PLAN_PARALLEL", "8"))
@@ -194,6 +207,54 @@ def make_retrieve(conn: sqlite3.Connection, index, id_to_pos: dict,
         return [[_source_of(hit) for hit in hits] for hits in answers]
 
     return retrieve
+
+
+def make_more_sources(db_path: Path, index, id_to_pos: dict,
+                      cache_path: Path) -> Callable:
+    """(document_id, queries, exclude) -> the passages the model asked for.
+
+    Retrieval a second time, but from a query the MODEL wrote rather than one
+    the spec generated. It runs during the harvest, not the plan, so it opens
+    its own connections per thread: the harvest pool is a hundred threads
+    wide and SQLite handles are not shared across them.
+
+    Queries the model invents are one-offs, so they miss the primed cache and
+    are embedded on the spot. That is the whole cost of the round trip, and
+    it only happens when the model says the passages it was given are not
+    enough.
+    """
+    from docpipe.inference import query_cache
+
+    local = threading.local()
+
+    def connections():
+        if getattr(local, "conn", None) is None:
+            local.conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
+            local.conn.row_factory = sqlite3.Row
+            local.cache = query_cache.connect(cache_path, create=False)
+            local.fetch = make_content_fetcher()
+        return local.conn, local.cache, local.fetch
+
+    def more_sources(document_id: int, queries: list, exclude: set) -> list:
+        conn, cache, fetch = connections()
+        retrieve = make_retrieve(conn, index, id_to_pos, cache, fetch)
+        found: list = []
+        taken = set(exclude)
+        try:
+            for sources in retrieve(list(queries)[:4], document_id, taken):
+                for source in sources:
+                    key = (source.owner_kind, source.owner_id)
+                    if key in taken:
+                        continue
+                    taken.add(key)
+                    found.append(source)
+        except Exception as exc:
+            log.warning("   more-passages for document %s failed: %s",
+                        document_id, exc)
+            return []
+        return found
+
+    return more_sources
 
 
 def fill_dynamic_axes(spec: Spec, vocabularies: Optional[dict]) -> Spec:
@@ -437,6 +498,26 @@ def _parse_tuples(raw_text: str) -> Optional[list]:
     return tuples if isinstance(tuples, list) else None
 
 
+def _parse_reply(raw_text: str) -> Optional[dict]:
+    """The whole answer object, not just its tuples.
+
+    A batch reply says three things: what it found, whether these passages
+    are exhausted for the parameter, and — when they are not — what sentence
+    to search for next. Only `tuples` decides whether the reply was
+    understood at all; the other two default to the conservative reading,
+    which is "there may be more, but I cannot say where".
+    """
+    tuples = _parse_tuples(raw_text)
+    if tuples is None:
+        return None
+    data = _loads_object(raw_text) or {}
+    status = data.get("status")
+    need = data.get("need_more")
+    return {"tuples": tuples,
+            "status": status if status in ("complete", "partial") else "partial",
+            "need_more": [q for q in (need or []) if isinstance(q, str) and q.strip()]}
+
+
 _UNPARSABLE_SHOWN = 0
 _UNPARSABLE_LIMIT = int(os.environ.get("EXTRACT_SHOW_UNPARSABLE", "20"))
 
@@ -556,6 +637,42 @@ def _image_part(path: str) -> Optional[dict]:
     return None if url is None else {"type": "image_url", "image_url": {"url": url}}
 
 
+def _prior_payload(prior: list) -> list:
+    """What the model is told it already has, small enough to send every time.
+
+    Coordinates and the value, not the whole verified row: the point is that
+    the model recognises a repeat, and provenance, flags and tier say nothing
+    about that. The newest entries are the ones a neighbouring passage is
+    likely to duplicate, so the tail is what survives the cap.
+    """
+    out: list = []
+    for row in prior[-PRIOR_MAX:]:
+        item = {k: v for k, v in row.items()
+                if k not in ("provenance", "flags", "tier", "compute", "quote")
+                and not k.endswith("_raw") and v is not None}
+        quote = row.get("quote")
+        if isinstance(quote, str):
+            item["quote"] = quote[:80]
+        out.append(item)
+    return out
+
+
+def _batch_payload(batch, prior: list) -> dict:
+    """The request body: one parameter, several labelled sources, what we have."""
+    sources = []
+    for index, item in enumerate(batch.items):
+        source = item.source
+        sources.append({"id": batch.label(index), "kind": source.owner_kind,
+                        "title": source.provenance.get("title"),
+                        "section": source.provenance.get("section_title"),
+                        "text": source.text})
+    payload = {"parameter": _parameter_payload(batch.parameter),
+               "sources": sources}
+    if prior:
+        payload["prior"] = _prior_payload(prior)
+    return payload
+
+
 def make_harvester(image_root: Optional[Path] = None) -> Callable:
     prompt = prompts.load(HARVEST_PROMPT_ID)
     client = _client()
@@ -566,24 +683,29 @@ def make_harvester(image_root: Optional[Path] = None) -> Callable:
     # loop, which demands a profile at import time.
     from docpipe.inference import code_exec
 
-    def harvest(source: Source, parameter) -> list:
-        payload = json.dumps(
-            {"parameter": _parameter_payload(parameter),
-             "source": {"kind": source.owner_kind,
-                        "title": source.provenance.get("title"),
-                        "section": source.provenance.get("section_title"),
-                        "text": source.text}},
-            ensure_ascii=False, indent=2)
+    def harvest(batch, prior: Optional[list] = None) -> dict:
+        payload = json.dumps(_batch_payload(batch, prior or []),
+                             ensure_ascii=False, indent=2)
         compute: list = []
-        # The crop rides along for tables and figures: the transcription is a
+        # The crops ride along for tables and figures: the transcription is a
         # reading of that picture, and the model should be able to check it
-        # against the picture rather than trust it.
+        # against the picture rather than trust it. One part per source that
+        # has one, in the batch's own order, so a crop stays next to the
+        # label its text was given.
         content: object = payload
-        if source.image_path and ATTACH_IMAGES:
-            part = _image_part(str(image_root / source.image_path)
-                               if image_root else source.image_path)
+        parts = [{"type": "text", "text": payload}]
+        for index, item in enumerate(batch.items):
+            path = item.source.image_path
+            if not (path and ATTACH_IMAGES):
+                continue
+            part = _image_part(str(image_root / path) if image_root else path)
             if part is not None:
-                content = [{"type": "text", "text": payload}, part]
+                parts.append({"type": "text",
+                              "text": f"Bild zu {batch.label(index)}:"})
+                parts.append(part)
+        if len(parts) > 1:
+            content = parts
+        first = batch.items[0].source
         conversation: list = [{"role": "user", "content": content}]
         # A compute round is a turn of the same conversation, not a retry, so
         # the attempt budget grows with the rounds actually used.
@@ -612,8 +734,10 @@ def make_harvester(image_root: Optional[Path] = None) -> Callable:
                 action = _parse_action(reply.message.content)
                 if action and len(compute) < CODE_ROUNDS:
                     out = code_exec.run_code(
-                        action, context={"source": source.text,
-                                         "title": source.provenance.get("title")})
+                        action, context={
+                            "sources": {batch.label(i): it.source.text
+                                        for i, it in enumerate(batch.items)},
+                            "title": first.provenance.get("title")})
                     compute.append({"code": action,
                                     "stdout": (out.get("stdout") or "")[:2000],
                                     "ok": bool(out.get("ok")),
@@ -623,25 +747,27 @@ def make_harvester(image_root: Optional[Path] = None) -> Callable:
                     conversation.append({"role": "user",
                                          "content": _compute_reply(compute[-1])})
                     continue
-                tuples = _parse_tuples(reply.message.content)
-                if tuples is None:
+                answer = _parse_reply(reply.message.content)
+                if answer is None:
                     # A reasoning parser puts the chain in reasoning_content
                     # and leaves content empty when the generation stopped
                     # inside it. The answer, if there is one, is in there.
-                    tuples = _parse_tuples(
+                    answer = _parse_reply(
                         getattr(reply.message, "reasoning_content", None))
-                if tuples is not None:
+                if answer is not None:
                     if compute:
-                        for t in tuples:
+                        for t in answer["tuples"]:
                             if isinstance(t, dict):
                                 t.setdefault("compute", compute)
-                    return tuples
-                log.warning("   harvest %s/%s attempt %d: reply carried no "
-                            "'tuples' list%s", source.owner_kind,
-                            source.owner_id, attempt, _unparsable(reply))
+                    return answer
+                log.warning("   harvest %s/%s+%d attempt %d: reply carried no "
+                            "'tuples' list%s", first.owner_kind,
+                            first.owner_id, len(batch.items) - 1, attempt,
+                            _unparsable(reply))
             except Exception as exc:
-                log.warning("   harvest %s/%s attempt %d failed: %s",
-                            source.owner_kind, source.owner_id, attempt, exc)
+                log.warning("   harvest %s/%s+%d attempt %d failed: %s",
+                            first.owner_kind, first.owner_id,
+                            len(batch.items) - 1, attempt, exc)
                 status = getattr(exc, "status_code", None)
                 if isinstance(status, int) and 400 <= status < 500 and status != 429:
                     # A request the server refuses is refused every time. The
@@ -650,9 +776,13 @@ def make_harvester(image_root: Optional[Path] = None) -> Callable:
                     break
             if attempt < MAX_RETRIES:
                 time.sleep(min(2 * attempt, 6))
-        # A source the model never answered for is a hole in the harvest, and
+        # Sources the model never answered for are a hole in the harvest, and
         # holes must be visible: the caller counts these via the sentinel.
-        return [{"_harvest_failed": True}]
+        # One per source, so a batch of six that died is six holes, not one.
+        return {"tuples": [{"_harvest_failed": True,
+                            "source": batch.label(i)}
+                           for i in range(len(batch.items))],
+                "status": "failed", "need_more": []}
 
     return harvest
 
@@ -687,42 +817,52 @@ def split_long_sources(items: list, max_chars: int = MAX_SOURCE_CHARS) -> list:
     return out
 
 
-def harvest_batch(items: list, harvest: Callable,
-                  workers: int = LLM_PARALLEL) -> list:
-    """Every harvest request of the whole run, in flight at once.
+def harvest_chains(chains: list, harvest: Callable,
+                   more_sources: Optional[Callable] = None,
+                   workers: int = LLM_PARALLEL) -> list:
+    """Every chain of the whole run, in flight at once.
 
-    Returns one claim list per item, in the order given: the caller folds
-    them back into the document they belong to. Ordering is by index, not by
-    completion — the server answers a 40-token table long before a 6000-token
-    section, and the report must not depend on that.
+    Returns one [(batch, reply)] list per chain, in the order given: the
+    caller folds them back into the document they belong to. Ordering is by
+    index, not by completion — the server answers a 40-token table long
+    before a 6000-token section, and the report must not depend on that.
     """
     from concurrent.futures import ThreadPoolExecutor, as_completed
 
-    results: list = [None] * len(items)
-    if not items:
+    results: list = [None] * len(chains)
+    if not chains:
         return results
     started = time.time()
-    step = max(len(items) // 20, 50)
+    step = max(len(chains) // 20, 10)
     done = 0
+    def one(chain: list) -> list:
+        return run_chain(chain, harvest, more_sources=more_sources,
+                         rounds=FOLLOWUP_ROUNDS, max_sources=BATCH_SOURCES,
+                         max_chars=BATCH_CHARS)
+
     with ThreadPoolExecutor(max_workers=max(workers, 1)) as pool:
-        futures = {pool.submit(harvest, it.source, it.parameter): i
-                   for i, it in enumerate(items)}
+        futures = {pool.submit(one, c): i for i, c in enumerate(chains)}
         for future in as_completed(futures):
             index = futures[future]
             try:
                 results[index] = future.result()
             except Exception as exc:                        # pragma: no cover
-                source = items[index].source
-                log.warning("   harvest %s/%s raised: %s",
-                            source.owner_kind, source.owner_id, exc)
-                results[index] = [{"_harvest_failed": True}]
+                batch = chains[index][0]
+                log.warning("   chain %s/%s raised: %s", batch.document_id,
+                            batch.parameter.uri, exc)
+                results[index] = [
+                    (b, {"tuples": [{"_harvest_failed": True,
+                                     "source": b.label(i)}
+                                    for i in range(len(b.items))],
+                         "status": "failed", "need_more": []})
+                    for b in chains[index]]
             done += 1
-            if done % step == 0 or done == len(items):
+            if done % step == 0 or done == len(chains):
                 elapsed = max(time.time() - started, 1e-6)
                 rate = done / elapsed
-                log.info("harvest: %d/%d requests (%.1f/s, %.0f s left)",
-                         done, len(items), rate,
-                         (len(items) - done) / max(rate, 1e-6))
+                log.info("harvest: %d/%d chains (%.1f/s, %.0f s left)",
+                         done, len(chains), rate,
+                         (len(chains) - done) / max(rate, 1e-6))
     return results
 
 
@@ -912,6 +1052,12 @@ def context_budget(prompt, spec=None) -> int:
     that hands the model a class list to choose from is many times the size of
     one that asks for a wording, and a flat allowance for both underserves the
     first.
+
+    A request carries several sources now, so the text term is the batch's
+    ceiling rather than one window's — and one source too long to share a
+    request rides alone, which is why the larger of the two is what counts.
+    Every source in a batch may bring a crop, and the prior block rides along
+    on top.
     """
     payload = 2000
     if spec is not None:
@@ -923,8 +1069,9 @@ def context_budget(prompt, spec=None) -> int:
         payload = max(payload, widest // 3 + 600
                       + (DYNAMIC_LIST_TOKENS if dynamic else 0))
     return int(len(prompt.text.split()) * 3
-               + MAX_SOURCE_CHARS // 3                      # a bounded window
-               + (1200 if ATTACH_IMAGES else 0)             # a 1280 px crop
+               + max(BATCH_CHARS, MAX_SOURCE_CHARS) // 3    # the batch's text
+               + (1200 * BATCH_SOURCES if ATTACH_IMAGES else 0)   # its crops
+               + PRIOR_MAX * 60                             # what we have already
                + payload                                    # payload + envelope
                + int(prompt.meta.get("max_tokens", 4096)))
 
@@ -1082,6 +1229,7 @@ def main(argv: Optional[list] = None) -> int:
     primer = query_cache.connect(cache_path)
     prime_probe_cache(primer, spec, templates, anchors)
     primer.close()
+    more_sources = make_more_sources(args.db, index, id_to_pos, cache_path)
 
     def plan(document_id: int, filename: str) -> tuple:
         # Both connections per thread, cache included. Sharing one across the
@@ -1117,9 +1265,9 @@ def main(argv: Optional[list] = None) -> int:
             cache_conn.close()
 
     def verify(entry: tuple) -> None:
-        name, items, report, answers = entry
-        for item, answer in zip(items, answers):
-            fold_claims(item, answer, report, locate=locate)
+        name, report, answered = entry
+        for batch, reply in answered:
+            fold_batch(batch, reply, report, locate=locate)
         finish_document(report, name, args.out, spec_sha)
 
     started = time.time()
@@ -1138,20 +1286,30 @@ def main(argv: Optional[list] = None) -> int:
                     failures += 1
                     log.exception("extraction: planning %s failed",
                                   futures[future])
-        flat = [item for _, items, _ in plans for item in items]
-        log.info("extraction: group %d/%d planned — %d request(s) over %d "
-                 "document(s)", offset // group_size + 1,
-                 (len(documents) - 1) // group_size + 1, len(flat), len(plans))
+        # A chain belongs to exactly one document, so the chains are built per
+        # document and the replies come back where they can be folded.
+        chains: list = []
+        owners: list = []
+        for name, items, report in plans:
+            for chain in build_chains(items, max_sources=BATCH_SOURCES,
+                                      max_chars=BATCH_CHARS):
+                chains.append(chain)
+                owners.append(name)
+        sources = sum(len(b.items) for c in chains for b in c)
+        log.info("extraction: group %d/%d planned — %d chain(s) over %d "
+                 "source(s) in %d document(s)", offset // group_size + 1,
+                 (len(documents) - 1) // group_size + 1, len(chains), sources,
+                 len(plans))
 
-        # ---- Harvest: all of them, at once ---------------------------------
-        claims = harvest_batch(flat, harvest, LLM_PARALLEL)
+        # ---- Harvest: every chain at once, its batches in order -------------
+        answered = harvest_chains(chains, harvest, more_sources, LLM_PARALLEL)
 
         # ---- Verify and write, document by document ------------------------
-        cursor = 0
-        entries = []
-        for name, items, report in plans:
-            entries.append((name, items, report, claims[cursor:cursor + len(items)]))
-            cursor += len(items)
+        by_document: dict = {}
+        for name, pairs in zip(owners, answered):
+            by_document.setdefault(name, []).extend(pairs or [])
+        entries = [(name, report, by_document.get(name, []))
+                   for name, _, report in plans]
         with ThreadPoolExecutor(max_workers=PLAN_PARALLEL) as pool:
             futures = {pool.submit(verify, e): e[0] for e in entries}
             for future in as_completed(futures):
