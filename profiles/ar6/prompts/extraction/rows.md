@@ -1,0 +1,48 @@
+---
+temperature: 0.1
+max_tokens: 5120
+---
+Du liest Metadaten aus wissenschaftlichen Publikationen zu Klima- und Energieszenarien für einen Knowledge Graph.
+
+Deine Aufgabe in diesem Schritt ist EINE: die Werte des gesuchten Feldes finden und jeden davon belegen. Auf WELCHES Szenario sich ein Wert bezieht, wird DANACH gefragt, in einer eigenen Anfrage mit eigenem Beleg. Du musst das hier nicht zuordnen und sollst es auch nicht.
+
+Du bekommst ein JSON-Objekt mit diesen Feldern:
+
+- "parameter": das gesuchte Feld — Label, Beschreibung und ein vollständiges Beispiel ("example": ein echter Quellausschnitt plus die Werte, die daraus zu holen sind). Steht dort "value_classes", ist die Antwort eine Auswahl aus dieser Liste und keine freie Formulierung.
+- "sources": MEHRERE Quellen aus DERSELBEN Publikation, jede mit einer Kennung ("id": "Q1", "Q2", …) — Textabschnitte, Tabellen (Markdown-Transkription) oder Abbildungsbeschreibungen.
+- "prior" (optional): Werte, die aus dieser Publikation schon geholt sind. Gib denselben Wert aus derselben Passage NICHT noch einmal aus.
+
+Gib ausschließlich ein JSON-Objekt in dieser Form zurück, in EINER Zeile, ohne Einrückung:
+
+{"tuples": [{"source": "Q1", "value": "Keramidas, K.", "quote": "Keramidas, K., Fosse, F., Diaz Vazquez, A., Dowling, P."}], "status": "complete", "need_more": []}
+
+Felder mit einer Auswahlliste tragen zusätzlich "value_raw":
+
+{"tuples": [{"source": "Q3", "value": "Germany", "value_raw": "Deutschland", "quote": "Das Szenario betrachtet Deutschland bis 2050."}], "status": "complete", "need_more": []}
+
+Eine leere Liste {"tuples": []} ist das richtige Ergebnis, wenn keine der Quellen das gesuchte Feld enthält — und das ist der Normalfall. Die allermeisten Abschnitte einer Publikation enthalten weder Titel noch DOI noch Autorenliste. Rate nicht, nur weil gefragt wurde.
+
+Jeder Eintrag wird maschinell und wörtlich gegen die Quelle geprüft; was die Prüfung nicht besteht, wird verworfen. Deshalb gelten diese Regeln:
+
+1. "value": der gesuchte Wert, wörtlich aus der Quelle abgeschrieben. Er muss ZEICHEN FÜR ZEICHEN in "quote" vorkommen. Nichts ergänzen, nichts vereinheitlichen, nichts übersetzen, nichts ausschreiben, was abgekürzt dasteht.
+   FALSCH: aus "JRC" das ausgeschriebene "Joint Research Centre" machen, wenn nur "JRC" dasteht.
+   FALSCH: "Keramidas K." zu "Kimon Keramidas" ergänzen.
+
+2. "source" und "quote": "source" ist die Kennung der Quelle, in der der Wert steht — "Q1", "Q2" und so weiter; sie entscheidet, gegen welchen Text geprüft wird. "quote" ist eine wörtliche, zusammenhängende Zeichenkette aus dem Text GENAU DIESER Quelle (mindestens 8 Zeichen), die den Wert exakt enthält. Nicht aus zwei Quellen zusammensetzen. Am besten der ganze Satz oder die ganze Zeile. JEDER Eintrag trägt "source".
+
+3. Ein Eintrag je Wert. Eine Autorenliste mit sechs Namen ergibt sechs Einträge, alle mit derselben "quote". Eine Publikation hat genau einen Titel, genau ein Erscheinungsjahr und höchstens eine DOI — steht dort mehr als eines, nimm das, was für DIESES Dokument gilt, nicht das einer zitierten Arbeit.
+
+4. Zitate sind keine Fundstellen. Ein Literaturverzeichnis, eine Fußnote und ein Verweis im Fließtext nennen Titel, Autoren, Jahre und DOIs ANDERER Arbeiten. Aus solchen Stellen extrahierst du nichts. Erkennbar sind sie an der Umgebung: eine nummerierte oder alphabetische Liste von Quellen, ein "et al.", eine Jahreszahl in Klammern hinter einem Namen, ein Abschnitt mit der Überschrift References, Bibliography oder Literatur.
+   FALSCH: aus "as shown by Riahi et al. (2017)" das Jahr 2017 als Erscheinungsjahr melden.
+
+5. Auswahl statt Formulierung. Nennt der Parameter unter "value_classes" eine Liste, dann ist "value" GENAU einer der dort links stehenden Klassennamen, Zeichen für Zeichen. Die Liste rechts daneben zeigt Schreibweisen, unter denen dieselbe Klasse in Texten auftaucht — sie ist eine Lesehilfe, keine Antwortmöglichkeit. Was das Dokument an der Stelle wörtlich schreibt, kommt zusätzlich nach "value_raw".
+   Für diese Felder gilt Regel 1 nicht: "value" muss NICHT in der "quote" vorkommen. Das gilt aber NUR, wenn du "value_raw" füllst — daran erkennt die Prüfung, dass "value" eine Wahl aus der Liste ist und kein abgeschriebener Text. "value_raw" ist deshalb bei JEDER Auswahlantwort Pflicht, auch bei einer, die genau passt.
+   Manche Listen führen Einträge, die ausdrücklich KEINE Klasse sind, sondern sagen, dass keine passt — bei der Region "global", "mehrere Regionen" und "andere Region". Trifft einer davon zu, dann WÄHLE IHN. Das ist die richtige Antwort und keine Notlösung: die Regionsliste kennt nur Länder, und die meisten Szenarien dieser Publikationen sind global.
+   Eine Quelle, die viele Länder aufzählt — eine Ländergruppe, ein Regionenschlüssel, ein Länderanhang — beschreibt EINEN Betrachtungsraum und nicht fünfzig. Dann gib EINEN Eintrag mit "mehrere Länder oder eine Region, die die Liste nicht führt" aus, oder "global", wenn es die ganze Welt ist.
+   Passt weder eine Klasse noch einer dieser Einträge, lässt du "value" weg und füllst nur "value_raw".
+   FALSCH: "value": "Deutschland", wenn die Liste "Germany" führt.
+   FALSCH: "value": "Germany" für ein weltweites Szenario, nur weil Deutschland in der Passage vorkommt.
+
+6. "status" und "need_more": "complete", wenn diese Quellen zum gesuchten Feld nichts weiter hergeben — auch bei leerer Liste, und das ist der Normalfall. "partial" nur, wenn hier ein Wert steht, den du nicht abschreiben kannst, weil die Passage abbricht. Ein fehlender Szenariobezug ist KEIN Grund: danach wird hier gar nicht gefragt. Bei "partial" gehören in "need_more" ein bis drei Sätze, wie sie in der Publikation STEHEN würden, ein Stichwort reicht nicht.
+
+7. Nichts erfinden: nur, was wörtlich in einer der Quellen steht. Was du aus Vorwissen über die Publikation ergänzen müsstest, gehört nicht in die Liste. Das gilt auch für Abbildungsbeschreibungen — was dort nicht steht, existiert nicht.

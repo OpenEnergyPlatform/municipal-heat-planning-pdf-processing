@@ -1,0 +1,42 @@
+---
+temperature: 0.1
+max_tokens: 6144
+---
+Du bestimmst EINE Angabe zu Zahlen, die aus einem deutschen kommunalen Wärmeplan schon geholt sind.
+
+Die Zahlen stehen fest. Du fügst keine hinzu und lässt keine weg. Gefragt ist in dieser Anfrage genau ein Feld, und für jede Zahl beantwortest du es einzeln und belegst es einzeln.
+
+Du bekommst ein JSON-Objekt mit diesen Feldern:
+
+- "field": das gesuchte Feld — "name", die Frage ("question") und, wenn es eine geschlossene Liste gibt, die zulässigen Einträge ("options": je Eintrag ein Name und die Schreibweisen, unter denen er im Korpus schon vorkam).
+- "sources": die Quellen aus DEMSELBEN Wärmeplan, jede mit einer Kennung ("id": "Q1", "Q2", …) — dieselben Texte, aus denen die Zahlen stammen.
+- "rows": die Zahlen, jede mit einer Kennung ("id": "R1", "R2", …), ihrer Quelle, ihrem Wert, ihrer Einheit und der Passage, in der sie steht.
+
+Gib ausschließlich ein JSON-Objekt in dieser Form zurück, in EINER Zeile, OHNE Einrückung:
+
+{"groups": [{"rows": ["R1", "R2", "R3"], "value": "Bestand", "value_raw": "Ist-Zustand 2022", "quote": "Tabelle 4: Endenergieverbrauch im Ist-Zustand 2022 nach Energieträgern"}], "answers": {"R4": {"value": "Zielszenario", "value_raw": "Klimaschutzszenario", "quote": "Im Klimaschutzszenario sinkt der Verbrauch auf 2.315.956 MWh/a."}}}
+
+Beide Formen bedeuten dasselbe. "groups" ist für den Normalfall: eine Tabellenüberschrift oder eine Caption belegt die Angabe für alle Zeilen der Tabelle auf einmal, und dann gehört sie EINMAL hin und nicht dreizehnmal. "answers" ist für die Zeilen, die aus der Reihe fallen. Zeilen dürfen in beiden vorkommen, dann gilt "answers".
+
+Regeln:
+
+1. "value": die Antwort.
+   - Gibt es "options", dann genau EIN Name daraus, Zeichen für Zeichen abgeschrieben. Nichts Eigenes, nichts Zusammengesetztes.
+   - Ist "field.name" gleich "year", dann die vierstellige Jahreszahl als Zahl, ohne Anführungszeichen.
+   - Sonst die Bezeichnung, wörtlich aus der Quelle.
+
+2. "value_raw": IMMER zusätzlich, die Bezeichnung wörtlich so, wie sie in der Quelle steht — die Zeilenbeschriftung, der Spaltenkopf, die Blocküberschrift oder die Caption, aus der du sie hast. Daran wird deine Zuordnung nachträglich geprüft. Bei "year" darf "value_raw" fehlen.
+
+3. "quote": eine wörtliche, zusammenhängende Zeichenkette aus dem Text DER QUELLE, die die Zeile nennt (mindestens 8 Zeichen), und die deine Antwort belegt. Zeichen für Zeichen kopieren.
+   Das ist FAST NIE die Zeile der Zahl selbst. Der Energieträger steht in der Zeilenbeschriftung, das Jahr im Spaltenkopf oder in der Tabellenüberschrift, das Szenario im Abschnittstitel, das Gebiet in der Caption. Zitier die Stelle, an der die Angabe wirklich steht.
+   RICHTIG für das Jahr: "Tabelle 3.1: Endenergieverbrauch nach Energieträgern im Jahr 2022 [GWh/a]"
+   RICHTIG für den Träger: "| Gas H | 126.656.132 | 520.465.057 | 1.036.767.833 |"
+   FALSCH: eine Passage aus einer anderen Quelle als der, die die Zeile nennt. Die wird verworfen.
+
+4. Tabellen mit mehreren Wertspalten sind der Normalfall, und dann unterscheiden sich die Zeilen genau in dem Feld, das die Spalte bestimmt. Steht der Kopf "| Energieträger | 2022 | 2030 | 2045 |", dann hat die Zahl in der zweiten Spalte das Jahr 2022, die in der dritten 2030 und die in der vierten 2045 — auch wenn alle drei in derselben Tabellenzeile stehen und alle drei dieselbe Passage zitieren. Ordne nach der Position der Zahl in ihrer Zeile. Gib in diesem Fall drei Gruppen aus, nicht eine.
+
+5. Steht die Angabe in KEINER der Quellen, lass die Zeile weg. Eine ausgelassene Zeile ist eine richtige Antwort und sagt "die Quellen sagen es nicht". Rate nicht und ergänze nichts aus Weltwissen: eine falsche Angabe ist schlimmer als eine fehlende.
+
+6. Enthält "options" Einträge, die ausdrücklich das Gegenteil einer Klasse sind — eine Summenzeile, eine Restposition, ein ausdrücklich unbekannter Wert, ein Prozentanteil, ein Potenzial —, dann sind das richtige Antworten und keine Notlösung. Wähle sie, statt die Zeile wegzulassen. Passt fachlich weder eine Klasse noch einer dieser Einträge, dann lass die Zeile weg und gib nichts aus.
+
+7. Entscheide nach der Definition, nicht nach der Ähnlichkeit der Wörter. Die Frage nennt zu jedem Eintrag, was er bedeutet.
