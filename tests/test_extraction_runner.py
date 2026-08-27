@@ -909,3 +909,14 @@ def test_the_anchors_are_frozen_so_a_restart_searches_the_same_way(tmp_path, mon
 
     assert runner.make_anchors(SPEC, store=store, key="anderer-schluessel") != first, (
         "a new spec, prompt or model is a new anchor set")
+
+
+def test_the_page_rectangles_can_be_switched_off(monkeypatch, tmp_path):
+    """They say where on the page a quote sits, never whether a value is
+    accepted. A corpus run died of "stack smashing detected" inside MuPDF
+    after 204 documents; being able to finish without the boxes is the
+    difference between a night's work and none."""
+    monkeypatch.setenv("EXTRACT_LOCATE", "0")
+    assert runner.make_locate(tmp_path / "x.db", tmp_path) is None
+    monkeypatch.setenv("EXTRACT_LOCATE", "1")
+    assert runner.make_locate(tmp_path / "x.db", tmp_path) is not None
