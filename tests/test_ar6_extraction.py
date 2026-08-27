@@ -776,7 +776,11 @@ def test_no_out_entry_ever_reaches_the_turtle():
                      "scenario": "out:family", "scenario_raw": "NPi",
                      "quote": "q", "provenance": {}})
     ttl = _ttl(rows)
-    assert extraction.NOT_IN_GRAPH not in ttl
+    # In the triples, not in the file: a flag comment legitimately records
+    # WHICH out: entry was chosen, and the pilot's TTL carries 238 of those.
+    triples = [line for line in ttl.splitlines()
+               if not line.lstrip().startswith("#")]
+    assert extraction.NOT_IN_GRAPH not in chr(10).join(triples)
 
 
 def test_what_the_graph_does_not_take_is_counted_by_what_was_chosen(caplog):
