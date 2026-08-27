@@ -10,9 +10,10 @@ is being decided on the ontology side, and this is written as if they will
 not. The whole point of reading metadata out of the PDF rather than taking
 the crawl's copy is that each value can name the passage it came from, so a
 graph that drops the passage gives up the reason it was built this way. One
-evidence node per value, linked with `oekgprov:hasEvidence`; set
-OEKG_EVIDENCE=0 to emit the shape-conformant graph instead, which keeps the
-same passages as Turtle comments above the triples they belong to.
+By default every passage is a Turtle comment above the triple it belongs to,
+which survives sh:closed; OEKG_EVIDENCE=1 emits one `oekgprov:ExtractionEvidence`
+node per value instead, linked with `oekgprov:hasEvidence` — the same content as
+triples, and knowingly ahead of the shapes.
 
 Cardinality is enforced here rather than in the verifier, because the
 verifier sees one claim at a time and `exactly one title` is a property of a
@@ -68,7 +69,6 @@ CLS_AUTHOR = "OEO_00000064"        # author
 CLS_ORGANISATION = "OEO_00030022"  # organisation
 CLS_FUNDER = "OEO_00090001"        # funder
 CLS_SCENARIO = "OEO_00000365"      # scenario factsheet (ScenarioShape target)
-CLS_REGION = "OEO_00020032"        # study region
 
 # Paths, from the shapes file.
 P_UUID = "OEO_00390095"            # has uuid
@@ -187,7 +187,25 @@ def ambiguous(wording, known: dict) -> bool:
     return not any(_squeeze(name) == needle for name in hits)
 
 
-def scenario_key(row: dict, known: Optional[dict] = None) -> tuple:
+def _quoted(wording, row: dict) -> bool:
+    """Does the document's own passage actually contain this wording?
+
+    Only asked of a wording that is about to become an identity. A resolved run
+    identifier does not have to stand in the text — the model maps a
+    description onto it, which is the whole job — but a string the model
+    presents as the document's own name for something has to be findable in
+    the passage the same tuple quotes.
+    """
+    if "quote" not in row:
+        # Nothing to check against. The verifier guarantees a quote on every
+        # tuple that reaches here, so this is the unit-test shape, and a check
+        # that cannot run must not reject.
+        return True
+    return _squeeze(wording) in _squeeze(row.get("quote"))
+
+
+def scenario_key(row: dict, known: Optional[dict] = None,
+                 synonyms: Optional[dict] = None) -> tuple:
     """(identity, label) for the scenario a row belongs to.
 
     The model picks the AR6 run from this publication's own list and keeps the
@@ -205,12 +223,31 @@ def scenario_key(row: dict, known: Optional[dict] = None) -> tuple:
     if not in_graph(resolved) and resolved:
         # An out: entry. The model said the wording names no single run, so
         # there is no identity — and no fallback either, because `value` is
-        # then the out: entry's own label ("eine Szenario-Familie, kein
-        # einzelner Lauf"), which is a description and not a name.
+        # then the out: entry's own label ("Szenario-Familie"), which is a
+        # description and not a name.
         resolved, fallback = None, None
     wording = wording or fallback
+    if not resolved and wording and synonyms:
+        # The document's own name for a run, learned from the rows that DID
+        # resolve it. The prompt tells the model to leave `scenario` empty when
+        # it is unsure, and it is unsure on a table caption and certain on the
+        # sentence that introduced the scenario — so one scenario arrived as
+        # two, the linked one holding nothing and the unlinked one holding all
+        # the values.
+        resolved = synonyms.get(normalise(wording))
     if resolved and known and ambiguous(wording, known):
+        # The wording names a family, so the link is dropped and the wording is
+        # the identity. Rows the model assigned to DIFFERENT runs then merge
+        # onto one factsheet — which is a conflation, but the alternative is
+        # worse: splitting them would take the identity from the very guess
+        # this guard just refused to trust. The merge is reported instead, in
+        # the serializer, where the whole document's rows are visible.
         resolved = None
+    if not resolved and wording and not _quoted(wording, row):
+        # A wording that is nowhere in the passage it claims to come from
+        # cannot be a name the document uses. It used to mint a factsheet
+        # anyway, with a stable IRI and the invented string as its label.
+        return None, None
     return (resolved or wording or None), (wording or resolved or None)
 
 
@@ -235,6 +272,17 @@ def _pick_one(rows: list) -> tuple:
     by_value: dict = {}
     for row in rows:
         by_value.setdefault(row["value"], []).append(row)
+    # A running header is a prefix of the title and is harvested from every
+    # page it stands on, so it outvotes the one reading that was located on the
+    # title page — and the truncation then becomes the document's IRI, stably,
+    # on every re-run. A candidate contained in another candidate is that
+    # truncation, and it never wins.
+    contained = [value for value in by_value
+                 if any(value != other and value in other
+                        for other in by_value)]
+    if len(contained) < len(by_value):
+        for value in contained:
+            del by_value[value]
     ranked = sorted(
         by_value.items(),
         key=lambda kv: (len(kv[1]),
@@ -274,9 +322,12 @@ def _crosscheck(conn, name: str, chosen: dict) -> None:
                         name, key, got, crawled)
 
 
-# Provisional, see the module docstring: emitting the evidence assumes the
-# shapes will not stay closed. Off gives a graph that validates today.
-EVIDENCE = os.environ.get("OEKG_EVIDENCE", "1") != "0"
+# The passages are written as Turtle comments by default, which is what kwp
+# does and for the same reason: the shapes are sh:closed, so oekgprov:hasEvidence
+# on a study report or a factsheet invalidates the very node it documents.
+# OEKG_EVIDENCE=1 emits the provenance nodes instead — same content, queryable,
+# and knowingly ahead of the shapes.
+EVIDENCE = os.environ.get("OEKG_EVIDENCE", "0") != "0"
 
 
 def _known_scenarios(conn, name: str) -> dict:
@@ -331,9 +382,13 @@ def _evidence(subject: str, predicate: str, row: dict, document: str) -> tuple:
     """
     provenance = row.get("provenance") or {}
     shown = graph_value(row)
+    # The passage belongs in the identity. Two windows of one long section
+    # overlap by 400 characters, so one value arrives twice from one owner
+    # with two different quotes — and without the quote in the key they merge
+    # into a single node asserting both, which is a citation of neither.
     iri = mint("evidence", f"{subject}|{predicate}|{shown}|"
                            f"{provenance.get('owner_kind')}|"
-                           f"{provenance.get('owner_id')}")
+                           f"{provenance.get('owner_id')}|{row.get('quote')}")
     node = [f"<{iri}>", "    a oekgprov:ExtractionEvidence ;",
             f"    oekgprov:aboutProperty {predicate} ;",
             f"    oekgprov:extractedValue {literal(shown)} ;",
@@ -353,6 +408,11 @@ def _evidence(subject: str, predicate: str, row: dict, document: str) -> tuple:
 def make_serializer(db_path: Path):
     """(document name, accepted tuple rows) -> TTL string or None."""
     header_pending = [True]
+    # A preprint and its journal version share a title, so they mint the same
+    # study report and the same bundle. The single-valued triples are then
+    # written twice into one file, with two dates and two abstracts on one
+    # subject, and each document's own log says "1 report, 1 bundle".
+    minted: dict = {}
 
     def serializer(name: str, rows: list):
         by_param: dict = {}
@@ -369,6 +429,14 @@ def make_serializer(db_path: Path):
             for field in ("value_uri", "scenario"):
                 if str(row.get(field) or "").startswith(NOT_IN_GRAPH):
                     out_of_graph[row[field]] += 1
+        for key in ("scenario_label", "scenario_region", "scenario_type"):
+            for row in by_param.get(key, ()):
+                if not row.get("value_uri"):
+                    # Verified, quoted, located — and it reaches no triple,
+                    # because the list held nothing for it and the model chose
+                    # no out: entry either. Without this the gap on a field
+                    # reads as zero after a corpus run.
+                    out_of_graph[f"unmapped:{key}"] += 1
 
         chosen: dict = {}
         contested: dict = {}
@@ -408,6 +476,13 @@ def make_serializer(db_path: Path):
         report = mint("studyreport", title)
         bundle = mint("scenariobundle",
                       chosen.get("study_project_name") or title)
+        for kind, iri in (("study report", report), ("bundle", bundle)):
+            first = minted.setdefault(iri, name)
+            if first != name:
+                log.warning("kg: %s: the %s <%s> was already written for %r — "
+                            "one subject, two documents, and the shapes allow "
+                            "one label and one date on it", name, kind, iri,
+                            first)
 
         evidence_nodes: list = []
 
@@ -429,29 +504,53 @@ def make_serializer(db_path: Path):
                 evidence_nodes.append(node)
             return links
 
+        # What this document calls each run, learned from the rows that DID
+        # resolve one. The prompt tells the model to leave the link empty when
+        # it is unsure, and it is sure on the sentence that introduces a
+        # scenario and unsure on the table caption three pages later — so the
+        # same scenario arrived twice, once linked and empty, once unlinked
+        # and carrying every value.
+        synonyms: dict = {}
+        for key in ("scenario_label",) + SCENARIO_FIELDS:
+            for row in by_param.get(key, ()):
+                proposed = (row.get("value_uri") if key == "scenario_label"
+                            else row.get("scenario"))
+                wording = (row.get("value_raw") if key == "scenario_label"
+                           else row.get("scenario_raw"))
+                if in_graph(proposed) and wording \
+                        and normalise(proposed) in known \
+                        and not ambiguous(wording, known):
+                    synonyms.setdefault(normalise(wording), proposed)
+
         def rows_for(key: str, value=None, scenario=None) -> list:
             out = []
             for row in by_param.get(key, ()):
                 if value is not None and row.get("value") != value:
                     continue
                 if scenario is not None and \
-                        normalise(scenario_key(row, known)[0] or "") != scenario:
+                        normalise(scenario_key(row, known, synonyms)[0] or "") \
+                        != scenario:
                     continue
                 out.append(row)
             return out
 
         def entities(key: str, collection: str, cls: str) -> tuple:
             """Distinct named things of one kind, each as its own node."""
-            seen: dict = {}
+            # Group by the normalised name, but keep every row: "Oeko-Institut"
+            # and "Oeko-Institut e.V." are one node, and filtering the evidence
+            # by the winning spelling afterwards threw the other one's passage
+            # away — the page where the second spelling stands vanished from
+            # the file entirely.
+            groups: dict = {}
             for row in by_param.get(key, ()):
-                seen.setdefault(normalise(row["value"]), row["value"])
+                groups.setdefault(normalise(row["value"]),
+                                  (row["value"], []))[1].append(row)
             links, nodes = [], []
-            for label in seen.values():
+            for label, sources in groups.values():
                 iri = mint(collection, label)
                 links.append(f"<{iri}>")
                 block = [f"<{iri}>", f"    a oeo:{cls} ;"]
-                block += evidence_for(iri, "rdfs:label",
-                                      rows_for(key, value=label))
+                block += evidence_for(iri, "rdfs:label", sources)
                 block.append(f"    rdfs:label {literal(label)} .")
                 nodes.append(NL.join(block) + NL)
             return links, nodes
@@ -494,9 +593,31 @@ def make_serializer(db_path: Path):
         wanted: dict = {}
         for key in ("scenario_label",) + SCENARIO_FIELDS:
             for row in by_param.get(key, ()):
-                ident, label = scenario_key(dict(row, parameter=key), known)
+                ident, label = scenario_key(dict(row, parameter=key),
+                                            known, synonyms)
                 if ident:
                     wanted.setdefault(normalise(ident), (ident, label))
+
+        # One wording, several runs the model proposed for it: the guard drops
+        # every one of those links, so the rows land on one factsheet. Whether
+        # the paper describes one scenario or three cannot be decided from the
+        # wording, and the graph should not pretend either way — but nobody
+        # should find this out from the triple count.
+        merged: dict = {}
+        for key in ("scenario_label",) + SCENARIO_FIELDS:
+            for row in by_param.get(key, ()):
+                proposed = (row.get("value_uri") if key == "scenario_label"
+                            else row.get("scenario"))
+                wording = (row.get("value_raw") if key == "scenario_label"
+                           else row.get("scenario_raw"))
+                if in_graph(proposed) and wording and ambiguous(wording, known):
+                    merged.setdefault(wording, set()).add(proposed)
+        for wording, runs in merged.items():
+            if len(runs) > 1:
+                log.warning("kg: %s: %r is the document's name for %d different "
+                            "AR6 runs (%s) — they share one factsheet, because "
+                            "the wording links to none of them", name, wording,
+                            len(runs), ", ".join(sorted(runs)))
 
         scenario_links: list = []
         scenario_nodes: list = []
@@ -521,7 +642,7 @@ def make_serializer(db_path: Path):
             # yet — see the note on IAM_SCENARIO.
             types: dict = {}
             for row in rows_for("scenario_type", scenario=norm):
-                if row.get("value_uri"):
+                if in_graph(row.get("value_uri")):
                     types.setdefault(row["value_uri"], []).append(row)
             for type_iri, sources in types.items():
                 block += evidence_for(iri, f"oeo:{P_SCENARIO_TYPE}", sources)
@@ -540,23 +661,22 @@ def make_serializer(db_path: Path):
             # its own IRI (oekg/region/Germany), so it is referenced, not
             # minted. Only a wording that matched nothing gets an IRI of ours,
             # and that one is a finding to review rather than a node to trust.
+            # Only a region the model actually chose off the OEKG's list is
+            # referenced, and it is ONLY referenced: the individual already
+            # exists over there with its own type and its own label, so
+            # asserting them again from a harvest writes our wording onto
+            # somebody else's node — a second label on a maxCount-1 property,
+            # caused on data this profile did not create.
+            # Everything else — an out: entry, or a wording the list did not
+            # hold — is counted and not minted. Minting put a German gloss
+            # under oekg/region/ next to the 249 real ones.
             regions: dict = {}
             for row in rows_for("scenario_region", scenario=norm):
-                if not in_graph(row.get("value_uri")) and row.get("value_uri"):
-                    # "global", "mehrere Laender": a true answer and not a
-                    # study region. The OEKG holds 249 countries and no
-                    # aggregate, so there is nothing to point at — minting one
-                    # would invent a region that the OEKG then has twice.
-                    continue
-                region_iri = row.get("value_uri") or mint("studyregion",
-                                                          row["value"])
-                regions.setdefault(region_iri, (row["value"], []))[1].append(row)
-            for region_iri, (canonical, sources) in regions.items():
+                if in_graph(row.get("value_uri")):
+                    regions.setdefault(row["value_uri"], []).append(row)
+            for region_iri, sources in regions.items():
                 block += evidence_for(iri, f"oeo:{P_STUDY_REGION}", sources)
                 block.append(f"    oeo:{P_STUDY_REGION} <{region_iri}> ;")
-                scenario_nodes.append(
-                    f"<{region_iri}>{NL}    a oeo:{CLS_REGION} ;{NL}"
-                    f"    rdfs:label {literal(canonical)} .{NL}")
 
             years = sorted({re.search(r"\d{4}", str(r["value"])).group(0)
                             for r in rows_for("scenario_year", scenario=norm)

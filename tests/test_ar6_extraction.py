@@ -38,9 +38,15 @@ def _rows(**overrides):
             for k, values in base.items() for v in values]
 
 
-def _ttl(rows, name="geco_2023"):
+def _ttl(rows, name="geco_2023", known=None):
     from profiles.ar6 import kg
-    return kg.make_serializer(Path("no-such.db"))(name, rows)
+    if known is None:
+        return kg.make_serializer(Path("no-such.db"))(name, rows)
+    import unittest.mock
+    with unittest.mock.patch.object(kg, "_known_scenarios",
+                                    lambda conn, n: known):
+        with unittest.mock.patch("sqlite3.connect"):
+            return kg.make_serializer(Path("no-such.db"))(name, rows)
 
 
 # ---------------------------------------------------------------------------
@@ -104,8 +110,14 @@ def test_the_scenario_types_are_the_ones_the_shapes_accept(spec):
         "OEO_00020317", "OEO_00020321", "OEO_00020345", "OEO_00020411",
         "OEO_00020412", "OEO_00030007", "OEO_00030008", "OEO_00030009",
         "OEO_00030010"}
-    assert {u.rsplit("/", 1)[-1]
-            for u in by_uri["scenario_type"].vocabulary} == shapes
+    from profiles.ar6 import kg
+
+    vocabulary = by_uri["scenario_type"].vocabulary
+    assert {u.rsplit("/", 1)[-1] for u in vocabulary
+            if kg.in_graph(u)} == shapes
+    # and the entries that are not classes say so in their key, which is the
+    # one thing that keeps them out of the graph
+    assert [u for u in vocabulary if not kg.in_graph(u)] == ["out:not_in_list"]
 
 
 def test_every_example_would_survive_its_own_verifier(spec):
@@ -373,9 +385,12 @@ def test_the_ar6_spelling_labels_the_node_the_pdf_spelling_stays_the_acronym():
     assert 'dc:acronym "CURPOL" ;' in ttl, "the PDF spelling is kept"
 
 
-def test_every_value_can_name_the_passage_it_came_from():
+def test_every_value_can_name_the_passage_it_came_from(monkeypatch):
     """The licence argument: the graph carries what the crawl could not give
-    it — the quote, the page and the rectangles on that page."""
+    it — the quote, the page and the rectangles on that page. As triples only
+    on request, because the shapes are closed; by default as comments."""
+    import profiles.ar6.kg as kg
+    monkeypatch.setattr(kg, "EVIDENCE", True)
     ttl = _ttl(_scenario_rows())
     assert "a oekgprov:ExtractionEvidence ;" in ttl
     assert 'oekgprov:quote "CurPol covers the EU27"' in ttl or \
@@ -384,7 +399,9 @@ def test_every_value_can_name_the_passage_it_came_from():
     assert "oekgprov:hasEvidence <" in ttl
 
 
-def test_the_evidence_iri_is_stable_across_runs():
+def test_the_evidence_iri_is_stable_across_runs(monkeypatch):
+    import profiles.ar6.kg as kg
+    monkeypatch.setattr(kg, "EVIDENCE", True)
     assert _ttl(_scenario_rows()) == _ttl(_scenario_rows())
 
 
@@ -702,7 +719,11 @@ def test_a_region_is_referenced_by_its_existing_oekg_iri():
     ttl = _ttl(rows)
     assert ("oeo:OEO_00020220 <https://openenergyplatform.org/ontology/oekg/"
             "region/Germany>") in ttl
-    assert "rdfs:label \"Germany\"" in ttl
+    # and referenced is ALL it is: the individual is the OEKG's, it already
+    # carries its type and its label over there, and writing ours on top would
+    # put a second label on a node this harvest did not create.
+    assert "region/Germany>" + chr(10) not in ttl, "no node block of our own"
+    assert "OEO_00020032" not in ttl
 
 
 def test_a_global_scenario_does_not_mint_a_region():
@@ -774,6 +795,115 @@ def test_what_the_graph_does_not_take_is_counted_by_what_was_chosen(caplog):
         _ttl(rows)
     assert "not in the graph by choice" in caplog.text
     assert "'out:global': 1" in caplog.text
+
+
+def test_a_region_the_list_did_not_hold_mints_nothing_and_is_counted(caplog):
+    """The wording used to become a node under oekg/region/ next to the 249
+    real ones, typed and labelled as if it were one of them. It is a finding,
+    and a finding belongs in the count, not in the graph."""
+    rows = _rows() + [
+        {"parameter": "scenario_label", "value": "EN_NPi2100",
+         "value_uri": "EN_NPi2100", "value_raw": "CurPol",
+         "quote": "the CurPol scenario", "provenance": {}},
+        {"parameter": "scenario_region", "value": "Sub-Saharan Africa",
+         "value_uri": None, "value_raw": "Sub-Saharan Africa",
+         "scenario": "EN_NPi2100", "scenario_raw": "CurPol",
+         "quote": "CurPol covers Sub-Saharan Africa", "provenance": {}},
+    ]
+    with caplog.at_level(logging.INFO):
+        ttl = _ttl(rows)
+    assert "OEO_00020220" not in ttl, "no study region link"
+    assert "OEO_00020032" not in ttl, "and no region node of our own"
+    assert "'unmapped:scenario_region': 1" in caplog.text
+
+
+def test_a_scenario_type_the_list_does_not_cover_is_no_type_triple():
+    rows = _rows() + [
+        {"parameter": "scenario_label", "value": "EN_NPi2100",
+         "value_uri": "EN_NPi2100", "value_raw": "CurPol",
+         "quote": "the CurPol scenario", "provenance": {}},
+        {"parameter": "scenario_type", "value": "keine dieser Arten",
+         "value_uri": "out:not_in_list", "value_raw": "a stylised sensitivity run",
+         "scenario": "EN_NPi2100", "scenario_raw": "CurPol",
+         "quote": "CurPol is a stylised sensitivity run", "provenance": {}},
+    ]
+    ttl = _ttl(rows)
+    assert "out:" not in ttl
+    # the blanket IAM annotation is the only scenario type left on the node
+    assert ttl.count("oeo:OEO_00390073") == 1
+
+
+def test_one_scenario_stays_one_factsheet_when_only_some_rows_resolve_it():
+    """The prompt tells the model to leave the link empty when it is unsure,
+    and it is sure on the sentence that introduces the scenario and unsure on
+    the caption three pages later. That produced two factsheets: the linked one
+    empty, the unlinked one holding every value."""
+    rows = _rows() + [
+        {"parameter": "scenario_label", "value": "EN_NPi2100",
+         "value_uri": "EN_NPi2100", "value_raw": "CurPol",
+         "quote": "the Current Policies scenario (CurPol)", "provenance": {}},
+        {"parameter": "scenario_year", "value": "2050", "scenario": None,
+         "scenario_raw": "CurPol", "quote": "CurPol results for 2050",
+         "provenance": {}},
+    ]
+    ttl = _ttl(rows, known={"en_npi2100": "EN_NPi2100"})
+    assert ttl.count("a oeo:OEO_00000365") == 1
+    assert "2050-01-01T00:00:00" in ttl
+
+
+def test_a_wording_that_is_not_in_its_own_quote_names_nothing():
+    """A run identifier the model maps onto a description does not have to
+    stand in the text — that mapping is the job. A string presented as the
+    document's own name for something does."""
+    rows = _rows() + [
+        {"parameter": "scenario_year", "value": "2050",
+         "scenario_raw": "EN_INDCi2030_1000f-NDC",
+         "quote": "Results are reported for 2050 under the central pathway.",
+         "provenance": {}},
+    ]
+    ttl = _ttl(rows)
+    assert "a oeo:OEO_00000365" not in ttl
+    assert "EN_INDCi2030_1000f-NDC" not in ttl
+
+
+def test_a_running_header_does_not_outvote_the_located_title_page():
+    """The header stands on every page and is harvested from each of them, so
+    it wins on count — and the truncation then becomes the document's IRI,
+    stably, on every re-run."""
+    from profiles.ar6 import kg
+
+    full = "Global Energy and Climate Outlook 2023: a world in transition"
+    rows = [{"parameter": "publication_title", "value": "Global Energy and "
+             "Climate Outlook 2023", "quote": "x", "provenance": {}}
+            for _ in range(3)]
+    rows.append({"parameter": "publication_title", "value": full, "quote": "x",
+                 "provenance": {"rects": [[1, 2, 3, 4]]}})
+    assert kg._pick_one(rows)[0] == full
+
+
+def test_the_absorbed_spelling_keeps_its_passage():
+    """"Oeko-Institut" and "Oeko-Institut e.V." are one node — and the page
+    where the second spelling stands used to vanish from the file with it."""
+    rows = _rows(study_organisation=["Oeko-Institut e.V.", "Oeko-Institut"])
+    rows = [dict(r, quote=f"quote for {r['value']}") if
+            r["parameter"] == "study_organisation" else r for r in rows]
+    ttl = _ttl(rows)
+    assert ttl.count("a oeo:OEO_00030022 ;") == 1, "one organisation"
+    assert ttl.count("quote for Oeko-Institut") == 2,         "both passages, not just the winning spelling's"
+
+
+def test_two_documents_that_mint_one_subject_say_so(caplog):
+    """A preprint and its journal version share a title, so they share a study
+    report IRI — and the shapes allow one label and one date on it."""
+    from pathlib import Path
+
+    from profiles.ar6 import kg
+
+    serialize = kg.make_serializer(Path("no-such.db"))
+    with caplog.at_level(logging.WARNING):
+        serialize("preprint", _rows(publication_date=["2021"]))
+        serialize("journal", _rows(publication_date=["2022"]))
+    assert "one subject, two documents" in caplog.text
 
 
 def test_the_scenario_types_the_model_chose_reach_the_graph():
