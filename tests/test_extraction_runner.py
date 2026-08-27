@@ -547,3 +547,209 @@ def test_need_more_keeps_only_what_can_be_searched_for():
     reply = runner._parse_reply(
         '{"tuples": [], "status": "partial", "need_more": ["Bezugsjahr 2020", "", 7]}')
     assert reply["need_more"] == ["Bezugsjahr 2020"]
+
+
+# ---------------------------------------------------------------------------
+# The answer contract: shared coordinates, and what survives a cut-off reply
+# ---------------------------------------------------------------------------
+
+def test_shared_coordinates_are_folded_into_every_tuple():
+    """Ten of sixteen keys are identical across a table's tuples, and writing
+    them once is half the answer. The model writes them once."""
+    reply = runner._parse_reply(json.dumps({
+        "defaults": {"source": "Q2", "unit": "kWh/a", "quantity": "final energy "
+                     "consumption value", "year": 2020},
+        "tuples": [{"value": 1, "carrier": "Erdgas", "quote": "a"},
+                   {"value": 2, "carrier": "Heizöl", "quote": "b"}],
+        "status": "complete", "need_more": []}, ensure_ascii=False))
+    assert [t["unit"] for t in reply["tuples"]] == ["kWh/a", "kWh/a"]
+    assert [t["year"] for t in reply["tuples"]] == [2020, 2020]
+    assert [t["carrier"] for t in reply["tuples"]] == ["Erdgas", "Heizöl"]
+
+
+def test_a_tuple_overrides_the_shared_value():
+    """The point of defaults is to state the rule once and the exception where
+    it happens — the one row in MWh/a among thirty-eight in kWh/a."""
+    reply = runner._parse_reply(json.dumps({
+        "defaults": {"unit": "kWh/a"},
+        "tuples": [{"value": 1, "quote": "a"},
+                   {"value": 2, "unit": "MWh/a", "quote": "b"}]}))
+    assert [t["unit"] for t in reply["tuples"]] == ["kWh/a", "MWh/a"]
+
+
+def test_the_evidence_pair_can_never_be_shared():
+    """A shared quote would hand every tuple in the reply the same evidence,
+    which is the one thing this stage exists to prevent."""
+    reply = runner._parse_reply(json.dumps({
+        "defaults": {"quote": "geteiltes Zitat", "value": 999,
+                     "compute": [{"code": "x"}], "_harvest_failed": True,
+                     "unit": "kWh/a"},
+        "tuples": [{"value": 1, "quote": "eigenes Zitat"}, {"unit": "MWh/a"}]}))
+    assert reply["tuples"][0]["quote"] == "eigenes Zitat"
+    assert "quote" not in reply["tuples"][1], "no tuple inherits a quote"
+    assert "value" not in reply["tuples"][1]
+    assert "compute" not in reply["tuples"][1]
+    assert "_harvest_failed" not in reply["tuples"][1]
+    assert reply["tuples"][1]["unit"] == "MWh/a"
+
+
+def _cut_off(n=3, tail='{"value": 44, "unit": "kWh/a", "quan'):
+    """A reply shaped like the ones vLLM returns at the token ceiling: whole
+    tuples, then a stop in the middle of a key."""
+    whole = ", ".join(
+        json.dumps({"source": "Q1", "value": i, "quote": f"Zeile {i}"})
+        for i in range(n))
+    return '{"defaults": {"unit": "kWh/a"}, "tuples": [' + whole + ", " + tail
+
+
+def test_the_tuples_written_before_the_cut_are_kept():
+    reply = runner.rescue_reply(_cut_off())
+    assert [t["value"] for t in reply["tuples"]] == [0, 1, 2]
+    assert all(t["unit"] == "kWh/a" for t in reply["tuples"]), (
+        "the defaults block is rescued too")
+    assert reply["status"] == "truncated"
+
+
+def test_the_rescue_survives_a_quote_whose_braces_do_not_balance():
+    """Quotes are lifted verbatim from the plans, and 15 of 1936 sections in
+    the pilot set are BibTeX dumps. A brace counter reads those as structure;
+    only a real JSON scanner knows which brace is evidence."""
+    bib = "@misc{bmj2025, title = {Gesetze / Verordnungen}}"
+    text = ('{"tuples": [' + json.dumps({"value": 1, "quote": bib})
+            + ', ' + json.dumps({"value": 2, "quote": "} allein {"})
+            + ', {"value": 3, "quo')
+    reply = runner.rescue_reply(text)
+    assert [t["value"] for t in reply["tuples"]] == [1, 2]
+    assert reply["tuples"][0]["quote"] == bib
+
+
+def test_the_rescue_survives_escapes_brackets_and_newlines_in_a_quote():
+    quote = ('| Wärmeverbrauch [kWh/a] | 4.605 |\n| --- |\n'
+             r'Er nennt sie "Wärmenetze" und schreibt \| als Trenner')
+    text = ('{"tuples": [' + json.dumps({"value": 1, "quote": quote},
+                                        ensure_ascii=False) + ', {"val')
+    reply = runner.rescue_reply(text)
+    assert reply["tuples"][0]["quote"] == quote
+
+
+def test_a_cut_before_the_first_tuple_is_not_a_rescue():
+    assert runner.rescue_reply('{"defaults": {"unit": "kWh/a"}, "tuples": [{"val') is None
+    assert runner.rescue_reply("kein json") is None
+
+
+def test_the_sources_after_the_cut_stay_countable_holes():
+    """A rescue must not trade a loud hole for a silent one: the model writes
+    in source order, so the loss is always the tail of the batch, and those
+    sources would otherwise read as 'looked at, found nothing'."""
+    from docpipe.extraction.pipeline import Batch
+    batch = Batch(7, SPEC.parameters[0],
+                  [_item(_source("a", owner_id=i)) for i in range(1, 5)])
+    holes = runner._holes(batch, [{"source": "Q1", "value": 1},
+                                  {"source": "Q2", "value": 2}])
+    assert [h["source"] for h in holes] == ["Q3", "Q4"]
+    assert all(h["_harvest_failed"] and h["_cut_off"] for h in holes)
+
+
+def test_a_truncated_reply_is_not_retried(monkeypatch):
+    """Measured 31 times over one pilot: five attempts, five identical
+    truncations, zero recoveries. The loop must stop after the first."""
+    import openai
+    attempts = []
+
+    class Message:
+        content = _cut_off()
+        reasoning_content = None
+
+    class Choice:
+        finish_reason = "length"
+        message = Message()
+
+    class Client:
+        def __init__(self, **kw):
+            self.chat = self
+
+        @property
+        def completions(self):
+            return self
+
+        def create(self, **kw):
+            attempts.append(kw)
+            return type("R", (), {"choices": [Choice()], "usage": None})()
+
+    monkeypatch.setattr(openai, "OpenAI", Client)
+    monkeypatch.setattr(runner.prompts, "load",
+                        lambda _id: type("P", (), {"text": "sys", "meta": {}})())
+    monkeypatch.setattr(runner.time, "sleep", lambda *_: None)
+
+    harvest = runner.make_harvester(None)
+    reply = harvest(_chain(_item(_source("x")))[0], [])
+    assert len(attempts) == 1, f"{len(attempts)} Versuche fuer einen Abbruch"
+    assert [t["value"] for t in reply["tuples"] if "value" in t] == [0, 1, 2]
+
+
+# What the served model can hold. vLLM reported max_seq_len=32768 for the
+# 122B this stage runs against, and --max-model-len above it is refused at
+# startup — so a budget over this is not a tuning question, it is a run that
+# never begins.
+SERVED_WINDOW = 32768
+
+# For the sizing assertion below. A source that yields at all yields 12 tuples
+# at the 90th percentile, measured over the finished pilots. Characters per
+# token came out of the truncated replies directly: they stopped at exactly
+# max_tokens, so content length over max_tokens is the measurement, and it
+# came out between 2.62 and 2.82 — the low end is the conservative one.
+P90_TUPLES_PER_SOURCE = 12
+CHARS_PER_TOKEN = 2.62
+
+
+def _profile_specs():
+    """Every profile that has an extraction spec, as (name, Spec, prompt)."""
+    import json
+    import os
+    from pathlib import Path
+    from docpipe.extraction.spec import load as load_spec
+    root = Path(__file__).resolve().parent.parent / "profiles"
+    for spec_file in sorted(root.glob("*/extraction_spec.json")):
+        name = spec_file.parent.name
+        os.environ["DOCPIPE_PROFILE"] = name
+        yield (name,
+               load_spec(json.loads(spec_file.read_text(encoding="utf-8"))),
+               runner.prompts.load("extraction/harvest"))
+
+
+def test_every_profile_fits_the_window_it_will_be_served(monkeypatch):
+    """The test that was missing. max_tokens lives in a prompt's frontmatter
+    and BATCH_SOURCES lives in this module, and until a pilot burned five GPUs
+    nothing had ever compared them. The job script serves
+    max(context_budget, 32768) as --max-model-len, so a budget over the
+    model's own ceiling is a server that refuses to start."""
+    monkeypatch.setenv("DOCPIPE_PROFILE", "kwp")
+    checked = 0
+    for name, spec, prompt in _profile_specs():
+        budget = runner.context_budget(prompt, spec)
+        assert budget <= SERVED_WINDOW, (
+            f"{name}: budget {budget} over the {SERVED_WINDOW} the model holds")
+        assert budget > int(prompt.meta["max_tokens"]), (
+            f"{name}: the answer cannot be the whole request")
+        checked += 1
+    assert checked >= 2, "the profiles stopped being found"
+
+
+def test_the_answer_budget_covers_a_full_batch(monkeypatch):
+    """The other half of the same pairing: a request that reads
+    BATCH_SOURCES sources has to be allowed to answer for all of them. At one
+    source per request 4096 was already marginal; at six it was the defect
+    that killed a pilot."""
+    monkeypatch.setenv("DOCPIPE_PROFILE", "kwp")
+    for name, spec, prompt in _profile_specs():
+        fitted = runner.fit_batch_sources(prompt, spec)
+        assert fitted >= 1, f"{name}: not even one source fits the answer budget"
+        # Sizing is the profile's own: the spec's example IS the contract the
+        # prompt shows the model, so a batch that fits it is a batch the model
+        # can finish answering for.
+        assert fitted <= runner.BATCH_SOURCES
+        if fitted < runner.BATCH_SOURCES:
+            # It fits because it was made to. Check the next size up really
+            # does not, or the clamp is just pessimism.
+            bigger = runner.fit_batch_sources(prompt, spec, wanted=fitted + 1)
+            assert bigger == fitted, f"{name}: the clamp is too tight"

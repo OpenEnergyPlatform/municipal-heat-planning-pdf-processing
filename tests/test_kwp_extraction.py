@@ -43,11 +43,25 @@ def test_the_class_is_the_models_choice_not_a_table_of_german_spellings():
         assert not parameter.axes["quantity"].required,             "a number that fits no class keeps its wording and is counted"
 
 
+def example_tuples(parameter):
+    """The example's tuples as the model is asked to write them back.
+
+    The spec writes the coordinates that every tuple in the example shares
+    once, under `defaults`, because that is the contract the prompt teaches —
+    ten of a tuple's fifteen keys are identical down a table's column and
+    rewriting them is half the answer. Everything downstream sees whole
+    tuples, so the tests do here what the runner does on the wire.
+    """
+    from docpipe.extraction.runner import expand_defaults
+    return expand_defaults(parameter.example.get("defaults"),
+                           parameter.example["tuples"])
+
+
 @pytest.mark.parametrize("parameter", SPEC.parameters, ids=lambda p: p.uri)
 def test_every_example_verifies_against_its_own_source(parameter):
     """The example doubles as the golden test: a spec whose own few-shot
     would be refused by verify_tuple teaches the model a refusable habit."""
-    for raw in parameter.example["tuples"]:
+    for raw in example_tuples(parameter):
         outcome = verify_tuple(dict(raw), parameter, parameter.example["source"])
         assert isinstance(outcome, Verified), getattr(outcome, "reason", outcome)
 
@@ -59,15 +73,15 @@ def test_the_examples_teach_exhaustive_extraction(parameter):
     vocabulary columns are the lesson, not the exception."""
     import re as re_mod
     from docpipe.extraction.verify import canonical_number
-    claimed = {canonical_number(t["value"]) for t in parameter.example["tuples"]}
-    quoted_rows = {t["quote"] for t in parameter.example["tuples"]}
+    claimed = {canonical_number(t["value"]) for t in example_tuples(parameter)}
+    quoted_rows = {t["quote"] for t in example_tuples(parameter)}
     for row in quoted_rows:
         cells = [c.strip() for c in row.strip().strip("|").split("|")]
         for cell in cells[1:]:
             if re_mod.fullmatch(r"[\d.,]+", cell):
                 assert canonical_number(cell) in claimed, f"{cell} has no tuple"
     outcomes = [verify_tuple(dict(t), parameter, parameter.example["source"])
-                for t in parameter.example["tuples"]]
+                for t in example_tuples(parameter)]
     flags = [f for o in outcomes for f in o.flags]
     assert flags, "the example must exercise the wording machinery at all"
 
@@ -77,7 +91,7 @@ def test_the_examples_show_both_mapping_and_refusing_to_map():
     list does not contain still gets mapped when it clearly fits, and a label
     that fits no class stays empty instead of being forced into one."""
     flags = [f for parameter in SPEC.parameters
-             for t in parameter.example["tuples"]
+             for t in example_tuples(parameter)
              for f in verify_tuple(dict(t), parameter,
                                    parameter.example["source"]).flags]
     assert any(f.startswith("mapped:") for f in flags)

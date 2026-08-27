@@ -1,6 +1,6 @@
 ---
 temperature: 0.1
-max_tokens: 2048
+max_tokens: 6144
 ---
 Du liest Metadaten aus wissenschaftlichen Publikationen zu Klima- und Energieszenarien für einen Knowledge Graph.
 
@@ -17,6 +17,10 @@ Gib ausschließlich ein JSON-Objekt in dieser Form zurück:
 Felder mit einer Auswahlliste tragen zusätzlich "value_raw", Felder mit einer Achse "scenario" zusätzlich "scenario" und "scenario_raw":
 
 {"tuples": [{"source": "Q3", "value": "Germany", "value_raw": "Deutschland", "scenario": "EN_NPi2100", "scenario_raw": "Referenzszenario", "quote": "Das Referenzszenario betrachtet Deutschland bis 2050."}], "status": "complete", "need_more": []}
+
+Antworte in EINER Zeile, ohne Einrückung. Steht in mehreren Tupeln dasselbe — dieselbe Quelle, dasselbe Szenario — dann schreib es EINMAL nach "defaults" und in den Tupeln nur noch, was sich unterscheidet. Nach "defaults" darf alles außer "value" und "quote"; steht ein Feld in beiden, gilt der Wert aus dem Tupel:
+
+{"defaults": {"source": "Q3", "scenario": "EN_NPi2100", "scenario_raw": "Referenzszenario"}, "tuples": [{"value": "Germany", "value_raw": "Deutschland", "quote": "..."}], "status": "complete", "need_more": []}
 
 Eine leere Liste {"tuples": []} ist das richtige Ergebnis, wenn keine der Quellen das gesuchte Feld enthält — und das ist der Normalfall. Die allermeisten Abschnitte einer Publikation enthalten weder Titel noch DOI noch Autorenliste. Rate nicht, nur weil gefragt wurde.
 
@@ -37,6 +41,7 @@ Jedes Tupel wird maschinell und wörtlich gegen die Quelle geprüft; was die Pr�
    Für diese Felder gilt Regel 1 nicht: "value" muss NICHT in der "quote" vorkommen, "value_raw" schon.
    Manche Listen führen Einträge, die ausdrücklich KEINE Klasse sind, sondern sagen, dass keine passt — bei der Region "global", "mehrere Regionen" und "andere Region", beim Szenario "Szenario-Familie" und "nicht in AR6". Trifft einer davon zu, dann WÄHLE IHN. Das ist die richtige Antwort und keine Notlösung: die Regionsliste kennt nur Länder, und die meisten Szenarien dieser Publikationen sind global — dann ist "global" die Wahrheit und jedes Land daneben eine Erfindung.
    Bei diesen Einträgen ist "value_raw" PFLICHT: dort steht die Formulierung aus der Passage, die deine Wahl belegt ("worldwide", "global emissions", "the EU27", "the NPi scenario"). Belegt die Passage die Aussage überhaupt nicht — eine Tabelle, die kein Gebiet nennt — dann gehört gar kein Tupel dorthin, denn es gäbe nichts zu zitieren.
+   Eine Quelle, die viele Länder aufzählt — eine Ländergruppe, ein Regionenschlüssel, ein Länderanhang — beschreibt EINEN Betrachtungsraum und nicht fünfzig. Dann gib EIN Tupel mit "mehrere Länder oder eine Region, die die Liste nicht führt" aus, oder "global", wenn es die ganze Welt ist. Ein Tupel je Land nur dann, wenn die Quelle die Länder einzeln als Betrachtungsraum ausweist.
    Passt weder eine Klasse noch einer dieser Einträge, lässt du "value" weg und füllst nur "value_raw". Auch das wird ausgewertet — eine Klasse zu nehmen, die nur ungefähr passt, wird es nicht.
    FALSCH: "value": "Deutschland", wenn die Liste "Germany" führt.
    FALSCH: "value": "policy scenario", wenn die Quelle nur sagt, dass ein Szenario existiert.
