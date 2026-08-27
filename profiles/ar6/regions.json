@@ -3,7 +3,8 @@
   "Afghanistan"
  ],
  "https://openenergyplatform.org/ontology/oekg/region/AlandIslands": [
-  "land Islands"
+  "Åland Islands",
+  "Aland Islands"
  ],
  "https://openenergyplatform.org/ontology/oekg/region/Albania": [
   "Albania"
@@ -171,9 +172,9 @@
   "Costa Rica"
  ],
  "https://openenergyplatform.org/ontology/oekg/region/CoteDIvoire": [
-  "Cte d Ivoire",
-  "Ivory Coast",
-  "Côte d'Ivoire"
+  "Côte d'Ivoire",
+  "Cote d'Ivoire",
+  "Ivory Coast"
  ],
  "https://openenergyplatform.org/ontology/oekg/region/Croatia": [
   "Croatia"
@@ -182,7 +183,8 @@
   "Cuba"
  ],
  "https://openenergyplatform.org/ontology/oekg/region/Curacao": [
-  "Curaao"
+  "Curaçao",
+  "Curacao"
  ],
  "https://openenergyplatform.org/ontology/oekg/region/Cyprus": [
   "Cyprus"
@@ -574,7 +576,8 @@
   "Qatar"
  ],
  "https://openenergyplatform.org/ontology/oekg/region/Reunion": [
-  "Runion"
+  "Réunion",
+  "Reunion"
  ],
  "https://openenergyplatform.org/ontology/oekg/region/Romania": [
   "Romania"
@@ -588,7 +591,8 @@
   "Rwanda"
  ],
  "https://openenergyplatform.org/ontology/oekg/region/SaintBarthelemy": [
-  "Saint Barthlemy"
+  "Saint Barthélemy",
+  "Saint Barthelemy"
  ],
  "https://openenergyplatform.org/ontology/oekg/region/SaintHelena": [
   "Saint Helena, Ascension and Tristan da Cunha"

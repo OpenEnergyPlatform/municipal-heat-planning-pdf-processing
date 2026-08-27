@@ -11,7 +11,8 @@ not. The whole point of reading metadata out of the PDF rather than taking
 the crawl's copy is that each value can name the passage it came from, so a
 graph that drops the passage gives up the reason it was built this way. One
 evidence node per value, linked with `oekgprov:hasEvidence`; set
-OEKG_EVIDENCE=0 to emit the bare shape-conformant graph instead.
+OEKG_EVIDENCE=0 to emit the shape-conformant graph instead, which keeps the
+same passages as Turtle comments above the triples they belong to.
 
 Cardinality is enforced here rather than in the verifier, because the
 verifier sees one claim at a time and `exactly one title` is a property of a
@@ -32,6 +33,7 @@ import re
 import sqlite3
 import unicodedata
 import uuid
+from collections import Counter
 from pathlib import Path
 from typing import Optional
 
@@ -138,6 +140,34 @@ def _squeeze(text) -> str:
     return re.sub(r"[^a-z0-9]", "", str(text or "").casefold())
 
 
+# The choice lists in extraction.py carry entries that are deliberately not a
+# thing in the graph: a scenario family instead of a run, a global scope
+# instead of a country. They exist so the model can say so instead of picking
+# the nearest entry that is almost right — which means every place where an
+# answer turns into an IRI, a type or a link has to refuse them. One prefix,
+# checked once here, so a new out: entry cannot quietly become a node.
+NOT_IN_GRAPH = "out:"
+
+
+def in_graph(value) -> bool:
+    """Is this answer something the graph takes, or one of the out: entries?"""
+    return bool(value) and not str(value).startswith(NOT_IN_GRAPH)
+
+
+def graph_value(row: dict):
+    """What this row actually put in the graph.
+
+    For an out: entry the model's `value` is that entry's own label — a
+    description of why nothing fitted, not a reading of the document. The
+    graph carries the wording instead, so the evidence has to name the wording
+    too, or it would cite a passage for a string that is nowhere in it.
+    """
+    uri = row.get("value_uri")
+    if uri and not in_graph(uri):
+        return row.get("value_raw") or ""
+    return row.get("value")
+
+
 def ambiguous(wording, known: dict) -> bool:
     """Does this wording fit more than one AR6 run of this publication?
 
@@ -168,10 +198,17 @@ def scenario_key(row: dict, known: Optional[dict] = None) -> tuple:
     """
     if row.get("parameter") == "scenario_label":
         resolved, wording = row.get("value_uri"), row.get("value_raw")
+        fallback = row.get("value")
     else:
         resolved, wording = row.get("scenario"), row.get("scenario_raw")
-    wording = wording or (row.get("value") if row.get("parameter") ==
-                          "scenario_label" else row.get("scenario"))
+        fallback = row.get("scenario")
+    if not in_graph(resolved) and resolved:
+        # An out: entry. The model said the wording names no single run, so
+        # there is no identity — and no fallback either, because `value` is
+        # then the out: entry's own label ("eine Szenario-Familie, kein
+        # einzelner Lauf"), which is a description and not a name.
+        resolved, fallback = None, None
+    wording = wording or fallback
     if resolved and known and ambiguous(wording, known):
         resolved = None
     return (resolved or wording or None), (wording or resolved or None)
@@ -252,6 +289,38 @@ def _known_scenarios(conn, name: str) -> dict:
     return {normalise(r[0]): r[0] for r in rows}
 
 
+def _ttl_comment(text) -> str:
+    """One Turtle comment line, flattened so a quote cannot break the file."""
+    flat = re.sub(r"\s+", " ", str(text or "")).strip()
+    return "    # " + flat[:400]
+
+
+def _evidence_comment(row: dict, document: str) -> list:
+    """The same passage as comment lines, for a run against the closed shapes.
+
+    OEKG_EVIDENCE=0 used to mean the graph simply forgot where a value came
+    from, which gives up the reason the metadata is read out of the PDF at all
+    instead of taken from the crawl. A comment is not a triple: it survives
+    sh:closed, it survives a diff, and a reader looking at the node sees the
+    sentence the value was read in.
+    """
+    provenance = row.get("provenance") or {}
+    where = [f"{document}.pdf"]
+    if provenance.get("page"):
+        where.append(f"p. {provenance['page']}")
+    if provenance.get("owner_kind"):
+        where.append(str(provenance["owner_kind"]))
+    if row.get("tier"):
+        where.append(str(row["tier"]))
+    lines = []
+    if row.get("quote"):
+        lines.append(_ttl_comment(f"“{row['quote']}”"))
+    lines.append(_ttl_comment(", ".join(where)))
+    if row.get("flags"):
+        lines.append(_ttl_comment("flags: " + ", ".join(row["flags"])))
+    return lines
+
+
 def _evidence(subject: str, predicate: str, row: dict, document: str) -> tuple:
     """(link line, node block) for one value's passage.
 
@@ -261,12 +330,13 @@ def _evidence(subject: str, predicate: str, row: dict, document: str) -> tuple:
     located in the PDF before it ever got here.
     """
     provenance = row.get("provenance") or {}
-    iri = mint("evidence", f"{subject}|{predicate}|{row.get('value')}|"
+    shown = graph_value(row)
+    iri = mint("evidence", f"{subject}|{predicate}|{shown}|"
                            f"{provenance.get('owner_kind')}|"
                            f"{provenance.get('owner_id')}")
     node = [f"<{iri}>", "    a oekgprov:ExtractionEvidence ;",
             f"    oekgprov:aboutProperty {predicate} ;",
-            f"    oekgprov:extractedValue {literal(row.get('value'))} ;",
+            f"    oekgprov:extractedValue {literal(shown)} ;",
             f"    oekgprov:quote {literal(row.get('quote') or '')} ;",
             f"    oekgprov:sourceDocument {literal(document)} ;",
             f"    oekgprov:evidenceTier {literal(row.get('tier') or '')} ;"]
@@ -288,6 +358,17 @@ def make_serializer(db_path: Path):
         by_param: dict = {}
         for row in rows:
             by_param.setdefault(row.get("parameter"), []).append(row)
+
+        # What the model said does NOT belong in the graph. Counted once, here,
+        # so the number is a measurement of the corpus rather than a side
+        # effect of whichever loop happened to look at the row: a run of
+        # publications that is 80% out:global is telling us the OEKG's region
+        # list is missing its aggregates, not that the harvest is failing.
+        out_of_graph: Counter = Counter()
+        for row in rows:
+            for field in ("value_uri", "scenario"):
+                if str(row.get(field) or "").startswith(NOT_IN_GRAPH):
+                    out_of_graph[row[field]] += 1
 
         chosen: dict = {}
         contested: dict = {}
@@ -331,9 +412,16 @@ def make_serializer(db_path: Path):
         evidence_nodes: list = []
 
         def evidence_for(subject: str, predicate: str, sources: list) -> list:
-            """Link lines for one value's passages; the nodes are collected."""
+            """Lines to put above the triple this evidence belongs to.
+
+            With EVIDENCE on those are links into oekgprov: nodes; with it off
+            they are comments. Either way the passage stays in the file, and
+            either way the caller appends the triple itself afterwards, so the
+            block never ends on one of these lines.
+            """
             if not EVIDENCE:
-                return []
+                return [line for row in sources
+                        for line in _evidence_comment(row, name)]
             links = []
             for row in sources:
                 link, node = _evidence(subject, predicate, row, name)
@@ -454,6 +542,12 @@ def make_serializer(db_path: Path):
             # and that one is a finding to review rather than a node to trust.
             regions: dict = {}
             for row in rows_for("scenario_region", scenario=norm):
+                if not in_graph(row.get("value_uri")) and row.get("value_uri"):
+                    # "global", "mehrere Laender": a true answer and not a
+                    # study region. The OEKG holds 249 countries and no
+                    # aggregate, so there is nothing to point at — minting one
+                    # would invent a region that the OEKG then has twice.
+                    continue
                 region_iri = row.get("value_uri") or mint("studyregion",
                                                           row["value"])
                 regions.setdefault(region_iri, (row["value"], []))[1].append(row)
@@ -497,13 +591,15 @@ def make_serializer(db_path: Path):
         std[-1] = std[-1].rstrip(" ;") + " ."
 
         log.info("kg: %s: 1 report, 1 bundle, %d scenario(s), %d author(s), "
-                 "%d organisation(s), %d funder(s)%s%s%s", name,
+                 "%d organisation(s), %d funder(s)%s%s%s%s", name,
                  len(scenario_links), len(author_links), len(org_links),
                  len(funder_links),
                  f", contested {contested}" if contested else "",
                  f", MISSING REQUIRED {missing}" if missing else "",
                  f", {len(unplaced)} scenario name(s) not in the AR6 list "
-                 f"{unplaced[:5]}" if unplaced else "")
+                 f"{unplaced[:5]}" if unplaced else "",
+                 f", not in the graph by choice: {dict(out_of_graph)}"
+                 if out_of_graph else "")
 
         parts = [NL.join(pub) + NL, NL.join(std) + NL]
         parts += scenario_nodes + author_nodes + org_nodes + funder_nodes
