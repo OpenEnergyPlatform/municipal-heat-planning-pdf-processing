@@ -1182,7 +1182,10 @@ def make_locate(db_path: Path, pdf_root: Optional[Path]) -> Optional[Callable]:
     A section can run over a page break, so the section's other pages are
     tried too - bounded, because this opens the PDF each time.
     """
-    if pdf_root is None:
+    if pdf_root is None or os.environ.get("EXTRACT_LOCATE", "1") == "0":
+        # The rectangles are display data: they say WHERE on the page a quote
+        # sits, never whether the value is accepted. A run that cannot afford
+        # to enter MuPDF at all still produces every value, quote and page.
         return None
     from docpipe.inference.pdf_locate import page_words, rects_from_words
 
@@ -1248,7 +1251,15 @@ def make_locate(db_path: Path, pdf_root: Optional[Path]) -> Optional[Callable]:
         candidates = ([int(first_page)] if first_page else []) + \
                      [p for p in pages if p != first_page]
         for page in candidates[:LOCATE_MAX_PAGES]:
-            rects = rects_from_words(words_of(pdf_path, page), quote)
+            # Under the lock, because this is where MuPDF is entered. The lock
+            # guarded the two dicts and not the library, so eight verification
+            # threads opened and laid out PDFs at once; a corpus run died of
+            # "stack smashing detected" after 204 documents, taking the rest
+            # of its group with it. The lru_cache means most calls here are a
+            # dict lookup anyway.
+            with lock:
+                words = words_of(pdf_path, page)
+            rects = rects_from_words(words, quote)
             if rects:
                 return rects
         return None
