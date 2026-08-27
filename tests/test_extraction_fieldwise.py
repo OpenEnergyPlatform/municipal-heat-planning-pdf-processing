@@ -172,6 +172,48 @@ def test_the_example_survives_the_field_wise_round_trip(profile):
                     f"{parameter.uri}.{name} arrived without its own evidence"
 
 
+TABLE = "| Erdgas | 126.656.132 | 520.465.057 | 1.036.767.833 |"
+
+
+@pytest.mark.parametrize("value,expected", [
+    (126656132, (2, 4)),
+    (520465057, (3, 4)),
+    (1036767833, (4, 4)),
+])
+def test_the_column_a_number_stands_in_is_counted_not_guessed(value, expected):
+    """Three numbers, one quote, three different years. The column tells them
+    apart, and it is derivable from the value and the row it was quoted from."""
+    from docpipe.extraction.pipeline import cell_index
+    assert cell_index(TABLE, value) == expected
+
+
+@pytest.mark.parametrize("quote,value", [
+    ("Der Verbrauch lag bei 126.656.132 kWh/a.", 126656132),   # not a table
+    ("| Erdgas | 4.000 | 4.000 | 8.000 |", 4000),              # twice over
+    (TABLE, 999),                                              # in no cell
+])
+def test_an_uncertain_column_is_left_out_rather_than_guessed(quote, value):
+    """A wrong column would put a value under the wrong year, which is worse
+    than a value with no year at all."""
+    from docpipe.extraction.pipeline import cell_index
+    assert cell_index(quote, value) is None
+
+
+def test_the_field_reply_contract_is_stated_by_every_profiles_prompt(profile):
+    """merge_field parses one shape, and each profile describes it in its own
+    words. A prompt that describes a different one fills nothing and says
+    nothing, so the keys the core reads are checked to be named.
+
+    The prompts stay with the profile on purpose (prompts.py: a prompt names
+    the corpus and the language, and the core knows neither). This is the seam
+    that costs, so it is the seam that is held.
+    """
+    name, _spec = profile
+    text = runner.prompts.load(runner.FIELD_PROMPT_ID).text
+    for key in ("groups", "answers", "rows", "value", "value_raw", "quote"):
+        assert f'"{key}"' in text, f"{name}: field prompt never names {key!r}"
+
+
 def test_both_new_prompts_exist_and_leave_room_for_an_answer(profile):
     """A field reply is small, but a table of forty rows is not."""
     name, _spec = profile

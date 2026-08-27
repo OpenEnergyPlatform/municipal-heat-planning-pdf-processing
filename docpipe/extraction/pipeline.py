@@ -30,7 +30,8 @@ from typing import Callable, Optional
 
 from . import queries as queries_mod
 from .spec import Spec
-from .verify import Refusal, Verified, quote_in, verify_tuple
+from .verify import (Refusal, Verified, numbers_in, canonical_number,
+                     quote_in, verify_tuple)
 
 log = logging.getLogger(__name__)
 
@@ -273,6 +274,34 @@ class Row:
 
 def row_label(index: int) -> str:
     return f"R{index + 1}"
+
+
+def cell_index(quote: str, value) -> Optional[tuple]:
+    """(cell holding this value, cells in the row), 1-based, or None.
+
+    The one thing a field request should not have to work out for itself. A
+    table row quoted whole carries three numbers under three year columns, and
+    which year applies is decided by which cell the number sits in — a fact
+    that is already known here, because the value and the row it was quoted
+    from are both in hand. Handing it over turns "count the cells" into a
+    given and leaves the model the part that actually needs reading: which
+    year the header's nth cell names.
+
+    None whenever it is not certain: no table row, the value in no cell, or
+    the same number in two of them. A wrong column is worse than none.
+    """
+    if not isinstance(quote, str) or "|" not in quote:
+        return None
+    line = next((l for l in quote.splitlines() if l.count("|") >= 2), None)
+    if line is None:
+        return None
+    cells = [c.strip() for c in line.strip().strip("|").split("|")]
+    wanted = canonical_number(value)
+    if wanted is None:
+        return None
+    hits = [i for i, cell in enumerate(cells, start=1)
+            if wanted in numbers_in(cell)]
+    return (hits[0], len(cells)) if len(hits) == 1 else None
 
 
 def rows_from_reply(batch: Batch, reply: Optional[dict]) -> tuple:
