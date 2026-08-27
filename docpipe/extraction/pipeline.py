@@ -47,6 +47,9 @@ class Source:
     text: str                             # what the model will read
     provenance: dict = field(default_factory=dict)
     image_path: Optional[str] = None      # the crop, for tables and figures
+    # The transcription without the heading prefixed to `text`, for the quote
+    # repair alone — that repair needs the value to occur exactly once.
+    body: Optional[str] = None
 
 
 @dataclass
@@ -409,7 +412,8 @@ def fold_claims(item: WorkItem, claims: Optional[list],
         finder = ((lambda quote, s=source: locate(s, quote))
                   if locate is not None else None)
         outcome = verify_tuple(claim, parameter, source.text,
-                               owner_kind=source.owner_kind, locate=finder)
+                               owner_kind=source.owner_kind, locate=finder,
+                               repair_text=source.body)
         if isinstance(outcome, Refusal):
             report.refusals.append(
                 {"parameter": parameter.uri, "reason": outcome.reason,

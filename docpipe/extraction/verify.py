@@ -284,7 +284,8 @@ def _repair_quote(raw: dict, parameter: Parameter, source: str) -> Optional[str]
 
 def verify_tuple(raw: dict, parameter: Parameter, source_text: str, *,
                  owner_kind: str = "section",
-                 locate: Optional[Callable[[str], Optional[list]]] = None):
+                 locate: Optional[Callable[[str], Optional[list]]] = None,
+                 repair_text: Optional[str] = None):
     """One claimed tuple against everything the model does not control.
 
     Returns Verified or Refusal. *owner_kind* decides the tier: prose gets
@@ -292,6 +293,11 @@ def verify_tuple(raw: dict, parameter: Parameter, source_text: str, *,
     that maps the quote to highlight rectangles in the source PDF — lazy
     because opening the PDF is the expensive step and a claim refused earlier
     never needs it.
+
+    *repair_text* is what a missing quote is rebuilt from, when the heading
+    prefixed into *source_text* is not part of it. The repair rests on the
+    value occurring exactly once, and 1.9% of this corpus's table numbers
+    also stand in their own caption.
     """
     if not isinstance(raw, dict):
         return Refusal(raw={}, reason="tuple is not an object")
@@ -386,7 +392,9 @@ def verify_tuple(raw: dict, parameter: Parameter, source_text: str, *,
     if not isinstance(quote, str) or len(quote) < 8:
         return Refusal(raw, "quote missing or too short to identify anything")
     if not quote_in(source_text, quote):
-        repaired = _repair_quote(raw, parameter, source_text)
+        repaired = _repair_quote(
+            raw, parameter,
+            repair_text if repair_text is not None else source_text)
         if repaired is None:
             return Refusal(raw, "quote not found in the source it cites")
         raw = dict(raw, quote=repaired)

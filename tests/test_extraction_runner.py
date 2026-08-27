@@ -796,3 +796,47 @@ def test_the_holes_are_the_tail_of_the_batch_not_the_unlabelled_sources():
     holes = runner._holes(batch, rescued["tuples"])
     assert [h["source"] for h in holes] == ["Q4", "Q5", "Q6"], (
         "Q1 to Q3 were reached; the loss is what comes after")
+
+
+# ---------------------------------------------------------------------------
+# The heading the model could read but not cite
+# ---------------------------------------------------------------------------
+
+def test_the_caption_joins_the_text_the_quote_is_checked_against():
+    """A unit, a year or a scenario printed only in a caption was visible to
+    the model and quotable by nobody: _batch_payload sends it as its own
+    field, the verifier only ever saw the transcription. Measured on this
+    corpus, a table's caption is absent from its markdown 98.6% of the time
+    and 15992 captions carry a year."""
+    source = runner._source_of({
+        "owner_kind": "table", "owner_id": 5,
+        "title": "Tabelle 12: Endenergieverbrauch 2035 im Zielszenario [MWh/a]",
+        "text": "| Erdgas | 42.005 |", "page_number": 7})
+    assert source.text.startswith("Tabelle 12:")
+    assert "| Erdgas | 42.005 |" in source.text
+    assert source.body == "| Erdgas | 42.005 |", (
+        "the repair still works from the transcription alone")
+
+
+def test_a_heading_already_in_the_text_is_not_repeated():
+    source = runner._source_of({
+        "owner_kind": "section", "owner_id": 5, "title": "5.2 Zielszenario",
+        "text": "5.2 Zielszenario\n\nDer Bedarf sinkt.", "page_number": 7})
+    assert source.text.count("5.2 Zielszenario") == 1
+    assert source.body is None, "nothing was prefixed, so there is nothing to strip"
+
+
+def test_the_repair_stays_unambiguous_when_the_caption_repeats_a_number():
+    """The one regression the joining could cause: the repair rests on the
+    value occurring exactly once, and 1.9% of table numbers also appear in
+    their own caption. It reads the transcription, so it still does."""
+    from docpipe.extraction.pipeline import Source, WorkItem, DocumentReport, fold_claims
+
+    source = Source("table", 5, "Waermebedarf 42.005 MWh/a\n| Erdgas | 42.005 |",
+                    {"page": 7}, body="| Erdgas | 42.005 |")
+    report = DocumentReport(document_id=7)
+    fold_claims(WorkItem(7, SPEC.parameters[0], source),
+                [{"value": 42005, "unit": "MWh/a", "unit_raw": "MWh/a",
+                  "carrier": "Erdgas", "quote": "Erdgas 42.005 MWh"}], report)
+    assert report.tuples, [r["reason"] for r in report.refusals]
+    assert "quote_repaired" in report.tuples[0]["flags"]

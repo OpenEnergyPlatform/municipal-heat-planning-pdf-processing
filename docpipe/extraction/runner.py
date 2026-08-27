@@ -138,9 +138,18 @@ def _source_of(hit: dict, via: Optional[str] = None) -> Source:
                   "title": hit.get("title")}
     if via:
         provenance["via"] = via
+    body = hit.get("text") or ""
+    # The heading joins the text the quote is checked against. The model was
+    # always shown it; the verifier only ever saw the transcription, so a unit
+    # or a year printed only in a caption was visible and not quotable.
+    heading = (hit.get("title") or hit.get("section_title") or "").strip()
+    text = body
+    if heading and heading not in body[:200]:
+        text = f"{heading}\n{body}"
     return Source(owner_kind=hit["owner_kind"], owner_id=hit["owner_id"],
-                  text=hit.get("text") or "", provenance=provenance,
-                  image_path=hit.get("image_path"))
+                  text=text, provenance=provenance,
+                  image_path=hit.get("image_path"),
+                  body=body if text is not body else None)
 
 
 def make_content_fetcher() -> Callable:
