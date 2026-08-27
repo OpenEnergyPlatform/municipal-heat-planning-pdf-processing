@@ -50,13 +50,28 @@ _SPEC = json.loads(
 # Zielgroesse je OEO-Klasse, nicht je Parameter: welche Klasse ein Wert ist,
 # entscheidet das Modell auf der Achse `quantity`, und die Einheit haengt an
 # der Klasse.
+# Die Klassen, die der Graph aufnimmt. Die uebrigen Eintraege der Liste
+# beginnen mit `out:` und sind ausdruecklich waehlbare Nicht-Klassen: eine
+# kumulierte Summe, eine vermiedene oder abgeschiedene Menge, ein Potenzial.
+# Sie stehen in der Auswahl, damit das Modell sie WAEHLEN kann, statt die
+# naechstbeste echte Klasse zu nehmen.
+NOT_IN_GRAPH = "out:"
 UNIT_TARGET = {uri: par["unit_target"]
                for par in _SPEC["parameters"]
                if par.get("unit_target")
-               for uri in par["axes"]["quantity"]["vocabulary"]}
+               for uri in par["axes"]["quantity"]["vocabulary"]
+               if not uri.startswith(NOT_IN_GRAPH)}
+# Wie ein Wert ueber Zeit oder Raum zusammengefasst ist, waehlt das Modell aus
+# den fuenf Klassen, die OEO unter `aggregation type` fuehrt. Frueher stand hier
+# immer `integral`, also wurde eine Spitzenlast als Jahressumme behauptet.
+AGGREGATIONS = {uri for par in _SPEC["parameters"]
+                if "aggregation" in par.get("axes", {})
+                for uri in par["axes"]["aggregation"]["vocabulary"]}
 ORGANISATION = "planning_organisation"
 CLS_ORGANISATION = "OEO_00030022"        # organisation
+CLS_PLAN_AREA = "MHPO_00020018"          # heat plan area
 P_ORGANISATION = "OEO_00000510"          # has organisation
+P_PART_OF = "BFO_0000050"                # part of
 
 PREFIXES = """\
 @prefix rdfs:  <http://www.w3.org/2000/01/rdf-schema#> .
@@ -141,17 +156,59 @@ def _document_identity(db_path: Path, name: str):
 
 
 def _value_iri(heatplan: str, row: dict) -> str:
-    # mint_slice.py's coordinate list plus the sector (see module docstring);
-    # absent coordinates are empty segments so the arity never varies.
+    # mint_slice.py's coordinate list plus the sector and the sub-area (see
+    # module docstring); absent coordinates are empty segments so the arity
+    # never varies. The area has to be in here: one plan carries four separate
+    # gas tables, one per heat-network area, and without it they collide onto
+    # one node and the conflict guard drops all four.
     coordinates = "|".join([
         heatplan,
         f"{OEO}{row['quantity']}",
         f"{OEO}{row['carrier']}" if row.get("carrier") else "",
         f"{OEO}{row['sector']}" if row.get("sector") else "",
         str(row["year"]),
-        f"{OEO}{AGGREGATION_INTEGRAL}",
+        f"{OEO}{row.get('aggregation') or AGGREGATION_INTEGRAL}",
+        normalise(row.get("spatial_scope_raw") or ""),
     ])
     return mint("value", coordinates)
+
+
+def _ttl_comment(text) -> str:
+    """One Turtle comment line, flattened so a quote cannot break the file."""
+    flat = re.sub(r"\s+", " ", str(text or "")).strip()
+    return "# " + flat[:400]
+
+
+def evidence_comment(row: dict, document: str) -> list:
+    """Where this value was read, as comment lines above its node.
+
+    The prototype's evidence: the wording the document used, the passage it
+    was read in, and the page it stands on. A comment rather than triples
+    because the shapes are sh:closed and an extra triple on a value node
+    invalidates it.
+    """
+    prov = row.get("provenance") or {}
+    where = [f"{document}.pdf"]
+    if prov.get("page"):
+        where.append(f"Seite {prov['page']}")
+    kind = {"section": "Abschnitt", "table": "Tabelle",
+            "figure": "Abbildung"}.get(prov.get("owner_kind"))
+    if kind:
+        where.append(kind + (f" „{prov['title']}“" if prov.get("title") else ""))
+    what = [row.get("quantity_raw") or "", row.get("scenario_raw") or "",
+            row.get("spatial_scope_raw") or "", row.get("carrier_raw") or "",
+            row.get("sector_raw") or ""]
+    lines = [_ttl_comment(" · ".join(x for x in what if x))] if any(what) else []
+    if row.get("quote"):
+        lines.append(_ttl_comment(f"„{row['quote']}“"))
+    lines.append(_ttl_comment(", ".join(where)))
+    if row.get("compute"):
+        # A value the sandbox computed carries the code and its inputs, so the
+        # arithmetic is checkable without re-running anything.
+        lines.append(_ttl_comment(f"berechnet: {row['compute']}"))
+    if row.get("flags"):
+        lines.append(_ttl_comment("Flags: " + ", ".join(row["flags"])))
+    return lines
 
 
 def make_serializer(db_path: Path):
@@ -183,14 +240,24 @@ def make_serializer(db_path: Path):
             # could not place keeps its wording and is counted, instead of
             # being guessed at from a table of German spellings.
             quantity = row.get("quantity")
+            scope = row.get("spatial_scope")
+            area = (row.get("spatial_scope_raw") or "").strip()
             if row.get("scenario") != "target":
                 skip("scenario")
-            elif row.get("spatial_scope") != "municipality":
+            elif scope not in ("municipality", "sub_area"):
                 skip("spatial_scope")
+            elif scope == "sub_area" and not area:
+                # Two unnamed sub-areas are one node and one is silently lost.
+                skip("sub_area_unnamed")
             elif not isinstance(row.get("year"), int):
                 skip("year")
             elif quantity not in UNIT_TARGET:
-                skip(f"not_a_class:{row.get('quantity_raw') or '?'}")
+                # The model chose one of the classes the graph does not take —
+                # a potential, a cumulative sum, a captured amount. Counted by
+                # what it chose, which is the useful thing to read.
+                skip(f"not_a_class:{quantity or row.get('quantity_raw') or '?'}")
+            elif row.get("aggregation") and row["aggregation"] not in AGGREGATIONS:
+                skip(f"aggregation:{row['aggregation']}")
             elif row.get("carrier") in NOT_AN_ENERGY_CARRIER:
                 skip(f"carrier_not_in_oeo:"
                      f"{NOT_AN_ENERGY_CARRIER[row['carrier']]}")
@@ -246,6 +313,10 @@ def make_serializer(db_path: Path):
         # ohne Rechtsform ergeben einen Knoten, nicht zwei.
         office_iris = {mint("organisation", key): label
                        for key, label in offices.items()}
+        areas = {normalise(r["spatial_scope_raw"]): r["spatial_scope_raw"].strip()
+                 for r in values.values()
+                 if r.get("spatial_scope") == "sub_area"
+                 and (r.get("spatial_scope_raw") or "").strip()}
         office_edge = ""
         if office_iris:
             refs = " ,\n        ".join(f"<{i}>" for i in office_iris)
@@ -270,8 +341,9 @@ def make_serializer(db_path: Path):
     oeo:OEO_00140002 {value_refs} .
 """)
         for iri, row in values.items():
-            lines = [f"<{iri}>",
-                     f"    a oeo:{row['quantity']} ;",
+            lines = evidence_comment(row, name)
+            lines += [f"<{iri}>",
+                      f"    a oeo:{row['quantity']} ;",
                      f"    oeo:OEO_00140178 \"{float(row['value_target'])!r}\"^^xsd:float ;",
                      f"    oeo:OEO_00040010 oeo:{UNIT_TARGET[row['quantity']]} ;"]
             if row.get("carrier"):
@@ -279,12 +351,24 @@ def make_serializer(db_path: Path):
             if row.get("sector"):
                 lines.append(f"    oeo:OEO_00000505 oeo:{row['sector']} ;")
             lines.append(f"    oeo:OEO_00020440 \"{row['year']}\"^^xsd:integer ;")
-            lines.append(f"    oeo:OEO_00390023 oeo:{AGGREGATION_INTEGRAL} .")
+            lines.append(f"    oeo:OEO_00390023 "
+                         f"oeo:{row.get('aggregation') or AGGREGATION_INTEGRAL} .")
             parts.append("\n".join(lines) + "\n")
         for iri, label in office_iris.items():
             parts.append(f"<{iri}>\n"
                          f"    a oeo:{CLS_ORGANISATION} ;\n"
                          f"    rdfs:label \"{label}\" .\n")
+        # Sub-areas exist as nodes and are part of the municipality area. What
+        # is missing is the edge from a VALUE to the area it holds for: MHPO
+        # has `heat plan area` and BFO `part of`, and nothing that relates a
+        # value or a plan to an area (TERM REQUEST 1 in their own schema). So
+        # the area is in the value's identity and in its comment, and the
+        # relation is the term request.
+        for key, label in sorted(areas.items()):
+            parts.append(f"<{mint('heatplanarea', f'{ags}|{key}')}>\n"
+                         f"    a mhpo:{CLS_PLAN_AREA} ;\n"
+                         f"    rdfs:label \"{label}\" ;\n"
+                         f"    obo:{P_PART_OF} <{municipality_iri}> .\n")
         parts.append(f"""\
 <{municipality_iri}>
     a mhpo:MHPO_00020017 ;

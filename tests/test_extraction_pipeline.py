@@ -19,7 +19,7 @@ SPEC = load({"parameters": [{
         "year": {"type": "int"},
     },
     "example": {"source": "| Erdgas | 42.005 | MWh/a | im Jahr 2020 |",
-                "tuples": [{"value": 42005, "unit_raw": "MWh/a"}]},
+                "tuples": [{"value": 42005, "unit": "MWh/a", "unit_raw": "MWh/a"}]},
 }]})
 
 TEMPLATES = ["{label} nach Energieträgern Tabelle", "{label} {axis:carrier}"]
@@ -72,7 +72,7 @@ def test_an_owner_found_by_two_queries_is_harvested_once():
 
     def harvest(source, parameter):
         calls.append(source.owner_id)
-        return [{"value": 42005, "unit_raw": "MWh/a", "carrier": "Erdgas",
+        return [{"value": 42005, "unit": "MWh/a", "unit_raw": "MWh/a", "carrier": "Erdgas",
                  "quote": "Erdgas | 42.005"}]
 
     report = harvest_document(7, SPEC, TEMPLATES,
@@ -105,7 +105,7 @@ def test_refusals_are_reported_not_dropped():
                 if ("table", s.owner_id) not in exclude]
 
     def harvest(source, parameter):
-        return [{"value": 99999, "unit_raw": "MWh/a",
+        return [{"value": 99999, "unit": "MWh/a", "unit_raw": "MWh/a",
                  "quote": "Erdgas | 42.005"}]          # value not in quote
 
     report = harvest_document(7, SPEC, TEMPLATES,
@@ -122,7 +122,7 @@ def test_unmapped_labels_ride_on_the_row_itself():
                 if ("table", s.owner_id) not in exclude]
 
     def harvest(source, parameter):
-        return [{"value": 42005, "unit_raw": "MWh/a", "carrier": "Klärgas",
+        return [{"value": 42005, "unit": "MWh/a", "unit_raw": "MWh/a", "carrier": "Klärgas",
                  "quote": "Erdgas | 42.005"}]
 
     report = harvest_document(7, SPEC, TEMPLATES,
@@ -140,7 +140,7 @@ def test_a_figure_claim_carries_the_visual_tier():
     def harvest(source, parameter):
         if source.owner_kind != "figure":
             return []
-        return [{"value": 42000, "unit_raw": "MWh/a", "carrier": "Erdgas",
+        return [{"value": 42000, "unit": "MWh/a", "unit_raw": "MWh/a", "carrier": "Erdgas",
                  "quote": "Erdgas etwa 42.000 MWh/a"}]
 
     report = harvest_document(7, SPEC, TEMPLATES,
@@ -157,9 +157,9 @@ def test_the_report_file_is_the_audit_trail(tmp_path):
 
     def harvest(source, parameter):
         if source.owner_id == 1:
-            return [{"value": 42005, "unit_raw": "MWh/a", "carrier": "Erdgas",
+            return [{"value": 42005, "unit": "MWh/a", "unit_raw": "MWh/a", "carrier": "Erdgas",
                      "quote": "Erdgas | 42.005"}]
-        return [{"value": 1, "unit_raw": "MWh/a", "quote": "Heizöl | 17.300"}]
+        return [{"value": 1, "unit": "MWh/a", "unit_raw": "MWh/a", "quote": "Heizöl | 17.300"}]
 
     report = harvest_document(7, SPEC, TEMPLATES,
                               retrieve=_per_probe(retrieve), harvest=harvest)

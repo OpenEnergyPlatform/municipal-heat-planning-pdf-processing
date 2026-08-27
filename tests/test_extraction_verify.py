@@ -36,7 +36,8 @@ SOURCE = ("| Energieträger | Private Haushalte | | Erdgas | 1.036.767.833 | "
 
 
 def _claim(**overrides):
-    claim = {"value": 1036767833, "unit_raw": "kWh/a", "carrier": "Erdgas",
+    claim = {"value": 1036767833, "unit": "kWh/a", "unit_raw": "kWh/a",
+             "carrier": "Erdgas",
              "sector": "Private Haushalte", "year": 2020,
              "scenario": "status_quo",
              "quote": "Erdgas | 1.036.767.833"}
@@ -131,14 +132,27 @@ def test_a_value_the_source_holds_twice_is_not_repaired():
     assert "not found in the source" in out.reason
 
 
-def test_a_unit_spelled_another_way_is_still_that_unit():
-    """The spec lists "kWh/a"; the document writes "kWh pro Jahr". Enumerating
-    spellings does not converge, so the comparison normalises instead — and
-    the flag keeps the new spelling visible for the list."""
-    out = verify_tuple(_claim(unit_raw="kWh pro Jahr"), _parameter(), SOURCE)
+def test_the_unit_is_a_choice_and_the_spelling_is_evidence():
+    """units_accepted is a closed list, so the model picks from it and writes
+    the document's own spelling beside it. The spelling is never looked up."""
+    out = verify_tuple(_claim(unit="kWh/a", unit_raw="kWh pro Jahr"),
+                       _parameter(), SOURCE)
+    assert isinstance(out, Verified), getattr(out, "reason", out)
+    assert out.tuple["unit"] == "kWh/a"
+    assert out.tuple["unit_raw"] == "kWh pro Jahr"
+    assert out.tuple["value_target"] == 1036767.833
+    assert not out.flags, "an exact choice needed no judgement"
+
+
+def test_a_unit_nobody_chose_is_still_read_but_flagged():
+    """The fallback while the fleet learns the new field, and a measurement of
+    how often it is needed: the spelling is looked up and the tuple says so."""
+    claim = _claim(unit_raw="kWh pro Jahr")
+    claim.pop("unit", None)
+    out = verify_tuple(claim, _parameter(), SOURCE)
     assert isinstance(out, Verified), getattr(out, "reason", out)
     assert out.tuple["value_target"] == 1036767.833
-    assert "unit_spelling:kWh pro Jahr" in out.flags
+    assert "unit_not_chosen:kWh pro Jahr" in out.flags
 
 
 def test_a_unit_of_another_quantity_is_still_refused():
@@ -146,7 +160,7 @@ def test_a_unit_of_another_quantity_is_still_refused():
     and a normaliser that merged them would put a specific demand into a
     column of absolute ones."""
     for unit in ("kWh/(m²*a)", "kWh/EW", "%"):
-        out = verify_tuple(_claim(unit_raw=unit), _parameter(), SOURCE)
+        out = verify_tuple(_claim(unit=unit, unit_raw=unit), _parameter(), SOURCE)
         assert isinstance(out, Refusal), unit
         assert "units_accepted" in out.reason
 
@@ -194,7 +208,7 @@ def test_an_unknown_label_is_kept_but_flagged_not_refused():
 
 
 def test_a_foreign_unit_is_refused():
-    out = verify_tuple(_claim(unit_raw="PJ"), _parameter(), SOURCE)
+    out = verify_tuple(_claim(unit="PJ", unit_raw="PJ"), _parameter(), SOURCE)
     assert isinstance(out, Refusal)
     assert "units_accepted" in out.reason
 

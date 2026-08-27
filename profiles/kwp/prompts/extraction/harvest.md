@@ -11,7 +11,7 @@ Du bekommst ein JSON-Objekt mit zwei Feldern:
 
 Gib ausschließlich ein JSON-Objekt in dieser Form zurück:
 
-{"tuples": [{"value": 126656132, "unit_raw": "kWh/a", "carrier": "Erdgas", "carrier_raw": "Gas H", "sector": "Industrie", "sector_raw": "Industrie", "year": 2020, "scenario": "status_quo", "spatial_scope": "municipality", "quantity": "final energy consumption value", "quantity_raw": "Endenergie", "quote": "| Gas H | 126.656.132 | 520.465.057 | 1.036.767.833 |"}]}
+{"tuples": [{"value": 126656132, "unit": "kWh/a", "unit_raw": "kWh/a", "quantity": "final energy consumption value", "quantity_raw": "Endenergie", "aggregation": "integral", "carrier": "Erdgas", "carrier_raw": "Gas H", "sector": "Industrie", "sector_raw": "Industrie", "year": 2020, "scenario": "Bestand", "spatial_scope": "Gemeindegebiet", "spatial_scope_raw": null, "quote": "| Gas H | 126.656.132 | 520.465.057 | 1.036.767.833 |"}]}
 
 Ein Tupel pro Zahl, und zwar VOLLSTÄNDIG: jede Zahl des gesuchten Parameters in der Quelle bekommt ihr Tupel — jede Zeile und jede Spalte, auch wenn deren Bezeichnung zu keiner Klasse passt (dann die Klasse null und die Bezeichnung in "_raw"). Eine leere Liste {"tuples": []} ist nur dann das Ergebnis, wenn die Quelle wirklich keinen Wert des gesuchten Parameters enthält.
 
@@ -21,7 +21,12 @@ Jedes Tupel wird maschinell und wörtlich gegen die Quelle geprüft; was die Pr�
    FALSCH: 126.656.132 und 520.465.057 addieren und die Summe ausgeben — die Summe steht nirgends in der Quelle.
    FALSCH: 126.656.132 kWh/a in 126656.132 MWh/a umrechnen — ausgegeben wird die gedruckte Zahl mit der gedruckten Einheit.
 
-2. "unit_raw": die Einheit EXAKT, wie sie in der Quelle steht. Steht sie nur im Spaltenkopf, in einer Blocküberschrift wie "Endenergieverbrauch [MWh/a]" oder in der Caption, gilt sie für alle zugehörigen Zellen. Gib das Tupel auch dann aus, wenn die Einheit nicht in "units_accepted" steht — es wird dann geprüft und mit Begründung abgelehnt, statt unsichtbar zu fehlen. Nur Zahlen ganz ohne erkennbare Einheit lässt du weg.
+2. "unit" und "unit_raw": zwei Felder, wie bei allen Auswahlfeldern.
+   - "unit": genau EIN Eintrag aus "units_accepted", nämlich der, den die Quelle meint. Zeichen für Zeichen aus der Liste abgeschrieben.
+   - "unit_raw": die Einheit EXAKT so, wie sie in der Quelle steht. Steht sie nur im Spaltenkopf, in einer Blocküberschrift wie "Endenergieverbrauch [MWh/a]" oder in der Caption, gilt sie für alle zugehörigen Zellen.
+   Beispiel: Quelle schreibt "t CO₂ eq/a", die Liste führt "t CO2eq/a" — dann "unit": "t CO2eq/a", "unit_raw": "t CO₂ eq/a".
+   Steht in der Quelle eine Einheit, die in "units_accepted" keine Entsprechung hat, lässt du "unit" leer und füllst nur "unit_raw". Das Tupel wird dann mit Begründung abgelehnt, statt unsichtbar zu fehlen. Rechne NIE um: die Umrechnung macht die Prüfung anhand der gewählten Einheit.
+   Nur Zahlen ganz ohne erkennbare Einheit lässt du weg.
 
 3. "quote": eine wörtliche, zusammenhängende Zeichenkette aus source.text (mindestens 8 Zeichen), die die Zahl EXAKT wie gedruckt enthält — am besten die komplette Tabellenzeile. Zeichen für Zeichen kopieren, nichts umformatieren, nichts auslassen.
    FALSCH: "Erdgas: 126656132 kWh/a" — umformatiert, steht so nicht in der Quelle.
@@ -34,16 +39,21 @@ Jedes Tupel wird maschinell und wörtlich gegen die Quelle geprüft; was die Pr�
 
 5. "year": das vierstellige Bezugsjahr, nur wenn es in der Quelle, ihrem Titel oder dem Abschnittsnamen genannt ist; sonst null.
 
-6. "scenario": "target" bei Zielszenario, Zielbild oder Zielwerten; "trend" bei Trend- oder Referenzszenario; "status_quo" bei Bestandsbilanzen (Ist-Zustand); sonst "unknown".
+6. "scenario": eine Klasse aus axes.scenario.classes. Der Bezug steht selten in der Zeile selbst, sondern in der Abschnittsüberschrift, im Tabellentitel oder in der Caption — lies dort nach, bevor du "nicht erkennbar" wählst. Nennt die Quelle mehrere Zielszenarien nebeneinander (Umsetzungsszenario 1, Umsetzungsszenario 2), gehört der Name des konkreten in "scenario_raw".
 
-7. "spatial_scope": "sub_area", wenn sich die Werte auf ein Fokusgebiet, Teilgebiet, Quartier oder einen Stadtteil beziehen — auch wenn das nur im Titel oder in der Caption steht; "municipality" bei Gesamtstadt oder Gemeinde; sonst "unknown".
+7. "spatial_scope" und "spatial_scope_raw": auf welches Gebiet sich der Wert bezieht.
+   - "spatial_scope": eine Klasse aus axes.spatial_scope.classes. Auch hier steht der Bezug meist in der Überschrift oder der Caption, nicht in der Zeile.
+   - "spatial_scope_raw": der NAME des Gebiets, wörtlich, wenn die Quelle einen nennt: "Fokusgebiet Eicken", "Quartier Nordstadt", "Wärmenetzgebiet 3". Pflichtfeld bei "Teilgebiet" — ohne den Namen sind zwei Teilgebiete im Graphen nicht auseinanderzuhalten. Bei "Gemeindegebiet" null.
 
 8. "quantity" und "quantity_raw": WELCHE GRÖSSE die Zahl ist. Das ist die wichtigste Entscheidung des ganzen Tupels, denn sie bestimmt, als welche Klasse der Wert im Knowledge Graph steht.
-   - "quantity": genau EIN Klassenname aus axes.quantity.classes. Die Beschreibung des Parameters nennt zu jeder Klasse ihre Definition aus der Ontologie. Entscheide danach, nicht nach der Ähnlichkeit der Wörter.
+   - "quantity": genau EIN Klassenname aus axes.quantity.classes. Die Beschreibung des Parameters nennt zu jeder Klasse ihre Definition aus der Ontologie. Entscheide nach der Definition, nicht nach der Ähnlichkeit der Wörter.
    - "quantity_raw": die wörtliche Bezeichnung der Kennzahl aus der Quelle, aus Zeile, Spaltenkopf, Blocküberschrift oder Caption. Pflichtfeld, auch wenn du eine Klasse gewählt hast.
-   Passt keine Klasse, lässt du "quantity" leer und füllst nur "quantity_raw". Das ist ein brauchbares Ergebnis und wird ausgewertet. Diese Fälle sind häufig und richtig: ein Bedarf ist kein Verbrauch (Wärmebedarf, Nutzwärmebedarf, Endenergiebedarf), ein Potenzial ist keiner, eine Erzeugung, eine Einsparung, eine Abscheidung und ein Anteil in Prozent auch nicht.
-   RICHTIG: Zeile "Wärmeverbrauch", Klasse "final energy consumption value" — die Definition lautet "the energy delivered to and consumed by end users", und genau das ist ein Wärmeverbrauch.
-   RICHTIG: Zeile "Wärmebedarf", "quantity" leer, "quantity_raw": "Wärmebedarf".
-   FALSCH: eine Klasse wählen, weil das Wort ähnlich klingt.
+   Die Liste enthält AUCH die Größen, die der Graph nicht aufnimmt. Ist die Zahl eine kumulierte Summe über mehrere Jahre, eine vermiedene Emission, eine abgeschiedene Menge, ein Potenzial, eine Erzeugung oder ein Prozentanteil, dann wähle GENAU DIESEN Eintrag. Das ist ein richtiges Ergebnis, kein Fehler, und es ist besser als jede Klasse, die nur ungefähr passt.
+   RICHTIG: "Wärmeverbrauch" und "Wärmebedarf" sind BEIDE "final energy consumption value" — die Definition lautet "the energy delivered to and consumed by end users", und ein im Zielszenario zu deckender Bedarf ist genau die Energie, die dort bei den Endverbrauchern ankommt. In einem Szenario ist ohnehin nichts gemessen.
+   RICHTIG: "Kumulierte THG-Emissionen" → "kumulierte Emission über mehrere Jahre".
+   RICHTIG: "CO₂-Abscheidung" aus einer CCS-Anlage → "abgeschiedene oder gespeicherte Emission".
+   FALSCH: "CO₂-Abscheidung" als "CO2 emission value" — abgeschieden ist das Gegenteil von ausgestoßen.
 
-9. Nichts erfinden: nur Zahlen, die wörtlich in source.text stehen. Das gilt auch für Diagrammbeschreibungen — was dort nicht beziffert ist, existiert nicht. Was du aus Kontextwissen ergänzen müsstest, gehört nicht in die Liste.
+9. "aggregation": wie der Wert über Zeit oder Raum zusammengefasst ist, eine Klasse aus axes.aggregation.classes. Der Normalfall ist "integral", also eine Jahressumme. "maximum" bei einer Spitzenlast oder einem Höchstwert, "arithmetic mean" bei einem Durchschnitt je Gebäude oder je Jahr, "instantaneous" bei einem Momentanwert.
+
+10. Nichts erfinden: nur Zahlen, die wörtlich in source.text stehen. Das gilt auch für Diagrammbeschreibungen — was dort nicht beziffert ist, existiert nicht. Was du aus Kontextwissen ergänzen müsstest, gehört nicht in die Liste.

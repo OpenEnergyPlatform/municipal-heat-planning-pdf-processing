@@ -29,8 +29,16 @@ def test_the_class_is_the_models_choice_not_a_table_of_german_spellings():
     assert [p.uri for p in SPEC.parameters] == [
         "energy_consumption", "emission", "planning_organisation"]
     classes = {uri for p in NUMERIC for uri in p.axes["quantity"].vocabulary}
-    assert classes == {"OEO_00050016", "OEO_00050018",
-                       "OEO_00340066", "OEO_00140083"}
+    assert {c for c in classes if not c.startswith("out:")} == {
+        "OEO_00050016", "OEO_00050018", "OEO_00340066", "OEO_00140083"}
+    # The list also names what the graph does NOT take, as choices rather than
+    # prose. Without them the model picks the nearest class anyway: the first
+    # run put Kassel's "CO2-Abscheidung" in as a CO2 emission and Bremen's
+    # cumulative twenty-year sum beside its annual values.
+    for needed in ("out:cumulative", "out:avoided", "out:captured"):
+        assert needed in classes, needed
+    for needed in ("out:potential", "out:generation", "out:share"):
+        assert needed in classes, needed
     for parameter in NUMERIC:
         assert not parameter.axes["quantity"].required,             "a number that fits no class keeps its wording and is counted"
 
@@ -374,3 +382,91 @@ def test_one_heat_plan_comes_out_as_the_published_example(tmp_path):
     assert ours == theirs, (
         f"\nfehlt : {sorted(theirs - ours)}\nzuviel: {sorted(ours - theirs)}")
     assert re.search(rf"oeo:OEO_00140002 <{kg.BASE}value/{UUID5}>", ttl)
+
+
+# --- what the model chooses, and what the graph does with it ---------------
+
+def test_a_captured_or_cumulative_amount_is_a_choice_not_a_class(tmp_path):
+    """The two failures of the first run, as one test. Both are real readings
+    with real quotes, and neither is an emission the plan causes."""
+    serializer = kg.make_serializer(_database(tmp_path))
+    ttl = serializer("waermeplan_kassel_20240315", [
+        _row(quantity="out:captured", quantity_raw="CO₂-Abscheidung",
+             value=95000, value_target=95000.0),
+        _row(quantity="out:cumulative", quantity_raw="Kumulierte THG-Emissionen",
+             value=12400000, value_target=12400000.0),
+        _row(),
+    ])
+    assert ttl.count("mhpkg/value/") == 2, "one value node, referenced twice"
+    assert "95000" not in ttl and "12400000" not in ttl
+
+
+def test_the_aggregation_is_the_models_choice(tmp_path):
+    """OEO has five aggregation types and the serializer used to assert
+    `integral` for all of them, so a peak load went in as an annual sum."""
+    serializer = kg.make_serializer(_database(tmp_path))
+    ttl = serializer("waermeplan_kassel_20240315", [
+        _row(aggregation="OEO_00140073", quantity_raw="Spitzenlast"),
+    ])
+    assert "oeo:OEO_00390023 oeo:OEO_00140073" in ttl
+
+
+def test_two_sub_areas_are_two_values_not_one(tmp_path):
+    """One plan carries four gas tables, one per heat-network area, all at the
+    same carrier and year. Without the area in the coordinates they collide
+    onto one node and the conflict guard drops every one of them."""
+    serializer = kg.make_serializer(_database(tmp_path))
+    ttl = serializer("waermeplan_kassel_20240315", [
+        _row(spatial_scope="sub_area", spatial_scope_raw="Quartier Nordstadt",
+             value=64000, value_target=64000.0),
+        _row(spatial_scope="sub_area", spatial_scope_raw="Quartier Süd",
+             value=9100, value_target=9100.0),
+    ])
+    assert ttl.count("a oeo:OEO_00050016") == 2
+    assert '"64000.0"^^xsd:float' in ttl and '"9100.0"^^xsd:float' in ttl
+    assert ttl.count(f"a mhpo:{kg.CLS_PLAN_AREA}") == 2
+    assert "Quartier Nordstadt" in ttl and "Quartier Süd" in ttl
+    assert f"obo:{kg.P_PART_OF} <{kg.BASE}municipality/AGS_06611000>" in ttl
+
+
+def test_an_unnamed_sub_area_is_counted_out(tmp_path):
+    """Two unnamed sub-areas are one node and one of them is silently lost."""
+    serializer = kg.make_serializer(_database(tmp_path))
+    assert serializer("waermeplan_kassel_20240315", [
+        _row(spatial_scope="sub_area", spatial_scope_raw=None)]) is None
+
+
+def test_every_value_carries_where_it_was_read(tmp_path):
+    """The prototype's evidence: a comment, because the shapes are sh:closed
+    and an extra triple on a value node invalidates it."""
+    serializer = kg.make_serializer(_database(tmp_path))
+    ttl = serializer("waermeplan_kassel_20240315", [
+        _row(quote="| Erdgas | 241 |",
+             provenance={"document_id": 857, "page": 84, "owner_kind": "table",
+                         "title": "Endenergie im Zielszenario"}),
+    ])
+    assert "# Endenergieverbrauch" in ttl
+    assert "„| Erdgas | 241 |“" in ttl
+    assert "Seite 84" in ttl and "Tabelle" in ttl
+
+
+def test_the_unit_is_chosen_from_the_list_and_the_wording_is_evidence():
+    """units_accepted is a closed list, so the unit is a choice. The
+    document's spelling rides along as evidence and is never looked up."""
+    from docpipe.extraction.verify import verify_tuple, Verified
+
+    parameter = {p.uri: p for p in SPEC.parameters}["emission"]
+    source = "Die Emissionen sinken bis 2045 auf 4.041 t CO₂ eq/a."
+    out = verify_tuple({"value": 4041, "unit": "t CO2eq/a",
+                        "unit_raw": "t CO₂ eq/a",
+                        "quantity": "carbon dioxide equivalent quantity value",
+                        "quantity_raw": "Emissionen", "aggregation": "integral",
+                        "year": 2045, "scenario": "Zielszenario",
+                        "spatial_scope": "Gemeindegebiet",
+                        "quote": source}, parameter, source)
+    assert isinstance(out, Verified), getattr(out, "reason", out)
+    assert out.tuple["unit"] == "t CO2eq/a"
+    assert out.tuple["unit_raw"] == "t CO₂ eq/a"
+    assert out.tuple["value_target"] == 4041.0
+    assert out.tuple["scenario"] == "target"
+    assert out.tuple["spatial_scope"] == "municipality"
