@@ -86,7 +86,7 @@ def canonical_number(raw) -> Optional[str]:
     return re.sub(r"[.,]", "", s)
 
 
-def _numbers_in(text: str) -> set:
+def numbers_in(text: str) -> set:
     found = {canonical_number(m.group(0)) for m in _NUMBER.finditer(text or "")}
     found.update(canonical_number(m.group(0))
                  for m in _SPACE_GROUPED.finditer(text or ""))
@@ -196,7 +196,7 @@ def computed_in_output(raw: dict, parameter: Parameter) -> bool:
     if wanted is None:
         return False
     for run in raw.get("compute") or ():
-        if isinstance(run, dict) and wanted in _numbers_in(run.get("stdout") or ""):
+        if isinstance(run, dict) and wanted in numbers_in(run.get("stdout") or ""):
             return True
     return False
 
@@ -204,7 +204,7 @@ def computed_in_output(raw: dict, parameter: Parameter) -> bool:
 def _value_in_quote(raw: dict, parameter: Parameter, quote: str) -> bool:
     """Is the claimed value actually in the passage it cites?"""
     if parameter.is_numeric:
-        return canonical_number(raw.get("value")) in _numbers_in(quote)
+        return canonical_number(raw.get("value")) in numbers_in(quote)
     # For a category the tuple carries two things: the class the model mapped
     # to and, in *_raw, how the document worded it. The evidence check is
     # about the document, so it runs against the wording, never against the

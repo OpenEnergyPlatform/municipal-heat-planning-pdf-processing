@@ -35,7 +35,8 @@ from docpipe.llm_preflight import assert_serving
 from docpipe.profile import add_profile_argument, resolve_profile
 
 from . import fields
-from .pipeline import (Source, WorkItem, build_sweeps, fold_batch,
+from .pipeline import (Source, WorkItem, build_sweeps,
+                       cell_index as pipeline_cell_index, fold_batch,
                        follow_up, group_items, harvest_document, merge_field,
                        plan_document, route_claims, rows_from_reply,
                        write_report)
@@ -1082,6 +1083,13 @@ def _field_payload(batch, rows: list, slot) -> dict:
         unit = row.claim.get("unit_raw") or row.claim.get("unit")
         if unit:
             entry["unit"] = unit
+        # Which cell of the quoted table row this number sits in. Three
+        # numbers under three year columns share one quote, and the column is
+        # what tells them apart — a fact already in hand here, so it is handed
+        # over rather than left to be counted.
+        cell = pipeline_cell_index(entry["quote"], entry["value"])
+        if cell is not None:
+            entry["column"], entry["columns"] = cell
         listed.append(entry)
     field = {"name": slot.name, "question": slot.question}
     if slot.options:

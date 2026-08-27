@@ -10,7 +10,7 @@ Du bekommst ein JSON-Objekt mit diesen Feldern:
 
 - "field": das gesuchte Feld — "name", die Frage ("question") und, wenn es eine geschlossene Liste gibt, die zulässigen Einträge ("options": je Eintrag ein Name und die Schreibweisen, unter denen er vorkommt).
 - "sources": die Quellen aus DERSELBEN Publikation, jede mit einer Kennung ("id": "Q1", "Q2", …) — dieselben Texte, aus denen die Werte stammen.
-- "rows": die Werte, jeder mit einer Kennung ("id": "R1", "R2", …), seiner Quelle und der Passage, in der er steht.
+- "rows": die Werte, jeder mit einer Kennung ("id": "R1", "R2", …), seiner Quelle und der Passage, in der er steht. Stammt der Wert aus einer Tabellenzeile, steht zusätzlich "column": in welcher Zelle dieser Zeile er steht, von "columns" Zellen insgesamt. Das ist ausgezählt und nicht geraten. Benennt die Kopfzeile je Spalte ein Szenario, dann entscheidet diese Nummer, welches gilt.
 
 Gib ausschließlich ein JSON-Objekt in dieser Form zurück, in EINER Zeile, ohne Einrückung:
 

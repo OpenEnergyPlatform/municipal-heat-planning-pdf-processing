@@ -70,11 +70,11 @@ def test_canonical_number(raw, expected):
 def test_adjacent_numbers_never_merge_into_one_token():
     """'betrug 2020 45.000 MWh' is a year and a value, not 202045000; a
     merged token would refuse the correct claim of 45000."""
-    from docpipe.extraction.verify import _numbers_in
-    numbers = _numbers_in("Der Endenergieverbrauch betrug 2020 45.000 MWh")
+    from docpipe.extraction.verify import numbers_in
+    numbers = numbers_in("Der Endenergieverbrauch betrug 2020 45.000 MWh")
     assert {"2020", "45000"} <= numbers
     assert "202045000" not in numbers
-    assert "45000" in _numbers_in("betrug 45 000 MWh im Jahr")
+    assert "45000" in numbers_in("betrug 45 000 MWh im Jahr")
 
 
 # ---------------------------------------------------------------------------

@@ -10,7 +10,7 @@ Du bekommst ein JSON-Objekt mit diesen Feldern:
 
 - "field": das gesuchte Feld — "name", die Frage ("question") und, wenn es eine geschlossene Liste gibt, die zulässigen Einträge ("options": je Eintrag ein Name und die Schreibweisen, unter denen er im Korpus schon vorkam).
 - "sources": die Quellen aus DEMSELBEN Wärmeplan, jede mit einer Kennung ("id": "Q1", "Q2", …) — dieselben Texte, aus denen die Zahlen stammen.
-- "rows": die Zahlen, jede mit einer Kennung ("id": "R1", "R2", …), ihrer Quelle, ihrem Wert, ihrer Einheit und der Passage, in der sie steht.
+- "rows": die Zahlen, jede mit einer Kennung ("id": "R1", "R2", …), ihrer Quelle, ihrem Wert, ihrer Einheit und der Passage, in der sie steht. Stammt die Zahl aus einer Tabellenzeile, steht zusätzlich "column": in welcher Zelle dieser Zeile sie steht, von "columns" Zellen insgesamt. Das ist ausgezählt und nicht geraten, du kannst dich darauf verlassen.
 
 Gib ausschließlich ein JSON-Objekt in dieser Form zurück, in EINER Zeile, OHNE Einrückung:
 
@@ -33,7 +33,8 @@ Regeln:
    RICHTIG für den Träger: "| Gas H | 126.656.132 | 520.465.057 | 1.036.767.833 |"
    FALSCH: eine Passage aus einer anderen Quelle als der, die die Zeile nennt. Die wird verworfen.
 
-4. Tabellen mit mehreren Wertspalten sind der Normalfall, und dann unterscheiden sich die Zeilen genau in dem Feld, das die Spalte bestimmt. Steht der Kopf "| Energieträger | 2022 | 2030 | 2045 |", dann hat die Zahl in der zweiten Spalte das Jahr 2022, die in der dritten 2030 und die in der vierten 2045 — auch wenn alle drei in derselben Tabellenzeile stehen und alle drei dieselbe Passage zitieren. Ordne nach der Position der Zahl in ihrer Zeile. Gib in diesem Fall drei Gruppen aus, nicht eine.
+4. Tabellen mit mehreren Wertspalten sind der Normalfall, und dann unterscheiden sich die Zeilen genau in dem Feld, das die Spalte bestimmt. Steht der Kopf "| Energieträger | 2022 | 2030 | 2045 |" und hat eine Zeile "column": 2, dann gilt für sie 2022, bei "column": 3 gilt 2030, bei "column": 4 gilt 2045. Zähl die Zellen der Kopfzeile genauso, von links, die erste Zelle ist die 1. Drei Zahlen derselben Tabellenzeile zitieren dieselbe Passage und haben trotzdem drei verschiedene Jahre. Gib in diesem Fall drei Gruppen aus, nicht eine.
+   Zähl nicht selbst nach, welche Zahl in welcher Zelle steht: "column" sagt es dir. Deine Aufgabe ist die andere Hälfte, nämlich was die Kopfzelle mit derselben Nummer benennt.
 
 5. Steht die Angabe in KEINER der Quellen, lass die Zeile weg. Eine ausgelassene Zeile ist eine richtige Antwort und sagt "die Quellen sagen es nicht". Rate nicht und ergänze nichts aus Weltwissen: eine falsche Angabe ist schlimmer als eine fehlende.
 
