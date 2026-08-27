@@ -340,8 +340,9 @@ def test_a_request_that_raises_becomes_a_visible_hole():
     got = dict((b.items[0].source.owner_id, r)
                for b, r in runner.harvest_batches(batches, harvest, workers=2))
     assert got[1]["tuples"] == [{"value": 1}]
-    assert got[2]["tuples"] == [{"_harvest_failed": True, "source": "Q1"}], (
-        "a hole must stay countable")
+    assert got[2]["tuples"] == [{"_harvest_failed": True, "_why": "unreachable",
+                                 "source": "Q1"}], (
+        "a hole must stay countable, and say what made it")
 
 
 def test_planning_never_calls_the_model():
@@ -418,7 +419,10 @@ def test_a_refused_request_is_not_retried(monkeypatch):
 
     harvest = runner.make_harvester(None)
     reply = harvest(_chain(_item(_source("x")))[0], [])
-    assert reply["tuples"] == [{"_harvest_failed": True, "source": "Q1"}]
+    assert reply["tuples"] == [{"_harvest_failed": True, "_why": "no_answer",
+                                "source": "Q1"}], (
+        "a 400 is the server answering, not the server being gone — a resume "
+        "must not redo the document over it")
     assert len(attempts) == 1, f"{len(attempts)} attempts for a 400"
 
 
@@ -840,3 +844,68 @@ def test_the_repair_stays_unambiguous_when_the_caption_repeats_a_number():
                   "carrier": "Erdgas", "quote": "Erdgas 42.005 MWh"}], report)
     assert report.tuples, [r["reason"] for r in report.refusals]
     assert "quote_repaired" in report.tuples[0]["flags"]
+
+
+def test_a_document_the_server_never_answered_for_is_not_stamped(tmp_path, monkeypatch):
+    """The failure that could cost a whole overnight run: a dead server makes
+    every request fail the same way, every document comes back all sentinels,
+    and stamping those writes up to a thousand empty documents down as
+    finished. The resume then skips every one of them without a word."""
+    monkeypatch.setattr(runner.prompts, "versions", lambda ids: {i: "v1" for i in ids})
+    from docpipe.extraction.pipeline import DocumentReport
+
+    def report_with(why):
+        report = DocumentReport(document_id=7)
+        report.owners_harvested = 4
+        report.refusals = [
+            {"parameter": "p", "reason": "value is not a number",
+             "claim": {"_harvest_failed": True, "_why": why}, "owner": ["section", i]}
+            for i in range(4)]
+        return report
+
+    runner.finish_document(report_with("unreachable"), "tot", tmp_path, "sha")
+    assert (tmp_path / "tot.jsonl").is_file(), "the holes are still written down"
+    assert not (tmp_path / "tot.stamp.json").exists(), (
+        "an unreachable server must not mark the document harvested")
+
+    runner.finish_document(report_with("no_answer"), "stumm", tmp_path, "sha")
+    assert (tmp_path / "stumm.stamp.json").is_file(), (
+        "a model that answered nothing IS a harvest, and redoing it forever "
+        "is the other way to lose a run")
+
+
+def test_the_anchors_are_frozen_so_a_restart_searches_the_same_way(tmp_path, monkeypatch):
+    """Two calls in one job shared 0 of 18 anchor strings. The anchors decide
+    which passages the corpus is harvested from, so a restart searching
+    differently is a corpus nobody can say the provenance of."""
+    monkeypatch.setattr(runner.prompts, "versions", lambda ids: {i: "v1" for i in ids})
+    monkeypatch.setattr(runner.prompts, "load",
+                        lambda _id: type("P", (), {"text": "sys", "meta": {}})())
+    calls = []
+
+    class Client:
+        def __init__(self, **kw):
+            self.chat = self
+
+        @property
+        def completions(self):
+            return self
+
+        def create(self, **kw):
+            calls.append(kw)
+            body = json.dumps({"anchors": [f"Ein Satz wie er im Plan stuende {len(calls)}"]})
+            return type("R", (), {"choices": [type("C", (), {
+                "message": type("M", (), {"content": body})()})()]})()
+
+    import openai
+    monkeypatch.setattr(openai, "OpenAI", Client)
+    store, key = tmp_path / "anchors.json", runner.anchors_key("sha")
+
+    first = runner.make_anchors(SPEC, store=store, key=key)
+    assert len(calls) == 1 and first[SPEC.parameters[0].uri]
+    second = runner.make_anchors(SPEC, store=store, key=key)
+    assert second == first, "a restart must search with the same anchors"
+    assert len(calls) == 1, "and must not pay for them twice"
+
+    assert runner.make_anchors(SPEC, store=store, key="anderer-schluessel") != first, (
+        "a new spec, prompt or model is a new anchor set")

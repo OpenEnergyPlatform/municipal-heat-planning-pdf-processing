@@ -42,6 +42,17 @@ NOT_AN_ENERGY_CARRIER = {
     "OEO_00000132": "district heating",
     "OEO_00000139": "electrical energy",
     "OEO_00000388": "solar thermal energy",
+    # Ambient and waste heat. The plans name these in the carrier column
+    # constantly and OEO does not place them under `energy carrier` either,
+    # so the value keeps its node and loses only the edge. Naming them at all
+    # is the point: without the classes the model mapped 36 of these onto
+    # solar thermal energy, which is a wrong triple rather than a missing one.
+    "OEO_00000191": "geothermal energy",
+    "OEO_00010114": "waste heat",
+    "OEO_00310004": "industrial waste heat",
+    "OEO_00000056": "ambient heat",
+    "OEO_00140105": "waste water heat",
+    "OEO_00140104": "surface water heat",
 }
 LEGAL = r"(gmbh\s*&\s*co\.?\s*kg|gmbh|mbh|ag|kg|ohg|e\.?\s*v\.?|gbr|se|ug)"
 
@@ -258,9 +269,6 @@ def make_serializer(db_path: Path):
                 skip(f"not_a_class:{quantity or row.get('quantity_raw') or '?'}")
             elif row.get("aggregation") and row["aggregation"] not in AGGREGATIONS:
                 skip(f"aggregation:{row['aggregation']}")
-            elif row.get("carrier") in NOT_AN_ENERGY_CARRIER:
-                skip(f"carrier_not_in_oeo:"
-                     f"{NOT_AN_ENERGY_CARRIER[row['carrier']]}")
             else:
                 kept.append(row)
         if not kept:
@@ -346,8 +354,19 @@ def make_serializer(db_path: Path):
                       f"    a oeo:{row['quantity']} ;",
                      f"    oeo:OEO_00140178 \"{float(row['value_target'])!r}\"^^xsd:float ;",
                      f"    oeo:OEO_00040010 oeo:{UNIT_TARGET[row['quantity']]} ;"]
-            if row.get("carrier"):
-                lines.append(f"    oeo:OEO_00000523 oeo:{row['carrier']} ;")
+            carrier = row.get("carrier")
+            if carrier and not str(carrier).startswith(NOT_IN_GRAPH):
+                if carrier in NOT_AN_ENERGY_CARRIER:
+                    # The value stands, the edge does not. Dropping the whole
+                    # row over this cost 51 of 244 value nodes in the pilot,
+                    # every one of them a properly evidenced consumption or
+                    # emission with its year, unit, sector and aggregation.
+                    # What is missing is one relation the TBox does not allow
+                    # yet, and a value without its carrier is a smaller loss
+                    # than no value at all.
+                    skip(f"carrier_not_in_oeo:{NOT_AN_ENERGY_CARRIER[carrier]}")
+                else:
+                    lines.append(f"    oeo:OEO_00000523 oeo:{carrier} ;")
             if row.get("sector"):
                 lines.append(f"    oeo:OEO_00000505 oeo:{row['sector']} ;")
             lines.append(f"    oeo:OEO_00020440 \"{row['year']}\"^^xsd:integer ;")

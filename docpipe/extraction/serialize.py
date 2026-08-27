@@ -54,6 +54,14 @@ def run(jsonl_dir: Path, out_path: Path,
             parts.append(rendered)
             counts[name] = len(rows)
     out_path = Path(out_path)
+    if not parts:
+        # Refusing to write is the point. This runs unconditionally at the end
+        # of a GPU job so that a run with a counted exception still yields its
+        # graph, and the same unconditional call would otherwise truncate a
+        # good TTL to nothing whenever the harvest directory was empty or
+        # unreadable.
+        raise ValueError(f"nothing to serialize from {jsonl_dir} — "
+                         f"{out_path} left as it was")
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text("\n".join(parts), encoding="utf-8")
     log.info("serialize: %d document(s) with tuples -> %s",
