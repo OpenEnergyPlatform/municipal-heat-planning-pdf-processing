@@ -74,6 +74,7 @@ def plan_document(
     spec: Spec,
     templates: list,
     *,
+    extra_probes: Optional[dict] = None,
     retrieve: Callable,                   # (probes, document_id, exclude) -> [[Source]]
     candidates: Optional[Callable] = None,  # (document_id, Parameter) -> [Source]
     max_rounds: int = MAX_SWEEP_ROUNDS,
@@ -91,6 +92,12 @@ def plan_document(
     items: list = []
     for parameter in spec.parameters:
         probes = queries_mod.expand(templates, parameter)
+        # The anchors the model wrote from this parameter's ontology
+        # definition, beside the spec's own templates. A template says what to
+        # look for; an anchor says how the sentence would READ in a plan, which
+        # is what a similarity search actually matches against.
+        probes += [p for p in (extra_probes or {}).get(parameter.uri, ())
+                   if p and p not in probes]
         seen: set = set()
         rounds = 0
         while rounds < max_rounds:

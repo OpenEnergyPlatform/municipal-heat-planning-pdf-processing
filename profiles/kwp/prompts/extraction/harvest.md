@@ -17,9 +17,9 @@ Ein Tupel pro Zahl, und zwar VOLLSTÄNDIG: jede Zahl des gesuchten Parameters in
 
 Jedes Tupel wird maschinell und wörtlich gegen die Quelle geprüft; was die Prüfung nicht besteht, wird verworfen. Deshalb gelten diese Regeln:
 
-1. "value": die Zahl EXAKT wie gedruckt, nur ohne Tausendertrennzeichen und mit Dezimalpunkt (aus "126.656.132" wird 126656132, aus "1.036.767,8" wird 1036767.8). Niemals rechnen, runden, summieren oder umrechnen.
-   FALSCH: 126.656.132 und 520.465.057 addieren und die Summe ausgeben — die Summe steht nirgends in der Quelle.
-   FALSCH: 126.656.132 kWh/a in 126656.132 MWh/a umrechnen — ausgegeben wird die gedruckte Zahl mit der gedruckten Einheit.
+1. "value": die Zahl EXAKT wie gedruckt, nur ohne Tausendertrennzeichen und mit Dezimalpunkt (aus "126.656.132" wird 126656132, aus "1.036.767,8" wird 1036767.8). Rechne NICHT im Kopf: weder addieren noch runden noch umrechnen. Eine im Kopf gerechnete Zahl hat keinen Beleg und wird verworfen. Wenn gerechnet werden MUSS, gibt es dafür die Sandbox, siehe Regel 11.
+   FALSCH: 126.656.132 und 520.465.057 addieren und die Summe ausgeben.
+   FALSCH: 126.656.132 kWh/a in 126656.132 MWh/a umrechnen — die Umrechnung macht die Prüfung anhand der gewählten Einheit.
 
 2. "unit" und "unit_raw": zwei Felder, wie bei allen Auswahlfeldern.
    - "unit": genau EIN Eintrag aus "units_accepted", nämlich der, den die Quelle meint. Zeichen für Zeichen aus der Liste abgeschrieben.
@@ -56,4 +56,11 @@ Jedes Tupel wird maschinell und wörtlich gegen die Quelle geprüft; was die Pr�
 
 9. "aggregation": wie der Wert über Zeit oder Raum zusammengefasst ist, eine Klasse aus axes.aggregation.classes. Der Normalfall ist "integral", also eine Jahressumme. "maximum" bei einer Spitzenlast oder einem Höchstwert, "arithmetic mean" bei einem Durchschnitt je Gebäude oder je Jahr, "instantaneous" bei einem Momentanwert.
 
-10. Nichts erfinden: nur Zahlen, die wörtlich in source.text stehen. Das gilt auch für Diagrammbeschreibungen — was dort nicht beziffert ist, existiert nicht. Was du aus Kontextwissen ergänzen müsstest, gehört nicht in die Liste.
+11. Rechnen lassen statt rechnen. Steht der gesuchte Wert nicht gedruckt da, sondern ergibt sich erst aus gedruckten Zahlen, dann gib STATT des Tupel-Objekts EIN Aktions-Objekt zurück:
+   {"action": "python", "code": "<Python-Code>"}
+   Verfügbar sind numpy und pandas, der Quelltext liegt als Variable `source` vor, der Titel als `title`. Gib jedes Ergebnis mit print() aus. Du bekommst die Ausgabe zurück und antwortest DANN mit den Tupeln.
+   Wann das richtig ist: "Der Gesamtverbrauch liegt bei 604 GWh/a, davon 40 % Fernwärme" — der Fernwärmeanteil in GWh/a steht nicht da, ist aber eindeutig bestimmt.
+   Wann es falsch ist: wenn die Zahl gedruckt dasteht. Dann schreib sie ab. Und wenn die Rechnung eine Annahme bräuchte, die im Dokument nicht steht, dann lass es und gib kein Tupel aus.
+   Jedes so entstandene Tupel trägt "computed": true. Sein "quote" ist die Passage mit den EINGANGSZAHLEN — die muss wie immer wörtlich in der Quelle stehen. Der Code und seine Ausgabe werden mitgespeichert und geprüft: was die Sandbox nicht ausgegeben hat, wird verworfen.
+
+12. Nichts erfinden: nur Zahlen, die wörtlich in source.text stehen. Das gilt auch für Diagrammbeschreibungen — was dort nicht beziffert ist, existiert nicht. Was du aus Kontextwissen ergänzen müsstest, gehört nicht in die Liste.

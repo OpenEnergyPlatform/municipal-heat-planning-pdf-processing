@@ -181,6 +181,26 @@ def _check_value(raw: dict, parameter: Parameter, flags: list):
     return out, None
 
 
+def computed_in_output(raw: dict, parameter: Parameter) -> bool:
+    """Did the sandbox actually print this number?
+
+    A computed value cannot stand in its quote — the document prints the
+    inputs, not the result. What replaces the quote as the check on the value
+    is the sandbox's own output: the number has to be in what the code printed.
+    That is machine-checked, unlike a number the model works out in its head,
+    which is exactly why the arithmetic goes to the sandbox at all. The quote
+    is still required and still checked: it proves the inputs are in the
+    document.
+    """
+    wanted = canonical_number(raw.get("value"))
+    if wanted is None:
+        return False
+    for run in raw.get("compute") or ():
+        if isinstance(run, dict) and wanted in _numbers_in(run.get("stdout") or ""):
+            return True
+    return False
+
+
 def _value_in_quote(raw: dict, parameter: Parameter, quote: str) -> bool:
     """Is the claimed value actually in the passage it cites?"""
     if parameter.is_numeric:
@@ -373,7 +393,13 @@ def verify_tuple(raw: dict, parameter: Parameter, source_text: str, *,
         quote = repaired
         flags.append("quote_repaired")
     if not _value_in_quote(raw, parameter, quote):
-        return Refusal(raw, f"value {raw.get('value')!r} does not occur in the quote")
+        if raw.get("computed") and computed_in_output(raw, parameter):
+            # The document prints the inputs and the sandbox printed the
+            # result. Both halves of the evidence are on the tuple.
+            flags.append("computed")
+        else:
+            return Refusal(raw, f"value {raw.get('value')!r} does not occur "
+                                f"in the quote")
 
     rects = None
     if owner_kind in TEXT_KINDS:
