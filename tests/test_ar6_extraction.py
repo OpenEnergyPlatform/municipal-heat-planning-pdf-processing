@@ -157,11 +157,40 @@ def test_nothing_the_closed_shapes_do_not_name_is_emitted(monkeypatch):
                "obo:BFO_0000051", "oeo:OEO_00390073", "oeo:OEO_00020220",
                "oeo:OEO_00020440"}
     # Predicates sit at four spaces; a further object of the same predicate
-    # is continued at eight and is not a predicate line.
+    # is continued at eight and is not a predicate line. A comment carries the
+    # passage and is not a triple at all — that is the point of writing the
+    # evidence as one when the shapes are closed.
     used = {line.split()[0] for line in ttl.splitlines()
             if line.startswith("    ") and not line.startswith("        ")
-            and line.strip()}
+            and line.strip() and not line.lstrip().startswith("#")}
     assert used <= allowed, used - allowed
+
+
+def test_a_closed_shape_run_still_says_where_every_value_was_read(monkeypatch):
+    """Switching the evidence off used to mean the graph forgot the passage,
+    which gives up the reason the metadata is read from the PDF at all."""
+    import profiles.ar6.kg as kg
+    monkeypatch.setattr(kg, "EVIDENCE", False)
+    rows = [dict(r, quote="Keramidas, K., Fosse, F., Diaz Vazquez, A.",
+                 tier="text_located", provenance={"page": 3,
+                                                  "owner_kind": "section"})
+            for r in _rows()]
+    ttl = _ttl(rows)
+    assert "# “Keramidas, K., Fosse, F., Diaz Vazquez, A.”" in ttl
+    assert "# geco_2023.pdf, p. 3, section, text_located" in ttl
+    assert "oekgprov:hasEvidence" not in ttl, "no triple, only the comment"
+
+
+def test_a_quote_with_a_line_break_cannot_break_the_comment(monkeypatch):
+    import profiles.ar6.kg as kg
+    monkeypatch.setattr(kg, "EVIDENCE", False)
+    rows = [dict(r, quote="a title\nsplit over\ntwo lines",
+                 provenance={})
+            for r in _rows()]
+    ttl = _ttl(rows)
+    for line in ttl.splitlines():
+        assert not (line.strip() and line.lstrip().startswith("split over"))
+    assert "# “a title split over two lines”" in ttl
 
 
 def test_two_spellings_of_one_author_become_one_node():
@@ -361,7 +390,7 @@ def test_the_evidence_can_be_switched_off_for_a_closed_shape_run(monkeypatch):
     import profiles.ar6.kg as kg
     monkeypatch.setattr(kg, "EVIDENCE", False)
     ttl = _ttl(_scenario_rows())
-    assert "oekgprov:" not in ttl.split("@prefix")[-1].split("\n", 1)[1]
+    assert "oekgprov:hasEvidence" not in ttl, "no triple, only the comment".split("@prefix")[-1].split("\n", 1)[1]
 
 
 # ---------------------------------------------------------------------------
@@ -449,9 +478,39 @@ def test_document_axes_feeds_both_the_coordinate_and_the_value():
     conn = _corpus_db(sections=["A study of Norway."],
                       scenarios=[(1, "EN_NPi2100")])
     axes = extraction.document_axes(conn, 1)
-    assert axes["scenario"] == {"EN_NPi2100": ["EN_NPi2100"]}
+    assert axes["scenario"]["EN_NPi2100"] == ["EN_NPi2100"]
     assert axes["scenario_label"] == axes["scenario"]
     assert "Norway" in {v[0] for v in axes["scenario_region"].values()}
+    runs = [k for k in axes["scenario"] if not k.startswith(extraction.NOT_IN_GRAPH)]
+    assert runs == ["EN_NPi2100"], "the out: entries are the only additions"
+
+
+def test_every_list_offers_a_way_to_say_none_of_these_fit():
+    """A closed list without an escape hatch does not stop a wrong answer, it
+    only makes the wrong answer look like a valid one. The corpus proves the
+    need: the OEKG has 249 countries and no aggregate, and an AR6 scenario is
+    usually global."""
+    from profiles.ar6 import extraction
+
+    bare = _corpus_db(sections=["A model description with no country in it."])
+    axes = extraction.document_axes(bare, 1)
+    assert set(axes) == {"scenario", "scenario_label", "scenario_region"}
+    assert "out:global" in axes["scenario_region"]
+    assert "out:family" in axes["scenario"]
+    # and the lists exist even where the narrowing found nothing at all
+    assert not [k for k in axes["scenario"]
+                if not k.startswith(extraction.NOT_IN_GRAPH)]
+
+
+def test_the_out_entries_read_as_answers_a_model_can_pick():
+    """The model is shown the first label, not the key, so the label has to be
+    a sentence someone could choose — not a slug."""
+    from profiles.ar6 import extraction
+
+    for vocabulary in (extraction.REGION_OUT, extraction.SCENARIO_OUT):
+        for key, labels in vocabulary.items():
+            assert key.startswith(extraction.NOT_IN_GRAPH)
+            assert labels and len(labels[0]) > 20, key
 
 
 def test_filling_turns_the_markers_into_a_real_choice(spec):
@@ -553,6 +612,77 @@ def test_a_region_is_referenced_by_its_existing_oekg_iri():
     assert ("oeo:OEO_00020220 <https://openenergyplatform.org/ontology/oekg/"
             "region/Germany>") in ttl
     assert "rdfs:label \"Germany\"" in ttl
+
+
+def test_a_global_scenario_does_not_mint_a_region():
+    """out:global is a true answer and not a study region. Minting it would put
+    a region called "global" next to the OEKG's 249 countries, and the next run
+    would point at it as if it were one."""
+    rows = _rows() + [
+        {"parameter": "scenario_label", "value": "EN_NPi2100",
+         "value_uri": "EN_NPi2100", "value_raw": "CurPol",
+         "quote": "the CurPol scenario", "provenance": {}},
+        {"parameter": "scenario_region", "value": "global — die ganze Welt",
+         "value_uri": "out:global", "value_raw": "worldwide",
+         "scenario": "EN_NPi2100", "scenario_raw": "CurPol",
+         "quote": "CurPol covers worldwide emissions", "provenance": {}},
+    ]
+    ttl = _ttl(rows)
+    assert "OEO_00020220" not in ttl, "no has-study-region link at all"
+    assert "OEO_00020032" not in ttl, "and no study region node"
+
+
+def test_a_family_is_a_wording_and_never_an_identity():
+    """"NPi" fits EN_NPi2020_300f, _400 and _3000. The model says so by
+    choosing out:family, and what survives is the document's own wording — not
+    the out: entry's label, which is a description of a problem."""
+    rows = _rows() + [
+        {"parameter": "scenario_label",
+         "value": "eine Szenario-Familie, kein einzelner Lauf",
+         "value_uri": "out:family", "value_raw": "NPi",
+         "quote": "the NPi scenario", "provenance": {}},
+    ]
+    ttl = _ttl(rows)
+    assert 'rdfs:label "NPi" ;' in ttl
+    assert "Familie" not in ttl
+    assert "a oeo:OEO_00000365 ;" in ttl, "the scenario is still a factsheet"
+
+
+def test_no_out_entry_ever_reaches_the_turtle():
+    """One guard, checked on every field that can carry a choice: an out: entry
+    is countable, never quotable as an IRI, a type or a label."""
+    from profiles.ar6 import extraction
+
+    rows = _rows()
+    for key in extraction.SCENARIO_OUT:
+        rows.append({"parameter": "scenario_label", "value": "egal",
+                     "value_uri": key, "value_raw": key.split(":")[1],
+                     "quote": "q", "provenance": {}})
+    for key in extraction.REGION_OUT:
+        rows.append({"parameter": "scenario_region", "value": "egal",
+                     "value_uri": key, "value_raw": "wording",
+                     "scenario": "out:family", "scenario_raw": "NPi",
+                     "quote": "q", "provenance": {}})
+    ttl = _ttl(rows)
+    assert extraction.NOT_IN_GRAPH not in ttl
+
+
+def test_what_the_graph_does_not_take_is_counted_by_what_was_chosen(caplog):
+    """The number is the finding: a corpus that is 80% out:global is telling us
+    the OEKG region list is missing its aggregates."""
+    rows = _rows() + [
+        {"parameter": "scenario_label", "value": "EN_NPi2100",
+         "value_uri": "EN_NPi2100", "value_raw": "CurPol", "quote": "q",
+         "provenance": {}},
+        {"parameter": "scenario_region", "value": "egal",
+         "value_uri": "out:global", "value_raw": "worldwide",
+         "scenario": "EN_NPi2100", "scenario_raw": "CurPol", "quote": "q",
+         "provenance": {}},
+    ]
+    with caplog.at_level(logging.INFO):
+        _ttl(rows)
+    assert "not in the graph by choice" in caplog.text
+    assert "'out:global': 1" in caplog.text
 
 
 def test_the_scenario_types_the_model_chose_reach_the_graph():

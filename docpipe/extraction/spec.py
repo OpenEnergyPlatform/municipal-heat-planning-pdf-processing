@@ -250,10 +250,6 @@ def _validate_parameter(path: str, raw) -> Parameter:
                 not all(isinstance(f, (int, float)) and f > 0 for f in units.values()):
             _fail(f"{path}.units_accepted",
                   "non-empty object of unit string -> positive factor")
-    else:
-        if unit_target is not None or raw.get("units_accepted") is not None:
-            _fail(f"{path}.unit_target",
-                  f"a {value_type} parameter carries no unit")
         # Two spellings of one unit are the point; two spellings that mean
         # different amounts and normalise alike would silently multiply a
         # value by a thousand, so that is a load error.
@@ -266,7 +262,10 @@ def _validate_parameter(path: str, raw) -> Parameter:
                       f"spelling to the verifier but carry {factor} and "
                       f"{collisions[key][1]}")
             collisions[key] = (unit, factor)
-
+    else:
+        if unit_target is not None or raw.get("units_accepted") is not None:
+            _fail(f"{path}.unit_target",
+                  f"a {value_type} parameter carries no unit")
         if value_type == "category":
             if vocabulary_dynamic:
                 if vocabulary is not None:
