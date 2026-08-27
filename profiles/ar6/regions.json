@@ -80,9 +80,11 @@
   "Bhutan"
  ],
  "https://openenergyplatform.org/ontology/oekg/region/Bolivia": [
+  "Bolivia",
   "Bolivia (Plurinational State of)"
  ],
  "https://openenergyplatform.org/ontology/oekg/region/Bonaire": [
+  "Bonaire",
   "Bonaire, Sint Eustatius and Saba"
  ],
  "https://openenergyplatform.org/ontology/oekg/region/BosniaAndHerzegovina": [
@@ -159,10 +161,16 @@
  ],
  "https://openenergyplatform.org/ontology/oekg/region/Congo": [
   "Congo",
+  "Republic of the Congo",
+  "Congo-Brazzaville",
   "Congo (the)"
  ],
  "https://openenergyplatform.org/ontology/oekg/region/CongoDemocraticRepublicOf": [
-  "Congo Democratic Republic Of"
+  "Democratic Republic of the Congo",
+  "DR Congo",
+  "DRC",
+  "Congo Democratic Republic Of",
+  "Zaire"
  ],
  "https://openenergyplatform.org/ontology/oekg/region/CookIslands": [
   "Cook Islands",
@@ -232,7 +240,9 @@
   "Ethiopia"
  ],
  "https://openenergyplatform.org/ontology/oekg/region/FalklandIslands": [
-  "Falkland Islands (the) Malvinas"
+  "Falkland Islands",
+  "Falkland Islands (the) Malvinas",
+  "Malvinas"
  ],
  "https://openenergyplatform.org/ontology/oekg/region/FaroeIslands": [
   "Faroe Islands",
@@ -337,6 +347,7 @@
   "Indonesia"
  ],
  "https://openenergyplatform.org/ontology/oekg/region/Iran": [
+  "Iran",
   "Iran (Islamic Republic of)"
  ],
  "https://openenergyplatform.org/ontology/oekg/region/Iraq": [
@@ -376,10 +387,16 @@
   "Kiribati"
  ],
  "https://openenergyplatform.org/ontology/oekg/region/KoreaDemocraticPeoplesRepublicOf": [
-  "Korea Democratic Peoples Republic Of"
+  "North Korea",
+  "Democratic People's Republic of Korea",
+  "Korea Democratic Peoples Republic Of",
+  "DPRK"
  ],
  "https://openenergyplatform.org/ontology/oekg/region/KoreaRepublicOf": [
-  "Korea Republic Of"
+  "South Korea",
+  "Republic of Korea",
+  "Korea Republic Of",
+  "Korea, Rep."
  ],
  "https://openenergyplatform.org/ontology/oekg/region/Kuwait": [
   "Kuwait"
@@ -388,9 +405,9 @@
   "Kyrgyzstan"
  ],
  "https://openenergyplatform.org/ontology/oekg/region/LaoPeoplesDemocraticRepublic": [
-  "Lao People 's Democratic Republic",
   "Laos",
-  "Lao People 's Democratic Republic (the)"
+  "Lao People 's Democratic Republic",
+  "Lao People's Democratic Republic"
  ],
  "https://openenergyplatform.org/ontology/oekg/region/Latvia": [
   "Latvia"
@@ -420,8 +437,9 @@
   "Macao"
  ],
  "https://openenergyplatform.org/ontology/oekg/region/Macedonia": [
-  "Macedonia (the former Yugoslav Republic of)",
-  "North Macedonia"
+  "North Macedonia",
+  "Macedonia",
+  "Macedonia (the former Yugoslav Republic of)"
  ],
  "https://openenergyplatform.org/ontology/oekg/region/Madagascar": [
   "Madagascar"
@@ -461,9 +479,11 @@
   "Mexico"
  ],
  "https://openenergyplatform.org/ontology/oekg/region/Micronesia": [
+  "Micronesia",
   "Micronesia (Federated States of)"
  ],
  "https://openenergyplatform.org/ontology/oekg/region/Moldova": [
+  "Moldova",
   "Moldova (the Republic of)"
  ],
  "https://openenergyplatform.org/ontology/oekg/region/Monaco": [
@@ -542,7 +562,9 @@
   "Palau"
  ],
  "https://openenergyplatform.org/ontology/oekg/region/Palestine": [
-  "Palestine, State of"
+  "Palestine",
+  "Palestine, State of",
+  "State of Palestine"
  ],
  "https://openenergyplatform.org/ontology/oekg/region/Panama": [
   "Panama"
@@ -595,6 +617,7 @@
   "Saint Barthelemy"
  ],
  "https://openenergyplatform.org/ontology/oekg/region/SaintHelena": [
+  "Saint Helena",
   "Saint Helena, Ascension and Tristan da Cunha"
  ],
  "https://openenergyplatform.org/ontology/oekg/region/SaintKittsAndNevis": [
@@ -604,6 +627,7 @@
   "Saint Lucia"
  ],
  "https://openenergyplatform.org/ontology/oekg/region/SaintMartin": [
+  "Saint Martin",
   "Saint Martin (French part)"
  ],
  "https://openenergyplatform.org/ontology/oekg/region/SaintPierreAndMiquelon": [
@@ -640,6 +664,7 @@
   "Singapore"
  ],
  "https://openenergyplatform.org/ontology/oekg/region/SintMaarten": [
+  "Sint Maarten",
   "Sint Maarten (Dutch part)"
  ],
  "https://openenergyplatform.org/ontology/oekg/region/Slovakia": [
@@ -687,17 +712,21 @@
   "Switzerland"
  ],
  "https://openenergyplatform.org/ontology/oekg/region/SyrianArabRepublic": [
-  "Syrian Arab Republic",
-  "Syria"
+  "Syria",
+  "Syrian Arab Republic"
  ],
  "https://openenergyplatform.org/ontology/oekg/region/Taiwan": [
-  "Taiwan (Province of China)"
+  "Taiwan",
+  "Taiwan (Province of China)",
+  "Chinese Taipei"
  ],
  "https://openenergyplatform.org/ontology/oekg/region/Tajikistan": [
   "Tajikistan"
  ],
  "https://openenergyplatform.org/ontology/oekg/region/Tanzania": [
-  "Tanzania, United Republic of"
+  "Tanzania",
+  "Tanzania, United Republic of",
+  "United Republic of Tanzania"
  ],
  "https://openenergyplatform.org/ontology/oekg/region/Thailand": [
   "Thailand"
@@ -775,6 +804,7 @@
   "Vanuatu"
  ],
  "https://openenergyplatform.org/ontology/oekg/region/Venezuela": [
+  "Venezuela",
   "Venezuela (Bolivarian Republic of)"
  ],
  "https://openenergyplatform.org/ontology/oekg/region/VietNam": [

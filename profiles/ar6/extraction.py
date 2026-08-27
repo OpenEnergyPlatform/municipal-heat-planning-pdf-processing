@@ -55,15 +55,24 @@ _WORD = r"(?<!\w){}(?!\w)"
 # or a link from any of them (see NOT_IN_GRAPH there) and counts them by name.
 NOT_IN_GRAPH = "out:"
 
-# A scenario is global far more often than it is national, and the OEKG's
-# region list is 249 countries with no aggregate — no World, no EU27, no OECD,
-# no R5. Without these three the correct answer for most AR6 scenarios is
-# simply not in the list.
+# The first label is the answer token: runner._parameter_payload renders a
+# choice list as {labels[0]: labels[1:]} and the prompt says to copy it
+# character for character. So labels[0] is short and quotable, and the
+# explanation is an alternate — value_to_uri() maps every label, so both
+# spellings resolve. The long gloss first was a mistake: an answer nobody can
+# retype without a slip is an answer that arrives as an unmapped wording, and
+# an unmapped wording is exactly what these entries exist to prevent.
+#
+# A scenario is global far more often than national, and the OEKG's region list
+# is 249 countries with no aggregate — no World, no EU27, no OECD, no R5.
+# Without these the correct answer for most AR6 scenarios is not in the list.
 REGION_OUT = {
-    "out:global": ["global — die ganze Welt, kein einzelnes Land"],
-    "out:multiregion": ["mehrere Laender oder eine Region, die die Liste nicht "
-                        "fuehrt (EU27, OECD, Asien, R5, R10)"],
-    "out:other": ["etwas anderes, das kein Land der Liste ist"],
+    "out:global": ["global", "weltweit", "worldwide",
+                   u"global — die ganze Welt, kein einzelnes Land"],
+    "out:multiregion": ["mehrere Regionen", "mehrere Länder", "EU27", "OECD",
+                        u"mehrere Länder oder eine Region, die die Liste "
+                        u"nicht führt"],
+    "out:other": ["andere Region", "etwas anderes, das kein Land der Liste ist"],
 }
 
 # The AR6 identifiers are finer than the language of the papers: the pilot's
@@ -72,10 +81,11 @@ REGION_OUT = {
 # kg.py drops the link when it happens. It cannot tell that case apart from a
 # scenario the publication simply does not have in AR6 — these two can.
 SCENARIO_OUT = {
-    "out:family": ["eine Szenario-Familie, kein einzelner Lauf "
-                   "(z. B. \"NPi\", \"NDC\", \"das 1,5-Grad-Szenario\")"],
-    "out:not_documented": ["ein Szenario dieser Publikation, das nicht in "
-                           "ihrer AR6-Liste steht"],
+    "out:family": ["Szenario-Familie", "Familie",
+                   u"eine Szenario-Familie, kein einzelner Lauf"],
+    "out:not_documented": ["nicht in AR6", "nicht in der AR6-Liste",
+                           u"ein Szenario dieser Publikation, das nicht in "
+                           u"ihrer AR6-Liste steht"],
 }
 
 
@@ -85,22 +95,47 @@ def _regions() -> dict:
 
 def _document_text(conn: sqlite3.Connection, document_id: int) -> str:
     """Everything a harvest of this document could ever quote from."""
+    # The captions belong in here as much as the bodies do: a harvest quotes
+    # the caption of a table as readily as its cells, so a country named only
+    # in "Figure 3: Emissions in India" is quotable — and if the narrowing has
+    # not seen it, the model is offered no class for it and answers with a
+    # wording nobody can resolve.
     rows = conn.execute(
         "SELECT s.content FROM Sections s WHERE s.document = ? "
         "UNION ALL "
         "SELECT t.markdown FROM Tables t JOIN Sections s ON t.section = s.id "
         "WHERE s.document = ? "
         "UNION ALL "
+        "SELECT t.caption FROM Tables t JOIN Sections s ON t.section = s.id "
+        "WHERE s.document = ? "
+        "UNION ALL "
         "SELECT i.description FROM Images i JOIN Sections s ON i.section = s.id "
+        "WHERE s.document = ? "
+        "UNION ALL "
+        "SELECT i.caption FROM Images i JOIN Sections s ON i.section = s.id "
         "WHERE s.document = ?",
-        (document_id, document_id, document_id),
+        (document_id,) * 5,
     ).fetchall()
     return "\n".join(str(r[0]) for r in rows if r[0])
+
+
+def _acronym(label: str) -> bool:
+    """A label that is only a word when its capitals are: US, UK, USA, U.S."""
+    return len(label) <= 4 and label.upper() == label and label.lower() != label
 
 
 def _mentioned(text: str, labels: list) -> bool:
     lowered = text.casefold()
     for label in labels:
+        # "US" casefolds onto the English pronoun, and these publications are
+        # English, so every one of them would be offered the United States as
+        # a class next to the out: entries — reintroducing exactly the pull
+        # those entries exist to remove. An all-caps acronym is matched with
+        # its capitals; everything else is matched casefolded.
+        if _acronym(label):
+            if re.search(_WORD.format(re.escape(label)), text):
+                return True
+            continue
         needle = label.casefold()
         if needle not in lowered:
             continue

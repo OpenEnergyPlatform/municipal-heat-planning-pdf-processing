@@ -86,10 +86,11 @@ def test_run_document_writes_then_skips_then_redoes_on_stale(tmp_path, monkeypat
         return [] if ("table", 1) in exclude else \
             [Source("table", 1, "| Erdgas | 42.005 | MWh/a |", {"page": 3})]
 
-    def harvest(source, parameter):
-        calls.append(source.owner_id)
-        return [{"value": 42005, "unit_raw": "MWh/a", "carrier": "Erdgas",
-                 "quote": "Erdgas | 42.005"}]
+    def harvest(batch, prior=None):
+        calls.extend(i.source.owner_id for i in batch.items)
+        return {"tuples": [{"source": "Q1", "value": 42005, "unit_raw": "MWh/a",
+                            "carrier": "Erdgas", "quote": "Erdgas | 42.005"}],
+                "status": "complete", "need_more": []}
 
     deps = {"retrieve": _per_probe(retrieve), "harvest": harvest}
     args = (7, "plan_x", tmp_path, SPEC, "sha-1", ["{label}"], deps)
@@ -119,7 +120,9 @@ def test_a_source_the_model_never_answered_is_a_visible_hole(tmp_path, monkeypat
             [Source("table", 1, "| Erdgas | 42.005 |", {"page": 3})]
 
     deps = {"retrieve": _per_probe(retrieve),
-            "harvest": lambda s, p: [{"_harvest_failed": True}]}
+            "harvest": lambda b, prior=None: {
+                "tuples": [{"_harvest_failed": True, "source": "Q1"}],
+                "status": "failed", "need_more": []}}
     runner.run_document(7, "plan_y", tmp_path, SPEC, "sha", ["{label}"], deps)
     rows = [json.loads(l) for l in
             (tmp_path / "plan_y.jsonl").read_text(encoding="utf-8").splitlines()]
@@ -291,31 +294,40 @@ def test_a_long_source_becomes_overlapping_windows_of_the_same_owner():
     assert len(covered) == len(text)
 
 
-def test_harvest_batch_answers_in_the_caller_order_not_the_server_order():
+def _chain(item):
+    from docpipe.extraction.pipeline import build_chains
+    return build_chains([item])[0]
+
+
+def test_harvest_chains_answers_in_the_caller_order_not_the_server_order():
     """A 40-token table comes back long before a 6000-token section. The report
     must not depend on that: results are placed by index."""
-    items = [_item(_source(f"s{i}", owner_id=i)) for i in range(20)]
+    chains = [_chain(_item(_source(f"s{i}", owner_id=i))) for i in range(20)]
 
-    def harvest(source, parameter):
-        if source.owner_id % 2:
+    def harvest(batch, prior=None):
+        owner = batch.items[0].source.owner_id
+        if owner % 2:
             time.sleep(0.01)                               # the slow half
-        return [{"value": source.owner_id}]
+        return {"tuples": [{"value": owner}], "status": "complete",
+                "need_more": []}
 
-    got = runner.harvest_batch(items, harvest, workers=8)
-    assert [g[0]["value"] for g in got] == list(range(20))
+    got = runner.harvest_chains(chains, harvest, workers=8)
+    assert [pairs[0][1]["tuples"][0]["value"] for pairs in got] == list(range(20))
 
 
 def test_a_request_that_raises_becomes_a_visible_hole():
-    items = [_item(_source("a", owner_id=1)), _item(_source("b", owner_id=2))]
+    chains = [_chain(_item(_source("a", owner_id=1))),
+              _chain(_item(_source("b", owner_id=2)))]
 
-    def harvest(source, parameter):
-        if source.owner_id == 2:
+    def harvest(batch, prior=None):
+        if batch.items[0].source.owner_id == 2:
             raise RuntimeError("server gone")
-        return [{"value": 1}]
+        return {"tuples": [{"value": 1}], "status": "complete", "need_more": []}
 
-    got = runner.harvest_batch(items, harvest, workers=2)
-    assert got[0] == [{"value": 1}]
-    assert got[1] == [{"_harvest_failed": True}], "a hole must stay countable"
+    got = runner.harvest_chains(chains, harvest, workers=2)
+    assert got[0][0][1]["tuples"] == [{"value": 1}]
+    assert got[1][0][1]["tuples"] == [{"_harvest_failed": True, "source": "Q1"}], (
+        "a hole must stay countable")
 
 
 def test_planning_never_calls_the_model():
@@ -391,7 +403,8 @@ def test_a_refused_request_is_not_retried(monkeypatch):
     monkeypatch.setattr(runner.time, "sleep", lambda *_: None)
 
     harvest = runner.make_harvester(None)
-    assert harvest(_source("x"), SPEC.parameters[0]) == [{"_harvest_failed": True}]
+    reply = harvest(_chain(_item(_source("x")))[0], [])
+    assert reply["tuples"] == [{"_harvest_failed": True, "source": "Q1"}]
     assert len(attempts) == 1, f"{len(attempts)} attempts for a 400"
 
 
@@ -495,3 +508,42 @@ def test_an_action_object_is_read_as_code_and_an_answer_is_not():
     assert runner._parse_action('{"tuples": [{"value": 5}]}') is None
     assert runner._parse_action('{"action": "python"}') is None
     assert runner._parse_action(None) is None
+
+
+# ---------------------------------------------------------------------------
+# What one batched request actually sends and reads back
+# ---------------------------------------------------------------------------
+
+def test_the_request_labels_every_source_and_carries_what_we_have():
+    from docpipe.extraction.pipeline import Batch
+    batch = Batch(7, SPEC.parameters[0],
+                  [_item(_source("erste", owner_id=1)),
+                   _item(_source("zweite", owner_id=2))])
+    payload = runner._batch_payload(batch, [
+        {"value": 42005, "unit": "MWh/a", "unit_raw": "MWh/a",
+         "carrier": "Erdgas", "quote": "| Erdgas | 42.005 |",
+         "tier": "text", "provenance": {"page": 3}, "flags": []}])
+
+    assert [s["id"] for s in payload["sources"]] == ["Q1", "Q2"]
+    assert [s["text"] for s in payload["sources"]] == ["erste", "zweite"]
+    prior = payload["prior"][0]
+    assert prior["value"] == 42005 and prior["carrier"] == "Erdgas"
+    assert "provenance" not in prior and "tier" not in prior, (
+        "prior is there so the model recognises a repeat, nothing else")
+    assert "unit_raw" not in prior
+
+
+def test_a_reply_without_a_status_is_read_as_partial():
+    """The conservative reading of silence: there may be more here. A missing
+    status must not be taken as 'exhausted', or a truncated reply would close
+    a chain that still had values in it."""
+    assert runner._parse_reply('{"tuples": []}')["status"] == "partial"
+    assert runner._parse_reply(
+        '{"tuples": [], "status": "complete"}')["status"] == "complete"
+    assert runner._parse_reply("nicht json") is None
+
+
+def test_need_more_keeps_only_what_can_be_searched_for():
+    reply = runner._parse_reply(
+        '{"tuples": [], "status": "partial", "need_more": ["Bezugsjahr 2020", "", 7]}')
+    assert reply["need_more"] == ["Bezugsjahr 2020"]

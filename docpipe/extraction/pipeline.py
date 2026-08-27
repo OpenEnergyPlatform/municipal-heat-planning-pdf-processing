@@ -34,6 +34,8 @@ from .verify import Refusal, Verified, verify_tuple
 log = logging.getLogger(__name__)
 
 MAX_SWEEP_ROUNDS = 4
+BATCH_SOURCES = 6
+BATCH_CHARS = 14000
 
 
 @dataclass
@@ -55,6 +57,33 @@ class WorkItem:
 
 
 @dataclass
+class Batch:
+    """Several sources read in ONE request, for one parameter.
+
+    A single source at a time is how the answer loop in the chat app works,
+    and it is the wrong unit here: a plan states the carrier in the heading,
+    the year in the caption and the number in the table, and a model shown
+    only the table has to invent the other two or refuse. A batch puts the
+    neighbouring passages in front of it at once, so a tuple can be assembled
+    across them instead of guessed from one.
+
+    Sources keep their label (`id`): the model names the label a value came
+    from, and every claim is verified against THAT source's text. The batch
+    widens what the model may read, not what a quote may be checked against.
+    """
+    document_id: int
+    parameter: object
+    items: list = field(default_factory=list)     # [WorkItem], label = index + 1
+
+    @property
+    def sources(self) -> list:
+        return [item.source for item in self.items]
+
+    def label(self, index: int) -> str:
+        return f"Q{index + 1}"
+
+
+@dataclass
 class DocumentReport:
     document_id: int
     tuples: list = field(default_factory=list)
@@ -67,6 +96,9 @@ class DocumentReport:
     # set retrieval never surfaced. A growing leftover means the probes (or
     # the vocabularies they expand from) have a blind spot.
     fallback: dict = field(default_factory=dict)
+    # parameter uri -> {"asked": n, "served": m}: how often the model said the
+    # passages were not enough, and how often retrieval could answer that.
+    followups: dict = field(default_factory=dict)
 
 
 def plan_document(
@@ -139,29 +171,167 @@ def plan_document(
     return items, report
 
 
+def group_items(items: list, *, max_sources: int = BATCH_SOURCES,
+                max_chars: int = BATCH_CHARS) -> list:
+    """Work items grouped into batches — one request reads several sources.
+
+    Grouping is per document AND per parameter, in the order the sweep found
+    them, so a batch holds passages retrieval considered close to the same
+    question. It never mixes parameters: the choice lists differ per
+    parameter, and a batch spanning two of them would have to carry both.
+    """
+    batches: list = []
+    current: Optional[Batch] = None
+    size = 0
+    for item in items:
+        text = len(item.source.text or "")
+        # A source too long for a shared request rides alone rather than
+        # pushing a neighbour out: split_long_sources has already cut what
+        # cannot fit at all.
+        if (current is not None
+                and current.document_id == item.document_id
+                and current.parameter is item.parameter
+                and len(current.items) < max_sources
+                and (size + text <= max_chars or not current.items)):
+            current.items.append(item)
+            size += text
+            continue
+        current = Batch(item.document_id, item.parameter, [item])
+        size = text
+        batches.append(current)
+    return batches
+
+
+def route_claims(batch: Batch, tuples: Optional[list]) -> list:
+    """One claim list per work item — the label proposes, the quote decides.
+
+    The model names the source a value came from, but a label is the easiest
+    thing in a batch to get wrong, and a mislabelled tuple would be refused
+    for a quote that is verbatim in the document. So the quote settles it:
+    the claim goes to the source whose text actually carries it, and the
+    label only breaks the tie when several do. A claim no source carries
+    stays with its label and is refused by verify — which is the right
+    outcome, because that quote is in none of the passages the model read.
+    """
+    routed: list = [[] for _ in batch.items]
+    labels = {batch.label(i): i for i in range(len(batch.items))}
+    for claim in tuples or []:
+        if not isinstance(claim, dict):
+            continue
+        named = labels.get(str(claim.get("source") or "").strip())
+        quote = claim.get("quote")
+        holders = ([i for i, item in enumerate(batch.items)
+                    if quote and quote in (item.source.text or "")]
+                   if isinstance(quote, str) else [])
+        if named is not None and named in holders:
+            index = named
+        elif holders:
+            index = holders[0]
+        elif named is not None:
+            index = named
+        else:
+            index = 0
+        claim.pop("source", None)
+        routed[index].append(claim)
+    return routed
+
+
+def build_chains(items: list, *, max_sources: int = BATCH_SOURCES,
+                 max_chars: int = BATCH_CHARS) -> list:
+    """Batches grouped into the sequences that must be read in order.
+
+    One chain per (document, parameter). Within a chain the batches share a
+    `prior` that grows as they are read, so they run one after another; every
+    chain is independent of every other, so the run's parallelism is the
+    number of chains, not the number of requests. A group of 40 documents
+    with three parameters is 120 chains — more than enough to keep the
+    server's queue full, and the ordering constraint costs nothing.
+    """
+    chains: dict = {}
+    for batch in group_items(items, max_sources=max_sources,
+                             max_chars=max_chars):
+        chains.setdefault((batch.document_id, batch.parameter.uri),
+                          []).append(batch)
+    return list(chains.values())
+
+
+def run_chain(batches: list, harvest: Callable, *,
+              more_sources: Optional[Callable] = None,
+              rounds: int = 1,
+              max_sources: int = BATCH_SOURCES,
+              max_chars: int = BATCH_CHARS) -> list:
+    """One chain, read in order — returns [(batch, reply)] including follow-ups.
+
+    Three of the four things a batch may answer are handled here. "Found it"
+    and "not in these passages" both just end the batch; "there is a value
+    here but its context is elsewhere" is the one that does work: the model
+    writes what to search for, retrieval answers with passages this document
+    has not shown yet, and they become one more batch of the same chain. The
+    fourth, the sandbox, is a turn inside the request and never reaches here.
+
+    Follow-ups are bounded per chain, and the sources they add are excluded
+    from any later round, so a model that keeps asking cannot loop.
+    """
+    out: list = []
+    prior: list = []
+    seen = {(it.source.owner_kind, it.source.owner_id)
+            for b in batches for it in b.items}
+    queue = list(batches)
+    budget = rounds
+    while queue:
+        batch = queue.pop(0)
+        reply = harvest(batch, list(prior))
+        reply = reply if isinstance(reply, dict) else {}
+        prior.extend(t for t in reply.get("tuples") or []
+                     if isinstance(t, dict) and not t.get("_harvest_failed"))
+        wanted = (reply.get("need_more")
+                  if reply.get("status") == "partial" else None)
+        if wanted and budget > 0 and more_sources is not None:
+            budget -= 1
+            extra = more_sources(batch.document_id, list(wanted), set(seen)) or []
+            fresh = [s for s in extra if (s.owner_kind, s.owner_id) not in seen]
+            for source in fresh:
+                seen.add((source.owner_kind, source.owner_id))
+            if fresh:
+                reply["_served"] = True
+                items = [WorkItem(batch.document_id, batch.parameter, s)
+                         for s in fresh]
+                queue.extend(group_items(items, max_sources=max_sources,
+                                         max_chars=max_chars))
+        out.append((batch, reply))
+    return out
+
+
 def harvest_document(
     document_id: int,
     spec: Spec,
     templates: list,
     *,
     retrieve: Callable,                   # (probes, document_id, exclude) -> [[Source]]
-    harvest: Callable,                    # (Source, Parameter) -> [claim dict]
+    harvest: Callable,                    # (Batch, prior) -> reply dict
     locate: Optional[Callable] = None,    # (Source, quote) -> rects | None
     candidates: Optional[Callable] = None,  # (document_id, Parameter) -> [Source]
+    more_sources: Optional[Callable] = None,  # (doc, queries, exclude) -> [Source]
     max_rounds: int = MAX_SWEEP_ROUNDS,
+    max_sources: int = BATCH_SOURCES,
+    max_chars: int = BATCH_CHARS,
 ) -> DocumentReport:
-    """Plan and harvest one document, one request after another.
+    """Plan and harvest one document, one chain after another.
 
     The serial path: it keeps the loop's semantics in one readable piece and
-    is what the tests own. Real runs go through plan_document + fold_claims,
-    which do the same work with every request in flight at once.
+    is what the tests own. Real runs call the same run_chain, with every
+    chain of every document in flight at once.
     """
     items, report = plan_document(document_id, spec, templates,
                                   retrieve=retrieve, candidates=candidates,
                                   max_rounds=max_rounds)
-    for item in items:
-        fold_claims(item, harvest(item.source, item.parameter), report,
-                    locate=locate)
+    for chain in build_chains(items, max_sources=max_sources,
+                              max_chars=max_chars):
+        for batch, reply in run_chain(chain, harvest,
+                                      more_sources=more_sources,
+                                      max_sources=max_sources,
+                                      max_chars=max_chars):
+            fold_batch(batch, reply, report, locate=locate)
     return report
 
 
@@ -202,6 +372,28 @@ def fold_claims(item: WorkItem, claims: Optional[list],
         report.flags.extend(outcome.flags)
 
 
+def fold_batch(batch: Batch, reply: Optional[dict], report: DocumentReport, *,
+               locate: Optional[Callable] = None) -> None:
+    """Verify one batch's reply into the report.
+
+    The reply carries the tuples, and it carries what the model said about
+    them: `complete` means these passages hold nothing else for this
+    parameter, `partial` with `need_more` means a value is in here but its
+    context is not. The second is the number that matters for the next
+    sweep — it is the model telling us where retrieval was too narrow.
+    """
+    reply = reply if isinstance(reply, dict) else {}
+    routed = route_claims(batch, reply.get("tuples"))
+    for item, claims in zip(batch.items, routed):
+        fold_claims(item, claims, report, locate=locate)
+    counts = report.followups.setdefault(
+        batch.parameter.uri, {"asked": 0, "served": 0})
+    if reply.get("status") == "partial" and reply.get("need_more"):
+        counts["asked"] += 1
+    if reply.get("_served"):
+        counts["served"] += 1
+
+
 def write_report(report: DocumentReport, out_path: Path) -> None:
     """Tuples and refusals as one JSONL, written atomically.
 
@@ -222,10 +414,13 @@ def write_report(report: DocumentReport, out_path: Path) -> None:
     temp.replace(out_path)
     leftovers = {k.rsplit("/", 1)[-1]: v["leftover"]
                  for k, v in report.fallback.items()}
+    asked = sum(v["asked"] for v in report.followups.values())
+    served = sum(v["served"] for v in report.followups.values())
     log.info(
         "extraction: document %s -> %d tuple(s), %d refusal(s), %d flag(s), "
-        "%d owner(s) harvested, sweep rounds %s, fallback leftovers %s",
+        "%d owner(s) harvested, sweep rounds %s, fallback leftovers %s, "
+        "%d more-passages request(s), %d served",
         report.document_id, len(report.tuples), len(report.refusals),
         len(report.flags), report.owners_harvested,
         {k.rsplit("/", 1)[-1]: v for k, v in report.sweep_rounds.items()},
-        leftovers or "-")
+        leftovers or "-", asked, served)
