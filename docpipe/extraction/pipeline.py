@@ -257,6 +257,99 @@ def route_claims(batch: Batch, tuples: Optional[list]) -> tuple:
     return routed, orphans
 
 
+@dataclass
+class Row:
+    """One value found in one source, before its coordinates are filled.
+
+    A row is created by the value request and by nothing else. Every later
+    request fills a column of rows that already exist, so no field request can
+    invent a value and none can quietly drop one: the count is fixed before
+    the first coordinate is asked for.
+    """
+    label: str                            # "R1", the id a field answer names
+    item_index: int                       # which source of the batch it sits in
+    claim: dict = field(default_factory=dict)
+
+
+def row_label(index: int) -> str:
+    return f"R{index + 1}"
+
+
+def rows_from_reply(batch: Batch, reply: Optional[dict]) -> tuple:
+    """(rows, orphans) from the value request — the only request that counts.
+
+    Routing is the same as for a whole tuple: the quote decides which source a
+    value belongs to, the label breaks a tie, and a claim that neither quotes
+    nor names any source of the batch is an orphan.
+    """
+    reply = reply if isinstance(reply, dict) else {}
+    routed, orphans = route_claims(batch, reply.get("tuples"))
+    rows: list = []
+    for item_index, claims in enumerate(routed):
+        for claim in claims:
+            rows.append(Row(label=row_label(len(rows)),
+                            item_index=item_index, claim=dict(claim)))
+    return rows, orphans
+
+
+def merge_field(rows: list, batch: Batch, slot, reply: Optional[dict]) -> dict:
+    """Fold one field's answers onto the rows. Returns {"filled", "unquoted"}.
+
+    Every answer brings its own passage, and that passage is checked against
+    the text of the source its row came from — the same whitespace-collapsed
+    test the tuple's own quote passes. A field whose evidence is not in that
+    source is left empty rather than written unbacked: the point of asking per
+    field is that each coordinate is evidenced, and an answer that cannot show
+    where it read the year is exactly the answer a whole-tuple request used to
+    hide inside a tuple the value's quote had already justified.
+    """
+    reply = reply if isinstance(reply, dict) else {}
+    pairs: list = []
+    answers = reply.get("answers")
+    if isinstance(answers, dict):
+        pairs.extend(answers.items())
+    # One answer for many rows. A table's thirteen rows share one reference
+    # year and one caption to prove it, and repeating that caption thirteen
+    # times is how a reply runs into the token wall and is lost whole.
+    for group in reply.get("groups") or ():
+        if not isinstance(group, dict):
+            continue
+        for label in group.get("rows") or ():
+            pairs.append((label, group))
+    by_label = {row.label: row for row in rows}
+    filled = unquoted = 0
+    for label, answer in pairs:
+        row = by_label.get(str(label).strip())
+        if row is None or not isinstance(answer, dict):
+            continue
+        given = answer.get("value")
+        if given is None or (isinstance(given, str) and not given.strip()):
+            continue
+        quote = answer.get("quote")
+        source = batch.items[row.item_index].source
+        if not (isinstance(quote, str) and quote_in(source.text or "", quote)):
+            unquoted += 1
+            continue
+        row.claim[slot.name] = given
+        wording = answer.get("value_raw")
+        if isinstance(wording, str) and wording.strip():
+            row.claim[f"{slot.name}_raw"] = wording.strip()
+        # The passage this one coordinate was read in, kept next to it. A
+        # value and its year are two findings, and a graph that cites one
+        # sentence for both is citing the wrong one for at least one of them.
+        row.claim[f"{slot.name}_quote"] = quote
+        filled += 1
+    return {"filled": filled, "unquoted": unquoted}
+
+
+def rows_by_item(batch: Batch, rows: list) -> list:
+    """The finished claims, grouped back into one list per source."""
+    out: list = [[] for _ in batch.items]
+    for row in rows:
+        out[row.item_index].append(row.claim)
+    return out
+
+
 class Sweep:
     """The shared state of one (document, parameter), across its batches.
 
@@ -472,6 +565,29 @@ def fold_batch(batch: Batch, reply: Optional[dict], report: DocumentReport, *,
     # Counted here, not frozen at plan time: a follow-up brings passages the
     # plan never knew about, and a report that says "N owners harvested"
     # while having read more than N cannot be used to audit coverage.
+    if batch.followed_up:
+        report.owners_harvested += len(batch.items)
+
+
+def fold_fieldwise(batch: Batch, rows: list, orphans: list,
+                   report: DocumentReport, *,
+                   locate: Optional[Callable] = None) -> None:
+    """Verify a field-wise batch into the report.
+
+    By the time this runs the rows carry every coordinate a field request
+    could evidence, so what is left is exactly what fold_batch does: hand each
+    source its claims and let verify decide. The difference is upstream — a
+    coordinate that is empty here is empty because a request asked for it and
+    the passage did not say, not because a sixteen-field answer skipped it.
+    """
+    for item, claims in zip(batch.items, rows_by_item(batch, rows)):
+        fold_claims(item, claims, report, locate=locate)
+    for claim in orphans:
+        report.refusals.append(
+            {"parameter": batch.parameter.uri, "reason": "claim names no source",
+             "claim": claim,
+             "owner": [batch.items[0].source.owner_kind,
+                       batch.items[0].source.owner_id]})
     if batch.followed_up:
         report.owners_harvested += len(batch.items)
 

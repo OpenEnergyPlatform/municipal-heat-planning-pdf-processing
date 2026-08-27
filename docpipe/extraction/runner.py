@@ -34,9 +34,11 @@ from docpipe import prompts
 from docpipe.llm_preflight import assert_serving
 from docpipe.profile import add_profile_argument, resolve_profile
 
+from . import fields
 from .pipeline import (Source, WorkItem, build_sweeps, fold_batch,
-                       follow_up, group_items, harvest_document, plan_document,
-                       route_claims, write_report)
+                       follow_up, group_items, harvest_document, merge_field,
+                       plan_document, route_claims, rows_from_reply,
+                       write_report)
 from .queries import expand as expand_queries
 from .spec import Spec, load as load_spec
 
@@ -94,7 +96,20 @@ LOCATE_MAX_PAGES = int(os.environ.get("EXTRACT_LOCATE_MAX_PAGES", "3"))
 HARVEST_PROMPT_ID = "extraction/harvest"
 QUERIES_PROMPT_ID = "extraction/queries"
 ANCHORS_PROMPT_ID = "extraction/anchors"
-PROMPT_IDS = (HARVEST_PROMPT_ID, QUERIES_PROMPT_ID, ANCHORS_PROMPT_ID)
+# The field-wise pair that replaces the single whole-tuple request: one call
+# finds the values, one call per coordinate fills them in.
+ROWS_PROMPT_ID = "extraction/rows"
+FIELD_PROMPT_ID = "extraction/field"
+PROMPT_IDS = (HARVEST_PROMPT_ID, QUERIES_PROMPT_ID, ANCHORS_PROMPT_ID,
+              ROWS_PROMPT_ID, FIELD_PROMPT_ID)
+
+# One request per field, or one request per tuple. The old way is kept
+# reachable because it is what every measured number so far was taken with,
+# and a comparison needs both.
+FIELDWISE = os.environ.get("EXTRACT_FIELDWISE", "1") != "0"
+# The field requests of one batch go out together. They are HTTP waits, and
+# they share their whole prefix, so the server answers them from cache.
+FIELD_PARALLEL = int(os.environ.get("EXTRACT_FIELD_PARALLEL", "64"))
 
 _THINK_RE = re.compile(r"<think>.*?</think>", re.DOTALL)
 _FENCE_OPEN = re.compile(r"^```(?:json)?\s*")
@@ -891,8 +906,16 @@ def _holes(batch, rescued: list) -> list:
             for i in range(frontier + 1, len(batch.items))]
 
 
-def make_harvester(image_root: Optional[Path] = None) -> Callable:
-    prompt = prompts.load(HARVEST_PROMPT_ID)
+def make_harvester(image_root: Optional[Path] = None,
+                   prompt_id: str = HARVEST_PROMPT_ID) -> Callable:
+    """The request loop, for either contract.
+
+    The whole-tuple prompt and the field-wise value prompt differ in what they
+    ask for and in nothing else: same sources, same crops, same sandbox, same
+    rescue of a reply cut off at the token ceiling. So the prompt is the
+    argument and the loop is shared.
+    """
+    prompt = prompts.load(prompt_id)
     client = _client()
     temperature = float(prompt.meta.get("temperature", 0.1))
     max_tokens = int(prompt.meta.get("max_tokens", 4096))
@@ -1032,6 +1055,135 @@ def make_harvester(image_root: Optional[Path] = None) -> Callable:
                             "source": batch.label(i)}
                            for i in range(len(batch.items))],
                 "status": "failed", "need_more": []}
+
+    return harvest
+
+
+def _field_payload(batch, rows: list, slot) -> dict:
+    """The request body of one field question.
+
+    Sources first, rows second, the field last. Every field of one batch then
+    shares a prefix that is almost the whole request, which is what makes
+    asking eight times affordable: the server answers the shared part from its
+    prefix cache and only the tail is new work.
+    """
+    sources = []
+    for index, item in enumerate(batch.items):
+        source = item.source
+        sources.append({"id": batch.label(index), "kind": source.owner_kind,
+                        "title": source.provenance.get("title"),
+                        "section": source.provenance.get("section_title"),
+                        "text": source.text})
+    listed = []
+    for row in rows:
+        entry = {"id": row.label, "source": batch.label(row.item_index),
+                 "value": row.claim.get("value"),
+                 "quote": row.claim.get("quote")}
+        unit = row.claim.get("unit_raw") or row.claim.get("unit")
+        if unit:
+            entry["unit"] = unit
+        listed.append(entry)
+    field = {"name": slot.name, "question": slot.question}
+    if slot.options:
+        field["options"] = {opt.label: list(opt.synonyms) for opt in slot.options}
+    return {"sources": sources, "rows": listed, "field": field}
+
+
+def make_field_asker() -> Callable:
+    """ask(batch, rows, slot) -> reply, or None when the field stays unasked.
+
+    No sandbox and no rescue of a truncated reply. A field answer is a choice
+    and a quote, never arithmetic, and a reply cut off in the middle fills
+    fewer rows than it could — which is a gap the harvest can see, because the
+    coordinate is simply empty and counted as empty. That is the difference
+    the whole change is about: what is missing is missing on the record.
+    """
+    prompt = prompts.load(FIELD_PROMPT_ID)
+    client = _client()
+    temperature = float(prompt.meta.get("temperature", 0.1))
+    max_tokens = int(prompt.meta.get("max_tokens", 4096))
+
+    def ask(batch, rows: list, slot) -> Optional[dict]:
+        payload = json.dumps(_field_payload(batch, rows, slot),
+                             ensure_ascii=False, indent=2)
+        for attempt in range(1, MAX_RETRIES + 1):
+            try:
+                response = client.chat.completions.create(
+                    model=LLM_MODEL, temperature=temperature,
+                    max_tokens=max_tokens,
+                    messages=[{"role": "system", "content": prompt.text},
+                              {"role": "user", "content": payload}],
+                    extra_body={"chat_template_kwargs": {"enable_thinking": False}},
+                )
+                reply = response.choices[0]
+                _observe_usage(getattr(response, "usage", None))
+                answer = _loads_object(reply.message.content)
+                if answer is None:
+                    answer = _loads_object(
+                        getattr(reply.message, "reasoning_content", None))
+                if isinstance(answer, dict):
+                    return answer
+                log.warning("   field %s attempt %d: unreadable reply%s",
+                            slot.name, attempt, _unparsable(reply))
+            except Exception as exc:
+                log.warning("   field %s attempt %d failed: %s",
+                            slot.name, attempt, exc)
+                status = getattr(exc, "status_code", None)
+                if isinstance(status, int) and 400 <= status < 500 and status != 429:
+                    break
+            if attempt < MAX_RETRIES:
+                time.sleep(min(2 * attempt, 6))
+        return None
+
+    return ask
+
+
+def make_fieldwise_harvester(image_root: Optional[Path] = None) -> Callable:
+    """A harvest(batch, prior) that asks per field and answers like the old one.
+
+    Same signature as make_harvester's, so the scheduler above it does not
+    change: the batch is still the unit in flight, and the fan-out over the
+    fields happens inside one batch's turn.
+    """
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    find_rows = make_harvester(image_root, prompt_id=ROWS_PROMPT_ID)
+    ask = make_field_asker()
+    pool = ThreadPoolExecutor(max_workers=FIELD_PARALLEL,
+                              thread_name_prefix="field")
+
+    def harvest(batch, prior: Optional[list] = None) -> dict:
+        reply = find_rows(batch, prior)
+        rows, orphans = rows_from_reply(batch, reply)
+        if not rows:
+            # Either nothing is in these passages or the value request died.
+            # Both are already stated in the reply the row request returned,
+            # sentinels included, so it is passed through untouched.
+            return reply
+        slots = fields.axis_slots(batch.parameter)
+        counts: dict = {}
+        futures = {pool.submit(ask, batch, rows, slot): slot for slot in slots}
+        for future in as_completed(futures):
+            slot = futures[future]
+            try:
+                answer = future.result()
+            except Exception as exc:            # pragma: no cover - defensive
+                log.warning("   field %s raised: %s", slot.name, exc)
+                continue
+            counts[slot.name] = merge_field(rows, batch, slot, answer)
+        unquoted = sum(c["unquoted"] for c in counts.values())
+        if unquoted:
+            log.info("   fields: %d answer(s) dropped for evidence that is "
+                     "not in the source", unquoted)
+        # The label goes back on so the fold routes each claim to the source
+        # the value request already settled on, instead of deciding a second
+        # time from the quote alone.
+        for row in rows:
+            row.claim["source"] = batch.label(row.item_index)
+        return {"tuples": [row.claim for row in rows] + orphans,
+                "status": reply.get("status", "complete"),
+                "need_more": reply.get("need_more") or [],
+                "_fieldwise": {name: c["filled"] for name, c in counts.items()}}
 
     return harvest
 
@@ -1576,7 +1728,12 @@ def main(argv: Optional[list] = None) -> int:
                  fitted, BATCH_SOURCES)
         BATCH_SOURCES = fitted
 
-    harvest = make_harvester(args.image_root)     # OpenAI client is thread-safe
+    # OpenAI client is thread-safe
+    harvest = (make_fieldwise_harvester(args.image_root) if FIELDWISE
+               else make_harvester(args.image_root))
+    log.info("extraction: %s",
+             "one request per field, each with its own evidence" if FIELDWISE
+             else "one request per tuple (EXTRACT_FIELDWISE=0)")
     locate = make_locate(args.db, args.pdf_root)
 
     listing = sqlite3.connect(f"file:{args.db}?mode=ro", uri=True)

@@ -86,6 +86,11 @@ class Axis:
     enum: Optional[tuple] = None
     required: bool = False
     dynamic: bool = False
+    # The one line the field request asks. It lives on the axis because the
+    # harvest asks per field: a rule buried in a prompt that covers sixteen
+    # fields at once is a rule the model can skip, and skipping is what cost
+    # the corpus run 63.5% of its years.
+    question: Optional[str] = None
 
     def label_to_uri(self) -> dict:
         """Corpus label (casefolded) -> URI. Built once, used per tuple."""
@@ -184,9 +189,13 @@ def _validate_axis(path: str, name: str, raw) -> Axis:
         if not isinstance(enum, list) or not all(isinstance(e, str) for e in enum):
             _fail(path, "enum must be a list of strings")
         enum = tuple(enum)
+    question = raw.get("question")
+    if question is not None and (not isinstance(question, str) or
+                                 not question.strip()):
+        _fail(path, "question must be a non-empty string when given")
     return Axis(name=name, vocabulary=vocabulary, type=axis_type,
                 enum=enum, required=bool(raw.get("required", False)),
-                dynamic=dynamic)
+                dynamic=dynamic, question=question)
 
 
 def _validate_example(path: str, raw, value_type: str,
