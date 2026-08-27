@@ -53,6 +53,10 @@ MAX_RETRIES = 3
 # handful of requests leaves four H100s idle between tokens. The first pilot
 # ran eight at a time and did 0.14 requests a second.
 LLM_PARALLEL = int(os.environ.get("EXTRACT_LLM_PARALLEL", "128"))
+# Sandbox rounds per harvest. A computed value carries its code and the code's
+# output as evidence; without the sandbox the model would have to work the
+# number out itself, and that number would have no evidence at all.
+CODE_ROUNDS = int(os.environ.get("EXTRACT_CODE_ROUNDS", "2"))
 # Threads for the two cheap halves: retrieval planning (FAISS + SQL) and
 # verification (PyMuPDF quote location). Neither talks to the LLM server.
 PLAN_PARALLEL = int(os.environ.get("EXTRACT_PLAN_PARALLEL", "8"))
@@ -72,7 +76,8 @@ LOCATE_MAX_PAGES = int(os.environ.get("EXTRACT_LOCATE_MAX_PAGES", "3"))
 
 HARVEST_PROMPT_ID = "extraction/harvest"
 QUERIES_PROMPT_ID = "extraction/queries"
-PROMPT_IDS = (HARVEST_PROMPT_ID, QUERIES_PROMPT_ID)
+ANCHORS_PROMPT_ID = "extraction/anchors"
+PROMPT_IDS = (HARVEST_PROMPT_ID, QUERIES_PROMPT_ID, ANCHORS_PROMPT_ID)
 
 _THINK_RE = re.compile(r"<think>.*?</think>", re.DOTALL)
 _FENCE_OPEN = re.compile(r"^```(?:json)?\s*")
@@ -222,19 +227,78 @@ def fill_dynamic_axes(spec: Spec, vocabularies: Optional[dict]) -> Spec:
     return Spec(parameters=parameters) if changed else spec
 
 
-def probe_texts(spec: Spec, templates: list) -> list:
+def make_anchors(spec: Spec, client=None) -> dict:
+    """parameter uri -> search anchors the model wrote from its definition.
+
+    The QA app turns a question into a HyDE anchor before it searches: a
+    sentence written as it would READ in the document, because that is what a
+    similarity search matches against. This stage searched with the spec's
+    templates alone, which name the thing rather than say it.
+
+    Once per run and per parameter, not per document: the anchor depends on the
+    definition, not on the plan, and a stable probe string is what makes the
+    query-embedding cache hit across the whole corpus.
+    """
+    prompt = prompts.load(ANCHORS_PROMPT_ID)
+    client = client or _client()
+    out: dict = {}
+
+    def one(parameter):
+        payload = json.dumps({"label": parameter.label,
+                              "description": parameter.description},
+                             ensure_ascii=False, indent=2)
+        for attempt in range(1, MAX_RETRIES + 1):
+            try:
+                reply = client.chat.completions.create(
+                    model=LLM_MODEL,
+                    temperature=float(prompt.meta.get("temperature", 0.4)),
+                    max_tokens=int(prompt.meta.get("max_tokens", 800)),
+                    messages=[{"role": "system", "content": prompt.text},
+                              {"role": "user", "content": payload}],
+                    extra_body={"chat_template_kwargs": {"enable_thinking": False}},
+                ).choices[0].message.content
+                parsed = _loads_object(reply)
+                anchors = [a.strip() for a in (parsed or {}).get("anchors", ())
+                           if isinstance(a, str) and len(a.strip()) > 20]
+                if anchors:
+                    return parameter.uri, anchors
+            except Exception as exc:
+                log.warning("anchors %s attempt %d failed: %s",
+                            parameter.uri, attempt, exc)
+            if attempt < MAX_RETRIES:
+                time.sleep(min(2 * attempt, 6))
+        # No anchors is not fatal: the templates alone are what this stage
+        # searched with until now.
+        log.warning("anchors %s: none generated, templates only", parameter.uri)
+        return parameter.uri, []
+
+    from concurrent.futures import ThreadPoolExecutor
+    with ThreadPoolExecutor(max_workers=min(8, len(spec.parameters) or 1)) as pool:
+        for uri, anchors in pool.map(one, spec.parameters):
+            out[uri] = anchors
+    log.info("extraction: %d anchor(s) over %d parameter(s)",
+             sum(len(v) for v in out.values()), len(out))
+    for uri, anchors in out.items():
+        for anchor in anchors:
+            log.info("   anchor %s: %s", uri, anchor)
+    return out
+
+
+def probe_texts(spec: Spec, templates: list, anchors: Optional[dict] = None) -> list:
     """Every retrieval probe the run will ever send, once, order-stable."""
     seen: set = set()
     probes: list = []
     for parameter in spec.parameters:
-        for probe in expand_queries(templates, parameter):
+        for probe in list(expand_queries(templates, parameter)) + list(
+                (anchors or {}).get(parameter.uri, ())):
             if probe not in seen:
                 seen.add(probe)
                 probes.append(probe)
     return probes
 
 
-def prime_probe_cache(cache_conn, spec: Spec, templates: list) -> int:
+def prime_probe_cache(cache_conn, spec: Spec, templates: list,
+                      anchors: Optional[dict] = None) -> int:
     """Embed every probe of every parameter in one batch, before any planning.
 
     The probes come from the spec, not from a document, so the whole corpus
@@ -245,7 +309,7 @@ def prime_probe_cache(cache_conn, spec: Spec, templates: list) -> int:
     """
     from docpipe.inference import query_cache
 
-    probes = probe_texts(spec, templates)
+    probes = probe_texts(spec, templates, anchors)
     keys = {p: query_cache.make_key("text", text=p, image_bytes=None)
             for p in probes}
     missing = [p for p in probes if query_cache.get(cache_conn, keys[p]) is None]
@@ -332,6 +396,30 @@ def make_candidates(conn: sqlite3.Connection,
 # Harvest: one source + one parameter -> the model's claimed tuples
 # ---------------------------------------------------------------------------
 
+def _client():
+    """The one OpenAI-compatible client shape this stage uses."""
+    from openai import OpenAI
+    return OpenAI(base_url=LLM_BASE_URL, api_key=LLM_API_KEY,
+                  timeout=LLM_TIMEOUT, max_retries=0)
+
+
+def _loads_object(raw_text: str) -> Optional[dict]:
+    """The JSON object in a reply, whatever it is wrapped in."""
+    text = _THINK_RE.sub("", raw_text or "").strip()
+    text = _FENCE_CLOSE.sub("", _FENCE_OPEN.sub("", text)).strip()
+    try:
+        data = json.loads(text)
+    except json.JSONDecodeError:
+        match = re.search(r"\{.*\}", text, re.DOTALL)
+        if not match:
+            return None
+        try:
+            data = json.loads(match.group(0))
+        except json.JSONDecodeError:
+            return None
+    return data if isinstance(data, dict) else None
+
+
 def _parse_tuples(raw_text: str) -> Optional[list]:
     text = _THINK_RE.sub("", raw_text or "").strip()
     text = _FENCE_CLOSE.sub("", _FENCE_OPEN.sub("", text)).strip()
@@ -371,6 +459,34 @@ def _unparsable(reply) -> str:
     return (f" [finish={getattr(reply, 'finish_reason', '?')} "
             f"content={len(content)}ch {content[:160]!r} "
             f"reasoning={len(reasoning)}ch {reasoning[-160:]!r}]")
+
+
+def _parse_action(text) -> Optional[str]:
+    """The python the model wants run, or None if it answered instead."""
+    if not isinstance(text, str) or '"action"' not in text:
+        return None
+    try:
+        start, end = text.index("{"), text.rindex("}") + 1
+        obj = json.loads(text[start:end])
+    except (ValueError, json.JSONDecodeError):
+        return None
+    if not isinstance(obj, dict) or obj.get("action") != "python":
+        return None
+    code = obj.get("code")
+    return code if isinstance(code, str) and code.strip() else None
+
+
+def _compute_reply(run: dict) -> str:
+    """What the model gets back after a sandbox round."""
+    if not run.get("ok"):
+        return (f"Der Code lief nicht: {run.get('error') or 'unbekannt'}. "
+                f"Antworte jetzt ohne Berechnung, oder korrigiere den Code.")
+    out = (run.get("stdout") or "").strip()
+    if not out:
+        return ("Der Code lief, hat aber nichts ausgegeben. Gib jedes Ergebnis "
+                "mit print() aus, oder antworte ohne Berechnung.")
+    return (f"Ausgabe des Codes:\n{out}\n\nAntworte jetzt mit dem "
+            f'Tupel-Objekt. Berechnete Werte tragen "computed": true.')
 
 
 def _parameter_payload(parameter) -> dict:
@@ -441,12 +557,14 @@ def _image_part(path: str) -> Optional[dict]:
 
 
 def make_harvester(image_root: Optional[Path] = None) -> Callable:
-    from openai import OpenAI
     prompt = prompts.load(HARVEST_PROMPT_ID)
-    client = OpenAI(base_url=LLM_BASE_URL, api_key=LLM_API_KEY,
-                    timeout=LLM_TIMEOUT, max_retries=0)
+    client = _client()
     temperature = float(prompt.meta.get("temperature", 0.1))
     max_tokens = int(prompt.meta.get("max_tokens", 4096))
+
+    # Deferred: docpipe.inference's package __init__ pulls in the whole answer
+    # loop, which demands a profile at import time.
+    from docpipe.inference import code_exec
 
     def harvest(source: Source, parameter) -> list:
         payload = json.dumps(
@@ -456,6 +574,7 @@ def make_harvester(image_root: Optional[Path] = None) -> Callable:
                         "section": source.provenance.get("section_title"),
                         "text": source.text}},
             ensure_ascii=False, indent=2)
+        compute: list = []
         # The crop rides along for tables and figures: the transcription is a
         # reading of that picture, and the model should be able to check it
         # against the picture rather than trust it.
@@ -465,13 +584,16 @@ def make_harvester(image_root: Optional[Path] = None) -> Callable:
                                if image_root else source.image_path)
             if part is not None:
                 content = [{"type": "text", "text": payload}, part]
-        for attempt in range(1, MAX_RETRIES + 1):
+        conversation: list = [{"role": "user", "content": content}]
+        # A compute round is a turn of the same conversation, not a retry, so
+        # the attempt budget grows with the rounds actually used.
+        for attempt in range(1, MAX_RETRIES + CODE_ROUNDS + 1):
             try:
                 response = client.chat.completions.create(
                     model=LLM_MODEL, temperature=temperature,
                     max_tokens=max_tokens,
                     messages=[{"role": "system", "content": prompt.text},
-                              {"role": "user", "content": content}],
+                              *conversation],
                     # Refinement and the vision path have said this for
                     # longer than this stage has existed: a reasoning model
                     # must not spend the token budget on a think block,
@@ -482,6 +604,25 @@ def make_harvester(image_root: Optional[Path] = None) -> Callable:
                     extra_body={"chat_template_kwargs": {"enable_thinking": False}},
                 )
                 reply = response.choices[0]
+                # An action object instead of an answer: the model wants the
+                # sandbox. A value it works out itself would be a number with
+                # no evidence; a value the sandbox works out carries the code
+                # and the code's output, which is checkable without rerunning
+                # anything. Bounded, and only while a round is left.
+                action = _parse_action(reply.message.content)
+                if action and len(compute) < CODE_ROUNDS:
+                    out = code_exec.run_code(
+                        action, context={"source": source.text,
+                                         "title": source.provenance.get("title")})
+                    compute.append({"code": action,
+                                    "stdout": (out.get("stdout") or "")[:2000],
+                                    "ok": bool(out.get("ok")),
+                                    "error": out.get("error")})
+                    conversation.append({"role": "assistant",
+                                         "content": reply.message.content or ""})
+                    conversation.append({"role": "user",
+                                         "content": _compute_reply(compute[-1])})
+                    continue
                 tuples = _parse_tuples(reply.message.content)
                 if tuples is None:
                     # A reasoning parser puts the chain in reasoning_content
@@ -490,6 +631,10 @@ def make_harvester(image_root: Optional[Path] = None) -> Callable:
                     tuples = _parse_tuples(
                         getattr(reply.message, "reasoning_content", None))
                 if tuples is not None:
+                    if compute:
+                        for t in tuples:
+                            if isinstance(t, dict):
+                                t.setdefault("compute", compute)
                     return tuples
                 log.warning("   harvest %s/%s attempt %d: reply carried no "
                             "'tuples' list%s", source.owner_kind,
@@ -927,9 +1072,15 @@ def main(argv: Optional[list] = None) -> int:
              len(documents), len(spec.parameters), TOP_K, MAX_ROUNDS,
              PLAN_PARALLEL, LLM_PARALLEL, group_size)
 
+    # One call per parameter, before anything is planned: the anchors depend on
+    # the definition, not on the document, and a probe string that is the same
+    # for the whole corpus is what makes the query-embedding cache pay.
+    anchors = ({} if os.environ.get("EXTRACT_ANCHORS", "1") == "0"
+               else make_anchors(spec))
+
     cache_path = args.out / "query_cache.db"
     primer = query_cache.connect(cache_path)
-    prime_probe_cache(primer, spec, templates)
+    prime_probe_cache(primer, spec, templates, anchors)
     primer.close()
 
     def plan(document_id: int, filename: str) -> tuple:
@@ -957,7 +1108,7 @@ def main(argv: Optional[list] = None) -> int:
                              ", ".join(f"{k}={len(v)}"
                                        for k, v in sorted(lists.items())))
             items, report = plan_document(
-                document_id, doc_spec, templates,
+                document_id, doc_spec, templates, extra_probes=anchors,
                 retrieve=make_retrieve(conn, index, id_to_pos, cache_conn, fetch),
                 candidates=make_candidates(conn, fetch), max_rounds=MAX_ROUNDS)
             return Path(filename).stem, split_long_sources(items), report

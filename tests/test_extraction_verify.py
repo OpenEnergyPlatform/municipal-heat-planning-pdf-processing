@@ -350,3 +350,44 @@ def test_a_text_value_needs_no_unit_and_no_vocabulary():
     assert isinstance(out, Verified), getattr(out, "reason", out)
     assert out.tuple["value"] == "Rat der Stadt"
     assert "value_target" not in out.tuple, "no unit means no converted value"
+
+
+def test_a_computed_value_is_backed_by_the_sandbox_output_not_the_quote():
+    """A value the pipeline works out cannot stand in the document, so the
+    quote proves the INPUTS and the sandbox's printed output proves the
+    result. Both are on the tuple; neither is the model's word."""
+    source = "Der Gesamtverbrauch liegt bei 604 GWh/a, davon 40 % Fernwärme."
+    out = verify_tuple(
+        {"value": 241600, "unit": "MWh/a", "computed": True,
+         "compute": [{"code": "print(604000 * 0.40)", "stdout": "241600.0",
+                      "ok": True}],
+         "carrier": "Erdgas", "sector": "Private Haushalte", "year": 2020,
+         "scenario": "status_quo", "quote": source},
+        _parameter(), source)
+    assert isinstance(out, Verified), getattr(out, "reason", out)
+    assert "computed" in out.flags
+    assert out.tuple["compute"][0]["code"] == "print(604000 * 0.40)"
+
+
+def test_a_computed_value_the_sandbox_never_printed_is_refused():
+    """Otherwise `computed: true` would be a licence to invent a number."""
+    source = "Der Gesamtverbrauch liegt bei 604 GWh/a, davon 40 % Fernwärme."
+    out = verify_tuple(
+        {"value": 999999, "unit": "MWh/a", "computed": True,
+         "compute": [{"code": "print(604000 * 0.40)", "stdout": "241600.0",
+                      "ok": True}],
+         "carrier": "Erdgas", "sector": "Private Haushalte", "year": 2020,
+         "scenario": "status_quo", "quote": source},
+        _parameter(), source)
+    assert isinstance(out, Refusal)
+
+
+def test_a_computed_value_still_needs_its_quote_in_the_source():
+    out = verify_tuple(
+        {"value": 241600, "unit": "MWh/a", "computed": True,
+         "compute": [{"code": "x", "stdout": "241600.0", "ok": True}],
+         "carrier": "Erdgas", "sector": "Private Haushalte", "year": 2020,
+         "scenario": "status_quo", "quote": "steht so nirgends im Dokument"},
+        _parameter(), "Der Gesamtverbrauch liegt bei 604 GWh/a.")
+    assert isinstance(out, Refusal)
+    assert "not found in the source" in out.reason

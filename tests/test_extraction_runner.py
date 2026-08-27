@@ -427,3 +427,71 @@ def test_the_document_index_is_built_once_and_searched_once_per_probe_set(monkey
 
     assert prepared_for == [7, 9], "one sub-index per document, not per round"
     assert searched == [2, 1, 2], "round two reuses round one's search"
+
+
+# --- the search anchor, written from the definition -------------------------
+
+class _StubReply:
+    def __init__(self, content):
+        self.choices = [type("C", (), {"message": type("M", (), {
+            "content": content, "reasoning_content": None})()})()]
+
+
+class _StubClient:
+    """Records what it was asked and answers with a fixed reply."""
+    def __init__(self, content):
+        self.content, self.seen = content, []
+        self.chat = type("Chat", (), {"completions": self})()
+
+    def create(self, **kw):
+        self.seen.append(kw)
+        return _StubReply(self.content)
+
+
+def test_the_anchors_are_written_once_per_parameter_not_per_document():
+    """The QA app writes a HyDE anchor per question. Here the question is the
+    parameter's definition, which does not change between documents — so one
+    call each, and a probe string that is stable for the whole corpus is what
+    makes the query-embedding cache pay."""
+    from docpipe.extraction import runner
+    from docpipe.extraction.spec import load
+
+    spec = load({"parameters": [{
+        "uri": "OEO_00050016", "label": "Endenergieverbrauch",
+        "description": "the energy delivered to and consumed by end users",
+        "unit_target": "OEO_00050008", "units_accepted": {"MWh/a": 1.0},
+        "axes": {}, "example": {"source": "| x | 5 | MWh/a |",
+                                "tuples": [{"value": 5, "unit_raw": "MWh/a"}]}}]})
+    client = _StubClient('{"anchors": ["Der Endenergieverbrauch fuer Waerme im '
+                         'Stadtgebiet betrug 2022 rund 512 GWh/a.", "zu kurz"]}')
+    anchors = runner.make_anchors(spec, client=client)
+    assert len(client.seen) == 1, "one call per parameter"
+    assert len(anchors["OEO_00050016"]) == 1, "a two-word anchor is no anchor"
+    assert "512 GWh/a" in anchors["OEO_00050016"][0]
+
+
+def test_anchors_that_never_arrive_leave_the_templates_alone():
+    """No anchors is not fatal: templates are what this stage searched with
+    until now."""
+    from docpipe.extraction import runner
+    from docpipe.extraction.spec import load
+
+    spec = load({"parameters": [{
+        "uri": "OEO_00050016", "label": "Endenergieverbrauch",
+        "description": "the energy delivered to and consumed by end users",
+        "unit_target": "OEO_00050008", "units_accepted": {"MWh/a": 1.0},
+        "axes": {}, "example": {"source": "| x | 5 | MWh/a |",
+                                "tuples": [{"value": 5, "unit_raw": "MWh/a"}]}}]})
+    assert runner.make_anchors(spec, client=_StubClient("not json")) == {
+        "OEO_00050016": []}
+
+
+def test_an_action_object_is_read_as_code_and_an_answer_is_not():
+    from docpipe.extraction import runner
+
+    assert runner._parse_action(
+        '{"action": "python", "code": "print(604000 * 0.4)"}'
+    ) == "print(604000 * 0.4)"
+    assert runner._parse_action('{"tuples": [{"value": 5}]}') is None
+    assert runner._parse_action('{"action": "python"}') is None
+    assert runner._parse_action(None) is None
