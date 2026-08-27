@@ -357,3 +357,75 @@ def test_a_model_that_keeps_asking_cannot_loop():
     harvest_document(7, SPEC, TEMPLATES, retrieve=_per_probe(retrieve),
                      harvest=harvest, more_sources=more_sources)
     assert len(rounds) == 2, "one follow-up per chain, then it stops asking"
+
+
+# ---------------------------------------------------------------------------
+# What the audit found: routing, the hint, and the counting
+# ---------------------------------------------------------------------------
+
+def test_a_claim_that_names_no_source_is_refused_not_filed_under_the_first():
+    """Filing an unroutable claim under Q1 was a way to manufacture evidence:
+    verify rebuilds a missing quote from the source it is handed whenever the
+    value occurs there once, so a number read from the fourth passage could
+    be accepted carrying the first passage's page, section and image."""
+    def harvest(batch, prior=None):
+        return {"tuples": [{"value": 42005, "unit": "MWh/a", "unit_raw": "MWh/a",
+                            "carrier": "Erdgas", "source": "Q9",
+                            "quote": "Erdgas macht 42.005 MWh/a aus"}],
+                "status": "complete", "need_more": []}
+
+    report = harvest_document(7, SPEC, TEMPLATES,
+                              retrieve=_per_probe(_all_three), harvest=harvest)
+    assert not report.tuples
+    assert [r["reason"] for r in report.refusals] == ["claim names no source"]
+
+
+def test_only_verified_values_become_the_next_batch_s_prior():
+    """The prompt tells the model not to repeat what prior holds. A claim the
+    verifier threw away used to go in anyway, so one bad quote suppressed
+    that value for the rest of the document — leaving neither a tuple nor a
+    refusal where it should have been found."""
+    seen = []
+
+    def harvest(batch, prior=None):
+        seen.append(list(prior or []))
+        owner = batch.items[0].source.owner_id
+        if owner == 1:
+            return {"tuples": [
+                {"value": 42005, "unit": "MWh/a", "unit_raw": "MWh/a",
+                 "carrier": "Erdgas", "quote": "| Erdgas | 42.005 | MWh/a |"},
+                {"value": 999999, "unit": "MWh/a", "unit_raw": "MWh/a",
+                 "carrier": "Erdgas", "quote": "| Erdgas | 42.005 | MWh/a |"}],
+                "status": "complete", "need_more": []}
+        return {"tuples": [], "status": "complete", "need_more": []}
+
+    report = harvest_document(7, SPEC, TEMPLATES,
+                              retrieve=_per_probe(_all_three),
+                              harvest=harvest, max_sources=1)
+    assert len(report.refusals) == 1, "the second value is not in its quote"
+    assert [t["value"] for t in seen[1]] == [42005], (
+        "the refused value must not be handed on as already extracted")
+
+
+def test_passages_the_model_asked_for_are_counted_as_harvested():
+    """owners_harvested was frozen at plan time, so a report could claim to
+    have read fewer passages than it read — and that number is the one the
+    coverage audit rests on."""
+    def retrieve(query, document_id, exclude):
+        return [s for s in _sources()[:1]
+                if (s.owner_kind, s.owner_id) not in exclude]
+
+    def more_sources(document_id, queries, exclude):
+        return [s for s in _sources()[1:]
+                if (s.owner_kind, s.owner_id) not in exclude]
+
+    def harvest(batch, prior=None):
+        if batch.followed_up:
+            return {"tuples": [], "status": "complete", "need_more": []}
+        return {"tuples": [], "status": "partial", "need_more": ["mehr davon"]}
+
+    report = harvest_document(7, SPEC, TEMPLATES, retrieve=_per_probe(retrieve),
+                              harvest=harvest, more_sources=more_sources)
+    assert report.owners_harvested == 3, (
+        "one planned passage plus the two the model asked for")
+    assert report.followups["OEO_00050016"] == {"asked": 1, "served": 1}

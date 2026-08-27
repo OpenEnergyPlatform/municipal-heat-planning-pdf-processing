@@ -295,38 +295,52 @@ def test_a_long_source_becomes_overlapping_windows_of_the_same_owner():
 
 
 def _chain(item):
-    from docpipe.extraction.pipeline import build_chains
-    return build_chains([item])[0]
+    from docpipe.extraction.pipeline import group_items
+    return group_items([item])
 
 
-def test_harvest_chains_answers_in_the_caller_order_not_the_server_order():
-    """A 40-token table comes back long before a 6000-token section. The report
-    must not depend on that: results are placed by index."""
-    chains = [_chain(_item(_source(f"s{i}", owner_id=i))) for i in range(20)]
+def test_every_batch_is_in_flight_at_once_not_one_per_document():
+    """The unit of scheduling is the unit of parallelism. When a chain was
+    the unit, a single-document run — the pilot's own canary stage — put
+    three requests to a server sized for two hundred."""
+    import threading
+    batches = runner.group_items(
+        [_item(_source(f"s{i}", owner_id=i)) for i in range(20)],
+        max_sources=1)
+    # A barrier, not a sleep: it PROVES four requests were open at the same
+    # moment instead of inferring it from timing — and conftest patches
+    # time.sleep away for every test, so a sleeping version measures nothing.
+    gate = threading.Barrier(4, timeout=5)
+    through = []
 
     def harvest(batch, prior=None):
-        owner = batch.items[0].source.owner_id
-        if owner % 2:
-            time.sleep(0.01)                               # the slow half
-        return {"tuples": [{"value": owner}], "status": "complete",
-                "need_more": []}
+        try:
+            gate.wait()
+            through.append(batch)
+        except threading.BrokenBarrierError:
+            pass                       # fewer than four ever ran together
+        return {"tuples": [], "status": "complete", "need_more": []}
 
-    got = runner.harvest_chains(chains, harvest, workers=8)
-    assert [pairs[0][1]["tuples"][0]["value"] for pairs in got] == list(range(20))
+    # One document, one parameter: as chains this was 1, whatever the pool.
+    runner.harvest_batches(batches, harvest, workers=8)
+    assert len(through) >= 4, (
+        f"only {len(through)} of 20 batches ever shared the server")
 
 
 def test_a_request_that_raises_becomes_a_visible_hole():
-    chains = [_chain(_item(_source("a", owner_id=1))),
-              _chain(_item(_source("b", owner_id=2)))]
+    batches = runner.group_items(
+        [_item(_source("a", owner_id=1)), _item(_source("b", owner_id=2))],
+        max_sources=1)
 
     def harvest(batch, prior=None):
         if batch.items[0].source.owner_id == 2:
             raise RuntimeError("server gone")
         return {"tuples": [{"value": 1}], "status": "complete", "need_more": []}
 
-    got = runner.harvest_chains(chains, harvest, workers=2)
-    assert got[0][0][1]["tuples"] == [{"value": 1}]
-    assert got[1][0][1]["tuples"] == [{"_harvest_failed": True, "source": "Q1"}], (
+    got = dict((b.items[0].source.owner_id, r)
+               for b, r in runner.harvest_batches(batches, harvest, workers=2))
+    assert got[1]["tuples"] == [{"value": 1}]
+    assert got[2]["tuples"] == [{"_harvest_failed": True, "source": "Q1"}], (
         "a hole must stay countable")
 
 
@@ -753,3 +767,32 @@ def test_the_answer_budget_covers_a_full_batch(monkeypatch):
             # does not, or the clamp is just pessimism.
             bigger = runner.fit_batch_sources(prompt, spec, wanted=fitted + 1)
             assert bigger == fitted, f"{name}: the clamp is too tight"
+
+
+def test_the_computed_switch_can_never_be_shared():
+    """`computed` is not a coordinate but a switch: it decides WHICH evidence
+    check applies, letting the value be absent from its own quote as long as
+    the sandbox printed it. Shared across a reply it would open that door for
+    every tuple in it — and a table whose rows are all computed is exactly
+    the case the defaults block was written for."""
+    reply = runner._parse_reply(json.dumps({
+        "defaults": {"computed": True, "unit": "kWh/a"},
+        "tuples": [{"value": 1, "quote": "a"}]}))
+    assert "computed" not in reply["tuples"][0]
+    assert reply["tuples"][0]["unit"] == "kWh/a"
+
+
+def test_the_holes_are_the_tail_of_the_batch_not_the_unlabelled_sources():
+    """Under the defaults contract `source` is one of the keys stated once
+    for the whole reply, so every rescued tuple carries the same label.
+    Reading it would report five of six sources as never answered, and could
+    never report the one the block names — even when the cut hit it first."""
+    from docpipe.extraction.pipeline import Batch
+    batch = Batch(7, SPEC.parameters[0],
+                  [_item(_source("a", owner_id=i)) for i in range(1, 7)])
+    rescued = runner._parse_reply(json.dumps({
+        "defaults": {"source": "Q3"},
+        "tuples": [{"value": 1, "quote": "a"}, {"value": 2, "quote": "b"}]}))
+    holes = runner._holes(batch, rescued["tuples"])
+    assert [h["source"] for h in holes] == ["Q4", "Q5", "Q6"], (
+        "Q1 to Q3 were reached; the loss is what comes after")

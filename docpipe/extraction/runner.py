@@ -34,9 +34,9 @@ from docpipe import prompts
 from docpipe.llm_preflight import assert_serving
 from docpipe.profile import add_profile_argument, resolve_profile
 
-from .pipeline import (Source, WorkItem, build_chains, fold_batch,
-                       group_items, harvest_document, plan_document, run_chain,
-                       write_report)
+from .pipeline import (Source, WorkItem, build_sweeps, fold_batch,
+                       follow_up, group_items, harvest_document, plan_document,
+                       route_claims, write_report)
 from .queries import expand as expand_queries
 from .spec import Spec, load as load_spec
 
@@ -508,7 +508,15 @@ def _parse_tuples(raw_text: str) -> Optional[list]:
 # pair, one number and the words it was read from, and a shared one would
 # hand every tuple in the reply the same evidence, which is the one thing
 # this stage exists to prevent. Underscore keys are ours, not the model's.
-NOT_DEFAULTABLE = frozenset({"value", "quote", "compute"})
+NOT_DEFAULTABLE = frozenset({
+    "value", "quote", "value_raw",
+    # Not a coordinate at all but a switch: `computed` decides WHICH evidence
+    # check applies, letting the value be absent from its own quote as long
+    # as the sandbox printed it. Shared across a reply it would open that
+    # door for every tuple in it, and a table whose rows are all computed is
+    # exactly the case the defaults block was written for.
+    "computed", "compute",
+})
 
 _TUPLES_KEY = re.compile(r'"tuples"\s*:\s*\[')
 _DEFAULTS_KEY = re.compile(r'"defaults"\s*:\s*\{')
@@ -809,18 +817,28 @@ def _holes(batch, rescued: list) -> list:
     """Sentinels for the sources a cut-off reply never got to.
 
     Without this the rescue would trade a loud hole for a silent one. A dead
-    batch writes one sentinel per source today, which is exactly how the
-    truncation was measurable in the finished pilots at all; a rescued batch
-    that simply returned fewer tuples would leave the sources after the cut
-    indistinguishable from "read, and there was nothing in them". The model
-    writes in source order, so the loss is always the tail of the batch.
+    batch writes one sentinel per source, which is exactly how the truncation
+    was measurable in the finished pilots at all; a rescued batch that simply
+    returned fewer tuples would leave the sources after the cut
+    indistinguishable from "read, and there was nothing in them".
+
+    Which sources those are is decided by POSITION, not by the label on the
+    tuples. Under the defaults contract `source` is one of the keys the model
+    is told to state once for the whole reply, so every rescued tuple carries
+    the same label — reading it here would report five of six sources as
+    never answered and could never report the one the block names. The model
+    writes in source order, so the last label it actually reached is the
+    frontier and everything past it is the loss.
     """
-    answered = {claim.get("source") for claim in rescued
-                if isinstance(claim, dict)}
+    labels = {batch.label(i): i for i in range(len(batch.items))}
+    reached = [labels[claim["source"]] for claim in rescued
+               if isinstance(claim, dict)
+               and isinstance(claim.get("source"), str)
+               and claim["source"] in labels]
+    frontier = max(reached) if reached else 0
     return [{"_harvest_failed": True, "source": batch.label(i),
              "_cut_off": True}
-            for i in range(len(batch.items))
-            if batch.label(i) not in answered]
+            for i in range(frontier + 1, len(batch.items))]
 
 
 def make_harvester(image_root: Optional[Path] = None) -> Callable:
@@ -989,52 +1007,85 @@ def split_long_sources(items: list, max_chars: int = MAX_SOURCE_CHARS) -> list:
     return out
 
 
-def harvest_chains(chains: list, harvest: Callable,
-                   more_sources: Optional[Callable] = None,
-                   workers: int = LLM_PARALLEL) -> list:
-    """Every chain of the whole run, in flight at once.
+def harvest_batches(batches: list, harvest: Callable, *,
+                    more_sources: Optional[Callable] = None,
+                    verify: Optional[Callable] = None,
+                    workers: int = LLM_PARALLEL) -> list:
+    """Every batch of the whole run in flight at once.
 
-    Returns one [(batch, reply)] list per chain, in the order given: the
-    caller folds them back into the document they belong to. Ordering is by
-    index, not by completion — the server answers a 40-token table long
-    before a 6000-token section, and the report must not depend on that.
+    The batch is the unit, not the chain. A chain — one document, one
+    parameter — has to be read in order only if a later batch must be told
+    what an earlier one found, and making that ordering real made it the unit
+    of scheduling too: the pilot's canary stage is a single document, which
+    is three chains, so three requests faced a server sized for two hundred.
+    The same document had taken three minutes when every source was its own
+    request; it was killed unfinished after nine.
+
+    So `prior` became a hint that each batch reads at dispatch instead of a
+    sequence it waits for. *verify* turns one reply into the rows that
+    survived checking, and only those are recorded — the hint must not carry
+    claims the verifier threw away, or a value refused once is suppressed
+    everywhere else in the document.
+
+    Returns [(batch, reply)] in submission order, follow-up batches appended
+    as they are earned. Ordering is by index, not by completion: the server
+    answers a 40-token table long before a 6000-token section, and the report
+    must not depend on that.
     """
-    from concurrent.futures import ThreadPoolExecutor, as_completed
+    from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 
-    results: list = [None] * len(chains)
-    if not chains:
-        return results
+    if not batches:
+        return []
+    sweeps = build_sweeps(batches, FOLLOWUP_ROUNDS)
+    results: list = []
     started = time.time()
-    step = max(len(chains) // 20, 10)
-    done = 0
-    def one(chain: list) -> list:
-        return run_chain(chain, harvest, more_sources=more_sources,
-                         rounds=FOLLOWUP_ROUNDS, max_sources=BATCH_SOURCES,
-                         max_chars=BATCH_CHARS)
+    submitted = len(batches)
+
+    def one(batch):
+        sweep = sweeps[(batch.document_id, batch.parameter.uri)]
+        reply = harvest(batch, sweep.snapshot())
+        reply = reply if isinstance(reply, dict) else {}
+        if verify is not None:
+            try:
+                sweep.record(verify(batch, reply))
+            except Exception as exc:                        # pragma: no cover
+                log.warning("   prior for %s/%s not updated: %s",
+                            batch.document_id, batch.parameter.uri, exc)
+        return batch, reply, sweep
 
     with ThreadPoolExecutor(max_workers=max(workers, 1)) as pool:
-        futures = {pool.submit(one, c): i for i, c in enumerate(chains)}
-        for future in as_completed(futures):
-            index = futures[future]
-            try:
-                results[index] = future.result()
-            except Exception as exc:                        # pragma: no cover
-                batch = chains[index][0]
-                log.warning("   chain %s/%s raised: %s", batch.document_id,
-                            batch.parameter.uri, exc)
-                results[index] = [
-                    (b, {"tuples": [{"_harvest_failed": True,
-                                     "source": b.label(i)}
-                                    for i in range(len(b.items))],
-                         "status": "failed", "need_more": []})
-                    for b in chains[index]]
-            done += 1
-            if done % step == 0 or done == len(chains):
-                elapsed = max(time.time() - started, 1e-6)
-                rate = done / elapsed
-                log.info("harvest: %d/%d chains (%.1f/s, %.0f s left)",
-                         done, len(chains), rate,
-                         (len(chains) - done) / max(rate, 1e-6))
+        pending = {pool.submit(one, b): b for b in batches}
+        step = max(submitted // 20, 25)
+        while pending:
+            done_now, _ = wait(list(pending), return_when=FIRST_COMPLETED)
+            for future in done_now:
+                batch = pending.pop(future)
+                try:
+                    batch, reply, sweep = future.result()
+                except Exception as exc:                    # pragma: no cover
+                    log.warning("   harvest %s/%s raised: %s",
+                                batch.document_id, batch.parameter.uri, exc)
+                    reply = {"tuples": [{"_harvest_failed": True,
+                                         "source": batch.label(i)}
+                                        for i in range(len(batch.items))],
+                             "status": "failed", "need_more": []}
+                    sweep = None
+                results.append((batch, reply))
+                if sweep is not None and more_sources is not None:
+                    # A follow-up joins the pool rather than blocking its
+                    # sweep: the passages it brings are new to the whole run,
+                    # so nothing else is waiting on them.
+                    for extra in follow_up(batch, reply, sweep, more_sources,
+                                           max_sources=BATCH_SOURCES,
+                                           max_chars=BATCH_CHARS):
+                        submitted += 1
+                        pending[pool.submit(one, extra)] = extra
+                if len(results) % step == 0 or not pending:
+                    elapsed = max(time.time() - started, 1e-6)
+                    rate = len(results) / elapsed
+                    log.info("harvest: %d/%d batches (%.1f/s, %.0f s left)",
+                             len(results), submitted, rate,
+                             (submitted - len(results)) / max(rate, 1e-6))
     return results
 
 
@@ -1485,6 +1536,29 @@ def main(argv: Optional[list] = None) -> int:
             conn.close()
             cache_conn.close()
 
+    document_name = {did: Path(fn).stem for did, fn in documents}
+
+    def accepted_rows(batch, reply) -> list:
+        """What of one reply survives checking — the next batch's `prior`.
+
+        The same verify_tuple the fold runs, against the same source text, so
+        the two cannot drift apart. It skips only `locate`, which turns a
+        quote into highlight rectangles and has never decided whether a
+        claim is accepted.
+        """
+        from .verify import Refusal, verify_tuple
+
+        routed, _orphans = route_claims(batch, reply.get("tuples"))
+        rows: list = []
+        for item, claims in zip(batch.items, routed):
+            for claim in claims:
+                outcome = verify_tuple(dict(claim), batch.parameter,
+                                       item.source.text,
+                                       owner_kind=item.source.owner_kind)
+                if not isinstance(outcome, Refusal):
+                    rows.append(dict(outcome.tuple))
+        return rows
+
     def verify(entry: tuple) -> None:
         name, report, answered = entry
         for batch, reply in answered:
@@ -1507,28 +1581,34 @@ def main(argv: Optional[list] = None) -> int:
                     failures += 1
                     log.exception("extraction: planning %s failed",
                                   futures[future])
-        # A chain belongs to exactly one document, so the chains are built per
-        # document and the replies come back where they can be folded.
-        chains: list = []
-        owners: list = []
+        # Every batch of every document goes into one pool. A batch belongs
+        # to exactly one document, so the replies come back where they can be
+        # folded; nothing about the scheduling depends on that.
+        batches: list = []
+        owner_of: dict = {}
         for name, items, report in plans:
-            for chain in build_chains(items, max_sources=BATCH_SOURCES,
-                                      max_chars=BATCH_CHARS):
-                chains.append(chain)
-                owners.append(name)
-        sources = sum(len(b.items) for c in chains for b in c)
-        log.info("extraction: group %d/%d planned — %d chain(s) over %d "
+            for batch in group_items(items, max_sources=BATCH_SOURCES,
+                                     max_chars=BATCH_CHARS):
+                batches.append(batch)
+                owner_of[id(batch)] = name
+        sources = sum(len(b.items) for b in batches)
+        log.info("extraction: group %d/%d planned — %d batch(es) over %d "
                  "source(s) in %d document(s)", offset // group_size + 1,
-                 (len(documents) - 1) // group_size + 1, len(chains), sources,
+                 (len(documents) - 1) // group_size + 1, len(batches), sources,
                  len(plans))
 
-        # ---- Harvest: every chain at once, its batches in order -------------
-        answered = harvest_chains(chains, harvest, more_sources, LLM_PARALLEL)
+        # ---- Harvest: all of them, at once ---------------------------------
+        answered = harvest_batches(batches, harvest,
+                                   more_sources=more_sources,
+                                   verify=accepted_rows, workers=LLM_PARALLEL)
 
         # ---- Verify and write, document by document ------------------------
         by_document: dict = {}
-        for name, pairs in zip(owners, answered):
-            by_document.setdefault(name, []).extend(pairs or [])
+        for batch, reply in answered:
+            # A follow-up batch is new since planning, and it belongs to the
+            # document its own sweep does.
+            name = owner_of.get(id(batch)) or document_name.get(batch.document_id)
+            by_document.setdefault(name, []).append((batch, reply))
         entries = [(name, report, by_document.get(name, []))
                    for name, _, report in plans]
         with ThreadPoolExecutor(max_workers=PLAN_PARALLEL) as pool:
