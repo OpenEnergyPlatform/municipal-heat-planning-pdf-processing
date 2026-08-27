@@ -174,7 +174,7 @@
     {
       "uri": "scenario_label",
       "label": "Name des Szenarios",
-      "description": "Das Szenario der AR6-Datenbank, das an dieser Stelle beschrieben wird. Waehle es aus value_classes aus; die Klassennamen sind die Lauf-Kennungen der AR6-Datenbank fuer genau diese Publikation. In value_raw traegst du ein, wie das Dokument das Szenario nennt, woertlich. Ein Tupel je Szenario. Passt kein Eintrag der Liste, lass value weg und trage die Bezeichnung des Dokuments trotzdem in value_raw ein.",
+      "description": "Das Szenario der AR6-Datenbank, das an dieser Stelle beschrieben wird. Waehle es aus value_classes aus; die Klassennamen sind die Lauf-Kennungen der AR6-Datenbank fuer genau diese Publikation. In value_raw traegst du ein, wie das Dokument das Szenario nennt, woertlich. Ein Tupel je Szenario, und zwar fuer JEDES, das die Passage nennt - auch fuer die, die du nicht zuordnen kannst. Nennt das Dokument nur eine Familie ('NPi', 'NDC'), waehlst du 'Szenario-Familie'; steht das Szenario nicht in der AR6-Liste dieser Publikation, waehlst du 'nicht in AR6'. Bist du unsicher, laesst du value weg und traegst die Bezeichnung trotzdem in value_raw ein. Weglassen ist die einzige falsche Antwort.",
       "value_type": "category",
       "example": {
         "source": "We analyse three pathways: the Current Policies scenario (CurPol), the Nationally Determined Contributions scenario (NDC-LTT) and a 1.5C-compatible pathway.",
@@ -188,6 +188,11 @@
             "value": "EN_INDCi2030_1000f",
             "value_raw": "NDC-LTT",
             "quote": "We analyse three pathways: the Current Policies scenario (CurPol), the Nationally Determined Contributions scenario (NDC-LTT) and a 1.5C-compatible pathway."
+          },
+          {
+            "value": "Szenario-Familie",
+            "value_raw": "a 1.5C-compatible pathway",
+            "quote": "We analyse three pathways: the Current Policies scenario (CurPol), the Nationally Determined Contributions scenario (NDC-LTT) and a 1.5C-compatible pathway."
           }
         ]
       },
@@ -196,7 +201,7 @@
     {
       "uri": "scenario_type",
       "label": "Art des Szenarios",
-      "description": "Die Art eines Szenarios, gewaehlt aus value_classes. Das sind die Klassen, die der OEKG fuer dieses Feld zulaesst. Nimm die spezifischste Klasse, die der Text belegt: steht dort, dass ein Szenario nur bereits beschlossene Massnahmen enthaelt, ist das 'with existing measures scenario' und nicht blosses 'policy scenario'. Die allgemeine Klasse 'scenario' nur, wenn der Text keine engere Aussage traegt. In value_raw kommt die Formulierung des Dokuments. Ein Tupel je Szenario und Klasse; ein Szenario darf mehrere Klassen tragen, wenn der Text sie belegt.",
+      "description": "Die Art eines Szenarios, gewaehlt aus value_classes. Das sind die Klassen, die der OEKG fuer dieses Feld zulaesst; die Schreibweisen daneben stammen aus der Ontologie selbst. Nimm die spezifischste Klasse, die der Text belegt: steht dort, dass ein Szenario nur bereits beschlossene Massnahmen enthaelt, ist das 'with existing measures scenario' und nicht blosses 'policy scenario'. Zwei Antworten bedeuten NICHT dasselbe: 'scenario' heisst, der Text sagt nichts Engeres als 'ein Szenario'; 'keine dieser Arten' heisst, der Text nennt sehr wohl eine Art, aber keine der Klassen deckt sie ab. Das zweite ist ein Befund und wird gezaehlt; das erste waere dann eine Behauptung. In value_raw kommt die Formulierung des Dokuments. Ein Tupel je Szenario und Klasse; ein Szenario darf mehrere Klassen tragen, wenn der Text sie belegt.",
       "value_type": "category",
       "vocabulary": {
         "https://openenergyplatform.org/ontology/oeo/OEO_00020309": [
@@ -205,51 +210,59 @@
         "https://openenergyplatform.org/ontology/oeo/OEO_00020310": [
           "without measures scenario",
           "WOM",
-          "without measures"
+          "without measures",
+          "WOM scenario"
         ],
         "https://openenergyplatform.org/ontology/oeo/OEO_00020311": [
           "with existing measures scenario",
           "WEM",
-          "with existing measures"
+          "with existing measures",
+          "WEM scenario"
         ],
         "https://openenergyplatform.org/ontology/oeo/OEO_00020312": [
           "with additional measures scenario",
           "WAM",
-          "with additional measures"
+          "with additional measures",
+          "WAM scenario"
         ],
         "https://openenergyplatform.org/ontology/oeo/OEO_00020314": [
           "reference scenario",
-          "baseline scenario",
-          "baseline",
           "reference case"
         ],
         "https://openenergyplatform.org/ontology/oeo/OEO_00020247": [
           "target driven scenario",
           "normative scenario",
-          "backcasting scenario"
+          "backcasting scenario",
+          "Zielszenario"
         ],
         "https://openenergyplatform.org/ontology/oeo/OEO_00020248": [
           "explorative scenario",
-          "exploratory scenario"
+          "exploratory scenario",
+          "exploratives Szenario"
         ],
         "https://openenergyplatform.org/ontology/oeo/OEO_00020345": [
           "sufficiency scenario"
         ],
         "https://openenergyplatform.org/ontology/oeo/OEO_00020411": [
-          "robust system scenario"
+          "robust system scenario",
+          "robust investment decision",
+          "robust transformation pathway"
         ],
         "https://openenergyplatform.org/ontology/oeo/OEO_00020412": [
           "statistically robust scenario"
         ],
         "https://openenergyplatform.org/ontology/oeo/OEO_00030007": [
-          "climate scenario"
+          "climate scenario",
+          "Klimaszenario"
         ],
         "https://openenergyplatform.org/ontology/oeo/OEO_00030008": [
-          "economic scenario"
+          "economic scenario",
+          "Wirtschaftsszenario"
         ],
         "https://openenergyplatform.org/ontology/oeo/OEO_00030009": [
           "emission scenario",
-          "emissions scenario"
+          "emissions scenario",
+          "Emissionsszenario"
         ],
         "https://openenergyplatform.org/ontology/oeo/OEO_00020317": [
           "greenhouse gas emission scenario",
@@ -259,10 +272,18 @@
           "CO2 emission scenario"
         ],
         "https://openenergyplatform.org/ontology/oeo/OEO_00030010": [
-          "energy scenario"
+          "energy scenario",
+          "Energieszenario"
         ],
         "https://openenergyplatform.org/ontology/oeo/OEO_00000364": [
-          "scenario"
+          "scenario",
+          "Szenario",
+          "narrative",
+          "storyline"
+        ],
+        "out:not_in_list": [
+          "keine dieser Arten",
+          "die Art, die der Text nennt, steht nicht in der Liste"
         ]
       },
       "axes": {
@@ -316,7 +337,7 @@
     {
       "uri": "scenario_region",
       "label": "Betrachtete Region eines Szenarios",
-      "description": "Das Land oder Gebiet, das ein Szenario abbildet. Waehle es aus value_classes aus - das sind die Studienregionen des OEKG, gefiltert auf die, die dieses Dokument nennt. Ein Tupel je Region: eine Studie ueber die EU27 ergibt 27 Tupel, sofern die Laender einzeln genannt sind. In value_raw traegst du ein, wie das Dokument die Region nennt. Nur Regionen, die als Betrachtungsraum genannt sind, nicht jede erwaehnte.",
+      "description": "Das Land oder Gebiet, das ein Szenario abbildet. Waehle es aus value_classes aus - das sind die Studienregionen des OEKG, gefiltert auf die, die dieses Dokument nennt. Ein Tupel je Angabe. Die Liste kennt nur Laender: fuer ein weltweites Szenario waehlst du 'global', fuer einen Zusammenschluss oder eine Grossregion, die nicht als Land dasteht (EU27, OECD, Asien, R5), 'mehrere Regionen'. Beides sind richtige Antworten und werden ausgewertet - ein einzelnes Land stattdessen zu nennen, waere erfunden. In value_raw traegst du ein, wie das Dokument die Region nennt. Nur Regionen, die als Betrachtungsraum genannt sind, nicht jede erwaehnte.",
       "value_type": "category",
       "axes": {
         "scenario": {
@@ -328,8 +349,22 @@
         "source": "The NDC-LTT scenario covers the EU27, China, India and the United States at national resolution.",
         "tuples": [
           {
+            "value": "mehrere Regionen",
+            "value_raw": "the EU27",
+            "scenario": "EN_INDCi2030_1000f",
+            "scenario_raw": "NDC-LTT",
+            "quote": "The NDC-LTT scenario covers the EU27, China, India and the United States at national resolution."
+          },
+          {
             "value": "China",
             "value_raw": "China",
+            "scenario": "EN_INDCi2030_1000f",
+            "scenario_raw": "NDC-LTT",
+            "quote": "The NDC-LTT scenario covers the EU27, China, India and the United States at national resolution."
+          },
+          {
+            "value": "India",
+            "value_raw": "India",
             "scenario": "EN_INDCi2030_1000f",
             "scenario_raw": "NDC-LTT",
             "quote": "The NDC-LTT scenario covers the EU27, China, India and the United States at national resolution."

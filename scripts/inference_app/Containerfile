@@ -1,0 +1,14 @@
+# The image sandbox_service.py runs LLM-written Python in.
+#
+# It is part of the contract, not a deployment detail: the harvest prompt tells
+# the model that numpy and pandas are available, so what this file installs is
+# what that promise means. Nothing else goes in — the container is started with
+# --network=none and a memory cap, and every package is one more thing that
+# could read a file the sandbox has no business reading.
+#
+# Build (rootless podman, behind the RZ proxy):
+#   podman build -t kwp-sandbox:latest \
+#     --build-arg http_proxy=$http_proxy --build-arg https_proxy=$https_proxy \
+#     -f scripts/inference_app/Containerfile .
+FROM docker.io/library/python:3.11-slim
+RUN pip install --no-cache-dir numpy pandas

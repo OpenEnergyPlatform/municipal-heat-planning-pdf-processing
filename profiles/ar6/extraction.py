@@ -82,7 +82,9 @@ REGION_OUT = {
 # scenario the publication simply does not have in AR6 — these two can.
 SCENARIO_OUT = {
     "out:family": ["Szenario-Familie", "Familie",
-                   u"eine Szenario-Familie, kein einzelner Lauf"],
+                   "eine Szenario-Familie oder eine Beschreibung, die auf "
+                   "mehrere Läufe passt und auf keinen genau",
+                   "eine Szenario-Familie, kein einzelner Lauf"],
     "out:not_documented": ["nicht in AR6", "nicht in der AR6-Liste",
                            u"ein Szenario dieser Publikation, das nicht in "
                            u"ihrer AR6-Liste steht"],
