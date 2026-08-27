@@ -67,6 +67,21 @@ _SPEC = json.loads(
 # Sie stehen in der Auswahl, damit das Modell sie WAEHLEN kann, statt die
 # naechstbeste echte Klasse zu nehmen.
 NOT_IN_GRAPH = "out:"
+
+
+def is_class(value) -> bool:
+    """True for a real OEO class, false for every deliberate non-class.
+
+    The axes hold entries that say what a row IS when no class fits — a sum,
+    a residual, a sector the source calls unknown. They are answers, not
+    classes, and writing one as `oeo:out:total` mints an IRI that does not
+    exist. Checked by shape rather than by prefix so a new entry cannot slip
+    past by being spelled differently.
+    """
+    return bool(_OEO_CLASS.fullmatch(str(value or "")))
+
+
+_OEO_CLASS = re.compile(r"OEO_\d+")
 UNIT_TARGET = {uri: par["unit_target"]
                for par in _SPEC["parameters"]
                if par.get("unit_target")
@@ -355,7 +370,7 @@ def make_serializer(db_path: Path):
                      f"    oeo:OEO_00140178 \"{float(row['value_target'])!r}\"^^xsd:float ;",
                      f"    oeo:OEO_00040010 oeo:{UNIT_TARGET[row['quantity']]} ;"]
             carrier = row.get("carrier")
-            if carrier and not str(carrier).startswith(NOT_IN_GRAPH):
+            if carrier and is_class(carrier):
                 if carrier in NOT_AN_ENERGY_CARRIER:
                     # The value stands, the edge does not. Dropping the whole
                     # row over this cost 51 of 244 value nodes in the pilot,
@@ -367,7 +382,7 @@ def make_serializer(db_path: Path):
                     skip(f"carrier_not_in_oeo:{NOT_AN_ENERGY_CARRIER[carrier]}")
                 else:
                     lines.append(f"    oeo:OEO_00000523 oeo:{carrier} ;")
-            if row.get("sector"):
+            if row.get("sector") and is_class(row["sector"]):
                 lines.append(f"    oeo:OEO_00000505 oeo:{row['sector']} ;")
             lines.append(f"    oeo:OEO_00020440 \"{row['year']}\"^^xsd:integer ;")
             lines.append(f"    oeo:OEO_00390023 "

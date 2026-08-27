@@ -488,3 +488,39 @@ def test_the_unit_is_chosen_from_the_list_and_the_wording_is_evidence():
     assert out.tuple["value_target"] == 4041.0
     assert out.tuple["scenario"] == "target"
     assert out.tuple["spatial_scope"] == "municipality"
+
+
+def test_a_deliberate_non_class_never_becomes_an_oeo_iri(tmp_path):
+    """The axes hold entries that say what a row IS when no class fits — a
+    sum, a residual, a sector the source calls unknown. Written as
+    `oeo:out:total` they mint an IRI that does not exist, and a corpus run
+    put those into 2.2 MB of graph before anyone looked."""
+    serializer = kg.make_serializer(_database(tmp_path))
+    ttl = serializer("waermeplan_kassel_20240315", [
+        _row(sector="out:total", value_target=1.0),
+        _row(sector="unknown", value_target=2.0),
+        _row(carrier="out:other", value_target=3.0),
+    ])
+    assert ttl.count("a oeo:OEO_00050016") == 3, "the values themselves stand"
+    for bad in ("oeo:out:total", "oeo:unknown", "oeo:out:other"):
+        assert bad not in ttl, f"{bad} is not a class"
+    assert "OEO_00000505" not in ttl, "no sector edge for a non-class"
+
+
+# The axes kg.py turns into edges. scenario and spatial_scope are read as
+# filters and never written, so their keys are free-form.
+EDGE_AXES = ("carrier", "sector", "aggregation")
+
+
+def test_every_entry_that_becomes_an_edge_is_a_class_or_is_left_out():
+    """A vocabulary key on an edge axis is either a real OEO class or one
+    kg.py leaves out. An entry that is neither gets serialized as an invented
+    IRI, which is exactly how `oeo:out:total` reached 2.2 MB of graph."""
+    for parameter in SPEC.parameters:
+        for name in EDGE_AXES:
+            axis = parameter.axes.get(name)
+            for uri in ((axis.vocabulary if axis else None) or {}):
+                marked = uri.startswith(kg.NOT_IN_GRAPH) or uri == "unknown"
+                assert kg.is_class(uri) or marked, (
+                    f"{parameter.uri}.{name}: {uri!r} is neither a class nor "
+                    f"a marked non-class, so it would be written as one")
