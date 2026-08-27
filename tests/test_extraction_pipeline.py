@@ -429,3 +429,20 @@ def test_passages_the_model_asked_for_are_counted_as_harvested():
     assert report.owners_harvested == 3, (
         "one planned passage plus the two the model asked for")
     assert report.followups["OEO_00050016"] == {"asked": 1, "served": 1}
+
+
+def test_routing_is_never_stricter_than_verification():
+    """A table row retyped without its column padding is the normal case.
+    Routing used to demand a byte-exact substring while verify collapses
+    whitespace, so claims verification would have accepted were refused
+    before they were ever offered to it — 276 of one pilot's refusals."""
+    def harvest(batch, prior=None):
+        return {"tuples": [{"value": 17300, "unit": "MWh/a", "unit_raw": "MWh/a",
+                            "carrier": "Heizöl",
+                            "quote": "| Heizöl |   17.300 |  MWh/a |"}],
+                "status": "complete", "need_more": []}
+
+    report = harvest_document(7, SPEC, TEMPLATES,
+                              retrieve=_per_probe(_all_three), harvest=harvest)
+    assert not report.refusals, [r["reason"] for r in report.refusals]
+    assert report.tuples[0]["provenance"]["owner_id"] == 2

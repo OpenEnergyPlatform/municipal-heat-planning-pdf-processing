@@ -30,7 +30,7 @@ from typing import Callable, Optional
 
 from . import queries as queries_mod
 from .spec import Spec
-from .verify import Refusal, Verified, verify_tuple
+from .verify import Refusal, Verified, quote_in, verify_tuple
 
 log = logging.getLogger(__name__)
 
@@ -230,8 +230,12 @@ def route_claims(batch: Batch, tuples: Optional[list]) -> tuple:
             continue
         named = labels.get(str(claim.get("source") or "").strip())
         quote = claim.get("quote")
+        # quote_in, not `in`: the same whitespace-collapsed test verify runs.
+        # Routing stricter than verification refuses claims verification
+        # would have accepted, and a table row retyped without its padding is
+        # the normal case, not the exception — 276 of one pilot's refusals.
         holders = ([i for i, item in enumerate(batch.items)
-                    if quote and quote in (item.source.text or "")]
+                    if quote_in(item.source.text or "", quote)]
                    if isinstance(quote, str) else [])
         if named is not None and named in holders:
             index = named
