@@ -160,6 +160,83 @@
             ],
             "OEO_00000204": [
               "Steinkohle"
+            ],
+            "OEO_00010215": [
+              "Biomethan"
+            ],
+            "OEO_00000332": [
+              "biogener Festbrennstoff",
+              "biogene Festbrennstoffe",
+              "sonstige biogene Festbrennstoffe"
+            ],
+            "OEO_00010214": [
+              "Biomasse",
+              "pflanzliche Biomasse",
+              "landwirtschaftliche Biomasse"
+            ],
+            "OEO_00000088": [
+              "Kohle"
+            ],
+            "OEO_00000290": [
+              "Siedlungsabfälle",
+              "Abfall",
+              "thermische Abfallverwertung"
+            ],
+            "OEO_00000356": [
+              "Biogut",
+              "Gartenabfälle",
+              "Grünschnitt"
+            ],
+            "OEO_00000439": [
+              "Klärschlamm"
+            ],
+            "OEO_00020495": [
+              "tierische Exkremente",
+              "Schlachtreste"
+            ],
+            "OEO_00010155": [
+              "grüne Gase",
+              "synthetische Gase"
+            ],
+            "OEO_00000191": [
+              "Geothermie",
+              "Erdwärme",
+              "oberflächennahe Geothermie",
+              "Tiefengeothermie",
+              "Erdwärmesonde",
+              "Erdwärmekollektor"
+            ],
+            "OEO_00010114": [
+              "Abwärme",
+              "unvermeidbare Abwärme"
+            ],
+            "OEO_00310004": [
+              "industrielle Abwärme"
+            ],
+            "OEO_00000056": [
+              "Umweltwärme"
+            ],
+            "OEO_00140105": [
+              "Abwasserwärme",
+              "Abwasser"
+            ],
+            "OEO_00140104": [
+              "Oberflächengewässer",
+              "Seethermie",
+              "Flusswärme"
+            ],
+            "out:total": [
+              "Summe",
+              "Gesamt",
+              "Gesamtwert",
+              "Gesamtsumme",
+              "alle Energieträger",
+              "insgesamt"
+            ],
+            "out:other": [
+              "Sonstige",
+              "Andere",
+              "sonstige Energieträger"
             ]
           }
         },
@@ -173,13 +250,30 @@
             "OEO_00000405": [
               "GHD",
               "Gewerbe, Handel, Dienstleistungen",
-              "Gewerbe/Handel/Dienstleistungen"
+              "Gewerbe/Handel/Dienstleistungen",
+              "öffentliche Gebäude",
+              "öffentliche Liegenschaften",
+              "kommunale Einrichtungen"
             ],
             "OEO_00000227": [
               "Industrie"
             ],
             "OEO_00000422": [
               "Verkehr"
+            ],
+            "OEO_00010035": [
+              "Landwirtschaft",
+              "Land- und Forstwirtschaft"
+            ],
+            "out:total": [
+              "Summe",
+              "Gesamt",
+              "alle Sektoren",
+              "insgesamt"
+            ],
+            "unknown": [
+              "nicht erkennbar",
+              "unbekannt"
             ]
           }
         },
@@ -501,6 +595,83 @@
             ],
             "OEO_00000204": [
               "Steinkohle"
+            ],
+            "OEO_00010215": [
+              "Biomethan"
+            ],
+            "OEO_00000332": [
+              "biogener Festbrennstoff",
+              "biogene Festbrennstoffe",
+              "sonstige biogene Festbrennstoffe"
+            ],
+            "OEO_00010214": [
+              "Biomasse",
+              "pflanzliche Biomasse",
+              "landwirtschaftliche Biomasse"
+            ],
+            "OEO_00000088": [
+              "Kohle"
+            ],
+            "OEO_00000290": [
+              "Siedlungsabfälle",
+              "Abfall",
+              "thermische Abfallverwertung"
+            ],
+            "OEO_00000356": [
+              "Biogut",
+              "Gartenabfälle",
+              "Grünschnitt"
+            ],
+            "OEO_00000439": [
+              "Klärschlamm"
+            ],
+            "OEO_00020495": [
+              "tierische Exkremente",
+              "Schlachtreste"
+            ],
+            "OEO_00010155": [
+              "grüne Gase",
+              "synthetische Gase"
+            ],
+            "OEO_00000191": [
+              "Geothermie",
+              "Erdwärme",
+              "oberflächennahe Geothermie",
+              "Tiefengeothermie",
+              "Erdwärmesonde",
+              "Erdwärmekollektor"
+            ],
+            "OEO_00010114": [
+              "Abwärme",
+              "unvermeidbare Abwärme"
+            ],
+            "OEO_00310004": [
+              "industrielle Abwärme"
+            ],
+            "OEO_00000056": [
+              "Umweltwärme"
+            ],
+            "OEO_00140105": [
+              "Abwasserwärme",
+              "Abwasser"
+            ],
+            "OEO_00140104": [
+              "Oberflächengewässer",
+              "Seethermie",
+              "Flusswärme"
+            ],
+            "out:total": [
+              "Summe",
+              "Gesamt",
+              "Gesamtwert",
+              "Gesamtsumme",
+              "alle Energieträger",
+              "insgesamt"
+            ],
+            "out:other": [
+              "Sonstige",
+              "Andere",
+              "sonstige Energieträger"
             ]
           }
         },
@@ -514,13 +685,30 @@
             "OEO_00000405": [
               "GHD",
               "Gewerbe, Handel, Dienstleistungen",
-              "Gewerbe/Handel/Dienstleistungen"
+              "Gewerbe/Handel/Dienstleistungen",
+              "öffentliche Gebäude",
+              "öffentliche Liegenschaften",
+              "kommunale Einrichtungen"
             ],
             "OEO_00000227": [
               "Industrie"
             ],
             "OEO_00000422": [
               "Verkehr"
+            ],
+            "OEO_00010035": [
+              "Landwirtschaft",
+              "Land- und Forstwirtschaft"
+            ],
+            "out:total": [
+              "Summe",
+              "Gesamt",
+              "alle Sektoren",
+              "insgesamt"
+            ],
+            "unknown": [
+              "nicht erkennbar",
+              "unbekannt"
             ]
           }
         },

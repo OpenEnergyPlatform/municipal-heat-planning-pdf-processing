@@ -301,7 +301,35 @@ def fill_dynamic_axes(spec: Spec, vocabularies: Optional[dict]) -> Spec:
     return Spec(parameters=parameters) if changed else spec
 
 
-def make_anchors(spec: Spec, client=None) -> dict:
+def anchors_key(spec_sha: str) -> str:
+    """What an anchor set depends on: the spec, the anchor prompt, the model."""
+    import hashlib
+    versions = prompts.versions((ANCHORS_PROMPT_ID,))
+    raw = f"{spec_sha}|{versions.get(ANCHORS_PROMPT_ID)}|{LLM_MODEL}"
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16]
+
+
+def load_anchors(path: Path, key: str) -> dict:
+    """The anchors a previous run of this same configuration wrote."""
+    try:
+        stored = json.loads(Path(path).read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    if not isinstance(stored, dict) or stored.get("key") != key:
+        return {}
+    anchors = stored.get("anchors")
+    return anchors if isinstance(anchors, dict) else {}
+
+
+def save_anchors(path: Path, key: str, anchors: dict) -> None:
+    Path(path).parent.mkdir(parents=True, exist_ok=True)
+    Path(path).write_text(
+        json.dumps({"key": key, "model": LLM_MODEL, "anchors": anchors},
+                   ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def make_anchors(spec: Spec, client=None, *, store: Optional[Path] = None,
+                 key: str = "") -> dict:
     """parameter uri -> search anchors the model wrote from its definition.
 
     The QA app turns a question into a HyDE anchor before it searches: a
@@ -314,8 +342,19 @@ def make_anchors(spec: Spec, client=None) -> dict:
     query-embedding cache hit across the whole corpus.
     """
     prompt = prompts.load(ANCHORS_PROMPT_ID)
+    # Frozen, because they decide which passages the whole corpus is harvested
+    # from. Two calls in one job shared 0 of 18 strings, so a restart searched
+    # a different document set with nothing in any of the 1082 output files
+    # saying which set had found it. The file carries the reproducibility;
+    # the temperature stays where it is.
+    out: dict = dict(load_anchors(store, key)) if store is not None else {}
+    todo = [p for p in spec.parameters if not out.get(p.uri)]
+    if store is not None and out:
+        log.info("extraction: %d anchor set(s) reused from %s, %d to write",
+                 len(out), store, len(todo))
+    if not todo:
+        return out
     client = client or _client()
-    out: dict = {}
 
     def one(parameter):
         payload = json.dumps({"label": parameter.label,
@@ -347,9 +386,11 @@ def make_anchors(spec: Spec, client=None) -> dict:
         return parameter.uri, []
 
     from concurrent.futures import ThreadPoolExecutor
-    with ThreadPoolExecutor(max_workers=min(8, len(spec.parameters) or 1)) as pool:
-        for uri, anchors in pool.map(one, spec.parameters):
+    with ThreadPoolExecutor(max_workers=min(8, len(todo) or 1)) as pool:
+        for uri, anchors in pool.map(one, todo):
             out[uri] = anchors
+    if store is not None:
+        save_anchors(store, key, out)
     log.info("extraction: %d anchor(s) over %d parameter(s)",
              sum(len(v) for v in out.values()), len(out))
     for uri, anchors in out.items():
@@ -883,6 +924,7 @@ def make_harvester(image_root: Optional[Path] = None) -> Callable:
         if len(parts) > 1:
             content = parts
         first = batch.items[0].source
+        why = ["no_answer"]
         conversation: list = [{"role": "user", "content": content}]
         # A compute round is a turn of the same conversation, not a retry, so
         # the attempt budget grows with the rounds actually used.
@@ -968,6 +1010,10 @@ def make_harvester(image_root: Optional[Path] = None) -> Callable:
                             first.owner_kind, first.owner_id,
                             len(batch.items) - 1, attempt, exc)
                 status = getattr(exc, "status_code", None)
+                # No HTTP status at all is a transport failure: the server is
+                # not there. That is the case a resume must never mistake for
+                # a harvested document.
+                why[0] = "no_answer" if isinstance(status, int) else "unreachable"
                 if isinstance(status, int) and 400 <= status < 500 and status != 429:
                     # A request the server refuses is refused every time. The
                     # last run spent three tries and eight seconds of sleep on
@@ -978,7 +1024,11 @@ def make_harvester(image_root: Optional[Path] = None) -> Callable:
         # Sources the model never answered for are a hole in the harvest, and
         # holes must be visible: the caller counts these via the sentinel.
         # One per source, so a batch of six that died is six holes, not one.
-        return {"tuples": [{"_harvest_failed": True,
+        # The cause rides along, because a server that is gone and a model
+        # that answered nothing are the same row in the output and must not
+        # be the same thing to the resume: an unreachable server would
+        # otherwise stamp every remaining document as harvested.
+        return {"tuples": [{"_harvest_failed": True, "_why": why[0],
                             "source": batch.label(i)}
                            for i in range(len(batch.items))],
                 "status": "failed", "need_more": []}
@@ -1062,6 +1112,14 @@ def harvest_batches(batches: list, harvest: Callable, *,
                             batch.document_id, batch.parameter.uri, exc)
         return batch, reply, sweep
 
+    # A server that goes away turns every request into the same failure, and
+    # the pool would work its way through the whole queue to find that out.
+    # Measured: 53 minutes of dying on five H100s. Past this many consecutive
+    # unreachable replies the rest is cancelled and the run ends with its
+    # documents unstamped, which is what makes a resume possible.
+    dead_streak = [0]
+    give_up = max(64, workers)
+
     with ThreadPoolExecutor(max_workers=max(workers, 1)) as pool:
         pending = {pool.submit(one, b): b for b in batches}
         step = max(submitted // 20, 25)
@@ -1075,11 +1133,25 @@ def harvest_batches(batches: list, harvest: Callable, *,
                     log.warning("   harvest %s/%s raised: %s",
                                 batch.document_id, batch.parameter.uri, exc)
                     reply = {"tuples": [{"_harvest_failed": True,
+                                         "_why": "unreachable",
                                          "source": batch.label(i)}
                                         for i in range(len(batch.items))],
                              "status": "failed", "need_more": []}
                     sweep = None
                 results.append((batch, reply))
+                if any(t.get("_why") == "unreachable"
+                       for t in reply.get("tuples") or []):
+                    dead_streak[0] += 1
+                    if dead_streak[0] >= give_up:
+                        log.error("harvest: %d requests in a row never reached "
+                                  "the server — cancelling the remaining %d",
+                                  dead_streak[0], len(pending))
+                        for f in list(pending):
+                            f.cancel()
+                        pending.clear()
+                        break
+                else:
+                    dead_streak[0] = 0
                 if sweep is not None and more_sources is not None:
                     # A follow-up joins the pool rather than blocking its
                     # sweep: the passages it brings are new to the whole run,
@@ -1238,13 +1310,34 @@ def already_done(name: str, out_dir: Path, spec_sha: str, *,
     return False
 
 
+# A document this many of whose sources died on an unreachable server was not
+# harvested, whatever its file says. Half is the line: below it a plan really
+# can be mostly holes, above it the server was gone.
+UNREACHABLE_LIMIT = 0.5
+
+
 def finish_document(report, name: str, out_dir: Path, spec_sha: str) -> None:
-    """Write one document's JSONL and stamp it with what produced it."""
+    """Write one document's JSONL and stamp it with what produced it.
+
+    The stamp is what a resume trusts, so it is withheld when the harvest did
+    not happen. A dead server answers every request the same way and every
+    document comes back all sentinels; stamping those would write up to a
+    thousand empty documents down as finished, and the run that resumed would
+    skip every one of them without a word.
+    """
     failed = [r for r in report.refusals
               if r.get("claim", {}).get("_harvest_failed")]
     if failed:
         log.warning("extraction: %s: %d source(s) never answered", name, len(failed))
     write_report(report, out_dir / f"{name}.jsonl")
+    unreachable = sum(1 for r in failed
+                      if r.get("claim", {}).get("_why") == "unreachable")
+    sources = max(report.owners_harvested, len(failed))
+    if sources and unreachable > sources * UNREACHABLE_LIMIT:
+        log.error("extraction: %s: %d of %d source(s) never reached the "
+                  "server — not stamped, so a resume harvests it again",
+                  name, unreachable, sources)
+        return
     (out_dir / f"{name}.stamp.json").write_text(
         json.dumps(_stamp_current(spec_sha), indent=2), encoding="utf-8")
 
@@ -1408,7 +1501,11 @@ def main(argv: Optional[list] = None) -> int:
             parser.error(f"profile {profile.name!r} provides no "
                          f"kg.make_serializer (profiles/{profile.name}/kg.py)")
         from .serialize import run as serialize_run
-        counts = serialize_run(args.out, args.serialize, factory(args.db))
+        try:
+            counts = serialize_run(args.out, args.serialize, factory(args.db))
+        except ValueError as exc:
+            log.error("serialize: %s", exc)
+            return 1
         log.info("serialize: %d tuple(s) from %d document(s) -> %s",
                  sum(counts.values()), len(counts), args.serialize)
         return 0
@@ -1504,7 +1601,8 @@ def main(argv: Optional[list] = None) -> int:
     # the definition, not on the document, and a probe string that is the same
     # for the whole corpus is what makes the query-embedding cache pay.
     anchors = ({} if os.environ.get("EXTRACT_ANCHORS", "1") == "0"
-               else make_anchors(spec))
+               else make_anchors(spec, store=args.out / "anchors.json",
+                                 key=anchors_key(spec_sha)))
 
     cache_path = args.out / "query_cache.db"
     primer = query_cache.connect(cache_path)

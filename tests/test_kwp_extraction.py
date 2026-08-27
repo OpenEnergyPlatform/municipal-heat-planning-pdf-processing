@@ -205,18 +205,22 @@ def test_the_serializer_emits_only_the_target_scenario_slice(tmp_path):
     assert "Kommunale Wärmeplanung Kassel 2024" in ttl
 
 
-def test_a_carrier_oeo_does_not_call_a_carrier_is_counted_out(tmp_path):
+def test_a_carrier_oeo_does_not_call_a_carrier_loses_its_edge_not_its_value(tmp_path):
     """`covers energy carrier` has range `energy carrier`, and district heating
-    is a heat transfer, not one. The value is kept in the harvest and left out
-    of the TTL rather than asserted against the range."""
+    is a heat transfer, not one. So the edge is left out — but the value is a
+    properly evidenced consumption with its year, unit, sector and
+    aggregation, and dropping the whole row over one relation the TBox does
+    not allow yet cost 51 of 244 value nodes in the pilot."""
     serializer = kg.make_serializer(_database(tmp_path))
     ttl = serializer("waermeplan_kassel_20240315", [
         _row(carrier="OEO_00000132"),          # Fernwärme
         _row(carrier="OEO_00000139", value_target=5.0),   # Strom
-        _row(),                                # Erdgas, the one that survives
+        _row(),                                # Erdgas, a carrier OEO allows
     ])
-    assert ttl.count("a oeo:OEO_00050016") == 1
-    assert "OEO_00000132" not in ttl and "OEO_00000139" not in ttl
+    assert ttl.count("a oeo:OEO_00050016") == 3, "every value stands"
+    assert ttl.count("oeo:OEO_00000523") == 1, "only Erdgas may claim a carrier"
+    assert "oeo:OEO_00000523 oeo:OEO_00000132" not in ttl
+    assert "oeo:OEO_00000523 oeo:OEO_00000139" not in ttl
 
 
 def test_a_value_conflict_on_one_coordinate_drops_every_claimant(tmp_path):
