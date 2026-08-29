@@ -36,7 +36,7 @@ from docpipe.profile import add_profile_argument, resolve_profile
 
 from . import fields
 from . import trace
-from .pipeline import (Source, WorkItem, build_sweeps,
+from .pipeline import (Source, WorkItem, batch_uri, build_sweeps,
                        cell_index as pipeline_cell_index, fold_batch,
                        follow_up, group_items, harvest_document, merge_field,
                        mark_unanswered, open_rows, plan_document, route_claims,
@@ -1675,8 +1675,8 @@ def make_fieldwise_harvester(image_root: Optional[Path] = None,
             for row in rows:
                 slots_of[row.label] = axes
             for axis in axes:
-                jobs.append((rows, axis, anchor_key(batch.parameter.uri,
-                                                    axis.name)))
+                jobs.append((rows, axis,
+                             anchor_key(batch.parameter.uri, axis.name)))
 
         futures = {pool.submit(sweep_field, batch, group, slot, anchor): slot
                    for group, slot, anchor in jobs}
@@ -1780,7 +1780,7 @@ def harvest_batches(batches: list, harvest: Callable, *,
     submitted = len(batches)
 
     def one(batch):
-        sweep = sweeps[(batch.document_id, batch.parameter.uri)]
+        sweep = sweeps[(batch.document_id, batch_uri(batch))]
         reply = harvest(batch, sweep.snapshot())
         reply = reply if isinstance(reply, dict) else {}
         if verify is not None:
@@ -1788,7 +1788,7 @@ def harvest_batches(batches: list, harvest: Callable, *,
                 sweep.record(verify(batch, reply))
             except Exception as exc:                        # pragma: no cover
                 log.warning("   prior for %s/%s not updated: %s",
-                            batch.document_id, batch.parameter.uri, exc)
+                            batch.document_id, batch_uri(batch), exc)
         return batch, reply, sweep
 
     # A server that goes away turns every request into the same failure, and
@@ -1810,7 +1810,7 @@ def harvest_batches(batches: list, harvest: Callable, *,
                     batch, reply, sweep = future.result()
                 except Exception as exc:                    # pragma: no cover
                     log.warning("   harvest %s/%s raised: %s",
-                                batch.document_id, batch.parameter.uri, exc)
+                                batch.document_id, batch_uri(batch), exc)
                     reply = {"tuples": [{"_harvest_failed": True,
                                          "_why": "unreachable",
                                          "source": batch.label(i)}
