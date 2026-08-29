@@ -71,13 +71,23 @@ def build_subindex(
     sub = faiss.IndexFlatIP(EMBEDDING_DIM)
     if not faiss_ids:
         return sub
-    # Straight into the destination: vstack built one temporary per vector and
-    # then astype copied the whole block again, though FAISS already stores
-    # float32.
+    # One call for the whole document, not one per vector: each reconstruct()
+    # crosses the SWIG boundary with its own small allocation, and a plan does
+    # about 470 of them. Measured on the cluster over 50 repetitions of one
+    # document: 0.421 s to 0.277 s, so 8.4 ms per document instead of 5.5. It
+    # is not a bottleneck and was never the reason a document took 3.2 s — it
+    # is here because it is also the simpler call.
     inner = getattr(global_index, "index", global_index)
-    vectors = np.empty((len(faiss_ids), EMBEDDING_DIM), dtype="float32")
-    for i, fid in enumerate(faiss_ids):
-        vectors[i] = inner.reconstruct(int(id_to_pos[int(fid)]))
+    positions = np.fromiter((id_to_pos[int(fid)] for fid in faiss_ids),
+                            dtype="int64", count=len(faiss_ids))
+    batch = getattr(inner, "reconstruct_batch", None)
+    if batch is not None:
+        vectors = np.ascontiguousarray(batch(positions), dtype="float32")
+    else:
+        # Older FAISS. Same vectors, one at a time.
+        vectors = np.empty((len(faiss_ids), EMBEDDING_DIM), dtype="float32")
+        for i, pos in enumerate(positions):
+            vectors[i] = inner.reconstruct(int(pos))
     sub.add(vectors)
     return sub
 
