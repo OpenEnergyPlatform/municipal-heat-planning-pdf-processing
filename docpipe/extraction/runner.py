@@ -1653,7 +1653,17 @@ def already_done(name: str, out_dir: Path, spec_sha: str, *,
     spec, prompts and model — or stale with nobody asking for the redo."""
     if force or not (out_dir / f"{name}.jsonl").exists():
         return False
-    changed = stale(out_dir / f"{name}.stamp.json", _stamp_current(spec_sha))
+    stamp_path = out_dir / f"{name}.stamp.json"
+    if not stamp_path.is_file():
+        # No record at all, which is not the same as a record of something
+        # older and must not be read as one. A file with no stamp is a file
+        # nothing vouches for: it may predate the stamps, it may be half
+        # written, it may have been rewritten by a rule the run never applied.
+        # Treating that as "already done" is how deleting the stamps to force
+        # a redo caused every document to be skipped instead.
+        log.info("extraction: %s carries no stamp — harvested again", name)
+        return False
+    changed = stale(stamp_path, _stamp_current(spec_sha))
     if not changed:
         log.info("extraction: %s is current — skipped", name)
         return True
