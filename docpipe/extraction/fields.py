@@ -52,6 +52,13 @@ UNANSWERED = "unanswered"   # the request came back without this row at all
 # is a finding about the run, and collapsing them is the mistake this module
 # was written to stop making.
 EXHAUSTED = "exhausted"
+# Answered, and the answer could not be backed: the passage cited is not in
+# anything the model was shown, or it is and does not carry the answer. Its own
+# outcome, because "said nothing" and "said something it could not back" are a
+# different finding about the model and collapsing them is the mistake this
+# module exists to stop making. It stays OPEN — a later window can still read
+# the coordinate properly — and only survives to the end if none does.
+UNBACKED = "unbacked"
 
 
 @dataclass(frozen=True)
@@ -74,6 +81,19 @@ class Slot:
     @property
     def is_closed(self) -> bool:
         return self.kind == CHOICE and bool(self.options)
+
+    def answerable(self) -> dict:
+        """The closed list as the request shows it, UNSTATED included.
+
+        A finite set of correct answers is a choice, and "the passages do not
+        state it" is one of the correct answers — so it belongs in the list the
+        model picks from, not only in the prose above it. It was in the prompt
+        and not in the options, which asks the model to remember a rule instead
+        of reading a row.
+        """
+        out = {opt.label: list(opt.synonyms) for opt in self.options}
+        out[UNSTATED] = ["steht in diesen Passagen nicht"]
+        return out
 
 
 def _options(vocabulary: dict) -> tuple:

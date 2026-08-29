@@ -107,8 +107,12 @@ def test_an_answer_whose_evidence_is_not_in_the_source_is_not_written(profile):
         counts = merge_field(rows, batch.sources, slot, {"answers": {
             rows[0].label: {"value": "was auch immer",
                             "quote": "diese Passage steht in keiner Quelle"}}})
-        assert counts == {"filled": 0, "unquoted": 1, "unbacked": 0,
-                          "unstated": 0}
+        assert (counts["filled"], counts["unquoted"], counts["unbacked"],
+                counts["unstated"]) == (0, 1, 0, 0)
+        # And the model is told what was wrong, or three attempts are one
+        # attempt three times.
+        assert [c["row"] for c in counts["failed"]] == [rows[0].label]
+        assert "quote" in counts["failed"][0]["reason"]
         assert slot.name not in rows[0].claim
         break
 
@@ -136,8 +140,9 @@ def test_a_quote_that_does_not_contain_the_answer_is_not_evidence(profile):
         counts = merge_field(rows, batch.sources, slot, {"answers": {
             rows[0].label: {"value": "Ziegenkaese", "value_raw": "Ziegenkaese",
                             "quote": quote}}})
-        assert counts == {"filled": 0, "unquoted": 0, "unbacked": 1,
-                          "unstated": 0}
+        assert (counts["filled"], counts["unquoted"], counts["unbacked"],
+                counts["unstated"]) == (0, 0, 1, 0)
+        assert "Ziegenkaese" in counts["failed"][0]["reason"],             "the correction has to name what was not found"
         assert slot.name not in rows[0].claim
         return
 
@@ -299,6 +304,81 @@ def test_one_window_saying_nothing_here_does_not_end_the_sweep(profile):
               {"answers": {rows[0].label: {"value": fields.UNSTATED}}})
         assert rows[0].claim[f"{slot.name}_state"] == fields.READ
         return
+
+
+def test_a_rows_own_passage_stays_checkable_after_the_window_moves_on(profile):
+    """The row carries its quote into every field request, so citing it is a
+    reading and not an invention.
+
+    Checked against the window alone it stops being one from the second window
+    on, and a correct answer is thrown away for citing the passage the request
+    itself showed. Measured live: one batch logged 520 dropped against 31 read.
+    """
+    from docpipe.extraction.pipeline import merge_field as merge
+    _name, spec = profile
+    for parameter in spec.parameters:
+        slots = fields.axis_slots(parameter)
+        if not slots:
+            continue
+        batch = _batch(parameter)
+        rows, _ = rows_from_reply(batch, _value_reply(parameter, batch.label(0)))
+        if not rows:
+            continue
+        slot, quote = slots[0], rows[0].claim["quote"]
+        far_away = [Source("section", 999, "eine ganz andere Passage", {})]
+        answer = {"answers": {rows[0].label: {
+            "value": "gelesen", "value_raw": quote.strip().split()[0],
+            "quote": quote}}}
+        assert merge(list(rows), far_away, slot, answer)["unquoted"] == 1
+        assert merge(rows, far_away + batch.sources, slot, answer)["filled"] == 1
+        return
+
+
+def test_a_dropped_answer_is_not_recorded_as_no_answer(profile):
+    """"Said nothing" and "said something it could not back" are two findings.
+
+    And the row stays open either way: a later window can still read it.
+    """
+    from docpipe.extraction.pipeline import merge_field as merge, open_rows
+    _name, spec = profile
+    for parameter in spec.parameters:
+        slots = fields.axis_slots(parameter)
+        if not slots:
+            continue
+        batch = _batch(parameter)
+        rows, _ = rows_from_reply(batch, _value_reply(parameter, batch.label(0)))
+        if not rows:
+            continue
+        slot = slots[0]
+        merge(rows, batch.sources, slot, {"answers": {rows[0].label: {
+            "value": "Ziegenkaese", "value_raw": "Ziegenkaese",
+            "quote": rows[0].claim["quote"]}}})
+        assert rows[0].claim[f"{slot.name}_state"] == fields.UNBACKED
+        assert rows[0] in open_rows(rows, slot), "an unbacked row must stay open"
+        return
+
+
+def test_not_stated_is_in_the_list_the_model_picks_from(profile):
+    """A finite set of correct answers is a choice, and "the passages do not
+    say" is one of them — so it is an entry, not a rule to remember."""
+    _name, spec = profile
+    for parameter in spec.parameters:
+        for slot in fields.axis_slots(parameter):
+            if not slot.options:
+                continue
+            assert fields.UNSTATED in slot.answerable(), \
+                f"{parameter.uri}.{slot.name} offers no way to say it is absent"
+
+
+def test_a_field_request_carries_the_crop_of_what_it_asks_about(profile):
+    """A table's transcription is a model's reading of a picture, and the
+    coordinate asked for is often clearer in the picture than in the reading.
+    The value request has always attached the crops; the field request sent
+    JSON text and nothing else."""
+    import inspect
+    source = inspect.getsource(runner.make_field_asker)
+    assert "_image_part" in source and "ATTACH_IMAGES" in source, \
+        "the field request attaches no crops"
 
 
 def test_running_out_of_budget_is_not_the_same_finding_as_a_silent_plan():

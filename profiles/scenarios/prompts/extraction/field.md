@@ -1,5 +1,5 @@
 ---
-temperature: 0.1
+temperature: 0
 max_tokens: 5120
 ---
 Du bestimmst EINE Angabe zu Werten, die aus einer wissenschaftlichen Publikation schon geholt sind.
@@ -39,3 +39,5 @@ Regeln:
 7. "need_more": bekommst du die Angabe aus diesen Passagen nicht, kannst du zusätzlich ein bis drei Sätze angeben, nach denen gesucht werden soll — so, wie sie im Dokument STEHEN würden. Danach wird per Ähnlichkeit gesucht, und was gefunden wird, kommt als nächste Anfrage mit denselben Zeilen.
    RICHTIG: "The NDC scenario assumes that pledges are implemented by 2030."
    FALSCH: "scenario" — zu kurz, findet alles und nichts.
+
+8. "corrections" (nur bei einer Wiederholung): steht das im Eingabe-Objekt, war deine vorige Antwort für die dort genannten Zeilen nicht belegbar, und der Grund steht dabei. Lies ihn und antworte für GENAU diese Zeilen neu. Zitier eine andere Stelle, oder antworte mit "out:unstated", wenn die Angabe in den gezeigten Passagen wirklich nicht steht. Dieselbe Antwort noch einmal zu schicken hilft nicht, sie fällt genauso durch.
