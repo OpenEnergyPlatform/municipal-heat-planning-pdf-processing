@@ -643,17 +643,29 @@ def _client():
 
 
 def _loads_object(raw_text: str) -> Optional[dict]:
-    """The JSON object in a reply, whatever it is wrapped in."""
+    """The JSON object in a reply, whatever it is wrapped in.
+
+    The fallback used to be a greedy {.*} span, which is the one shape that
+    cannot work: two objects in a row, or a sentence after the answer that
+    happens to end in a brace, and the span covers both and is invalid by
+    construction. Replies that looked perfectly well formed in the log were
+    dropped that way.
+
+    raw_decode instead — it reads ONE object from the first brace and stops,
+    so trailing anything is simply not read. The same decoder rescue_reply
+    uses, and for the same reason: quotes are lifted verbatim out of plans and
+    braces in them do not balance.
+    """
     text = _THINK_RE.sub("", raw_text or "").strip()
     text = _FENCE_CLOSE.sub("", _FENCE_OPEN.sub("", text)).strip()
     try:
         data = json.loads(text)
     except json.JSONDecodeError:
-        match = re.search(r"\{.*\}", text, re.DOTALL)
-        if not match:
+        start = text.find("{")
+        if start == -1:
             return None
         try:
-            data = json.loads(match.group(0))
+            data, _end = _DECODER.raw_decode(text, start)
         except json.JSONDecodeError:
             return None
     return data if isinstance(data, dict) else None
@@ -813,9 +825,23 @@ def _unparsable(reply) -> str:
     message = getattr(reply, "message", None)
     content = (getattr(message, "content", None) or "")
     reasoning = (getattr(message, "reasoning_content", None) or "")
-    return (f" [finish={getattr(reply, 'finish_reason', '?')} "
-            f"content={len(content)}ch {content[:160]!r} "
-            f"reasoning={len(reasoning)}ch {reasoning[-160:]!r}]")
+
+    def show(text: str, keep: int = 400) -> str:
+        """Head and tail, with the cut marked.
+
+        Marked, because an unmarked cut is worse than no excerpt: this line
+        used to end a JSON string mid-word with no sign of why, and a reply
+        that was merely long read as a reply that was broken. And the TAIL is
+        the half that matters — a malformed reply is malformed at its end, and
+        the head was all this printed.
+        """
+        if len(text) <= 2 * keep:
+            return repr(text)
+        return f"{text[:keep]!r} …{len(text) - 2 * keep} weitere… {text[-keep:]!r}"
+
+    return (f" [finish={getattr(reply, 'finish_reason', '?')}"
+            f" | content {len(content)}ch: {show(content)}"
+            f" | reasoning {len(reasoning)}ch: {show(reasoning)}]")
 
 
 def _parse_action(text) -> Optional[str]:
@@ -1245,13 +1271,17 @@ def make_field_asker(image_root: Optional[Path] = None) -> Callable:
                 parts.append(part)
         if len(parts) > 1:
             content = parts
+        # A model error is told to the model, the same way a verification
+        # failure is. Retrying a malformed reply without saying what was
+        # malformed is one attempt three times.
+        conversation: list = [{"role": "user", "content": content}]
         for attempt in range(1, MAX_RETRIES + 1):
             try:
                 response = client.chat.completions.create(
                     model=LLM_MODEL, temperature=temperature,
                     max_tokens=max_tokens,
                     messages=[{"role": "system", "content": prompt.text},
-                              {"role": "user", "content": content}],
+                              *conversation],
                     extra_body={"chat_template_kwargs": {"enable_thinking": False}},
                 )
                 reply = response.choices[0]
@@ -1264,6 +1294,15 @@ def make_field_asker(image_root: Optional[Path] = None) -> Callable:
                     return answer
                 log.warning("   field %s attempt %d: unreadable reply%s",
                             slot.name, attempt, _unparsable(reply))
+                conversation.append({"role": "assistant",
+                                     "content": reply.message.content or ""})
+                conversation.append({"role": "user", "content": (
+                    "Deine Antwort war kein lesbares JSON-Objekt. Gib NUR das "
+                    "Objekt aus, in EINER Zeile, ohne Text davor oder danach "
+                    "und ohne ein zweites Objekt. Anführungszeichen INNERHALB "
+                    "eines Zitats müssen als \\\" escaped sein — ist das "
+                    "mühsam, kürz das Zitat auf eine Stelle ohne "
+                    "Anführungszeichen.")})
             except Exception as exc:
                 log.warning("   field %s attempt %d failed: %s",
                             slot.name, attempt, exc)

@@ -1,6 +1,8 @@
 """The runner's pure parts: reply parsing, staleness, resume."""
-import time
 import json
+import time
+
+import pytest
 
 from docpipe.extraction import runner
 from docpipe.extraction.pipeline import Source
@@ -927,3 +929,88 @@ def test_the_page_rectangles_can_be_switched_off(monkeypatch, tmp_path):
     assert runner.make_locate(tmp_path / "x.db", tmp_path) is None
     monkeypatch.setenv("EXTRACT_LOCATE", "1")
     assert runner.make_locate(tmp_path / "x.db", tmp_path) is not None
+
+
+@pytest.mark.parametrize("raw,expect", [
+    ('{"a": 1}', {"a": 1}),
+    ('```json\n{"a": 1}\n```', {"a": 1}),
+    # The shapes the greedy {.*} span could not read. Both looked well formed
+    # in the log and were dropped: a second object after the answer, and a
+    # sentence after it that happens to end in a brace.
+    ('{"a": 1}{"b": 2}', {"a": 1}),
+    ('{"a": 1}\nDas war die Antwort (siehe oben) {Ende}', {"a": 1}),
+    ('Hier ist das Ergebnis: {"a": 1} — fertig.', {"a": 1}),
+    ('{"a": 1', None),
+    ('gar kein json', None),
+])
+def test_one_object_is_read_and_trailing_anything_is_not(raw, expect):
+    assert runner._loads_object(raw) == expect
+
+
+def test_an_unreadable_reply_is_sent_back_with_the_reason(monkeypatch):
+    """A model error goes to the model, like a verification failure does.
+
+    Retrying a malformed reply without saying what was malformed is one
+    attempt three times.
+    """
+    from docpipe.extraction import fields
+    seen = []
+
+    class _Msg:
+        def __init__(self, content):
+            self.content = content
+            self.reasoning_content = ""
+
+    class _Choice:
+        def __init__(self, content):
+            self.message = _Msg(content)
+            self.finish_reason = "stop"
+
+    class _Resp:
+        def __init__(self, content):
+            self.choices = [_Choice(content)]
+            self.usage = None
+
+    replies = iter(["kein json", '{"answers": {}}'])
+
+    class _Client:
+        class chat:
+            class completions:
+                @staticmethod
+                def create(**kw):
+                    seen.append(kw["messages"])
+                    return _Resp(next(replies))
+
+    monkeypatch.setattr(runner, "_client", lambda: _Client())
+    monkeypatch.setattr(runner.time, "sleep", lambda s: None)
+    ask = runner.make_field_asker()
+    slot = fields.Slot(name="year", kind=fields.NUMBER, question="Welches Jahr?")
+    out = ask([], [], slot)
+    assert out == {"answers": {}}
+    assert len(seen) == 2, "it has to try again"
+    followup = seen[1][-1]
+    assert followup["role"] == "user"
+    assert "JSON" in followup["content"], "the retry must say what was wrong"
+
+
+def test_the_unreadable_diagnostic_shows_the_end_and_marks_the_cut():
+    """The tail is the half that matters, and an unmarked cut misleads.
+
+    This line used to print the first 160 characters and stop, so a JSON
+    string that was merely long ended mid-word with no sign of why — and a
+    reply that was cut off read as a reply whose quote had run into the next
+    log field. The defect it is meant to expose lives at the end.
+    """
+    class _M:
+        content = '{"answers": {"R1": {"quote": "' + "x" * 900 + '"}}'
+        reasoning_content = ""
+
+    class _R:
+        message = _M()
+        finish_reason = "stop"
+
+    runner._UNPARSABLE_SHOWN = 0
+    line = runner._unparsable(_R())
+    assert f"content {len(_M.content)}ch" in line
+    assert "weitere" in line, "the cut has to be marked"
+    assert _M.content[-40:] in line, "the end of the reply has to be visible"
