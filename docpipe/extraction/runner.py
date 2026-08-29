@@ -456,12 +456,19 @@ def fill_dynamic_axes(spec: Spec, vocabularies: Optional[dict]) -> Spec:
 ANCHOR_SCHEMA = "per-question-1"
 
 
-def anchors_key(spec_sha: str) -> str:
-    """What an anchor set depends on: the spec, the anchor prompt, the model."""
+def anchors_key(spec_sha: str, frozen_sha: str = "") -> str:
+    """What an anchor set depends on: the spec, the anchor prompt, the model,
+    and whatever the profile froze.
+
+    The frozen part belongs in the key because a run reads its own
+    anchors.json back. Without it, changing the profile's file would leave
+    every output directory that already holds one searching with the old set,
+    and no line anywhere would say so.
+    """
     import hashlib
     versions = prompts.versions((ANCHORS_PROMPT_ID,))
     raw = (f"{spec_sha}|{versions.get(ANCHORS_PROMPT_ID)}|{LLM_MODEL}"
-           f"|{ANCHOR_SCHEMA}")
+           f"|{ANCHOR_SCHEMA}|{frozen_sha}")
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16]
 
 
@@ -491,6 +498,52 @@ def anchor_targets(spec: Spec) -> list:
     return [t for t in out if t[0] != PARAMETER_ANCHOR or t[3]]
 
 
+def frozen_anchors(profile, spec: Spec) -> tuple:
+    """(anchors, sha) the profile froze, or ({}, "") if it freezes none.
+
+    An anchor the model writes is a guess at how the corpus phrases a value.
+    These are not guesses: they are sections of an earlier run that really
+    produced one, taken verbatim. Measured over 150 documents and 4,785 prose
+    values, the kwp profile's frozen set puts 18.0% of them in the top 10
+    sections where the written ones put 11.0%, against 7.6% for chance.
+
+    Only the questions the file names are frozen. Everything else, the axis
+    questions above all, is still written per run, so a profile can freeze what
+    it has measured and leave the rest alone.
+    """
+    raw_path = profile.component("extraction", "ANCHORS_PATH") if profile else None
+    if raw_path is None:
+        return {}, ""
+    path = Path(raw_path)
+    raw = path.read_bytes()
+    stored = json.loads(raw.decode("utf-8"))
+    anchors = stored.get("anchors") if isinstance(stored, dict) else None
+    if not isinstance(anchors, dict) or not anchors:
+        raise LookupError(f"{path} names no anchors object")
+    # The file outlives the spec it was measured against. A key that is no
+    # question of this run would be dropped by every reader without a word,
+    # and the run would search with a set nobody had checked.
+    targets = {target[0] for target in anchor_targets(spec)}
+    unknown = sorted(set(anchors) - targets)
+    if unknown:
+        raise LookupError(
+            f"{path}: {', '.join(unknown)} is no question of this spec, which "
+            f"asks {len(targets)}. Either the spec moved or the file did.")
+    out, empty = {}, []
+    for anchor_id, texts in anchors.items():
+        usable = [t.strip() for t in texts
+                  if isinstance(t, str) and len(t.strip()) > 20]
+        if not usable:
+            empty.append(anchor_id)
+        out[anchor_id] = usable
+    if empty:
+        raise LookupError(f"{path}: {', '.join(sorted(empty))} freezes no "
+                          f"usable anchor, which is a broken file and not a "
+                          f"decision to leave the question to the model")
+    import hashlib
+    return out, hashlib.sha256(raw).hexdigest()[:16]
+
+
 def load_anchors(path: Path, key: str) -> dict:
     """The anchors a previous run of this same configuration wrote."""
     try:
@@ -511,7 +564,7 @@ def save_anchors(path: Path, key: str, anchors: dict) -> None:
 
 
 def make_anchors(spec: Spec, client=None, *, store: Optional[Path] = None,
-                 key: str = "") -> dict:
+                 key: str = "", frozen: Optional[dict] = None) -> dict:
     """parameter uri -> search anchors the model wrote from its definition.
 
     The QA app turns a question into a HyDE anchor before it searches: a
@@ -530,6 +583,13 @@ def make_anchors(spec: Spec, client=None, *, store: Optional[Path] = None,
     # saying which set had found it. The file carries the reproducibility;
     # the temperature stays where it is.
     out: dict = dict(load_anchors(store, key)) if store is not None else {}
+    # The profile's frozen anchors win over anything a previous run wrote for
+    # the same question: those are the model's guess, these are measured.
+    frozen = frozen or {}
+    if frozen:
+        out.update({k: list(v) for k, v in frozen.items()})
+        log.info("extraction: %d anchor set(s) frozen in the profile: %s",
+                 len(frozen), ", ".join(sorted(frozen)))
     todo = [t for t in anchor_targets(spec) if not out.get(t[0])]
     if store is not None and out:
         log.info("extraction: %d anchor set(s) reused from %s, %d to write",
@@ -1950,10 +2010,18 @@ def make_locate(db_path: Path, pdf_root: Optional[Path]) -> Optional[Callable]:
 # Resume stamps and the per-document run
 # ---------------------------------------------------------------------------
 
-def _stamp_current(spec_sha: str) -> dict:
+def _stamp_current(spec_sha: str, anchors_sha: str = "") -> dict:
     # The model is part of the stamp: tuples harvested by another model are
     # not "current" any more than tuples harvested with another prompt.
-    return {"spec": spec_sha, "model": LLM_MODEL, **prompts.versions(PROMPT_IDS)}
+    #
+    # So are the anchors. They are the only probes the plan searches with, so
+    # they decide WHICH passages a document was read from, and a document
+    # harvested under one set is not the same result as one harvested under
+    # another. Without this the documents an interrupted run had already
+    # stamped come back "current", stay the only ones on the old set, and
+    # nothing in the corpus says which document was read with what.
+    return {"spec": spec_sha, "model": LLM_MODEL, "anchors": anchors_sha,
+            **prompts.versions(PROMPT_IDS)}
 
 
 def stale(stamp_path: Path, current: dict) -> list:
@@ -1969,9 +2037,10 @@ def stale(stamp_path: Path, current: dict) -> list:
 
 def run_document(document_id: int, name: str, out_dir: Path, spec: Spec,
                  spec_sha: str, templates: list, deps: dict, *,
-                 force: bool = False, force_stale: bool = False) -> bool:
+                 force: bool = False, force_stale: bool = False,
+                 anchors_sha: str = "") -> bool:
     if already_done(name, out_dir, spec_sha, force=force,
-                    force_stale=force_stale):
+                    force_stale=force_stale, anchors_sha=anchors_sha):
         return True
     report = harvest_document(document_id, spec, templates,
                               retrieve=deps["retrieve"],
@@ -1981,14 +2050,16 @@ def run_document(document_id: int, name: str, out_dir: Path, spec: Spec,
                               more_sources=deps.get("more_sources"),
                               extra_probes=deps.get("anchors"),
                               prose_top=PROSE_TOP)
-    finish_document(report, name, out_dir, spec_sha)
+    finish_document(report, name, out_dir, spec_sha, anchors_sha)
     return True
 
 
 def already_done(name: str, out_dir: Path, spec_sha: str, *,
-                 force: bool = False, force_stale: bool = False) -> bool:
+                 force: bool = False, force_stale: bool = False,
+                 anchors_sha: str = "") -> bool:
     """True when this document needs no work: harvested under the current
-    spec, prompts and model — or stale with nobody asking for the redo."""
+    spec, prompts, model and anchors — or stale with nobody asking for the
+    redo."""
     if force or not (out_dir / f"{name}.jsonl").exists():
         return False
     stamp_path = out_dir / f"{name}.stamp.json"
@@ -2001,7 +2072,7 @@ def already_done(name: str, out_dir: Path, spec_sha: str, *,
         # a redo caused every document to be skipped instead.
         log.info("extraction: %s carries no stamp — harvested again", name)
         return False
-    changed = stale(stamp_path, _stamp_current(spec_sha))
+    changed = stale(stamp_path, _stamp_current(spec_sha, anchors_sha))
     if not changed:
         log.info("extraction: %s is current — skipped", name)
         return True
@@ -2018,7 +2089,8 @@ def already_done(name: str, out_dir: Path, spec_sha: str, *,
 UNREACHABLE_LIMIT = 0.5
 
 
-def finish_document(report, name: str, out_dir: Path, spec_sha: str) -> None:
+def finish_document(report, name: str, out_dir: Path, spec_sha: str,
+                    anchors_sha: str = "") -> None:
     """Write one document's JSONL and stamp it with what produced it.
 
     The stamp is what a resume trusts, so it is withheld when the harvest did
@@ -2041,7 +2113,8 @@ def finish_document(report, name: str, out_dir: Path, spec_sha: str) -> None:
                   name, unreachable, sources)
         return
     (out_dir / f"{name}.stamp.json").write_text(
-        json.dumps(_stamp_current(spec_sha), indent=2), encoding="utf-8")
+        json.dumps(_stamp_current(spec_sha, anchors_sha), indent=2),
+        encoding="utf-8")
 
 
 def resolve_image_root(pdf_root: Optional[Path],
@@ -2248,6 +2321,12 @@ def main(argv: Optional[list] = None) -> int:
     spec = load_spec(spec_path)
     import hashlib
     spec_sha = hashlib.sha256(spec_path.read_bytes()).hexdigest()
+    # Read here rather than beside make_anchors, because the resume stamps are
+    # checked before the anchors are ever built and a stamp that does not know
+    # which anchors produced a document cannot tell it from one produced under
+    # another set. A broken anchors file raises here, before the model loads.
+    frozen, frozen_sha = frozen_anchors(profile, spec)
+    anchors_sha = anchors_key(spec_sha, frozen_sha)
     templates = [line for line in
                  prompts.load(QUERIES_PROMPT_ID).text.splitlines()
                  if line.strip() and not line.lstrip().startswith("#")]
@@ -2312,7 +2391,8 @@ def main(argv: Optional[list] = None) -> int:
     documents = [(did, fn) for did, fn in documents
                  if not already_done(Path(fn).stem, args.out, spec_sha,
                                      force=args.force,
-                                     force_stale=args.force_stale)]
+                                     force_stale=args.force_stale,
+                                     anchors_sha=anchors_sha)]
     if not documents:
         log.info("extraction: nothing to harvest")
         return 0
@@ -2331,7 +2411,7 @@ def main(argv: Optional[list] = None) -> int:
     # for the whole corpus is what makes the query-embedding cache pay.
     anchors = ({} if os.environ.get("EXTRACT_ANCHORS", "1") == "0"
                else make_anchors(spec, store=args.out / "anchors.json",
-                                 key=anchors_key(spec_sha)))
+                                 key=anchors_sha, frozen=frozen))
 
     cache_path = args.out / "query_cache.db"
     primer = query_cache.connect(cache_path)
@@ -2434,7 +2514,7 @@ def main(argv: Optional[list] = None) -> int:
                         parameter=refusal.get("parameter"),
                         reason=refusal.get("reason"),
                         owner=refusal.get("owner"))
-        finish_document(report, name, args.out, spec_sha)
+        finish_document(report, name, args.out, spec_sha, anchors_sha)
         trace.flush(report.document_id)
 
     started = time.time()

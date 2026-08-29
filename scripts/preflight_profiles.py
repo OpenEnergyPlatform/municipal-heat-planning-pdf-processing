@@ -84,6 +84,24 @@ def audit(profile: str) -> None:
           len(with_question) >= wanted - len(spec.parameters) - 1,
           f"{len(with_question)} mit Frage")
 
+    # What the profile freezes, and what it leaves to the model. A frozen
+    # anchor is a section that really produced a value, so the file outlives
+    # the spec it was measured against: a key that is no question of this spec
+    # would be dropped by every reader without a word, and the run would search
+    # with a set nobody checked. It fails here rather than on five GPUs.
+    from docpipe.extraction.runner import frozen_anchors
+    from docpipe.profile import load_profile
+    try:
+        fixed, fixed_sha = frozen_anchors(load_profile(profile), spec)
+    except Exception as exc:
+        check(profile, "eingefrorene Anker lesbar", False, str(exc)[:140])
+    else:
+        check(profile, "eingefrorene Anker lesbar", True,
+              (f"{sum(len(v) for v in fixed.values())} Anker fuer {len(fixed)} "
+               f"von {len(keys)} Frage(n), sha {fixed_sha}, den Rest schreibt "
+               f"das Modell" if fixed else "keine, das Modell schreibt alle"),
+              fatal=False)
+
     # No entry that means "I do not know". Those are states now.
     shrugs = []
     for p in spec.parameters:
