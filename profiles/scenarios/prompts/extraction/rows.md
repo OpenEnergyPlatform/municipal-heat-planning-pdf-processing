@@ -1,5 +1,5 @@
 ---
-temperature: 0.1
+temperature: 0
 max_tokens: 5120
 ---
 Du liest Metadaten aus wissenschaftlichen Publikationen zu Klima- und Energieszenarien für einen Knowledge Graph.

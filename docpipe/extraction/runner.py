@@ -135,6 +135,9 @@ EDGE_SECTIONS = int(os.environ.get("EXTRACT_EDGE_SECTIONS", "3"))
 # requests for one batch, so there is a ceiling — and a row that hits it is
 # marked exhausted, never "not stated".
 FIELD_MAX_WINDOWS = int(os.environ.get("EXTRACT_FIELD_MAX_WINDOWS", "24"))
+# How often one window is asked when the answers came back unbackable. The
+# retry carries the reason per row, so it is a correction and not a repeat.
+FIELD_ATTEMPTS = int(os.environ.get("EXTRACT_FIELD_ATTEMPTS", "3"))
 
 _THINK_RE = re.compile(r"<think>.*?</think>", re.DOTALL)
 _FENCE_OPEN = re.compile(r"^```(?:json)?\s*")
@@ -1165,7 +1168,8 @@ def make_harvester(image_root: Optional[Path] = None,
     return harvest
 
 
-def _field_payload(shown: list, rows: list, slot) -> dict:
+def _field_payload(shown: list, rows: list, slot,
+                   corrections: Optional[list] = None) -> dict:
     """The request body of one field question, over the window shown.
 
     Sources first, rows second, the field last. Consecutive windows then share
@@ -1196,11 +1200,17 @@ def _field_payload(shown: list, rows: list, slot) -> dict:
         listed.append(entry)
     field = {"name": slot.name, "question": slot.question}
     if slot.options:
-        field["options"] = {opt.label: list(opt.synonyms) for opt in slot.options}
-    return {"sources": sources, "rows": listed, "field": field}
+        field["options"] = slot.answerable()
+    out = {"sources": sources, "rows": listed, "field": field}
+    if corrections:
+        # What was wrong with the last answer, per row. A verification failure
+        # is information the model can act on, and withholding it turns three
+        # attempts into the same wrong answer three times.
+        out["corrections"] = corrections
+    return out
 
 
-def make_field_asker() -> Callable:
+def make_field_asker(image_root: Optional[Path] = None) -> Callable:
     """ask(batch, rows, slot) -> reply, or None when the field stays unasked.
 
     No sandbox and no rescue of a truncated reply. A field answer is a choice
@@ -1214,16 +1224,34 @@ def make_field_asker() -> Callable:
     temperature = float(prompt.meta.get("temperature", 0.1))
     max_tokens = int(prompt.meta.get("max_tokens", 4096))
 
-    def ask(shown: list, rows: list, slot) -> Optional[dict]:
-        payload = json.dumps(_field_payload(shown, rows, slot),
+    def ask(shown: list, rows: list, slot,
+            corrections: Optional[list] = None) -> Optional[dict]:
+        payload = json.dumps(_field_payload(shown, rows, slot, corrections),
                              ensure_ascii=False, indent=2)
+        # The crops ride along, as they do for the value request. A table's
+        # transcription is a model's reading of a picture, and the coordinate
+        # this asks for — the year in the header, the carrier in the row label
+        # — is often clearer in the picture than in the transcription. The
+        # field request was sending JSON text and nothing else.
+        content: object = payload
+        parts = [{"type": "text", "text": payload}]
+        for index, source in enumerate(shown):
+            path = source.image_path
+            if not (path and ATTACH_IMAGES):
+                continue
+            part = _image_part(str(image_root / path) if image_root else path)
+            if part is not None:
+                parts.append({"type": "text", "text": f"Bild zu Q{index + 1}:"})
+                parts.append(part)
+        if len(parts) > 1:
+            content = parts
         for attempt in range(1, MAX_RETRIES + 1):
             try:
                 response = client.chat.completions.create(
                     model=LLM_MODEL, temperature=temperature,
                     max_tokens=max_tokens,
                     messages=[{"role": "system", "content": prompt.text},
-                              {"role": "user", "content": payload}],
+                              {"role": "user", "content": content}],
                     extra_body={"chat_template_kwargs": {"enable_thinking": False}},
                 )
                 reply = response.choices[0]
@@ -1262,7 +1290,7 @@ def make_fieldwise_harvester(image_root: Optional[Path] = None,
     from concurrent.futures import ThreadPoolExecutor, as_completed
 
     find_rows = make_harvester(image_root, prompt_id=ROWS_PROMPT_ID)
-    ask = make_field_asker()
+    ask = make_field_asker(image_root)
     pool = ThreadPoolExecutor(max_workers=FIELD_PARALLEL,
                               thread_name_prefix="field")
 
@@ -1287,23 +1315,51 @@ def make_fieldwise_harvester(image_root: Optional[Path] = None,
         down differently, because "the plan does not say" and "we stopped
         looking" are the pair this whole stage exists to keep apart.
         """
-        totals = {"filled": 0, "unquoted": 0, "unbacked": 0, "unstated": 0}
+        totals = {"filled": 0, "unquoted": 0, "unbacked": 0, "unstated": 0,
+                  "retried": 0}
         seen = {(i.source.owner_kind, i.source.owner_id) for i in batch.items}
         state = {"asked": 0, "answer": None}
 
         def run(windows) -> bool:
-            """Ask over these windows. False when the budget ran out."""
+            """Ask over these windows. False when the budget ran out.
+
+            A window is asked again when its answers came back unbackable, and
+            the retry carries what was wrong with each row. A model told "R7:
+            your quote is in none of the sources" can fix R7; a model told
+            nothing gives the same answer again, which is why three attempts
+            without the reason are one attempt three times. Every attempt
+            counts against the window budget, so a stubborn coordinate cannot
+            eat the document.
+            """
             for shown in windows:
                 todo = open_rows(rows, slot)
                 if not todo:
                     return True
-                if state["asked"] >= FIELD_MAX_WINDOWS:
-                    return False
-                state["asked"] += 1
-                state["answer"] = ask(shown, todo, slot)
-                counts = merge_field(rows, shown, slot, state["answer"])
-                for key in totals:
-                    totals[key] += counts[key]
+                corrections = None
+                for attempt in range(FIELD_ATTEMPTS):
+                    if state["asked"] >= FIELD_MAX_WINDOWS:
+                        return False
+                    state["asked"] += 1
+                    state["answer"] = ask(shown, todo, slot, corrections)
+                    # Checked against the window AND the passages the rows
+                    # carry. A row's own quote is shown to the model in the
+                    # rows list, so citing it is legitimate — and from the
+                    # second window on it is no longer among `shown`, which
+                    # threw away correct readings by the hundred: one batch
+                    # logged 520 dropped against 31 read.
+                    counts = merge_field(rows, list(shown) + batch.sources,
+                                         slot, state["answer"])
+                    for key in ("filled", "unquoted", "unbacked", "unstated"):
+                        totals[key] += counts[key]
+                    totals["retried"] += 1 if attempt else 0
+                    corrections = counts["failed"]
+                    if not corrections:
+                        break
+                    named = {c["row"] for c in corrections}
+                    todo = [r for r in open_rows(rows, slot)
+                            if r.label in named]
+                    if not todo:
+                        break
             return True
 
         combed = run([batch.sources])
@@ -1360,7 +1416,7 @@ def make_fieldwise_harvester(image_root: Optional[Path] = None,
         blank = mark_unanswered(rows, slots)
         tally = {k: sum(c[k] for c in counts.values())
                  for k in ("filled", "unstated", "unquoted", "unbacked",
-                           "asked")}
+                           "asked", "retried")}
         if tally["unquoted"] or tally["unbacked"] or blank:
             log.info("   fields: %d read, %d not stated, %d unanswered, "
                      "dropped %d (quote not in source) + %d (answer not in quote)",

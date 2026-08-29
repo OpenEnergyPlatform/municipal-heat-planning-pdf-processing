@@ -26,7 +26,7 @@ def _build_parser() -> argparse.ArgumentParser:
         epilog="""\
 Examples:
 python -m scripts.fileprocessing --profile kwp --source kww.xlsx --db data/kwp/kwp.db --data-dir data/kwp/pdf
-python -m scripts.fileprocessing --profile ar6 --source pdf_index.json --db data/ar6/ar6.db --data-dir data/ar6/pdf
+python -m scripts.fileprocessing --profile scenarios --source pdf_index.json --db data/ar6/ar6.db --data-dir data/ar6/pdf
         """,
     )
     # --excel is what this was called while kwp was the only profile, and the

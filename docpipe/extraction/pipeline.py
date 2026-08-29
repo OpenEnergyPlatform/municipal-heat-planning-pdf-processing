@@ -30,7 +30,8 @@ from typing import Callable, Optional
 
 from . import queries as queries_mod
 from .spec import Spec
-from .fields import NUMBER, READ, SAID_UNSTATED, UNANSWERED, UNSTATED
+from .fields import (NUMBER, READ, SAID_UNSTATED, UNANSWERED, UNBACKED,
+                     UNSTATED)
 from .verify import (Refusal, Verified, canonical_number, flat, numbers_in,
                      quote_in, verify_tuple)
 
@@ -374,6 +375,11 @@ def merge_field(rows: list, sources: list, slot, reply: Optional[dict]) -> dict:
             pairs.append((label, group))
     by_label = {row.label: row for row in rows}
     filled = unquoted = unbacked = unstated = 0
+    # Not just how many failed but which, and why. A model that is told "R7:
+    # the passage you cited is in none of the sources" can fix R7; a model
+    # that is told nothing repeats itself, and the same window is worth
+    # asking again only if the second ask differs from the first.
+    failed: list = []
     for label, answer in pairs:
         row = by_label.get(str(label).strip())
         if row is None or not isinstance(answer, dict):
@@ -394,12 +400,25 @@ def merge_field(rows: list, sources: list, slot, reply: Optional[dict]) -> dict:
         quote = answer.get("quote")
         if not (isinstance(quote, str)
                 and any(quote_in(s.text or "", quote) for s in sources)):
+            if row.claim.get(f"{slot.name}_state") != READ:
+                row.claim[f"{slot.name}_state"] = UNBACKED
+            failed.append({"row": row.label, "reason": (
+                "Dein \"quote\" steht in keiner der gezeigten Quellen. "
+                "Kopiere eine Passage Zeichen für Zeichen aus \"sources\" "
+                "oder aus dem \"quote\" der Zeile selbst.")})
             unquoted += 1
             continue
         wording = answer.get("value_raw")
         wording = wording.strip() if isinstance(wording, str) and wording.strip() \
             else None
         if not answer_in_quote(slot, given, wording, quote):
+            if row.claim.get(f"{slot.name}_state") != READ:
+                row.claim[f"{slot.name}_state"] = UNBACKED
+            shown_answer = wording or given
+            failed.append({"row": row.label, "reason": (
+                f"Dein \"quote\" enthält {shown_answer!r} nicht. Zitier die "
+                f"Stelle, an der es wirklich steht, oder antworte mit "
+                f"\"{UNSTATED}\".")})
             unbacked += 1
             continue
         row.claim[f"{slot.name}_state"] = READ
@@ -411,8 +430,8 @@ def merge_field(rows: list, sources: list, slot, reply: Optional[dict]) -> dict:
         # sentence for both is citing the wrong one for at least one of them.
         row.claim[f"{slot.name}_quote"] = quote
         filled += 1
-    return {"filled": filled, "unquoted": unquoted,
-            "unbacked": unbacked, "unstated": unstated}
+    return {"filled": filled, "unquoted": unquoted, "unbacked": unbacked,
+            "unstated": unstated, "failed": failed}
 
 
 def open_rows(rows: list, slot) -> list:
@@ -424,7 +443,8 @@ def open_rows(rows: list, slot) -> list:
     windows run out, and not before.
     """
     return [row for row in rows
-            if row.claim.get(f"{slot.name}_state") in (None, SAID_UNSTATED)]
+            if row.claim.get(f"{slot.name}_state") in (None, SAID_UNSTATED,
+                                                       UNBACKED)]
 
 
 def window_sources(pool: list, size: int, overlap: int):

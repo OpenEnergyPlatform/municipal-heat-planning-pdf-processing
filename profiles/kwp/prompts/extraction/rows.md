@@ -1,5 +1,5 @@
 ---
-temperature: 0.1
+temperature: 0
 max_tokens: 6144
 ---
 Du findest Zahlen in deutschen kommunalen Wärmeplänen für einen Knowledge Graph.
