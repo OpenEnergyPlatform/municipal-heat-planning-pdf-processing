@@ -273,13 +273,9 @@
               "Gesamt",
               "alle Sektoren",
               "insgesamt"
-            ],
-            "unknown": [
-              "nicht erkennbar",
-              "unbekannt"
             ]
           },
-          "question": "Welcher Verbrauchssektor? Die Bezeichnung steht in der Zeilenbeschriftung, im Spaltenkopf oder in der Blocküberschrift: \"Wohnen\" meint die Klasse Private Haushalte, \"GHD/Kommune\" und \"Gewerbe\" die Klasse GHD. Eine Zeile über alle Sektoren ist \"out:total\", ein Sektor, den die Quelle ausdrücklich als unbekannt führt, ist \"unknown\"."
+          "question": "Welcher Verbrauchssektor? Die Bezeichnung steht in der Zeilenbeschriftung, im Spaltenkopf oder in der Blocküberschrift: \"Wohnen\" meint die Klasse Private Haushalte, \"GHD/Kommune\" und \"Gewerbe\" die Klasse GHD. Eine Zeile über alle Sektoren ist \"out:total\". Nennt die Passage den Sektor gar nicht, ist das keine Klasse, sondern eine fehlende Angabe: antworte dann mit \"out:unstated\"."
         },
         "year": {
           "type": "int",
@@ -307,9 +303,6 @@
               "Bilanzjahr",
               "Status quo",
               "Bestandsanalyse"
-            ],
-            "unknown": [
-              "nicht erkennbar"
             ]
           },
           "required": false,
@@ -332,9 +325,6 @@
               "Baublock",
               "Wärmenetzgebiet",
               "Ortsteil"
-            ],
-            "unknown": [
-              "nicht erkennbar"
             ]
           },
           "required": false,
@@ -715,13 +705,9 @@
               "Gesamt",
               "alle Sektoren",
               "insgesamt"
-            ],
-            "unknown": [
-              "nicht erkennbar",
-              "unbekannt"
             ]
           },
-          "question": "Welcher Verbrauchssektor? Die Bezeichnung steht in der Zeilenbeschriftung, im Spaltenkopf oder in der Blocküberschrift: \"Wohnen\" meint die Klasse Private Haushalte, \"GHD/Kommune\" und \"Gewerbe\" die Klasse GHD. Eine Zeile über alle Sektoren ist \"out:total\", ein Sektor, den die Quelle ausdrücklich als unbekannt führt, ist \"unknown\"."
+          "question": "Welcher Verbrauchssektor? Die Bezeichnung steht in der Zeilenbeschriftung, im Spaltenkopf oder in der Blocküberschrift: \"Wohnen\" meint die Klasse Private Haushalte, \"GHD/Kommune\" und \"Gewerbe\" die Klasse GHD. Eine Zeile über alle Sektoren ist \"out:total\". Nennt die Passage den Sektor gar nicht, ist das keine Klasse, sondern eine fehlende Angabe: antworte dann mit \"out:unstated\"."
         },
         "year": {
           "type": "int",
@@ -749,9 +735,6 @@
               "Bilanzjahr",
               "Status quo",
               "Bestandsanalyse"
-            ],
-            "unknown": [
-              "nicht erkennbar"
             ]
           },
           "required": false,
@@ -774,9 +757,6 @@
               "Baublock",
               "Wärmenetzgebiet",
               "Ortsteil"
-            ],
-            "unknown": [
-              "nicht erkennbar"
             ]
           },
           "required": false,
