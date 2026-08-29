@@ -492,3 +492,92 @@ def test_a_wording_offered_with_not_stated_is_kept_for_the_vocabulary_review(pro
         assert f"{slot.name}_quote" not in claim, "and it is not evidence"
         assert claim[f"{slot.name}_seen"].startswith("CCS/CCU")
         return
+
+
+# ---------------------------------------------------------------------------
+# The parameter is a coordinate, not a property of the plan
+# ---------------------------------------------------------------------------
+
+def _document_batch(sources=1):
+    """A batch as a document-level plan produces one: no parameter fixed."""
+    items = [WorkItem(7, None, Source("table", n, "| Erdgas | 42.005 | MWh/a |",
+                                      {"document_id": 7, "page": n}))
+             for n in range(sources)]
+    return group_items(items, max_sources=runner.BATCH_SOURCES)[0]
+
+
+def _fieldwise(monkeypatch, spec, rows_reply, answers):
+    """A field-wise harvester whose two model calls are the given stubs.
+
+    `answers` is called with the slot and returns that field's reply, so a
+    test says what the model answers per coordinate and nothing else.
+    """
+    asked = []
+    monkeypatch.setattr(runner, "make_harvester",
+                        lambda *a, **kw: (lambda batch, prior=None: rows_reply))
+
+    def make_asker(image_root=None):
+        def ask(shown, rows, slot, corrections=None, document_id=None):
+            asked.append(slot.name)
+            return answers(slot, rows)
+        return ask
+
+    monkeypatch.setattr(runner, "make_field_asker", make_asker)
+    return runner.make_fieldwise_harvester(spec=spec), asked
+
+
+def test_which_quantity_a_number_is_gets_asked_before_its_axes(monkeypatch):
+    """The plan used to fix the parameter, so a table holding a consumption and
+    an emission was retrieved, read and paid for twice — 804 planned sources
+    against 234 owners. Asked instead of assumed, it is a coordinate like any
+    other and decides which coordinates the row even has."""
+    spec = load_spec(json.loads(
+        (PROFILES / "kwp" / "extraction_spec.json").read_text(encoding="utf-8")))
+    consumption = spec.parameters[0]
+    rows_reply = {"tuples": [{"source": "Q1", "value": 42005, "unit": "MWh/a",
+                              "unit_raw": "MWh/a",
+                              "quote": "| Erdgas | 42.005 | MWh/a |"}],
+                  "status": "complete", "need_more": []}
+
+    def answers(slot, rows):
+        if slot.name == "parameter":
+            # The wording the passage really carries is the unit, and the
+            # class it stands for is the quantity. That is what value_raw is
+            # for: a plan hardly ever prints the word "Endenergieverbrauch"
+            # next to the number, it prints MWh/a.
+            return {"answers": {"R1": {
+                "value": consumption.label, "value_raw": "MWh/a",
+                "quote": "| Erdgas | 42.005 | MWh/a |"}}}
+        return {"answers": {}}
+
+    harvest, asked = _fieldwise(monkeypatch, spec, rows_reply, answers)
+    reply = harvest(_document_batch())
+
+    assert asked[0] == "parameter", "the parameter gates the rest"
+    axes = {s.name for s in fields.axis_slots(consumption)}
+    assert axes <= set(asked[1:]), "then the axes of the parameter it turned out to be"
+    assert reply["tuples"][0]["parameter"] == consumption.uri, (
+        "the label the model picked is stored as the class it stands for")
+
+
+def test_a_row_whose_quantity_stayed_unread_is_not_given_a_guessed_axis(
+        monkeypatch):
+    """Refusing it later is the point: a row with no parameter has no
+    coordinates to fill, and filling the first parameter's would be a guess
+    written down as a reading."""
+    spec = load_spec(json.loads(
+        (PROFILES / "kwp" / "extraction_spec.json").read_text(encoding="utf-8")))
+    rows_reply = {"tuples": [{"source": "Q1", "value": 42005, "unit": "MWh/a",
+                              "unit_raw": "MWh/a",
+                              "quote": "| Erdgas | 42.005 | MWh/a |"}],
+                  "status": "complete", "need_more": []}
+
+    harvest, asked = _fieldwise(
+        monkeypatch, spec, rows_reply,
+        lambda slot, rows: {"answers": {"R1": {"value": fields.UNSTATED}}})
+    reply = harvest(_document_batch())
+
+    assert asked == ["parameter"], "no axis is asked for a row with no quantity"
+    row = reply["tuples"][0]
+    assert row["parameter_state"] in (fields.EXHAUSTED, fields.SAID_UNSTATED)
+    assert not any(k.endswith("_state") and k != "parameter_state" for k in row)

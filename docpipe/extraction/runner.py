@@ -35,6 +35,7 @@ from docpipe.llm_preflight import assert_serving
 from docpipe.profile import add_profile_argument, resolve_profile
 
 from . import fields
+from . import trace
 from .pipeline import (Source, WorkItem, build_sweeps,
                        cell_index as pipeline_cell_index, fold_batch,
                        follow_up, group_items, harvest_document, merge_field,
@@ -109,6 +110,14 @@ PROMPT_IDS = (HARVEST_PROMPT_ID, QUERIES_PROMPT_ID, ANCHORS_PROMPT_ID,
 # reachable because it is what every measured number so far was taken with,
 # and a comparison needs both.
 FIELDWISE = os.environ.get("EXTRACT_FIELDWISE", "1") != "0"
+# The anchors.json key of the "which quantity is this" question. It belongs to
+# no single parameter, so it cannot be keyed by one.
+PARAMETER_ANCHOR = "#parameter"
+# How many prose sections a document is planned from. Tables and figures are
+# not capped. Measured over 65 documents: 66% of all values sit in the first
+# 50 ranks of an anchor-only ranking, 80% of them are in a table or a figure
+# and are taken whole regardless of rank.
+PROSE_TOP = int(os.environ.get("EXTRACT_PROSE_TOP", "50"))
 # Where the run's concurrency actually lives once the values are found. A
 # batch is one row request and then one sweep per axis, and the sweeps are
 # independent, so 128 batches of seven axes are nine hundred sweeps that can
@@ -217,12 +226,18 @@ def make_content_fetcher() -> Callable:
 
 
 def make_retrieve(conn: sqlite3.Connection, index, id_to_pos: dict,
-                  cache_conn, content_fetcher: Optional[Callable] = None) -> Callable:
-    """(probes, document_id, exclude) -> one Source list per probe.
+                  cache_conn, content_fetcher: Optional[Callable] = None,
+                  limit: int = 0) -> Callable:
+    """(probes, document_id, exclude) -> ONE ranked Source list.
 
-    Takes every probe of a sweep round at once. One sub-index for the document
-    instead of one per probe, and one FAISS search over a query matrix instead
-    of sixty-four searches.
+    Takes every probe at once. One sub-index for the document instead of one
+    per probe, one FAISS search over a query matrix, and one ranking out of
+    it: the best score any probe gave an owner decides where it sits.
+
+    It used to return a list per probe, which the plan then concatenated. That
+    is not a ranking, it is a concatenation of rankings, and it put probe 17's
+    best match behind everything probes 1 to 16 had surfaced. Measured over 65
+    documents and 15,082 values: median rank 77 that way, 26 this way.
     """
     from docpipe.inference import db as inference_db
     from docpipe.inference import faiss_store, query_cache
@@ -257,12 +272,57 @@ def make_retrieve(conn: sqlite3.Connection, index, id_to_pos: dict,
             search[:] = [key, faiss_store.search_prepared(
                 document[1], [embed(p) for p in probes])]
         scores, positions = search[1]
-        answers = faiss_store.rank_prepared(
-            conn, document[1], scores, positions, TOP_K,
-            content_fetcher=content_fetcher, exclude=exclude)
-        return [[_source_of(hit) for hit in hits] for hits in answers]
+        hits = faiss_store.fuse_prepared(
+            conn, document[1], scores, positions, limit,
+            content_fetcher=content_fetcher, exclude=exclude, probes=probes)
+        return [_source_of(hit) for hit in hits]
 
     return retrieve
+
+
+def make_structure(conn: sqlite3.Connection,
+                   content_fetcher: Optional[Callable] = None) -> Callable:
+    """(document_id) -> every table and every figure of the document.
+
+    The floor of the plan, and it is structural rather than lexical on
+    purpose. The old floor searched the stored text with LIKE for the
+    vocabulary's own words, which is a worse version of the retrieval above
+    it — measured over the corpus it never had anything left to add, because
+    the sweep above had already walked the whole document.
+
+    This one adds what retrieval is bad at and structure is certain about:
+    12,094 of 15,082 values came from a table or a figure, and whether
+    something is a table is not a question a similarity search should be
+    asked. There are about 110 per document, which is affordable exactly
+    because the plan is no longer built once per parameter.
+    """
+    from docpipe.inference import db as inference_db
+
+    fetch = content_fetcher or inference_db.fetch_owner_content
+
+    def structure(document_id: int) -> list:
+        out: list = []
+        for kind, sql in (
+                ("table", "SELECT t.id FROM \"Tables\" t "
+                          "JOIN Sections s ON s.id = t.section "
+                          "WHERE s.document = ? ORDER BY t.id"),
+                ("figure", "SELECT i.id FROM Images i "
+                           "JOIN Sections s ON s.id = i.section "
+                           "WHERE s.document = ? ORDER BY i.id")):
+            try:
+                ids = [int(r[0]) for r in conn.execute(sql, (document_id,))]
+            except Exception as exc:
+                log.warning("   %ss of document %s unreadable: %s", kind,
+                            document_id, exc)
+                continue
+            for owner_id in ids:
+                content = fetch(conn, kind, owner_id)
+                if content is None:
+                    continue
+                out.append(_source_of({"score": None, **content}))
+        return out
+
+    return structure
 
 
 def make_rest_of_document(db_path: Path) -> Callable:
@@ -344,13 +404,12 @@ def make_more_sources(db_path: Path, index, id_to_pos: dict,
         found: list = []
         taken = set(exclude)
         try:
-            for sources in retrieve(list(queries)[:4], document_id, taken):
-                for source in sources:
-                    key = (source.owner_kind, source.owner_id)
-                    if key in taken:
-                        continue
-                    taken.add(key)
-                    found.append(source)
+            for source in retrieve(list(queries)[:4], document_id, taken):
+                key = (source.owner_kind, source.owner_id)
+                if key in taken:
+                    continue
+                taken.add(key)
+                found.append(source)
         except Exception as exc:
             log.warning("   more-passages for document %s failed: %s",
                         document_id, exc)
@@ -391,12 +450,45 @@ def fill_dynamic_axes(spec: Spec, vocabularies: Optional[dict]) -> Spec:
     return Spec(parameters=parameters) if changed else spec
 
 
+# Bumped when the SET of anchor targets changes, not just their wording: an
+# anchors.json written for three parameters must not be read back as if it
+# also held the twenty-two question anchors this version asks for.
+ANCHOR_SCHEMA = "per-question-1"
+
+
 def anchors_key(spec_sha: str) -> str:
     """What an anchor set depends on: the spec, the anchor prompt, the model."""
     import hashlib
     versions = prompts.versions((ANCHORS_PROMPT_ID,))
-    raw = f"{spec_sha}|{versions.get(ANCHORS_PROMPT_ID)}|{LLM_MODEL}"
+    raw = (f"{spec_sha}|{versions.get(ANCHORS_PROMPT_ID)}|{LLM_MODEL}"
+           f"|{ANCHOR_SCHEMA}")
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16]
+
+
+def anchor_key(parameter_uri: str, slot_name: Optional[str] = None) -> str:
+    """The anchors.json key of one question: the value's, or one axis's."""
+    return parameter_uri if not slot_name else f"{parameter_uri}#{slot_name}"
+
+
+def anchor_targets(spec: Spec) -> list:
+    """(key, label, description, question) for every question the run asks.
+
+    One anchor set per QUESTION, not per parameter. An anchor is a sentence as
+    the document would write it, and the sentence that states a value and the
+    sentence that states its reference year are not the same sentence. Six
+    anchors written from "Endenergieverbrauch" find tables of consumption and
+    say nothing about where a bilanz year is printed, which is why the field
+    sweep searched with the raw question and found captions by accident.
+    """
+    out: list = [(PARAMETER_ANCHOR, "Kennzahl", "", spec.parameter_question)]
+    for parameter in spec.parameters:
+        out.append((anchor_key(parameter.uri), parameter.label,
+                    parameter.description, None))
+        for slot in fields.axis_slots(parameter):
+            out.append((anchor_key(parameter.uri, slot.name),
+                        f"{parameter.label} / {slot.name}",
+                        parameter.description, slot.question))
+    return [t for t in out if t[0] != PARAMETER_ANCHOR or t[3]]
 
 
 def load_anchors(path: Path, key: str) -> dict:
@@ -438,7 +530,7 @@ def make_anchors(spec: Spec, client=None, *, store: Optional[Path] = None,
     # saying which set had found it. The file carries the reproducibility;
     # the temperature stays where it is.
     out: dict = dict(load_anchors(store, key)) if store is not None else {}
-    todo = [p for p in spec.parameters if not out.get(p.uri)]
+    todo = [t for t in anchor_targets(spec) if not out.get(t[0])]
     if store is not None and out:
         log.info("extraction: %d anchor set(s) reused from %s, %d to write",
                  len(out), store, len(todo))
@@ -446,10 +538,15 @@ def make_anchors(spec: Spec, client=None, *, store: Optional[Path] = None,
         return out
     client = client or _client()
 
-    def one(parameter):
-        payload = json.dumps({"label": parameter.label,
-                              "description": parameter.description},
-                             ensure_ascii=False, indent=2)
+    def one(target):
+        anchor_id, label, description, question = target
+        body = {"label": label, "description": description}
+        if question:
+            # The anchors must read like the ANSWER to this question, not like
+            # the topic it belongs to. Without it every axis of a parameter
+            # would get the same six sentences about the parameter.
+            body["question"] = question
+        payload = json.dumps(body, ensure_ascii=False, indent=2)
         for attempt in range(1, MAX_RETRIES + 1):
             try:
                 reply = client.chat.completions.create(
@@ -464,16 +561,14 @@ def make_anchors(spec: Spec, client=None, *, store: Optional[Path] = None,
                 anchors = [a.strip() for a in (parsed or {}).get("anchors", ())
                            if isinstance(a, str) and len(a.strip()) > 20]
                 if anchors:
-                    return parameter.uri, anchors
+                    return anchor_id, anchors
             except Exception as exc:
                 log.warning("anchors %s attempt %d failed: %s",
-                            parameter.uri, attempt, exc)
+                            anchor_id, attempt, exc)
             if attempt < MAX_RETRIES:
                 time.sleep(min(2 * attempt, 6))
-        # No anchors is not fatal: the templates alone are what this stage
-        # searched with until now.
-        log.warning("anchors %s: none generated, templates only", parameter.uri)
-        return parameter.uri, []
+        log.warning("anchors %s: none generated", anchor_id)
+        return anchor_id, []
 
     from concurrent.futures import ThreadPoolExecutor
     with ThreadPoolExecutor(max_workers=min(8, len(todo) or 1)) as pool:
@@ -481,7 +576,7 @@ def make_anchors(spec: Spec, client=None, *, store: Optional[Path] = None,
             out[uri] = anchors
     if store is not None:
         save_anchors(store, key, out)
-    log.info("extraction: %d anchor(s) over %d parameter(s)",
+    log.info("extraction: %d anchor(s) over %d question(s)",
              sum(len(v) for v in out.values()), len(out))
     for uri, anchors in out.items():
         for anchor in anchors:
@@ -959,8 +1054,35 @@ def _prior_payload(prior: list) -> list:
     return out
 
 
-def _batch_payload(batch, prior: list) -> dict:
-    """The request body: one parameter, several labelled sources, what we have."""
+def _quantities_payload(spec) -> list:
+    """What counts as a value, for a batch that was not planned per parameter.
+
+    The definitions and the accepted units, and no axes: this request finds
+    numbers and says where it read them. Which quantity each number is, is a
+    coordinate and is asked for on its own, with its own quote.
+    """
+    out = []
+    for parameter in spec.parameters:
+        entry = {"uri": parameter.uri, "label": parameter.label,
+                 "description": parameter.description,
+                 "value_type": parameter.value_type}
+        if parameter.is_numeric:
+            entry["units_accepted"] = sorted(parameter.units_accepted)
+        elif parameter.vocabulary:
+            entry["value_classes"] = {labels[0]: list(labels[1:])
+                                      for labels in parameter.vocabulary.values()}
+        out.append(entry)
+    return out
+
+
+def _batch_payload(batch, prior: list, spec=None) -> dict:
+    """The request body: labelled sources, the target, and what we have.
+
+    The target is one parameter when the plan fixed one, and the list of
+    quantities when it did not. The second is the document-level plan: a
+    passage is read once and every value in it is found in that one reading,
+    instead of once per parameter with two thirds of the answers empty.
+    """
     sources = []
     for index, item in enumerate(batch.items):
         source = item.source
@@ -968,8 +1090,11 @@ def _batch_payload(batch, prior: list) -> dict:
                         "title": source.provenance.get("title"),
                         "section": source.provenance.get("section_title"),
                         "text": source.text})
-    payload = {"parameter": _parameter_payload(batch.parameter),
-               "sources": sources}
+    payload: dict = {"sources": sources}
+    if batch.parameter is not None:
+        payload = {"parameter": _parameter_payload(batch.parameter), **payload}
+    elif spec is not None:
+        payload = {"quantities": _quantities_payload(spec), **payload}
     if prior:
         payload["prior"] = _prior_payload(prior)
     return payload
@@ -1042,7 +1167,8 @@ def _holes(batch, rescued: list) -> list:
 
 
 def make_harvester(image_root: Optional[Path] = None,
-                   prompt_id: str = HARVEST_PROMPT_ID) -> Callable:
+                   prompt_id: str = HARVEST_PROMPT_ID,
+                   spec=None) -> Callable:
     """The request loop, for either contract.
 
     The whole-tuple prompt and the field-wise value prompt differ in what they
@@ -1060,7 +1186,8 @@ def make_harvester(image_root: Optional[Path] = None,
     from docpipe.inference import code_exec
 
     def harvest(batch, prior: Optional[list] = None) -> dict:
-        payload = json.dumps(_batch_payload(batch, prior or []),
+        started = time.time()
+        payload = json.dumps(_batch_payload(batch, prior or [], spec),
                              ensure_ascii=False, indent=2)
         compute: list = []
         # The crops ride along for tables and figures: the transcription is a
@@ -1158,16 +1285,38 @@ def make_harvester(image_root: Optional[Path] = None,
                         for t in answer["tuples"]:
                             if isinstance(t, dict):
                                 t.setdefault("compute", compute)
+                    usage = getattr(response, "usage", None)
+                    trace.event("rows", batch.document_id, prompt=prompt_id,
+                                attempt=attempt, rows=len(answer["tuples"]),
+                                status=answer.get("status"),
+                                sources=[[it.source.owner_kind,
+                                          it.source.owner_id]
+                                         for it in batch.items],
+                                ranks=[it.rank for it in batch.items],
+                                origins=[it.origin for it in batch.items],
+                                prompt_tokens=getattr(usage, "prompt_tokens",
+                                                      None),
+                                completion_tokens=getattr(
+                                    usage, "completion_tokens", None),
+                                ms=int((time.time() - started) * 1000))
                     return answer
                 log.warning("   harvest %s/%s+%d attempt %d: reply carried no "
                             "'tuples' list%s", first.owner_kind,
                             first.owner_id, len(batch.items) - 1, attempt,
                             _unparsable(reply))
+                trace.event("error", batch.document_id, where=prompt_id,
+                            kind="no_tuples", attempt=attempt,
+                            owner=[first.owner_kind, first.owner_id],
+                            finish=getattr(reply, "finish_reason", None))
             except Exception as exc:
                 log.warning("   harvest %s/%s+%d attempt %d failed: %s",
                             first.owner_kind, first.owner_id,
                             len(batch.items) - 1, attempt, exc)
                 status = getattr(exc, "status_code", None)
+                trace.event("error", batch.document_id, where=prompt_id,
+                            kind="exception", attempt=attempt,
+                            status=status, detail=str(exc)[:300],
+                            owner=[first.owner_kind, first.owner_id])
                 # No HTTP status at all is a transport failure: the server is
                 # not there. That is the case a resume must never mistake for
                 # a harvested document.
@@ -1186,6 +1335,11 @@ def make_harvester(image_root: Optional[Path] = None,
         # that answered nothing are the same row in the output and must not
         # be the same thing to the resume: an unreachable server would
         # otherwise stamp every remaining document as harvested.
+        trace.event("error", batch.document_id, where=prompt_id,
+                    kind="gave_up", why=why[0],
+                    sources=[[it.source.owner_kind, it.source.owner_id]
+                             for it in batch.items],
+                    ms=int((time.time() - started) * 1000))
         return {"tuples": [{"_harvest_failed": True, "_why": why[0],
                             "source": batch.label(i)}
                            for i in range(len(batch.items))],
@@ -1231,8 +1385,11 @@ def _field_payload(shown: list, rows: list, slot,
     if corrections:
         # What was wrong with the last answer, per row. A verification failure
         # is information the model can act on, and withholding it turns three
-        # attempts into the same wrong answer three times.
-        out["corrections"] = corrections
+        # attempts into the same wrong answer three times. Only the row and
+        # the sentence go over the wire: the rest of the entry is for the
+        # trace, and the model pays for every token it is shown.
+        out["corrections"] = [{"row": c.get("row"), "reason": c.get("reason")}
+                              for c in corrections]
     return out
 
 
@@ -1251,7 +1408,8 @@ def make_field_asker(image_root: Optional[Path] = None) -> Callable:
     max_tokens = int(prompt.meta.get("max_tokens", 4096))
 
     def ask(shown: list, rows: list, slot,
-            corrections: Optional[list] = None) -> Optional[dict]:
+            corrections: Optional[list] = None,
+            document_id: Optional[int] = None) -> Optional[dict]:
         payload = json.dumps(_field_payload(shown, rows, slot, corrections),
                              ensure_ascii=False, indent=2)
         # The crops ride along, as they do for the value request. A table's
@@ -1294,6 +1452,9 @@ def make_field_asker(image_root: Optional[Path] = None) -> Callable:
                     return answer
                 log.warning("   field %s attempt %d: unreadable reply%s",
                             slot.name, attempt, _unparsable(reply))
+                trace.event("error", document_id, where="field",
+                            kind="unparsable", slot=slot.name, attempt=attempt,
+                            finish=getattr(reply, "finish_reason", None))
                 conversation.append({"role": "assistant",
                                      "content": reply.message.content or ""})
                 conversation.append({"role": "user", "content": (
@@ -1307,6 +1468,9 @@ def make_field_asker(image_root: Optional[Path] = None) -> Callable:
                 log.warning("   field %s attempt %d failed: %s",
                             slot.name, attempt, exc)
                 status = getattr(exc, "status_code", None)
+                trace.event("error", document_id, where="field",
+                            kind="exception", slot=slot.name, attempt=attempt,
+                            status=status, detail=str(exc)[:300])
                 if isinstance(status, int) and 400 <= status < 500 and status != 429:
                     break
             if attempt < MAX_RETRIES:
@@ -1318,7 +1482,8 @@ def make_field_asker(image_root: Optional[Path] = None) -> Callable:
 
 def make_fieldwise_harvester(image_root: Optional[Path] = None,
                              more_sources: Optional[Callable] = None,
-                             rest_of_document: Optional[Callable] = None
+                             rest_of_document: Optional[Callable] = None,
+                             spec=None, anchors: Optional[dict] = None
                              ) -> Callable:
     """A harvest(batch, prior) that asks per field and answers like the old one.
 
@@ -1328,12 +1493,13 @@ def make_fieldwise_harvester(image_root: Optional[Path] = None,
     """
     from concurrent.futures import ThreadPoolExecutor, as_completed
 
-    find_rows = make_harvester(image_root, prompt_id=ROWS_PROMPT_ID)
+    find_rows = make_harvester(image_root, prompt_id=ROWS_PROMPT_ID, spec=spec)
     ask = make_field_asker(image_root)
+    anchors = anchors or {}
     pool = ThreadPoolExecutor(max_workers=FIELD_PARALLEL,
                               thread_name_prefix="field")
 
-    def sweep_field(batch, rows: list, slot) -> dict:
+    def sweep_field(batch, rows: list, slot, anchor_id: str = "") -> dict:
         """Short windows over the document until this coordinate is read.
 
         The value's own passages first, because a carrier usually is in the
@@ -1357,7 +1523,7 @@ def make_fieldwise_harvester(image_root: Optional[Path] = None,
         totals = {"filled": 0, "unquoted": 0, "unbacked": 0, "unstated": 0,
                   "retried": 0}
         seen = {(i.source.owner_kind, i.source.owner_id) for i in batch.items}
-        state = {"asked": 0, "answer": None}
+        state = {"asked": 0, "answer": None, "stage": "own"}
 
         def run(windows) -> bool:
             """Ask over these windows. False when the budget ran out.
@@ -1379,7 +1545,9 @@ def make_fieldwise_harvester(image_root: Optional[Path] = None,
                     if state["asked"] >= FIELD_MAX_WINDOWS:
                         return False
                     state["asked"] += 1
-                    state["answer"] = ask(shown, todo, slot, corrections)
+                    started = time.time()
+                    state["answer"] = ask(shown, todo, slot, corrections,
+                                          batch.document_id)
                     # Checked against the window AND the passages the rows
                     # carry. A row's own quote is shown to the model in the
                     # rows list, so citing it is legitimate — and from the
@@ -1391,6 +1559,27 @@ def make_fieldwise_harvester(image_root: Optional[Path] = None,
                     for key in ("filled", "unquoted", "unbacked", "unstated"):
                         totals[key] += counts[key]
                     totals["retried"] += 1 if attempt else 0
+                    # The window this coordinate was asked in, what was shown,
+                    # and what came back. Every knob this stage has cuts
+                    # through this distribution, and none of them could be set
+                    # from a log line that only counted the failures.
+                    trace.event("field", batch.document_id, slot=slot.name,
+                                anchor=anchor_id, window=state["asked"],
+                                stage=state["stage"], attempt=attempt,
+                                parameter=(batch.parameter.uri
+                                           if batch.parameter else None),
+                                open=len(todo), reply=state["answer"] is not None,
+                                shown=[[x.owner_kind, x.owner_id]
+                                       for x in shown],
+                                ms=int((time.time() - started) * 1000),
+                                **{k: counts[k] for k in
+                                   ("filled", "unquoted", "unbacked",
+                                    "unstated")})
+                    for bad in counts["failed"]:
+                        trace.event("drop", batch.document_id, slot=slot.name,
+                                    window=state["asked"], attempt=attempt,
+                                    row=bad.get("row"),
+                                    why=bad.get("why") or "unbacked")
                     corrections = counts["failed"]
                     if not corrections:
                         break
@@ -1402,13 +1591,18 @@ def make_fieldwise_harvester(image_root: Optional[Path] = None,
             return True
 
         combed = run([batch.sources])
+        state["stage"] = "retrieval"
         for _ in range(FIELD_ROUNDS):
             if not combed or not open_rows(rows, slot) or more_sources is None:
                 break
-            # Still open, so look further out. The probe is the axis's own
-            # question — the sentence that would STATE this coordinate, which
-            # is what a similarity search can match on.
-            probes = [slot.question] if slot.question else []
+            # Still open, so look further out. The probes are the anchors
+            # written for THIS question: sentences as a plan would print the
+            # answer. The question itself was what this searched with before,
+            # and a question is the one sentence that never stands in a
+            # document.
+            probes = list(anchors.get(anchor_id) or ())
+            if not probes and slot.question:
+                probes = [slot.question]
             probes += [q for q in (state["answer"] or {}).get("need_more") or []
                        if isinstance(q, str) and len(q) > 20]
             fresh = more_sources(batch.document_id, probes, set(seen)) or []
@@ -1423,15 +1617,22 @@ def make_fieldwise_harvester(image_root: Optional[Path] = None,
             # open. Read the rest of the plan rather than call it unstated on
             # the strength of what a ranking happened to surface.
             rest = rest_of_document(batch.document_id, set(seen)) or []
+            state["stage"] = "rest"
             combed = run(window_sources(rest, FIELD_WINDOW, FIELD_OVERLAP))
 
+        stranded = 0
         if not combed:
             for row in open_rows(rows, slot):
                 # Still open with the document unread to the end. Not the same
                 # finding as a document that does not say it, and not recorded
                 # as one.
                 row.claim[f"{slot.name}_state"] = EXHAUSTED
+                stranded += 1
         totals["asked"] = state["asked"]
+        totals["exhausted"] = stranded
+        trace.event("sweep", batch.document_id, slot=slot.name,
+                    anchor=anchor_id, windows=state["asked"],
+                    rows=len(rows), combed=combed, **totals)
         return totals
 
     def harvest(batch, prior: Optional[list] = None) -> dict:
@@ -1442,18 +1643,58 @@ def make_fieldwise_harvester(image_root: Optional[Path] = None,
             # Both are already stated in the reply the row request returned,
             # sentinels included, so it is passed through untouched.
             return reply
-        slots = fields.axis_slots(batch.parameter)
         counts: dict = {}
-        futures = {pool.submit(sweep_field, batch, rows, slot): slot
-                   for slot in slots}
+        jobs: list = []          # (rows, slot, anchor id)
+        slots_of: dict = {}      # row label -> the slots that apply to it
+
+        if batch.parameter is None:
+            # Which quantity each value is comes first, because it decides
+            # which coordinates the row even has. One request, one quote, and
+            # a row it cannot answer for gets no axes rather than the axes of
+            # a guess.
+            slot = fields.parameter_slot(spec)
+            counts[slot.name] = sweep_field(batch, rows, slot,
+                                            PARAMETER_ANCHOR)
+            uri_of = {opt.label: opt.uri for opt in slot.options}
+            grouped: dict = {}
+            for row in rows:
+                uri = uri_of.get(str(row.claim.get("parameter") or "").strip())
+                if uri is None:
+                    slots_of[row.label] = [slot]
+                    continue
+                row.claim["parameter"] = uri
+                grouped.setdefault(uri, []).append(row)
+            for uri, group in grouped.items():
+                axes = fields.axis_slots(spec.by_uri[uri])
+                for row in group:
+                    slots_of[row.label] = [slot] + axes
+                for axis in axes:
+                    jobs.append((group, axis, anchor_key(uri, axis.name)))
+        else:
+            axes = fields.axis_slots(batch.parameter)
+            for row in rows:
+                slots_of[row.label] = axes
+            for axis in axes:
+                jobs.append((rows, axis, anchor_key(batch.parameter.uri,
+                                                    axis.name)))
+
+        futures = {pool.submit(sweep_field, batch, group, slot, anchor): slot
+                   for group, slot, anchor in jobs}
         for future in as_completed(futures):
             slot = futures[future]
             try:
-                counts[slot.name] = future.result()
+                got = future.result()
             except Exception as exc:            # pragma: no cover - defensive
                 log.warning("   field %s raised: %s", slot.name, exc)
-        blank = mark_unanswered(rows, slots)
-        tally = {k: sum(c[k] for c in counts.values())
+                continue
+            into = counts.setdefault(slot.name, dict(got))
+            if into is not got:
+                for key, value in got.items():
+                    into[key] = into.get(key, 0) + value
+        blank = 0
+        for row in rows:
+            blank += mark_unanswered([row], slots_of.get(row.label, []))
+        tally = {k: sum(c.get(k, 0) for c in counts.values())
                  for k in ("filled", "unstated", "unquoted", "unbacked",
                            "asked", "retried")}
         if tally["unquoted"] or tally["unbacked"] or blank:
@@ -1736,8 +1977,10 @@ def run_document(document_id: int, name: str, out_dir: Path, spec: Spec,
                               retrieve=deps["retrieve"],
                               harvest=deps["harvest"],
                               locate=deps.get("locate"),
-                              candidates=deps.get("candidates"),
-                              max_rounds=MAX_ROUNDS)
+                              structure=deps.get("structure"),
+                              more_sources=deps.get("more_sources"),
+                              extra_probes=deps.get("anchors"),
+                              prose_top=PROSE_TOP)
     finish_document(report, name, out_dir, spec_sha)
     return True
 
@@ -2100,8 +2343,9 @@ def main(argv: Optional[list] = None) -> int:
     # is not in the value's own passage is looked for further out in the same
     # document. OpenAI client is thread-safe.
     harvest = (make_fieldwise_harvester(args.image_root, more_sources,
-                                        make_rest_of_document(args.db))
-               if FIELDWISE else make_harvester(args.image_root))
+                                        make_rest_of_document(args.db),
+                                        spec=spec, anchors=anchors)
+               if FIELDWISE else make_harvester(args.image_root, spec=spec))
 
     def plan(document_id: int, filename: str) -> tuple:
         # Both connections per thread, cache included. Sharing one across the
@@ -2129,14 +2373,24 @@ def main(argv: Optional[list] = None) -> int:
                                        for k, v in sorted(lists.items())))
             items, report = plan_document(
                 document_id, doc_spec, templates, extra_probes=anchors,
-                retrieve=make_retrieve(conn, index, id_to_pos, cache_conn, fetch),
-                candidates=make_candidates(conn, fetch), max_rounds=MAX_ROUNDS)
+                retrieve=make_retrieve(conn, index, id_to_pos, cache_conn,
+                                       fetch),
+                structure=make_structure(conn, fetch), prose_top=PROSE_TOP)
+            for item in items:
+                trace.event("plan", document_id, rank=item.rank,
+                            origin=item.origin, kind=item.source.owner_kind,
+                            owner=item.source.owner_id,
+                            chars=len(item.source.text or ""),
+                            image=bool(item.source.image_path))
             return Path(filename).stem, split_long_sources(items), report
         finally:
             conn.close()
             cache_conn.close()
 
     document_name = {did: Path(fn).stem for did, fn in documents}
+    # Every event carries the document it belongs to and lands in that
+    # document's own file, so a redone document overwrites its own trace.
+    trace.open_trace(args.out / "trace", document_name.get)
 
     def accepted_rows(batch, reply) -> list:
         """What of one reply survives checking — the next batch's `prior`.
@@ -2152,7 +2406,11 @@ def main(argv: Optional[list] = None) -> int:
         rows: list = []
         for item, claims in zip(batch.items, routed):
             for claim in claims:
-                outcome = verify_tuple(dict(claim), batch.parameter,
+                parameter = item.parameter or spec.by_uri.get(
+                    str(claim.get("parameter") or ""))
+                if parameter is None:
+                    continue
+                outcome = verify_tuple(dict(claim), parameter,
                                        item.source.text,
                                        owner_kind=item.source.owner_kind)
                 if not isinstance(outcome, Refusal):
@@ -2162,8 +2420,22 @@ def main(argv: Optional[list] = None) -> int:
     def verify(entry: tuple) -> None:
         name, report, answered = entry
         for batch, reply in answered:
-            fold_batch(batch, reply, report, locate=locate)
+            fold_batch(batch, reply, report, locate=locate, spec=spec)
+        for row in report.tuples:
+            prov = row.get("provenance") or {}
+            trace.event("coord", report.document_id,
+                        parameter=row.get("parameter"), value=row.get("value"),
+                        unit=row.get("unit"), tier=row.get("tier"),
+                        kind=prov.get("owner_kind"), owner=prov.get("owner_id"),
+                        states={k[:-6]: v for k, v in row.items()
+                                if k.endswith("_state")})
+        for refusal in report.refusals:
+            trace.event("refusal", report.document_id,
+                        parameter=refusal.get("parameter"),
+                        reason=refusal.get("reason"),
+                        owner=refusal.get("owner"))
         finish_document(report, name, args.out, spec_sha)
+        trace.flush(report.document_id)
 
     started = time.time()
     failures = 0

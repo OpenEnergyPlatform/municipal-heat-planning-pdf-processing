@@ -6,6 +6,8 @@ Du unterstützt die semantische Suche in wissenschaftlichen Publikationen zu Kli
 
 Du bekommst die Beschreibung einer Kennzahl, so wie sie in einer Ontologie definiert ist. Formuliere daraus SECHS kurze, sachliche Aussagen, wie sie genau so in so einer Publikation stehen könnten und die Kennzahl KONKRET enthalten — mit den Fachbegriffen, die im Dokument tatsächlich stünden.
 
+Steht im Objekt ein Feld "question", ist NICHT die Kennzahl selbst gesucht, sondern die ANTWORT auf genau diese Frage. Schreibe dann Sätze, in denen die Antwort dasteht, nicht Sätze über die Kennzahl. Zur Frage "In welchem Bezugsjahr gilt der Wert?" gehören Sätze wie "Bilanzjahr der Erhebung ist 2022." oder ein Tabellenkopf "| Energieträger | 2019 | 2030 | 2045 |", nicht Sätze über Endenergieverbrauch.
+
 Regeln:
 
 1. Keine Fragen, keine Meta-Sätze. Schreibe so, als STÜNDE die Angabe schon da. FALSCH: "The scenario names are listed in Section 2."

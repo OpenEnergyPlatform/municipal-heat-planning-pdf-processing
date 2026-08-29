@@ -63,6 +63,27 @@ def audit(profile: str) -> None:
              if not (s.question or "").strip()]
     check(profile, "jede Achse hat eine Frage", not blank, ", ".join(blank))
 
+    # Which quantity a value is, is a coordinate now. Without its question the
+    # field request carries no rule and the whole document-level plan collapses
+    # into rows nobody can assign a parameter to.
+    check(profile, "die Parameterfrage steht in der Spec",
+          bool((spec.parameter_question or "").strip()),
+          (spec.parameter_question or "")[:60])
+
+    # One anchor set per QUESTION. Six sentences about a parameter say nothing
+    # about where its reference year is printed, and the field sweep searched
+    # with the raw question until this was measured.
+    from docpipe.extraction.runner import anchor_key, anchor_targets
+    targets = anchor_targets(spec)
+    keys = [t[0] for t in targets]
+    wanted = 1 + sum(1 + len(fields.axis_slots(p)) for p in spec.parameters)
+    check(profile, "ein Anker je Frage",
+          len(keys) == len(set(keys)) == wanted, f"{len(keys)} Ziel(e)")
+    with_question = [t for t in targets if t[3]]
+    check(profile, "jedes Achsenziel traegt seine Frage",
+          len(with_question) >= wanted - len(spec.parameters) - 1,
+          f"{len(with_question)} mit Frage")
+
     # No entry that means "I do not know". Those are states now.
     shrugs = []
     for p in spec.parameters:
@@ -115,6 +136,14 @@ def audit(profile: str) -> None:
     for key in ("groups", "answers", "value_raw", "quote", "corrections",
                 fields.UNSTATED):
         check(profile, f"Feld-Prompt nennt {key!r}", f'"{key}"' in field_text)
+    # The value request reads a passage once for every quantity at once, so it
+    # must be told about all of them and not about one.
+    rows_text = prompts.load("extraction/rows").text
+    check(profile, "Zeilen-Prompt nennt 'quantities'", '"quantities"' in rows_text)
+    check(profile, "Zeilen-Prompt fixiert keinen Parameter mehr",
+          '"parameter": die gesucht' not in rows_text)
+    anchors_text = prompts.load("extraction/anchors").text
+    check(profile, "Anker-Prompt kennt die Frage", '"question"' in anchors_text)
 
     kg = base / "kg.py"
     check(profile, "Serializer vorhanden", kg.is_file(), str(kg))

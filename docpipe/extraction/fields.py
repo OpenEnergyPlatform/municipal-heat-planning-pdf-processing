@@ -113,6 +113,25 @@ def _options(vocabulary: dict) -> tuple:
     return tuple(out)
 
 
+def parameter_slot(spec) -> Slot:
+    """Which quantity a value is — a choice from the spec's own parameters.
+
+    The plan used to be built per parameter, so a table holding a consumption
+    and an emission was retrieved twice, read twice and paid for twice. It
+    made the document's whole owner set into three documents' worth of
+    requests, which was 804 planned sources against 234 owners.
+
+    Asked instead of assumed, it is the same shape as every other coordinate:
+    a finite list, one request, one quote. And it is a real question — a
+    passage rarely says "this is an emission", it says "t CO2-Äq", so the
+    evidence is the wording that makes it one.
+    """
+    return Slot(name="parameter", kind=CHOICE, required=True,
+                question=spec.parameter_question,
+                options=tuple(Option(label=p.label, uri=p.uri)
+                              for p in spec.parameters))
+
+
 def value_slot(parameter: Parameter) -> Slot:
     """The row maker: the one request that decides how many values there are."""
     if parameter.is_numeric:

@@ -60,21 +60,22 @@ def test_only_the_changed_version_is_stale(tmp_path):
 
 
 def _per_probe(fn):
-    """Adapt a one-probe stub to the batched contract retrieval now has.
+    """Adapt a one-probe stub to the fused contract retrieval now has.
 
-    plan_document hands every probe of a round over in one call, because the
-    real implementation builds the document's sub-index once and searches the
-    probes as a matrix. Exclusion still grows from probe to probe — that is
-    what this reproduces, and what the sequential version did by rebuilding
-    the snapshot each time.
+    plan_document hands every probe over in one call and gets ONE ranking
+    back. These stubs are written per probe, so this runs them in turn and
+    merges, keeping each owner where the first probe that found it put it.
     """
     def retrieve(probes, document_id, exclude):
         taken = set(exclude)
         out = []
         for probe in probes:
-            found = list(fn(probe, document_id, set(taken)))
-            taken.update((s.owner_kind, s.owner_id) for s in found)
-            out.append(found)
+            for source in fn(probe, document_id, set(taken)) or []:
+                key = (source.owner_kind, source.owner_id)
+                if key in taken:
+                    continue
+                taken.add(key)
+                out.append(source)
         return out
     return retrieve
 
@@ -363,13 +364,11 @@ def test_planning_never_calls_the_model():
 
     def retrieve(probes, document_id, exclude):
         calls.append(list(probes))
-        if len(calls) > 1:
-            return [[] for _ in probes]
-        return [[_source("Erdgas 42.005 MWh/a im Jahr 2020")] for _ in probes]
+        return [_source("Erdgas 42.005 MWh/a im Jahr 2020")]
 
     items, report = plan_document(7, SPEC, ["{label}"], retrieve=retrieve)
-    assert calls[0] == ["Endenergieverbrauch"], (
-        "every probe of a round goes over in one call, not one call per probe")
+    assert calls == [["Endenergieverbrauch"]], (
+        "every probe goes over in one call, and the plan asks exactly once")
     assert len(items) == 1 and items[0].source.owner_id == 1
     assert report.owners_harvested == 1
     assert report.tuples == [] and report.refusals == []
@@ -455,8 +454,8 @@ def test_the_document_index_is_built_once_and_searched_once_per_probe_set(monkey
 
     monkeypatch.setattr(faiss_store, "prepare_document", prepare)
     monkeypatch.setattr(faiss_store, "search_prepared", search)
-    monkeypatch.setattr(faiss_store, "rank_prepared",
-                        lambda conn, prepared, s, p, k, **kw: [])
+    monkeypatch.setattr(faiss_store, "fuse_prepared",
+                        lambda conn, prepared, s, p, limit, **kw: [])
     monkeypatch.setattr(query_cache, "get", lambda conn, key: [0.1, 0.2])
 
     retrieve = runner.make_retrieve(None, None, {}, None)
@@ -911,10 +910,16 @@ def test_the_anchors_are_frozen_so_a_restart_searches_the_same_way(tmp_path, mon
     store, key = tmp_path / "anchors.json", runner.anchors_key("sha")
 
     first = runner.make_anchors(SPEC, store=store, key=key)
-    assert len(calls) == 1 and first[SPEC.parameters[0].uri]
+    wanted = len(runner.anchor_targets(SPEC))
+    assert len(calls) == wanted > 1, (
+        "one anchor set per question, not one per parameter: the sentence "
+        "that states a value and the sentence that states its reference year "
+        "are not the same sentence")
+    assert first[SPEC.parameters[0].uri]
+    assert first[runner.anchor_key(SPEC.parameters[0].uri, "year")]
     second = runner.make_anchors(SPEC, store=store, key=key)
     assert second == first, "a restart must search with the same anchors"
-    assert len(calls) == 1, "and must not pay for them twice"
+    assert len(calls) == wanted, "and must not pay for them twice"
 
     assert runner.make_anchors(SPEC, store=store, key="anderer-schluessel") != first, (
         "a new spec, prompt or model is a new anchor set")

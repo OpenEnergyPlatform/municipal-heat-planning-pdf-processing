@@ -27,6 +27,7 @@
     "'the NDC scenario'. Refusing what the model cannot map would delete the one",
     "measurement that tells us how far apart those two vocabularies are."
   ],
+  "parameter_question": "Um WELCHES Feld handelt es sich bei diesem Wert? Entscheide danach, was die Quelle über ihn sagt: die Beschriftung, die Einheit und die Überschrift des Abschnitts. Zitiere die Stelle, aus der das hervorgeht.",
   "parameters": [
     {
       "uri": "publication_title",
