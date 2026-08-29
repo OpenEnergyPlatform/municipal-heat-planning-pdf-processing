@@ -461,3 +461,34 @@ def test_both_new_prompts_exist_and_leave_room_for_an_answer(profile):
         assert prompt.text.strip(), f"{name}: {prompt_id} is empty"
         assert int(prompt.meta.get("max_tokens", 0)) >= 4096, \
             f"{name}: {prompt_id} leaves no room for a long table"
+
+
+def test_a_wording_offered_with_not_stated_is_kept_for_the_vocabulary_review(profile):
+    """"There is no sector here" and "I found CCS/CCU and it is in no list"
+    are two findings, and they arrive in the same answer shape.
+
+    The wording is not evidence and does not fill the coordinate. It is the
+    only trace of which classes the corpus needs and the spec does not have,
+    and without it both cases are the same empty cell.
+    """
+    from docpipe.extraction.pipeline import merge_field as merge
+    _name, spec = profile
+    for parameter in spec.parameters:
+        slots = fields.axis_slots(parameter)
+        if not slots:
+            continue
+        batch = _batch(parameter)
+        rows, _ = rows_from_reply(batch, _value_reply(parameter, batch.label(0)))
+        if not rows:
+            continue
+        slot = slots[0]
+        merge(rows, batch.sources, slot, {"answers": {rows[0].label: {
+            "value": fields.UNSTATED,
+            "value_raw": "CCS/CCU (Abscheideleistung: 95.000 t/a)",
+            "quote": rows[0].claim["quote"]}}})
+        claim = rows[0].claim
+        assert claim[f"{slot.name}_state"] == fields.SAID_UNSTATED
+        assert slot.name not in claim, "it must not fill the coordinate"
+        assert f"{slot.name}_quote" not in claim, "and it is not evidence"
+        assert claim[f"{slot.name}_seen"].startswith("CCS/CCU")
+        return
