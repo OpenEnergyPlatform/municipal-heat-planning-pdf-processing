@@ -266,6 +266,53 @@ def test_every_coordinate_ends_with_a_state_even_when_nothing_answered(profile):
         return
 
 
+def test_one_window_saying_nothing_here_does_not_end_the_sweep(profile):
+    """"Not in these two passages" is not "not in this plan".
+
+    A row answered out:unstated stays open and goes into the next window. It
+    closes on a reading, or on the document running out — never on the first
+    window that happens not to carry the coordinate.
+    """
+    from docpipe.extraction.pipeline import merge_field as merge, open_rows
+    _name, spec = profile
+    for parameter in spec.parameters:
+        slots = fields.axis_slots(parameter)
+        if not slots:
+            continue
+        batch = _batch(parameter)
+        rows, _ = rows_from_reply(batch, _value_reply(parameter, batch.label(0)))
+        if not rows:
+            continue
+        slot = slots[0]
+        merge(rows, batch.sources, slot,
+              {"answers": {r.label: {"value": fields.UNSTATED} for r in rows}})
+        assert open_rows(rows, slot) == rows, \
+            "a window that said nothing closed the sweep"
+        # A reading in a later window closes it, and cannot be undone by yet
+        # another window that says the coordinate is not in ITS passages.
+        quote = rows[0].claim["quote"]
+        merge(rows, batch.sources, slot, {"answers": {rows[0].label: {
+            "value": "gelesen", "value_raw": quote.strip().split()[0],
+            "quote": quote}}})
+        assert rows[0] not in open_rows(rows, slot)
+        merge(rows, batch.sources, slot,
+              {"answers": {rows[0].label: {"value": fields.UNSTATED}}})
+        assert rows[0].claim[f"{slot.name}_state"] == fields.READ
+        return
+
+
+def test_running_out_of_budget_is_not_the_same_finding_as_a_silent_plan():
+    """The pair this stage exists to keep apart, one level up.
+
+    "The plan does not say" is a finding about the corpus and belongs in a
+    report. "We stopped looking" is a finding about the run and belongs in a
+    backlog. They must not be the same string.
+    """
+    assert fields.EXHAUSTED != fields.SAID_UNSTATED
+    assert len({fields.READ, fields.SAID_UNSTATED,
+                fields.UNANSWERED, fields.EXHAUSTED}) == 4
+
+
 @pytest.mark.parametrize("size,overlap,expected", [
     (2, 1, [["a", "b"], ["b", "c"], ["c", "d"]]),
     (2, 0, [["a", "b"], ["c", "d"]]),
