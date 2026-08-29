@@ -229,3 +229,31 @@ def test_a_table_whose_content_is_gone_is_skipped_and_not_planned_empty():
          "page_number": 1, "section_number": 1, "section_title": "",
          "title": ""})
     assert [s.owner_id for s in structure(7)] == [11]
+
+
+def test_the_parallel_scheduler_harvests_a_batch_that_fixes_no_parameter():
+    """The path the corpus actually runs on. The serial harvest_document is
+    what the tests owned, so a plan that had correctly dropped 825 sources to
+    162 still died on its first batch: the scheduler keyed its sweeps through
+    batch.parameter.uri, and a document-level plan has no parameter."""
+    from docpipe.extraction.pipeline import Batch, WorkItem, batch_uri
+
+    batches = [Batch(7, None, [WorkItem(7, None,
+                                        Source("table", n, "| x | 1 |", {}))])
+               for n in (1, 2)]
+    assert batch_uri(batches[0]) is None
+
+    seen = []
+
+    def harvest(batch, prior=None):
+        seen.append([(i.source.owner_kind, i.source.owner_id)
+                     for i in batch.items])
+        return {"tuples": [], "status": "complete", "need_more": []}
+
+    answered = runner.harvest_batches(batches, harvest, workers=2)
+    assert len(answered) == 2 and sorted(seen) == [[("table", 1)],
+                                                   [("table", 2)]]
+    assert all(reply.get("status") == "complete" for _b, reply in answered), (
+        "a batch that raised comes back as a failure sentinel, and would hide "
+        "exactly this defect behind a retry"
+    )

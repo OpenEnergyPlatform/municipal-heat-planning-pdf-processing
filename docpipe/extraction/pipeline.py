@@ -633,7 +633,7 @@ def build_sweeps(batches: list, rounds: int = 1) -> dict:
     """
     sweeps: dict = {}
     for batch in batches:
-        key = (batch.document_id, _batch_uri(batch))
+        key = (batch.document_id, batch_uri(batch))
         sweep = sweeps.get(key)
         if sweep is None:
             sweep = sweeps[key] = Sweep(set(), rounds)
@@ -701,7 +701,7 @@ def harvest_document(
     sweeps = build_sweeps(queue)
     while queue:
         batch = queue.pop(0)
-        sweep = sweeps[(batch.document_id, _batch_uri(batch))]
+        sweep = sweeps[(batch.document_id, batch_uri(batch))]
         reply = harvest(batch, sweep.snapshot())
         reply = reply if isinstance(reply, dict) else {}
         # The follow-up runs first because it is what marks the reply as
@@ -777,8 +777,14 @@ def fold_claims(item: WorkItem, claims: Optional[list],
         report.flags.extend(outcome.flags)
 
 
-def _batch_uri(batch: Batch) -> Optional[str]:
-    """The parameter a batch was planned for, or None for a document plan."""
+def batch_uri(batch: Batch) -> Optional[str]:
+    """The parameter a batch was planned for, or None for a document plan.
+
+    Public because the parallel scheduler in the runner keys the same sweeps
+    by the same thing. It was not, and the runner reached through
+    `batch.parameter.uri` in three places, which is how a plan that had
+    correctly dropped 825 sources to 162 died on its first batch.
+    """
     return batch.parameter.uri if batch.parameter is not None else None
 
 
@@ -801,12 +807,12 @@ def fold_batch(batch: Batch, reply: Optional[dict], report: DocumentReport, *,
         # Named no source of this batch and quoted none of them either. There
         # is no text to check it against, so there is no way to accept it.
         report.refusals.append(
-            {"parameter": _batch_uri(batch), "reason": "claim names no source",
+            {"parameter": batch_uri(batch), "reason": "claim names no source",
              "claim": claim,
              "owner": [batch.items[0].source.owner_kind,
                        batch.items[0].source.owner_id]})
     counts = report.followups.setdefault(
-        _batch_uri(batch) or "document", {"asked": 0, "served": 0})
+        batch_uri(batch) or "document", {"asked": 0, "served": 0})
     if reply.get("status") == "partial" and reply.get("need_more"):
         counts["asked"] += 1
     if reply.get("_served"):
@@ -834,7 +840,7 @@ def fold_fieldwise(batch: Batch, rows: list, orphans: list,
         fold_claims(item, claims, report, locate=locate, spec=spec)
     for claim in orphans:
         report.refusals.append(
-            {"parameter": _batch_uri(batch), "reason": "claim names no source",
+            {"parameter": batch_uri(batch), "reason": "claim names no source",
              "claim": claim,
              "owner": [batch.items[0].source.owner_kind,
                        batch.items[0].source.owner_id]})

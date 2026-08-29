@@ -54,6 +54,21 @@ def _batches(spec, sources_per_parameter=8):
     return group_items(items, max_sources=runner.BATCH_SOURCES)
 
 
+def _document_batches(spec, sources=8):
+    """Work the way a document-level plan produces it: no parameter fixed.
+
+    `_batches` above fixes one, which is what the plan did until the parameter
+    became a coordinate. Keeping only that shape is how this gate passed while
+    the corpus path crashed on its first batch: the scheduler keyed its sweeps
+    through `batch.parameter.uri`, and there is no parameter to key through.
+    """
+    text = (spec.parameters[0].example or {}).get("source") or ""
+    items = [WorkItem(7, None, Source("table", n, text,
+                                      {"document_id": 7, "page": n}))
+             for n in range(sources)]
+    return group_items(items, max_sources=runner.BATCH_SOURCES)
+
+
 def _answer(parameter, label):
     """The example, in the shape the prompt asks the model to write it."""
     example = parameter.example or {}
@@ -150,3 +165,22 @@ def test_the_answer_budget_and_the_batch_size_agree(profile):
         f"{name}: a request needs {budget} tokens, more than the model holds")
     assert runner.fit_batch_sources(prompt, spec) >= 1, (
         f"{name}: max_tokens cannot answer for even one source")
+
+
+def test_the_corpus_path_runs_the_shape_the_plan_really_produces(profile):
+    """The gate has to see what the run sees. A batch that fixes no parameter
+    is what every plan builds now, and the parallel scheduler is where it goes
+    — the two places a stub can quietly agree with itself instead of with the
+    corpus."""
+    _name, spec, _prompt = profile
+    batches = _document_batches(spec)
+    assert batches and all(b.parameter is None for b in batches)
+
+    def harvest(batch, prior=None):
+        return {"tuples": [], "status": "complete", "need_more": []}
+
+    answered = runner.harvest_batches(batches, harvest, workers=8)
+    assert len(answered) == len(batches)
+    assert all(reply.get("status") == "complete" for _b, reply in answered), (
+        "a batch that raised comes back as a failure sentinel, which is how "
+        "this crash looked like a harvest that found nothing")
