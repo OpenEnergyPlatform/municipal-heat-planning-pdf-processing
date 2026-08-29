@@ -110,6 +110,13 @@ def test_run_document_writes_then_skips_then_redoes_on_stale(tmp_path, monkeypat
     runner.run_document(*args, force_stale=True)
     assert calls == [1, 1], "--force-stale redoes exactly the stale document"
 
+    # No stamp is not an older stamp. A file nothing vouches for gets redone
+    # without anyone having to ask, which is what deleting the stamps means
+    # and what it silently failed to do.
+    (tmp_path / "plan_x.stamp.json").unlink()
+    runner.run_document(*args)
+    assert calls == [1, 1, 1], "a file with no stamp is harvested again"
+
 
 def test_a_source_the_model_never_answered_is_a_visible_hole(tmp_path, monkeypatch):
     monkeypatch.setattr(runner.prompts, "versions",
