@@ -204,6 +204,35 @@ def _quoted(wording, row: dict) -> bool:
     return _squeeze(wording) in _squeeze(row.get("quote"))
 
 
+def resolve_wording(wording, known: Optional[dict] = None) -> Optional[str]:
+    """The run this wording names, when the list settles it without a guess.
+
+    The mirror of `ambiguous()`. That one refuses the link where several runs
+    fit and none matches exactly; this one MAKES the link where exactly one
+    does. Both read the same list, and between them the model's own choice is
+    only consulted where the list is genuinely undecided.
+
+    Measured on the corpus run: the model answered with an out: entry 1171
+    times for a wording its own list resolved unambiguously — 347 of them a
+    character-for-character match of a run name, one document refusing "BaU"
+    against a list whose single entry is "BaU".
+
+    Short wordings are exact-match only. "NPi" is three characters and sits
+    inside a dozen run names; a containment hit that short is a coincidence,
+    not a reading.
+    """
+    needle = _squeeze(wording)
+    if not needle or not known:
+        return None
+    for name in known.values():
+        if _squeeze(name) == needle:
+            return name
+    if len(needle) < 4:
+        return None
+    hits = [name for name in known.values() if needle in _squeeze(name)]
+    return hits[0] if len(hits) == 1 else None
+
+
 def scenario_key(row: dict, known: Optional[dict] = None,
                  synonyms: Optional[dict] = None) -> tuple:
     """(identity, label) for the scenario a row belongs to.
@@ -235,6 +264,11 @@ def scenario_key(row: dict, known: Optional[dict] = None,
         # two, the linked one holding nothing and the unlinked one holding all
         # the values.
         resolved = synonyms.get(normalise(wording))
+    if not resolved and wording:
+        # And if the list itself settles it, the model's refusal does not
+        # stand: an out: entry says "no single run fits", which is a claim
+        # about the list, and the list is right here to be read.
+        resolved = resolve_wording(wording, known)
     if resolved and known and ambiguous(wording, known):
         # The wording names a family, so the link is dropped and the wording is
         # the identity. Rows the model assigned to DIFFERENT runs then merge
@@ -510,6 +544,19 @@ def make_serializer(db_path: Path):
         # scenario and unsure on the table caption three pages later — so the
         # same scenario arrived twice, once linked and empty, once unlinked
         # and carrying every value.
+        # What the list settled that the model had given up on. Counted, not
+        # silently absorbed: a number that stays high says the prompt is
+        # teaching the escape hatch too well.
+        rescued = 0
+        for key in ("scenario_label",) + SCENARIO_FIELDS:
+            for row in by_param.get(key, ()):
+                proposed = (row.get("value_uri") if key == "scenario_label"
+                            else row.get("scenario"))
+                wording = (row.get("value_raw") if key == "scenario_label"
+                           else row.get("scenario_raw"))
+                if str(proposed or "").startswith(NOT_IN_GRAPH)                         and resolve_wording(wording, known):
+                    rescued += 1
+
         synonyms: dict = {}
         for key in ("scenario_label",) + SCENARIO_FIELDS:
             for row in by_param.get(key, ()):
@@ -711,7 +758,7 @@ def make_serializer(db_path: Path):
         std[-1] = std[-1].rstrip(" ;") + " ."
 
         log.info("kg: %s: 1 report, 1 bundle, %d scenario(s), %d author(s), "
-                 "%d organisation(s), %d funder(s)%s%s%s%s", name,
+                 "%d organisation(s), %d funder(s)%s%s%s%s%s", name,
                  len(scenario_links), len(author_links), len(org_links),
                  len(funder_links),
                  f", contested {contested}" if contested else "",
@@ -719,7 +766,9 @@ def make_serializer(db_path: Path):
                  f", {len(unplaced)} scenario name(s) not in the AR6 list "
                  f"{unplaced[:5]}" if unplaced else "",
                  f", not in the graph by choice: {dict(out_of_graph)}"
-                 if out_of_graph else "")
+                 if out_of_graph else "",
+                 f", {rescued} link(s) the list settled after the model gave up"
+                 if rescued else "")
 
         parts = [NL.join(pub) + NL, NL.join(std) + NL]
         parts += scenario_nodes + author_nodes + org_nodes + funder_nodes

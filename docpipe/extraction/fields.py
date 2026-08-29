@@ -31,6 +31,23 @@ CHOICE = "choice"
 NUMBER = "number"
 TEXT = "text"
 
+# The answer that says the passages do not state this coordinate. It is an
+# answer, not a gap: a row left out of a field reply and a row the document
+# genuinely says nothing about used to be the same empty cell, and they were
+# 16% to 34% of every coordinate on the 1079-document run. One of the two is
+# a statement about the corpus and the other is a statement about the model,
+# and a pipeline that cannot tell them apart can improve neither.
+#
+# A protocol token, not a German phrase: the prompt explains it in the
+# profile's language, the wire carries this. It rides the out: convention, so
+# the serializers already refuse to mint it as a class.
+UNSTATED = "out:unstated"
+
+# What is known about one coordinate of one row, always one of these.
+READ = "read"              # answered and the passage carries it
+SAID_UNSTATED = "unstated"  # answered: the passages do not say
+UNANSWERED = "unanswered"   # the request came back without this row at all
+
 
 @dataclass(frozen=True)
 class Option:

@@ -18,7 +18,7 @@
     "  scenario_type    the 17 classes the OEKG shapes accept for `has scenario",
     "                   type` (corpus-wide, listed below)",
     "The first two are marked `vocabulary_dynamic` and filled by",
-    "profiles/ar6/extraction.py:document_axes before the harvest starts. In every",
+    "profiles/scenarios/extraction.py:document_axes before the harvest starts. In every",
     "case the document's own wording stays on the tuple in `value_raw` or",
     "`<axis>_raw`, so a choice is never a substitute for the evidence.",
     "",

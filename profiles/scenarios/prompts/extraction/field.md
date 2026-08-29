@@ -24,7 +24,7 @@ Regeln:
 
 2. "value_raw": IMMER zusätzlich, der Name so, wie das Dokument ihn schreibt — "Current Policies", "the NDC scenario", "unser 1,5-Grad-Pfad". Daran wird deine Zuordnung nachträglich geprüft. "das erste Szenario" ist kein Name aus dem Dokument und keine gültige Antwort.
 
-3. "quote": eine wörtliche, zusammenhängende Zeichenkette aus dem Text DER QUELLE, die die Zeile nennt (mindestens 8 Zeichen), und in der der Name aus "value_raw" steht. Zeichen für Zeichen kopieren. Eine Passage aus einer anderen Quelle wird verworfen.
+3. "quote": eine wörtliche, zusammenhängende Zeichenkette aus EINER der gezeigten Quellen (mindestens 8 Zeichen), und in der der Name aus "value_raw" steht. Zeichen für Zeichen kopieren. Es muss NICHT die Quelle sein, aus der die Zeile stammt — der Szenarioname steht oft in einem anderen Absatz. Erfundene Passagen werden verworfen, und mit ihnen die Antwort.
    Das ist oft NICHT die Passage des Wertes selbst. Das Szenario wird meist einen Absatz vorher eingeführt und danach nur noch vorausgesetzt. Zitier die Stelle, an der es benannt ist.
 
 4. Die Kennungen sind Lauf-Kennungen wie "EN_INDCi2030_300f". Im Text stehen sie fast nie; dort heißt dasselbe Szenario "Current Policies", "the NDC scenario" oder "unser 1,5-Grad-Pfad". Genau diese Zuordnung ist deine Aufgabe: die Beschreibung im Text mit der Kennung zusammenbringen. Anhaltspunkte sind das Ambitionsniveau, das Zieljahr, das Klimaziel und die Reihenfolge, in der die Publikation ihre Szenarien einführt.
@@ -32,4 +32,10 @@ Regeln:
 5. Viele Kennungen teilen sich einen Anfang: EN_NPi2020_400, EN_NPi2020_1000 und EN_NPi2020_3000 sind DREI verschiedene Läufe. Nennt das Dokument nur die Familie ("NPi", "NDC", "das NPi-Szenario"), dann ist damit KEINE einzelne Kennung bestimmt, und du darfst dir keine aussuchen. Dafür führt die Liste den Eintrag "Szenario-Familie" — WÄHLE IHN. Eine Kennung setzt du nur, wenn der Text sie unterscheidbar macht, etwa durch das Budget, das Temperaturziel oder das Jahr, das sie im Namen trägt.
    Beschreibt die Publikation ein Szenario, das in ihrer AR6-Liste überhaupt nicht vorkommt, dann ist das der Eintrag "nicht in AR6".
 
-6. Nennt die Quelle der Zeile überhaupt kein Szenario, lass die Zeile weg. Eine ausgelassene Zeile ist eine richtige Antwort und sagt "die Quelle sagt es nicht". Eine falsche Kennung ist schlechter als keine.
+6. JEDE Zeile bekommt eine Antwort. Auslassen ist keine Antwort und zählt als Fehler.
+   Nennen die gezeigten Passagen überhaupt kein Szenario, dann antworte für diese Zeile mit "value": "out:unstated". Das ist eine richtige Antwort und heißt "in diesen Passagen steht es nicht". Sie braucht kein "quote" und kein "value_raw".
+   Du bekommst diese Zeilen danach noch einmal, mit ANDEREN Passagen aus derselben Publikation. Eine falsche Kennung ist schlechter als "out:unstated".
+
+7. "need_more": bekommst du die Angabe aus diesen Passagen nicht, kannst du zusätzlich ein bis drei Sätze angeben, nach denen gesucht werden soll — so, wie sie im Dokument STEHEN würden. Danach wird per Ähnlichkeit gesucht, und was gefunden wird, kommt als nächste Anfrage mit denselben Zeilen.
+   RICHTIG: "The NDC scenario assumes that pledges are implemented by 2030."
+   FALSCH: "scenario" — zu kurz, findet alles und nichts.

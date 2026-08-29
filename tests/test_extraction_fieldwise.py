@@ -104,12 +104,42 @@ def test_an_answer_whose_evidence_is_not_in_the_source_is_not_written(profile):
         if not rows:
             continue
         slot = slots[0]
-        counts = merge_field(rows, batch, slot, {"answers": {
+        counts = merge_field(rows, batch.sources, slot, {"answers": {
             rows[0].label: {"value": "was auch immer",
                             "quote": "diese Passage steht in keiner Quelle"}}})
-        assert counts == {"filled": 0, "unquoted": 1}
+        assert counts == {"filled": 0, "unquoted": 1, "unbacked": 0,
+                          "unstated": 0}
         assert slot.name not in rows[0].claim
         break
+
+
+def test_a_quote_that_does_not_contain_the_answer_is_not_evidence(profile):
+    """The half that was missing, and the one that mattered.
+
+    A passage lifted verbatim out of the source proves the model read
+    something. Only a passage that CONTAINS the answer proves it read this.
+    With the first check alone, 27.6% of the corpus run's years cited a
+    passage with no year in it — a caption reading "Tabelle 1: Bestehende
+    Wärmenetze und Heiz(kraft)werke" was offered as evidence for 1990.
+    """
+    _name, spec = profile
+    for parameter in spec.parameters:
+        slots = fields.axis_slots(parameter)
+        if not slots:
+            continue
+        batch = _batch(parameter)
+        rows, _ = rows_from_reply(batch, _value_reply(parameter, batch.label(0)))
+        if not rows:
+            continue
+        slot, quote = slots[0], rows[0].claim["quote"]
+        assert "Ziegenkaese" not in quote
+        counts = merge_field(rows, batch.sources, slot, {"answers": {
+            rows[0].label: {"value": "Ziegenkaese", "value_raw": "Ziegenkaese",
+                            "quote": quote}}})
+        assert counts == {"filled": 0, "unquoted": 0, "unbacked": 1,
+                          "unstated": 0}
+        assert slot.name not in rows[0].claim
+        return
 
 
 def test_a_group_answer_reaches_every_row_it_names(profile):
@@ -122,9 +152,11 @@ def test_a_group_answer_reaches_every_row_it_names(profile):
         if not slots or len(rows) < 2:
             continue
         slot, quote = slots[0], rows[0].claim["quote"]
-        counts = merge_field(rows, batch, slot, {"groups": [
+        # The wording has to stand in the passage, so it is taken FROM it.
+        wording = quote.strip().split()[0]
+        counts = merge_field(rows, batch.sources, slot, {"groups": [
             {"rows": [r.label for r in rows], "value": "Sammelantwort",
-             "value_raw": "Sammelantwort", "quote": quote}]})
+             "value_raw": wording, "quote": quote}]})
         assert counts["filled"] == len(rows)
         assert all(r.claim[slot.name] == "Sammelantwort" for r in rows)
         assert all(r.claim[f"{slot.name}_quote"] == quote for r in rows)
@@ -147,29 +179,109 @@ def test_the_example_survives_the_field_wise_round_trip(profile):
                                                             batch.label(0)))
         assert not orphans, parameter.uri
         assert len(rows) == len(expected), parameter.uri
+        text = batch.items[0].source.text
+        backed: set = set()
         for slot in fields.axis_slots(parameter):
             answers = {}
             for row, want in zip(rows, expected):
                 if want.get(slot.name) is None:
                     continue
-                answers[row.label] = {
-                    "value": want[slot.name],
-                    "value_raw": want.get(f"{slot.name}_raw") or str(want[slot.name]),
-                    "quote": row.claim["quote"]}
-            merge_field(rows, batch, slot, {"answers": answers})
+                wording = want.get(f"{slot.name}_raw") or str(want[slot.name])
+                # The passage a real answer would cite: the one in the source
+                # that carries the wording. Where the source carries it
+                # nowhere, the coordinate is meant to be dropped, and the
+                # assertions below hold the rule rather than the outcome.
+                at = text.find(str(wording))
+                quote = (text[max(0, at - 60):at + len(str(wording)) + 60]
+                         if at != -1 else row.claim["quote"])
+                if at != -1:
+                    backed.add(slot.name)
+                answers[row.label] = {"value": want[slot.name],
+                                      "value_raw": wording, "quote": quote}
+            merge_field(rows, batch.sources, slot, {"answers": answers})
         report = DocumentReport(document_id=7)
         fold_fieldwise(batch, rows, orphans, report)
         assert report.tuples, f"{parameter.uri}: nothing survived"
         assert not report.refusals, \
             f"{parameter.uri}: {report.refusals[0]['reason']}"
         for got, want in zip(report.tuples, expected):
-            for name, axis in parameter.axes.items():
+            for name in parameter.axes:
                 if want.get(name) is None:
                     continue
-                assert got.get(name) is not None, \
-                    f"{parameter.uri}.{name} lost on the way through"
-                assert got.get(f"{name}_quote"), \
-                    f"{parameter.uri}.{name} arrived without its own evidence"
+                if name in backed:
+                    assert got.get(name) is not None, \
+                        f"{parameter.uri}.{name} lost on the way through"
+                    assert got.get(f"{name}_quote"), \
+                        f"{parameter.uri}.{name} arrived without its own evidence"
+                else:
+                    # The source says it nowhere, so nothing may claim it does.
+                    assert got.get(name) is None, \
+                        f"{parameter.uri}.{name} written without evidence"
+
+
+def test_not_stated_is_an_answer_and_needs_no_passage(profile):
+    """There is no sentence in a document saying a thing is not in it.
+
+    Which is why this is the one answer that carries no evidence, and why the
+    row can be required to answer at all. Leaving a row out used to mean both
+    "the plan does not say" and "I skipped it", and that was 16% to 34% of
+    every coordinate on the 1079-document run.
+    """
+    from docpipe.extraction.pipeline import merge_field as merge
+    _name, spec = profile
+    for parameter in spec.parameters:
+        slots = fields.axis_slots(parameter)
+        if not slots:
+            continue
+        batch = _batch(parameter)
+        rows, _ = rows_from_reply(batch, _value_reply(parameter, batch.label(0)))
+        if not rows:
+            continue
+        slot = slots[0]
+        counts = merge(rows, batch.sources, slot, {"answers": {
+            rows[0].label: {"value": fields.UNSTATED}}})
+        assert counts["unstated"] == 1 and counts["filled"] == 0
+        assert rows[0].claim[f"{slot.name}_state"] == fields.SAID_UNSTATED
+        assert slot.name not in rows[0].claim
+        return
+
+
+def test_every_coordinate_ends_with_a_state_even_when_nothing_answered(profile):
+    """100% of coordinates say what happened to them, or the run cannot be read."""
+    from docpipe.extraction.pipeline import mark_unanswered
+    _name, spec = profile
+    for parameter in spec.parameters:
+        slots = fields.axis_slots(parameter)
+        if not slots:
+            continue
+        batch = _batch(parameter)
+        rows, _ = rows_from_reply(batch, _value_reply(parameter, batch.label(0)))
+        if not rows:
+            continue
+        blank = mark_unanswered(rows, slots)
+        assert blank == len(rows) * len(slots)
+        for row in rows:
+            for slot in slots:
+                assert row.claim[f"{slot.name}_state"] == fields.UNANSWERED
+        return
+
+
+@pytest.mark.parametrize("size,overlap,expected", [
+    (2, 1, [["a", "b"], ["b", "c"], ["c", "d"]]),
+    (2, 0, [["a", "b"], ["c", "d"]]),
+    (3, 1, [["a", "b", "c"], ["c", "d"]]),
+])
+def test_the_sweep_walks_every_passage_and_never_cuts_a_seam(size, overlap,
+                                                             expected):
+    """Short windows, and no passage falls between two of them.
+
+    The overlap is not decoration: a caption and the table it belongs to are
+    adjacent passages, and the year lives on exactly that seam.
+    """
+    from docpipe.extraction.pipeline import window_sources
+    got = list(window_sources(["a", "b", "c", "d"], size, overlap))
+    assert got == expected
+    assert set(sum(got, [])) == {"a", "b", "c", "d"}
 
 
 TABLE = "| Erdgas | 126.656.132 | 520.465.057 | 1.036.767.833 |"

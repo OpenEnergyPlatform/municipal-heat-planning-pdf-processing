@@ -1,4 +1,4 @@
-"""The ar6 extraction stage: spec, prompts and the OEKG serializer.
+"""The scenarios extraction stage: spec, prompts and the OEKG serializer.
 
 What is asserted here is what the OEKG shapes demand and what the licence
 argument demands. The shapes are sh:closed, so a triple they do not name
@@ -13,7 +13,7 @@ import pytest
 
 from docpipe.extraction.spec import load
 
-SPEC_PATH = Path("profiles/ar6/extraction_spec.json")
+SPEC_PATH = Path("profiles/scenarios/extraction_spec.json")
 
 
 @pytest.fixture(scope="module")
@@ -39,7 +39,7 @@ def _rows(**overrides):
 
 
 def _ttl(rows, name="geco_2023", known=None):
-    from profiles.ar6 import kg
+    from profiles.scenarios import kg
     if known is None:
         return kg.make_serializer(Path("no-such.db"))(name, rows)
     import unittest.mock
@@ -110,7 +110,7 @@ def test_the_scenario_types_are_the_ones_the_shapes_accept(spec):
         "OEO_00020317", "OEO_00020321", "OEO_00020345", "OEO_00020411",
         "OEO_00020412", "OEO_00030007", "OEO_00030008", "OEO_00030009",
         "OEO_00030010"}
-    from profiles.ar6 import kg
+    from profiles.scenarios import kg
 
     vocabulary = by_uri["scenario_type"].vocabulary
     assert {u.rsplit("/", 1)[-1] for u in vocabulary
@@ -135,7 +135,7 @@ def test_every_example_would_survive_its_own_verifier(spec):
 
 
 def test_the_probes_expand_without_a_vocabulary_axis(monkeypatch):
-    monkeypatch.setenv("DOCPIPE_PROFILE", "ar6")
+    monkeypatch.setenv("DOCPIPE_PROFILE", "scenarios")
     from docpipe import prompts
     from docpipe.extraction.queries import expand
 
@@ -161,7 +161,7 @@ def test_nothing_the_closed_shapes_do_not_name_is_emitted(monkeypatch):
     """With OEKG_EVIDENCE=0 the graph is exactly what the closed shapes allow.
     That switch exists because whether they stay closed is still being decided
     — see the module docstring."""
-    import profiles.ar6.kg as kg
+    import profiles.scenarios.kg as kg
     monkeypatch.setattr(kg, "EVIDENCE", False)
     ttl = _ttl(_rows())
     allowed = {"a", "rdfs:label", "dc:acronym", "dc:abstract",
@@ -182,7 +182,7 @@ def test_nothing_the_closed_shapes_do_not_name_is_emitted(monkeypatch):
 def test_a_closed_shape_run_still_says_where_every_value_was_read(monkeypatch):
     """Switching the evidence off used to mean the graph forgot the passage,
     which gives up the reason the metadata is read from the PDF at all."""
-    import profiles.ar6.kg as kg
+    import profiles.scenarios.kg as kg
     monkeypatch.setattr(kg, "EVIDENCE", False)
     rows = [dict(r, quote="Keramidas, K., Fosse, F., Diaz Vazquez, A.",
                  tier="text_located", provenance={"page": 3,
@@ -196,7 +196,7 @@ def test_a_closed_shape_run_still_says_where_every_value_was_read(monkeypatch):
 
 
 def test_a_quote_with_a_line_break_cannot_break_the_comment(monkeypatch):
-    import profiles.ar6.kg as kg
+    import profiles.scenarios.kg as kg
     monkeypatch.setattr(kg, "EVIDENCE", False)
     rows = [dict(r, quote="a title\nsplit over\ntwo lines",
                  provenance={})
@@ -236,7 +236,7 @@ def test_a_document_without_a_title_is_skipped_not_half_emitted():
 
 def test_a_missing_required_field_is_named_in_the_log(caplog):
     rows = [r for r in _rows() if r["parameter"] != "publication_author"]
-    with caplog.at_level(logging.INFO, logger="profiles.ar6.kg"):
+    with caplog.at_level(logging.INFO, logger="profiles.scenarios.kg"):
         _ttl(rows)
     assert "MISSING REQUIRED" in caplog.text
     assert "publication_author" in caplog.text
@@ -248,7 +248,7 @@ def test_a_multiline_abstract_stays_valid_turtle():
 
 
 def test_the_year_becomes_a_datetime_and_says_so_where_it_guessed():
-    from profiles.ar6 import kg
+    from profiles.scenarios import kg
     assert kg._publication_date("2023") == "2023-01-01T00:00:00"
     assert kg._publication_date("ohne Jahr") == ""
 
@@ -257,7 +257,7 @@ def test_the_crawl_is_the_cross_check_not_the_source(tmp_path, caplog):
     """DocumentMeta must never supply a value — it comes with the crawl's
     licence. A disagreement is worth a line, not a substitution."""
     import sqlite3
-    from profiles.ar6 import kg
+    from profiles.scenarios import kg
 
     db = tmp_path / "ar6.db"
     conn = sqlite3.connect(db)
@@ -271,7 +271,7 @@ def test_the_crawl_is_the_cross_check_not_the_source(tmp_path, caplog):
     conn.commit()
     conn.close()
 
-    with caplog.at_level(logging.WARNING, logger="profiles.ar6.kg"):
+    with caplog.at_level(logging.WARNING, logger="profiles.scenarios.kg"):
         ttl = kg.make_serializer(db)("geco_2023", _rows())
     assert "Ein ganz anderer Titel" in caplog.text, "the disagreement is logged"
     assert "Ein ganz anderer Titel" not in ttl, "and never enters the graph"
@@ -326,7 +326,7 @@ def test_a_scenario_value_lands_on_the_scenario_it_names():
 
 def test_a_scenario_name_the_ar6_list_does_not_know_is_counted(tmp_path, caplog):
     import sqlite3
-    from profiles.ar6 import kg
+    from profiles.scenarios import kg
 
     db = tmp_path / "ar6.db"
     conn = sqlite3.connect(db)
@@ -343,7 +343,7 @@ def test_a_scenario_name_the_ar6_list_does_not_know_is_counted(tmp_path, caplog)
     conn.commit()
     conn.close()
 
-    with caplog.at_level(logging.INFO, logger="profiles.ar6.kg"):
+    with caplog.at_level(logging.INFO, logger="profiles.scenarios.kg"):
         ttl = kg.make_serializer(db)("geco_2023", _scenario_rows())
     assert "not in the AR6 list" in caplog.text and "CurPol" in caplog.text
     assert ttl is not None, "an unknown name is counted, not dropped"
@@ -355,7 +355,7 @@ def test_the_ar6_spelling_labels_the_node_the_pdf_spelling_stays_the_acronym():
     thrown away — it stays as the acronym."""
     import sqlite3
     import tempfile
-    from profiles.ar6 import kg
+    from profiles.scenarios import kg
 
     rows = [r for r in _scenario_rows() if r["parameter"] != "scenario_label"]
     rows.append({"parameter": "scenario_label", "value": "CURPOL",
@@ -389,7 +389,7 @@ def test_every_value_can_name_the_passage_it_came_from(monkeypatch):
     """The licence argument: the graph carries what the crawl could not give
     it — the quote, the page and the rectangles on that page. As triples only
     on request, because the shapes are closed; by default as comments."""
-    import profiles.ar6.kg as kg
+    import profiles.scenarios.kg as kg
     monkeypatch.setattr(kg, "EVIDENCE", True)
     ttl = _ttl(_scenario_rows())
     assert "a oekgprov:ExtractionEvidence ;" in ttl
@@ -400,13 +400,13 @@ def test_every_value_can_name_the_passage_it_came_from(monkeypatch):
 
 
 def test_the_evidence_iri_is_stable_across_runs(monkeypatch):
-    import profiles.ar6.kg as kg
+    import profiles.scenarios.kg as kg
     monkeypatch.setattr(kg, "EVIDENCE", True)
     assert _ttl(_scenario_rows()) == _ttl(_scenario_rows())
 
 
 def test_the_evidence_can_be_switched_off_for_a_closed_shape_run(monkeypatch):
-    import profiles.ar6.kg as kg
+    import profiles.scenarios.kg as kg
     monkeypatch.setattr(kg, "EVIDENCE", False)
     ttl = _ttl(_scenario_rows())
     body = ttl.split("@prefix")[-1].split(chr(10), 1)[1]
@@ -458,7 +458,7 @@ def _corpus_db(sections=(), tables=(), figures=(), scenarios=(),
 def test_the_scenario_list_is_this_publications_own():
     """One publication documents up to 146 of the corpus's 1389 scenarios. The
     model is asked to pick from its own, not from all of them."""
-    from profiles.ar6 import extraction
+    from profiles.scenarios import extraction
 
     conn = _corpus_db(scenarios=[(1, "EN_NPi2100"), (1, "EN_INDCi2030_300f"),
                                  (2, "SSP2_BASE")])
@@ -472,7 +472,7 @@ def test_the_region_list_is_narrowed_to_what_the_document_names():
     """249 study regions is a long list to put in front of every request. The
     narrowing is safe because a claim has to quote its source verbatim, so a
     country the document never writes could never have been answered."""
-    from profiles.ar6 import extraction
+    from profiles.scenarios import extraction
 
     conn = _corpus_db(sections=["The scenario covers Germany and Poland."],
                       tables=["| Country | 2030 |\n| France | 12 |"],
@@ -486,7 +486,7 @@ def test_the_region_list_is_narrowed_to_what_the_document_names():
 def test_a_two_letter_country_is_matched_as_a_word():
     """'US' hides inside 'thus' and 'UK' inside 'Ukraine'. A false entry in the
     list only wastes a line of prompt, but it is still wrong."""
-    from profiles.ar6 import extraction
+    from profiles.scenarios import extraction
 
     hidden = _corpus_db(sections=["Thus the trend continues in Ukraine."])
     assert "United States of America" not in {
@@ -503,7 +503,7 @@ def test_every_region_class_name_is_a_name_a_publication_would_write():
     ISO long form is neither — no paper writes "Macedonia (the former Yugoslav
     Republic of)", and stamping it onto the OEKG's own individual asserts a
     name retired in 2019."""
-    from profiles.ar6 import extraction
+    from profiles.scenarios import extraction
 
     for iri, labels in extraction._regions().items():
         name = labels[0]
@@ -516,7 +516,7 @@ def test_every_region_class_name_is_a_name_a_publication_would_write():
 def test_the_two_congos_and_the_two_koreas_are_each_offered_under_their_own_name():
     """"Congo" alone is Brazzaville, a different country from the DRC, and the
     list used to offer the DRC only as "Congo Democratic Republic Of"."""
-    from profiles.ar6 import extraction
+    from profiles.scenarios import extraction
 
     conn = _corpus_db(sections=["We model the Democratic Republic of the Congo "
                                 "and South Korea to 2050."])
@@ -529,7 +529,7 @@ def test_a_country_named_only_in_a_caption_is_still_offered():
     """The harvest quotes a caption as readily as a cell. A region the
     narrowing never saw is one the model has no class for, so it answers with
     a wording — and a wording is what puts a duplicate country in the graph."""
-    from profiles.ar6 import extraction
+    from profiles.scenarios import extraction
 
     conn = _corpus_db(tables=["| year | value |"],
                       table_captions=["Table 3: Emissions in India by sector"],
@@ -541,7 +541,7 @@ def test_a_country_named_only_in_a_caption_is_still_offered():
 
 def test_an_acronym_is_matched_with_its_capitals():
     """"US" casefolds onto the English pronoun, and these papers are English."""
-    from profiles.ar6 import extraction
+    from profiles.scenarios import extraction
 
     pronoun = _corpus_db(sections=["The model gives us robust results."])
     assert "United States of America" not in {
@@ -551,7 +551,7 @@ def test_an_acronym_is_matched_with_its_capitals():
 def test_document_axes_feeds_both_the_coordinate_and_the_value():
     """The scenario is a coordinate on other fields and the value of
     scenario_label. One list, both places."""
-    from profiles.ar6 import extraction
+    from profiles.scenarios import extraction
 
     conn = _corpus_db(sections=["A study of Norway."],
                       scenarios=[(1, "EN_NPi2100")])
@@ -568,7 +568,7 @@ def test_every_list_offers_a_way_to_say_none_of_these_fit():
     only makes the wrong answer look like a valid one. The corpus proves the
     need: the OEKG has 249 countries and no aggregate, and an AR6 scenario is
     usually global."""
-    from profiles.ar6 import extraction
+    from profiles.scenarios import extraction
 
     bare = _corpus_db(sections=["A model description with no country in it."])
     axes = extraction.document_axes(bare, 1)
@@ -586,7 +586,7 @@ def test_the_out_entries_are_short_enough_to_be_retyped_without_a_slip():
     wording — which is the thing these entries exist to prevent. So the answer
     token is short and the explanation is an alternate; value_to_uri() maps
     every label, so both resolve."""
-    from profiles.ar6 import extraction
+    from profiles.scenarios import extraction
 
     for vocabulary in (extraction.REGION_OUT, extraction.SCENARIO_OUT):
         for key, labels in vocabulary.items():
@@ -603,9 +603,9 @@ def test_the_prompt_quotes_the_out_entries_exactly_as_the_list_spells_them():
     paragraph that names them quotes nothing else."""
     from pathlib import Path
 
-    from profiles.ar6 import extraction
+    from profiles.scenarios import extraction
 
-    prompt = Path("profiles/ar6/prompts/extraction/harvest.md").read_text(
+    prompt = Path("profiles/scenarios/prompts/extraction/harvest.md").read_text(
         encoding="utf-8")
     known = {label.casefold()
              for vocabulary in (extraction.REGION_OUT, extraction.SCENARIO_OUT)
@@ -660,7 +660,7 @@ def test_the_individuals_live_where_the_oekg_puts_them():
     """Read off the running graph, not guessed: a study report sits under
     publication/, a factsheet under scenario/, a region under region/, and a
     bundle, author or organisation directly under the base."""
-    from profiles.ar6 import kg
+    from profiles.scenarios import kg
 
     base = "https://openenergyplatform.org/ontology/oekg/"
     assert kg.mint("studyreport", "x").startswith(base + "publication/")
@@ -763,7 +763,7 @@ def test_a_family_is_a_wording_and_never_an_identity():
 def test_no_out_entry_ever_reaches_the_turtle():
     """One guard, checked on every field that can carry a choice: an out: entry
     is countable, never quotable as an IRI, a type or a label."""
-    from profiles.ar6 import extraction
+    from profiles.scenarios import extraction
 
     rows = _rows()
     for key in extraction.SCENARIO_OUT:
@@ -874,7 +874,7 @@ def test_a_running_header_does_not_outvote_the_located_title_page():
     """The header stands on every page and is harvested from each of them, so
     it wins on count — and the truncation then becomes the document's IRI,
     stably, on every re-run."""
-    from profiles.ar6 import kg
+    from profiles.scenarios import kg
 
     full = "Global Energy and Climate Outlook 2023: a world in transition"
     rows = [{"parameter": "publication_title", "value": "Global Energy and "
@@ -901,7 +901,7 @@ def test_two_documents_that_mint_one_subject_say_so(caplog):
     report IRI — and the shapes allow one label and one date on it."""
     from pathlib import Path
 
-    from profiles.ar6 import kg
+    from profiles.scenarios import kg
 
     serialize = kg.make_serializer(Path("no-such.db"))
     with caplog.at_level(logging.WARNING):
@@ -928,12 +928,53 @@ def test_the_scenario_types_the_model_chose_reach_the_graph():
     assert "oeo:OEO_00390073 oeo:OEO_00020517" in ttl
 
 
+def test_the_list_settles_what_the_model_gave_up_on():
+    """An out: entry is a claim ABOUT THE LIST — "no single run fits" — and the
+    list is right there to be read. Measured on the corpus run: 1171 refusals
+    whose wording their own list resolved without a guess, one document
+    refusing "BaU" against a list whose only entry is "BaU"."""
+    from profiles.scenarios import kg
+
+    known = {kg.normalise("BaU"): "BaU"}
+    row = {"parameter": "scenario_label", "value_uri": "out:not_documented",
+           "value_raw": "BaU", "quote": "the BaU scenario"}
+    assert kg.scenario_key(row, known) == ("BaU", "BaU")
+
+    longer = {kg.normalise("EN_NPi2020_400"): "EN_NPi2020_400"}
+    row = {"parameter": "scenario_label", "value_uri": "out:family",
+           "value_raw": "NPi2020_400", "quote": "the NPi2020_400 run"}
+    assert kg.scenario_key(row, longer)[0] == "EN_NPi2020_400"
+
+
+def test_a_short_wording_links_only_on_an_exact_name():
+    """"NPi" is three characters and sits inside a dozen run names. A
+    containment hit that short is a coincidence, not a reading."""
+    from profiles.scenarios import kg
+
+    known = {kg.normalise(n): n for n in
+             ("EN_NPi2020_400", "EN_NPi2020_1000", "EN_NPi2020_3000")}
+    assert kg.resolve_wording("NPi", known) is None
+    assert kg.resolve_wording("EN_NPi2020_400", known) == "EN_NPi2020_400"
+
+
+def test_the_guard_still_wins_where_several_runs_fit():
+    """resolve_wording is the mirror of ambiguous(), not its replacement."""
+    from profiles.scenarios import kg
+
+    known = {kg.normalise(n): n for n in
+             ("EN_NPi2020_400", "EN_NPi2020_1000")}
+    assert kg.resolve_wording("NPi2020", known) is None
+    row = {"parameter": "scenario_label", "value_uri": "out:family",
+           "value_raw": "NPi2020", "quote": "the NPi2020 family"}
+    assert kg.scenario_key(row, known) == ("NPi2020", "NPi2020")
+
+
 def test_a_scenario_wording_that_fits_several_runs_links_to_none():
     """The pilot document names 146 AR6 runs and the paper writes "NPi". The
     database has EN_NPi2020_300f, _400 and _3000 — three runs, one family. A
     model handed the list picks one anyway; that is a guess dressed as a link,
     so the wording survives alone and the factsheet stays unlinked."""
-    from profiles.ar6 import kg
+    from profiles.scenarios import kg
 
     known = {kg.normalise(n): n for n in
              ("EN_NPi2020_300f", "EN_NPi2020_400", "EN_NPi2020_3000")}

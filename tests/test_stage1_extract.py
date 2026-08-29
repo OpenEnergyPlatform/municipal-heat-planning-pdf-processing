@@ -44,7 +44,7 @@ def test_english_suspended_hyphenation_survives(as_profile):
     """"short-" + "and long-term" is one construction. Under the German list
     nothing matches, the two lines are glued, and the corpus carries
     "shortand long-term" everywhere the phrase occurs."""
-    as_profile("ar6")
+    as_profile("scenarios")
 
     txt = s1._spans_to_text(_block("mitigation in the short-", "and long-term"))
 
@@ -54,7 +54,7 @@ def test_english_suspended_hyphenation_survives(as_profile):
 def test_the_german_list_does_not_reach_the_english_corpus(as_profile):
     """Counterpart: "und" holds nothing open in an English paper, and a word
     genuinely broken across the break must still be joined."""
-    as_profile("ar6")
+    as_profile("scenarios")
 
     txt = s1._spans_to_text(_block("the decarboni-", "sation pathway"))
 
@@ -64,7 +64,7 @@ def test_the_german_list_does_not_reach_the_english_corpus(as_profile):
 def test_each_profile_gets_its_own_list(as_profile):
     as_profile("kwp")
     german = s1.hyphen_exceptions()
-    as_profile("ar6")
+    as_profile("scenarios")
     english = s1.hyphen_exceptions()
 
     assert german.match("und Kälte") and not german.match("and cooling")
