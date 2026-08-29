@@ -72,7 +72,7 @@ REFUSALS = {
             "Dazu liegen keine Daten vor.",
             "Das lässt sich aus den Auszügen nicht ermitteln.",
             "Es ist keine Abbildung mit ähnlichen Angaben vorhanden."],
-    "ar6": ["This is not reported in the provided context.",
+    "scenarios": ["This is not reported in the provided context.",
             "No data available for this scenario.",
             "The value cannot be determined from the excerpts.",
             "There is no figure showing that."],
@@ -81,7 +81,7 @@ REFUSALS = {
 ANCHORS = {
     "kwp": ["Die Gemeinde hat 19.499 Einwohner und eine Fläche von 24 km².",
             "Abbildung 3: Wärmebedarf nach Sektoren im Jahr 2035."],
-    "ar6": ["The scenario reaches net-zero CO2 emissions in 2050.",
+    "scenarios": ["The scenario reaches net-zero CO2 emissions in 2050.",
             "Figure 3: Final energy demand by sector under SSP2-1.9."],
 }
 

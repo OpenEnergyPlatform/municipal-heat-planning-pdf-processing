@@ -7,7 +7,7 @@ import pytest
 from docpipe import store
 from docpipe.ingest import pipeline as ingest
 from docpipe.profile import load_profile
-from profiles.ar6 import source as ar6
+from profiles.scenarios import source as ar6
 
 
 def _entry(slug, **kw):
@@ -38,7 +38,7 @@ def _db():
     """Core schema plus the ar6 profile — the same tables the pipeline creates."""
     con = sqlite3.connect(":memory:")
     con.row_factory = sqlite3.Row
-    store.apply(con, load_profile("ar6"))
+    store.apply(con, load_profile("scenarios"))
     return con
 
 

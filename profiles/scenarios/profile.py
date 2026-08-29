@@ -2,7 +2,7 @@
 from docpipe.profile import Facet, Profile
 
 PROFILE = Profile(
-    name="ar6",
+    name="scenarios",
     title="IPCC-AR6-Szenarienliteratur – Recherche",
     document_noun="Publikation",
     source_language="en",
@@ -11,7 +11,7 @@ PROFILE = Profile(
     # often than heat plans are, and a two-column page read line by line is
     # interleaved nonsense. Takes effect on the next Stage 3 (--rebuild-stage3).
     column_layout="auto",
-    # Filled by profiles/ar6/catalog.py; "year" is the year stored in
+    # Filled by profiles/scenarios/catalog.py; "year" is the year stored in
     # DocumentMeta, the same one the label prints.
     facets=(
         Facet("year", "Jahr"),

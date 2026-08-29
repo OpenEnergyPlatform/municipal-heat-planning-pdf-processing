@@ -6,14 +6,14 @@ import pytest
 from docpipe import store
 from docpipe.inference import catalog as core
 from docpipe.profile import load_profile
-from profiles.ar6.catalog import Ar6Catalog
+from profiles.scenarios.catalog import Ar6Catalog
 
 
 @pytest.fixture
 def conn():
     con = sqlite3.connect(":memory:")
     con.row_factory = sqlite3.Row
-    store.apply(con, load_profile("ar6"))
+    store.apply(con, load_profile("scenarios"))
     con.executescript("""
         INSERT INTO Documents (id, filename, external_id, group_key, published)
              VALUES (1, '10.1088_1748-9326_aab53e.pdf', '10.1088/1748-9326/aab53e',
@@ -31,7 +31,7 @@ def conn():
 
 @pytest.fixture
 def cat():
-    return core.load_catalog(load_profile("ar6"))
+    return core.load_catalog(load_profile("scenarios"))
 
 
 def _add(con, doc_id, filename, meta=None):
@@ -43,7 +43,7 @@ def _add(con, doc_id, filename, meta=None):
     con.commit()
 
 
-def test_the_ar6_profile_selects_this_catalog(cat):
+def test_the_scenarios_profile_selects_this_catalog(cat):
     assert isinstance(cat, Ar6Catalog)
     assert cat.document_noun == "Publikation"
 

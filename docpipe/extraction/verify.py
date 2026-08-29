@@ -93,7 +93,7 @@ def numbers_in(text: str) -> set:
     return found
 
 
-def _flat(text: str) -> str:
+def flat(text: str) -> str:
     return _WS.sub(" ", text or "").strip()
 
 
@@ -101,7 +101,7 @@ def quote_in(source: str, quote: str) -> bool:
     """Whitespace-collapsed literal containment — corrections.py semantics."""
     if not quote or not source:
         return False
-    return _flat(quote) in _flat(source)
+    return flat(quote) in flat(source)
 
 
 @dataclass
@@ -210,7 +210,7 @@ def _value_in_quote(raw: dict, parameter: Parameter, quote: str) -> bool:
     # about the document, so it runs against the wording, never against the
     # class name the mapping produced.
     wording = raw.get("value_raw") or raw.get("value")
-    return _flat(str(wording)).casefold() in _flat(quote).casefold()
+    return flat(str(wording)).casefold() in flat(quote).casefold()
 
 
 # A full stop, not a list separator. Figure descriptions separate items with

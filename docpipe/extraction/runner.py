@@ -38,8 +38,8 @@ from . import fields
 from .pipeline import (Source, WorkItem, build_sweeps,
                        cell_index as pipeline_cell_index, fold_batch,
                        follow_up, group_items, harvest_document, merge_field,
-                       plan_document, route_claims, rows_from_reply,
-                       write_report)
+                       mark_unanswered, open_rows, plan_document, route_claims,
+                       rows_from_reply, window_sources, write_report)
 from .queries import expand as expand_queries
 from .spec import Spec, load as load_spec
 
@@ -111,6 +111,13 @@ FIELDWISE = os.environ.get("EXTRACT_FIELDWISE", "1") != "0"
 # The field requests of one batch go out together. They are HTTP waits, and
 # they share their whole prefix, so the server answers them from cache.
 FIELD_PARALLEL = int(os.environ.get("EXTRACT_FIELD_PARALLEL", "64"))
+# Short windows, many requests. Two sources per window with one shared is the
+# unit the sweep walks the document in once a coordinate was not in the
+# value's own passage; the rounds bound it, because a stop heuristic without a
+# bound is an outage.
+FIELD_WINDOW = int(os.environ.get("EXTRACT_FIELD_WINDOW", "2"))
+FIELD_OVERLAP = int(os.environ.get("EXTRACT_FIELD_OVERLAP", "1"))
+FIELD_ROUNDS = int(os.environ.get("EXTRACT_FIELD_ROUNDS", "4"))
 
 _THINK_RE = re.compile(r"<think>.*?</think>", re.DOTALL)
 _FENCE_OPEN = re.compile(r"^```(?:json)?\s*")
@@ -1060,24 +1067,22 @@ def make_harvester(image_root: Optional[Path] = None,
     return harvest
 
 
-def _field_payload(batch, rows: list, slot) -> dict:
-    """The request body of one field question.
+def _field_payload(shown: list, rows: list, slot) -> dict:
+    """The request body of one field question, over the window shown.
 
-    Sources first, rows second, the field last. Every field of one batch then
-    shares a prefix that is almost the whole request, which is what makes
-    asking eight times affordable: the server answers the shared part from its
-    prefix cache and only the tail is new work.
+    Sources first, rows second, the field last. Consecutive windows then share
+    the part of the prefix that did not move, which is what makes asking many
+    short questions cheaper than asking one long one.
     """
     sources = []
-    for index, item in enumerate(batch.items):
-        source = item.source
-        sources.append({"id": batch.label(index), "kind": source.owner_kind,
+    for index, source in enumerate(shown):
+        sources.append({"id": f"Q{index + 1}", "kind": source.owner_kind,
                         "title": source.provenance.get("title"),
                         "section": source.provenance.get("section_title"),
                         "text": source.text})
     listed = []
     for row in rows:
-        entry = {"id": row.label, "source": batch.label(row.item_index),
+        entry = {"id": row.label,
                  "value": row.claim.get("value"),
                  "quote": row.claim.get("quote")}
         unit = row.claim.get("unit_raw") or row.claim.get("unit")
@@ -1111,8 +1116,8 @@ def make_field_asker() -> Callable:
     temperature = float(prompt.meta.get("temperature", 0.1))
     max_tokens = int(prompt.meta.get("max_tokens", 4096))
 
-    def ask(batch, rows: list, slot) -> Optional[dict]:
-        payload = json.dumps(_field_payload(batch, rows, slot),
+    def ask(shown: list, rows: list, slot) -> Optional[dict]:
+        payload = json.dumps(_field_payload(shown, rows, slot),
                              ensure_ascii=False, indent=2)
         for attempt in range(1, MAX_RETRIES + 1):
             try:
@@ -1146,11 +1151,12 @@ def make_field_asker() -> Callable:
     return ask
 
 
-def make_fieldwise_harvester(image_root: Optional[Path] = None) -> Callable:
+def make_fieldwise_harvester(image_root: Optional[Path] = None,
+                             more_sources: Optional[Callable] = None) -> Callable:
     """A harvest(batch, prior) that asks per field and answers like the old one.
 
     Same signature as make_harvester's, so the scheduler above it does not
-    change: the batch is still the unit in flight, and the fan-out over the
+    change: the batch is still the unit in flight, and the sweep over the
     fields happens inside one batch's turn.
     """
     from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -1159,6 +1165,51 @@ def make_fieldwise_harvester(image_root: Optional[Path] = None) -> Callable:
     ask = make_field_asker()
     pool = ThreadPoolExecutor(max_workers=FIELD_PARALLEL,
                               thread_name_prefix="field")
+
+    def sweep_field(batch, rows: list, slot) -> dict:
+        """Short windows over the document until this coordinate is read.
+
+        The value's own passage first, because a carrier usually is in the
+        table row it labels. What is still open after that is looked for
+        further out, one short window at a time with an overlap, because the
+        year of a table is in its caption and the scenario is in the section
+        heading — neither of which the value's passage contains.
+
+        Short windows and many requests, not one wide one. A window that holds
+        the answer holds it whether or not ninety other passages ride along,
+        and the ninety cost the attention that would have found it. The sweep
+        stops the moment nothing is open, so a coordinate that stands in the
+        first window costs exactly one request.
+        """
+        totals = {"filled": 0, "unquoted": 0, "unbacked": 0, "unstated": 0}
+        pool_extra: list = []
+        seen = {(i.source.owner_kind, i.source.owner_id) for i in batch.items}
+        windows = [batch.sources]
+        for round_index in range(FIELD_ROUNDS):
+            for shown in windows:
+                todo = open_rows(rows, slot)
+                if not todo:
+                    return totals
+                answer = ask(shown, todo, slot)
+                counts = merge_field(rows, shown, slot, answer)
+                for key in totals:
+                    totals[key] += counts[key]
+            if not open_rows(rows, slot) or more_sources is None:
+                break
+            # Still open, so look further out. The probe is the axis's own
+            # question — the sentence that would STATE this coordinate, which
+            # is what a similarity search can match on.
+            probes = [slot.question] if slot.question else []
+            probes += [q for q in (answer or {}).get("need_more") or []
+                       if isinstance(q, str) and len(q) > 20]
+            fresh = more_sources(batch.document_id, probes, set(seen)) or []
+            if not fresh:
+                break
+            for source in fresh:
+                seen.add((source.owner_kind, source.owner_id))
+            pool_extra.extend(fresh)
+            windows = list(window_sources(fresh, FIELD_WINDOW, FIELD_OVERLAP))
+        return totals
 
     def harvest(batch, prior: Optional[list] = None) -> dict:
         reply = find_rows(batch, prior)
@@ -1170,19 +1221,22 @@ def make_fieldwise_harvester(image_root: Optional[Path] = None) -> Callable:
             return reply
         slots = fields.axis_slots(batch.parameter)
         counts: dict = {}
-        futures = {pool.submit(ask, batch, rows, slot): slot for slot in slots}
+        futures = {pool.submit(sweep_field, batch, rows, slot): slot
+                   for slot in slots}
         for future in as_completed(futures):
             slot = futures[future]
             try:
-                answer = future.result()
+                counts[slot.name] = future.result()
             except Exception as exc:            # pragma: no cover - defensive
                 log.warning("   field %s raised: %s", slot.name, exc)
-                continue
-            counts[slot.name] = merge_field(rows, batch, slot, answer)
-        unquoted = sum(c["unquoted"] for c in counts.values())
-        if unquoted:
-            log.info("   fields: %d answer(s) dropped for evidence that is "
-                     "not in the source", unquoted)
+        blank = mark_unanswered(rows, slots)
+        tally = {k: sum(c[k] for c in counts.values())
+                 for k in ("filled", "unstated", "unquoted", "unbacked")}
+        if tally["unquoted"] or tally["unbacked"] or blank:
+            log.info("   fields: %d read, %d not stated, %d unanswered, "
+                     "dropped %d (quote not in source) + %d (answer not in quote)",
+                     tally["filled"], tally["unstated"], blank,
+                     tally["unquoted"], tally["unbacked"])
         # The label goes back on so the fold routes each claim to the source
         # the value request already settled on, instead of deciding a second
         # time from the quote alone.
@@ -1191,7 +1245,7 @@ def make_fieldwise_harvester(image_root: Optional[Path] = None) -> Callable:
         return {"tuples": [row.claim for row in rows] + orphans,
                 "status": reply.get("status", "complete"),
                 "need_more": reply.get("need_more") or [],
-                "_fieldwise": {name: c["filled"] for name, c in counts.items()}}
+                "_fieldwise": tally}
 
     return harvest
 
@@ -1736,12 +1790,10 @@ def main(argv: Optional[list] = None) -> int:
                  fitted, BATCH_SOURCES)
         BATCH_SOURCES = fitted
 
-    # OpenAI client is thread-safe
-    harvest = (make_fieldwise_harvester(args.image_root) if FIELDWISE
-               else make_harvester(args.image_root))
     log.info("extraction: %s",
-             "one request per field, each with its own evidence" if FIELDWISE
-             else "one request per tuple (EXTRACT_FIELDWISE=0)")
+             "one request per field, each swept in short windows until it is "
+             "read" if FIELDWISE else "one request per tuple "
+             "(EXTRACT_FIELDWISE=0)")
     locate = make_locate(args.db, args.pdf_root)
 
     listing = sqlite3.connect(f"file:{args.db}?mode=ro", uri=True)
@@ -1785,6 +1837,12 @@ def main(argv: Optional[list] = None) -> int:
     prime_probe_cache(primer, spec, templates, anchors)
     primer.close()
     more_sources = make_more_sources(args.db, index, id_to_pos, cache_path)
+
+    # After more_sources, because the field sweep uses it: a coordinate that
+    # is not in the value's own passage is looked for further out in the same
+    # document. OpenAI client is thread-safe.
+    harvest = (make_fieldwise_harvester(args.image_root, more_sources)
+               if FIELDWISE else make_harvester(args.image_root))
 
     def plan(document_id: int, filename: str) -> tuple:
         # Both connections per thread, cache included. Sharing one across the

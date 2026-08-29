@@ -30,7 +30,8 @@ from typing import Callable, Optional
 
 from . import queries as queries_mod
 from .spec import Spec
-from .verify import (Refusal, Verified, numbers_in, canonical_number,
+from .fields import NUMBER, READ, SAID_UNSTATED, UNANSWERED, UNSTATED
+from .verify import (Refusal, Verified, canonical_number, flat, numbers_in,
                      quote_in, verify_tuple)
 
 log = logging.getLogger(__name__)
@@ -321,16 +322,42 @@ def rows_from_reply(batch: Batch, reply: Optional[dict]) -> tuple:
     return rows, orphans
 
 
-def merge_field(rows: list, batch: Batch, slot, reply: Optional[dict]) -> dict:
-    """Fold one field's answers onto the rows. Returns {"filled", "unquoted"}.
+def answer_in_quote(slot, given, wording: Optional[str], quote: str) -> bool:
+    """Does the coordinate actually stand in the passage cited for it?
 
-    Every answer brings its own passage, and that passage is checked against
-    the text of the source its row came from — the same whitespace-collapsed
-    test the tuple's own quote passes. A field whose evidence is not in that
-    source is left empty rather than written unbacked: the point of asking per
-    field is that each coordinate is evidenced, and an answer that cannot show
-    where it read the year is exactly the answer a whole-tuple request used to
-    hide inside a tuple the value's quote had already justified.
+    Both halves of a quote's job, and the second one is the one that was
+    missing. A passage that sits in the source proves the model read
+    something; only a passage that CONTAINS the answer proves it read this.
+    Measured on the corpus run that had the first half alone: 27.6% of years
+    cited a passage with no year in it, one of them the caption "Tabelle 1:
+    Bestehende Wärmenetze und Heiz(kraft)werke" offered as evidence for 1990.
+
+    A number is compared as a number, a wording as text — the same split
+    _value_in_quote makes for the value itself, because these are the same
+    question asked one level down.
+    """
+    if slot.kind == NUMBER:
+        return canonical_number(given) in numbers_in(quote)
+    shown = wording if wording else str(given)
+    return flat(shown).casefold() in flat(quote).casefold()
+
+
+def merge_field(rows: list, sources: list, slot, reply: Optional[dict]) -> dict:
+    """Fold one field's answers. Returns {"filled", "unquoted", "unbacked"}.
+
+    Every answer brings its own passage, and that passage has to pass exactly
+    what the value's own quote passes: it sits verbatim in one of the sources
+    that were SHOWN, AND it contains the answer. A field that fails either is
+    left empty rather than written unbacked — the point of asking per field is
+    that each coordinate is evidenced, and an answer that cannot show where it
+    read the year is exactly the answer a whole-tuple request used to hide
+    inside a tuple the value's quote had already justified.
+
+    Shown, not the row's own source: the year of a table is in its caption and
+    the scenario is in the section heading, so a coordinate's evidence is
+    routinely in a different passage than the number's. Checking it against
+    the row's own source would refuse exactly the readings this stage exists
+    to collect.
     """
     reply = reply if isinstance(reply, dict) else {}
     pairs: list = []
@@ -346,7 +373,7 @@ def merge_field(rows: list, batch: Batch, slot, reply: Optional[dict]) -> dict:
         for label in group.get("rows") or ():
             pairs.append((label, group))
     by_label = {row.label: row for row in rows}
-    filled = unquoted = 0
+    filled = unquoted = unbacked = unstated = 0
     for label, answer in pairs:
         row = by_label.get(str(label).strip())
         if row is None or not isinstance(answer, dict):
@@ -354,21 +381,93 @@ def merge_field(rows: list, batch: Batch, slot, reply: Optional[dict]) -> dict:
         given = answer.get("value")
         if given is None or (isinstance(given, str) and not given.strip()):
             continue
+        if str(given).strip() == UNSTATED:
+            if row.claim.get(f"{slot.name}_state") == READ:
+                continue          # an earlier window already read it
+            # No passage is asked for and none could be given: there is no
+            # sentence in a document that says a thing is not in it. This is
+            # the one answer that carries no evidence, and it is why the row
+            # can still be required to answer.
+            row.claim[f"{slot.name}_state"] = SAID_UNSTATED
+            unstated += 1
+            continue
         quote = answer.get("quote")
-        source = batch.items[row.item_index].source
-        if not (isinstance(quote, str) and quote_in(source.text or "", quote)):
+        if not (isinstance(quote, str)
+                and any(quote_in(s.text or "", quote) for s in sources)):
             unquoted += 1
             continue
-        row.claim[slot.name] = given
         wording = answer.get("value_raw")
-        if isinstance(wording, str) and wording.strip():
-            row.claim[f"{slot.name}_raw"] = wording.strip()
+        wording = wording.strip() if isinstance(wording, str) and wording.strip() \
+            else None
+        if not answer_in_quote(slot, given, wording, quote):
+            unbacked += 1
+            continue
+        row.claim[f"{slot.name}_state"] = READ
+        row.claim[slot.name] = given
+        if wording:
+            row.claim[f"{slot.name}_raw"] = wording
         # The passage this one coordinate was read in, kept next to it. A
         # value and its year are two findings, and a graph that cites one
         # sentence for both is citing the wrong one for at least one of them.
         row.claim[f"{slot.name}_quote"] = quote
         filled += 1
-    return {"filled": filled, "unquoted": unquoted}
+    return {"filled": filled, "unquoted": unquoted,
+            "unbacked": unbacked, "unstated": unstated}
+
+
+def open_rows(rows: list, slot) -> list:
+    """The rows this field still has no reading for.
+
+    Both the never-answered and the answered-with-"not stated": the second is
+    only a statement about the passages that were shown, and the next window
+    shows different ones. It becomes a statement about the document when the
+    windows run out, and not before.
+    """
+    return [row for row in rows
+            if row.claim.get(f"{slot.name}_state") in (None, SAID_UNSTATED)]
+
+
+def window_sources(pool: list, size: int, overlap: int):
+    """Walk a source pool in short overlapping windows.
+
+    Short, not wide. A coordinate that is not in the passage the value came
+    from is somewhere else in the plan, and the way to it is more requests
+    with little context each, not one request with all of it: the window that
+    holds the answer holds it whether or not ninety other passages ride along,
+    and the ninety cost the attention that finds it.
+
+    The overlap is why a caption is never cut off from the table it belongs
+    to, which is the seam the year lives on.
+    """
+    size = max(1, size)
+    step = max(1, size - max(0, overlap))
+    for start in range(0, max(len(pool), 1), step):
+        window = pool[start:start + size]
+        if not window:
+            break
+        yield window
+        if start + size >= len(pool):
+            break
+
+
+def mark_unanswered(rows: list, slots: list) -> int:
+    """Every coordinate no field reply mentioned, named as such. Returns how many.
+
+    The number this exists to expose. Before it, a coordinate the model had
+    skipped and a coordinate the document does not state were the same empty
+    cell — 16% to 34% of every axis on the 1079-document run, and no way to
+    tell which half was the corpus and which half was the harvest. A row that
+    reaches this with no state was asked and did not answer, and that is a
+    defect of the run, not a property of the plan.
+    """
+    unanswered = 0
+    for row in rows:
+        for slot in slots:
+            if row.claim.get(f"{slot.name}_state"):
+                continue
+            row.claim[f"{slot.name}_state"] = UNANSWERED
+            unanswered += 1
+    return unanswered
 
 
 def rows_by_item(batch: Batch, rows: list) -> list:
