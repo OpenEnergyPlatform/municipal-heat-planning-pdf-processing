@@ -23,6 +23,8 @@ SPEC = load({"parameters": [{
 }]})
 
 TEMPLATES = ["{label} nach Energieträgern Tabelle", "{label} {axis:carrier}"]
+# A document-level plan does not fix a parameter, so a claim carries its own.
+PARAM = SPEC.parameters[0].uri
 
 
 def _sources():
@@ -42,37 +44,44 @@ def test_queries_expand_per_vocabulary_entry():
 
 
 def _per_probe(fn):
-    """Adapt a one-probe stub to the batched contract retrieval now has.
+    """Adapt a one-probe stub to the fused contract retrieval now has.
 
-    plan_document hands every probe of a round over in one call, because the
-    real implementation builds the document's sub-index once and searches the
-    probes as a matrix. Exclusion still grows from probe to probe — that is
-    what this reproduces, and what the sequential version did by rebuilding
-    the snapshot each time.
+    plan_document hands every probe over in one call and gets ONE ranking
+    back, best score per owner. The stubs here are written per probe, so this
+    runs them in turn and merges, keeping each owner at the position the first
+    probe that found it put it.
     """
     def retrieve(probes, document_id, exclude):
         taken = set(exclude)
         out = []
         for probe in probes:
-            found = list(fn(probe, document_id, set(taken)))
-            taken.update((s.owner_kind, s.owner_id) for s in found)
-            out.append(found)
+            for source in fn(probe, document_id, set(taken)) or []:
+                key = (source.owner_kind, source.owner_id)
+                if key in taken:
+                    continue
+                taken.add(key)
+                out.append(source)
         return out
     return retrieve
 
 
-def _per_source(fn):
+def _per_source(fn, spec=None):
     """Adapt a one-source stub to the batched contract the harvest now has.
 
     A request reads several sources at once, and every claim names the source
     it came from. This reproduces that from a stub written per source, which
     is what these tests are about: the loop's bookkeeping, not the batching.
     """
+    spec = spec if spec is not None else SPEC
     def harvest(batch, prior=None):
+        parameter = batch.parameter or spec.parameters[0]
         tuples = []
         for index, item in enumerate(batch.items):
-            for claim in fn(item.source, batch.parameter) or []:
-                tuples.append({**claim, "source": batch.label(index)})
+            for claim in fn(item.source, parameter) or []:
+                # A document-level plan gets the parameter from the row, the
+                # way the field sweep fills it in a real run.
+                tuples.append({"parameter": parameter.uri, **claim,
+                               "source": batch.label(index)})
         return {"tuples": tuples, "status": "complete", "need_more": []}
     return harvest
 
@@ -97,11 +106,15 @@ def test_an_owner_found_by_two_queries_is_harvested_once():
     assert len(report.tuples) == 1
 
 
-def test_the_sweep_stops_when_a_round_finds_nothing_new():
-    rounds_seen = []
+def test_the_plan_asks_retrieval_once_and_not_until_the_document_is_gone():
+    """The defect this replaced: retrieval was called again with everything it
+    had already returned excluded, which walks the ranking to the end of the
+    document. Measured on the corpus, 277 planned sources against 234 owners,
+    once per parameter."""
+    calls = []
 
     def retrieve(query, document_id, exclude):
-        rounds_seen.append(query)
+        calls.append(query)
         return [s for s in _sources()
                 if (s.owner_kind, s.owner_id) not in exclude]
 
@@ -110,8 +123,7 @@ def test_the_sweep_stops_when_a_round_finds_nothing_new():
 
     report = harvest_document(7, SPEC, TEMPLATES,
                               retrieve=_per_probe(retrieve), harvest=_per_source(harvest))
-    # 3 probes find everything in round one; round two adds nothing and stops.
-    assert report.sweep_rounds["OEO_00050016"] == 1
+    assert len(calls) == len(expand(TEMPLATES, SPEC.parameters[0])),         "one pass over the probes, no second round"
     assert report.owners_harvested == 3
 
 
@@ -189,16 +201,16 @@ def test_the_report_file_is_the_audit_trail(tmp_path):
     assert accepted["provenance"]["page"] == 31
 
 
-def test_the_fallback_harvests_only_what_retrieval_never_saw():
-    """D1's division of labour: retrieval is the harvest, the deterministic
-    candidate set is the floor. The leftover count is the standing quality
-    metric of the probes."""
+def test_every_table_is_planned_whether_or_not_a_probe_ranked_it():
+    """The floor is structural now, not lexical. 12,094 of 15,082 values came
+    out of a table or a figure, and whether something is a table is not a
+    question a similarity search should be asked."""
     def retrieve(query, document_id, exclude):
         return [s for s in _sources()[:1]
                 if ("table", s.owner_id) not in exclude]
 
-    def candidates(document_id, parameter):
-        return _sources()[:2]              # table 1 (seen) + table 2 (missed)
+    def structure(document_id):
+        return _sources()[:2]              # table 1 (ranked) + table 2 (not)
 
     harvested = []
 
@@ -207,9 +219,30 @@ def test_the_fallback_harvests_only_what_retrieval_never_saw():
         return []
 
     report = harvest_document(7, SPEC, TEMPLATES, retrieve=_per_probe(retrieve),
-                              harvest=_per_source(harvest), candidates=candidates)
-    assert harvested == [1, 2], "the seen table is not harvested twice"
-    assert report.fallback["OEO_00050016"] == {"candidates": 2, "leftover": 1}
+                              harvest=_per_source(harvest), structure=structure)
+    assert harvested == [1, 2], "the ranked table is not harvested twice"
+    assert report.fallback["document"] == {"candidates": 2, "leftover": 1}
+
+
+def test_prose_is_capped_and_tables_are_not():
+    """Top 50 is the limit on the half a ranking has to earn, and only on it."""
+    prose = [Source("section", 100 + i, f"Abschnitt {i} mit 42.005 MWh/a", {})
+             for i in range(8)]
+    tables = [Source("table", 200 + i, f"| Erdgas | 42.00{i} | MWh/a |", {})
+              for i in range(4)]
+
+    def retrieve(query, document_id, exclude):
+        return [s for s in prose + tables
+                if (s.owner_kind, s.owner_id) not in exclude]
+
+    def harvest(source, parameter):
+        return []
+
+    report = harvest_document(7, SPEC, TEMPLATES, prose_top=3,
+                              retrieve=_per_probe(retrieve),
+                              harvest=_per_source(harvest))
+    assert report.planned["prose"] == 3
+    assert report.planned["visual"] == 4, "the cap must not reach the tables"
 
 
 # ---------------------------------------------------------------------------
@@ -242,7 +275,7 @@ def test_a_value_is_checked_against_the_source_it_was_read_from():
     checked against: the label says where the number came from, and that is
     the text the quote has to be in."""
     def harvest(batch, prior=None):
-        return {"tuples": [{"source": "Q2", "value": 17300, "unit": "MWh/a",
+        return {"tuples": [{"parameter": PARAM, "source": "Q2", "value": 17300, "unit": "MWh/a",
                             "unit_raw": "MWh/a", "carrier": "Heizöl",
                             "quote": "| Heizöl | 17.300 | MWh/a |"}],
                 "status": "complete", "need_more": []}
@@ -259,7 +292,7 @@ def test_a_mislabelled_source_is_settled_by_the_quote_not_refused():
     whose quote is verbatim in the document, because the model wrote Q1 where
     it meant Q2, would throw away a correct extraction over bookkeeping."""
     def harvest(batch, prior=None):
-        return {"tuples": [{"source": "Q1", "value": 17300, "unit": "MWh/a",
+        return {"tuples": [{"parameter": PARAM, "source": "Q1", "value": 17300, "unit": "MWh/a",
                             "unit_raw": "MWh/a", "carrier": "Heizöl",
                             "quote": "| Heizöl | 17.300 | MWh/a |"}],
                 "status": "complete", "need_more": []}
@@ -274,7 +307,7 @@ def test_a_quote_in_no_source_is_still_refused():
     """The routing must not become a way to smuggle an invented quote past
     verification: a string none of the passages carries stays a refusal."""
     def harvest(batch, prior=None):
-        return {"tuples": [{"source": "Q1", "value": 17300, "unit": "MWh/a",
+        return {"tuples": [{"parameter": PARAM, "source": "Q1", "value": 17300, "unit": "MWh/a",
                             "unit_raw": "MWh/a",
                             "quote": "Heizoel betraegt 17300 MWh pro Jahr"}],
                 "status": "complete", "need_more": []}
@@ -294,7 +327,7 @@ def test_the_next_batch_is_told_what_the_earlier_ones_yielded():
         owner = batch.items[0].source.owner_id
         if owner != 1:
             return {"tuples": [], "status": "complete", "need_more": []}
-        return {"tuples": [{"source": "Q1", "value": 42005, "unit": "MWh/a",
+        return {"tuples": [{"parameter": PARAM, "source": "Q1", "value": 42005, "unit": "MWh/a",
                             "unit_raw": "MWh/a", "carrier": "Erdgas",
                             "quote": "| Erdgas | 42.005 | MWh/a |"}],
                 "status": "complete", "need_more": []}
@@ -335,7 +368,7 @@ def test_more_paragraphs_are_fetched_when_the_model_says_it_needs_them():
                               harvest=harvest, more_sources=more_sources)
     assert asked == [["Die Bilanz bezieht sich auf das Jahr 2020."]]
     assert read == [[1], [2, 3]], "what came back is read as one more batch"
-    assert report.followups["OEO_00050016"] == {"asked": 1, "served": 1}
+    assert report.followups["document"] == {"asked": 1, "served": 1}
 
 
 def test_a_model_that_keeps_asking_cannot_loop():
@@ -369,7 +402,7 @@ def test_a_claim_that_names_no_source_is_refused_not_filed_under_the_first():
     value occurs there once, so a number read from the fourth passage could
     be accepted carrying the first passage's page, section and image."""
     def harvest(batch, prior=None):
-        return {"tuples": [{"value": 42005, "unit": "MWh/a", "unit_raw": "MWh/a",
+        return {"tuples": [{"parameter": PARAM, "value": 42005, "unit": "MWh/a", "unit_raw": "MWh/a",
                             "carrier": "Erdgas", "source": "Q9",
                             "quote": "Erdgas macht 42.005 MWh/a aus"}],
                 "status": "complete", "need_more": []}
@@ -392,9 +425,9 @@ def test_only_verified_values_become_the_next_batch_s_prior():
         owner = batch.items[0].source.owner_id
         if owner == 1:
             return {"tuples": [
-                {"value": 42005, "unit": "MWh/a", "unit_raw": "MWh/a",
+                {"parameter": PARAM, "value": 42005, "unit": "MWh/a", "unit_raw": "MWh/a",
                  "carrier": "Erdgas", "quote": "| Erdgas | 42.005 | MWh/a |"},
-                {"value": 999999, "unit": "MWh/a", "unit_raw": "MWh/a",
+                {"parameter": PARAM, "value": 999999, "unit": "MWh/a", "unit_raw": "MWh/a",
                  "carrier": "Erdgas", "quote": "| Erdgas | 42.005 | MWh/a |"}],
                 "status": "complete", "need_more": []}
         return {"tuples": [], "status": "complete", "need_more": []}
@@ -428,7 +461,7 @@ def test_passages_the_model_asked_for_are_counted_as_harvested():
                               harvest=harvest, more_sources=more_sources)
     assert report.owners_harvested == 3, (
         "one planned passage plus the two the model asked for")
-    assert report.followups["OEO_00050016"] == {"asked": 1, "served": 1}
+    assert report.followups["document"] == {"asked": 1, "served": 1}
 
 
 def test_routing_is_never_stricter_than_verification():
@@ -437,7 +470,7 @@ def test_routing_is_never_stricter_than_verification():
     whitespace, so claims verification would have accepted were refused
     before they were ever offered to it — 276 of one pilot's refusals."""
     def harvest(batch, prior=None):
-        return {"tuples": [{"value": 17300, "unit": "MWh/a", "unit_raw": "MWh/a",
+        return {"tuples": [{"parameter": PARAM, "value": 17300, "unit": "MWh/a", "unit_raw": "MWh/a",
                             "carrier": "Heizöl",
                             "quote": "| Heizöl |   17.300 |  MWh/a |"}],
                 "status": "complete", "need_more": []}

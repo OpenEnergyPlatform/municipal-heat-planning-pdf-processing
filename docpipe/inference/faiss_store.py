@@ -224,6 +224,65 @@ def rank_prepared(conn: sqlite3.Connection, prepared: dict, scores, positions,
     return out
 
 
+def fuse_prepared(conn: sqlite3.Connection, prepared: dict, scores, positions,
+                  limit: int,
+                  content_fetcher: Optional[Callable] = None,
+                  exclude: Optional[set] = None,
+                  probes: Optional[list] = None) -> list[dict]:
+    """ONE ranking over all probes, best score per owner. Not one list per probe.
+
+    `rank_prepared` answers a different question: it gives each probe its own
+    top_k and lets each take what the next one may no longer have. Read as a
+    plan, that puts probe 17's best match behind everything probes 1 to 16
+    surfaced, whatever the scores were. Measured over 65 documents and 15,082
+    values, the source a value was actually read from sat at median rank 77
+    that way and at median 26 under this one, with the same index and the same
+    probes.
+
+    Max over probes, not sum and not mean: a passage is relevant because ONE
+    question matches it well, and averaging that against fifteen questions it
+    has nothing to do with is how a good hit gets buried. It also means adding
+    a probe can only move an owner up, so a probe list is safe to grow — but
+    only with probes that say something. A vague probe raises everything it
+    half-matches, which is how the query templates pushed the median from 26
+    to 84 when they were merged in beside the anchors.
+
+    Each hit carries the score AND the probe that won it, because "which
+    wording found this" is the question the next round of anchors is written
+    from.
+    """
+    fetch = content_fetcher or db.fetch_owner_content
+    faiss_ids = prepared["faiss_ids"]
+    owner_of = prepared["owner_of"]
+    skip = set(exclude or ())
+
+    best: dict[tuple[str, int], tuple[float, int]] = {}
+    for i in range(len(scores)):
+        for score, pos in zip(scores[i].tolist(), positions[i].tolist()):
+            if pos < 0:
+                continue
+            owner = owner_of[faiss_ids[pos]]
+            if owner in skip:
+                continue
+            current = best.get(owner)
+            if current is None or score > current[0]:
+                best[owner] = (float(score), i)
+
+    hits: list[dict] = []
+    for (owner_kind, owner_id), (score, probe_index) in sorted(
+            best.items(), key=lambda kv: kv[1][0], reverse=True):
+        if limit and len(hits) >= limit:
+            break
+        content = fetch(conn, owner_kind, owner_id)
+        if content is None:
+            continue
+        hits.append({"score": score, "rank": len(hits),
+                     "probe": (probes[probe_index] if probes
+                               and probe_index < len(probes) else probe_index),
+                     **content})
+    return hits
+
+
 def retrieve(
     conn: sqlite3.Connection,
     global_index: faiss.Index,

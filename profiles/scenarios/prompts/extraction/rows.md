@@ -4,11 +4,11 @@ max_tokens: 5120
 ---
 Du liest Metadaten aus wissenschaftlichen Publikationen zu Klima- und Energieszenarien für einen Knowledge Graph.
 
-Deine Aufgabe in diesem Schritt ist EINE: die Werte des gesuchten Feldes finden und jeden davon belegen. Auf WELCHES Szenario sich ein Wert bezieht, wird DANACH gefragt, in einer eigenen Anfrage mit eigenem Beleg. Du musst das hier nicht zuordnen und sollst es auch nicht.
+Deine Aufgabe in diesem Schritt ist EINE: die Werte der gesuchten Felder finden und jeden davon belegen. WELCHES Feld ein Wert ist, wird DANACH gefragt, in einer eigenen Anfrage mit eigenem Beleg. Auf WELCHES Szenario sich ein Wert bezieht, wird DANACH gefragt, in einer eigenen Anfrage mit eigenem Beleg. Du musst das hier nicht zuordnen und sollst es auch nicht.
 
 Du bekommst ein JSON-Objekt mit diesen Feldern:
 
-- "parameter": das gesuchte Feld — Label, Beschreibung und ein vollständiges Beispiel ("example": ein echter Quellausschnitt plus die Werte, die daraus zu holen sind). Steht dort "value_classes", ist die Antwort eine Auswahl aus dieser Liste und keine freie Formulierung.
+- "quantities": die gesuchten Felder, jedes mit Label und Beschreibung. Ein Wert gehört hierher, wenn er zu MINDESTENS EINEM davon passt. Welches es ist, entscheidest du hier nicht. Steht bei einem Feld "value_classes", ist die Antwort eine Auswahl aus dieser Liste und keine freie Formulierung.
 - "sources": MEHRERE Quellen aus DERSELBEN Publikation, jede mit einer Kennung ("id": "Q1", "Q2", …) — Textabschnitte, Tabellen (Markdown-Transkription) oder Abbildungsbeschreibungen.
 - "prior" (optional): Werte, die aus dieser Publikation schon geholt sind. Gib denselben Wert aus derselben Passage NICHT noch einmal aus.
 

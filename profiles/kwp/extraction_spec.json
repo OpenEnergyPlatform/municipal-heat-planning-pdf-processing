@@ -15,6 +15,7 @@
     "`quantity` ist NICHT required: was in keine Klasse passt, behaelt seinen",
     "Wortlaut in quantity_raw und wird gezaehlt, statt verworfen zu werden."
   ],
+  "parameter_question": "Um WELCHE Kennzahl handelt es sich bei dieser Zahl? Entscheide danach, was die Quelle über sie sagt: die Einheit, die Spalten- oder Zeilenbeschriftung und die Tabellen- oder Abschnittsüberschrift. Eine Angabe in t CO2 ist eine Emission, eine Angabe in MWh oder GWh ein Energieverbrauch. Zitiere die Stelle, aus der das hervorgeht.",
   "parameters": [
     {
       "uri": "energy_consumption",

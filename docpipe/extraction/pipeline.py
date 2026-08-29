@@ -40,6 +40,11 @@ log = logging.getLogger(__name__)
 MAX_SWEEP_ROUNDS = 4
 BATCH_SOURCES = 6
 BATCH_CHARS = 14000
+# How many prose sections a document is planned from. Tables and figures are
+# not capped: they are taken whole, because structure predicts a value better
+# than any ranking does.
+PROSE_TOP = 50
+VISUAL_KINDS = ("table", "figure")
 
 
 @dataclass
@@ -57,10 +62,21 @@ class Source:
 
 @dataclass
 class WorkItem:
-    """One harvest request: read THIS source for THAT parameter."""
+    """One harvest request: read THIS source.
+
+    `parameter` is None for a document-level plan, where which quantity a
+    value is gets asked for instead of assumed. It stays for the callers that
+    still plan per parameter.
+
+    `rank` and `origin` are carried, not recomputed: every knob this stage has
+    is a cut through a ranking, and a cut can only be measured if the number
+    it cuts at is written down next to what came out.
+    """
     document_id: int
     parameter: object
     source: Source
+    rank: Optional[int] = None            # position in the fused ranking
+    origin: str = ""                      # "structure" | "retrieval"
 
 
 @dataclass
@@ -108,6 +124,9 @@ class DocumentReport:
     # parameter uri -> {"asked": n, "served": m}: how often the model said the
     # passages were not enough, and how often retrieval could answer that.
     followups: dict = field(default_factory=dict)
+    # What the plan was built from, so a run can be read back against the
+    # settings it ran under instead of against the ones in the file today.
+    planned: dict = field(default_factory=dict)
 
 
 def plan_document(
@@ -116,67 +135,103 @@ def plan_document(
     templates: list,
     *,
     extra_probes: Optional[dict] = None,
-    retrieve: Callable,                   # (probes, document_id, exclude) -> [[Source]]
-    candidates: Optional[Callable] = None,  # (document_id, Parameter) -> [Source]
-    max_rounds: int = MAX_SWEEP_ROUNDS,
+    retrieve: Callable,                 # (probes, document_id, exclude) -> [Source]
+    structure: Optional[Callable] = None,   # (document_id) -> [Source]
+    prose_top: int = PROSE_TOP,
 ) -> tuple:
     """(work items, report skeleton) — the retrieval half, no model involved.
 
-    The sweep's `seen` set is fed by retrieval alone: no round has ever
-    depended on what the harvest replied. So the whole plan, for the whole
-    corpus, can be built before the first request goes out — which is the
-    point. One request at a time keeps a 4-GPU server idle; the batch path
-    plans every document first and then hands vLLM thousands of requests to
-    schedule at once.
+    One plan per DOCUMENT, not one per parameter. Which quantity a number is,
+    is a coordinate the field sweep asks for like every other, so a table is
+    read once instead of once per parameter.
+
+    Two sets go in, and they are picked by different rules because the values
+    sit in them for different reasons:
+
+    * every table and every figure, from structure alone. Measured over 65
+      documents, 12,094 of 15,082 values came from one of those, and "is a
+      table" is a better predictor of holding a number than any similarity to
+      any question. There are about 110 per document, so reading all of them
+      is affordable exactly once the parameter stopped tripling the plan.
+    * the best `prose_top` sections by retrieval. Prose carries the other
+      fifth of the values and there are 125 sections per document, so this is
+      the half where a ranking has to earn its keep.
+
+    The probes are the HyDE anchors and nothing else. The query templates used
+    to ride along and they were measured as harmful: with them the source a
+    value was really read from sat at median rank 84, without them at 26. A
+    template names the thing, an anchor says the sentence as a plan would
+    write it, and a similarity search matches sentences.
+
+    No rounds. The old loop asked retrieval again with everything it had
+    already returned excluded, which walks down the ranking until the document
+    is exhausted — 277 planned sources against 234 owners, three times over.
+    That is a full scan wearing a vector store as a hat.
     """
     report = DocumentReport(document_id=document_id)
-    items: list = []
+    probes: list = []
     for parameter in spec.parameters:
-        probes = queries_mod.expand(templates, parameter)
-        # The anchors the model wrote from this parameter's ontology
-        # definition, beside the spec's own templates. A template says what to
-        # look for; an anchor says how the sentence would READ in a plan, which
-        # is what a similarity search actually matches against.
-        probes += [p for p in (extra_probes or {}).get(parameter.uri, ())
-                   if p and p not in probes]
-        seen: set = set()
-        rounds = 0
-        while rounds < max_rounds:
-            rounds += 1
-            new_sources: list = []
-            # Every probe of the round in one call: retrieval builds the
-            # document's sub-index once and searches the probes as one matrix.
-            # It grows the excluded set from probe to probe itself, which is
-            # what the loop used to do by handing each probe a fresh snapshot.
-            for sources in retrieve(probes, document_id, set(seen)):
-                for source in sources:
-                    key = (source.owner_kind, source.owner_id)
-                    if key in seen:
-                        continue
-                    seen.add(key)
-                    new_sources.append(source)
-            if not new_sources:
-                rounds -= 1               # the empty pass is not a round of work
-                break
-            items.extend(WorkItem(document_id, parameter, s)
-                         for s in new_sources)
-        report.sweep_rounds[parameter.uri] = rounds
+        for probe in (extra_probes or {}).get(parameter.uri, ()):
+            if probe and probe not in probes:
+                probes.append(probe)
+    if not probes:
+        # No anchors written for this spec. Falling back to the templates is
+        # worse retrieval, and silently worse retrieval is what this whole
+        # rewrite is about, so it is said out loud.
+        log.warning("extraction: document %s planned from query templates, "
+                    "no anchors — expect the ranking to be poor", document_id)
+        for parameter in spec.parameters:
+            for probe in queries_mod.expand(templates, parameter):
+                if probe not in probes:
+                    probes.append(probe)
 
-        if candidates is not None:
-            # The decided division of labour: retrieval is the primary
-            # harvest, the deterministic candidate set is the floor under it.
-            # Whatever the probes never surfaced is harvested now and counted
-            # loudly - the audit stays one sentence: every owner was either
-            # seen by retrieval or processed by the fallback.
-            pool = candidates(document_id, parameter) or []
-            leftover = [s for s in pool
-                        if (s.owner_kind, s.owner_id) not in seen]
-            report.fallback[parameter.uri] = {
-                "candidates": len(pool), "leftover": len(leftover)}
-            for source in leftover:
-                seen.add((source.owner_kind, source.owner_id))
-                items.append(WorkItem(document_id, parameter, source))
+    ranked = retrieve(probes, document_id, set()) or []
+    rank_of = {(s.owner_kind, s.owner_id): i for i, s in enumerate(ranked)}
+
+    visual = [s for s in (structure(document_id) if structure else ())
+              if s.owner_kind in VISUAL_KINDS]
+    # Ranked ones first and in their order, the rest behind them: a table no
+    # probe matched is still worth reading, and still worth reading last.
+    visual.sort(key=lambda s: rank_of.get((s.owner_kind, s.owner_id), 10 ** 9))
+    seen = {(s.owner_kind, s.owner_id) for s in visual}
+
+    # What the ranking found and the structural set does not already hold.
+    # A table among them is kept whatever the cap says: the cap exists because
+    # there are 125 prose sections and a fifth of the values, and it has no
+    # business dropping a table the structural query missed.
+    prose: list = []
+    for source in ranked:
+        key = (source.owner_kind, source.owner_id)
+        if key in seen:
+            continue
+        if source.owner_kind in VISUAL_KINDS:
+            seen.add(key)
+            visual.append(source)
+            continue
+        if len(prose) >= max(0, prose_top):
+            continue
+        seen.add(key)
+        prose.append(source)
+
+    items: list = []
+    for source in visual:
+        key = (source.owner_kind, source.owner_id)
+        items.append(WorkItem(document_id, None, source,
+                              rank=rank_of.get(key), origin="structure"))
+    for source in prose:
+        key = (source.owner_kind, source.owner_id)
+        items.append(WorkItem(document_id, None, source,
+                              rank=rank_of.get(key), origin="retrieval"))
+
+    unranked = sum(1 for s in visual
+                   if (s.owner_kind, s.owner_id) not in rank_of)
+    report.sweep_rounds["document"] = 1
+    report.fallback["document"] = {"candidates": len(visual),
+                                   "leftover": unranked}
     report.owners_harvested = len(items)
+    report.planned = {"visual": len(visual), "prose": len(prose),
+                      "ranked": len(ranked), "probes": len(probes),
+                      "prose_top": prose_top}
     return items, report
 
 
@@ -184,10 +239,14 @@ def group_items(items: list, *, max_sources: int = BATCH_SOURCES,
                 max_chars: int = BATCH_CHARS) -> list:
     """Work items grouped into batches — one request reads several sources.
 
-    Grouping is per document AND per parameter, in the order the sweep found
-    them, so a batch holds passages retrieval considered close to the same
-    question. It never mixes parameters: the choice lists differ per
-    parameter, and a batch spanning two of them would have to carry both.
+    Grouping is per document AND per parameter, in the order the plan built
+    them, so a batch holds passages that were ranked next to each other. It
+    never mixes parameters: the choice lists differ per parameter, and a batch
+    spanning two of them would have to carry both.
+
+    A document-level plan has `parameter is None` on every item, so the rule
+    still holds and the grouping is simply per document. Which parameter each
+    value belongs to is asked for afterwards, per row, with its own evidence.
     """
     batches: list = []
     current: Optional[Batch] = None
@@ -411,7 +470,8 @@ def merge_field(rows: list, sources: list, slot, reply: Optional[dict]) -> dict:
                 and any(quote_in(s.text or "", quote) for s in sources)):
             if row.claim.get(f"{slot.name}_state") != READ:
                 row.claim[f"{slot.name}_state"] = UNBACKED
-            failed.append({"row": row.label, "reason": (
+            failed.append({"row": row.label, "why": "quote_not_in_source",
+                           "reason": (
                 "Dein \"quote\" steht in keiner der gezeigten Quellen. "
                 "Kopiere eine Passage Zeichen für Zeichen aus \"sources\" "
                 "oder aus dem \"quote\" der Zeile selbst.")})
@@ -424,7 +484,8 @@ def merge_field(rows: list, sources: list, slot, reply: Optional[dict]) -> dict:
             if row.claim.get(f"{slot.name}_state") != READ:
                 row.claim[f"{slot.name}_state"] = UNBACKED
             shown_answer = wording or given
-            failed.append({"row": row.label, "reason": (
+            failed.append({"row": row.label, "why": "answer_not_in_quote",
+                           "given": given, "raw": wording, "reason": (
                 f"Dein \"quote\" enthält {shown_answer!r} nicht. Zitier die "
                 f"Stelle, an der es wirklich steht, oder antworte mit "
                 f"\"{UNSTATED}\".")})
@@ -565,10 +626,14 @@ class Sweep:
 
 
 def build_sweeps(batches: list, rounds: int = 1) -> dict:
-    """One Sweep per (document, parameter), keyed as the batches are."""
+    """One Sweep per (document, parameter), keyed as the batches are.
+
+    A document-level plan has no parameter, so the key is the document and the
+    follow-up budget is the document's.
+    """
     sweeps: dict = {}
     for batch in batches:
-        key = (batch.document_id, batch.parameter.uri)
+        key = (batch.document_id, _batch_uri(batch))
         sweep = sweeps.get(key)
         if sweep is None:
             sweep = sweeps[key] = Sweep(set(), rounds)
@@ -611,12 +676,13 @@ def harvest_document(
     spec: Spec,
     templates: list,
     *,
-    retrieve: Callable,                   # (probes, document_id, exclude) -> [[Source]]
+    retrieve: Callable,                   # (probes, document_id, exclude) -> [Source]
     harvest: Callable,                    # (Batch, prior) -> reply dict
     locate: Optional[Callable] = None,    # (Source, quote) -> rects | None
-    candidates: Optional[Callable] = None,  # (document_id, Parameter) -> [Source]
+    structure: Optional[Callable] = None,   # (document_id) -> [Source]
     more_sources: Optional[Callable] = None,  # (doc, queries, exclude) -> [Source]
-    max_rounds: int = MAX_SWEEP_ROUNDS,
+    extra_probes: Optional[dict] = None,
+    prose_top: int = PROSE_TOP,
     max_sources: int = BATCH_SOURCES,
     max_chars: int = BATCH_CHARS,
 ) -> DocumentReport:
@@ -628,13 +694,14 @@ def harvest_document(
     not a chain is the unit here.
     """
     items, report = plan_document(document_id, spec, templates,
-                                  retrieve=retrieve, candidates=candidates,
-                                  max_rounds=max_rounds)
+                                  extra_probes=extra_probes,
+                                  retrieve=retrieve, structure=structure,
+                                  prose_top=prose_top)
     queue = group_items(items, max_sources=max_sources, max_chars=max_chars)
     sweeps = build_sweeps(queue)
     while queue:
         batch = queue.pop(0)
-        sweep = sweeps[(batch.document_id, batch.parameter.uri)]
+        sweep = sweeps[(batch.document_id, _batch_uri(batch))]
         reply = harvest(batch, sweep.snapshot())
         reply = reply if isinstance(reply, dict) else {}
         # The follow-up runs first because it is what marks the reply as
@@ -644,7 +711,7 @@ def harvest_document(
                                    max_sources=max_sources,
                                    max_chars=max_chars))
         before = len(report.tuples)
-        fold_batch(batch, reply, report, locate=locate)
+        fold_batch(batch, reply, report, locate=locate, spec=spec)
         # Only what survived verification becomes the next batch's `prior`:
         # the prompt tells the model not to repeat what is in there, so a
         # claim the verifier threw away would suppress the same value
@@ -655,10 +722,29 @@ def harvest_document(
 
 def fold_claims(item: WorkItem, claims: Optional[list],
                 report: DocumentReport, *,
-                locate: Optional[Callable] = None) -> None:
-    """Verify one source's claims into the report — the pure half of a harvest."""
-    source, parameter = item.source, item.parameter
+                locate: Optional[Callable] = None,
+                spec: Optional[Spec] = None) -> None:
+    """Verify one source's claims into the report — the pure half of a harvest.
+
+    The parameter comes from the claim when the plan did not fix one: a
+    document-level plan reads a passage once and the field sweep decides, per
+    row and with its own quote, which quantity the number is. A claim that
+    names no parameter the spec knows cannot be verified against anything and
+    is refused rather than folded under a guess.
+    """
+    source = item.source
     for claim in claims or []:
+        parameter = item.parameter
+        if parameter is None:
+            parameter = (spec.by_uri.get(str(claim.get("parameter") or ""))
+                         if spec is not None else None)
+        if parameter is None:
+            report.refusals.append(
+                {"parameter": claim.get("parameter"),
+                 "reason": "claim names no parameter of the spec",
+                 "claim": claim,
+                 "owner": [source.owner_kind, source.owner_id]})
+            continue
         finder = ((lambda quote, s=source: locate(s, quote))
                   if locate is not None else None)
         outcome = verify_tuple(claim, parameter, source.text,
@@ -691,8 +777,14 @@ def fold_claims(item: WorkItem, claims: Optional[list],
         report.flags.extend(outcome.flags)
 
 
+def _batch_uri(batch: Batch) -> Optional[str]:
+    """The parameter a batch was planned for, or None for a document plan."""
+    return batch.parameter.uri if batch.parameter is not None else None
+
+
 def fold_batch(batch: Batch, reply: Optional[dict], report: DocumentReport, *,
-               locate: Optional[Callable] = None) -> None:
+               locate: Optional[Callable] = None,
+               spec: Optional[Spec] = None) -> None:
     """Verify one batch's reply into the report.
 
     The reply carries the tuples, and it carries what the model said about
@@ -704,17 +796,17 @@ def fold_batch(batch: Batch, reply: Optional[dict], report: DocumentReport, *,
     reply = reply if isinstance(reply, dict) else {}
     routed, orphans = route_claims(batch, reply.get("tuples"))
     for item, claims in zip(batch.items, routed):
-        fold_claims(item, claims, report, locate=locate)
+        fold_claims(item, claims, report, locate=locate, spec=spec)
     for claim in orphans:
         # Named no source of this batch and quoted none of them either. There
         # is no text to check it against, so there is no way to accept it.
         report.refusals.append(
-            {"parameter": batch.parameter.uri, "reason": "claim names no source",
+            {"parameter": _batch_uri(batch), "reason": "claim names no source",
              "claim": claim,
              "owner": [batch.items[0].source.owner_kind,
                        batch.items[0].source.owner_id]})
     counts = report.followups.setdefault(
-        batch.parameter.uri, {"asked": 0, "served": 0})
+        _batch_uri(batch) or "document", {"asked": 0, "served": 0})
     if reply.get("status") == "partial" and reply.get("need_more"):
         counts["asked"] += 1
     if reply.get("_served"):
@@ -728,7 +820,8 @@ def fold_batch(batch: Batch, reply: Optional[dict], report: DocumentReport, *,
 
 def fold_fieldwise(batch: Batch, rows: list, orphans: list,
                    report: DocumentReport, *,
-                   locate: Optional[Callable] = None) -> None:
+                   locate: Optional[Callable] = None,
+                   spec: Optional[Spec] = None) -> None:
     """Verify a field-wise batch into the report.
 
     By the time this runs the rows carry every coordinate a field request
@@ -738,10 +831,10 @@ def fold_fieldwise(batch: Batch, rows: list, orphans: list,
     the passage did not say, not because a sixteen-field answer skipped it.
     """
     for item, claims in zip(batch.items, rows_by_item(batch, rows)):
-        fold_claims(item, claims, report, locate=locate)
+        fold_claims(item, claims, report, locate=locate, spec=spec)
     for claim in orphans:
         report.refusals.append(
-            {"parameter": batch.parameter.uri, "reason": "claim names no source",
+            {"parameter": _batch_uri(batch), "reason": "claim names no source",
              "claim": claim,
              "owner": [batch.items[0].source.owner_kind,
                        batch.items[0].source.owner_id]})

@@ -148,6 +148,13 @@ class Parameter:
 @dataclass
 class Spec:
     parameters: list
+    # The one line that asks which parameter a value belongs to. The harvest
+    # reads a passage once and finds the numbers in it; WHICH quantity each
+    # number is, is a coordinate like any other and is asked for like any
+    # other, with its own closed list and its own evidence. Reading the same
+    # table once per parameter is how the plan came to be three times the
+    # document.
+    parameter_question: Optional[str] = None
     by_uri: dict = field(default_factory=dict)
 
     def __post_init__(self) -> None:
@@ -341,4 +348,9 @@ def load(source: Union[Path, str, dict]) -> Spec:
     uris = [p.uri for p in parameters]
     if len(set(uris)) != len(uris):
         _fail("spec.parameters", "duplicate parameter uri")
-    return Spec(parameters=parameters)
+    question = data.get("parameter_question")
+    if question is not None and not (isinstance(question, str)
+                                     and question.strip()):
+        _fail("spec.parameter_question", "must be a non-empty string")
+    return Spec(parameters=parameters,
+                parameter_question=(question or None))
