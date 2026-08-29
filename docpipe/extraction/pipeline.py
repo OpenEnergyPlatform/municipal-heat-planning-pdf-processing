@@ -390,6 +390,15 @@ def merge_field(rows: list, sources: list, slot, reply: Optional[dict]) -> dict:
         if str(given).strip() == UNSTATED:
             if row.claim.get(f"{slot.name}_state") == READ:
                 continue          # an earlier window already read it
+            # "Not stated" needs no passage, and the model sometimes supplies
+            # one anyway — usually the row's own label. That is not evidence
+            # and is not treated as any, but it is not noise either: it is the
+            # wording the model looked at and found no class for. A CCS unit
+            # in a sector column is a gap in the vocabulary, not a silent plan,
+            # and the two are the same empty cell unless the wording is kept.
+            noticed = answer.get("value_raw")
+            if isinstance(noticed, str) and noticed.strip():
+                row.claim[f"{slot.name}_seen"] = noticed.strip()
             # No passage is asked for and none could be given: there is no
             # sentence in a document that says a thing is not in it. This is
             # the one answer that carries no evidence, and it is why the row
