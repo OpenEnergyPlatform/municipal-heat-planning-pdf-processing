@@ -1019,3 +1019,157 @@ def test_the_unreadable_diagnostic_shows_the_end_and_marks_the_cut():
     assert f"content {len(_M.content)}ch" in line
     assert "weitere" in line, "the cut has to be marked"
     assert _M.content[-40:] in line, "the end of the reply has to be visible"
+
+
+# ---------------------------------------------------------------------------
+# Anchors the profile freezes
+#
+# The promise: planning searches with the anchors the profile froze wherever it
+# names any, the questions it does not name are still written by the model, an
+# anchor belonging to no question of this spec stops the run instead of
+# vanishing, and a document harvested under another set does not count as done.
+# Four clauses, four tests.
+# ---------------------------------------------------------------------------
+
+class _FrozenProfile:
+    """A profile that names an anchors file and nothing else."""
+
+    def __init__(self, path):
+        self.name, self.path = "test", path
+
+    def component(self, module, attr):
+        if (module, attr) == ("extraction", "ANCHORS_PATH"):
+            return self.path
+        return None
+
+
+def _anchor_file(tmp_path, anchors, name="anchors.json"):
+    path = tmp_path / name
+    path.write_text(json.dumps({"anchors": anchors}, ensure_ascii=False),
+                    encoding="utf-8")
+    return path
+
+
+REAL = ("Endenergiebilanz. Abbildung 28 zeigt den Median des bereinigten "
+        "Endenergieverbrauchs auf Ebene der Baubloecke.")
+
+
+def test_the_frozen_anchor_is_the_one_that_plans(tmp_path):
+    """Measured over 150 documents and 4,785 prose values: a set taken from
+    sections that really produced a value puts 18.0% of them in the top 10
+    sections, where the set the model wrote from the same definitions puts
+    11.0% and chance puts 7.6%. So the frozen one has to win — over the model,
+    and over whatever a previous run of the same output directory wrote."""
+    uri = SPEC.parameters[0].uri
+    store = tmp_path / "store.json"
+    runner.save_anchors(store, "k", {uri: ["Ein alter Satz aus einem "
+                                           "frueheren Lauf des Verzeichnisses."]})
+    frozen, sha = runner.frozen_anchors(_FrozenProfile(
+        _anchor_file(tmp_path, {uri: [REAL]})), SPEC)
+    assert sha, "a frozen set has to be identifiable"
+
+    client = _StubClient('{"anchors": ["Ein erfundener Satz, wie das Modell '
+                         'ihn schreiben wuerde, ueber zwanzig Zeichen."]}')
+    anchors = runner.make_anchors(SPEC, client=client, store=store, key="k",
+                                  frozen=frozen)
+    assert anchors[uri] == [REAL], (
+        "neither the store nor the model may overwrite what was measured")
+    asked = [json.loads(call["messages"][-1]["content"])["label"]
+             for call in client.seen]
+    assert SPEC.parameters[0].label not in asked, (
+        "and the model must not even be asked for a question already frozen")
+
+
+def test_a_question_the_profile_leaves_open_is_still_written(tmp_path):
+    """Only the value anchors were measured. The axis questions were not, and
+    freezing the ones we have must not silently drop the ones we do not."""
+    uri = SPEC.parameters[0].uri
+    frozen, _sha = runner.frozen_anchors(_FrozenProfile(
+        _anchor_file(tmp_path, {uri: [REAL]})), SPEC)
+    client = _StubClient('{"anchors": ["Das Bilanzjahr der Auswertung ist '
+                         'das Jahr 2022."]}')
+    anchors = runner.make_anchors(SPEC, client=client, frozen=frozen)
+
+    year = runner.anchor_key(uri, "year")
+    assert anchors[year] and anchors[year] != [REAL], (
+        "the axis anchors are still the model's job")
+    assert len(client.seen) == len(runner.anchor_targets(SPEC)) - 1, (
+        "one call for every question that was NOT frozen, and no more")
+
+
+def test_an_anchor_for_a_question_this_spec_does_not_ask_stops_the_run(tmp_path):
+    """The file is measured once and then outlives the spec it was measured
+    against. A key that is no question of this run would be dropped by every
+    reader without a word, and the corpus would be harvested with a set nobody
+    had checked."""
+    bad = _anchor_file(tmp_path, {"OEO_00050016": [REAL],
+                                  "eine_kennzahl_die_es_nicht_mehr_gibt": [REAL]})
+    with pytest.raises(LookupError) as caught:
+        runner.frozen_anchors(_FrozenProfile(bad), SPEC)
+    assert "eine_kennzahl_die_es_nicht_mehr_gibt" in str(caught.value)
+
+    # An empty list is the same defect wearing a different hat: the script that
+    # writes these files writes [] for a parameter it found nothing for.
+    empty = _anchor_file(tmp_path, {SPEC.parameters[0].uri: []}, "leer.json")
+    with pytest.raises(LookupError):
+        runner.frozen_anchors(_FrozenProfile(empty), SPEC)
+
+    # And a profile that freezes nothing is not an error, it is the default.
+    assert runner.frozen_anchors(_FrozenProfile(None), SPEC) == ({}, "")
+
+
+def test_a_document_harvested_under_other_anchors_is_not_current(tmp_path, monkeypatch):
+    """The anchors are the only probes the plan searches with, so they decide
+    WHICH passages a document was read from. When an interrupted run has
+    already stamped documents, leaving the anchors out of the stamp makes
+    exactly those come back "current" and stay the only ones on the old set,
+    with nothing in the corpus saying which document was read with what."""
+    monkeypatch.setattr(runner.prompts, "versions",
+                        lambda ids: {i: "v1" for i in ids})
+    calls = []
+
+    def retrieve(query, document_id, exclude):
+        return [] if ("table", 1) in exclude else \
+            [Source("table", 1, "| Erdgas | 42.005 | MWh/a |", {"page": 3})]
+
+    def harvest(batch, prior=None):
+        calls.extend(i.source.owner_id for i in batch.items)
+        return {"tuples": [{"source": "Q1", "value": 42005, "unit_raw": "MWh/a",
+                            "carrier": "Erdgas", "quote": "Erdgas | 42.005"}],
+                "status": "complete", "need_more": []}
+
+    deps = {"retrieve": _per_probe(retrieve), "harvest": harvest}
+    args = (7, "plan_a", tmp_path, SPEC, "sha-1", ["{label}"], deps)
+
+    runner.run_document(*args, anchors_sha="anker-a")
+    assert calls == [1]
+    runner.run_document(*args, anchors_sha="anker-a")
+    assert calls == [1], "the same anchors are the same result"
+
+    assert runner.stale(tmp_path / "plan_a.stamp.json",
+                        runner._stamp_current("sha-1", "anker-b")) == ["anchors"], (
+        "and a different set is reported as exactly that, not as a spec change")
+    runner.run_document(*args, anchors_sha="anker-b", force_stale=True)
+    assert calls == [1, 1], "another set is another harvest"
+
+
+def test_the_kwp_profile_freezes_anchors_its_own_spec_asks_for():
+    """The shipped file against the shipped spec, which is the pairing the
+    corpus run actually loads."""
+    from pathlib import Path
+
+    from docpipe.extraction.spec import load as load_spec
+    from docpipe.profile import load_profile
+
+    profile = load_profile("kwp")
+    spec = load_spec(Path(profile.component("extraction", "SPEC_PATH")))
+    frozen, sha = runner.frozen_anchors(profile, spec)
+    assert len(sha) == 16
+    assert set(frozen) == {p.uri for p in spec.parameters}, (
+        "every parameter is planned for, and only parameters are frozen")
+    assert all(len(text) > 100 for texts in frozen.values() for text in texts), (
+        "these are passages, not the one-line queries this replaced")
+    # The key a run reads its own anchors.json back under has to move with the
+    # file, or changing it leaves every existing output directory on the old
+    # set with no line anywhere saying so.
+    assert runner.anchors_key("sha", sha) != runner.anchors_key("sha")
