@@ -109,9 +109,16 @@ PROMPT_IDS = (HARVEST_PROMPT_ID, QUERIES_PROMPT_ID, ANCHORS_PROMPT_ID,
 # reachable because it is what every measured number so far was taken with,
 # and a comparison needs both.
 FIELDWISE = os.environ.get("EXTRACT_FIELDWISE", "1") != "0"
-# The field requests of one batch go out together. They are HTTP waits, and
-# they share their whole prefix, so the server answers them from cache.
-FIELD_PARALLEL = int(os.environ.get("EXTRACT_FIELD_PARALLEL", "64"))
+# Where the run's concurrency actually lives once the values are found. A
+# batch is one row request and then one sweep per axis, and the sweeps are
+# independent, so 128 batches of seven axes are nine hundred sweeps that can
+# all be in flight. Within ONE sweep the windows stay strictly sequential —
+# it exists to stop as soon as the coordinate is read, and asking the next
+# three windows speculatively would buy parallelism with wasted requests.
+#
+# 64 was the bottleneck it looks like: 128 batch threads waiting on a pool of
+# 64 held the server at a quarter of what it schedules.
+FIELD_PARALLEL = int(os.environ.get("EXTRACT_FIELD_PARALLEL", "192"))
 # Short windows, many requests. Two sources per window with one shared is the
 # unit the sweep walks the document in once a coordinate was not in the
 # value's own passage; the rounds bound it, because a stop heuristic without a
@@ -1835,6 +1842,13 @@ def main(argv: Optional[list] = None) -> int:
     parser.add_argument("--serialize", type=Path, default=None, metavar="TTL",
                         help="No harvest: hand the JSONL in OUT to the "
                              "profile's kg.make_serializer and write TTL")
+    parser.add_argument("--recheck", action="store_true",
+                        help="No harvest and no model: apply the current "
+                             "evidence rule to the JSONL already in OUT, drop "
+                             "every coordinate whose quote does not carry it, "
+                             "and clear the stamps so the next run redoes them")
+    parser.add_argument("--keep-stamps", action="store_true",
+                        help="--recheck only: leave the resume stamps in place")
     add_profile_argument(parser)
     args = parser.parse_args(argv)
     logging.basicConfig(level=args.log_level,
@@ -1842,6 +1856,19 @@ def main(argv: Optional[list] = None) -> int:
                         datefmt="%H:%M:%S")
 
     profile = resolve_profile(args)
+    if args.recheck:
+        raw_spec_path = profile.component("extraction", "SPEC_PATH")
+        if raw_spec_path is None:
+            parser.error(f"profile {profile.name!r} does not configure the "
+                         f"extraction stage")
+        from .recheck import run as recheck_run
+        stats = recheck_run(args.out, load_spec(Path(raw_spec_path)),
+                            drop_stamps=not args.keep_stamps)
+        total = stats["coordinates"] or 1
+        log.info("recheck: %d of %d coordinates survive the rule (%.1f%%), "
+                 "over %d tuple(s)", stats["read"], stats["coordinates"],
+                 100.0 * stats["read"] / total, stats["tuples"])
+        return 0
     if args.serialize is not None:
         factory = profile.component("kg", "make_serializer")
         if factory is None:
@@ -1912,10 +1939,14 @@ def main(argv: Optional[list] = None) -> int:
                  fitted, BATCH_SOURCES)
         BATCH_SOURCES = fitted
 
-    log.info("extraction: %s",
-             "one request per field, each swept in short windows until it is "
-             "read" if FIELDWISE else "one request per tuple "
-             "(EXTRACT_FIELDWISE=0)")
+    if FIELDWISE:
+        log.info("extraction: one request per field, swept in windows of %d "
+                 "(overlap %d) until read; %d batch thread(s), %d field "
+                 "thread(s), at most %d window(s) per coordinate",
+                 FIELD_WINDOW, FIELD_OVERLAP, LLM_PARALLEL, FIELD_PARALLEL,
+                 FIELD_MAX_WINDOWS)
+    else:
+        log.info("extraction: one request per tuple (EXTRACT_FIELDWISE=0)")
     locate = make_locate(args.db, args.pdf_root)
 
     listing = sqlite3.connect(f"file:{args.db}?mode=ro", uri=True)
