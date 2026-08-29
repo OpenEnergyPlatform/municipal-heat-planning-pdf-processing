@@ -40,6 +40,7 @@ from .pipeline import (Source, WorkItem, build_sweeps,
                        follow_up, group_items, harvest_document, merge_field,
                        mark_unanswered, open_rows, plan_document, route_claims,
                        rows_from_reply, window_sources, write_report)
+from .fields import EXHAUSTED
 from .queries import expand as expand_queries
 from .spec import Spec, load as load_spec
 
@@ -118,6 +119,15 @@ FIELD_PARALLEL = int(os.environ.get("EXTRACT_FIELD_PARALLEL", "64"))
 FIELD_WINDOW = int(os.environ.get("EXTRACT_FIELD_WINDOW", "2"))
 FIELD_OVERLAP = int(os.environ.get("EXTRACT_FIELD_OVERLAP", "1"))
 FIELD_ROUNDS = int(os.environ.get("EXTRACT_FIELD_ROUNDS", "4"))
+# How many sections at each end of a document count as its covers. Only ever
+# used for a parameter without axes, which asks for something that stands once
+# and at a known place — the title page in front, the Impressum at the back.
+EDGE_SECTIONS = int(os.environ.get("EXTRACT_EDGE_SECTIONS", "3"))
+# The most windows one coordinate may cost before the sweep stops. A plan of
+# 249 sections combed two at a time for seven axes would be nine hundred
+# requests for one batch, so there is a ceiling — and a row that hits it is
+# marked exhausted, never "not stated".
+FIELD_MAX_WINDOWS = int(os.environ.get("EXTRACT_FIELD_MAX_WINDOWS", "24"))
 
 _THINK_RE = re.compile(r"<think>.*?</think>", re.DOTALL)
 _FENCE_OPEN = re.compile(r"^```(?:json)?\s*")
@@ -243,6 +253,53 @@ def make_retrieve(conn: sqlite3.Connection, index, id_to_pos: dict,
         return [[_source_of(hit) for hit in hits] for hits in answers]
 
     return retrieve
+
+
+def make_rest_of_document(db_path: Path) -> Callable:
+    """(document_id, exclude) -> every remaining section, in document order.
+
+    The floor under the field sweep, and the reason "not stated" can mean it.
+    Retrieval answers "which passages look like this question", and for a
+    coordinate that is stated once in a caption twelve pages away the answer
+    is often none of them — an embedding does not rank a table caption under
+    "which reference year does this figure belong to".
+
+    So when the probes stop bringing anything new, the sweep stops asking and
+    starts reading: the document's own sections, in their own order, until the
+    coordinate is found or the document is finished. Finite by construction,
+    which is what lets a sweep end in an answer rather than in a budget.
+    """
+    local = threading.local()
+
+    def connections():
+        if getattr(local, "conn", None) is None:
+            local.conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
+            local.conn.row_factory = sqlite3.Row
+            local.fetch = make_content_fetcher()
+        return local.conn, local.fetch
+
+    def rest_of_document(document_id: int, exclude: set) -> list:
+        conn, fetch = connections()
+        try:
+            ids = [int(r[0]) for r in conn.execute(
+                "SELECT id FROM Sections WHERE document = ? "
+                "ORDER BY COALESCE(section_number, id)", (document_id,))]
+        except Exception as exc:
+            log.warning("   sections of document %s unreadable: %s",
+                        document_id, exc)
+            return []
+        out: list = []
+        for section_id in ids:
+            if ("section", section_id) in exclude:
+                continue
+            hit = fetch(conn, "section", section_id)
+            if hit is None:
+                continue
+            out.append(_source_of({**hit, "owner_kind": "section",
+                                   "owner_id": section_id}, via="comb"))
+        return out
+
+    return rest_of_document
 
 
 def make_more_sources(db_path: Path, index, id_to_pos: dict,
@@ -499,6 +556,36 @@ def make_candidates(conn: sqlite3.Connection,
 
     fetch = content_fetcher or inference_db.fetch_owner_content
 
+    def edges(document_id: int) -> list:
+        """The document's first and last sections — its covers.
+
+        A parameter without axes asks for something that stands once in the
+        document and at a known place, and that place is an edge: the title
+        page in front, the Impressum at the back. It is not a similarity
+        question, and treating it as one fails in a way retrieval cannot fix,
+        because a cover page carries almost no text to embed.
+
+        The token floor above cannot reach these either: its words come from
+        units_accepted and the axis vocabularies, and a parameter without axes
+        has neither. What is left is its label, so `planning_organisation`
+        searched German full text for the phrase "Beauftragtes Planungsbüro".
+
+        Both edges, not just the front. The scenarios side measured 59 of 60
+        missing front pages in section 1 and proposed the first; measured on
+        the 58 KWP plans that named no planning office, section 1 holds it for
+        15, sections 2-3 for another 17, and the last three sections for 17
+        more. A Wärmeplan puts its Impressum at the back.
+        """
+        first = [int(r[0]) for r in conn.execute(
+            "SELECT id FROM Sections WHERE document = ? "
+            "ORDER BY COALESCE(section_number, id) LIMIT ?",
+            (document_id, EDGE_SECTIONS))]
+        last = [int(r[0]) for r in conn.execute(
+            "SELECT id FROM Sections WHERE document = ? "
+            "ORDER BY COALESCE(section_number, id) DESC LIMIT ?",
+            (document_id, EDGE_SECTIONS))]
+        return first + last
+
     def candidates(document_id: int, parameter) -> list:
         with _TOKENS_LOCK:
             tokens = _TOKENS.get(parameter.uri)
@@ -518,6 +605,10 @@ def make_candidates(conn: sqlite3.Connection,
             f"SELECT i.id FROM Images i JOIN Sections s ON i.section = s.id "
             f"WHERE s.document = ? AND ({like('i.description')})",
             [document_id, *params])]
+        if not parameter.axes:
+            seen = {o for o in owners}
+            owners += [("section", sid) for sid in edges(document_id)
+                       if ("section", sid) not in seen]
         sources = []
         for owner_kind, owner_id in owners:
             hit = fetch(conn, owner_kind, owner_id)
@@ -1152,7 +1243,9 @@ def make_field_asker() -> Callable:
 
 
 def make_fieldwise_harvester(image_root: Optional[Path] = None,
-                             more_sources: Optional[Callable] = None) -> Callable:
+                             more_sources: Optional[Callable] = None,
+                             rest_of_document: Optional[Callable] = None
+                             ) -> Callable:
     """A harvest(batch, prior) that asks per field and answers like the old one.
 
     Same signature as make_harvester's, so the scheduler above it does not
@@ -1169,7 +1262,7 @@ def make_fieldwise_harvester(image_root: Optional[Path] = None,
     def sweep_field(batch, rows: list, slot) -> dict:
         """Short windows over the document until this coordinate is read.
 
-        The value's own passage first, because a carrier usually is in the
+        The value's own passages first, because a carrier usually is in the
         table row it labels. What is still open after that is looked for
         further out, one short window at a time with an overlap, because the
         year of a table is in its caption and the scenario is in the section
@@ -1177,38 +1270,66 @@ def make_fieldwise_harvester(image_root: Optional[Path] = None,
 
         Short windows and many requests, not one wide one. A window that holds
         the answer holds it whether or not ninety other passages ride along,
-        and the ninety cost the attention that would have found it. The sweep
-        stops the moment nothing is open, so a coordinate that stands in the
-        first window costs exactly one request.
+        and the ninety cost the attention that would have found it.
+
+        One window saying "not in here" ends nothing. It is a statement about
+        two passages, and the next window shows two others: a row stays open
+        through out:unstated and closes only on a reading. What ends the sweep
+        is running out of document — retrieval first, then the sections in
+        their own order — or running out of budget, and those two are written
+        down differently, because "the plan does not say" and "we stopped
+        looking" are the pair this whole stage exists to keep apart.
         """
         totals = {"filled": 0, "unquoted": 0, "unbacked": 0, "unstated": 0}
-        pool_extra: list = []
         seen = {(i.source.owner_kind, i.source.owner_id) for i in batch.items}
-        windows = [batch.sources]
-        for round_index in range(FIELD_ROUNDS):
+        state = {"asked": 0, "answer": None}
+
+        def run(windows) -> bool:
+            """Ask over these windows. False when the budget ran out."""
             for shown in windows:
                 todo = open_rows(rows, slot)
                 if not todo:
-                    return totals
-                answer = ask(shown, todo, slot)
-                counts = merge_field(rows, shown, slot, answer)
+                    return True
+                if state["asked"] >= FIELD_MAX_WINDOWS:
+                    return False
+                state["asked"] += 1
+                state["answer"] = ask(shown, todo, slot)
+                counts = merge_field(rows, shown, slot, state["answer"])
                 for key in totals:
                     totals[key] += counts[key]
-            if not open_rows(rows, slot) or more_sources is None:
+            return True
+
+        combed = run([batch.sources])
+        for _ in range(FIELD_ROUNDS):
+            if not combed or not open_rows(rows, slot) or more_sources is None:
                 break
             # Still open, so look further out. The probe is the axis's own
             # question — the sentence that would STATE this coordinate, which
             # is what a similarity search can match on.
             probes = [slot.question] if slot.question else []
-            probes += [q for q in (answer or {}).get("need_more") or []
+            probes += [q for q in (state["answer"] or {}).get("need_more") or []
                        if isinstance(q, str) and len(q) > 20]
             fresh = more_sources(batch.document_id, probes, set(seen)) or []
             if not fresh:
                 break
             for source in fresh:
                 seen.add((source.owner_kind, source.owner_id))
-            pool_extra.extend(fresh)
-            windows = list(window_sources(fresh, FIELD_WINDOW, FIELD_OVERLAP))
+            combed = run(window_sources(fresh, FIELD_WINDOW, FIELD_OVERLAP))
+
+        if combed and open_rows(rows, slot) and rest_of_document is not None:
+            # Retrieval has nothing left to offer and the coordinate is still
+            # open. Read the rest of the plan rather than call it unstated on
+            # the strength of what a ranking happened to surface.
+            rest = rest_of_document(batch.document_id, set(seen)) or []
+            combed = run(window_sources(rest, FIELD_WINDOW, FIELD_OVERLAP))
+
+        if not combed:
+            for row in open_rows(rows, slot):
+                # Still open with the document unread to the end. Not the same
+                # finding as a document that does not say it, and not recorded
+                # as one.
+                row.claim[f"{slot.name}_state"] = EXHAUSTED
+        totals["asked"] = state["asked"]
         return totals
 
     def harvest(batch, prior: Optional[list] = None) -> dict:
@@ -1231,7 +1352,8 @@ def make_fieldwise_harvester(image_root: Optional[Path] = None,
                 log.warning("   field %s raised: %s", slot.name, exc)
         blank = mark_unanswered(rows, slots)
         tally = {k: sum(c[k] for c in counts.values())
-                 for k in ("filled", "unstated", "unquoted", "unbacked")}
+                 for k in ("filled", "unstated", "unquoted", "unbacked",
+                           "asked")}
         if tally["unquoted"] or tally["unbacked"] or blank:
             log.info("   fields: %d read, %d not stated, %d unanswered, "
                      "dropped %d (quote not in source) + %d (answer not in quote)",
@@ -1841,7 +1963,8 @@ def main(argv: Optional[list] = None) -> int:
     # After more_sources, because the field sweep uses it: a coordinate that
     # is not in the value's own passage is looked for further out in the same
     # document. OpenAI client is thread-safe.
-    harvest = (make_fieldwise_harvester(args.image_root, more_sources)
+    harvest = (make_fieldwise_harvester(args.image_root, more_sources,
+                                        make_rest_of_document(args.db))
                if FIELDWISE else make_harvester(args.image_root))
 
     def plan(document_id: int, filename: str) -> tuple:

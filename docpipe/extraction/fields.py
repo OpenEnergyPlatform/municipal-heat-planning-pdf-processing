@@ -47,6 +47,11 @@ UNSTATED = "out:unstated"
 READ = "read"              # answered and the passage carries it
 SAID_UNSTATED = "unstated"  # answered: the passages do not say
 UNANSWERED = "unanswered"   # the request came back without this row at all
+# Still open when the sweep ran out of budget with the document unread to the
+# end. Deliberately not "unstated": one is a finding about the plan, the other
+# is a finding about the run, and collapsing them is the mistake this module
+# was written to stop making.
+EXHAUSTED = "exhausted"
 
 
 @dataclass(frozen=True)
