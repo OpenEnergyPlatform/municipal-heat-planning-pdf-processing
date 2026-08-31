@@ -1808,6 +1808,7 @@ def split_long_sources(items: list, max_chars: int = MAX_SOURCE_CHARS) -> list:
 def harvest_batches(batches: list, harvest: Callable, *,
                     more_sources: Optional[Callable] = None,
                     verify: Optional[Callable] = None,
+                    on_give_up: Optional[Callable] = None,
                     workers: int = LLM_PARALLEL) -> list:
     """Every batch of the whole run in flight at once.
 
@@ -1829,6 +1830,12 @@ def harvest_batches(batches: list, harvest: Callable, *,
     as they are earned. Ordering is by index, not by completion: the server
     answers a 40-token table long before a 6000-token section, and the report
     must not depend on that.
+
+    *on_give_up* is called once when the dead-server cut fires. Cancelling this
+    group is not enough on its own: the cut fired sixteen times in one run and
+    the loop went on to the next group each time, so a server that died at
+    01:44 was still being asked at 05:14. What the caller does with it is the
+    caller's business, but it has to be able to know.
     """
     from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 
@@ -1888,6 +1895,8 @@ def harvest_batches(batches: list, harvest: Callable, *,
                         for f in list(pending):
                             f.cancel()
                         pending.clear()
+                        if on_give_up is not None:
+                            on_give_up()
                         break
                 else:
                     dead_streak[0] = 0
@@ -2090,7 +2099,7 @@ UNREACHABLE_LIMIT = 0.5
 
 
 def finish_document(report, name: str, out_dir: Path, spec_sha: str,
-                    anchors_sha: str = "") -> None:
+                    anchors_sha: str = "", answered: Optional[int] = None) -> None:
     """Write one document's JSONL and stamp it with what produced it.
 
     The stamp is what a resume trusts, so it is withheld when the harvest did
@@ -2098,6 +2107,14 @@ def finish_document(report, name: str, out_dir: Path, spec_sha: str,
     document comes back all sentinels; stamping those would write up to a
     thousand empty documents down as finished, and the run that resumed would
     skip every one of them without a word.
+
+    `answered` is how many of the document's batches came back at all. None
+    means the caller does not track it and the count is not checked. Zero
+    against a plan that had sources is the second way a harvest fails to
+    happen, and the sentinel arithmetic below cannot see it: with no reply
+    there is no tuple and no refusal either, so it reads 0 > n/2, says no, and
+    stamps an empty file. That is how a dead server turned 872 planned
+    documents into 0-byte results a resume would have skipped.
     """
     failed = [r for r in report.refusals
               if r.get("claim", {}).get("_harvest_failed")]
@@ -2111,6 +2128,10 @@ def finish_document(report, name: str, out_dir: Path, spec_sha: str,
         log.error("extraction: %s: %d of %d source(s) never reached the "
                   "server — not stamped, so a resume harvests it again",
                   name, unreachable, sources)
+        return
+    if sources and answered == 0:
+        log.error("extraction: %s: %d source(s) planned and not one reply — "
+                  "not stamped, so a resume harvests it again", name, sources)
         return
     (out_dir / f"{name}.stamp.json").write_text(
         json.dumps(_stamp_current(spec_sha, anchors_sha), indent=2),
@@ -2499,6 +2520,7 @@ def main(argv: Optional[list] = None) -> int:
 
     def verify(entry: tuple) -> None:
         name, report, answered = entry
+        replies = len(answered)
         for batch, reply in answered:
             fold_batch(batch, reply, report, locate=locate, spec=spec)
         for row in report.tuples:
@@ -2514,11 +2536,20 @@ def main(argv: Optional[list] = None) -> int:
                         parameter=refusal.get("parameter"),
                         reason=refusal.get("reason"),
                         owner=refusal.get("owner"))
-        finish_document(report, name, args.out, spec_sha, anchors_sha)
+        finish_document(report, name, args.out, spec_sha, anchors_sha,
+                        answered=replies)
         trace.flush(report.document_id)
 
     started = time.time()
     failures = 0
+    # Set by the dead-server cut inside harvest_batches. The group still gets
+    # folded and written, because the documents that DID answer are real work,
+    # and the ones that did not stay unstamped and are redone on a resume.
+    server_gone = [False]
+
+    def give_up() -> None:
+        server_gone[0] = True
+
     for offset in range(0, len(documents), group_size):
         group = documents[offset:offset + group_size]
 
@@ -2552,7 +2583,8 @@ def main(argv: Optional[list] = None) -> int:
         # ---- Harvest: all of them, at once ---------------------------------
         answered = harvest_batches(batches, harvest,
                                    more_sources=more_sources,
-                                   verify=accepted_rows, workers=LLM_PARALLEL)
+                                   verify=accepted_rows, workers=LLM_PARALLEL,
+                                   on_give_up=give_up)
 
         # ---- Verify and write, document by document ------------------------
         by_document: dict = {}
@@ -2571,6 +2603,14 @@ def main(argv: Optional[list] = None) -> int:
                 except Exception:
                     failures += 1
                     log.exception("extraction: %s failed", futures[future])
+        if server_gone[0]:
+            log.error("extraction: the model server stopped answering — the "
+                      "run ends here after %d of %d document(s). What was "
+                      "harvested is written and stamped, the rest is not, so "
+                      "a resume picks up where this stopped.",
+                      min(offset + group_size, len(documents)), len(documents))
+            failures += 1
+            break
 
     log_usage(context_budget(prompts.load(HARVEST_PROMPT_ID), spec))
     log.info("extraction: done in %.0f s, %d failure(s)",
