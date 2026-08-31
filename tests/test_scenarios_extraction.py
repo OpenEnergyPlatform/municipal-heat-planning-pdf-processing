@@ -5,6 +5,7 @@ argument demands. The shapes are sh:closed, so a triple they do not name
 invalidates the node; and every value must be able to point at the passage it
 was read in, which is why nothing here is taken from DocumentMeta.
 """
+import json
 import logging
 import re
 from pathlib import Path
@@ -14,6 +15,7 @@ import pytest
 from docpipe.extraction.spec import load
 
 SPEC_PATH = Path("profiles/scenarios/extraction_spec.json")
+ROWS_PROMPT = Path("profiles/scenarios/prompts/extraction/rows.md")
 
 
 @pytest.fixture(scope="module")
@@ -132,6 +134,41 @@ def test_every_example_would_survive_its_own_verifier(spec):
                                    owner_kind="section")
             assert not isinstance(outcome, Refusal), \
                 f"{parameter.uri}: {getattr(outcome, 'reason', '')}"
+
+
+def test_every_example_in_the_rows_prompt_holds_its_own_quote():
+    """The few-shots are what the model imitates, and this path shows it no
+    others: the quantities payload of a document plan carries label and
+    description and no example at all. So an example whose value is not in its
+    own quote teaches the mistake the verifier refuses, and a set of examples
+    that only ever shows a name teaches that a whole line is not wanted. The
+    second is what happened: 54 of 164 publications were shown their own title
+    page and named everything on it except the title."""
+    from docpipe.extraction.verify import flat
+
+    text = ROWS_PROMPT.read_text(encoding="utf-8")
+    claims = [claim for line in text.splitlines()
+              if line.strip().startswith('{"tuples"')
+              for claim in json.loads(line.strip())["tuples"]]
+    assert claims, "the prompt shows no example any more"
+    for claim in claims:
+        # A choice answer is exempt from the value rule and not from this one:
+        # "value_raw" is what the document writes, so it stands in the quote.
+        shown = claim.get("value_raw") or claim["value"]
+        assert flat(shown) in flat(claim["quote"]), claim
+    assert max(len(claim["value"]) for claim in claims) > 30,         "no example shows a value longer than a name, and a title is a line"
+
+
+def test_the_rows_prompt_calls_the_front_page_what_it_is():
+    """Three sentences carry the fix, and each one answers a measured reason
+    the title stayed unnamed: the heading is quotable at all, the front page
+    is exempt from "an empty list is the normal case", and it is not one of
+    the citations rule 4 forbids."""
+    text = ROWS_PROMPT.read_text(encoding="utf-8")
+    for satz in ("steht am Anfang ihres \"text\" und ist zitierbar",
+                 "Eine Quelle ist davon ausgenommen: die Vorderseite",
+                 "Die Vorderseite ist keine solche Stelle"):
+        assert satz in text, satz
 
 
 def test_the_probes_expand_without_a_vocabulary_axis(monkeypatch):

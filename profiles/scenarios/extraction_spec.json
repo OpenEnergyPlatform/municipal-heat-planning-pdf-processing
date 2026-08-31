@@ -32,7 +32,7 @@
     {
       "uri": "publication_title",
       "label": "Titel der Publikation",
-      "description": "Der vollständige Titel des Dokuments, wie er auf der Titelseite oder im Kopf der ersten Seite steht. Nicht der Kolumnentitel, nicht der Name der Reihe, nicht der Name des Verlags.",
+      "description": "Der vollständige Titel des Dokuments. In den meisten PDFs ist er die Überschrift des ersten Abschnitts und steht als erste Zeile über der Autorenliste; sonst im Kopf der ersten Seite. Der Wert ist die ganze Titelzeile. Nicht der Kolumnentitel, nicht der Name der Reihe, nicht der Name des Verlags.",
       "value_type": "text",
       "example": {
         "source": "Global Energy and Climate Outlook 2023: Transforming Energy Systems for a Net Zero Future. JRC Science for Policy Report.",

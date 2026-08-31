@@ -16,23 +16,31 @@ Gib ausschließlich ein JSON-Objekt in dieser Form zurück, in EINER Zeile, ohne
 
 {"tuples": [{"source": "Q1", "value": "Keramidas, K.", "quote": "Keramidas, K., Fosse, F., Diaz Vazquez, A., Dowling, P."}], "status": "complete", "need_more": []}
 
+Ein Wert darf so lang sein wie eine ganze Zeile. Beim Titel ist er es fast immer, und dann füllt "value" die "quote" bis auf den Rest der Zeile aus — das ist die richtige Antwort und kein Fehler:
+
+{"tuples": [{"source": "Q1", "value": "Carbon dioxide removal technologies are not born equal", "quote": "Carbon dioxide removal technologies are not born equal OPEN ACCESS Jessica Strefler, Nico Bauer, Florian Humpenöder"}], "status": "complete", "need_more": []}
+
 Felder mit einer Auswahlliste tragen zusätzlich "value_raw":
 
 {"tuples": [{"source": "Q3", "value": "Germany", "value_raw": "Deutschland", "quote": "Das Szenario betrachtet Deutschland bis 2050."}], "status": "complete", "need_more": []}
 
 Eine leere Liste {"tuples": []} ist das richtige Ergebnis, wenn keine der Quellen das gesuchte Feld enthält — und das ist der Normalfall. Die allermeisten Abschnitte einer Publikation enthalten weder Titel noch DOI noch Autorenliste. Rate nicht, nur weil gefragt wurde.
 
+Eine Quelle ist davon ausgenommen: die Vorderseite. Folgen auf die Überschrift am Anfang einer Quelle Personennamen, Institute, ein Eingangsdatum oder ein Zitationshinweis, dann ist das die Titelseite dieser Publikation — und diese Überschrift IST ihr Titel. Dort werden Titel, Autorinnen und Autoren, Erscheinungsjahr und DOI gelesen, der Titel zuerst: er steht vor den Namen und wird sonst überlesen. Im letzten Korpuslauf lag die Vorderseite bei 54 Publikationen vor und der Titel wurde trotzdem nicht genannt — bei 41 davon sind Autoren, Datum und Institut aus derselben Zeile geholt worden. Diese 54 fehlen im Graphen vollständig.
+
 Jeder Eintrag wird maschinell und wörtlich gegen die Quelle geprüft; was die Prüfung nicht besteht, wird verworfen. Deshalb gelten diese Regeln:
 
 1. "value": der gesuchte Wert, wörtlich aus der Quelle abgeschrieben. Er muss ZEICHEN FÜR ZEICHEN in "quote" vorkommen. Nichts ergänzen, nichts vereinheitlichen, nichts übersetzen, nichts ausschreiben, was abgekürzt dasteht.
    FALSCH: aus "JRC" das ausgeschriebene "Joint Research Centre" machen, wenn nur "JRC" dasteht.
    FALSCH: "Keramidas K." zu "Kimon Keramidas" ergänzen.
+   FALSCH: einen Titel weglassen, weil er lang ist oder wie eine Überschrift aussieht. Eine Überschrift ist genau die Form, in der ein Titel dasteht.
 
-2. "source" und "quote": "source" ist die Kennung der Quelle, in der der Wert steht — "Q1", "Q2" und so weiter; sie entscheidet, gegen welchen Text geprüft wird. "quote" ist eine wörtliche, zusammenhängende Zeichenkette aus dem Text GENAU DIESER Quelle (mindestens 8 Zeichen), die den Wert exakt enthält. Nicht aus zwei Quellen zusammensetzen. Am besten der ganze Satz oder die ganze Zeile. JEDER Eintrag trägt "source".
+2. "source" und "quote": "source" ist die Kennung der Quelle, in der der Wert steht — "Q1", "Q2" und so weiter; sie entscheidet, gegen welchen Text geprüft wird. "quote" ist eine wörtliche, zusammenhängende Zeichenkette aus dem Text GENAU DIESER Quelle (mindestens 8 Zeichen), die den Wert exakt enthält. Nicht aus zwei Quellen zusammensetzen. Am besten der ganze Satz oder die ganze Zeile. Die Überschrift einer Quelle steht am Anfang ihres "text" und ist zitierbar wie jede andere Zeile. JEDER Eintrag trägt "source".
 
 3. Ein Eintrag je Wert. Eine Autorenliste mit sechs Namen ergibt sechs Einträge, alle mit derselben "quote". Eine Publikation hat genau einen Titel, genau ein Erscheinungsjahr und höchstens eine DOI — steht dort mehr als eines, nimm das, was für DIESES Dokument gilt, nicht das einer zitierten Arbeit.
 
 4. Zitate sind keine Fundstellen. Ein Literaturverzeichnis, eine Fußnote und ein Verweis im Fließtext nennen Titel, Autoren, Jahre und DOIs ANDERER Arbeiten. Aus solchen Stellen extrahierst du nichts. Erkennbar sind sie an der Umgebung: eine nummerierte oder alphabetische Liste von Quellen, ein "et al.", eine Jahreszahl in Klammern hinter einem Namen, ein Abschnitt mit der Überschrift References, Bibliography oder Literatur.
+   Die Vorderseite ist keine solche Stelle: dort steht die Publikation selbst, nicht eine, auf die sie verweist.
    FALSCH: aus "as shown by Riahi et al. (2017)" das Jahr 2017 als Erscheinungsjahr melden.
 
 5. Auswahl statt Formulierung. Nennt der Parameter unter "value_classes" eine Liste, dann ist "value" GENAU einer der dort links stehenden Klassennamen, Zeichen für Zeichen. Die Liste rechts daneben zeigt Schreibweisen, unter denen dieselbe Klasse in Texten auftaucht — sie ist eine Lesehilfe, keine Antwortmöglichkeit. Was das Dokument an der Stelle wörtlich schreibt, kommt zusätzlich nach "value_raw".
