@@ -257,3 +257,44 @@ def test_the_parallel_scheduler_harvests_a_batch_that_fixes_no_parameter():
         "a batch that raised comes back as a failure sentinel, and would hide "
         "exactly this defect behind a retry"
     )
+
+
+def test_the_pool_reads_what_each_question_asked_for():
+    """The promise: an owner is planned when it is near the top of AT LEAST
+    ONE probe, even when the fused ranking buries it.
+
+    Max-score fusion answers a different question. A section the year anchor
+    ranks second can sit far down the fused list because many owners have a
+    higher best score, and the cap then drops it — so the year question never
+    reads what it asked for."""
+    from docpipe.inference import faiss_store
+
+    owners = [("section", n) for n in range(1, 8)]
+    prepared = _Prepared(owners)
+    # Probe 1 likes 1..5 well. Probe 2 has exactly one thing it wants, 6, and
+    # it scores lower than everything probe 1 surfaced.
+    scores = _scores([[0.90, 0.89, 0.88, 0.87, 0.86, 0.10, 0.05],
+                      [0.40, 0.39, 0.38, 0.37, 0.36, 0.50, 0.05]])
+    positions = _scores([[0, 1, 2, 3, 4, 5, 6], [0, 1, 2, 3, 4, 5, 6]])
+    order = [[0, 1, 2, 3, 4, 5, 6], [5, 0, 1, 2, 3, 4, 6]]
+    by_rank = _scores([[scores[i][p] for p in order[i]] for i in range(2)])
+    by_rank_pos = _scores(order)
+
+    fused = faiss_store.fuse_prepared(None, prepared, by_rank, by_rank_pos, 5,
+                                      content_fetcher=_content)
+    assert 6 not in [h["owner_id"] for h in fused], (
+        "the fused top 5 is what buries it")
+
+    pooled = faiss_store.fuse_prepared(None, prepared, by_rank, by_rank_pos, 0,
+                                       content_fetcher=_content,
+                                       per_probe_top=1)
+    assert sorted(h["owner_id"] for h in pooled) == [1, 6], (
+        "one from each probe, and nothing else")
+
+    # And the pool is still a ranking: best score first, whatever found it.
+    assert [h["owner_id"] for h in pooled] == [1, 6]
+
+    # Without the pool the whole document is eligible and the cap decides.
+    everything = faiss_store.fuse_prepared(None, prepared, by_rank, by_rank_pos,
+                                           0, content_fetcher=_content)
+    assert len(everything) == len(owners)

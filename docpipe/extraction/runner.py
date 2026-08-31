@@ -117,7 +117,14 @@ PARAMETER_ANCHOR = "#parameter"
 # not capped. Measured over 65 documents: 66% of all values sit in the first
 # 50 ranks of an anchor-only ranking, 80% of them are in a table or a figure
 # and are taken whole regardless of rank.
-PROSE_TOP = int(os.environ.get("EXTRACT_PROSE_TOP", "50"))
+PROSE_TOP = int(os.environ.get("EXTRACT_PROSE_TOP", "200"))
+# The pool: how far down EACH probe's own ranking an owner still counts as
+# found. An owner is planned when it is in the top of at least one probe, so
+# a section only the year anchor likes is read, instead of sitting at rank 200
+# of the fused list because two hundred owners have a higher best score.
+# PROSE_TOP is then a ceiling against a pathological document, not the
+# selector: a plan has about 132 sections, so the pool cannot exceed that.
+POOL_TOP = int(os.environ.get("EXTRACT_POOL_TOP", "50"))
 # Where the run's concurrency actually lives once the values are found. A
 # batch is one row request and then one sweep per axis, and the sweeps are
 # independent, so 128 batches of seven axes are nine hundred sweeps that can
@@ -227,7 +234,7 @@ def make_content_fetcher() -> Callable:
 
 def make_retrieve(conn: sqlite3.Connection, index, id_to_pos: dict,
                   cache_conn, content_fetcher: Optional[Callable] = None,
-                  limit: int = 0) -> Callable:
+                  limit: int = 0, per_probe_top: int = 0) -> Callable:
     """(probes, document_id, exclude) -> ONE ranked Source list.
 
     Takes every probe at once. One sub-index for the document instead of one
@@ -274,7 +281,8 @@ def make_retrieve(conn: sqlite3.Connection, index, id_to_pos: dict,
         scores, positions = search[1]
         hits = faiss_store.fuse_prepared(
             conn, document[1], scores, positions, limit,
-            content_fetcher=content_fetcher, exclude=exclude, probes=probes)
+            content_fetcher=content_fetcher, exclude=exclude, probes=probes,
+            per_probe_top=per_probe_top)
         return [_source_of(hit) for hit in hits]
 
     return retrieve
@@ -2548,7 +2556,7 @@ def main(argv: Optional[list] = None) -> int:
             items, report = plan_document(
                 document_id, doc_spec, templates, extra_probes=anchors,
                 retrieve=make_retrieve(conn, index, id_to_pos, cache_conn,
-                                       fetch),
+                                       fetch, per_probe_top=POOL_TOP),
                 structure=make_structure(conn, fetch), prose_top=PROSE_TOP)
             for item in items:
                 trace.event("plan", document_id, rank=item.rank,
