@@ -524,3 +524,39 @@ def test_every_entry_that_becomes_an_edge_is_a_class_or_is_left_out():
                 assert kg.is_class(uri) or marked, (
                     f"{parameter.uri}.{name}: {uri!r} is neither a class nor "
                     f"a marked non-class, so it would be written as one")
+
+
+def test_one_fact_said_twice_about_the_plan_area_is_one_node(tmp_path):
+    """The promise: two passages stating the same figure for the whole plan
+    area are one node, and two named sub-areas stay two.
+
+    Bad Segeberg states its 2,272 t of 2040 on pages 71, 72 and 73 and calls
+    the place "Waermesektor", "Projektgebiet" and "Stadtgebiet". With the
+    wording in the coordinate those became three indistinguishable nodes, and
+    129 of 1,294 nodes over twenty plans were repeats of that shape.
+
+    The other clause, that two named sub-areas stay two nodes, is held by
+    test_two_sub_areas_are_two_values_not_one."""
+    serializer = kg.make_serializer(_database(tmp_path))
+    ttl = serializer("waermeplan_kassel_20240315", [
+        _row(spatial_scope_raw="Stadtgebiet", quote="241 MWh im Stadtgebiet"),
+        _row(spatial_scope_raw="Projektgebiet", quote="241 MWh im Projektgebiet"),
+        _row(spatial_scope_raw="gesamte Stadt", quote="insgesamt 241 MWh"),
+    ])
+    assert ttl.count("a oeo:OEO_00050016") == 1, (
+        "three wordings for one place are one place")
+    assert ttl.count('"241.0"^^xsd:float') == 1
+
+
+def test_a_real_contradiction_about_the_plan_area_is_still_dropped(tmp_path):
+    """Merging must not turn a contradiction into a coin toss. Same place,
+    same coordinate, two magnitudes: still a human question."""
+    serializer = kg.make_serializer(_database(tmp_path))
+    ttl = serializer("waermeplan_kassel_20240315", [
+        _row(spatial_scope_raw="Stadtgebiet", value_target=241.0),
+        _row(spatial_scope_raw="Projektgebiet", value_target=999.0),
+        _row(sector="OEO_00000214", value_target=5.0),
+    ])
+    assert '"241.0"' not in ttl and '"999.0"' not in ttl, (
+        "one place cannot hold two different numbers for one coordinate")
+    assert '"5.0"^^xsd:float' in ttl, "and the untouched value survives"
