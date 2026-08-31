@@ -4,23 +4,23 @@ max_tokens: 6144
 ---
 Du findest Zahlen in deutschen kommunalen Wärmeplänen für einen Knowledge Graph.
 
-Deine Aufgabe in diesem Schritt ist EINE: jede Zahl finden, die eine der gesuchten Kennzahlen ist, ihre Einheit nennen und die Passage zitieren, in der sie steht. Alles andere — WELCHE Kennzahl es ist, Energieträger, Sektor, Jahr, Szenario, Gebiet, Größe — wird DANACH gefragt, für jede Angabe einzeln und mit eigenem Beleg. Du musst hier nichts davon zuordnen und sollst es auch nicht.
+Deine Aufgabe in diesem Schritt ist EINE: jeden Wert der gesuchten Felder finden und die Passage zitieren, in der er steht. Die meisten Felder sind Zahlen mit einer Einheit; ein Feld OHNE "units_accepted" ist ein Textfeld, und sein Wert ist eine Bezeichnung. Alles andere — WELCHE Kennzahl es ist, Energieträger, Sektor, Jahr, Szenario, Gebiet, Größe — wird DANACH gefragt, für jede Angabe einzeln und mit eigenem Beleg. Du musst hier nichts davon zuordnen und sollst es auch nicht.
 
 Du bekommst ein JSON-Objekt mit diesen Feldern:
 
-- "quantities": die gesuchten Kennzahlen, jede mit Label, Beschreibung und akzeptierten Einheiten ("units_accepted"). Eine Zahl gehört hierher, wenn sie zu MINDESTENS EINER davon passt. Welche es ist, entscheidest du hier nicht.
+- "quantities": die gesuchten Felder, jedes mit Label, Beschreibung und, bei einem Zahlenfeld, den akzeptierten Einheiten ("units_accepted"). Ein Wert gehört hierher, wenn er zu MINDESTENS EINEM davon passt. Welches es ist, entscheidest du hier nicht. Ein Feld OHNE "units_accepted" ist ein Textfeld: sein Wert ist eine Bezeichnung aus dem Dokument, keine Zahl.
 - "sources": MEHRERE Quellen aus DEMSELBEN Wärmeplan, jede mit einer Kennung ("id": "Q1", "Q2", …) — Tabellen (Markdown-Transkription), Textabschnitte oder Diagrammbeschreibungen.
 - "prior" (optional): Zahlen, die aus diesem Plan schon geholt sind. Gib dieselbe Zahl aus derselben Passage NICHT noch einmal aus.
 
 Gib ausschließlich ein JSON-Objekt in dieser Form zurück, in EINER Zeile, OHNE Einrückung:
 
-{"tuples": [{"source": "Q2", "value": 126656132, "unit": "kWh/a", "unit_raw": "kWh/a", "quote": "| Gas H | 126.656.132 | 520.465.057 | 1.036.767.833 |"}], "status": "complete", "need_more": []}
+{"tuples": [{"source": "Q2", "value": 126656132, "unit": "kWh/a", "unit_raw": "kWh/a", "quote": "| Gas H | 126.656.132 | 520.465.057 | 1.036.767.833 |"}, {"source": "Q5", "value": "Kassel Wärme Ingenieurbüro", "unit": "", "unit_raw": "", "quote": "Auftragnehmer: Kassel Wärme Ingenieurbüro GmbH, Bearbeitung: Dipl.-Ing. M. Wagner."}], "status": "complete", "need_more": []}
 
-Eine Zahl pro Eintrag, und zwar VOLLSTÄNDIG: JEDE Zahl in JEDER der Quellen, die eine der gesuchten Kennzahlen sein kann, bekommt ihren Eintrag — jede Zeile und jede Spalte einer Tabelle einzeln. Eine Tabelle mit 13 Zeilen und 3 Zahlenspalten ergibt 39 Einträge. Eine leere Liste {"tuples": []} ist nur dann das Ergebnis, wenn keine der Quellen eine Zahl zu einer der gesuchten Kennzahlen enthält.
+Ein Wert pro Eintrag, und zwar VOLLSTÄNDIG: JEDER Wert in JEDER der Quellen, der zu einem der gesuchten Felder gehören kann, bekommt seinen Eintrag — jede Zeile und jede Spalte einer Tabelle einzeln. Eine Tabelle mit 13 Zeilen und 3 Zahlenspalten ergibt 39 Einträge. Eine leere Liste {"tuples": []} ist nur dann das Ergebnis, wenn keine der Quellen einen Wert zu einem der gesuchten Felder enthält.
 
 Jeder Eintrag wird maschinell und wörtlich gegen die Quelle geprüft; was die Prüfung nicht besteht, wird verworfen. Deshalb gelten diese Regeln:
 
-1. "value": die Zahl EXAKT wie gedruckt, nur ohne Tausendertrennzeichen und mit Dezimalpunkt (aus "126.656.132" wird 126656132, aus "1.036.767,8" wird 1036767.8). Rechne NICHT im Kopf: weder addieren noch runden noch umrechnen. Eine im Kopf gerechnete Zahl hat keinen Beleg und wird verworfen. Wenn gerechnet werden MUSS, gibt es dafür die Sandbox, siehe Regel 6.
+1. "value": bei einem Textfeld die Bezeichnung, wie das Dokument sie schreibt, ohne Rechtsform: aus "Kassel Wärme Ingenieurbüro GmbH" wird "Kassel Wärme Ingenieurbüro". Sonst die Zahl EXAKT wie gedruckt, nur ohne Tausendertrennzeichen und mit Dezimalpunkt (aus "126.656.132" wird 126656132, aus "1.036.767,8" wird 1036767.8). Rechne NICHT im Kopf: weder addieren noch runden noch umrechnen. Eine im Kopf gerechnete Zahl hat keinen Beleg und wird verworfen. Wenn gerechnet werden MUSS, gibt es dafür die Sandbox, siehe Regel 6.
    FALSCH: 126.656.132 und 520.465.057 addieren und die Summe ausgeben.
    FALSCH: 126.656.132 kWh/a in 126656.132 MWh/a umrechnen — die Umrechnung macht die Prüfung anhand der gewählten Einheit.
 
@@ -29,11 +29,11 @@ Jeder Eintrag wird maschinell und wörtlich gegen die Quelle geprüft; was die P
    - "unit_raw": die Einheit EXAKT so, wie sie in der Quelle steht. Steht sie nur im Spaltenkopf, in einer Blocküberschrift wie "Endenergieverbrauch [MWh/a]" oder in der Caption, gilt sie für alle zugehörigen Zellen.
    Beispiel: Quelle schreibt "t CO₂ eq/a", die Liste führt "t CO2eq/a" — dann "unit": "t CO2eq/a", "unit_raw": "t CO₂ eq/a".
    Steht in der Quelle eine Einheit, die in keiner der Listen eine Entsprechung hat, lässt du "unit" leer und füllst nur "unit_raw". Rechne NIE um.
-   Nur Zahlen ganz ohne erkennbare Einheit lässt du weg.
+   Nur Zahlen ganz ohne erkennbare Einheit lässt du weg. Bei einem Textfeld bleiben "unit" und "unit_raw" leer — dort gibt es keine.
 
-3. "source": die Kennung der Quelle, in der die ZAHL steht — "Q1", "Q2" und so weiter. Das Feld entscheidet, gegen welchen Text dein "quote" geprüft wird.
+3. "source": die Kennung der Quelle, in der der WERT steht — "Q1", "Q2" und so weiter. Das Feld entscheidet, gegen welchen Text dein "quote" geprüft wird.
 
-4. "quote": eine wörtliche, zusammenhängende Zeichenkette aus dem Text GENAU DIESER Quelle (mindestens 8 Zeichen), die die Zahl EXAKT wie gedruckt enthält — am besten die komplette Tabellenzeile. Zeichen für Zeichen kopieren, nichts umformatieren, nichts auslassen.
+4. "quote": eine wörtliche, zusammenhängende Zeichenkette aus dem Text GENAU DIESER Quelle (mindestens 8 Zeichen), die den Wert EXAKT wie gedruckt enthält — bei einem Textfeld die Bezeichnung samt Rechtsform, also die Zeile, in der sie steht — am besten die komplette Tabellenzeile. Zeichen für Zeichen kopieren, nichts umformatieren, nichts auslassen.
    FALSCH: "Erdgas: 126656132 kWh/a" — umformatiert, steht so nicht in der Quelle.
    RICHTIG: "| Erdgas | 126.656.132 | 520.465.057 | 1.036.767.833 |"
    Steht dieselbe Zahl mehrfach in derselben Zeile, zitier die ganze Zeile: welche Spalte gemeint ist, wird im nächsten Schritt geklärt.
@@ -52,4 +52,4 @@ Jeder Eintrag wird maschinell und wörtlich gegen die Quelle geprüft; was die P
    Wann es falsch ist: wenn die Zahl gedruckt dasteht. Dann schreib sie ab.
    Jeder so entstandene Eintrag trägt "computed": true, sein "quote" ist die Passage mit den EINGANGSZAHLEN.
 
-7. Nichts erfinden: nur Zahlen, die wörtlich in einer der Quellen stehen. Das gilt auch für Diagrammbeschreibungen — was dort nicht beziffert ist, existiert nicht.
+7. Nichts erfinden: nur Werte, die wörtlich in einer der Quellen stehen. Das gilt auch für Diagrammbeschreibungen — was dort nicht beziffert ist, existiert nicht.

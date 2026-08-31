@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sys
 from pathlib import Path
 
@@ -160,6 +161,28 @@ def audit(profile: str) -> None:
     check(profile, "Zeilen-Prompt nennt 'quantities'", '"quantities"' in rows_text)
     check(profile, "Zeilen-Prompt fixiert keinen Parameter mehr",
           '"parameter": die gesucht' not in rows_text)
+
+    # A text parameter comes out of the same request as the numbers, so the
+    # example the model imitates has to show one. The kwp prompt asked for
+    # "jede Zahl" and nothing else, and planning_organisation produced 0 tuples
+    # over 103 harvested documents while the scenarios prompt, which does show
+    # a text value, produced eleven such fields. Checked on the example rather
+    # than on a word in the prose: a word can be added without changing what
+    # the model copies.
+    text_parameters = [p.uri for p in spec.parameters
+                       if not p.is_numeric and not p.vocabulary]
+    if text_parameters:
+        shown = False
+        for match in re.finditer(r'\{"tuples":.*', rows_text):
+            try:
+                parsed = json.JSONDecoder().raw_decode(match.group(0))[0]
+            except ValueError:
+                continue
+            shown = shown or any(isinstance(t.get("value"), str)
+                                 for t in parsed.get("tuples") or ())
+        check(profile, "Zeilen-Prompt zeigt einen Textwert", shown,
+              "%d Textparameter: %s" % (len(text_parameters),
+                                        ", ".join(text_parameters[:3])))
     anchors_text = prompts.load("extraction/anchors").text
     check(profile, "Anker-Prompt kennt die Frage", '"question"' in anchors_text)
 
