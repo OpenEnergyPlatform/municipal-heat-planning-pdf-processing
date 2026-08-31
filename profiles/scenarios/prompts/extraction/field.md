@@ -4,17 +4,19 @@ max_tokens: 5120
 ---
 Du bestimmst EINE Angabe zu Werten, die aus einer wissenschaftlichen Publikation schon geholt sind.
 
-Die Werte stehen fest. Du fügst keine hinzu und lässt keine weg. Gefragt ist in dieser Anfrage genau ein Feld, und für jeden Wert beantwortest du es einzeln und belegst es einzeln.
+Die Werte stehen fest. Du fügst keine hinzu und lässt keine weg. Gefragt sind in dieser Anfrage EIN ODER MEHRERE Felder, und für jeden Wert beantwortest du JEDES gefragte Feld einzeln und belegst es einzeln. Ein Feld mit dem Beleg eines anderen ist kein Beleg.
 
 Du bekommst ein JSON-Objekt mit diesen Feldern:
 
-- "field": das gesuchte Feld — "name", die Frage ("question") und, wenn es eine geschlossene Liste gibt, die zulässigen Einträge ("options": je Eintrag ein Name und die Schreibweisen, unter denen er vorkommt).
+- "fields": die gesuchten Felder, je Feld "name", die Frage ("question") und, wenn es eine geschlossene Liste gibt, die zulässigen Einträge ("options": je Eintrag ein Name und die Schreibweisen, unter denen er vorkommt). Jedes Feld hat seine eigene Frage und braucht seine eigene Antwort mit eigenem Zitat.
 - "sources": die Quellen aus DERSELBEN Publikation, jede mit einer Kennung ("id": "Q1", "Q2", …) — dieselben Texte, aus denen die Werte stammen.
 - "rows": die Werte, jeder mit einer Kennung ("id": "R1", "R2", …), seiner Quelle und der Passage, in der er steht. Stammt der Wert aus einer Tabellenzeile, steht zusätzlich "column": in welcher Zelle dieser Zeile er steht, von "columns" Zellen insgesamt. Das ist ausgezählt und nicht geraten. Benennt die Kopfzeile je Spalte ein Szenario, dann entscheidet diese Nummer, welches gilt.
 
 Gib ausschließlich ein JSON-Objekt in dieser Form zurück, in EINER Zeile, ohne Einrückung:
 
-{"groups": [{"rows": ["R1", "R2"], "value": "EN_NPi2020_400", "value_raw": "the NDC scenario", "quote": "In the NDC scenario, emissions peak before 2030 and the remaining budget is 400 GtCO2."}], "answers": {"R3": {"value": "Szenario-Familie", "value_raw": "NPi", "quote": "Results for the NPi scenarios are shown in Figure 4."}}}
+{"fields": {"scenario": {"groups": [{"rows": ["R1", "R2"], "value": "EN_NPi2020_400", "value_raw": "the NDC scenario", "quote": "In the NDC scenario, emissions peak before 2030 and the remaining budget is 400 GtCO2."}], "answers": {"R3": {"value": "Szenario-Familie", "value_raw": "NPi", "quote": "Results for the NPi scenarios are shown in Figure 4."}}}}}
+
+Ein Schlüssel unter "fields" je gefragtem Feld, genau der "name" aus der Anfrage. Ein Feld, das du wegläßt, gilt als nicht beantwortet und wird noch einmal gefragt.
 
 Beide Formen bedeuten dasselbe. "groups" ist für den Normalfall: ein Absatz führt ein Szenario ein und belegt die Zuordnung für alle Werte, die aus ihm stammen. "answers" ist für die Zeilen, die aus der Reihe fallen. Zeilen dürfen in beiden vorkommen, dann gilt "answers".
 

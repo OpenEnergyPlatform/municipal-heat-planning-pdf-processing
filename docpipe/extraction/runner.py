@@ -1416,9 +1416,15 @@ def make_harvester(image_root: Optional[Path] = None,
     return harvest
 
 
-def _field_payload(shown: list, rows: list, slot,
+def _field_payload(shown: list, rows: list, slots,
                    corrections: Optional[list] = None) -> dict:
-    """The request body of one field question, over the window shown.
+    """The request body of one field request, over the window shown.
+
+    Several fields at once. One request per field was one round trip per
+    coordinate: measured over 60 documents, 2,108 field requests each, which
+    is what made a corpus run 82 hours. The evidence rule does not change —
+    every field still answers for itself and quotes for itself — only the
+    number of round trips does.
 
     Sources first, rows second, the field last. Consecutive windows then share
     the part of the prefix that did not move, which is what makes asking many
@@ -1446,10 +1452,13 @@ def _field_payload(shown: list, rows: list, slot,
         if cell is not None:
             entry["column"], entry["columns"] = cell
         listed.append(entry)
-    field = {"name": slot.name, "question": slot.question}
-    if slot.options:
-        field["options"] = slot.answerable()
-    out = {"sources": sources, "rows": listed, "field": field}
+    asked = []
+    for slot in ([slots] if not isinstance(slots, (list, tuple)) else slots):
+        field = {"name": slot.name, "question": slot.question}
+        if slot.options:
+            field["options"] = slot.answerable()
+        asked.append(field)
+    out = {"sources": sources, "rows": listed, "fields": asked}
     if corrections:
         # What was wrong with the last answer, per row. A verification failure
         # is information the model can act on, and withholding it turns three
@@ -1502,10 +1511,12 @@ def make_field_asker(image_root: Optional[Path] = None) -> Callable:
     temperature = float(prompt.meta.get("temperature", 0.1))
     max_tokens = int(prompt.meta.get("max_tokens", 4096))
 
-    def ask(shown: list, rows: list, slot,
+    def ask(shown: list, rows: list, slots,
             corrections: Optional[list] = None,
             document_id: Optional[int] = None) -> Optional[dict]:
-        payload = json.dumps(_field_payload(shown, rows, slot, corrections),
+        slots = list(slots) if isinstance(slots, (list, tuple)) else [slots]
+        name = "+".join(s.name for s in slots)
+        payload = json.dumps(_field_payload(shown, rows, slots, corrections),
                              ensure_ascii=False, indent=2)
         # The crops ride along, as they do for the value request. A table's
         # transcription is a model's reading of a picture, and the coordinate
@@ -1546,9 +1557,9 @@ def make_field_asker(image_root: Optional[Path] = None) -> Callable:
                 if isinstance(answer, dict):
                     return answer
                 log.warning("   field %s attempt %d: unreadable reply%s",
-                            slot.name, attempt, _unparsable(reply))
+                            name, attempt, _unparsable(reply))
                 trace.event("error", document_id, where="field",
-                            kind="unparsable", slot=slot.name, attempt=attempt,
+                            kind="unparsable", slot=name, attempt=attempt,
                             finish=getattr(reply, "finish_reason", None))
                 conversation.append({"role": "assistant",
                                      "content": reply.message.content or ""})
@@ -1561,10 +1572,10 @@ def make_field_asker(image_root: Optional[Path] = None) -> Callable:
                     "Anführungszeichen.")})
             except Exception as exc:
                 log.warning("   field %s attempt %d failed: %s",
-                            slot.name, attempt, exc)
+                            name, attempt, exc)
                 status = getattr(exc, "status_code", None)
                 trace.event("error", document_id, where="field",
-                            kind="exception", slot=slot.name, attempt=attempt,
+                            kind="exception", slot=name, attempt=attempt,
                             status=status, detail=str(exc)[:300])
                 if isinstance(status, int) and 400 <= status < 500 and status != 429:
                     break
@@ -1595,8 +1606,14 @@ def make_fieldwise_harvester(image_root: Optional[Path] = None,
     pool = ThreadPoolExecutor(max_workers=FIELD_PARALLEL,
                               thread_name_prefix="field")
 
-    def sweep_field(batch, rows: list, slot, anchor_id: str = "") -> dict:
-        """Short windows over the document until this coordinate is read.
+    def sweep_field(batch, rows: list, slots, anchor_id: str = "") -> dict:
+        """Short windows over the document until these coordinates are read.
+
+        Several fields in one request. One field per request was one round
+        trip per coordinate: 2,108 of them per document, which is what made a
+        corpus run 82 hours. Each field still answers for itself and quotes
+        for itself, and each is folded on its own, so nothing about the
+        evidence changes.
 
         The value's own passages first, because a carrier usually is in the
         table row it labels. What is still open after that is looked for
@@ -1616,10 +1633,18 @@ def make_fieldwise_harvester(image_root: Optional[Path] = None,
         down differently, because "the plan does not say" and "we stopped
         looking" are the pair this whole stage exists to keep apart.
         """
+        slots = list(slots) if isinstance(slots, (list, tuple)) else [slots]
+        name = "+".join(slot.name for slot in slots)
         totals = {"filled": 0, "unquoted": 0, "unbacked": 0, "unstated": 0,
                   "retried": 0}
         seen = {(i.source.owner_kind, i.source.owner_id) for i in batch.items}
         state = {"asked": 0, "answer": None, "stage": "own"}
+
+        def still_open(pool: list) -> list:
+            """Rows with at least one of these fields still unread."""
+            wanted = {row.label for slot in slots
+                      for row in open_rows(pool, slot)}
+            return [row for row in pool if row.label in wanted]
 
         def run(windows) -> bool:
             """Ask over these windows. False when the budget ran out.
@@ -1633,7 +1658,7 @@ def make_fieldwise_harvester(image_root: Optional[Path] = None,
             eat the document.
             """
             for shown in windows:
-                todo = open_rows(rows, slot)
+                todo = still_open(rows)
                 if not todo:
                     return True
                 corrections = None
@@ -1642,7 +1667,7 @@ def make_fieldwise_harvester(image_root: Optional[Path] = None,
                         return False
                     state["asked"] += 1
                     started = time.time()
-                    state["answer"] = ask(shown, todo, slot, corrections,
+                    state["answer"] = ask(shown, todo, slots, corrections,
                                           batch.document_id)
                     # Checked against the window AND the passages the rows
                     # carry. A row's own quote is shown to the model in the
@@ -1650,8 +1675,22 @@ def make_fieldwise_harvester(image_root: Optional[Path] = None,
                     # second window on it is no longer among `shown`, which
                     # threw away correct readings by the hundred: one batch
                     # logged 520 dropped against 31 read.
-                    counts = merge_field(rows, list(shown) + batch.sources,
-                                         slot, state["answer"])
+                    # One reply, folded field by field. A field that is
+                    # missing from it is simply not folded, which leaves its
+                    # rows open for the next window — the same outcome as an
+                    # empty answer, and the same as before.
+                    answered = (state["answer"] or {}).get("fields")
+                    if not isinstance(answered, dict):
+                        answered = {}
+                    counts = {"filled": 0, "unquoted": 0, "unbacked": 0,
+                              "unstated": 0, "failed": []}
+                    for slot in slots:
+                        got = merge_field(rows, list(shown) + batch.sources,
+                                          slot, answered.get(slot.name))
+                        for key in ("filled", "unquoted", "unbacked",
+                                    "unstated"):
+                            counts[key] += got[key]
+                        counts["failed"].extend(got["failed"])
                     for key in ("filled", "unquoted", "unbacked", "unstated"):
                         totals[key] += counts[key]
                     totals["retried"] += 1 if attempt else 0
@@ -1659,7 +1698,7 @@ def make_fieldwise_harvester(image_root: Optional[Path] = None,
                     # and what came back. Every knob this stage has cuts
                     # through this distribution, and none of them could be set
                     # from a log line that only counted the failures.
-                    trace.event("field", batch.document_id, slot=slot.name,
+                    trace.event("field", batch.document_id, slot=name,
                                 anchor=anchor_id, window=state["asked"],
                                 stage=state["stage"], attempt=attempt,
                                 parameter=(batch.parameter.uri
@@ -1672,7 +1711,7 @@ def make_fieldwise_harvester(image_root: Optional[Path] = None,
                                    ("filled", "unquoted", "unbacked",
                                     "unstated")})
                     for bad in counts["failed"]:
-                        trace.event("drop", batch.document_id, slot=slot.name,
+                        trace.event("drop", batch.document_id, slot=name,
                                     window=state["asked"], attempt=attempt,
                                     row=bad.get("row"),
                                     why=bad.get("why") or "unbacked")
@@ -1680,8 +1719,7 @@ def make_fieldwise_harvester(image_root: Optional[Path] = None,
                     if not corrections:
                         break
                     named = {c["row"] for c in corrections}
-                    todo = [r for r in open_rows(rows, slot)
-                            if r.label in named]
+                    todo = [r for r in still_open(rows) if r.label in named]
                     if not todo:
                         break
             return True
@@ -1689,7 +1727,7 @@ def make_fieldwise_harvester(image_root: Optional[Path] = None,
         combed = run([batch.sources])
         state["stage"] = "retrieval"
         for _ in range(FIELD_ROUNDS):
-            if not combed or not open_rows(rows, slot) or more_sources is None:
+            if not combed or not still_open(rows) or more_sources is None:
                 break
             # Still open, so look further out. The probes are the anchors
             # written for THIS question: sentences as a plan would print the
@@ -1697,8 +1735,8 @@ def make_fieldwise_harvester(image_root: Optional[Path] = None,
             # and a question is the one sentence that never stands in a
             # document.
             probes = list(anchors.get(anchor_id) or ())
-            if not probes and slot.question:
-                probes = [slot.question]
+            if not probes:
+                probes = [slot.question for slot in slots if slot.question]
             probes += [q for q in (state["answer"] or {}).get("need_more") or []
                        if isinstance(q, str) and len(q) > 20]
             fresh = more_sources(batch.document_id, probes, set(seen)) or []
@@ -1708,7 +1746,7 @@ def make_fieldwise_harvester(image_root: Optional[Path] = None,
                 seen.add((source.owner_kind, source.owner_id))
             combed = run(window_sources(fresh, FIELD_WINDOW, FIELD_OVERLAP))
 
-        if combed and open_rows(rows, slot) and rest_of_document is not None:
+        if combed and still_open(rows) and rest_of_document is not None:
             # Retrieval has nothing left to offer and the coordinate is still
             # open. Read the rest of the plan rather than call it unstated on
             # the strength of what a ranking happened to surface.
@@ -1718,15 +1756,16 @@ def make_fieldwise_harvester(image_root: Optional[Path] = None,
 
         stranded = 0
         if not combed:
-            for row in open_rows(rows, slot):
-                # Still open with the document unread to the end. Not the same
-                # finding as a document that does not say it, and not recorded
-                # as one.
-                row.claim[f"{slot.name}_state"] = EXHAUSTED
-                stranded += 1
+            for slot in slots:
+                for row in open_rows(rows, slot):
+                    # Still open with the document unread to the end. Not the
+                    # same finding as a document that does not say it, and not
+                    # recorded as one.
+                    row.claim[f"{slot.name}_state"] = EXHAUSTED
+                    stranded += 1
         totals["asked"] = state["asked"]
         totals["exhausted"] = stranded
-        trace.event("sweep", batch.document_id, slot=slot.name,
+        trace.event("sweep", batch.document_id, slot=name,
                     anchor=anchor_id, windows=state["asked"],
                     rows=len(rows), combed=combed, **totals)
         return totals
@@ -1774,19 +1813,15 @@ def make_fieldwise_harvester(image_root: Optional[Path] = None,
                 # the serializer for exactly these two coordinates, after the
                 # run had paid for all seven axes of every one of them.
                 inside = group
-                for axis in gate:
-                    if not inside:
-                        break
-                    got = sweep_field(batch, inside, axis,
-                                      anchor_key(uri, axis.name))
-                    into = counts.setdefault(axis.name, dict(got))
-                    if into is not got:
-                        for key, value in got.items():
-                            into[key] = into.get(key, 0) + value
-                    allowed = (slice_gate or {}).get(axis.name)
-                    inside = [row for row in inside
-                              if keeps_row(axis, row.claim.get(axis.name),
-                                           allowed)]
+                if gate:
+                    got = sweep_field(batch, inside, gate,
+                                      anchor_key(uri, gate[0].name))
+                    counts["+".join(a.name for a in gate)] = got
+                    for axis in gate:
+                        allowed = (slice_gate or {}).get(axis.name)
+                        inside = [row for row in inside
+                                  if keeps_row(axis, row.claim.get(axis.name),
+                                               allowed)]
                 staying = {row.label for row in inside}
                 for row in group:
                     if row.label in staying:
@@ -1797,29 +1832,28 @@ def make_fieldwise_harvester(image_root: Optional[Path] = None,
                         if axis.name not in gated:
                             row.claim.setdefault(f"{axis.name}_state",
                                                  fields.OUT_OF_SLICE)
-                for axis in axes:
-                    if axis.name in gated:
-                        continue
-                    if inside:
-                        jobs.append((inside, axis, anchor_key(uri, axis.name)))
+                rest = [axis for axis in axes if axis.name not in gated]
+                if inside and rest:
+                    jobs.append((inside, rest, anchor_key(uri, rest[0].name)))
         else:
             axes = fields.axis_slots(batch.parameter)
             for row in rows:
                 slots_of[row.label] = axes
-            for axis in axes:
-                jobs.append((rows, axis,
-                             anchor_key(batch.parameter.uri, axis.name)))
+            if axes:
+                jobs.append((rows, axes,
+                             anchor_key(batch.parameter.uri, axes[0].name)))
 
-        futures = {pool.submit(sweep_field, batch, group, slot, anchor): slot
-                   for group, slot, anchor in jobs}
+        futures = {pool.submit(sweep_field, batch, group, group_slots, anchor):
+                   "+".join(a.name for a in group_slots)
+                   for group, group_slots, anchor in jobs}
         for future in as_completed(futures):
-            slot = futures[future]
+            label = futures[future]
             try:
                 got = future.result()
             except Exception as exc:            # pragma: no cover - defensive
-                log.warning("   field %s raised: %s", slot.name, exc)
+                log.warning("   field %s raised: %s", label, exc)
                 continue
-            into = counts.setdefault(slot.name, dict(got))
+            into = counts.setdefault(label, dict(got))
             if into is not got:
                 for key, value in got.items():
                     into[key] = into.get(key, 0) + value
