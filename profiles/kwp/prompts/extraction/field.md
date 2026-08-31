@@ -4,19 +4,21 @@ max_tokens: 6144
 ---
 Du bestimmst EINE Angabe zu Zahlen, die aus einem deutschen kommunalen Wärmeplan schon geholt sind.
 
-Die Zahlen stehen fest. Du fügst keine hinzu und lässt keine weg. Gefragt ist in dieser Anfrage genau ein Feld, und für jede Zahl beantwortest du es einzeln und belegst es einzeln.
+Die Zahlen stehen fest. Du fügst keine hinzu und lässt keine weg. Gefragt sind in dieser Anfrage EIN ODER MEHRERE Felder, und für jede Zahl beantwortest du JEDES gefragte Feld einzeln und belegst es einzeln. Ein Feld mit dem Beleg eines anderen ist kein Beleg.
 
 Du bekommst ein JSON-Objekt mit diesen Feldern:
 
-- "field": das gesuchte Feld — "name", die Frage ("question") und, wenn es eine geschlossene Liste gibt, die zulässigen Einträge ("options": je Eintrag ein Name und die Schreibweisen, unter denen er im Korpus schon vorkam).
+- "fields": die gesuchten Felder, je Feld "name", die Frage ("question") und, wenn es eine geschlossene Liste gibt, die zulässigen Einträge ("options": je Eintrag ein Name und die Schreibweisen, unter denen er im Korpus schon vorkam). Jedes Feld hat seine eigene Frage und braucht seine eigene Antwort mit eigenem Zitat.
 - "sources": die Quellen aus DEMSELBEN Wärmeplan, jede mit einer Kennung ("id": "Q1", "Q2", …) — dieselben Texte, aus denen die Zahlen stammen.
 - "rows": die Zahlen, jede mit einer Kennung ("id": "R1", "R2", …), ihrer Quelle, ihrem Wert, ihrer Einheit und der Passage, in der sie steht. Stammt die Zahl aus einer Tabellenzeile, steht zusätzlich "column": in welcher Zelle dieser Zeile sie steht, von "columns" Zellen insgesamt. Das ist ausgezählt und nicht geraten, du kannst dich darauf verlassen.
 
 Gib ausschließlich ein JSON-Objekt in dieser Form zurück, in EINER Zeile, OHNE Einrückung:
 
-{"groups": [{"rows": ["R1", "R2", "R3"], "value": "Bestand", "value_raw": "Ist-Zustand 2022", "quote": "Tabelle 4: Endenergieverbrauch im Ist-Zustand 2022 nach Energieträgern"}], "answers": {"R4": {"value": "Zielszenario", "value_raw": "Klimaschutzszenario", "quote": "Im Klimaschutzszenario sinkt der Verbrauch auf 2.315.956 MWh/a."}}}
+{"fields": {"scenario": {"groups": [{"rows": ["R1", "R2", "R3"], "value": "Bestand", "value_raw": "Ist-Zustand 2022", "quote": "Tabelle 4: Endenergieverbrauch im Ist-Zustand 2022 nach Energieträgern"}], "answers": {"R4": {"value": "Zielszenario", "value_raw": "Klimaschutzszenario", "quote": "Im Klimaschutzszenario sinkt der Verbrauch auf 2.315.956 MWh/a."}}}, "year": {"groups": [{"rows": ["R1", "R2", "R3", "R4"], "value": 2022, "quote": "Tabelle 4: Endenergieverbrauch im Ist-Zustand 2022 nach Energieträgern"}]}}}
 
-Beide Formen bedeuten dasselbe. "groups" ist für den Normalfall: eine Tabellenüberschrift oder eine Caption belegt die Angabe für alle Zeilen der Tabelle auf einmal, und dann gehört sie EINMAL hin und nicht dreizehnmal. "answers" ist für die Zeilen, die aus der Reihe fallen. Zeilen dürfen in beiden vorkommen, dann gilt "answers".
+Ein Schlüssel unter "fields" je gefragtem Feld, genau der "name" aus der Anfrage. Ein Feld, das du wegläßt, gilt als nicht beantwortet und wird noch einmal gefragt — das kostet eine ganze Runde, also lass keines weg.
+
+Innerhalb eines Feldes bedeuten beide Formen dasselbe. "groups" ist für den Normalfall: eine Tabellenüberschrift oder eine Caption belegt die Angabe für alle Zeilen der Tabelle auf einmal, und dann gehört sie EINMAL hin und nicht dreizehnmal. "answers" ist für die Zeilen, die aus der Reihe fallen. Zeilen dürfen in beiden vorkommen, dann gilt "answers".
 
 Regeln:
 

@@ -517,9 +517,12 @@ def _fieldwise(monkeypatch, spec, rows_reply, answers):
                         lambda *a, **kw: (lambda batch, prior=None: rows_reply))
 
     def make_asker(image_root=None):
-        def ask(shown, rows, slot, corrections=None, document_id=None):
-            asked.append(slot.name)
-            return answers(slot, rows)
+        def ask(shown, rows, slots, corrections=None, document_id=None):
+            slots = slots if isinstance(slots, (list, tuple)) else [slots]
+            for slot in slots:
+                asked.append(slot.name)
+            return {"fields": {slot.name: answers(slot, rows)
+                               for slot in slots}}
         return ask
 
     monkeypatch.setattr(runner, "make_field_asker", make_asker)
@@ -599,9 +602,13 @@ def _gated(monkeypatch, spec, rows_reply, answers, gate):
                         lambda *a, **kw: (lambda batch, prior=None: rows_reply))
 
     def make_asker(image_root=None):
-        def ask(shown, rows, slot, corrections=None, document_id=None):
-            asked.append((slot.name, sorted(r.label for r in rows)))
-            return answers(slot, rows)
+        def ask(shown, rows, slots, corrections=None, document_id=None):
+            slots = slots if isinstance(slots, (list, tuple)) else [slots]
+            labels = sorted(r.label for r in rows)
+            for slot in slots:
+                asked.append((slot.name, labels))
+            return {"fields": {slot.name: answers(slot, rows)
+                               for slot in slots}}
         return ask
 
     monkeypatch.setattr(runner, "make_field_asker", make_asker)
@@ -712,3 +719,60 @@ def test_an_undecided_gate_coordinate_keeps_the_row(monkeypatch):
     assert runner.keeps_row(quantity, "final energy consumption value", None)
     assert runner.keeps_row(scenario, "Zielszenario", ("target",))
     assert not runner.keeps_row(scenario, "Ist-Zustand", ("target",))
+
+
+def test_the_coordinates_of_a_row_go_out_in_one_request(monkeypatch):
+    """The promise: several fields ride in ONE request, and each is folded and
+    evidenced on its own.
+
+    One field per request was one round trip per coordinate. Measured over 60
+    documents of the corpus run, 2,108 field requests each, which is what made
+    it 82 hours for 1,079 plans."""
+    spec, rows_reply = _two_row_spec_and_reply()
+    consumption = spec.parameters[0]
+    quote = "| Erdgas | 42.005 | MWh/a |"
+    calls = []
+
+    monkeypatch.setattr(runner, "make_harvester",
+                        lambda *a, **kw: (lambda batch, prior=None: rows_reply))
+
+    def make_asker(image_root=None):
+        def ask(shown, rows, slots, corrections=None, document_id=None):
+            slots = slots if isinstance(slots, (list, tuple)) else [slots]
+            calls.append([s.name for s in slots])
+            out = {}
+            for slot in slots:
+                if slot.name == "parameter":
+                    value = consumption.label
+                elif slot.name == "quantity":
+                    value = "final energy consumption value"
+                elif slot.name == "scenario":
+                    value = "Zielszenario"
+                elif slot.name == "carrier":
+                    value = "Erdgas"
+                else:
+                    continue
+                out[slot.name] = {"answers": {r.label: {
+                    "value": value, "value_raw": "MWh/a", "quote": quote}
+                    for r in rows}}
+            return {"fields": out}
+        return ask
+
+    monkeypatch.setattr(runner, "make_field_asker", make_asker)
+    harvest = runner.make_fieldwise_harvester(
+        spec=spec, slice_gate={"quantity": None, "scenario": ("target",)})
+    reply = harvest(_document_batch())
+
+    assert len(calls) == 3, (
+        "one for the parameter, one for the gate, one for the rest — not one "
+        "per coordinate: %s" % calls)
+    assert calls[0] == ["parameter"]
+    assert calls[1] == ["quantity", "scenario"]
+    assert len(calls[2]) == len(fields.axis_slots(consumption)) - 2
+
+    # Every field of the one reply is folded on its own.
+    row = reply["tuples"][0]
+    assert row["quantity_state"] == fields.READ
+    assert row["scenario_state"] == fields.READ
+    assert row["carrier_state"] == fields.READ
+    assert row["carrier_quote"] == quote, "and carries its own evidence"
