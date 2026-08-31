@@ -1173,3 +1173,65 @@ def test_the_kwp_profile_freezes_anchors_its_own_spec_asks_for():
     # file, or changing it leaves every existing output directory on the old
     # set with no line anywhere saying so.
     assert runner.anchors_key("sha", sha) != runner.anchors_key("sha")
+
+
+def test_a_document_no_reply_ever_came_back_for_is_not_stamped(tmp_path, monkeypatch):
+    """The second way a harvest fails to happen, and the one the sentinel
+    count cannot see. With no reply there is no tuple and no refusal either,
+    so the unreachable arithmetic reads 0 > n/2, says no, and stamps an empty
+    file. A dead vLLM engine turned 872 planned documents into 0-byte results
+    that way, all of them stamped, all of them skipped by a resume.
+
+    The other clause is the reason this counts replies instead of lines: a
+    document that WAS harvested and simply held no value is done, and redoing
+    it forever is the other way to lose a run."""
+    monkeypatch.setattr(runner.prompts, "versions", lambda ids: {i: "v1" for i in ids})
+    from docpipe.extraction.pipeline import DocumentReport
+
+    def planned():
+        report = DocumentReport(document_id=7)
+        report.owners_harvested = 160
+        return report
+
+    runner.finish_document(planned(), "stumm", tmp_path, "sha", answered=0)
+    assert (tmp_path / "stumm.jsonl").is_file(), "the empty result is still written"
+    assert not (tmp_path / "stumm.stamp.json").exists(), (
+        "160 planned sources and not one reply is not a harvest")
+
+    runner.finish_document(planned(), "leer", tmp_path, "sha", answered=27)
+    assert (tmp_path / "leer.stamp.json").is_file(), (
+        "a plan that was read and held nothing is done")
+
+    # A caller that does not track replies must not be second-guessed.
+    runner.finish_document(planned(), "ungezaehlt", tmp_path, "sha")
+    assert (tmp_path / "ungezaehlt.stamp.json").is_file()
+
+
+def test_the_dead_server_cut_is_visible_outside_the_group():
+    """Cancelling the group is not enough. The cut fired sixteen times in one
+    run and the loop went on to the next group each time, so a server that
+    died at 01:44 was still being asked at 05:14 and 872 documents came back
+    as 0-byte files. The caller has to be able to know."""
+    from docpipe.extraction.pipeline import Source, WorkItem, group_items
+
+    items = [WorkItem(7, None, Source("table", i, f"| x | {i} | MWh/a |", {}))
+             for i in range(200)]
+    batches = list(group_items(items, max_sources=1, max_chars=14000))
+    assert len(batches) > 64, "the cut needs more than its own threshold"
+
+    def dead(batch, prior=None):
+        raise ConnectionError("server is gone")
+
+    cut = []
+    answered = runner.harvest_batches(batches, dead, workers=1,
+                                      on_give_up=lambda: cut.append(1))
+    assert cut == [1], "fired once, and said so"
+    assert len(answered) < len(batches), "and the rest was cancelled"
+
+    # A server that answers must never trip it, or a healthy run ends early.
+    quiet = []
+    runner.harvest_batches(
+        batches, lambda b, prior=None: {"tuples": [], "status": "complete",
+                                        "need_more": []},
+        workers=1, on_give_up=lambda: quiet.append(1))
+    assert quiet == []
