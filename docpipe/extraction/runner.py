@@ -1453,6 +1453,33 @@ def _field_payload(shown: list, rows: list, slot,
     return out
 
 
+def keeps_row(slot, answer, allowed) -> bool:
+    """Does this gate answer keep the row in the slice this run serializes?
+
+    The answer is the option's LABEL, because that is what a field reply
+    carries and what merge_field writes: "Potenzial", not "out:potential". The
+    profile names classes, so the label is resolved here — reading the profile
+    as if it held German spellings would have kept every potential and thrown
+    away every target scenario, which is exactly what it did.
+
+    Undecided keeps the row. A coordinate that came back empty or "not stated"
+    is a finding about the passages, not a licence to throw the value away,
+    and dropping on it would silently shrink the harvest by whatever the sweep
+    happened to miss.
+
+    *allowed* None means every class the graph takes, which is every entry
+    that does not ride the out: convention. A tuple names the answers.
+    """
+    text = str(answer or "").strip()
+    if not text or text == fields.UNSTATED:
+        return True
+    uri = {option.label: option.uri
+           for option in (getattr(slot, "options", None) or ())}.get(text, text)
+    if allowed is None:
+        return not str(uri).startswith("out:")
+    return uri in allowed
+
+
 def make_field_asker(image_root: Optional[Path] = None) -> Callable:
     """ask(batch, rows, slot) -> reply, or None when the field stays unasked.
 
@@ -1543,7 +1570,8 @@ def make_field_asker(image_root: Optional[Path] = None) -> Callable:
 def make_fieldwise_harvester(image_root: Optional[Path] = None,
                              more_sources: Optional[Callable] = None,
                              rest_of_document: Optional[Callable] = None,
-                             spec=None, anchors: Optional[dict] = None
+                             spec=None, anchors: Optional[dict] = None,
+                             slice_gate: Optional[dict] = None
                              ) -> Callable:
     """A harvest(batch, prior) that asks per field and answers like the old one.
 
@@ -1728,8 +1756,44 @@ def make_fieldwise_harvester(image_root: Optional[Path] = None,
                 axes = fields.axis_slots(spec.by_uri[uri])
                 for row in group:
                     slots_of[row.label] = [slot] + axes
+                by_name = {axis.name: axis for axis in axes}
+                gate = [by_name[name] for name in (slice_gate or {})
+                        if name in by_name]
+                gated = {axis.name for axis in gate}
+                # Sequential and first. Each of these can close a row, and a
+                # closed row must not pay for the axes behind it: measured on
+                # 20 plans, 4,064 of 6,763 harvested tuples were dropped by
+                # the serializer for exactly these two coordinates, after the
+                # run had paid for all seven axes of every one of them.
+                inside = group
+                for axis in gate:
+                    if not inside:
+                        break
+                    got = sweep_field(batch, inside, axis,
+                                      anchor_key(uri, axis.name))
+                    into = counts.setdefault(axis.name, dict(got))
+                    if into is not got:
+                        for key, value in got.items():
+                            into[key] = into.get(key, 0) + value
+                    allowed = (slice_gate or {}).get(axis.name)
+                    inside = [row for row in inside
+                              if keeps_row(axis, row.claim.get(axis.name),
+                                           allowed)]
+                staying = {row.label for row in inside}
+                for row in group:
+                    if row.label in staying:
+                        continue
+                    # Never asked, and said so. An empty cell here would be
+                    # indistinguishable from a coordinate the model dropped.
+                    for axis in axes:
+                        if axis.name not in gated:
+                            row.claim.setdefault(f"{axis.name}_state",
+                                                 fields.OUT_OF_SLICE)
                 for axis in axes:
-                    jobs.append((group, axis, anchor_key(uri, axis.name)))
+                    if axis.name in gated:
+                        continue
+                    if inside:
+                        jobs.append((inside, axis, anchor_key(uri, axis.name)))
         else:
             axes = fields.axis_slots(batch.parameter)
             for row in rows:
@@ -2347,6 +2411,14 @@ def main(argv: Optional[list] = None) -> int:
     # which anchors produced a document cannot tell it from one produced under
     # another set. A broken anchors file raises here, before the model loads.
     frozen, frozen_sha = frozen_anchors(profile, spec)
+    # Which coordinates decide whether a value belongs in the graph at all.
+    # The profile's business: "scenario == target" is what the kwp target
+    # slice holds and says nothing about any other corpus.
+    slice_gate = profile.component("extraction", "SLICE") or {}
+    if slice_gate:
+        log.info("extraction: slice gate on %s — a row that falls out here "
+                 "is not asked for its other coordinates",
+                 ", ".join(sorted(slice_gate)))
     anchors_sha = anchors_key(spec_sha, frozen_sha)
     templates = [line for line in
                  prompts.load(QUERIES_PROMPT_ID).text.splitlines()
@@ -2445,7 +2517,8 @@ def main(argv: Optional[list] = None) -> int:
     # document. OpenAI client is thread-safe.
     harvest = (make_fieldwise_harvester(args.image_root, more_sources,
                                         make_rest_of_document(args.db),
-                                        spec=spec, anchors=anchors)
+                                        spec=spec, anchors=anchors,
+                                        slice_gate=slice_gate)
                if FIELDWISE else make_harvester(args.image_root, spec=spec))
 
     def plan(document_id: int, filename: str) -> tuple:

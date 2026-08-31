@@ -59,6 +59,12 @@ EXHAUSTED = "exhausted"
 # module exists to stop making. It stays OPEN — a later window can still read
 # the coordinate properly — and only survives to the end if none does.
 UNBACKED = "unbacked"
+# Never asked, because a gate coordinate already put this row outside what
+# this run serializes. A finding about the RUN'S SCOPE, and neither about the
+# plan nor about the model, so it is not "unstated" and not "unanswered". It
+# exists because the alternative is an empty cell, and an empty cell is the
+# one thing every state in this module was written to prevent.
+OUT_OF_SLICE = "out_of_slice"
 
 
 @dataclass(frozen=True)
