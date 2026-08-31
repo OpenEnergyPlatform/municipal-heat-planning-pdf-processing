@@ -581,3 +581,134 @@ def test_a_row_whose_quantity_stayed_unread_is_not_given_a_guessed_axis(
     row = reply["tuples"][0]
     assert row["parameter_state"] in (fields.EXHAUSTED, fields.SAID_UNSTATED)
     assert not any(k.endswith("_state") and k != "parameter_state" for k in row)
+
+
+# ---------------------------------------------------------------------------
+# The slice gate
+#
+# The promise: a row that a gate coordinate puts outside the slice is not
+# asked for its remaining axes, and every one of its coordinates still ends
+# with a state. Two clauses, and a third case so the gate cannot be too wide.
+# ---------------------------------------------------------------------------
+
+def _gated(monkeypatch, spec, rows_reply, answers, gate):
+    """Like _fieldwise, but it records WHICH rows each field was asked for."""
+    asked = []
+
+    monkeypatch.setattr(runner, "make_harvester",
+                        lambda *a, **kw: (lambda batch, prior=None: rows_reply))
+
+    def make_asker(image_root=None):
+        def ask(shown, rows, slot, corrections=None, document_id=None):
+            asked.append((slot.name, sorted(r.label for r in rows)))
+            return answers(slot, rows)
+        return ask
+
+    monkeypatch.setattr(runner, "make_field_asker", make_asker)
+    return runner.make_fieldwise_harvester(spec=spec, slice_gate=gate), asked
+
+
+def _two_row_spec_and_reply():
+    spec = load_spec(json.loads(
+        (PROFILES / "kwp" / "extraction_spec.json").read_text(encoding="utf-8")))
+    rows_reply = {"tuples": [
+        {"source": "Q1", "value": 42005, "unit": "MWh/a", "unit_raw": "MWh/a",
+         "quote": "| Erdgas | 42.005 | MWh/a |"},
+        {"source": "Q1", "value": 99, "unit": "MWh/a", "unit_raw": "MWh/a",
+         "quote": "| Erdgas | 42.005 | MWh/a |"}],
+        "status": "complete", "need_more": []}
+    return spec, rows_reply
+
+
+def _answers_for(spec, quantity_of, scenario_of):
+    consumption = spec.parameters[0]
+    quote = "| Erdgas | 42.005 | MWh/a |"
+
+    def answers(slot, rows):
+        if slot.name == "parameter":
+            return {"answers": {r.label: {"value": consumption.label,
+                                          "value_raw": "MWh/a", "quote": quote}
+                                for r in rows}}
+        if slot.name in ("quantity", "scenario"):
+            picked = quantity_of if slot.name == "quantity" else scenario_of
+            return {"answers": {r.label: {"value": picked.get(r.label),
+                                          "value_raw": "MWh/a", "quote": quote}
+                                for r in rows if picked.get(r.label)}}
+        return {"answers": {}}
+    return answers
+
+
+def test_a_row_outside_the_slice_is_not_asked_for_its_other_axes(monkeypatch):
+    """Measured on 20 plans: of 6,763 harvested tuples the serializer took
+    1,294 and dropped 4,064 for the quantity or the scenario alone — after the
+    run had paid for all seven axes of every one of them."""
+    spec, rows_reply = _two_row_spec_and_reply()
+    answers = _answers_for(
+        spec,
+        quantity_of={"R1": "final energy consumption value", "R2": "Potenzial"},
+        scenario_of={"R1": "Zielszenario", "R2": "Zielszenario"})
+    harvest, asked = _gated(monkeypatch, spec, rows_reply, answers,
+                            {"quantity": None, "scenario": ("target",)})
+    reply = harvest(_document_batch())
+
+    gate_order = [name for name, _rows in asked][:3]
+    assert gate_order == ["parameter", "quantity", "scenario"], (
+        "the gate is asked first and in order")
+    after = {name: rows for name, rows in asked[3:]}
+    assert after, "the row that stayed is still asked for its axes"
+    assert all(rows == ["R1"] for rows in after.values()), (
+        "and only that row: R2 fell out at the quantity")
+
+    out = next(t for t in reply["tuples"] if t.get("value") == 99)
+    for axis in fields.axis_slots(spec.parameters[0]):
+        if axis.name in ("quantity", "scenario"):
+            continue
+        assert out.get(f"{axis.name}_state") == fields.OUT_OF_SLICE, (
+            f"{axis.name} was never asked and has to say so")
+
+
+def test_a_scenario_the_slice_does_not_hold_closes_the_row(monkeypatch):
+    """The second gate coordinate, and the bigger one: 2,510 of those 4,064."""
+    spec, rows_reply = _two_row_spec_and_reply()
+    answers = _answers_for(
+        spec,
+        quantity_of={"R1": "final energy consumption value",
+                     "R2": "final energy consumption value"},
+        scenario_of={"R1": "Zielszenario", "R2": "Ist-Zustand"})
+    harvest, asked = _gated(monkeypatch, spec, rows_reply, answers,
+                            {"quantity": None, "scenario": ("target",)})
+    harvest(_document_batch())
+    after = {name: rows for name, rows in asked[3:]}
+    assert after and all(rows == ["R1"] for rows in after.values())
+
+
+def test_an_undecided_gate_coordinate_keeps_the_row(monkeypatch):
+    """The gate must not be a second way to lose values. A coordinate that
+    came back empty is a finding about the passages, not a licence to throw
+    the number away."""
+    spec, rows_reply = _two_row_spec_and_reply()
+    answers = _answers_for(
+        spec,
+        quantity_of={"R1": "final energy consumption value"},   # R2: no answer
+        scenario_of={"R1": "Zielszenario", "R2": "Zielszenario"})
+    harvest, asked = _gated(monkeypatch, spec, rows_reply, answers,
+                            {"quantity": None, "scenario": ("target",)})
+    harvest(_document_batch())
+    after = {name: rows for name, rows in asked[3:]}
+    assert after and all(rows == ["R1", "R2"] for rows in after.values()), (
+        "undecided is not outside")
+
+    # The reply carries the option's LABEL, so the gate has to resolve it.
+    # Reading the profile as if it held German spellings kept every potential
+    # and threw away every target scenario.
+    quantity = next(s for s in fields.axis_slots(spec.parameters[0])
+                    if s.name == "quantity")
+    scenario = next(s for s in fields.axis_slots(spec.parameters[0])
+                    if s.name == "scenario")
+    assert runner.keeps_row(quantity, None, None)
+    assert runner.keeps_row(scenario, "", ("target",))
+    assert runner.keeps_row(scenario, fields.UNSTATED, ("target",))
+    assert not runner.keeps_row(quantity, "Potenzial", None)
+    assert runner.keeps_row(quantity, "final energy consumption value", None)
+    assert runner.keeps_row(scenario, "Zielszenario", ("target",))
+    assert not runner.keeps_row(scenario, "Ist-Zustand", ("target",))
