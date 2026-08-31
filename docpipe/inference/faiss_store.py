@@ -238,7 +238,8 @@ def fuse_prepared(conn: sqlite3.Connection, prepared: dict, scores, positions,
                   limit: int,
                   content_fetcher: Optional[Callable] = None,
                   exclude: Optional[set] = None,
-                  probes: Optional[list] = None) -> list[dict]:
+                  probes: Optional[list] = None,
+                  per_probe_top: int = 0) -> list[dict]:
     """ONE ranking over all probes, best score per owner. Not one list per probe.
 
     `rank_prepared` answers a different question: it gives each probe its own
@@ -266,9 +267,18 @@ def fuse_prepared(conn: sqlite3.Connection, prepared: dict, scores, positions,
     owner_of = prepared["owner_of"]
     skip = set(exclude or ())
 
+    # The pool: with per_probe_top set, an owner is eligible when it is in the
+    # top of AT LEAST ONE probe. Max-score fusion alone answers a different
+    # question — a section only the year anchor likes, at rank 3 for that
+    # anchor, can sit at rank 200 in the fused list because two hundred other
+    # owners have a higher best score. The cap then drops it, and no question
+    # ever gets to read what it asked for.
     best: dict[tuple[str, int], tuple[float, int]] = {}
     for i in range(len(scores)):
-        for score, pos in zip(scores[i].tolist(), positions[i].tolist()):
+        row = zip(scores[i].tolist(), positions[i].tolist())
+        for taken, (score, pos) in enumerate(row):
+            if per_probe_top and taken >= per_probe_top:
+                break
             if pos < 0:
                 continue
             owner = owner_of[faiss_ids[pos]]
