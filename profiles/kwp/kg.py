@@ -187,6 +187,17 @@ def _value_iri(heatplan: str, row: dict) -> str:
     # never varies. The area has to be in here: one plan carries four separate
     # gas tables, one per heat-network area, and without it they collide onto
     # one node and the conflict guard drops all four.
+    # The area names the node only where it IS the identity. For a sub-area
+    # it is: one plan carries four separate gas tables, one per heat-network
+    # area, and without the name they collide onto one node and the conflict
+    # guard drops all four. For the whole plan area it is not, and putting it
+    # in there splits one fact into as many nodes as the document has words
+    # for the place. Measured over 20 plans: Bad Segeberg states its 2,272 t
+    # of 2040 on pages 71, 72 and 73 as "Waermesektor", "Projektgebiet" and
+    # "Stadtgebiet", and became three indistinguishable nodes. 129 of 1,294
+    # nodes were repeats of that shape.
+    area = (normalise(row.get("spatial_scope_raw") or "")
+            if row.get("spatial_scope") == "sub_area" else "")
     coordinates = "|".join([
         heatplan,
         f"{OEO}{row['quantity']}",
@@ -194,7 +205,7 @@ def _value_iri(heatplan: str, row: dict) -> str:
         f"{OEO}{row['sector']}" if row.get("sector") else "",
         str(row["year"]),
         f"{OEO}{row.get('aggregation') or AGGREGATION_INTEGRAL}",
-        normalise(row.get("spatial_scope_raw") or ""),
+        area,
     ])
     return mint("value", coordinates)
 
