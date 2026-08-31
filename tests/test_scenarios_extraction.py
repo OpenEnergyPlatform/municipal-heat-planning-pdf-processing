@@ -169,6 +169,32 @@ def test_the_rows_prompt_calls_the_front_page_what_it_is():
                  "Eine Quelle ist davon ausgenommen: die Vorderseite",
                  "Die Vorderseite ist keine solche Stelle"):
         assert satz in text, satz
+    # And the counterweight. "The heading IS the title" is a licence, and the
+    # three shapes it must not be given for are the ones the corpus really
+    # holds: ten of the titleless documents carry their author list as the
+    # heading of section 1, and seven carry a genus word.
+    assert "Der Titel ist die Zeile ÜBER den Namen" in text
+    for gegenprobe in ("Quellenverzeichnis", "schon die Autorenliste ist",
+                       "Gattungswort"):
+        assert gegenprobe in text, gegenprobe
+
+
+def test_the_rows_prompt_may_answer_as_long_as_the_batch_was_sized_for():
+    """How many sources a request reads and how much may be written about them
+    are set in two files, and the run mixes them: fit_batch_sources sizes the
+    batch from extraction/harvest's ceiling (runner.py hardwires
+    HARVEST_PROMPT_ID) while the field-wise path answers under
+    extraction/rows. A lower ceiling here means the batch is deliberately
+    sized for a reply the prompt forbids -- 43 replies were cut off at it in
+    the corpus run of 2026-08-31."""
+    import re as regex
+
+    def ceiling(path):
+        head = Path(path).read_text(encoding="utf-8").split("---")[1]
+        return int(regex.search(r"max_tokens:\s*(\d+)", head).group(1))
+
+    assert ceiling(ROWS_PROMPT) >= ceiling(
+        "profiles/scenarios/prompts/extraction/harvest.md")
 
 
 def test_the_probes_expand_without_a_vocabulary_axis(monkeypatch):

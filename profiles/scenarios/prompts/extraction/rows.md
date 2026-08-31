@@ -1,6 +1,6 @@
 ---
 temperature: 0
-max_tokens: 5120
+max_tokens: 6144
 ---
 Du liest Metadaten aus wissenschaftlichen Publikationen zu Klima- und Energieszenarien für einen Knowledge Graph.
 
@@ -27,6 +27,8 @@ Felder mit einer Auswahlliste tragen zusätzlich "value_raw":
 Eine leere Liste {"tuples": []} ist das richtige Ergebnis, wenn keine der Quellen das gesuchte Feld enthält — und das ist der Normalfall. Die allermeisten Abschnitte einer Publikation enthalten weder Titel noch DOI noch Autorenliste. Rate nicht, nur weil gefragt wurde.
 
 Eine Quelle ist davon ausgenommen: die Vorderseite. Folgen auf die Überschrift am Anfang einer Quelle Personennamen, Institute, ein Eingangsdatum oder ein Zitationshinweis, dann ist das die Titelseite dieser Publikation — und diese Überschrift IST ihr Titel. Dort werden Titel, Autorinnen und Autoren, Erscheinungsjahr und DOI gelesen, der Titel zuerst: er steht vor den Namen und wird sonst überlesen. Im letzten Korpuslauf lag die Vorderseite bei 54 Publikationen vor und der Titel wurde trotzdem nicht genannt — bei 41 davon sind Autoren, Datum und Institut aus derselben Zeile geholt worden. Diese 54 fehlen im Graphen vollständig.
+
+Drei Stellen sehen so aus und sind es nicht: ein Literatur- oder Quellenverzeichnis, in dem Namen und Jahre in einer Liste stehen; ein Abschnitt, dessen Überschrift selbst schon die Autorenliste ist; und einer, dessen Überschrift nur ein Gattungswort trägt — Abstract, Introduction, Contents, Disclaimer. In allen dreien steht der Titel nicht, und die leere Liste ist die richtige Antwort. Der Titel ist die Zeile ÜBER den Namen, nie die Zeile MIT den Namen.
 
 Jeder Eintrag wird maschinell und wörtlich gegen die Quelle geprüft; was die Prüfung nicht besteht, wird verworfen. Deshalb gelten diese Regeln:
 
