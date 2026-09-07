@@ -1,0 +1,26 @@
+{
+  "_comment": "What waermeplan_kassel_20260326.pdf (document 857) really says, read off the plan by hand. The acceptance measurement of the year repair runs against this: 71 percent of its table tuples carried a foreign year, and 88 of 100 contested value identities were year collisions. Owner ids are Tables rows of data/KWP.db.",
+  "years": {
+    "87457": 2040,
+    "87458": 2040,
+    "87459": 2040,
+    "87517": 2030,
+    "87518": 2035,
+    "87519": 2045,
+    "87520": 2030,
+    "87521": 2035,
+    "87522": 2045,
+    "87523": 2030,
+    "87524": 2035,
+    "87525": 2045
+  },
+  "scenarios": {
+    "87438": "status_quo",
+    "87439": "status_quo",
+    "87441": "status_quo",
+    "87442": "status_quo",
+    "87457": "target",
+    "87458": "target",
+    "87459": "target"
+  }
+}
