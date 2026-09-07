@@ -407,3 +407,43 @@ def test_stamp_forward_says_whether_it_wrote(tmp_path):
     # And a document with no stamp is not given one here.
     assert remap.stamp_forward(tmp_path / "missing.stamp.json",
                                _stamp(new), spaces) is False
+
+
+# ---------------------------------------------------------------------------
+# The circle closed
+# ---------------------------------------------------------------------------
+def test_a_remapped_document_is_current_and_a_stale_one_is_not(tmp_path,
+                                                               monkeypatch):
+    """The whole claim, end to end. A grown option list makes every document
+    stale; the pass maps the wordings it can and writes those keys forward;
+    the next run then skips exactly the documents that needed nothing else.
+    Without this the remap fixes values nobody stops re-harvesting."""
+    from docpipe.extraction import runner
+
+    monkeypatch.setattr(runner.prompts, "versions",
+                        lambda ids: {i: "v1" for i in ids})
+    monkeypatch.setattr(runner, "LLM_MODEL", "m")
+    old, new = _spec(OLD_LIST), _spec(NEW_LIST)
+    stamp_of = lambda spec: runner._stamp_current("spec-sha", "a", spec)
+
+    done = _harvest(tmp_path, [_tuple(carrier=None, carrier_raw="Klaergas")],
+                    stamp=stamp_of(old))
+    open_one = tmp_path / "offen.jsonl"
+    open_one.write_text(json.dumps(_tuple(carrier="oeo:gas",
+                                          carrier_raw="Grubengas")) + "\n",
+                        encoding="utf-8")
+    remap.stamp_path_of(open_one).write_text(json.dumps(stamp_of(old)),
+                                             encoding="utf-8")
+
+    # Before: the carrier list moved, so both are stale.
+    for name in ("plan", "offen"):
+        assert runner.stale(remap.stamp_path_of(tmp_path / f"{name}.jsonl"),
+                            stamp_of(new)) == ["axis/energy/carrier"]
+
+    remap.run(tmp_path, new, stamp_of(new))
+
+    assert runner.already_done("plan", tmp_path, "spec-sha", anchors_sha="a",
+                               spec=new) is True
+    assert runner.stale(remap.stamp_path_of(open_one), stamp_of(new)) \
+        == ["axis/energy/carrier"], "one unlisted wording keeps it stale"
+    assert _rows(done)[0]["carrier"] == "oeo:sewage"
