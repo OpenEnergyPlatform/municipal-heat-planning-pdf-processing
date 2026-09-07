@@ -88,7 +88,8 @@
             ]
           },
           "required": false,
-          "question": "Welche Größe ist diese Zahl? Das ist die wichtigste Entscheidung des Tupels, denn sie bestimmt, als welche Klasse der Wert im Graphen steht. Entscheide nach der Definition der Klasse, nicht nach der Ähnlichkeit der Wörter. Die Bezeichnung steht in der Zeile, im Spaltenkopf, in der Blocküberschrift oder in der Caption. \"Wärmeverbrauch\" und \"Wärmebedarf\" sind BEIDE \"final energy consumption value\": dessen Definition lautet \"die an Endverbraucher gelieferte und dort verbrauchte Energie\", und ein im Zielszenario zu deckender Bedarf ist genau diese Energie. In einem Szenario ist ohnehin nichts gemessen. \"Kumulierte THG-Emissionen\" dagegen ist die kumulierte Emission über mehrere Jahre, und eine abgeschiedene Menge ist das Gegenteil einer ausgestoßenen."
+          "question": "Welche Größe ist diese Zahl? Das ist die wichtigste Entscheidung des Tupels, denn sie bestimmt, als welche Klasse der Wert im Graphen steht. Entscheide nach der Definition der Klasse, nicht nach der Ähnlichkeit der Wörter. Die Bezeichnung steht in der Zeile, im Spaltenkopf, in der Blocküberschrift oder in der Caption. \"Wärmeverbrauch\" und \"Wärmebedarf\" sind BEIDE \"final energy consumption value\": dessen Definition lautet \"die an Endverbraucher gelieferte und dort verbrauchte Energie\", und ein im Zielszenario zu deckender Bedarf ist genau diese Energie. In einem Szenario ist ohnehin nichts gemessen. \"Kumulierte THG-Emissionen\" dagegen ist die kumulierte Emission über mehrere Jahre, und eine abgeschiedene Menge ist das Gegenteil einer ausgestoßenen.",
+          "evidence": "local"
         },
         "aggregation": {
           "vocabulary": {
@@ -246,7 +247,8 @@
               "sonstige Energieträger"
             ]
           },
-          "question": "Welcher Energieträger? Die Bezeichnung steht in der Zeilenbeschriftung, im Spaltenkopf oder in der Blocküberschrift, fast nie in der Schreibweise der Klassenliste: \"Gas H\" und \"Erdgas (netzgebunden)\" meinen die Klasse Erdgas, \"Nahwärme\" und \"Wärmenetz\" die Klasse Fernwärme. Eine Summenzeile (\"Summe\", \"Gesamt\", \"alle Energieträger\") ist \"out:total\", eine Restposition (\"Sonstige\", \"Andere\") ist \"out:other\". Passt fachlich weder eine Klasse noch einer dieser Einträge, etwa weil in der Spalte ein Gebäudetyp steht, dann lass die Zeile weg."
+          "question": "Welcher Energieträger? Die Bezeichnung steht in der Zeilenbeschriftung, im Spaltenkopf oder in der Blocküberschrift, fast nie in der Schreibweise der Klassenliste: \"Gas H\" und \"Erdgas (netzgebunden)\" meinen die Klasse Erdgas, \"Nahwärme\" und \"Wärmenetz\" die Klasse Fernwärme. Eine Summenzeile (\"Summe\", \"Gesamt\", \"alle Energieträger\") ist \"out:total\", eine Restposition (\"Sonstige\", \"Andere\") ist \"out:other\". Passt fachlich weder eine Klasse noch einer dieser Einträge, etwa weil in der Spalte ein Gebäudetyp steht, dann lass die Zeile weg.",
+          "evidence": "own"
         },
         "sector": {
           "vocabulary": {
@@ -280,11 +282,13 @@
               "insgesamt"
             ]
           },
-          "question": "Welcher Verbrauchssektor? Die Bezeichnung steht in der Zeilenbeschriftung, im Spaltenkopf oder in der Blocküberschrift: \"Wohnen\" meint die Klasse Private Haushalte, \"GHD/Kommune\" und \"Gewerbe\" die Klasse GHD. Eine Zeile über alle Sektoren ist \"out:total\". Nennt die Passage den Sektor gar nicht, ist das keine Klasse, sondern eine fehlende Angabe: antworte dann mit \"out:unstated\"."
+          "question": "Welcher Verbrauchssektor? Die Bezeichnung steht in der Zeilenbeschriftung, im Spaltenkopf oder in der Blocküberschrift: \"Wohnen\" meint die Klasse Private Haushalte, \"GHD/Kommune\" und \"Gewerbe\" die Klasse GHD. Eine Zeile über alle Sektoren ist \"out:total\". Nennt die Passage den Sektor gar nicht, ist das keine Klasse, sondern eine fehlende Angabe: antworte dann mit \"out:unstated\".",
+          "evidence": "own"
         },
         "year": {
           "type": "int",
-          "question": "Auf welches Bezugsjahr bezieht sich die Zahl? Vierstellig. Das Jahr steht fast nie in der Zeile der Zahl selbst, sondern im Spaltenkopf, im Tabellentitel, in der Caption oder in der Abschnittsüberschrift. Hat die Tabelle mehrere Jahresspalten, dann entscheidet die Position der Zahl in ihrer Zeile, welches Jahr gilt."
+          "question": "Auf welches Bezugsjahr bezieht sich die Zahl? Vierstellig. Das Jahr steht fast nie in der Zeile der Zahl selbst, sondern im Spaltenkopf, im Tabellentitel, in der Caption oder in der Abschnittsüberschrift. Hat die Tabelle mehrere Jahresspalten, dann entscheidet die Position der Zahl in ihrer Zeile, welches Jahr gilt.",
+          "evidence": "local"
         },
         "scenario": {
           "vocabulary": {
@@ -311,7 +315,8 @@
             ]
           },
           "required": false,
-          "question": "Auf welchen Zustand bezieht sich der Wert: den erhobenen Bestand, eine Trendfortschreibung oder ein Zielszenario? Der Bezug steht selten in der Zeile selbst, sondern in der Abschnittsüberschrift, im Tabellentitel oder in der Caption. Nennt die Quelle mehrere Zielszenarien nebeneinander (Umsetzungsszenario 1, Umsetzungsszenario 2), gehört der Name des konkreten in value_raw."
+          "question": "Auf welchen Zustand bezieht sich der Wert: den erhobenen Bestand, eine Trendfortschreibung oder ein Zielszenario? Der Bezug steht selten in der Zeile selbst, sondern in der Abschnittsüberschrift, im Tabellentitel oder in der Caption. Nennt die Quelle mehrere Zielszenarien nebeneinander (Umsetzungsszenario 1, Umsetzungsszenario 2), gehört der Name des konkreten in value_raw.",
+          "evidence": "local"
         },
         "spatial_scope": {
           "vocabulary": {
@@ -524,7 +529,8 @@
             ]
           },
           "required": false,
-          "question": "Welche Größe ist diese Zahl? Das ist die wichtigste Entscheidung des Tupels, denn sie bestimmt, als welche Klasse der Wert im Graphen steht. Entscheide nach der Definition der Klasse, nicht nach der Ähnlichkeit der Wörter. Die Bezeichnung steht in der Zeile, im Spaltenkopf, in der Blocküberschrift oder in der Caption. \"Wärmeverbrauch\" und \"Wärmebedarf\" sind BEIDE \"final energy consumption value\": dessen Definition lautet \"die an Endverbraucher gelieferte und dort verbrauchte Energie\", und ein im Zielszenario zu deckender Bedarf ist genau diese Energie. In einem Szenario ist ohnehin nichts gemessen. \"Kumulierte THG-Emissionen\" dagegen ist die kumulierte Emission über mehrere Jahre, und eine abgeschiedene Menge ist das Gegenteil einer ausgestoßenen."
+          "question": "Welche Größe ist diese Zahl? Das ist die wichtigste Entscheidung des Tupels, denn sie bestimmt, als welche Klasse der Wert im Graphen steht. Entscheide nach der Definition der Klasse, nicht nach der Ähnlichkeit der Wörter. Die Bezeichnung steht in der Zeile, im Spaltenkopf, in der Blocküberschrift oder in der Caption. \"Wärmeverbrauch\" und \"Wärmebedarf\" sind BEIDE \"final energy consumption value\": dessen Definition lautet \"die an Endverbraucher gelieferte und dort verbrauchte Energie\", und ein im Zielszenario zu deckender Bedarf ist genau diese Energie. In einem Szenario ist ohnehin nichts gemessen. \"Kumulierte THG-Emissionen\" dagegen ist die kumulierte Emission über mehrere Jahre, und eine abgeschiedene Menge ist das Gegenteil einer ausgestoßenen.",
+          "evidence": "local"
         },
         "aggregation": {
           "vocabulary": {
@@ -682,7 +688,8 @@
               "sonstige Energieträger"
             ]
           },
-          "question": "Welcher Energieträger? Die Bezeichnung steht in der Zeilenbeschriftung, im Spaltenkopf oder in der Blocküberschrift, fast nie in der Schreibweise der Klassenliste: \"Gas H\" und \"Erdgas (netzgebunden)\" meinen die Klasse Erdgas, \"Nahwärme\" und \"Wärmenetz\" die Klasse Fernwärme. Eine Summenzeile (\"Summe\", \"Gesamt\", \"alle Energieträger\") ist \"out:total\", eine Restposition (\"Sonstige\", \"Andere\") ist \"out:other\". Passt fachlich weder eine Klasse noch einer dieser Einträge, etwa weil in der Spalte ein Gebäudetyp steht, dann lass die Zeile weg."
+          "question": "Welcher Energieträger? Die Bezeichnung steht in der Zeilenbeschriftung, im Spaltenkopf oder in der Blocküberschrift, fast nie in der Schreibweise der Klassenliste: \"Gas H\" und \"Erdgas (netzgebunden)\" meinen die Klasse Erdgas, \"Nahwärme\" und \"Wärmenetz\" die Klasse Fernwärme. Eine Summenzeile (\"Summe\", \"Gesamt\", \"alle Energieträger\") ist \"out:total\", eine Restposition (\"Sonstige\", \"Andere\") ist \"out:other\". Passt fachlich weder eine Klasse noch einer dieser Einträge, etwa weil in der Spalte ein Gebäudetyp steht, dann lass die Zeile weg.",
+          "evidence": "own"
         },
         "sector": {
           "vocabulary": {
@@ -716,11 +723,13 @@
               "insgesamt"
             ]
           },
-          "question": "Welcher Verbrauchssektor? Die Bezeichnung steht in der Zeilenbeschriftung, im Spaltenkopf oder in der Blocküberschrift: \"Wohnen\" meint die Klasse Private Haushalte, \"GHD/Kommune\" und \"Gewerbe\" die Klasse GHD. Eine Zeile über alle Sektoren ist \"out:total\". Nennt die Passage den Sektor gar nicht, ist das keine Klasse, sondern eine fehlende Angabe: antworte dann mit \"out:unstated\"."
+          "question": "Welcher Verbrauchssektor? Die Bezeichnung steht in der Zeilenbeschriftung, im Spaltenkopf oder in der Blocküberschrift: \"Wohnen\" meint die Klasse Private Haushalte, \"GHD/Kommune\" und \"Gewerbe\" die Klasse GHD. Eine Zeile über alle Sektoren ist \"out:total\". Nennt die Passage den Sektor gar nicht, ist das keine Klasse, sondern eine fehlende Angabe: antworte dann mit \"out:unstated\".",
+          "evidence": "own"
         },
         "year": {
           "type": "int",
-          "question": "Auf welches Bezugsjahr bezieht sich die Zahl? Vierstellig. Das Jahr steht fast nie in der Zeile der Zahl selbst, sondern im Spaltenkopf, im Tabellentitel, in der Caption oder in der Abschnittsüberschrift. Hat die Tabelle mehrere Jahresspalten, dann entscheidet die Position der Zahl in ihrer Zeile, welches Jahr gilt."
+          "question": "Auf welches Bezugsjahr bezieht sich die Zahl? Vierstellig. Das Jahr steht fast nie in der Zeile der Zahl selbst, sondern im Spaltenkopf, im Tabellentitel, in der Caption oder in der Abschnittsüberschrift. Hat die Tabelle mehrere Jahresspalten, dann entscheidet die Position der Zahl in ihrer Zeile, welches Jahr gilt.",
+          "evidence": "local"
         },
         "scenario": {
           "vocabulary": {
@@ -747,7 +756,8 @@
             ]
           },
           "required": false,
-          "question": "Auf welchen Zustand bezieht sich der Wert: den erhobenen Bestand, eine Trendfortschreibung oder ein Zielszenario? Der Bezug steht selten in der Zeile selbst, sondern in der Abschnittsüberschrift, im Tabellentitel oder in der Caption. Nennt die Quelle mehrere Zielszenarien nebeneinander (Umsetzungsszenario 1, Umsetzungsszenario 2), gehört der Name des konkreten in value_raw."
+          "question": "Auf welchen Zustand bezieht sich der Wert: den erhobenen Bestand, eine Trendfortschreibung oder ein Zielszenario? Der Bezug steht selten in der Zeile selbst, sondern in der Abschnittsüberschrift, im Tabellentitel oder in der Caption. Nennt die Quelle mehrere Zielszenarien nebeneinander (Umsetzungsszenario 1, Umsetzungsszenario 2), gehört der Name des konkreten in value_raw.",
+          "evidence": "local"
         },
         "spatial_scope": {
           "vocabulary": {

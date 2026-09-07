@@ -91,6 +91,18 @@ class Axis:
     # fields at once is a rule the model can skip, and skipping is what cost
     # the corpus run 63.5% of its years.
     question: Optional[str] = None
+    # How far from the row a passage may stand and still be its evidence:
+    # "own" the row's own source or the section it stands in, "local" also a
+    # source on the neighbouring page, "any" anywhere in the window.
+    #
+    # Measured on Kassel: 370 of 455 year readings and 87 percent of the area
+    # readings cited a passage outside the row's own table and its section,
+    # and 146 of them cited the annotated placeholder of a DIFFERENT table.
+    # A row label and a column header are read off the table they are in; a
+    # scenario is often named a page earlier; a class is argued in a methods
+    # chapter anywhere in the plan. So this is per axis and the profile sets
+    # it, not one rule for all seven.
+    evidence: str = "any"
     # A coordinate the SPEC already decides, so no request asks for it:
     # {"from": "unit", "value": "<a key of this axis' vocabulary>"}.
     #
@@ -179,6 +191,9 @@ def _validate_axis(path: str, name: str, raw) -> Axis:
     axis_type = raw.get("type")
     enum = raw.get("enum")
     dynamic = bool(raw.get("dynamic", False))
+    evidence = raw.get("evidence", "any")
+    if evidence not in ("own", "local", "any"):
+        _fail(path, "evidence must be one of: own, local, any")
     derive = raw.get("derive")
     if derive is not None:
         if not isinstance(derive, dict):
@@ -222,7 +237,8 @@ def _validate_axis(path: str, name: str, raw) -> Axis:
         _fail(path, "question must be a non-empty string when given")
     return Axis(name=name, vocabulary=vocabulary, type=axis_type,
                 enum=enum, required=bool(raw.get("required", False)),
-                dynamic=dynamic, question=question, derive=derive)
+                dynamic=dynamic, question=question, derive=derive,
+                evidence=evidence)
 
 
 def _validate_example(path: str, raw, value_type: str,
