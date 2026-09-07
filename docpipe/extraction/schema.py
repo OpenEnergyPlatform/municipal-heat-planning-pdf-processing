@@ -473,7 +473,12 @@ def stamp_schema() -> dict:
         "title": "docpipe extraction resume stamp",
         "description": "Any key that differs from the current run makes the "
                        "document stale and it is harvested again. Withheld "
-                       "when the harvest did not happen.",
+                       "when the harvest did not happen. The parameter/ and "
+                       "axis/ keys say WHICH question changed, so a moving "
+                       "ontology costs the coordinates it touched rather "
+                       "than a full re-read of the corpus; a stamp written "
+                       "before they existed carries none of them and is "
+                       "therefore stale in all of them.",
         "type": "object",
         "properties": {
             "spec": {**sha, "description": "sha256 of extraction_spec.json"},
@@ -490,7 +495,21 @@ def stamp_schema() -> dict:
         },
         "patternProperties": {
             "^extraction/(harvest|queries|anchors|rows|field)$":
-                {**sha, "description": "sha256 of the prompt file"}},
+                {**sha, "description": "sha256 of the prompt file"},
+            "^parameter/[^/]+$": {
+                **sha,
+                "description": "What this parameter asks, without its axes: "
+                               "label, description, value type, accepted "
+                               "units, its own vocabulary and the example. A "
+                               "new option on ONE axis must not make every "
+                               "value of the parameter stale."},
+            "^axis/[^/]+/[^/]+$": {
+                **sha,
+                "description": "What this coordinate asks and what it may "
+                               "answer: the question, the evidence rule, and "
+                               "the offered list with its spellings and its "
+                               "definitions. Everything the model sees for "
+                               "this axis, and nothing else."}},
         "required": ["spec", "model", "anchors", "extraction/harvest",
                      "extraction/queries", "extraction/anchors",
                      "extraction/rows", "extraction/field"],

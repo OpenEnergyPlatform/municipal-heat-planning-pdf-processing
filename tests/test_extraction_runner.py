@@ -1316,3 +1316,37 @@ def test_the_dead_server_cut_is_visible_outside_the_group():
                                         "need_more": []},
         workers=1, on_give_up=lambda: quiet.append(1))
     assert quiet == []
+
+
+def test_the_stamp_says_which_question_changed(tmp_path, monkeypatch):
+    """One sha over the whole spec file answers "did anything change" and
+    nothing else. A corpus of 1.082 plans then becomes stale over one new
+    energy carrier, about 93 GPU hours, and the ontology keeps moving. The
+    stamp has to carry the detail now: a run cannot ask a file for a key it
+    never wrote."""
+    monkeypatch.setattr(runner.prompts, "versions",
+                        lambda ids: {i: "v1" for i in ids})
+    stamp = runner._stamp_current("sha-1", "anker", SPEC)
+    keys = [k for k in stamp if k.startswith(("parameter/", "axis/"))]
+    assert keys, "the stamp carries a key per parameter and per axis"
+    assert all(len(stamp[k]) == 64 for k in keys)
+    # And the coarse stamp is still the coarse stamp: no spec, no detail.
+    assert not [k for k in runner._stamp_current("sha-1", "anker")
+                if k.startswith(("parameter/", "axis/"))]
+
+
+def test_a_stamp_from_before_the_detail_is_stale_in_all_of_it(tmp_path,
+                                                              monkeypatch):
+    """It cannot vouch for a coordinate it never recorded. Reading a missing
+    key as "unchanged" would leave a document carrying a harvest nobody can
+    place, which is exactly the failure the stamp exists to prevent."""
+    monkeypatch.setattr(runner.prompts, "versions",
+                        lambda ids: {i: "v1" for i in ids})
+    old = tmp_path / "plan.stamp.json"
+    old.write_text(json.dumps(runner._stamp_current("sha-1", "anker")),
+                   encoding="utf-8")
+    changed = runner.stale(old, runner._stamp_current("sha-1", "anker", SPEC))
+    assert changed and all(c.startswith(("parameter/", "axis/"))
+                           for c in changed), changed
+    # Nothing else moved: the coarse keys still match.
+    assert "spec" not in changed and "model" not in changed
