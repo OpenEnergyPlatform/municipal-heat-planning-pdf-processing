@@ -347,6 +347,7 @@ def test_the_summary_names_only_reasons_the_schema_knows():
                                                       "D": 0}})
     assert not validator.is_valid({**line, "levels": {"A": 0, "B": 0}})
 
+
 def test_a_category_parameter_publishes_the_list_it_answers_from():
     """`value_uri` said "the entry of the parameter's own vocabulary" and the
     schema never showed what that vocabulary is. Unseen until scenarios,
@@ -380,6 +381,24 @@ def test_a_category_parameter_publishes_the_list_it_answers_from():
     text = defs["tuple_publication_title"]["properties"]["value_uri"]
     assert "enum" not in text and "x-options" not in text
     assert "never writes the key" in text["description"]
+
+
+def test_no_description_of_the_harvest_is_shaped_like_one_corpus():
+    """The generated schema is one file per profile out of one generator, so a
+    sentence about heat plans lands in the AR6 profile's schema too. Five did:
+    an AR6 paper has no AGS, mints no heat plan IRI, and its running text is
+    not "the plan's text". Held on the ar6 side, where the mismatch is."""
+    blob = (PROFILES / "scenarios" / "extraction_schema.json").read_text(
+        encoding="utf-8")
+    schema = json.loads(blob)
+    for kwp_shaped in ("heat plan", "AGS", "the plan's", "transcribed plan",
+                       "about the plan", "x-description-de"):
+        assert kwp_shaped not in blob, kwp_shaped
+    # And the one occurrence that legitimately stays: a planned source is a
+    # trace record kind, the same word in both profiles.
+    kinds = {(r.get("properties") or {}).get("t", {}).get("const")
+             for r in schema["trace"]["oneOf"]}
+    assert "plan" in kinds
 
 
 def test_a_stamp_key_moves_for_what_its_description_says_it_does():

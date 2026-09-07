@@ -12,7 +12,7 @@
       ]
      },
      "document_id": {
-      "description": "Documents.id. The AGS and the publication date, which the heat plan IRI is minted from, are joined from the database by the serializer rather than carried here.",
+      "description": "Documents.id. What the serializer joins from the database to mint the document's IRI is not carried here: which columns those are is the profile's business, not the row's.",
       "type": "integer"
      },
      "image": {
@@ -197,7 +197,7 @@
      "read": "answered, and the cited passage carries the answer",
      "unanswered": "the field reply never mentioned this row. A finding about the model",
      "unbacked": "answered, but no shown passage carried the answer, or the passage belonged to another row, and no later window fixed it",
-     "unstated": "answered: the passages shown do not state it. A finding about the plan, and only final once the sweep ran out of document"
+     "unstated": "answered: the passages shown do not state it. A finding about the document, and only final once the sweep ran out of it"
     }
    },
    "summary": {
@@ -208,7 +208,7 @@
       "type": "integer"
      },
      "image_origin": {
-      "description": "Values read out of a table or figure image rather than the plan's text.",
+      "description": "Values read out of a table or figure image rather than the document's text.",
       "type": "integer"
      },
      "kind": {
@@ -235,7 +235,7 @@
       ],
       "type": "object",
       "x-doc": {
-       "A": "read off its own passage, in the plan's own text",
+       "A": "read off its own passage, in the document's own text",
        "B": "the same, but out of an image transcription or a page a model transcribed",
        "C": "something is off; see reasons"
       }
@@ -968,7 +968,7 @@
      "parameter": {
       "const": "emission",
       "description": "Spec parameter: Emissionen.",
-      "x-description-de": "Eine im Wärmeplan bilanzierte Emissionsmenge, je Energieträger, Sektor und Jahr. Welche Größe es ist, wählst du in \"quantity\" aus der Liste. Die Ontologie definiert die beiden Klassen so: CO2 emission value ist \"a greenhouse gas emission value that quantifies a CO2 emission rate and has a mass unit\", also reines Kohlendioxid. carbon dioxide equivalent quantity value ist \"the combined effect of all emitted greenhouse gases by giving an equivalent amount of CO2\", also alle Treibhausgase in CO2-Äquivalenten. Die Einheit verrät es meist: t CO2 gegen t CO2-Äq. Die übrigen Einträge der Liste beginnen mit \"out:\": das sind Größen, die der Graph NICHT aufnimmt, etwa eine kumulierte Summe über mehrere Jahre, eine vermiedene Emission oder eine abgeschiedene Menge aus einer CCS-Anlage. Wähle den passenden davon, wenn die Zahl eine davon ist. Das ist ein richtiges Ergebnis, kein Fehler.",
+      "x-description-source": "Eine im Wärmeplan bilanzierte Emissionsmenge, je Energieträger, Sektor und Jahr. Welche Größe es ist, wählst du in \"quantity\" aus der Liste. Die Ontologie definiert die beiden Klassen so: CO2 emission value ist \"a greenhouse gas emission value that quantifies a CO2 emission rate and has a mass unit\", also reines Kohlendioxid. carbon dioxide equivalent quantity value ist \"the combined effect of all emitted greenhouse gases by giving an equivalent amount of CO2\", also alle Treibhausgase in CO2-Äquivalenten. Die Einheit verrät es meist: t CO2 gegen t CO2-Äq. Die übrigen Einträge der Liste beginnen mit \"out:\": das sind Größen, die der Graph NICHT aufnimmt, etwa eine kumulierte Summe über mehrere Jahre, eine vermiedene Emission oder eine abgeschiedene Menge aus einer CCS-Anlage. Wähle den passenden davon, wenn die Zahl eine davon ist. Das ist ein richtiges Ergebnis, kein Fehler.",
       "x-question": "Um WELCHE Kennzahl handelt es sich bei dieser Zahl? Entscheide danach, was die Quelle über sie sagt: die Einheit, die Spalten- oder Zeilenbeschriftung und die Tabellen- oder Abschnittsüberschrift. Eine Angabe in t CO2 ist eine Emission, eine Angabe in MWh oder GWh ein Energieverbrauch. Zitiere die Stelle, aus der das hervorgeht."
      },
      "parameter_quote": {
@@ -2407,7 +2407,7 @@
      "parameter": {
       "const": "energy_consumption",
       "description": "Spec parameter: Energieverbrauch.",
-      "x-description-de": "Eine im Wärmeplan bilanzierte Energiemenge, je Energieträger, Sektor und Jahr. Welche Größe es ist, wählst du in \"quantity\" aus der Liste. Die Ontologie definiert die beiden Klassen so: final energy consumption value ist \"the energy delivered to and consumed by end users\". Darunter fällt BEIDES, was ein deutscher Wärmeplan Verbrauch nennt und was er Bedarf nennt: für ein Zielszenario ist nichts gemessen, jede Zahl ist gerechnet, und die Definition spricht nicht von Messung. Ein Wärmebedarf, ein Endenergiebedarf und ein zu deckender Wärmebedarf sind also diese Klasse. primary energy consumption value ist \"the total consumption of energy in a spatial region excluding the non-energetic use of fuels\", also die Bilanz vor der Umwandlung. Die übrigen Einträge der Liste beginnen mit \"out:\": das sind Größen, die der Graph NICHT aufnimmt. Wähle den passenden davon, wenn die Zahl eine davon ist. Das ist ein richtiges Ergebnis, kein Fehler.",
+      "x-description-source": "Eine im Wärmeplan bilanzierte Energiemenge, je Energieträger, Sektor und Jahr. Welche Größe es ist, wählst du in \"quantity\" aus der Liste. Die Ontologie definiert die beiden Klassen so: final energy consumption value ist \"the energy delivered to and consumed by end users\". Darunter fällt BEIDES, was ein deutscher Wärmeplan Verbrauch nennt und was er Bedarf nennt: für ein Zielszenario ist nichts gemessen, jede Zahl ist gerechnet, und die Definition spricht nicht von Messung. Ein Wärmebedarf, ein Endenergiebedarf und ein zu deckender Wärmebedarf sind also diese Klasse. primary energy consumption value ist \"the total consumption of energy in a spatial region excluding the non-energetic use of fuels\", also die Bilanz vor der Umwandlung. Die übrigen Einträge der Liste beginnen mit \"out:\": das sind Größen, die der Graph NICHT aufnimmt. Wähle den passenden davon, wenn die Zahl eine davon ist. Das ist ein richtiges Ergebnis, kein Fehler.",
       "x-question": "Um WELCHE Kennzahl handelt es sich bei dieser Zahl? Entscheide danach, was die Quelle über sie sagt: die Einheit, die Spalten- oder Zeilenbeschriftung und die Tabellen- oder Abschnittsüberschrift. Eine Angabe in t CO2 ist eine Emission, eine Angabe in MWh oder GWh ein Energieverbrauch. Zitiere die Stelle, aus der das hervorgeht."
      },
      "parameter_quote": {
@@ -3197,7 +3197,7 @@
      "parameter": {
       "const": "planning_organisation",
       "description": "Spec parameter: Beauftragtes Planungsbüro.",
-      "x-description-de": "Das Ingenieur-, Planungs- oder Beratungsbüro, das die Wärmeplanung im Auftrag der Kommune erstellt hat. Ein Tupel je Büro, in der Schreibweise des Dokuments, ohne Rechtsform. Zu finden im Impressum, auf der Titelseite, unter Auftragnehmer, Bearbeitung, Erstellt durch oder Verfasser. NICHT die Kommune selbst, die ist die Auftraggeberin. NICHT Fördermittelgeber, Datenlieferanten, Netzbetreiber oder im Text erwähnte Firmen.",
+      "x-description-source": "Das Ingenieur-, Planungs- oder Beratungsbüro, das die Wärmeplanung im Auftrag der Kommune erstellt hat. Ein Tupel je Büro, in der Schreibweise des Dokuments, ohne Rechtsform. Zu finden im Impressum, auf der Titelseite, unter Auftragnehmer, Bearbeitung, Erstellt durch oder Verfasser. NICHT die Kommune selbst, die ist die Auftraggeberin. NICHT Fördermittelgeber, Datenlieferanten, Netzbetreiber oder im Text erwähnte Firmen.",
       "x-question": "Um WELCHE Kennzahl handelt es sich bei dieser Zahl? Entscheide danach, was die Quelle über sie sagt: die Einheit, die Spalten- oder Zeilenbeschriftung und die Tabellen- oder Abschnittsüberschrift. Eine Angabe in t CO2 ist eine Emission, eine Angabe in MWh oder GWh ein Energieverbrauch. Zitiere die Stelle, aus der das hervorgeht."
      },
      "parameter_quote": {
@@ -3386,7 +3386,7 @@
     "type": "string"
    },
    "page_text_transcribed": {
-    "description": "How many pages of this document a model read rather than the PDF. A harvest from a transcribed plan is a reading of a reading.",
+    "description": "How many pages of this document a model read rather than the PDF. A harvest from a transcribed document is a reading of a reading.",
     "type": [
      "integer",
      "null"

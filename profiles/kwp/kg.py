@@ -26,7 +26,7 @@ from typing import Optional
 from docpipe.extraction.fields import DERIVED
 from docpipe.extraction.spec import (
     kg_name, load as load_spec, own_evidence)
-from docpipe.extraction.trust import sentence as trust_sentence, trust
+from docpipe.extraction.trust import check_prose, render, trust
 
 log = logging.getLogger(__name__)
 
@@ -386,6 +386,20 @@ def _value_iri(heatplan: str, row: dict) -> str:
     return mint("value", coordinates)
 
 
+# The words of the trust line; the marks and their order are the core's
+# (docpipe.extraction.trust.MARKS). German, because this corpus is German and
+# the graph is read by the people who wrote the plans.
+TRUST_PROSE = check_prose({
+    "level": "Vertrauen: {level}",
+    "image_origin": "aus einem Bild",
+    "image_origin_named": "aus einem Bild ({image})",
+    "corroborated": "zweite Quelle bestätigt",
+    "reasons": "{reasons}",
+    "review": "Prüfung empfohlen",
+}, "profiles/kwp/kg.py TRUST_PROSE")
+TRUST_JOIN = " · "
+
+
 def _ttl_comment(text) -> str:
     """One Turtle comment line, flattened so a quote cannot break the file."""
     flat = re.sub(r"\s+", " ", str(text or "")).strip()
@@ -444,7 +458,8 @@ def evidence_comment(row: dict, document: str, *,
         lines.append(_ttl_comment(f"berechnet: {row['compute']}"))
     if row.get("flags"):
         lines.append(_ttl_comment("Flags: " + ", ".join(row["flags"])))
-    lines.append(_ttl_comment(trust_sentence(verdict, row)))
+    lines.append(_ttl_comment(render(verdict, TRUST_PROSE,
+                                     join=TRUST_JOIN, row=row)))
     return lines
 
 

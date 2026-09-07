@@ -39,7 +39,8 @@ from collections import Counter
 from pathlib import Path
 from typing import Optional
 
-from docpipe.extraction.spec import kg_name
+from docpipe.extraction.spec import kg_name, load as load_spec, own_evidence
+from docpipe.extraction.trust import check_prose, render, trust
 
 log = logging.getLogger(__name__)
 
@@ -441,6 +442,32 @@ def _crosscheck(conn, name: str, chosen: dict) -> None:
 # and knowingly ahead of the shapes.
 EVIDENCE = os.environ.get("OEKG_EVIDENCE", "0") != "0"
 
+# The words of the trust line; the marks and their order are the core's
+# (docpipe.extraction.trust.MARKS). English, because this corpus is English
+# and so is the graph its values go into.
+TRUST_PROSE = check_prose({
+    "level": "confidence: {level}",
+    "image_origin": "read off an image, not the running text",
+    "image_origin_named": "read off an image, not the running text ({image})",
+    "corroborated": "a second passage says the same",
+    "reasons": "{reasons}",
+    "review": "worth checking",
+}, "profiles/scenarios/kg.py TRUST_PROSE")
+TRUST_JOIN = ", "
+
+# Empty for this profile, and passed rather than left at None on purpose:
+# every axis of this spec reads evidence "any", so no coordinate may be held
+# to the row's own source. None means "judge every axis by the strictest
+# rule", which would report every legal reading of a scientific paper as a
+# doubt.
+OWN_EVIDENCE = own_evidence(load_spec(_SPEC))
+
+# This corpus has no transcribed pages to declare: ar6.db Documents carries
+# no page_text_transcribed column, so `trust` is never told a page was itself
+# a reading. Named here so the missing argument is a fact and not an
+# oversight -- if that column ever arrives, this is where it is read.
+PAGE_TRANSCRIBED = False
+
 
 def _known_scenarios(conn, name: str) -> dict:
     """{normalised AR6 scenario name: name as the AR6 database writes it}."""
@@ -605,16 +632,36 @@ def make_serializer(db_path: Path):
             they are comments. Either way the passage stays in the file, and
             either way the caller appends the triple itself afterwards, so the
             block never ends on one of these lines.
+
+            The trust line rides on both branches, not inside
+            `_evidence_comment`: that one is skipped whole under
+            OEKG_EVIDENCE=1, so a level written there would be in the file
+            nobody publishes and missing from the one they do. A Turtle
+            comment is legal between the link line and the triple, and the
+            level is the one thing the closed shapes have no property for.
+
+            One line per source, like the passage above it. A value three
+            passages agree on is three readings and each has its own level.
             """
-            if not EVIDENCE:
-                return [line for row in sources
-                        for line in _evidence_comment(row, name)]
-            links = []
+            lines = []
             for row in sources:
-                link, node = _evidence(subject, predicate, row, name)
-                links.append(link)
-                evidence_nodes.append(node)
-            return links
+                if EVIDENCE:
+                    link, node = _evidence(subject, predicate, row, name)
+                    lines.append(link)
+                    evidence_nodes.append(node)
+                else:
+                    lines.extend(_evidence_comment(row, name))
+                # A single-valued field the harvest read two ways is a doubt
+                # about THIS value, the same doubt kwp reports when two tuples
+                # mint one IRI. `_pick_one` already decided and counted the
+                # rivals; without this the winner is graded as if it had been
+                # the only reading.
+                verdict = trust(row, own=OWN_EVIDENCE,
+                                transcribed=PAGE_TRANSCRIBED,
+                                conflict=bool(contested.get(row.get("parameter"))))
+                lines.append(_ttl_comment(render(verdict, TRUST_PROSE,
+                                                 join=TRUST_JOIN, row=row)))
+            return lines
 
         # What this document calls each run, learned from the rows that DID
         # resolve one. The prompt tells the model to leave the link empty when

@@ -36,7 +36,11 @@ def _rows(**overrides):
         "study_acronym": ["ENGAGE"],
     }
     base.update(overrides)
-    return [{"parameter": k, "value": v, "quote": "x", "provenance": {}}
+    # `tier` because the harvest always writes one: `pipeline.py` sets it from
+    # `verify_tuple` on every row. A fixture without it reads as a value taken
+    # off an image, which is the harder case and not the common one.
+    return [{"parameter": k, "value": v, "quote": "x", "provenance": {},
+             "tier": "text_located"}
             for k, values in base.items() for v in values]
 
 
@@ -1260,6 +1264,7 @@ def test_a_value_that_names_its_scenario_is_not_counted_as_lost(caplog):
     assert "a oeo:OEO_00000365 ;" in ttl
     assert '"2050-01-01T00:00:00"^^xsd:dateTime' in ttl
 
+
 # ---------------------------------------------------------------------------
 # The option meanings (SC5)
 # ---------------------------------------------------------------------------
@@ -1321,3 +1326,76 @@ def test_the_offered_wording_did_not_move_when_the_meanings_arrived(spec):
     assert parameter.value_to_uri()["zielszenario"] == (
         "https://openenergyplatform.org/ontology/oeo/OEO_00020247")
     assert len(parameter.value_to_uri()) == 45
+
+
+# ---------------------------------------------------------------------------
+# The trust line (SC3)
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("evidence", [False, True])
+def test_every_value_says_how_much_of_it_the_run_can_stand_behind(
+        monkeypatch, evidence):
+    """kwp has said this per value since 8582e49 and this graph said nothing.
+    On BOTH branches: `_evidence_comment` is skipped whole under
+    OEKG_EVIDENCE=1, so a line written inside it would sit in the file nobody
+    publishes and be missing from the one they do.
+    """
+    from profiles.scenarios import kg
+    monkeypatch.setattr(kg, "EVIDENCE", evidence)
+    ttl = _ttl(_rows())
+    assert "# confidence: A" in ttl
+    # English, and not the German the core used to write for both corpora.
+    assert "Vertrauen" not in ttl
+    # Exactly one per passage, like the quote or the link above it. A value
+    # three passages agree on is three readings, each with its own level, and
+    # neither branch may drop or double one.
+    passages = (ttl.count("oekgprov:quote") if evidence
+                else ttl.count("# geco_2023.pdf"))
+    assert passages == 8, "the fixture serializes eight of its ten rows"
+    assert ttl.count("# confidence: ") == passages
+
+
+def test_a_value_read_off_an_image_says_so_and_names_the_image(monkeypatch):
+    """The level alone tells a reader something is off; the image name tells
+    them where to look."""
+    from profiles.scenarios import kg
+    monkeypatch.setattr(kg, "EVIDENCE", False)
+    rows = [dict(row, tier="visual_source",
+                 provenance={"page": 3, "image": "geco_2023_f_7.png"})
+            for row in _rows()]
+    ttl = _ttl(rows)
+    assert ("# confidence: B, read off an image, not the running text "
+            "(geco_2023_f_7.png)") in ttl
+    assert "# confidence: A" not in ttl
+
+
+def test_a_single_valued_field_read_two_ways_says_so_on_the_winner(
+        monkeypatch):
+    """`_pick_one` decides which spelling of a maxCount-1 field reaches the
+    graph and counts the rivals. Without that count on the trust line the
+    winner is graded as if it had been the only reading -- the same doubt kwp
+    reports when two tuples mint one value IRI."""
+    from profiles.scenarios import kg
+    monkeypatch.setattr(kg, "EVIDENCE", False)
+    ttl = _ttl(_rows(publication_doi=["10.2760/58255", "10.2760/999"]))
+    assert "conflict" in ttl
+    assert "# confidence: C" in ttl
+    assert "worth checking" in ttl
+    # And a field nobody contested keeps its A in the same file.
+    assert "# confidence: A" in ttl
+
+
+def test_the_profile_holds_no_axis_to_the_rows_own_source(spec):
+    """Every axis of this spec reads evidence `any`, so `own_evidence` is
+    empty -- and it is PASSED rather than left at None. None means "judge
+    every axis by the strictest rule", which would report every legal reading
+    of a scientific paper, where a scenario is named pages from its numbers,
+    as a doubt."""
+    from docpipe.extraction.spec import own_evidence
+    from profiles.scenarios import kg
+    assert kg.OWN_EVIDENCE == own_evidence(spec) == frozenset()
+    assert {a.evidence for p in spec.parameters
+            for a in p.axes.values()} <= {"any"}
+    # And nothing claims a transcribed page: ar6.db Documents has no
+    # page_text_transcribed column to read one from.
+    assert kg.PAGE_TRANSCRIBED is False
