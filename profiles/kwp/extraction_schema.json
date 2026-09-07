@@ -3292,7 +3292,7 @@
       "type": "string"
      },
      "value_uri": {
-      "description": "The entry of the parameter's own vocabulary the wording resolved to, where the parameter has one; null when the list did not hold it.",
+      "description": "The entry of the parameter's own vocabulary the wording resolved to; null when the list did not hold it. Only a category parameter has a vocabulary, so this one never writes the key at all.",
       "type": [
        "string",
        "null"
@@ -3360,7 +3360,7 @@
     "type": "string"
    },
    "^parameter/[^/]+$": {
-    "description": "What this parameter asks, without its axes: label, description, value type, accepted units, its own vocabulary and the example. A new option on ONE axis must not make every value of the parameter stale.",
+    "description": "What this parameter asks, without its axes and without its own list: label, description, value type, accepted units and the example. A new option on ONE axis, or in the list the parameter answers from, must not make every value of the parameter stale -- those have keys of their own.",
     "pattern": "^[0-9a-f]{64}$",
     "type": "string"
    },

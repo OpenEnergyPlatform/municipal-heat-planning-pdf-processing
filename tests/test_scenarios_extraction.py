@@ -1259,3 +1259,65 @@ def test_a_value_that_names_its_scenario_is_not_counted_as_lost(caplog):
     assert "no scenario to hang them on" not in caplog.text
     assert "a oeo:OEO_00000365 ;" in ttl
     assert '"2050-01-01T00:00:00"^^xsd:dateTime' in ttl
+
+# ---------------------------------------------------------------------------
+# The option meanings (SC5)
+# ---------------------------------------------------------------------------
+
+def test_every_scenario_type_says_what_it_means(spec):
+    """The field prompt tells the model to decide by the definition and not by
+    the nearest word, and `fields.Slot.answerable` switches the whole option
+    block to the long form as soon as ONE option carries a definition. So an
+    entry without one is not neutral: it is rendered as a bare spelling list
+    inside a request whose instruction it cannot follow."""
+    parameter = {p.uri: p for p in spec.parameters}["scenario_type"]
+    assert set(parameter.definitions) == set(parameter.vocabulary)
+    assert len(parameter.definitions) == 18
+    for uri, meaning in parameter.definitions.items():
+        assert len(meaning.split()) >= 6, uri
+        assert meaning.rstrip().endswith("."), uri
+    # Pairwise distinct, which the shape check below cannot see: pasting the
+    # `greenhouse gas emission scenario` sentence onto `emission scenario`
+    # satisfies every other assertion here and tells the model the two terms
+    # are the same thing.
+    assert len(set(parameter.definitions.values())) == 18
+
+
+def test_the_meanings_are_the_terms_own_and_not_a_paraphrase(spec):
+    """OEO writes genus-differentia: the definition of X opens by naming X.
+    All seventeen do, so a sentence that does not is one somebody wrote here
+    instead of copying -- the realistic failure of transcribing seventeen
+    lines out of an ontology.
+
+    `out:not_in_list` is not an ontology term and is held to nothing of the
+    sort: its words are this profile's own, and they are German because the
+    prompts of this profile are.
+    """
+    from profiles.scenarios import kg
+    parameter = {p.uri: p for p in spec.parameters}["scenario_type"]
+    classes = [u for u in parameter.vocabulary if kg.in_graph(u)]
+    assert len(classes) == 17
+    for uri in classes:
+        label = parameter.vocabulary[uri][0].lower()
+        opening = parameter.definitions[uri].lower()
+        assert opening.startswith(("a " + label, "an " + label,
+                                   "the " + label)), uri
+    assert [u for u in parameter.vocabulary if not kg.in_graph(u)] \
+        == ["out:not_in_list"]
+    assert "Art" in parameter.definitions["out:not_in_list"]
+
+
+def test_the_offered_wording_did_not_move_when_the_meanings_arrived(spec):
+    """The object form carries `label` + `spellings`, and `_vocabulary`
+    rebuilds `[label] + spellings`. So the list the model is offered and the
+    map a harvested wording resolves through are the ones that were there
+    before -- otherwise this commit would have re-mapped an already harvested
+    corpus while claiming to only add meanings."""
+    parameter = {p.uri: p for p in spec.parameters}["scenario_type"]
+    assert parameter.vocabulary[
+        "https://openenergyplatform.org/ontology/oeo/OEO_00020247"] == [
+        "target driven scenario", "normative scenario",
+        "backcasting scenario", "Zielszenario"]
+    assert parameter.value_to_uri()["zielszenario"] == (
+        "https://openenergyplatform.org/ontology/oeo/OEO_00020247")
+    assert len(parameter.value_to_uri()) == 45

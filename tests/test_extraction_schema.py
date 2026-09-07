@@ -346,3 +346,98 @@ def test_the_summary_names_only_reasons_the_schema_knows():
     assert not validator.is_valid({**line, "levels": {"A": 0, "B": 0, "C": 1,
                                                       "D": 0}})
     assert not validator.is_valid({**line, "levels": {"A": 0, "B": 0}})
+
+def test_a_category_parameter_publishes_the_list_it_answers_from():
+    """`value_uri` said "the entry of the parameter's own vocabulary" and the
+    schema never showed what that vocabulary is. Unseen until scenarios,
+    because kwp has no category parameter at all -- so the profile that would
+    have reported the gap does not have the shape.
+
+    The three cases read differently on purpose: a closed list is published,
+    a dynamic one says the profile fills it per document, and a text
+    parameter says it never writes the key.
+    """
+    schema = json.loads((PROFILES / "scenarios"
+                         / "extraction_schema.json").read_text(encoding="utf-8"))
+    defs = schema["harvest"]["$defs"]
+
+    closed = defs["tuple_scenario_type"]["properties"]["value_uri"]
+    assert len(closed["enum"]) == 19, "eighteen entries and null"
+    assert None in closed["enum"]
+    options = closed["x-options"]
+    assert len(options) == 18
+    assert options["policy scenario"]["meaning"].startswith("A policy scenario")
+    assert options["target driven scenario"]["spellings"] == [
+        "normative scenario", "backcasting scenario", "Zielszenario"]
+    # The question belongs on `value`, not here: it would be the parameter's
+    # description a second time, under a key claiming to be a question.
+    assert "x-question" not in closed
+
+    dynamic = defs["tuple_scenario_label"]["properties"]["value_uri"]
+    assert "enum" not in dynamic and "x-options" not in dynamic
+    assert "per document" in dynamic["description"]
+
+    text = defs["tuple_publication_title"]["properties"]["value_uri"]
+    assert "enum" not in text and "x-options" not in text
+    assert "never writes the key" in text["description"]
+
+
+def test_a_stamp_key_moves_for_what_its_description_says_it_does():
+    """Twice now a published key described something it does not carry: the
+    `anchors` one after b15f230 (fixed in 75fa443) and the `parameter` one,
+    which claimed the parameter's own vocabulary while `parameter_fingerprint`
+    hashes it nowhere. A description nobody can check is a description that
+    goes stale between two commits and is read as true for a year.
+
+    So each edit is applied to a real spec and the keys that move are compared
+    against the keys the descriptions claim.
+    """
+    import copy
+    from docpipe.extraction.spec import fingerprints
+
+    raw = json.loads((PROFILES / "scenarios" / "extraction_spec.json")
+                     .read_text(encoding="utf-8"))
+
+    def moved(edit):
+        before = fingerprints(load_spec(copy.deepcopy(raw)))
+        after_raw = copy.deepcopy(raw)
+        edit(after_raw)
+        after = fingerprints(load_spec(after_raw))
+        return sorted(k for k in set(before) | set(after)
+                      if before.get(k) != after.get(k))
+
+    def a_parameter(d):
+        return [p for p in d["parameters"] if p["uri"] == "scenario_type"][0]
+
+    def reword_the_question(d):
+        a_parameter(d)["description"] += " Und noch ein Satz dazu."
+
+    def add_a_spelling(d):
+        a_parameter(d)["vocabulary"][
+            "https://openenergyplatform.org/ontology/oeo/OEO_00020345"][
+                "spellings"].append("Suffizienzszenario")
+
+    def reword_a_meaning(d):
+        a_parameter(d)["vocabulary"][
+            "https://openenergyplatform.org/ontology/oeo/OEO_00020345"][
+                "definition"] = "A sufficiency scenario is something else."
+
+    def reword_an_axis(d):
+        a_parameter(d)["axes"]["scenario"]["question"] += " Bitte genau."
+
+    # The parameter key: its own question, and NOT the list it answers from.
+    assert moved(reword_the_question) == ["parameter/scenario_type"]
+    # The list has keys of its own -- spellings and meanings both.
+    assert moved(add_a_spelling) == ["value/scenario_type"]
+    assert moved(reword_a_meaning) == ["value/scenario_type"]
+    # And an axis moves its axis and nothing else.
+    assert moved(reword_an_axis) == ["axis/scenario_type/scenario"]
+
+    # The published words for those two keys, held to what just happened.
+    stamp = build(load_spec(PROFILES / "scenarios" / "extraction_spec.json"))[
+        "stamp"]["patternProperties"]
+    parameter_doc = stamp["^parameter/[^/]+$"]["description"]
+    assert "without its own list" in parameter_doc
+    assert "keys of their own" in parameter_doc
+    assert "the list a category parameter answers from" \
+        in stamp["^value/[^/]+$"]["description"].lower()

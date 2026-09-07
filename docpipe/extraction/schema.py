@@ -144,6 +144,44 @@ def _slot_value(slot, doc: str) -> dict:
     return value
 
 
+def _value_uri(parameter) -> dict:
+    """What a wording resolved to, and — for a closed list — the list itself.
+
+    An axis has published its options since the schema existed. A category
+    PARAMETER answers from a list in exactly the same way and published none:
+    the key said "the entry of the parameter's own vocabulary" and the schema
+    never showed what that vocabulary is. Unseen until now because kwp has no
+    category parameter at all -- the gap only exists where the profile does.
+
+    Three cases and they read differently on purpose. A text parameter has no
+    list at all and never writes the key; a dynamic list exists but is the
+    profile's to supply per document, so there is nothing static to publish;
+    a closed list is published, meanings and all.
+    """
+    doc = ("The entry of the parameter's own vocabulary the wording resolved "
+           "to; null when the list did not hold it. ")
+    if parameter.value_type != "category":
+        return {"type": ["string", "null"],
+                "description": doc + "Only a category parameter has a "
+                                     "vocabulary, so this one never writes "
+                                     "the key at all."}
+    if parameter.vocabulary_dynamic:
+        return {"type": ["string", "null"],
+                "description": doc + "The list is per document: the profile "
+                                     "supplies it before the harvest, so it "
+                                     "is not in this schema."}
+    slot = fields.value_slot(parameter)
+    out = _slot_value(slot, doc + "The list is closed; an entry beginning "
+                                  "'out:' is a deliberate non-class answer "
+                                  "and mints no node.")
+    # `_slot_value` puts the slot's question on the value it types. Here it
+    # would be the parameter's own description, which `parameter` already
+    # publishes as x-description-de -- two copies, one of them under a name
+    # that says it is a question.
+    out.pop("x-question", None)
+    return out
+
+
 def _slot_properties(name: str, slot, doc: str) -> dict:
     """Every key one coordinate writes.
 
@@ -277,11 +315,7 @@ def _tuple_schema(spec, parameter) -> dict:
             "description": "The wording before any tidying (an "
                            "organisation's legal form, a title's line "
                            "break)."}
-        props["value_uri"] = {
-            "type": ["string", "null"],
-            "description": "The entry of the parameter's own vocabulary the "
-                           "wording resolved to, where the parameter has "
-                           "one; null when the list did not hold it."}
+        props["value_uri"] = _value_uri(parameter)
         props["unit"] = {"type": "string", "maxLength": 0,
                          "description": "Empty: a wording has no unit. The "
                                         "key is present so every row has the "
@@ -520,11 +554,13 @@ def stamp_schema() -> dict:
                 {**sha, "description": "sha256 of the prompt file"},
             "^parameter/[^/]+$": {
                 **sha,
-                "description": "What this parameter asks, without its axes: "
-                               "label, description, value type, accepted "
-                               "units, its own vocabulary and the example. A "
-                               "new option on ONE axis must not make every "
-                               "value of the parameter stale."},
+                "description": "What this parameter asks, without its axes "
+                               "and without its own list: label, description, "
+                               "value type, accepted units and the example. A "
+                               "new option on ONE axis, or in the list the "
+                               "parameter answers from, must not make every "
+                               "value of the parameter stale -- those have "
+                               "keys of their own."},
             "^value/[^/]+$": {
                 **sha,
                 "description": "The list a category parameter answers from. "

@@ -25,7 +25,15 @@
     "The `scenario` axis is dynamic for the same reason and NOT required: the",
     "AR6 names are run identifiers (EN_INDCi2030_300f) and a publication writes",
     "'the NDC scenario'. Refusing what the model cannot map would delete the one",
-    "measurement that tells us how far apart those two vocabularies are."
+    "measurement that tells us how far apart those two vocabularies are.",
+    "",
+    "The seventeen scenario classes carry the ontology's own definition, copied verbatim from the pinned release",
+    "openenergyplatform.org/ontology/oeo/releases/2.13.0/oeo.owl, whose closure file has sha256",
+    "df25aa5aec966be79096cb5dc1f09023fc66a99b984c485a24897adb76a99dd4 -- the same pin profiles/kwp/vocabulary.json",
+    "records. The property is IAO_0000115 except where an entry says otherwise in its own note. Nothing",
+    "here holds these strings against that release yet: this profile has no vocabulary snapshot, which is SC4.",
+    "out:not_in_list is not an ontology term, so its meaning is this profile's own words, in the language of",
+    "its prompts."
   ],
   "parameter_question": "Um WELCHES Feld handelt es sich bei diesem Wert? Entscheide danach, was die Quelle über ihn sagt: die Beschriftung, die Einheit und die Überschrift des Abschnitts. Zitiere die Stelle, aus der das hervorgeht.",
   "parameters": [
@@ -318,87 +326,138 @@
       "description": "Die Art eines Szenarios, gewaehlt aus value_classes. Das sind die Klassen, die der OEKG fuer dieses Feld zulaesst; die Schreibweisen daneben stammen aus der Ontologie selbst. Nimm die spezifischste Klasse, die der Text belegt: steht dort, dass ein Szenario nur bereits beschlossene Massnahmen enthaelt, ist das 'with existing measures scenario' und nicht blosses 'policy scenario'. Zwei Antworten bedeuten NICHT dasselbe: 'scenario' heisst, der Text sagt nichts Engeres als 'ein Szenario'; 'keine dieser Arten' heisst, der Text nennt sehr wohl eine Art, aber keine der Klassen deckt sie ab. Das zweite ist ein Befund und wird gezaehlt; das erste waere dann eine Behauptung. In value_raw kommt die Formulierung des Dokuments. Ein Tupel je Szenario und Klasse; ein Szenario darf mehrere Klassen tragen, wenn der Text sie belegt.",
       "value_type": "category",
       "vocabulary": {
-        "https://openenergyplatform.org/ontology/oeo/OEO_00020309": [
-          "policy scenario"
-        ],
-        "https://openenergyplatform.org/ontology/oeo/OEO_00020310": [
-          "without measures scenario",
-          "WOM",
-          "without measures",
-          "WOM scenario"
-        ],
-        "https://openenergyplatform.org/ontology/oeo/OEO_00020311": [
-          "with existing measures scenario",
-          "WEM",
-          "with existing measures",
-          "WEM scenario"
-        ],
-        "https://openenergyplatform.org/ontology/oeo/OEO_00020312": [
-          "with additional measures scenario",
-          "WAM",
-          "with additional measures",
-          "WAM scenario"
-        ],
-        "https://openenergyplatform.org/ontology/oeo/OEO_00020314": [
-          "reference scenario",
-          "reference case"
-        ],
-        "https://openenergyplatform.org/ontology/oeo/OEO_00020247": [
-          "target driven scenario",
-          "normative scenario",
-          "backcasting scenario",
-          "Zielszenario"
-        ],
-        "https://openenergyplatform.org/ontology/oeo/OEO_00020248": [
-          "explorative scenario",
-          "exploratory scenario",
-          "exploratives Szenario"
-        ],
-        "https://openenergyplatform.org/ontology/oeo/OEO_00020345": [
-          "sufficiency scenario"
-        ],
-        "https://openenergyplatform.org/ontology/oeo/OEO_00020411": [
-          "robust system scenario",
-          "robust investment decision",
-          "robust transformation pathway"
-        ],
-        "https://openenergyplatform.org/ontology/oeo/OEO_00020412": [
-          "statistically robust scenario"
-        ],
-        "https://openenergyplatform.org/ontology/oeo/OEO_00030007": [
-          "climate scenario",
-          "Klimaszenario"
-        ],
-        "https://openenergyplatform.org/ontology/oeo/OEO_00030008": [
-          "economic scenario",
-          "Wirtschaftsszenario"
-        ],
-        "https://openenergyplatform.org/ontology/oeo/OEO_00030009": [
-          "emission scenario",
-          "emissions scenario",
-          "Emissionsszenario"
-        ],
-        "https://openenergyplatform.org/ontology/oeo/OEO_00020317": [
-          "greenhouse gas emission scenario",
-          "GHG emission scenario"
-        ],
-        "https://openenergyplatform.org/ontology/oeo/OEO_00020321": [
-          "CO2 emission scenario"
-        ],
-        "https://openenergyplatform.org/ontology/oeo/OEO_00030010": [
-          "energy scenario",
-          "Energieszenario"
-        ],
-        "https://openenergyplatform.org/ontology/oeo/OEO_00000364": [
-          "scenario",
-          "Szenario",
-          "narrative",
-          "storyline"
-        ],
-        "out:not_in_list": [
-          "keine dieser Arten",
-          "die Art, die der Text nennt, steht nicht in der Liste"
-        ]
+        "https://openenergyplatform.org/ontology/oeo/OEO_00020309": {
+          "label": "policy scenario",
+          "spellings": [],
+          "definition": "A policy scenario is a scenario in which certain policy instruments or transformative measures and their impacts are assessed."
+        },
+        "https://openenergyplatform.org/ontology/oeo/OEO_00020310": {
+          "label": "without measures scenario",
+          "spellings": [
+            "WOM",
+            "without measures",
+            "WOM scenario"
+          ],
+          "definition": "A without measures scenario (WOM) is a policy scenario that excludes all policy instruments and transformative measures which are planned, adopted or implemented."
+        },
+        "https://openenergyplatform.org/ontology/oeo/OEO_00020311": {
+          "label": "with existing measures scenario",
+          "spellings": [
+            "WEM",
+            "with existing measures",
+            "WEM scenario"
+          ],
+          "definition": "A with existing measures scenario (WEM) is a policy scenario that includes policy instruments and transformative measures that have been adopted and implemented."
+        },
+        "https://openenergyplatform.org/ontology/oeo/OEO_00020312": {
+          "label": "with additional measures scenario",
+          "spellings": [
+            "WAM",
+            "with additional measures",
+            "WAM scenario"
+          ],
+          "definition": "A with additional measures scenario (WAM) is a policy scenario that includes policy instruments and transformative measures which have been adopted and implemented to mitigate climate change or meet energy objectives, as well as policy instruments and transformative measures which are planned for that purpose."
+        },
+        "https://openenergyplatform.org/ontology/oeo/OEO_00020314": {
+          "label": "reference scenario",
+          "spellings": [
+            "reference case"
+          ],
+          "definition": "A reference scenario is a scenario that is used as a reference, e.g. in a scenario comparison. It has the reference role."
+        },
+        "https://openenergyplatform.org/ontology/oeo/OEO_00020247": {
+          "label": "target driven scenario",
+          "spellings": [
+            "normative scenario",
+            "backcasting scenario",
+            "Zielszenario"
+          ],
+          "definition": "A target driven scenario is a scenario that contains certain target constraints/ statements that in a possible future shall be realized. The path how the targets will be met is not predefined in the scenario."
+        },
+        "https://openenergyplatform.org/ontology/oeo/OEO_00020248": {
+          "label": "explorative scenario",
+          "spellings": [
+            "exploratory scenario",
+            "exploratives Szenario"
+          ],
+          "definition": "An explorative scenario is a scenario that contains certain constraints / statements regarding measures that are taken in the near future / today to explore where these measures will lead to in a later future. The later future is not predefined in the scenario."
+        },
+        "https://openenergyplatform.org/ontology/oeo/OEO_00020345": {
+          "label": "sufficiency scenario",
+          "spellings": [],
+          "definition": "A sufficiency scenario is a scenario that comprises sufficiency strategies."
+        },
+        "https://openenergyplatform.org/ontology/oeo/OEO_00020411": {
+          "label": "robust system scenario",
+          "spellings": [
+            "robust investment decision",
+            "robust transformation pathway"
+          ],
+          "definition": "A robust system scenario is an explorative scenario that describes an energy system that is designed to evolve in a robust way."
+        },
+        "https://openenergyplatform.org/ontology/oeo/OEO_00020412": {
+          "label": "statistically robust scenario",
+          "spellings": [],
+          "definition": "A statistically robust scenario is a scenario that is the basis for statistically robust projection data.",
+          "note": "OEO files this one under dc:description instead of IAO_0000115. Two terms of the whole release do, both from issue 1683 / PR 1843. The sentence is the ontology's own and defines the right term."
+        },
+        "https://openenergyplatform.org/ontology/oeo/OEO_00030007": {
+          "label": "climate scenario",
+          "spellings": [
+            "Klimaszenario"
+          ],
+          "definition": "A climate scenario is a scenario that describes a possible future state of a climate system."
+        },
+        "https://openenergyplatform.org/ontology/oeo/OEO_00030008": {
+          "label": "economic scenario",
+          "spellings": [
+            "Wirtschaftsszenario"
+          ],
+          "definition": "An economic scenario is a scenario that describes a possible future state of economic systems."
+        },
+        "https://openenergyplatform.org/ontology/oeo/OEO_00030009": {
+          "label": "emission scenario",
+          "spellings": [
+            "emissions scenario",
+            "Emissionsszenario"
+          ],
+          "definition": "An emission scenario is a scenario that describes a possible emission trajectory."
+        },
+        "https://openenergyplatform.org/ontology/oeo/OEO_00020317": {
+          "label": "greenhouse gas emission scenario",
+          "spellings": [
+            "GHG emission scenario"
+          ],
+          "definition": "A greenhouse gas emission scenario is an emission scenario that describes a possible greenhouse gas emission trajectory."
+        },
+        "https://openenergyplatform.org/ontology/oeo/OEO_00020321": {
+          "label": "CO2 emission scenario",
+          "spellings": [],
+          "definition": "A CO2 emission scenario is an emission scenario that describes a possible CO2 emission trajectory."
+        },
+        "https://openenergyplatform.org/ontology/oeo/OEO_00030010": {
+          "label": "energy scenario",
+          "spellings": [
+            "Energieszenario"
+          ],
+          "definition": "An energy scenario is a scenario that describes a possible future state of an energy system."
+        },
+        "https://openenergyplatform.org/ontology/oeo/OEO_00000364": {
+          "label": "scenario",
+          "spellings": [
+            "Szenario",
+            "narrative",
+            "storyline"
+          ],
+          "definition": "A scenario is an information content entity that contains statements about a possible future development based on a coherent and internally consistent set of assumptions and their motivation."
+        },
+        "out:not_in_list": {
+          "label": "keine dieser Arten",
+          "spellings": [
+            "die Art, die der Text nennt, steht nicht in der Liste"
+          ],
+          "definition": "Der Text nennt eine Art, die keine dieser Klassen trifft. Nicht zu verwechseln damit, dass der Text gar keine Art nennt: das ist die Antwort, dass es in diesen Passagen nicht steht."
+        }
       },
       "axes": {
         "scenario": {
