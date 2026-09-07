@@ -1405,3 +1405,35 @@ def test_a_wording_that_does_not_name_its_class_is_counted_and_kept(profile):
     counts = merge(rows, [source], slot, {"answers": {rows[0].label: {
         "value": label, "value_raw": label, "quote": passage}}})
     assert (counts["filled"], counts["raw_foreign"]) == (1, 0)
+
+
+def test_the_request_says_what_each_option_means(profile):
+    """field.md rule 7 says "decide by the meaning, the spellings are only
+    examples" and the request never carried a meaning: the model was handed a
+    class identifier and a list of German words. The rule was unfollowable,
+    and which class a number is is the decision the whole tuple hangs on."""
+    name, spec = profile
+    if name != "kwp":
+        pytest.skip("the meanings are the profile's to write")
+    slot = next(s for s in fields.axis_slots(spec.parameters[0])
+                if s.name == "quantity")
+    offered = slot.answerable()
+    assert offered["final energy consumption value"]["bedeutet"].startswith(
+        "A final energy consumption value is")
+    assert "Endenergiebedarf" in \
+        offered["final energy consumption value"]["Schreibweisen"]
+    # "The passages do not state it" is an answer like any other and says so.
+    assert offered[fields.UNSTATED]["bedeutet"]
+    # And every entry the graph does NOT take says what it excludes.
+    assert "Nutzwärme" in offered["Nutzenergie"]["bedeutet"]
+
+
+def test_an_option_list_without_meanings_keeps_the_short_form():
+    """A profile that has written no definition pays nothing for the promise:
+    the payload is what it was."""
+    slot = fields.Slot(name="carrier", kind=fields.CHOICE, question="?",
+                       options=(fields.Option(label="Erdgas", uri="OEO_1",
+                                              synonyms=("Gas",)),))
+    assert slot.answerable() == {
+        "Erdgas": ["Gas"],
+        fields.UNSTATED: ["steht in diesen Passagen nicht"]}

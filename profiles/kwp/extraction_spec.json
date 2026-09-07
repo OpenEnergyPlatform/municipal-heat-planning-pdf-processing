@@ -37,55 +37,84 @@
       "axes": {
         "quantity": {
           "vocabulary": {
-            "OEO_00050016": [
-              "final energy consumption value",
-              "Endenergieverbrauch",
-              "Endenergie",
-              "Endenergiebedarf",
-              "Wärmeverbrauch",
-              "Wärmebedarf",
-              "Fernwärmeverbrauch",
-              "Stromverbrauch",
-              "Erdgasverbrauch",
-              "zu deckender Wärmebedarf"
-            ],
-            "OEO_00050018": [
-              "primary energy consumption value",
-              "Primärenergieverbrauch",
-              "Primärenergie"
-            ],
-            "out:potential": [
-              "Potenzial",
-              "Ausbaupotenzial",
-              "technisches Potenzial",
-              "erschließbares Potenzial"
-            ],
-            "out:generation": [
-              "Erzeugung oder Bereitstellung",
-              "Wärmeerzeugung",
-              "Einspeisung",
-              "Wärmebereitstellung",
-              "Absatz"
-            ],
-            "out:useful_energy": [
-              "Nutzenergie",
-              "Nutzwärme",
-              "Heizwärme"
-            ],
-            "out:saving": [
-              "Einsparung",
-              "Reduktion gegenüber einem Vergleichsjahr"
-            ],
-            "out:share": [
-              "Anteil in Prozent",
-              "Anteil am Gesamtverbrauch"
-            ],
-            "out:specific": [
-              "spezifischer Wert je Fläche, Kopf oder Einwohner"
-            ],
-            "out:other": [
-              "etwas anderes"
-            ]
+            "OEO_00050016": {
+              "label": "final energy consumption value",
+              "spellings": [
+                "Endenergieverbrauch",
+                "Endenergie",
+                "Endenergiebedarf",
+                "Wärmeverbrauch",
+                "Wärmebedarf",
+                "Fernwärmeverbrauch",
+                "Stromverbrauch",
+                "Erdgasverbrauch",
+                "zu deckender Wärmebedarf",
+                "Jahresendenergiebedarf",
+                "Endenergiebedarf für Wärme"
+              ],
+              "definition": "A final energy consumption value is an energy consumption value expressing the magnitude of the energy delivered to and consumed by end users."
+            },
+            "OEO_00050018": {
+              "label": "primary energy consumption value",
+              "spellings": [
+                "Primärenergieverbrauch",
+                "Primärenergie"
+              ],
+              "definition": "A primary energy consumption value is an energy consumption value expressing the magnitude of the total consumption of energy in a spatial region excluding the non-energetic use of fuels."
+            },
+            "out:potential": {
+              "label": "Potenzial",
+              "spellings": [
+                "Ausbaupotenzial",
+                "technisches Potenzial",
+                "erschließbares Potenzial"
+              ],
+              "definition": "Ein erschließbares Maximum, keine im Bilanzjahr verbrauchte oder ausgestoßene Menge."
+            },
+            "out:generation": {
+              "label": "Erzeugung oder Bereitstellung",
+              "spellings": [
+                "Wärmeerzeugung",
+                "Einspeisung",
+                "Wärmebereitstellung",
+                "Absatz"
+              ],
+              "definition": "Erzeugte oder bereitgestellte Energie, also die Seite vor dem Endverbrauch."
+            },
+            "out:useful_energy": {
+              "label": "Nutzenergie",
+              "spellings": [
+                "Nutzwärme",
+                "Heizwärme"
+              ],
+              "definition": "Die Wärme hinter dem Erzeuger, nach der Umwandlung: Nutzwärme, Heizwärme, Raumwärme. Nicht die an den Endverbraucher gelieferte Endenergie."
+            },
+            "out:saving": {
+              "label": "Einsparung",
+              "spellings": [
+                "Reduktion gegenüber einem Vergleichsjahr"
+              ],
+              "definition": "Eine Differenz gegenüber einem Vergleichsjahr, keine Menge."
+            },
+            "out:share": {
+              "label": "Anteil in Prozent",
+              "spellings": [
+                "Anteil am Gesamtverbrauch",
+                "EE-Anteil",
+                "Anteil erneuerbarer Energien"
+              ],
+              "definition": "Ein Anteil in Prozent, keine Menge."
+            },
+            "out:specific": {
+              "label": "spezifischer Wert je Fläche, Kopf oder Einwohner",
+              "spellings": [],
+              "definition": "Ein Wert je Fläche, Kopf, Gebäude oder Kilowattstunde, keine Gesamtmenge."
+            },
+            "out:other": {
+              "label": "etwas anderes",
+              "spellings": [],
+              "definition": "Etwas, das keiner der übrigen Einträge dieser Liste ist."
+            }
           },
           "required": false,
           "question": "Welche Größe ist diese Zahl? Das ist die wichtigste Entscheidung des Tupels, denn sie bestimmt, als welche Klasse der Wert im Graphen steht. Entscheide nach der Definition der Klasse, nicht nach der Ähnlichkeit der Wörter. Die Bezeichnung steht in der Zeile, im Spaltenkopf, in der Blocküberschrift oder im Titel der eigenen Tabelle. \"final energy consumption value\" ist definiert als die an Endverbraucher gelieferte und dort verbrauchte Energie. Darunter fällt BEIDES, was ein Plan Verbrauch nennt und was er Bedarf nennt: in einem Szenario ist nichts gemessen, jede Zahl ist gerechnet, und die Definition spricht nicht von Messung. Endenergieverbrauch, Endenergiebedarf, Wärmebedarf und ein zu deckender Wärmebedarf sind also diese Klasse. \"primary energy consumption value\" ist die Bilanz vor der Umwandlung. Nutzwärme, Heizwärme, Raumwärme und Nutzenergie sind dagegen NICHT Endenergie, sondern die Wärme hinter dem Erzeuger: \"out:useful_energy\", auch im Zielszenario. Ein Anteil in Prozent und ein Wert je Fläche oder Kopf sind eigene Einträge und keine Verbrauchsmenge.",
@@ -97,32 +126,47 @@
         },
         "aggregation": {
           "vocabulary": {
-            "OEO_00140070": [
-              "integral",
-              "Summe oder Integral über einen Zeitraum oder ein Gebiet",
-              "Jahreswert",
-              "Jahressumme"
-            ],
-            "OEO_00140071": [
-              "arithmetic mean",
-              "Mittelwert",
-              "Durchschnitt"
-            ],
-            "OEO_00140069": [
-              "instantaneous",
-              "Momentanwert zu einem Zeitpunkt"
-            ],
-            "OEO_00140073": [
-              "maximum",
-              "Maximum",
-              "Spitzenwert",
-              "Spitzenlast"
-            ],
-            "OEO_00140072": [
-              "minimum",
-              "Minimum",
-              "Tiefstwert"
-            ]
+            "OEO_00140070": {
+              "label": "integral",
+              "spellings": [
+                "Summe oder Integral über einen Zeitraum oder ein Gebiet",
+                "Jahreswert",
+                "Jahressumme"
+              ],
+              "definition": "sum or integral of values, e.g. within a time step or a spatial region"
+            },
+            "OEO_00140071": {
+              "label": "arithmetic mean",
+              "spellings": [
+                "Mittelwert",
+                "Durchschnitt"
+              ],
+              "definition": "average value calculated by arithmetic mean over a set of data values, e.g. within a time step or spatial region"
+            },
+            "OEO_00140069": {
+              "label": "instantaneous",
+              "spellings": [
+                "Momentanwert zu einem Zeitpunkt"
+              ],
+              "definition": "value measured at or modelled for exactly one 0-dim temporal region, referenced by a time stamp, e.g. to represent a time step in a time series"
+            },
+            "OEO_00140073": {
+              "label": "maximum",
+              "spellings": [
+                "Maximum",
+                "Spitzenwert",
+                "Spitzenlast"
+              ],
+              "definition": "maximum value within a set of data values, e.g. in a time step or spatial region"
+            },
+            "OEO_00140072": {
+              "label": "minimum",
+              "spellings": [
+                "Minimum",
+                "Tiefstwert"
+              ],
+              "definition": "minimum value within a set of data values, e.g. in a time step or spatial region"
+            }
           },
           "required": false,
           "question": "Wie ist der Wert über Zeit oder Raum zusammengefasst? Der Normalfall ist \"integral\", also eine Jahressumme. \"maximum\" bei einer Spitzenlast oder einem Höchstwert, \"arithmetic mean\" bei einem Durchschnitt je Gebäude oder je Jahr, \"instantaneous\" bei einem Momentanwert.",
@@ -139,123 +183,198 @@
         },
         "carrier": {
           "vocabulary": {
-            "OEO_00000292": [
-              "Erdgas",
-              "Gas"
-            ],
-            "OEO_00000211": [
-              "Heizöl",
-              "Öl"
-            ],
-            "OEO_00000132": [
-              "Fernwärme",
-              "Wärmenetze",
-              "Wärmenetz"
-            ],
-            "OEO_00000139": [
-              "Strom",
-              "Elektrizität"
-            ],
-            "OEO_00000449": [
-              "Holz",
-              "Holzpellets",
-              "Pellets"
-            ],
-            "OEO_00000074": [
-              "Biogas"
-            ],
-            "OEO_00000388": [
-              "Solarthermie"
-            ],
-            "OEO_00000251": [
-              "Braunkohle"
-            ],
-            "OEO_00320011": [
-              "Flüssiggas"
-            ],
-            "OEO_00000220": [
-              "Wasserstoff"
-            ],
-            "OEO_00000204": [
-              "Steinkohle"
-            ],
-            "OEO_00010215": [
-              "Biomethan"
-            ],
-            "OEO_00000332": [
-              "biogener Festbrennstoff",
-              "biogene Festbrennstoffe",
-              "sonstige biogene Festbrennstoffe"
-            ],
-            "OEO_00010214": [
-              "Biomasse",
-              "pflanzliche Biomasse",
-              "landwirtschaftliche Biomasse"
-            ],
-            "OEO_00000088": [
-              "Kohle"
-            ],
-            "OEO_00000290": [
-              "Siedlungsabfälle",
-              "Abfall",
-              "thermische Abfallverwertung"
-            ],
-            "OEO_00000356": [
-              "Biogut",
-              "Gartenabfälle",
-              "Grünschnitt"
-            ],
-            "OEO_00000439": [
-              "Klärschlamm"
-            ],
-            "OEO_00020495": [
-              "tierische Exkremente",
-              "Schlachtreste"
-            ],
-            "OEO_00010155": [
-              "grüne Gase",
-              "synthetische Gase"
-            ],
-            "OEO_00000191": [
-              "Geothermie",
-              "Erdwärme",
-              "oberflächennahe Geothermie",
-              "Tiefengeothermie",
-              "Erdwärmesonde",
-              "Erdwärmekollektor"
-            ],
-            "OEO_00010114": [
-              "Abwärme",
-              "unvermeidbare Abwärme"
-            ],
-            "OEO_00310004": [
-              "industrielle Abwärme"
-            ],
-            "OEO_00000056": [
-              "Umweltwärme"
-            ],
-            "OEO_00140105": [
-              "Abwasserwärme",
-              "Abwasser"
-            ],
-            "OEO_00140104": [
-              "Oberflächengewässer",
-              "Seethermie",
-              "Flusswärme"
-            ],
-            "out:total": [
-              "Summe",
-              "Gesamt",
-              "Gesamtwert",
-              "Gesamtsumme",
-              "alle Energieträger",
-              "insgesamt"
-            ],
-            "out:other": [
-              "Sonstige",
-              "Andere",
-              "sonstige Energieträger"
-            ]
+            "OEO_00000292": {
+              "label": "Erdgas",
+              "spellings": [
+                "Gas"
+              ]
+            },
+            "OEO_00000211": {
+              "label": "Heizöl",
+              "spellings": [
+                "Öl"
+              ]
+            },
+            "OEO_00000132": {
+              "label": "Fernwärme",
+              "spellings": [
+                "Wärmenetze",
+                "Wärmenetz",
+                "Nahwärme"
+              ]
+            },
+            "OEO_00000139": {
+              "label": "Strom",
+              "spellings": [
+                "Elektrizität",
+                "Heizungsstrom",
+                "Wärmestrom",
+                "Direktstrom"
+              ],
+              "definition": "Electrical energy is a form of energy derived from the potential or kinetic energy of charged particles."
+            },
+            "OEO_00000449": {
+              "label": "Holz",
+              "spellings": [
+                "Holzpellets",
+                "Pellets",
+                "Hackschnitzel",
+                "Brennholz",
+                "Holzenergie"
+              ]
+            },
+            "OEO_00000074": {
+              "label": "Biogas",
+              "spellings": [
+                "aufbereitetes Biogas"
+              ]
+            },
+            "OEO_00000388": {
+              "label": "Solarthermie",
+              "spellings": [
+                "solare Wärme"
+              ]
+            },
+            "OEO_00000251": {
+              "label": "Braunkohle",
+              "spellings": []
+            },
+            "OEO_00320011": {
+              "label": "Flüssiggas",
+              "spellings": [],
+              "definition": "Liquefied petroleum gas (LPG) is gas mixture of hydrocarbon gases, mainly propane and butane."
+            },
+            "OEO_00000220": {
+              "label": "Wasserstoff",
+              "spellings": [
+                "H2"
+              ]
+            },
+            "OEO_00000204": {
+              "label": "Steinkohle",
+              "spellings": []
+            },
+            "OEO_00010215": {
+              "label": "Biomethan",
+              "spellings": []
+            },
+            "OEO_00000332": {
+              "label": "biogener Festbrennstoff",
+              "spellings": [
+                "biogene Festbrennstoffe",
+                "sonstige biogene Festbrennstoffe"
+              ]
+            },
+            "OEO_00010214": {
+              "label": "Biomasse",
+              "spellings": [
+                "pflanzliche Biomasse",
+                "landwirtschaftliche Biomasse"
+              ]
+            },
+            "OEO_00000088": {
+              "label": "Kohle",
+              "spellings": []
+            },
+            "OEO_00000290": {
+              "label": "Siedlungsabfälle",
+              "spellings": [
+                "Abfall",
+                "thermische Abfallverwertung"
+              ],
+              "definition": "A municipal waste fuel is waste fuel produced by households or non-industrial commercial activities."
+            },
+            "OEO_00000356": {
+              "label": "Biogut",
+              "spellings": [
+                "Gartenabfälle",
+                "Grünschnitt"
+              ],
+              "definition": "A biogenic municipal waste fuel is a municipal waste fuel that has a biogenic origin."
+            },
+            "OEO_00000439": {
+              "label": "Klärschlamm",
+              "spellings": [],
+              "definition": "A waste fuel is a fuel in which the material entity is waste."
+            },
+            "OEO_00020495": {
+              "label": "tierische Exkremente",
+              "spellings": [
+                "Schlachtreste"
+              ],
+              "definition": "An angricultural waste fuel is waste fuel produced by agriculture."
+            },
+            "OEO_00010155": {
+              "label": "grüne Gase",
+              "spellings": [
+                "synthetische Gase"
+              ]
+            },
+            "OEO_00000191": {
+              "label": "Geothermie",
+              "spellings": [
+                "Erdwärme",
+                "oberflächennahe Geothermie",
+                "Tiefengeothermie",
+                "Erdwärmesonde",
+                "Erdwärmekollektor",
+                "Oberflächengeothermie"
+              ]
+            },
+            "OEO_00010114": {
+              "label": "Abwärme",
+              "spellings": [
+                "unvermeidbare Abwärme"
+              ]
+            },
+            "OEO_00310004": {
+              "label": "industrielle Abwärme",
+              "spellings": []
+            },
+            "OEO_00000056": {
+              "label": "Umweltwärme",
+              "spellings": [
+                "Umgebungswärme",
+                "Umgebungsluft"
+              ],
+              "definition": "Ambient thermal energy is thermal energy that is stored in the ambient air, beneath the surface of solid earth or in surface water. It is captured by heat pumps."
+            },
+            "OEO_00140105": {
+              "label": "Abwasserwärme",
+              "spellings": [
+                "Abwasser"
+              ],
+              "definition": "Artificial ambient thermal energy is ambient thermal energy that has an anthropogenic origin."
+            },
+            "OEO_00140104": {
+              "label": "Oberflächengewässer",
+              "spellings": [
+                "Seethermie",
+                "Flusswärme"
+              ],
+              "definition": "Natural ambient thermal energy is ambient thermal energy that has a renewable origin."
+            },
+            "out:total": {
+              "label": "Summe",
+              "spellings": [
+                "Gesamt",
+                "Gesamtwert",
+                "Gesamtsumme",
+                "alle Energieträger",
+                "insgesamt"
+              ],
+              "definition": "Eine Zeile, die ausdrücklich über alle Einträge summiert."
+            },
+            "out:other": {
+              "label": "Sonstige",
+              "spellings": [
+                "Andere",
+                "sonstige Energieträger",
+                "Sonstige Wärmequellen",
+                "Rest"
+              ],
+              "definition": "Etwas, das keiner der übrigen Einträge dieser Liste ist."
+            }
           },
           "question": "Welcher Energieträger? Die Bezeichnung steht in der Zeilenbeschriftung, im Spaltenkopf oder in der Blocküberschrift, fast nie in der Schreibweise der Klassenliste: \"Gas H\" und \"Erdgas (netzgebunden)\" meinen die Klasse Erdgas, \"Nahwärme\" und \"Wärmenetz\" die Klasse Fernwärme. Eine Summenzeile (\"Summe\", \"Gesamt\", \"alle Energieträger\") ist \"out:total\", eine Restposition (\"Sonstige\", \"Andere\") ist \"out:other\". Passt fachlich weder eine Klasse noch einer dieser Einträge, etwa weil in der Spalte ein Gebäudetyp steht, dann lass die Zeile weg.",
           "evidence": "own",
@@ -279,40 +398,63 @@
         },
         "sector": {
           "vocabulary": {
-            "OEO_00000214": [
-              "Private Haushalte",
-              "Haushalte",
-              "Privathaushalte",
-              "Wohnen",
-              "Wohngebäude"
-            ],
-            "OEO_00000405": [
-              "GHD",
-              "Gewerbe, Handel, Dienstleistungen",
-              "Gewerbe/Handel/Dienstleistungen",
-              "öffentliche Gebäude",
-              "öffentliche Liegenschaften",
-              "kommunale Einrichtungen",
-              "GHD/Kommune",
-              "Gewerbe",
-              "wirtschaftlich genutzte Gebäude"
-            ],
-            "OEO_00000227": [
-              "Industrie"
-            ],
-            "OEO_00000422": [
-              "Verkehr"
-            ],
-            "OEO_00010035": [
-              "Landwirtschaft",
-              "Land- und Forstwirtschaft"
-            ],
-            "out:total": [
-              "Summe",
-              "Gesamt",
-              "alle Sektoren",
-              "insgesamt"
-            ]
+            "OEO_00000214": {
+              "label": "Private Haushalte",
+              "spellings": [
+                "Haushalte",
+                "Privathaushalte",
+                "Wohnen",
+                "Wohngebäude",
+                "Haushaltssektor"
+              ],
+              "definition": "A household sector is a sector that covers households."
+            },
+            "OEO_00000405": {
+              "label": "GHD",
+              "spellings": [
+                "Gewerbe, Handel, Dienstleistungen",
+                "Gewerbe/Handel/Dienstleistungen",
+                "öffentliche Gebäude",
+                "öffentliche Liegenschaften",
+                "kommunale Einrichtungen",
+                "GHD/Kommune",
+                "Gewerbe",
+                "wirtschaftlich genutzte Gebäude",
+                "kommerzieller Sektor"
+              ],
+              "definition": "A commercial sector is a sector that covers non-industrial commercial activities."
+            },
+            "OEO_00000227": {
+              "label": "Industrie",
+              "spellings": [
+                "Industriesektor",
+                "verarbeitendes Gewerbe"
+              ],
+              "definition": "An industry sector is a sector that covers industrial activities with other main purposes of energy transformation."
+            },
+            "OEO_00000422": {
+              "label": "Verkehr",
+              "spellings": [
+                "Verkehrssektor"
+              ],
+              "definition": "A transport sector is a sector that covers transport of people and/or goods."
+            },
+            "OEO_00010035": {
+              "label": "Landwirtschaft",
+              "spellings": [
+                "Land- und Forstwirtschaft"
+              ],
+              "definition": "A agriculture, forestry and land use (AFOLU) sector is a sector that covers activities and natural processes from agriculture, forestry, land use and land use change."
+            },
+            "out:total": {
+              "label": "Summe",
+              "spellings": [
+                "Gesamt",
+                "alle Sektoren",
+                "insgesamt"
+              ],
+              "definition": "Eine Zeile, die ausdrücklich über alle Einträge summiert."
+            }
           },
           "question": "Welcher Verbrauchssektor? Die Bezeichnung steht in der Zeilenbeschriftung, im Spaltenkopf oder in der Blocküberschrift DERSELBEN Tabelle: \"Wohnen\" und \"Wohngebäude\" meinen die Klasse Private Haushalte, \"GHD/Kommune\", \"Gewerbe\" und \"wirtschaftlich genutzte Gebäude\" die Klasse GHD. Ein GEBIET ist kein Sektor: \"Gesamtstadt\", \"Stadtgebiet\", \"Gemeinde\" und \"Plangebiet\" sagen, WO die Zahl gilt, nicht für welchen Verbraucher, und sie sind auch keine Summe über die Sektoren. Eine Zeile, die ausdrücklich über alle Sektoren summiert (\"Summe\", \"Gesamt\", \"insgesamt\" als Zeilen- oder Spaltenkopf), ist \"out:total\". Hat die eigene Tabelle keine Sektorspalte und nennt ihr Titel keinen Sektor, dann ist das keine Klasse, sondern eine fehlende Angabe: antworte mit \"out:unstated\".",
           "evidence": "own",
@@ -337,33 +479,49 @@
         },
         "scenario": {
           "vocabulary": {
-            "target": [
-              "Zielszenario",
-              "Zielbild",
-              "Zielwert",
-              "Zielpfad",
-              "Umsetzungsszenario",
-              "Transformationspfad"
-            ],
-            "trend": [
-              "Trendszenario",
-              "Referenzszenario",
-              "Weiter-wie-bisher",
-              "Business as usual"
-            ],
-            "status_quo": [
-              "Bestand",
-              "Ist-Zustand",
-              "Bilanzjahr",
-              "Status quo",
-              "Bestandsanalyse"
-            ],
-            "out:variant": [
-              "Variante oder Sensitivität neben dem Szenario",
-              "Variante",
-              "Sensitivität",
-              "Bandbreite"
-            ]
+            "target": {
+              "label": "Zielszenario",
+              "spellings": [
+                "Zielbild",
+                "Zielwert",
+                "Zielpfad",
+                "Umsetzungsszenario",
+                "Transformationspfad"
+              ],
+              "definition": "Der angestrebte Zustand eines künftigen Jahres, wie der Plan ihn erreichen will."
+            },
+            "trend": {
+              "label": "Trendszenario",
+              "spellings": [
+                "Referenzszenario",
+                "Weiter-wie-bisher",
+                "Business as usual"
+              ],
+              "definition": "Die Fortschreibung ohne zusätzliche Maßnahmen."
+            },
+            "status_quo": {
+              "label": "Bestand",
+              "spellings": [
+                "Ist-Zustand",
+                "Bilanzjahr",
+                "Status quo",
+                "Bestandsanalyse",
+                "Basisjahr",
+                "Ist-Zustandsanalyse",
+                "Ist-Analyse",
+                "Erstellungsjahr"
+              ],
+              "definition": "Erhoben oder bilanziert für ein vergangenes oder das laufende Jahr."
+            },
+            "out:variant": {
+              "label": "Variante oder Sensitivität neben dem Szenario",
+              "spellings": [
+                "Variante",
+                "Sensitivität",
+                "Bandbreite"
+              ],
+              "definition": "Eine Rechenvariante, die der Plan neben sein Szenario stellt, um eine Bandbreite zu zeigen."
+            }
           },
           "required": false,
           "question": "Auf welchen Zustand bezieht sich der Wert? Der Bezug steht selten in der Zeile selbst, sondern im Titel der eigenen Tabelle, in der Abschnittsüberschrift oder in dem Satz, der die Tabelle ankündigt. Bestand heißt: erhoben oder bilanziert für ein vergangenes oder das laufende Jahr. Daran zu erkennen sind Bestandsanalyse, Ist-Zustand, Bilanzjahr, Ausgangslage, Energiebilanz, \"bislang\", \"derzeit\", \"wird verbraucht\", oder ein Jahr vor der Erstellung des Plans im Titel. Ein Satz wie \"wie viel Wärme pro Jahr verbraucht wird und welche Energieträger dafür bislang eingesetzt werden\" ist ein Bestand, auch wenn das Wort Bestandsanalyse nicht fällt. Trendszenario ist die Fortschreibung ohne zusätzliche Maßnahmen. Zielszenario ist der angestrebte Zustand, auch wenn der Plan ihm einen eigenen Namen gibt (\"bei erhöhter Energieeinsparung\", \"Umsetzungsszenario 2\", \"Transformationspfad\"); nennt die Quelle mehrere Zielszenarien nebeneinander, gehört der Name des konkreten in value_raw. Steht in der eigenen Quelle, in ihrem Abschnitt und in dem Satz davor nichts über den Zustand, dann ist das \"out:unstated\" und keine Schätzung.",
@@ -381,22 +539,28 @@
         },
         "spatial_scope": {
           "vocabulary": {
-            "municipality": [
-              "Gemeindegebiet",
-              "Gesamtstadt",
-              "Stadtgebiet",
-              "gesamtes Plangebiet",
-              "Gemeinde insgesamt"
-            ],
-            "sub_area": [
-              "Teilgebiet",
-              "Fokusgebiet",
-              "Quartier",
-              "Stadtteil",
-              "Baublock",
-              "Wärmenetzgebiet",
-              "Ortsteil"
-            ]
+            "municipality": {
+              "label": "Gemeindegebiet",
+              "spellings": [
+                "Gesamtstadt",
+                "Stadtgebiet",
+                "gesamtes Plangebiet",
+                "Gemeinde insgesamt"
+              ],
+              "definition": "Das ganze Gemeinde- oder Stadtgebiet des Plans."
+            },
+            "sub_area": {
+              "label": "Teilgebiet",
+              "spellings": [
+                "Fokusgebiet",
+                "Quartier",
+                "Stadtteil",
+                "Baublock",
+                "Wärmenetzgebiet",
+                "Ortsteil"
+              ],
+              "definition": "Ein benannter Teil davon: ein Quartier, ein Fokusgebiet, ein Wärmenetzgebiet."
+            }
           },
           "required": false,
           "question": "Auf welches Gebiet bezieht sich der Wert? Sieh ZUERST in der Zeile selbst nach: benennt die Zeilenbeschriftung ein Gebiet — einen Quartiersnamen, ein Eignungsgebiet, eine Straße —, dann ist DAS das Gebiet dieser Zeile und die Überschrift gilt für sie nicht. Eine Steckbrief- oder Quartierstabelle hat in jeder Zeile ein anderes Gebiet und in der Überschrift nur den Gemeindenamen; wer dann die Überschrift nimmt, legt vierzig Quartiere auf eine Koordinate. Erst wenn die Zeile kein Gebiet nennt, gilt die Überschrift oder die Caption. Bei einem Teilgebiet gehört sein NAME wörtlich in value_raw (\"Fokusgebiet Eicken\", \"Quartier Nordstadt\", \"Wärmenetzgebiet 3\"), ohne den Namen sind zwei Teilgebiete im Graphen nicht auseinanderzuhalten. Beim ganzen Gemeindegebiet reicht die Klasse.",
@@ -567,52 +731,83 @@
       "axes": {
         "quantity": {
           "vocabulary": {
-            "OEO_00340066": [
-              "CO2 emission value",
-              "CO2-Emissionen",
-              "Kohlendioxidemissionen",
-              "CO2-Ausstoß"
-            ],
-            "OEO_00140083": [
-              "carbon dioxide equivalent quantity value",
-              "Treibhausgasemissionen",
-              "THG-Emissionen",
-              "CO2-Äquivalente",
-              "CO2e-Emissionen",
-              "THG",
-              "CO2e"
-            ],
-            "out:cumulative": [
-              "kumulierte Emission über mehrere Jahre",
-              "kumulierte Emissionen",
-              "Emissionsbudget"
-            ],
-            "out:avoided": [
-              "vermiedene oder eingesparte Emission",
-              "THG-Minderung",
-              "THG-Einsparung",
-              "Emissionsreduktion"
-            ],
-            "out:captured": [
-              "abgeschiedene oder gespeicherte Emission",
-              "CO2-Abscheidung",
-              "CCS",
-              "CCU",
-              "Senke"
-            ],
-            "out:factor": [
-              "Emissionsfaktor je Kilowattstunde"
-            ],
-            "out:share": [
-              "Anteil in Prozent",
-              "Anteil an den Gesamtemissionen"
-            ],
-            "out:specific": [
-              "Emission je Kopf oder je Einwohner"
-            ],
-            "out:other": [
-              "etwas anderes"
-            ]
+            "OEO_00340066": {
+              "label": "CO2 emission value",
+              "spellings": [
+                "CO2-Emissionen",
+                "Kohlendioxidemissionen",
+                "CO2-Ausstoß"
+              ],
+              "definition": "A CO2 emission value is a greenhouse gas emission value that quantifies a CO2 emission rate and has a mass unit."
+            },
+            "OEO_00140083": {
+              "label": "carbon dioxide equivalent quantity value",
+              "spellings": [
+                "Treibhausgasemissionen",
+                "THG-Emissionen",
+                "CO2-Äquivalente",
+                "CO2e-Emissionen",
+                "THG",
+                "CO2e",
+                "Treibhausgas"
+              ],
+              "definition": "A carbon dioxide equivalent quantity is a greenhouse gas emission value that quantifies the combined effect of all emitted greenhouse gases by giving an equivalent amount of CO2 which would have the same effect on the climate."
+            },
+            "out:cumulative": {
+              "label": "kumulierte Emission über mehrere Jahre",
+              "spellings": [
+                "kumulierte Emissionen",
+                "Emissionsbudget"
+              ],
+              "definition": "Über mehrere Jahre aufsummiert, keine Jahresmenge."
+            },
+            "out:avoided": {
+              "label": "vermiedene oder eingesparte Emission",
+              "spellings": [
+                "THG-Minderung",
+                "THG-Einsparung",
+                "Emissionsreduktion"
+              ],
+              "definition": "Eine vermiedene oder eingesparte Emission, das Gegenteil einer ausgestoßenen."
+            },
+            "out:captured": {
+              "label": "abgeschiedene oder gespeicherte Emission",
+              "spellings": [
+                "CO2-Abscheidung",
+                "CCS",
+                "CCU",
+                "Senke"
+              ],
+              "definition": "Eine abgeschiedene oder gespeicherte Menge, das Gegenteil einer ausgestoßenen."
+            },
+            "out:factor": {
+              "label": "Emissionsfaktor je Kilowattstunde",
+              "spellings": [
+                "Emissionsfaktor",
+                "CO2-Faktor",
+                "spezifische Emissionen"
+              ],
+              "definition": "Emission je Kilowattstunde, eine Eigenschaft des Energieträgers und keine Menge."
+            },
+            "out:share": {
+              "label": "Anteil in Prozent",
+              "spellings": [
+                "Anteil an den Gesamtemissionen",
+                "EE-Anteil",
+                "Anteil erneuerbarer Energien"
+              ],
+              "definition": "Ein Anteil in Prozent, keine Menge."
+            },
+            "out:specific": {
+              "label": "Emission je Kopf oder je Einwohner",
+              "spellings": [],
+              "definition": "Ein Wert je Fläche, Kopf, Gebäude oder Kilowattstunde, keine Gesamtmenge."
+            },
+            "out:other": {
+              "label": "etwas anderes",
+              "spellings": [],
+              "definition": "Etwas, das keiner der übrigen Einträge dieser Liste ist."
+            }
           },
           "required": false,
           "question": "Welche Größe ist diese Zahl? Das ist die wichtigste Entscheidung des Tupels, denn sie bestimmt, als welche Klasse der Wert im Graphen steht. Entscheide nach der Definition der Klasse, nicht nach der Ähnlichkeit der Wörter. \"CO2 emission value\" ist reines Kohlendioxid, \"carbon dioxide equivalent quantity value\" sind alle Treibhausgase, in CO2-Äquivalenten zusammengefasst. Die Einheit verrät es meist: t CO2 gegen t CO2-Äq. Sagt der Plan an anderer Stelle, dass seine Emissionen in CO2-Äquivalenten angegeben sind (\"Die zugehörigen Treibhausgasemissionen - angegeben in Tonnen CO2-Äquivalenten - sind gesondert aufgeführt\"), dann gilt das auch für eine Tabelle, deren Kopfzeile nur \"CO2-Emissionen\" schreibt: der Methodiksatz schlägt die Kopfzeile. Eine kumulierte Emission über mehrere Jahre, eine vermiedene oder eingesparte Emission und eine abgeschiedene Menge sind das Gegenteil einer im Bilanzjahr ausgestoßenen und haben ihre eigenen Einträge.",
@@ -624,32 +819,47 @@
         },
         "aggregation": {
           "vocabulary": {
-            "OEO_00140070": [
-              "integral",
-              "Summe oder Integral über einen Zeitraum oder ein Gebiet",
-              "Jahreswert",
-              "Jahressumme"
-            ],
-            "OEO_00140071": [
-              "arithmetic mean",
-              "Mittelwert",
-              "Durchschnitt"
-            ],
-            "OEO_00140069": [
-              "instantaneous",
-              "Momentanwert zu einem Zeitpunkt"
-            ],
-            "OEO_00140073": [
-              "maximum",
-              "Maximum",
-              "Spitzenwert",
-              "Spitzenlast"
-            ],
-            "OEO_00140072": [
-              "minimum",
-              "Minimum",
-              "Tiefstwert"
-            ]
+            "OEO_00140070": {
+              "label": "integral",
+              "spellings": [
+                "Summe oder Integral über einen Zeitraum oder ein Gebiet",
+                "Jahreswert",
+                "Jahressumme"
+              ],
+              "definition": "sum or integral of values, e.g. within a time step or a spatial region"
+            },
+            "OEO_00140071": {
+              "label": "arithmetic mean",
+              "spellings": [
+                "Mittelwert",
+                "Durchschnitt"
+              ],
+              "definition": "average value calculated by arithmetic mean over a set of data values, e.g. within a time step or spatial region"
+            },
+            "OEO_00140069": {
+              "label": "instantaneous",
+              "spellings": [
+                "Momentanwert zu einem Zeitpunkt"
+              ],
+              "definition": "value measured at or modelled for exactly one 0-dim temporal region, referenced by a time stamp, e.g. to represent a time step in a time series"
+            },
+            "OEO_00140073": {
+              "label": "maximum",
+              "spellings": [
+                "Maximum",
+                "Spitzenwert",
+                "Spitzenlast"
+              ],
+              "definition": "maximum value within a set of data values, e.g. in a time step or spatial region"
+            },
+            "OEO_00140072": {
+              "label": "minimum",
+              "spellings": [
+                "Minimum",
+                "Tiefstwert"
+              ],
+              "definition": "minimum value within a set of data values, e.g. in a time step or spatial region"
+            }
           },
           "required": false,
           "question": "Wie ist der Wert über Zeit oder Raum zusammengefasst? Der Normalfall ist \"integral\", also eine Jahressumme. \"maximum\" bei einer Spitzenlast oder einem Höchstwert, \"arithmetic mean\" bei einem Durchschnitt je Gebäude oder je Jahr, \"instantaneous\" bei einem Momentanwert.",
@@ -666,123 +876,198 @@
         },
         "carrier": {
           "vocabulary": {
-            "OEO_00000292": [
-              "Erdgas",
-              "Gas"
-            ],
-            "OEO_00000211": [
-              "Heizöl",
-              "Öl"
-            ],
-            "OEO_00000132": [
-              "Fernwärme",
-              "Wärmenetze",
-              "Wärmenetz"
-            ],
-            "OEO_00000139": [
-              "Strom",
-              "Elektrizität"
-            ],
-            "OEO_00000449": [
-              "Holz",
-              "Holzpellets",
-              "Pellets"
-            ],
-            "OEO_00000074": [
-              "Biogas"
-            ],
-            "OEO_00000388": [
-              "Solarthermie"
-            ],
-            "OEO_00000251": [
-              "Braunkohle"
-            ],
-            "OEO_00320011": [
-              "Flüssiggas"
-            ],
-            "OEO_00000220": [
-              "Wasserstoff"
-            ],
-            "OEO_00000204": [
-              "Steinkohle"
-            ],
-            "OEO_00010215": [
-              "Biomethan"
-            ],
-            "OEO_00000332": [
-              "biogener Festbrennstoff",
-              "biogene Festbrennstoffe",
-              "sonstige biogene Festbrennstoffe"
-            ],
-            "OEO_00010214": [
-              "Biomasse",
-              "pflanzliche Biomasse",
-              "landwirtschaftliche Biomasse"
-            ],
-            "OEO_00000088": [
-              "Kohle"
-            ],
-            "OEO_00000290": [
-              "Siedlungsabfälle",
-              "Abfall",
-              "thermische Abfallverwertung"
-            ],
-            "OEO_00000356": [
-              "Biogut",
-              "Gartenabfälle",
-              "Grünschnitt"
-            ],
-            "OEO_00000439": [
-              "Klärschlamm"
-            ],
-            "OEO_00020495": [
-              "tierische Exkremente",
-              "Schlachtreste"
-            ],
-            "OEO_00010155": [
-              "grüne Gase",
-              "synthetische Gase"
-            ],
-            "OEO_00000191": [
-              "Geothermie",
-              "Erdwärme",
-              "oberflächennahe Geothermie",
-              "Tiefengeothermie",
-              "Erdwärmesonde",
-              "Erdwärmekollektor"
-            ],
-            "OEO_00010114": [
-              "Abwärme",
-              "unvermeidbare Abwärme"
-            ],
-            "OEO_00310004": [
-              "industrielle Abwärme"
-            ],
-            "OEO_00000056": [
-              "Umweltwärme"
-            ],
-            "OEO_00140105": [
-              "Abwasserwärme",
-              "Abwasser"
-            ],
-            "OEO_00140104": [
-              "Oberflächengewässer",
-              "Seethermie",
-              "Flusswärme"
-            ],
-            "out:total": [
-              "Summe",
-              "Gesamt",
-              "Gesamtwert",
-              "Gesamtsumme",
-              "alle Energieträger",
-              "insgesamt"
-            ],
-            "out:other": [
-              "Sonstige",
-              "Andere",
-              "sonstige Energieträger"
-            ]
+            "OEO_00000292": {
+              "label": "Erdgas",
+              "spellings": [
+                "Gas"
+              ]
+            },
+            "OEO_00000211": {
+              "label": "Heizöl",
+              "spellings": [
+                "Öl"
+              ]
+            },
+            "OEO_00000132": {
+              "label": "Fernwärme",
+              "spellings": [
+                "Wärmenetze",
+                "Wärmenetz",
+                "Nahwärme"
+              ]
+            },
+            "OEO_00000139": {
+              "label": "Strom",
+              "spellings": [
+                "Elektrizität",
+                "Heizungsstrom",
+                "Wärmestrom",
+                "Direktstrom"
+              ],
+              "definition": "Electrical energy is a form of energy derived from the potential or kinetic energy of charged particles."
+            },
+            "OEO_00000449": {
+              "label": "Holz",
+              "spellings": [
+                "Holzpellets",
+                "Pellets",
+                "Hackschnitzel",
+                "Brennholz",
+                "Holzenergie"
+              ]
+            },
+            "OEO_00000074": {
+              "label": "Biogas",
+              "spellings": [
+                "aufbereitetes Biogas"
+              ]
+            },
+            "OEO_00000388": {
+              "label": "Solarthermie",
+              "spellings": [
+                "solare Wärme"
+              ]
+            },
+            "OEO_00000251": {
+              "label": "Braunkohle",
+              "spellings": []
+            },
+            "OEO_00320011": {
+              "label": "Flüssiggas",
+              "spellings": [],
+              "definition": "Liquefied petroleum gas (LPG) is gas mixture of hydrocarbon gases, mainly propane and butane."
+            },
+            "OEO_00000220": {
+              "label": "Wasserstoff",
+              "spellings": [
+                "H2"
+              ]
+            },
+            "OEO_00000204": {
+              "label": "Steinkohle",
+              "spellings": []
+            },
+            "OEO_00010215": {
+              "label": "Biomethan",
+              "spellings": []
+            },
+            "OEO_00000332": {
+              "label": "biogener Festbrennstoff",
+              "spellings": [
+                "biogene Festbrennstoffe",
+                "sonstige biogene Festbrennstoffe"
+              ]
+            },
+            "OEO_00010214": {
+              "label": "Biomasse",
+              "spellings": [
+                "pflanzliche Biomasse",
+                "landwirtschaftliche Biomasse"
+              ]
+            },
+            "OEO_00000088": {
+              "label": "Kohle",
+              "spellings": []
+            },
+            "OEO_00000290": {
+              "label": "Siedlungsabfälle",
+              "spellings": [
+                "Abfall",
+                "thermische Abfallverwertung"
+              ],
+              "definition": "A municipal waste fuel is waste fuel produced by households or non-industrial commercial activities."
+            },
+            "OEO_00000356": {
+              "label": "Biogut",
+              "spellings": [
+                "Gartenabfälle",
+                "Grünschnitt"
+              ],
+              "definition": "A biogenic municipal waste fuel is a municipal waste fuel that has a biogenic origin."
+            },
+            "OEO_00000439": {
+              "label": "Klärschlamm",
+              "spellings": [],
+              "definition": "A waste fuel is a fuel in which the material entity is waste."
+            },
+            "OEO_00020495": {
+              "label": "tierische Exkremente",
+              "spellings": [
+                "Schlachtreste"
+              ],
+              "definition": "An angricultural waste fuel is waste fuel produced by agriculture."
+            },
+            "OEO_00010155": {
+              "label": "grüne Gase",
+              "spellings": [
+                "synthetische Gase"
+              ]
+            },
+            "OEO_00000191": {
+              "label": "Geothermie",
+              "spellings": [
+                "Erdwärme",
+                "oberflächennahe Geothermie",
+                "Tiefengeothermie",
+                "Erdwärmesonde",
+                "Erdwärmekollektor",
+                "Oberflächengeothermie"
+              ]
+            },
+            "OEO_00010114": {
+              "label": "Abwärme",
+              "spellings": [
+                "unvermeidbare Abwärme"
+              ]
+            },
+            "OEO_00310004": {
+              "label": "industrielle Abwärme",
+              "spellings": []
+            },
+            "OEO_00000056": {
+              "label": "Umweltwärme",
+              "spellings": [
+                "Umgebungswärme",
+                "Umgebungsluft"
+              ],
+              "definition": "Ambient thermal energy is thermal energy that is stored in the ambient air, beneath the surface of solid earth or in surface water. It is captured by heat pumps."
+            },
+            "OEO_00140105": {
+              "label": "Abwasserwärme",
+              "spellings": [
+                "Abwasser"
+              ],
+              "definition": "Artificial ambient thermal energy is ambient thermal energy that has an anthropogenic origin."
+            },
+            "OEO_00140104": {
+              "label": "Oberflächengewässer",
+              "spellings": [
+                "Seethermie",
+                "Flusswärme"
+              ],
+              "definition": "Natural ambient thermal energy is ambient thermal energy that has a renewable origin."
+            },
+            "out:total": {
+              "label": "Summe",
+              "spellings": [
+                "Gesamt",
+                "Gesamtwert",
+                "Gesamtsumme",
+                "alle Energieträger",
+                "insgesamt"
+              ],
+              "definition": "Eine Zeile, die ausdrücklich über alle Einträge summiert."
+            },
+            "out:other": {
+              "label": "Sonstige",
+              "spellings": [
+                "Andere",
+                "sonstige Energieträger",
+                "Sonstige Wärmequellen",
+                "Rest"
+              ],
+              "definition": "Etwas, das keiner der übrigen Einträge dieser Liste ist."
+            }
           },
           "question": "Welcher Energieträger? Die Bezeichnung steht in der Zeilenbeschriftung, im Spaltenkopf oder in der Blocküberschrift, fast nie in der Schreibweise der Klassenliste: \"Gas H\" und \"Erdgas (netzgebunden)\" meinen die Klasse Erdgas, \"Nahwärme\" und \"Wärmenetz\" die Klasse Fernwärme. Eine Summenzeile (\"Summe\", \"Gesamt\", \"alle Energieträger\") ist \"out:total\", eine Restposition (\"Sonstige\", \"Andere\") ist \"out:other\". Passt fachlich weder eine Klasse noch einer dieser Einträge, etwa weil in der Spalte ein Gebäudetyp steht, dann lass die Zeile weg.",
           "evidence": "own",
@@ -806,40 +1091,63 @@
         },
         "sector": {
           "vocabulary": {
-            "OEO_00000214": [
-              "Private Haushalte",
-              "Haushalte",
-              "Privathaushalte",
-              "Wohnen",
-              "Wohngebäude"
-            ],
-            "OEO_00000405": [
-              "GHD",
-              "Gewerbe, Handel, Dienstleistungen",
-              "Gewerbe/Handel/Dienstleistungen",
-              "öffentliche Gebäude",
-              "öffentliche Liegenschaften",
-              "kommunale Einrichtungen",
-              "GHD/Kommune",
-              "Gewerbe",
-              "wirtschaftlich genutzte Gebäude"
-            ],
-            "OEO_00000227": [
-              "Industrie"
-            ],
-            "OEO_00000422": [
-              "Verkehr"
-            ],
-            "OEO_00010035": [
-              "Landwirtschaft",
-              "Land- und Forstwirtschaft"
-            ],
-            "out:total": [
-              "Summe",
-              "Gesamt",
-              "alle Sektoren",
-              "insgesamt"
-            ]
+            "OEO_00000214": {
+              "label": "Private Haushalte",
+              "spellings": [
+                "Haushalte",
+                "Privathaushalte",
+                "Wohnen",
+                "Wohngebäude",
+                "Haushaltssektor"
+              ],
+              "definition": "A household sector is a sector that covers households."
+            },
+            "OEO_00000405": {
+              "label": "GHD",
+              "spellings": [
+                "Gewerbe, Handel, Dienstleistungen",
+                "Gewerbe/Handel/Dienstleistungen",
+                "öffentliche Gebäude",
+                "öffentliche Liegenschaften",
+                "kommunale Einrichtungen",
+                "GHD/Kommune",
+                "Gewerbe",
+                "wirtschaftlich genutzte Gebäude",
+                "kommerzieller Sektor"
+              ],
+              "definition": "A commercial sector is a sector that covers non-industrial commercial activities."
+            },
+            "OEO_00000227": {
+              "label": "Industrie",
+              "spellings": [
+                "Industriesektor",
+                "verarbeitendes Gewerbe"
+              ],
+              "definition": "An industry sector is a sector that covers industrial activities with other main purposes of energy transformation."
+            },
+            "OEO_00000422": {
+              "label": "Verkehr",
+              "spellings": [
+                "Verkehrssektor"
+              ],
+              "definition": "A transport sector is a sector that covers transport of people and/or goods."
+            },
+            "OEO_00010035": {
+              "label": "Landwirtschaft",
+              "spellings": [
+                "Land- und Forstwirtschaft"
+              ],
+              "definition": "A agriculture, forestry and land use (AFOLU) sector is a sector that covers activities and natural processes from agriculture, forestry, land use and land use change."
+            },
+            "out:total": {
+              "label": "Summe",
+              "spellings": [
+                "Gesamt",
+                "alle Sektoren",
+                "insgesamt"
+              ],
+              "definition": "Eine Zeile, die ausdrücklich über alle Einträge summiert."
+            }
           },
           "question": "Welcher Verbrauchssektor? Die Bezeichnung steht in der Zeilenbeschriftung, im Spaltenkopf oder in der Blocküberschrift DERSELBEN Tabelle: \"Wohnen\" und \"Wohngebäude\" meinen die Klasse Private Haushalte, \"GHD/Kommune\", \"Gewerbe\" und \"wirtschaftlich genutzte Gebäude\" die Klasse GHD. Ein GEBIET ist kein Sektor: \"Gesamtstadt\", \"Stadtgebiet\", \"Gemeinde\" und \"Plangebiet\" sagen, WO die Zahl gilt, nicht für welchen Verbraucher, und sie sind auch keine Summe über die Sektoren. Eine Zeile, die ausdrücklich über alle Sektoren summiert (\"Summe\", \"Gesamt\", \"insgesamt\" als Zeilen- oder Spaltenkopf), ist \"out:total\". Hat die eigene Tabelle keine Sektorspalte und nennt ihr Titel keinen Sektor, dann ist das keine Klasse, sondern eine fehlende Angabe: antworte mit \"out:unstated\".",
           "evidence": "own",
@@ -864,33 +1172,49 @@
         },
         "scenario": {
           "vocabulary": {
-            "target": [
-              "Zielszenario",
-              "Zielbild",
-              "Zielwert",
-              "Zielpfad",
-              "Umsetzungsszenario",
-              "Transformationspfad"
-            ],
-            "trend": [
-              "Trendszenario",
-              "Referenzszenario",
-              "Weiter-wie-bisher",
-              "Business as usual"
-            ],
-            "status_quo": [
-              "Bestand",
-              "Ist-Zustand",
-              "Bilanzjahr",
-              "Status quo",
-              "Bestandsanalyse"
-            ],
-            "out:variant": [
-              "Variante oder Sensitivität neben dem Szenario",
-              "Variante",
-              "Sensitivität",
-              "Bandbreite"
-            ]
+            "target": {
+              "label": "Zielszenario",
+              "spellings": [
+                "Zielbild",
+                "Zielwert",
+                "Zielpfad",
+                "Umsetzungsszenario",
+                "Transformationspfad"
+              ],
+              "definition": "Der angestrebte Zustand eines künftigen Jahres, wie der Plan ihn erreichen will."
+            },
+            "trend": {
+              "label": "Trendszenario",
+              "spellings": [
+                "Referenzszenario",
+                "Weiter-wie-bisher",
+                "Business as usual"
+              ],
+              "definition": "Die Fortschreibung ohne zusätzliche Maßnahmen."
+            },
+            "status_quo": {
+              "label": "Bestand",
+              "spellings": [
+                "Ist-Zustand",
+                "Bilanzjahr",
+                "Status quo",
+                "Bestandsanalyse",
+                "Basisjahr",
+                "Ist-Zustandsanalyse",
+                "Ist-Analyse",
+                "Erstellungsjahr"
+              ],
+              "definition": "Erhoben oder bilanziert für ein vergangenes oder das laufende Jahr."
+            },
+            "out:variant": {
+              "label": "Variante oder Sensitivität neben dem Szenario",
+              "spellings": [
+                "Variante",
+                "Sensitivität",
+                "Bandbreite"
+              ],
+              "definition": "Eine Rechenvariante, die der Plan neben sein Szenario stellt, um eine Bandbreite zu zeigen."
+            }
           },
           "required": false,
           "question": "Auf welchen Zustand bezieht sich der Wert? Der Bezug steht selten in der Zeile selbst, sondern im Titel der eigenen Tabelle, in der Abschnittsüberschrift oder in dem Satz, der die Tabelle ankündigt. Bestand heißt: erhoben oder bilanziert für ein vergangenes oder das laufende Jahr. Daran zu erkennen sind Bestandsanalyse, Ist-Zustand, Bilanzjahr, Ausgangslage, Energiebilanz, \"bislang\", \"derzeit\", \"wird verbraucht\", oder ein Jahr vor der Erstellung des Plans im Titel. Ein Satz wie \"wie viel Wärme pro Jahr verbraucht wird und welche Energieträger dafür bislang eingesetzt werden\" ist ein Bestand, auch wenn das Wort Bestandsanalyse nicht fällt. Trendszenario ist die Fortschreibung ohne zusätzliche Maßnahmen. Zielszenario ist der angestrebte Zustand, auch wenn der Plan ihm einen eigenen Namen gibt (\"bei erhöhter Energieeinsparung\", \"Umsetzungsszenario 2\", \"Transformationspfad\"); nennt die Quelle mehrere Zielszenarien nebeneinander, gehört der Name des konkreten in value_raw. Steht in der eigenen Quelle, in ihrem Abschnitt und in dem Satz davor nichts über den Zustand, dann ist das \"out:unstated\" und keine Schätzung.",
@@ -908,22 +1232,28 @@
         },
         "spatial_scope": {
           "vocabulary": {
-            "municipality": [
-              "Gemeindegebiet",
-              "Gesamtstadt",
-              "Stadtgebiet",
-              "gesamtes Plangebiet",
-              "Gemeinde insgesamt"
-            ],
-            "sub_area": [
-              "Teilgebiet",
-              "Fokusgebiet",
-              "Quartier",
-              "Stadtteil",
-              "Baublock",
-              "Wärmenetzgebiet",
-              "Ortsteil"
-            ]
+            "municipality": {
+              "label": "Gemeindegebiet",
+              "spellings": [
+                "Gesamtstadt",
+                "Stadtgebiet",
+                "gesamtes Plangebiet",
+                "Gemeinde insgesamt"
+              ],
+              "definition": "Das ganze Gemeinde- oder Stadtgebiet des Plans."
+            },
+            "sub_area": {
+              "label": "Teilgebiet",
+              "spellings": [
+                "Fokusgebiet",
+                "Quartier",
+                "Stadtteil",
+                "Baublock",
+                "Wärmenetzgebiet",
+                "Ortsteil"
+              ],
+              "definition": "Ein benannter Teil davon: ein Quartier, ein Fokusgebiet, ein Wärmenetzgebiet."
+            }
           },
           "required": false,
           "question": "Auf welches Gebiet bezieht sich der Wert? Sieh ZUERST in der Zeile selbst nach: benennt die Zeilenbeschriftung ein Gebiet — einen Quartiersnamen, ein Eignungsgebiet, eine Straße —, dann ist DAS das Gebiet dieser Zeile und die Überschrift gilt für sie nicht. Eine Steckbrief- oder Quartierstabelle hat in jeder Zeile ein anderes Gebiet und in der Überschrift nur den Gemeindenamen; wer dann die Überschrift nimmt, legt vierzig Quartiere auf eine Koordinate. Erst wenn die Zeile kein Gebiet nennt, gilt die Überschrift oder die Caption. Bei einem Teilgebiet gehört sein NAME wörtlich in value_raw (\"Fokusgebiet Eicken\", \"Quartier Nordstadt\", \"Wärmenetzgebiet 3\"), ohne den Namen sind zwei Teilgebiete im Graphen nicht auseinanderzuhalten. Beim ganzen Gemeindegebiet reicht die Klasse.",

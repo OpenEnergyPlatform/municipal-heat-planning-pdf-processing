@@ -111,9 +111,11 @@ def _slot_value(slot, doc: str) -> dict:
         value = {"type": ["string", "null"],
                  "enum": [o.uri for o in slot.options] + [None],
                  "description": doc}
-        value["x-options"] = {o.label: {"uri": o.uri,
-                                        "spellings": list(o.synonyms)}
-                              for o in slot.options}
+        value["x-options"] = {
+            o.label: {k: v for k, v in
+                      (("uri", o.uri), ("meaning", o.definition),
+                       ("spellings", list(o.synonyms))) if v}
+            for o in slot.options}
     elif slot.kind == fields.NUMBER:
         value = {"type": ["integer", "null"], "description": doc}
     else:

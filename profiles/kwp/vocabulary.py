@@ -289,15 +289,19 @@ def foreign_labels(spec_raw: dict, snapshot: dict) -> list:
     out: list = []
     for parameter in spec_raw.get("parameters", []):
         for name, axis in (parameter.get("axes") or {}).items():
-            for uri, labels in (axis.get("vocabulary") or {}).items():
+            for uri, entry in (axis.get("vocabulary") or {}).items():
                 term = terms.get(uri)
-                if uri.startswith("out:") or term is None or not labels:
+                # Either spec form: a list whose first item is the offered
+                # label, or an object that names it.
+                offered = (entry.get("label") if isinstance(entry, dict)
+                           else (entry or [None])[0])
+                if uri.startswith("out:") or term is None or not offered:
                     continue
                 known = {term["label"].casefold()}
                 known |= {a.casefold() for a in term["alt_labels"]}
-                if labels[0].casefold() not in known:
+                if offered.casefold() not in known:
                     out.append((f"{parameter.get('uri')}.{name}", uri,
-                                labels[0], term["label"]))
+                                offered, term["label"]))
     return out
 
 

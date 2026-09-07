@@ -451,6 +451,7 @@
       },
       "x-options": {
        "arithmetic mean": {
+        "meaning": "average value calculated by arithmetic mean over a set of data values, e.g. within a time step or spatial region",
         "spellings": [
          "Mittelwert",
          "Durchschnitt"
@@ -458,12 +459,14 @@
         "uri": "OEO_00140071"
        },
        "instantaneous": {
+        "meaning": "value measured at or modelled for exactly one 0-dim temporal region, referenced by a time stamp, e.g. to represent a time step in a time series",
         "spellings": [
          "Momentanwert zu einem Zeitpunkt"
         ],
         "uri": "OEO_00140069"
        },
        "integral": {
+        "meaning": "sum or integral of values, e.g. within a time step or a spatial region",
         "spellings": [
          "Summe oder Integral über einen Zeitraum oder ein Gebiet",
          "Jahreswert",
@@ -472,6 +475,7 @@
         "uri": "OEO_00140070"
        },
        "maximum": {
+        "meaning": "maximum value within a set of data values, e.g. in a time step or spatial region",
         "spellings": [
          "Maximum",
          "Spitzenwert",
@@ -480,6 +484,7 @@
         "uri": "OEO_00140073"
        },
        "minimum": {
+        "meaning": "minimum value within a set of data values, e.g. in a time step or spatial region",
         "spellings": [
          "Minimum",
          "Tiefstwert"
@@ -602,6 +607,7 @@
       },
       "x-options": {
        "Abwasserwärme": {
+        "meaning": "Artificial ambient thermal energy is ambient thermal energy that has an anthropogenic origin.",
         "spellings": [
          "Abwasser"
         ],
@@ -614,10 +620,13 @@
         "uri": "OEO_00010114"
        },
        "Biogas": {
-        "spellings": [],
+        "spellings": [
+         "aufbereitetes Biogas"
+        ],
         "uri": "OEO_00000074"
        },
        "Biogut": {
+        "meaning": "A biogenic municipal waste fuel is a municipal waste fuel that has a biogenic origin.",
         "spellings": [
          "Gartenabfälle",
          "Grünschnitt"
@@ -632,11 +641,9 @@
         "uri": "OEO_00010214"
        },
        "Biomethan": {
-        "spellings": [],
         "uri": "OEO_00010215"
        },
        "Braunkohle": {
-        "spellings": [],
         "uri": "OEO_00000251"
        },
        "Erdgas": {
@@ -648,12 +655,13 @@
        "Fernwärme": {
         "spellings": [
          "Wärmenetze",
-         "Wärmenetz"
+         "Wärmenetz",
+         "Nahwärme"
         ],
         "uri": "OEO_00000132"
        },
        "Flüssiggas": {
-        "spellings": [],
+        "meaning": "Liquefied petroleum gas (LPG) is gas mixture of hydrocarbon gases, mainly propane and butane.",
         "uri": "OEO_00320011"
        },
        "Geothermie": {
@@ -662,7 +670,8 @@
          "oberflächennahe Geothermie",
          "Tiefengeothermie",
          "Erdwärmesonde",
-         "Erdwärmekollektor"
+         "Erdwärmekollektor",
+         "Oberflächengeothermie"
         ],
         "uri": "OEO_00000191"
        },
@@ -675,19 +684,22 @@
        "Holz": {
         "spellings": [
          "Holzpellets",
-         "Pellets"
+         "Pellets",
+         "Hackschnitzel",
+         "Brennholz",
+         "Holzenergie"
         ],
         "uri": "OEO_00000449"
        },
        "Klärschlamm": {
-        "spellings": [],
+        "meaning": "A waste fuel is a fuel in which the material entity is waste.",
         "uri": "OEO_00000439"
        },
        "Kohle": {
-        "spellings": [],
         "uri": "OEO_00000088"
        },
        "Oberflächengewässer": {
+        "meaning": "Natural ambient thermal energy is ambient thermal energy that has a renewable origin.",
         "spellings": [
          "Seethermie",
          "Flusswärme"
@@ -695,6 +707,7 @@
         "uri": "OEO_00140104"
        },
        "Siedlungsabfälle": {
+        "meaning": "A municipal waste fuel is waste fuel produced by households or non-industrial commercial activities.",
         "spellings": [
          "Abfall",
          "thermische Abfallverwertung"
@@ -702,27 +715,36 @@
         "uri": "OEO_00000290"
        },
        "Solarthermie": {
-        "spellings": [],
+        "spellings": [
+         "solare Wärme"
+        ],
         "uri": "OEO_00000388"
        },
        "Sonstige": {
+        "meaning": "Etwas, das keiner der übrigen Einträge dieser Liste ist.",
         "spellings": [
          "Andere",
-         "sonstige Energieträger"
+         "sonstige Energieträger",
+         "Sonstige Wärmequellen",
+         "Rest"
         ],
         "uri": "out:other"
        },
        "Steinkohle": {
-        "spellings": [],
         "uri": "OEO_00000204"
        },
        "Strom": {
+        "meaning": "Electrical energy is a form of energy derived from the potential or kinetic energy of charged particles.",
         "spellings": [
-         "Elektrizität"
+         "Elektrizität",
+         "Heizungsstrom",
+         "Wärmestrom",
+         "Direktstrom"
         ],
         "uri": "OEO_00000139"
        },
        "Summe": {
+        "meaning": "Eine Zeile, die ausdrücklich über alle Einträge summiert.",
         "spellings": [
          "Gesamt",
          "Gesamtwert",
@@ -733,11 +755,17 @@
         "uri": "out:total"
        },
        "Umweltwärme": {
-        "spellings": [],
+        "meaning": "Ambient thermal energy is thermal energy that is stored in the ambient air, beneath the surface of solid earth or in surface water. It is captured by heat pumps.",
+        "spellings": [
+         "Umgebungswärme",
+         "Umgebungsluft"
+        ],
         "uri": "OEO_00000056"
        },
        "Wasserstoff": {
-        "spellings": [],
+        "spellings": [
+         "H2"
+        ],
         "uri": "OEO_00000220"
        },
        "biogener Festbrennstoff": {
@@ -754,10 +782,10 @@
         "uri": "OEO_00010155"
        },
        "industrielle Abwärme": {
-        "spellings": [],
         "uri": "OEO_00310004"
        },
        "tierische Exkremente": {
+        "meaning": "An angricultural waste fuel is waste fuel produced by agriculture.",
         "spellings": [
          "Schlachtreste"
         ],
@@ -935,12 +963,16 @@
       },
       "x-options": {
        "Anteil in Prozent": {
+        "meaning": "Ein Anteil in Prozent, keine Menge.",
         "spellings": [
-         "Anteil an den Gesamtemissionen"
+         "Anteil an den Gesamtemissionen",
+         "EE-Anteil",
+         "Anteil erneuerbarer Energien"
         ],
         "uri": "out:share"
        },
        "CO2 emission value": {
+        "meaning": "A CO2 emission value is a greenhouse gas emission value that quantifies a CO2 emission rate and has a mass unit.",
         "spellings": [
          "CO2-Emissionen",
          "Kohlendioxidemissionen",
@@ -949,14 +981,20 @@
         "uri": "OEO_00340066"
        },
        "Emission je Kopf oder je Einwohner": {
-        "spellings": [],
+        "meaning": "Ein Wert je Fläche, Kopf, Gebäude oder Kilowattstunde, keine Gesamtmenge.",
         "uri": "out:specific"
        },
        "Emissionsfaktor je Kilowattstunde": {
-        "spellings": [],
+        "meaning": "Emission je Kilowattstunde, eine Eigenschaft des Energieträgers und keine Menge.",
+        "spellings": [
+         "Emissionsfaktor",
+         "CO2-Faktor",
+         "spezifische Emissionen"
+        ],
         "uri": "out:factor"
        },
        "abgeschiedene oder gespeicherte Emission": {
+        "meaning": "Eine abgeschiedene oder gespeicherte Menge, das Gegenteil einer ausgestoßenen.",
         "spellings": [
          "CO2-Abscheidung",
          "CCS",
@@ -966,21 +1004,24 @@
         "uri": "out:captured"
        },
        "carbon dioxide equivalent quantity value": {
+        "meaning": "A carbon dioxide equivalent quantity is a greenhouse gas emission value that quantifies the combined effect of all emitted greenhouse gases by giving an equivalent amount of CO2 which would have the same effect on the climate.",
         "spellings": [
          "Treibhausgasemissionen",
          "THG-Emissionen",
          "CO2-Äquivalente",
          "CO2e-Emissionen",
          "THG",
-         "CO2e"
+         "CO2e",
+         "Treibhausgas"
         ],
         "uri": "OEO_00140083"
        },
        "etwas anderes": {
-        "spellings": [],
+        "meaning": "Etwas, das keiner der übrigen Einträge dieser Liste ist.",
         "uri": "out:other"
        },
        "kumulierte Emission über mehrere Jahre": {
+        "meaning": "Über mehrere Jahre aufsummiert, keine Jahresmenge.",
         "spellings": [
          "kumulierte Emissionen",
          "Emissionsbudget"
@@ -988,6 +1029,7 @@
         "uri": "out:cumulative"
        },
        "vermiedene oder eingesparte Emission": {
+        "meaning": "Eine vermiedene oder eingesparte Emission, das Gegenteil einer ausgestoßenen.",
         "spellings": [
          "THG-Minderung",
          "THG-Einsparung",
@@ -1085,15 +1127,21 @@
       },
       "x-options": {
        "Bestand": {
+        "meaning": "Erhoben oder bilanziert für ein vergangenes oder das laufende Jahr.",
         "spellings": [
          "Ist-Zustand",
          "Bilanzjahr",
          "Status quo",
-         "Bestandsanalyse"
+         "Bestandsanalyse",
+         "Basisjahr",
+         "Ist-Zustandsanalyse",
+         "Ist-Analyse",
+         "Erstellungsjahr"
         ],
         "uri": "status_quo"
        },
        "Trendszenario": {
+        "meaning": "Die Fortschreibung ohne zusätzliche Maßnahmen.",
         "spellings": [
          "Referenzszenario",
          "Weiter-wie-bisher",
@@ -1102,6 +1150,7 @@
         "uri": "trend"
        },
        "Variante oder Sensitivität neben dem Szenario": {
+        "meaning": "Eine Rechenvariante, die der Plan neben sein Szenario stellt, um eine Bandbreite zu zeigen.",
         "spellings": [
          "Variante",
          "Sensitivität",
@@ -1110,6 +1159,7 @@
         "uri": "out:variant"
        },
        "Zielszenario": {
+        "meaning": "Der angestrebte Zustand eines künftigen Jahres, wie der Plan ihn erreichen will.",
         "spellings": [
          "Zielbild",
          "Zielwert",
@@ -1202,6 +1252,7 @@
       },
       "x-options": {
        "GHD": {
+        "meaning": "A commercial sector is a sector that covers non-industrial commercial activities.",
         "spellings": [
          "Gewerbe, Handel, Dienstleistungen",
          "Gewerbe/Handel/Dienstleistungen",
@@ -1210,30 +1261,39 @@
          "kommunale Einrichtungen",
          "GHD/Kommune",
          "Gewerbe",
-         "wirtschaftlich genutzte Gebäude"
+         "wirtschaftlich genutzte Gebäude",
+         "kommerzieller Sektor"
         ],
         "uri": "OEO_00000405"
        },
        "Industrie": {
-        "spellings": [],
+        "meaning": "An industry sector is a sector that covers industrial activities with other main purposes of energy transformation.",
+        "spellings": [
+         "Industriesektor",
+         "verarbeitendes Gewerbe"
+        ],
         "uri": "OEO_00000227"
        },
        "Landwirtschaft": {
+        "meaning": "A agriculture, forestry and land use (AFOLU) sector is a sector that covers activities and natural processes from agriculture, forestry, land use and land use change.",
         "spellings": [
          "Land- und Forstwirtschaft"
         ],
         "uri": "OEO_00010035"
        },
        "Private Haushalte": {
+        "meaning": "A household sector is a sector that covers households.",
         "spellings": [
          "Haushalte",
          "Privathaushalte",
          "Wohnen",
-         "Wohngebäude"
+         "Wohngebäude",
+         "Haushaltssektor"
         ],
         "uri": "OEO_00000214"
        },
        "Summe": {
+        "meaning": "Eine Zeile, die ausdrücklich über alle Einträge summiert.",
         "spellings": [
          "Gesamt",
          "alle Sektoren",
@@ -1242,7 +1302,10 @@
         "uri": "out:total"
        },
        "Verkehr": {
-        "spellings": [],
+        "meaning": "A transport sector is a sector that covers transport of people and/or goods.",
+        "spellings": [
+         "Verkehrssektor"
+        ],
         "uri": "OEO_00000422"
        }
       },
@@ -1326,6 +1389,7 @@
       },
       "x-options": {
        "Gemeindegebiet": {
+        "meaning": "Das ganze Gemeinde- oder Stadtgebiet des Plans.",
         "spellings": [
          "Gesamtstadt",
          "Stadtgebiet",
@@ -1335,6 +1399,7 @@
         "uri": "municipality"
        },
        "Teilgebiet": {
+        "meaning": "Ein benannter Teil davon: ein Quartier, ein Fokusgebiet, ein Wärmenetzgebiet.",
         "spellings": [
          "Fokusgebiet",
          "Quartier",
@@ -1795,6 +1860,7 @@
       },
       "x-options": {
        "arithmetic mean": {
+        "meaning": "average value calculated by arithmetic mean over a set of data values, e.g. within a time step or spatial region",
         "spellings": [
          "Mittelwert",
          "Durchschnitt"
@@ -1802,12 +1868,14 @@
         "uri": "OEO_00140071"
        },
        "instantaneous": {
+        "meaning": "value measured at or modelled for exactly one 0-dim temporal region, referenced by a time stamp, e.g. to represent a time step in a time series",
         "spellings": [
          "Momentanwert zu einem Zeitpunkt"
         ],
         "uri": "OEO_00140069"
        },
        "integral": {
+        "meaning": "sum or integral of values, e.g. within a time step or a spatial region",
         "spellings": [
          "Summe oder Integral über einen Zeitraum oder ein Gebiet",
          "Jahreswert",
@@ -1816,6 +1884,7 @@
         "uri": "OEO_00140070"
        },
        "maximum": {
+        "meaning": "maximum value within a set of data values, e.g. in a time step or spatial region",
         "spellings": [
          "Maximum",
          "Spitzenwert",
@@ -1824,6 +1893,7 @@
         "uri": "OEO_00140073"
        },
        "minimum": {
+        "meaning": "minimum value within a set of data values, e.g. in a time step or spatial region",
         "spellings": [
          "Minimum",
          "Tiefstwert"
@@ -1946,6 +2016,7 @@
       },
       "x-options": {
        "Abwasserwärme": {
+        "meaning": "Artificial ambient thermal energy is ambient thermal energy that has an anthropogenic origin.",
         "spellings": [
          "Abwasser"
         ],
@@ -1958,10 +2029,13 @@
         "uri": "OEO_00010114"
        },
        "Biogas": {
-        "spellings": [],
+        "spellings": [
+         "aufbereitetes Biogas"
+        ],
         "uri": "OEO_00000074"
        },
        "Biogut": {
+        "meaning": "A biogenic municipal waste fuel is a municipal waste fuel that has a biogenic origin.",
         "spellings": [
          "Gartenabfälle",
          "Grünschnitt"
@@ -1976,11 +2050,9 @@
         "uri": "OEO_00010214"
        },
        "Biomethan": {
-        "spellings": [],
         "uri": "OEO_00010215"
        },
        "Braunkohle": {
-        "spellings": [],
         "uri": "OEO_00000251"
        },
        "Erdgas": {
@@ -1992,12 +2064,13 @@
        "Fernwärme": {
         "spellings": [
          "Wärmenetze",
-         "Wärmenetz"
+         "Wärmenetz",
+         "Nahwärme"
         ],
         "uri": "OEO_00000132"
        },
        "Flüssiggas": {
-        "spellings": [],
+        "meaning": "Liquefied petroleum gas (LPG) is gas mixture of hydrocarbon gases, mainly propane and butane.",
         "uri": "OEO_00320011"
        },
        "Geothermie": {
@@ -2006,7 +2079,8 @@
          "oberflächennahe Geothermie",
          "Tiefengeothermie",
          "Erdwärmesonde",
-         "Erdwärmekollektor"
+         "Erdwärmekollektor",
+         "Oberflächengeothermie"
         ],
         "uri": "OEO_00000191"
        },
@@ -2019,19 +2093,22 @@
        "Holz": {
         "spellings": [
          "Holzpellets",
-         "Pellets"
+         "Pellets",
+         "Hackschnitzel",
+         "Brennholz",
+         "Holzenergie"
         ],
         "uri": "OEO_00000449"
        },
        "Klärschlamm": {
-        "spellings": [],
+        "meaning": "A waste fuel is a fuel in which the material entity is waste.",
         "uri": "OEO_00000439"
        },
        "Kohle": {
-        "spellings": [],
         "uri": "OEO_00000088"
        },
        "Oberflächengewässer": {
+        "meaning": "Natural ambient thermal energy is ambient thermal energy that has a renewable origin.",
         "spellings": [
          "Seethermie",
          "Flusswärme"
@@ -2039,6 +2116,7 @@
         "uri": "OEO_00140104"
        },
        "Siedlungsabfälle": {
+        "meaning": "A municipal waste fuel is waste fuel produced by households or non-industrial commercial activities.",
         "spellings": [
          "Abfall",
          "thermische Abfallverwertung"
@@ -2046,27 +2124,36 @@
         "uri": "OEO_00000290"
        },
        "Solarthermie": {
-        "spellings": [],
+        "spellings": [
+         "solare Wärme"
+        ],
         "uri": "OEO_00000388"
        },
        "Sonstige": {
+        "meaning": "Etwas, das keiner der übrigen Einträge dieser Liste ist.",
         "spellings": [
          "Andere",
-         "sonstige Energieträger"
+         "sonstige Energieträger",
+         "Sonstige Wärmequellen",
+         "Rest"
         ],
         "uri": "out:other"
        },
        "Steinkohle": {
-        "spellings": [],
         "uri": "OEO_00000204"
        },
        "Strom": {
+        "meaning": "Electrical energy is a form of energy derived from the potential or kinetic energy of charged particles.",
         "spellings": [
-         "Elektrizität"
+         "Elektrizität",
+         "Heizungsstrom",
+         "Wärmestrom",
+         "Direktstrom"
         ],
         "uri": "OEO_00000139"
        },
        "Summe": {
+        "meaning": "Eine Zeile, die ausdrücklich über alle Einträge summiert.",
         "spellings": [
          "Gesamt",
          "Gesamtwert",
@@ -2077,11 +2164,17 @@
         "uri": "out:total"
        },
        "Umweltwärme": {
-        "spellings": [],
+        "meaning": "Ambient thermal energy is thermal energy that is stored in the ambient air, beneath the surface of solid earth or in surface water. It is captured by heat pumps.",
+        "spellings": [
+         "Umgebungswärme",
+         "Umgebungsluft"
+        ],
         "uri": "OEO_00000056"
        },
        "Wasserstoff": {
-        "spellings": [],
+        "spellings": [
+         "H2"
+        ],
         "uri": "OEO_00000220"
        },
        "biogener Festbrennstoff": {
@@ -2098,10 +2191,10 @@
         "uri": "OEO_00010155"
        },
        "industrielle Abwärme": {
-        "spellings": [],
         "uri": "OEO_00310004"
        },
        "tierische Exkremente": {
+        "meaning": "An angricultural waste fuel is waste fuel produced by agriculture.",
         "spellings": [
          "Schlachtreste"
         ],
@@ -2279,18 +2372,23 @@
       },
       "x-options": {
        "Anteil in Prozent": {
+        "meaning": "Ein Anteil in Prozent, keine Menge.",
         "spellings": [
-         "Anteil am Gesamtverbrauch"
+         "Anteil am Gesamtverbrauch",
+         "EE-Anteil",
+         "Anteil erneuerbarer Energien"
         ],
         "uri": "out:share"
        },
        "Einsparung": {
+        "meaning": "Eine Differenz gegenüber einem Vergleichsjahr, keine Menge.",
         "spellings": [
          "Reduktion gegenüber einem Vergleichsjahr"
         ],
         "uri": "out:saving"
        },
        "Erzeugung oder Bereitstellung": {
+        "meaning": "Erzeugte oder bereitgestellte Energie, also die Seite vor dem Endverbrauch.",
         "spellings": [
          "Wärmeerzeugung",
          "Einspeisung",
@@ -2300,6 +2398,7 @@
         "uri": "out:generation"
        },
        "Nutzenergie": {
+        "meaning": "Die Wärme hinter dem Erzeuger, nach der Umwandlung: Nutzwärme, Heizwärme, Raumwärme. Nicht die an den Endverbraucher gelieferte Endenergie.",
         "spellings": [
          "Nutzwärme",
          "Heizwärme"
@@ -2307,6 +2406,7 @@
         "uri": "out:useful_energy"
        },
        "Potenzial": {
+        "meaning": "Ein erschließbares Maximum, keine im Bilanzjahr verbrauchte oder ausgestoßene Menge.",
         "spellings": [
          "Ausbaupotenzial",
          "technisches Potenzial",
@@ -2315,10 +2415,11 @@
         "uri": "out:potential"
        },
        "etwas anderes": {
-        "spellings": [],
+        "meaning": "Etwas, das keiner der übrigen Einträge dieser Liste ist.",
         "uri": "out:other"
        },
        "final energy consumption value": {
+        "meaning": "A final energy consumption value is an energy consumption value expressing the magnitude of the energy delivered to and consumed by end users.",
         "spellings": [
          "Endenergieverbrauch",
          "Endenergie",
@@ -2328,11 +2429,14 @@
          "Fernwärmeverbrauch",
          "Stromverbrauch",
          "Erdgasverbrauch",
-         "zu deckender Wärmebedarf"
+         "zu deckender Wärmebedarf",
+         "Jahresendenergiebedarf",
+         "Endenergiebedarf für Wärme"
         ],
         "uri": "OEO_00050016"
        },
        "primary energy consumption value": {
+        "meaning": "A primary energy consumption value is an energy consumption value expressing the magnitude of the total consumption of energy in a spatial region excluding the non-energetic use of fuels.",
         "spellings": [
          "Primärenergieverbrauch",
          "Primärenergie"
@@ -2340,7 +2444,7 @@
         "uri": "OEO_00050018"
        },
        "spezifischer Wert je Fläche, Kopf oder Einwohner": {
-        "spellings": [],
+        "meaning": "Ein Wert je Fläche, Kopf, Gebäude oder Kilowattstunde, keine Gesamtmenge.",
         "uri": "out:specific"
        }
       },
@@ -2433,15 +2537,21 @@
       },
       "x-options": {
        "Bestand": {
+        "meaning": "Erhoben oder bilanziert für ein vergangenes oder das laufende Jahr.",
         "spellings": [
          "Ist-Zustand",
          "Bilanzjahr",
          "Status quo",
-         "Bestandsanalyse"
+         "Bestandsanalyse",
+         "Basisjahr",
+         "Ist-Zustandsanalyse",
+         "Ist-Analyse",
+         "Erstellungsjahr"
         ],
         "uri": "status_quo"
        },
        "Trendszenario": {
+        "meaning": "Die Fortschreibung ohne zusätzliche Maßnahmen.",
         "spellings": [
          "Referenzszenario",
          "Weiter-wie-bisher",
@@ -2450,6 +2560,7 @@
         "uri": "trend"
        },
        "Variante oder Sensitivität neben dem Szenario": {
+        "meaning": "Eine Rechenvariante, die der Plan neben sein Szenario stellt, um eine Bandbreite zu zeigen.",
         "spellings": [
          "Variante",
          "Sensitivität",
@@ -2458,6 +2569,7 @@
         "uri": "out:variant"
        },
        "Zielszenario": {
+        "meaning": "Der angestrebte Zustand eines künftigen Jahres, wie der Plan ihn erreichen will.",
         "spellings": [
          "Zielbild",
          "Zielwert",
@@ -2550,6 +2662,7 @@
       },
       "x-options": {
        "GHD": {
+        "meaning": "A commercial sector is a sector that covers non-industrial commercial activities.",
         "spellings": [
          "Gewerbe, Handel, Dienstleistungen",
          "Gewerbe/Handel/Dienstleistungen",
@@ -2558,30 +2671,39 @@
          "kommunale Einrichtungen",
          "GHD/Kommune",
          "Gewerbe",
-         "wirtschaftlich genutzte Gebäude"
+         "wirtschaftlich genutzte Gebäude",
+         "kommerzieller Sektor"
         ],
         "uri": "OEO_00000405"
        },
        "Industrie": {
-        "spellings": [],
+        "meaning": "An industry sector is a sector that covers industrial activities with other main purposes of energy transformation.",
+        "spellings": [
+         "Industriesektor",
+         "verarbeitendes Gewerbe"
+        ],
         "uri": "OEO_00000227"
        },
        "Landwirtschaft": {
+        "meaning": "A agriculture, forestry and land use (AFOLU) sector is a sector that covers activities and natural processes from agriculture, forestry, land use and land use change.",
         "spellings": [
          "Land- und Forstwirtschaft"
         ],
         "uri": "OEO_00010035"
        },
        "Private Haushalte": {
+        "meaning": "A household sector is a sector that covers households.",
         "spellings": [
          "Haushalte",
          "Privathaushalte",
          "Wohnen",
-         "Wohngebäude"
+         "Wohngebäude",
+         "Haushaltssektor"
         ],
         "uri": "OEO_00000214"
        },
        "Summe": {
+        "meaning": "Eine Zeile, die ausdrücklich über alle Einträge summiert.",
         "spellings": [
          "Gesamt",
          "alle Sektoren",
@@ -2590,7 +2712,10 @@
         "uri": "out:total"
        },
        "Verkehr": {
-        "spellings": [],
+        "meaning": "A transport sector is a sector that covers transport of people and/or goods.",
+        "spellings": [
+         "Verkehrssektor"
+        ],
         "uri": "OEO_00000422"
        }
       },
@@ -2674,6 +2799,7 @@
       },
       "x-options": {
        "Gemeindegebiet": {
+        "meaning": "Das ganze Gemeinde- oder Stadtgebiet des Plans.",
         "spellings": [
          "Gesamtstadt",
          "Stadtgebiet",
@@ -2683,6 +2809,7 @@
         "uri": "municipality"
        },
        "Teilgebiet": {
+        "meaning": "Ein benannter Teil davon: ein Quartier, ein Fokusgebiet, ein Wärmenetzgebiet.",
         "spellings": [
          "Fokusgebiet",
          "Quartier",
