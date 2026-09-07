@@ -61,9 +61,21 @@ Eine Koordinate endet immer mit einem Zustand, nie leer:
 | | |
 |---|---|
 | `read` | gelesen, die Passage trägt die Angabe |
+| `derived` | nicht gefragt, die Spec entscheidet sie aus der Einheit |
 | `unstated` | gefragt, das Dokument sagt es nicht — erst nach dem Durchkämmen |
+| `unbacked` | geantwortet, die zitierte Passage trägt es nicht |
 | `exhausted` | noch offen, als das Budget endete |
 | `unanswered` | keine Antwort auf diese Zeile |
+| `out_of_slice` | nie gefragt, eine Torkoordinate hat die Zeile ausgeschlossen |
 
 `unstated` ist ein Befund über den Plan, `exhausted` einer über den Lauf. Sie
 zusammenzuwerfen ist der Fehler, wegen dem es diese Zustände gibt.
+
+Jede Erntedatei endet mit einer `kind: summary`-Zeile: Verteilung über die
+Vertrauensstufen A, B und C, die Gründe und die Bildherkunft. Konflikt und
+Zweitlesung stehen nicht darin, die kennt erst der Serializer.
+
+Neben dem Wert steht immer der Wortlaut (`<achse>_raw`) und die Passage
+(`<achse>_quote`). Deshalb kostet eine gewachsene Optionsliste `--remap`
+statt eines Korpuslaufs, und der Stempel trägt je Parameter und je Achse
+einen Fingerabdruck, damit ein Lauf sieht, welche Frage sich geändert hat.
