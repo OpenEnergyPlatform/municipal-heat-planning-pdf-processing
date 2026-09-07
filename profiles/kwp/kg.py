@@ -24,6 +24,7 @@ from pathlib import Path
 from typing import Optional
 
 from docpipe.extraction.fields import DERIVED
+from docpipe.extraction.trust import sentence as trust_sentence, trust
 
 log = logging.getLogger(__name__)
 
@@ -204,7 +205,7 @@ def _iso_date(raw) -> str:
 
 
 def _document_identity(db_path: Path, name: str):
-    """(ags 8-digit, published YYYY-MM-DD, municipality name) or None."""
+    """(ags, published, municipality name, transcribed page count) or None."""
     conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
     try:
         row = conn.execute(
@@ -213,6 +214,17 @@ def _document_identity(db_path: Path, name: str):
         if row is None:
             return None
         document_id, published = row
+        try:
+            # How many of this plan's pages a MODEL read rather than the PDF.
+            # Eleven plans of the corpus have no text layer at all, and their
+            # section text is itself a reading -- a value from one of them
+            # cannot be an A no matter how local its passages are. NULL where
+            # nobody looked, which is not the same as zero.
+            transcribed = conn.execute(
+                "SELECT page_text_transcribed FROM Documents WHERE id = ?",
+                (document_id,)).fetchone()[0]
+        except sqlite3.OperationalError:      # a database predating WP11
+            transcribed = None
         try:
             meta = conn.execute(
                 "SELECT dm.municipality_ags, m.name FROM DocumentMeta dm "
@@ -228,7 +240,7 @@ def _document_identity(db_path: Path, name: str):
     published = _iso_date(published)
     if not ags.isdigit() or not re.fullmatch(r"\d{4}-\d{2}-\d{2}", published):
         return None
-    return ags.zfill(8), published, (meta[1] if meta else None)
+    return ags.zfill(8), published, (meta[1] if meta else None), transcribed
 
 
 def _value_iri(heatplan: str, row: dict) -> str:
@@ -266,7 +278,9 @@ def _ttl_comment(text) -> str:
     return "# " + flat[:400]
 
 
-def evidence_comment(row: dict, document: str) -> list:
+def evidence_comment(row: dict, document: str, *,
+                     transcribed: bool = False,
+                     conflict: bool = False) -> list:
     """Where this value was read, as comment lines above its node.
 
     The prototype's evidence: the wording the document used, the passage it
@@ -274,6 +288,12 @@ def evidence_comment(row: dict, document: str) -> list:
     because the shapes are sh:closed and an extra triple on a value node
     invalidates it.
     """
+    # How much of this value the run can stand behind, in the one place a
+    # reader of the graph looks. Every accepted tuple is verified, and that
+    # is a floor and not a grade: a value with every coordinate read off its
+    # own table and one with its year read off another table's caption both
+    # clear it, and the graph showed a reader two numbers.
+    verdict = trust(row, transcribed=transcribed, conflict=conflict)
     prov = row.get("provenance") or {}
     where = [f"{document}.pdf"]
     if prov.get("page"):
@@ -309,6 +329,7 @@ def evidence_comment(row: dict, document: str) -> list:
         lines.append(_ttl_comment(f"berechnet: {row['compute']}"))
     if row.get("flags"):
         lines.append(_ttl_comment("Flags: " + ", ".join(row["flags"])))
+    lines.append(_ttl_comment(trust_sentence(verdict, row)))
     return lines
 
 
@@ -385,7 +406,7 @@ def make_serializer(db_path: Path):
             log.warning("kg: %s: no AGS or publication date — %d tuple(s) "
                         "not serialized", name, len(kept))
             return None
-        ags, published, municipality = identity
+        ags, published, municipality, transcribed = identity
         owner = claimed.setdefault((ags, published), name)
         if owner != name:
             log.error("kg: %s claims AGS %s / %s already serialized for %s — "
@@ -482,7 +503,8 @@ def make_serializer(db_path: Path):
     oeo:OEO_00140002 {value_refs} .
 """)
         for iri, row in values.items():
-            lines = evidence_comment(row, name)
+            lines = evidence_comment(row, name,
+                                     transcribed=bool(transcribed))
             lines += [f"<{iri}>",
                       f"    a oeo:{row['quantity']} ;",
                      f"    oeo:{P_NUMBER} \"{float(row['value_target'])!r}\"^^xsd:float ;",
