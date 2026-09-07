@@ -263,6 +263,15 @@ def _sentence_around(source: str, start: int, end: int, span: int = 320) -> str:
     return passage if len(passage) >= _MIN_PASSAGE else source[lo:hi].strip()
 
 
+# A passage shorter than this identifies nothing. "2030" sits in every plan
+# a hundred times over, so it proves that the model can read a number and
+# nothing about where it read THIS one. The value quote has been held to it
+# since the first corpus run; the coordinate quotes were not, although
+# field.md rule 3 promises the same, and three of Kassel's year readings were
+# the bare year.
+MIN_QUOTE_CHARS = 8
+
+
 def _repair_quote(raw: dict, parameter: Parameter, source: str) -> Optional[str]:
     """The passage the source itself gives for this value, or None.
 
@@ -279,7 +288,7 @@ def _repair_quote(raw: dict, parameter: Parameter, source: str) -> Optional[str]
     if len(spans) != 1:
         return None
     passage = _sentence_around(source, *spans[0])
-    return passage if len(passage) >= 8 else None
+    return passage if len(passage) >= MIN_QUOTE_CHARS else None
 
 
 def verify_tuple(raw: dict, parameter: Parameter, source_text: str, *,
@@ -389,7 +398,7 @@ def verify_tuple(raw: dict, parameter: Parameter, source_text: str, *,
                                     f"{list(axis.enum or ())}")
 
     quote = raw.get("quote")
-    if not isinstance(quote, str) or len(quote) < 8:
+    if not isinstance(quote, str) or len(quote) < MIN_QUOTE_CHARS:
         return Refusal(raw, "quote missing or too short to identify anything")
     if not quote_in(source_text, quote):
         repaired = _repair_quote(

@@ -517,7 +517,8 @@ def _fieldwise(monkeypatch, spec, rows_reply, answers):
                         lambda *a, **kw: (lambda batch, prior=None: rows_reply))
 
     def make_asker(image_root=None):
-        def ask(shown, rows, slots, corrections=None, document_id=None):
+        def ask(shown, rows, slots, corrections=None, document_id=None,
+                usage_out=None):
             slots = slots if isinstance(slots, (list, tuple)) else [slots]
             for slot in slots:
                 asked.append(slot.name)
@@ -602,7 +603,8 @@ def _gated(monkeypatch, spec, rows_reply, answers, gate):
                         lambda *a, **kw: (lambda batch, prior=None: rows_reply))
 
     def make_asker(image_root=None):
-        def ask(shown, rows, slots, corrections=None, document_id=None):
+        def ask(shown, rows, slots, corrections=None, document_id=None,
+                usage_out=None):
             slots = slots if isinstance(slots, (list, tuple)) else [slots]
             labels = sorted(r.label for r in rows)
             for slot in slots:
@@ -737,7 +739,8 @@ def test_the_coordinates_of_a_row_go_out_in_one_request(monkeypatch):
                         lambda *a, **kw: (lambda batch, prior=None: rows_reply))
 
     def make_asker(image_root=None):
-        def ask(shown, rows, slots, corrections=None, document_id=None):
+        def ask(shown, rows, slots, corrections=None, document_id=None,
+                usage_out=None):
             slots = slots if isinstance(slots, (list, tuple)) else [slots]
             calls.append([s.name for s in slots])
             out = {}
@@ -776,3 +779,196 @@ def test_the_coordinates_of_a_row_go_out_in_one_request(monkeypatch):
     assert row["scenario_state"] == fields.READ
     assert row["carrier_state"] == fields.READ
     assert row["carrier_quote"] == quote, "and carries its own evidence"
+
+
+# ---------------------------------------------------------------------------
+# What a reading is worth once it exists
+#
+# Four promises, one folding step. A coordinate that was read and backed is
+# final, a four-character quote is not a passage, every reading says where and
+# when it was read, and a choice that arrives without the words it was read
+# from is counted because it can never be re-mapped.
+# ---------------------------------------------------------------------------
+
+def _one_row(profile_pair, kind=None):
+    """A parameter, its batch, one row and a slot of the wanted kind."""
+    _name, spec = profile_pair
+    for parameter in spec.parameters:
+        slots = [s for s in fields.axis_slots(parameter)
+                 if kind is None or s.kind == kind]
+        if not slots:
+            continue
+        batch = _batch(parameter)
+        rows, _ = rows_from_reply(batch, _value_reply(parameter, batch.label(0)))
+        if rows:
+            return batch, rows, slots[0]
+    return None, None, None
+
+
+def test_a_read_coordinate_is_not_overwritten_by_a_later_window(profile):
+    """The promise: a coordinate that was read and backed keeps its value,
+    its wording and its passage, whatever a later window answers.
+
+    Measured on Kassel: table 10 was read as useful energy in a trend scenario
+    in its own window and rewritten to final energy in the target scenario by
+    a later window that showed the appendix. 7 value nodes carried the second
+    reading, 10 more tuples collided with the first and took six identities
+    down with them. The last speaker does not own the coordinate.
+    """
+    batch, rows, slot = _one_row(profile)
+    if batch is None:
+        pytest.skip("this profile has no axes")
+    quote = rows[0].claim["quote"]
+    first = quote.strip().split()[0]
+    merge_field(rows, batch.sources, slot, {"answers": {rows[0].label: {
+        "value": "gelesen", "value_raw": first, "quote": quote}}})
+    assert rows[0].claim[f"{slot.name}_state"] == fields.READ
+
+    later = Source("section", 4242, "Ganz woanders steht gelesen anders.", {})
+    counts = merge_field(rows, [later], slot, {"answers": {rows[0].label: {
+        "value": "anders", "value_raw": "anders",
+        "quote": "Ganz woanders steht gelesen anders."}}})
+    assert rows[0].claim[slot.name] == "gelesen", "a reading is final"
+    assert rows[0].claim[f"{slot.name}_raw"] == first
+    assert rows[0].claim[f"{slot.name}_quote"] == quote
+    assert counts["filled"] == 0, "and the second answer is not counted as one"
+
+
+def test_a_quote_too_short_to_name_a_place_is_not_evidence(profile):
+    """The promise: a passage under MIN_QUOTE_CHARS leaves the coordinate
+    open, whatever else is right about the answer.
+
+    "2030" stands in a heat plan a hundred times over, so it proves the model
+    can read a number and nothing about where it read THIS one. field.md rule
+    3 promises eight characters and only the value quote was ever held to it.
+    Kassel cited the bare year three times.
+    """
+    from docpipe.extraction.verify import MIN_QUOTE_CHARS
+    batch, rows, slot = _one_row(profile)
+    if batch is None:
+        pytest.skip("this profile has no axes")
+    short = "2030"
+    assert len(short) < MIN_QUOTE_CHARS
+    sources = [Source("table", 77, f"| Jahr | {short} |", {})]
+    counts = merge_field(rows, sources, slot, {"answers": {rows[0].label: {
+        "value": short, "value_raw": short, "quote": short}}})
+    assert counts["filled"] == 0
+    assert rows[0].claim[f"{slot.name}_state"] == fields.UNBACKED
+    assert [f["why"] for f in counts["failed"]] == ["quote_too_short"]
+
+    # The same reading in a passage that names a place is taken.
+    long = f"| Endenergie gesamt | {short} | 1.234 |"
+    assert len(long) >= MIN_QUOTE_CHARS
+    counts = merge_field(rows, [Source("table", 77, long, {})],
+                         slot, {"answers": {rows[0].label: {
+                             "value": short, "value_raw": short,
+                             "quote": long}}})
+    assert counts["filled"] == 1
+
+
+def test_every_reading_says_which_passage_and_which_window_it_came_from(profile):
+    """The promise: a read coordinate carries the owner its passage was found
+    in and the window it was read in.
+
+    Whether a reading is local to its row or borrowed from elsewhere in the
+    document is the question the Kassel review could only answer by hand: 370
+    of 455 year readings cited a passage outside the row's own table and its
+    section, and not one of them said so. A boolean "some source had it"
+    cannot be asked that question afterwards.
+    """
+    batch, rows, slot = _one_row(profile)
+    if batch is None:
+        pytest.skip("this profile has no axes")
+    quote = rows[0].claim["quote"]
+    near = Source("section", 4711, f"Im Abschnitt steht: {quote}", {})
+    merge_field(rows, [near], slot, {"answers": {rows[0].label: {
+        "value": "gelesen", "value_raw": quote.strip().split()[0],
+        "quote": quote}}}, window=("retrieval", 3))
+    assert rows[0].claim[f"{slot.name}_source"] == ["section", 4711]
+    assert rows[0].claim[f"{slot.name}_window"] == ["retrieval", 3]
+
+
+def test_a_choice_without_its_wording_is_counted_as_unmappable(profile):
+    """The promise: a choice read without value_raw is counted, because it can
+    never be re-mapped when the vocabulary moves.
+
+    The URI is all that survives such a reading and the words the model
+    resolved to it are gone, so an alias added later cannot be applied to it
+    offline. That is the difference between minutes of re-mapping and a
+    93-GPU-hour re-harvest of 1,082 plans. The absence of the key is the
+    marker a top-up looks for, so nothing is invented to fill it.
+    """
+    batch, rows, slot = _one_row(profile, kind=fields.CHOICE)
+    if batch is None:
+        pytest.skip("this profile has no choice axis")
+    label = slot.options[0].label
+    quote = f"In der Tabelle steht {label} als Zeilenbeschriftung."
+    counts = merge_field(rows, [Source("table", 5, quote, {})],
+                         slot, {"answers": {rows[0].label: {
+                             "value": label, "quote": quote}}})
+    assert counts["filled"] == 1, "it is still a reading"
+    assert counts["raw_missing"] == 1
+    assert f"{slot.name}_raw" not in rows[0].claim
+
+    # With the wording it is mappable and not counted.
+    batch, rows, slot = _one_row(profile, kind=fields.CHOICE)
+    counts = merge_field(rows, [Source("table", 5, quote, {})],
+                         slot, {"answers": {rows[0].label: {
+                             "value": label, "value_raw": label,
+                             "quote": quote}}})
+    assert counts["raw_missing"] == 0
+    assert rows[0].claim[f"{slot.name}_raw"] == label
+
+
+def test_the_trace_names_the_field_that_filled_and_the_field_that_dropped(
+        monkeypatch):
+    """The promise: a field event says which coordinate filled and which
+    failed, and a drop event names the coordinate it belongs to.
+
+    Five fields answer in one reply. A run that logs
+    "aggregation+carrier+sector+year+spatial_scope: 3 filled, 2 unbacked"
+    cannot say which two were dropped, and on one corpus group 7,738 unbacked
+    and 3,110 unquoted answers were not attributable to any coordinate. The
+    knob that would fix them cannot be found in a number that names five
+    things at once.
+    """
+    spec, rows_reply = _two_row_spec_and_reply()
+    consumption = spec.parameters[0]
+    good = "| Erdgas | 42.005 | MWh/a |"
+
+    def answers(slot, rows):
+        if slot.name == "parameter":
+            return {"answers": {r.label: {"value": consumption.label,
+                                          "value_raw": "MWh/a",
+                                          "quote": good} for r in rows}}
+        if slot.name == "carrier":
+            return {"answers": {r.label: {"value": "Erdgas",
+                                          "value_raw": "Erdgas",
+                                          "quote": good} for r in rows}}
+        if slot.name == "sector":
+            return {"answers": {r.label: {
+                "value": "Haushalte", "value_raw": "Haushalte",
+                "quote": "Diese Passage steht in keiner gezeigten Quelle."}
+                for r in rows}}
+        return {"answers": {}}
+
+    events = []
+    monkeypatch.setattr(runner.trace, "event",
+                        lambda kind, doc, **kw: events.append((kind, kw)))
+    harvest, _asked = _gated(monkeypatch, spec, rows_reply, answers, {})
+    harvest(_document_batch())
+
+    fields_events = [kw for kind, kw in events if kind == "field"
+                     and "carrier" in (kw.get("slot") or "")]
+    assert fields_events, "the axes were asked"
+    first = fields_events[0]
+    assert first["filled_by"].get("carrier") == 2, "carrier read both rows"
+    assert "sector" not in first["filled_by"]
+    assert first["unbacked_by"].get("sector") == 2
+    assert "carrier" not in first["unbacked_by"]
+
+    dropped = [kw for kind, kw in events if kind == "drop"]
+    assert dropped, "a failed coordinate is a drop"
+    assert {d["field"] for d in dropped} == {"sector"}, (
+        "and the drop names the coordinate, not the request")
+    assert {d["why"] for d in dropped} == {"quote_not_in_source"}
