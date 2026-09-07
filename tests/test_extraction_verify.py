@@ -420,3 +420,50 @@ def test_a_subscript_two_resolves_to_the_class_and_is_not_flagged():
     assert isinstance(out, Verified), getattr(out, "reason", out)
     assert out.tuple["quantity"] == "OEO_00340066"
     assert not [f for f in out.flags if f.startswith(("unmapped:", "mapped:"))]
+
+
+def test_a_bare_amount_says_whether_its_quote_makes_it_a_yearly_one():
+    """The year on a tuple is not a label, it is the period the amount is
+    integrated over (aggregation OEO_00140070, "sum or integral within a time
+    step"). A unit of "GWh" does not say that period, so the passage has to,
+    and a graph that writes a year beside a storage capacity has invented it.
+
+    Measured on Kassel: 23 accepted tuples carried a bare GWh or t, 11 of
+    them in a sentence saying "pro Jahr", 3 a storage capacity.
+    """
+    parameter = load({"parameters": [{
+        "uri": "OEO_00050016",
+        "label": "final energy consumption value",
+        "description": "Endenergieverbrauch je Energieträger, Sektor und "
+                       "Jahr, wie im Plan bilanziert.",
+        "unit_target": "OEO_00050008",
+        # A bare amount and a rate, both accepted, as the kwp spec has them:
+        # a plan writes "GWh" for a yearly figure as often as "GWh/a".
+        "units_accepted": {"kWh": 0.001, "kWh/a": 0.001},
+        "axes": {"carrier": {"vocabulary": {"OEO_00000292": ["Erdgas"]}},
+                 "sector": {"vocabulary": {"OEO_00000214":
+                                           ["Private Haushalte"]}},
+                 "year": {"type": "int"},
+                 "scenario": {"enum": ["status_quo", "trend", "target",
+                                       "unknown"]}},
+        "example": {"source": "| Erdgas | 1.036.767.833 | kWh/a in 2020 |",
+                    "tuples": [{"value": 1036767833, "unit_raw": "kWh/a"}]},
+    }]}).by_uri["OEO_00050016"]
+    source = ("Der Waermeverbrauch betrug pro Jahr rund 1.036.767.833 kWh. "
+              "Die Speicherkapazitaet liegt bei 203.458.519 kWh.")
+    annual = verify_tuple(_claim(unit="kWh", unit_raw="kWh", quote=(
+        "Der Waermeverbrauch betrug pro Jahr rund 1.036.767.833 kWh")),
+        parameter, source)
+    assert isinstance(annual, Verified), getattr(annual, "reason", annual)
+    assert "period:annual_in_quote" in annual.flags
+
+    stock = verify_tuple(_claim(value=203458519, unit="kWh", unit_raw="kWh",
+                                quote=("Die Speicherkapazitaet liegt bei "
+                                       "203.458.519 kWh")),
+                         parameter, source)
+    assert isinstance(stock, Verified), getattr(stock, "reason", stock)
+    assert "period:unstated" in stock.flags
+
+    # A unit that says it itself needs no flag at all.
+    stated = verify_tuple(_claim(), _parameter(), SOURCE)
+    assert not [f for f in stated.flags if f.startswith("period:")]

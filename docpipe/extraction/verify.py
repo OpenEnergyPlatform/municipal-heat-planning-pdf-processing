@@ -32,7 +32,7 @@ import re
 from dataclasses import dataclass, field
 from typing import Callable, Optional
 
-from .spec import Parameter, fold_label
+from .spec import Parameter, fold_label, states_a_year
 
 TIER_TEXT = "text_located"
 TIER_VISUAL = "visual_source"
@@ -417,6 +417,15 @@ def verify_tuple(raw: dict, parameter: Parameter, source_text: str, *,
         else:
             return Refusal(raw, f"value {raw.get('value')!r} does not occur "
                                 f"in the quote")
+
+    if parameter.is_numeric and not states_a_year(raw.get("unit_raw")
+                                                  or raw.get("unit") or ""):
+        # The unit is a plain amount, so what makes it a yearly one is the
+        # passage or nothing. An integral needs the period it runs over, and
+        # a graph that writes a year beside a storage capacity has invented
+        # that period rather than read it.
+        flags.append("period:annual_in_quote" if states_a_year(quote)
+                     else "period:unstated")
 
     rects = None
     if owner_kind in TEXT_KINDS:
