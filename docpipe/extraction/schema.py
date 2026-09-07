@@ -493,15 +493,22 @@ def stamp_schema() -> dict:
                                     "outvote every key below it."},
             "model": {"type": "string", "description": "the serving model"},
             "anchors": {"type": "string", "pattern": "^([0-9a-f]{16})?$",
-                        "description": "The questions the anchors were "
-                                       "written for, the anchor prompt, the "
-                                       "model and the profile's frozen set, "
-                                       "together. The anchors decide which "
-                                       "passages a document was read from, "
-                                       "so a document read under one set is "
-                                       "not the same result as one read "
-                                       "under another. Empty when anchors "
-                                       "were off."},
+                        "description": "The anchor prompt, the model, the "
+                                       "version of the target set and the "
+                                       "profile's frozen anchor file, "
+                                       "together. NOT the questions: which "
+                                       "question was asked is carried by the "
+                                       "parameter/, value/, axis/ and slot/ "
+                                       "keys, and a question that is GONE by "
+                                       "the rule that a key the stamp still "
+                                       "carries and the run no longer asks "
+                                       "makes the document stale. The "
+                                       "anchors decide which passages a "
+                                       "document was read from, so a "
+                                       "document read under one set is not "
+                                       "the same result as one read under "
+                                       "another. Empty when anchors were "
+                                       "off."},
             "page_text_transcribed": {
                 "type": ["integer", "null"],
                 "description": "How many pages of this document a model read "

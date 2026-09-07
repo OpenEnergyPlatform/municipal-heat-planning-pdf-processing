@@ -1741,12 +1741,14 @@ def test_a_store_that_cannot_say_which_question_is_reused_for_nothing(
                                  "anchors": {"OEO_00050016": ["Ein Satz."]}}),
                      encoding="utf-8")
     assert runner.load_anchors(store, key, targets) == {}
-    # And the real file from before the map: it does not even reach that
-    # check, because the whole-file key was computed another way. Named
-    # separately, or the test above reads as covering a case it never sees.
-    store.write_text(json.dumps({"key": "1d97bfa2e0def6a3", "model": "m",
-                                 "anchors": {"OEO_00050016": ["Ein Satz."]}}),
-                     encoding="utf-8")
+    # And the case the whole-file key alone stands against, which nothing
+    # else in this test reaches: every per-question key still matches -- the
+    # question tuple did not move -- and only the model or the prompt did.
+    # Written as a real store, so removing the key check really lets three
+    # sets of another model's sentences into the run.
+    runner.save_anchors(store, runner.anchors_key("ein-anderer-satz"),
+                        {t[0]: ["Ein Satz, den ein anderes Modell schrieb."]
+                         for t in targets}, targets)
     assert runner.load_anchors(store, key, targets) == {}
 
 
