@@ -220,26 +220,86 @@ def test_the_graph_carries_both_nodes_the_shapes_target():
     assert "obo:BFO_0000051 <" in ttl           # bundle has part report
 
 
+def _promised():
+    """Every predicate the spec's kg blocks promise, qualified.
+
+    Read out of the spec rather than typed here, because typing it here is
+    what made the graph vocabulary exist in three places at once: the module
+    constants, the f-strings that had no constant, and this list. A list that
+    is maintained by hand beside the thing it checks agrees with it by
+    accident.
+    """
+    import profiles.scenarios.kg as kg
+    out = set()
+    for parameter in kg._SPEC["parameters"]:
+        block = parameter.get("kg") or {}
+        for key in ("property", "also", "edge_from"):
+            if block.get(key):
+                out.add(kg._name(block[key]))
+        for axis in (parameter.get("axes") or {}).values():
+            link = ((axis.get("kg") or {}).get("linked_by"))
+            if link:
+                out.add(kg._name(link))
+    return out
+
+
+# Behind no harvested value, so promised by no parameter: rdf:type and the
+# uuid every OEKG node carries. Named, so that "the spec did not promise it"
+# stays a finding and does not quietly grow a third member.
+STRUCTURAL = {"a", "oeo:OEO_00390095"}
+
+
+def _predicates_in(ttl):
+    """Predicates sit at four spaces; a further object of the same predicate
+    is continued at eight and is not a predicate line. A comment carries the
+    passage and is not a triple at all — that is the point of writing the
+    evidence as one when the shapes are closed."""
+    return {line.split()[0] for line in ttl.splitlines()
+            if line.startswith("    ") and not line.startswith("        ")
+            and line.strip() and not line.lstrip().startswith("#")}
+
+
 def test_nothing_the_closed_shapes_do_not_name_is_emitted(monkeypatch):
     """With OEKG_EVIDENCE=0 the graph is exactly what the closed shapes allow.
     That switch exists because whether they stay closed is still being decided
     — see the module docstring."""
     import profiles.scenarios.kg as kg
     monkeypatch.setattr(kg, "EVIDENCE", False)
-    ttl = _ttl(_rows())
-    allowed = {"a", "rdfs:label", "dc:acronym", "dc:abstract",
-               "oeo:OEO_00390095", "oeo:OEO_00000506", "oeo:OEO_00390096",
-               "oeo:OEO_00390098", "oeo:OEO_00000510", "oeo:OEO_00000509",
-               "obo:BFO_0000051", "oeo:OEO_00390073", "oeo:OEO_00020220",
-               "oeo:OEO_00020440"}
-    # Predicates sit at four spaces; a further object of the same predicate
-    # is continued at eight and is not a predicate line. A comment carries the
-    # passage and is not a triple at all — that is the point of writing the
-    # evidence as one when the shapes are closed.
-    used = {line.split()[0] for line in ttl.splitlines()
-            if line.startswith("    ") and not line.startswith("        ")
-            and line.strip() and not line.lstrip().startswith("#")}
+    allowed = _promised() | STRUCTURAL
+    assert len(allowed) == 14, sorted(allowed)
+    used = _predicates_in(_ttl(_rows()))
     assert used <= allowed, used - allowed
+
+
+def test_every_predicate_the_spec_promises_is_one_the_serializer_writes(
+        monkeypatch):
+    """The direction the drift actually runs. A `kg` block is a promise to a
+    reader of the published schema, and a promise nobody keeps is worse than
+    silence: the block would describe a graph that is not being written, and
+    the JSON schema publishes it as `x-kg`.
+
+    Needs a row for every parameter, so the two that `_scenario_rows` leaves
+    without a resolvable target are given one here: a region and a type are
+    only serialized when the model picked an entry off the list, which is what
+    `value_uri` records.
+    """
+    import profiles.scenarios.kg as kg
+    monkeypatch.setattr(kg, "EVIDENCE", False)
+    where = {"page": 9, "owner_kind": "section", "owner_id": 9}
+    rows = _scenario_rows() + [
+        {"parameter": "scenario_region", "value": "Germany",
+         "value_uri": "https://openenergyplatform.org/ontology/oekg/region/Germany",
+         "scenario": "CurPol", "tier": "text_located",
+         "quote": "CurPol also covers Germany", "provenance": where},
+        {"parameter": "scenario_type", "value": "with existing measures",
+         "value_uri": "https://openenergyplatform.org/ontology/oeo/OEO_00020311",
+         "scenario": "CurPol", "tier": "text_located",
+         "quote": "CurPol is a with existing measures scenario",
+         "provenance": where},
+    ]
+    written = _predicates_in(_ttl(rows))
+    assert _promised() - written == set(), _promised() - written
+    assert written - (_promised() | STRUCTURAL) == set()
 
 
 def test_a_closed_shape_run_still_says_where_every_value_was_read(monkeypatch):
@@ -1049,3 +1109,102 @@ def test_a_scenario_wording_that_fits_several_runs_links_to_none():
     assert kg.scenario_key(row, known) == ("NPi", "NPi")
     assert kg.scenario_key(row, None) == ("EN_NPi2020_400", "NPi"), \
         "without the list there is nothing to call ambiguous"
+
+
+def test_every_parameter_says_which_node_it_lands_on(spec):
+    """A block whose `node` is not a node of this graph describes nothing. The
+    fourteen were silent until this commit, and the preflight could not see it:
+    its check reads the axes, and thirteen of the fourteen have none."""
+    import profiles.scenarios.kg as kg
+    for parameter in kg._SPEC["parameters"]:
+        block = parameter.get("kg") or {}
+        assert block, parameter["uri"]
+        assert block.get("node") in kg.COLLECTIONS, (parameter["uri"],
+                                                     block.get("node"))
+        assert "property" in block, parameter["uri"]
+
+
+def test_a_prefix_no_header_declares_would_not_parse(spec):
+    """`dcterms:abstract` instead of `dc:abstract` writes a Turtle file no
+    reader can load, and it would look right in the diff. The header is the
+    only place that decides, so every block is held to it."""
+    import profiles.scenarios.kg as kg
+    used = set()
+    for parameter in kg._SPEC["parameters"]:
+        block = parameter.get("kg") or {}
+        for key in ("property", "also", "edge_from"):
+            if block.get(key):
+                used.add(block[key]["prefix"])
+        for axis in (parameter.get("axes") or {}).values():
+            link = (axis.get("kg") or {}).get("linked_by")
+            if link:
+                used.add(link["prefix"])
+    assert used == {"rdfs", "dc", "oeo", "obo"}, used
+    for prefix in used:
+        assert f"@prefix {prefix}:" in kg.PREFIXES
+
+
+def test_the_four_scenario_axes_name_one_and_the_same_factsheet():
+    """They are four questions about the same node, so a block that drifts on
+    one of them puts one parameter's values on a node of its own. The class is
+    cross-checked against the parameter that mints the factsheet, which is a
+    different block in a different place."""
+    import profiles.scenarios.kg as kg
+    blocks = [(p["uri"], p["axes"]["scenario"]["kg"])
+              for p in kg._SPEC["parameters"]
+              if "scenario" in (p.get("axes") or {})]
+    assert [uri for uri, _b in blocks] == list(kg.SCENARIO_FIELDS)
+    assert len(blocks) == 4
+    assert all(b == blocks[0][1] for _u, b in blocks)
+    assert blocks[0][1]["role"] == "parent"
+    assert blocks[0][1]["class"] == kg.CLS_SCENARIO
+    assert blocks[0][1]["node"] == "scenariofactsheet"
+    # And the edge it names is really written, on the bundle.
+    ttl = _ttl(_scenario_rows())
+    predicate = kg._name(blocks[0][1]["linked_by"])
+    assert f"    {predicate} <" in ttl
+
+
+def test_the_serializer_dies_at_import_if_the_spec_stops_saying_it(spec):
+    """The constants are reads, not literals with a comment beside them. A
+    parameter whose block loses its predicate must stop the serializer where
+    it is noticed, not write a graph with an empty predicate in it."""
+    import pytest as _pytest
+
+    import profiles.scenarios.kg as kg
+    with _pytest.raises(KeyError):
+        kg._property("publication_title", "no_such_key")
+    with _pytest.raises(KeyError):
+        kg._name({"predicate": "OEO_00000506"})          # no prefix
+    with _pytest.raises(KeyError):
+        kg._name({"prefix": "dcterms", "predicate": "abstract"})
+    with _pytest.raises(KeyError):
+        kg._class("publication_date")                    # mints no node
+    with _pytest.raises(KeyError):
+        kg._kg("no_such_parameter")
+
+
+def test_a_parameter_that_says_nothing_stops_the_serializer(monkeypatch):
+    """Every parameter carries a block today, so the refusal never fires on
+    this spec -- and a refusal that cannot fire is one nobody has run. The
+    fifteenth parameter is the case: read as an empty block it would mint a
+    node with no predicate and the graph would be short one field with no line
+    anywhere saying so."""
+    import pytest as _pytest
+
+    import profiles.scenarios.kg as kg
+    monkeypatch.setattr(kg, "_SPEC", {"parameters": [
+        {"uri": "publication_venue", "label": "Wo erschienen"}]})
+    with _pytest.raises(KeyError, match="says nothing about the graph"):
+        kg._kg("publication_venue")
+
+
+def test_the_preflight_names_a_parameter_that_says_nothing():
+    """The same question the serializer asks, asked in the job prolog where
+    pytest does not run."""
+    from scripts import preflight_profiles as pre
+
+    assert pre.silent_parameters({"parameters": [
+        {"uri": "a", "kg": {"node": "studyreport"}},
+        {"uri": "b"}]}) == ["b"]
+    assert pre.silent_parameters({"parameters": []}) == []

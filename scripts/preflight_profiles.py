@@ -274,6 +274,27 @@ def audit(profile: str) -> None:
     check(profile, "jede Achse sagt, was sie im Graphen wird", not silent,
           ", ".join(silent), fatal=False)
 
+    # And the same question one level up, which was asked nowhere: the axes
+    # of a parameter can all be answered while the parameter's own value says
+    # nothing about the graph it lands in. Thirteen of the fourteen scenarios
+    # parameters have no axis at all, so the axis check above could not see
+    # them. Read from the raw file: `kg` is passed through to the serializer
+    # and is not a field of the loaded Parameter.
+    mute = silent_parameters(json.loads(spec_file.read_text(encoding="utf-8")))
+    check(profile, "jeder Parameter sagt, was er im Graphen wird", not mute,
+          ", ".join(mute), fatal=False)
+
+
+def silent_parameters(raw: dict) -> list:
+    """Which parameters of a raw spec say nothing about the graph.
+
+    A function rather than three lines inside `audit`, because a gate that
+    cannot be handed a failing input is decoration, and `audit` can only be
+    handed the repository's own files -- which are, by the time anyone runs
+    it, the ones that pass.
+    """
+    return [p["uri"] for p in raw.get("parameters", ()) if not p.get("kg")]
+
 
 def main(argv: list) -> int:
     for profile in (argv or ["kwp", "scenarios"]):

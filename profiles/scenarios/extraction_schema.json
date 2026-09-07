@@ -429,7 +429,15 @@
      "provenance",
      "value"
     ],
-    "type": "object"
+    "type": "object",
+    "x-kg": {
+     "node": "scenariobundle",
+     "note": "On the bundle, not on the report: the shapes carry the study's abstract there.",
+     "property": {
+      "predicate": "abstract",
+      "prefix": "dc"
+     }
+    }
    },
    "tuple_publication_author": {
     "additionalProperties": false,
@@ -570,7 +578,23 @@
      "provenance",
      "value"
     ],
-    "type": "object"
+    "type": "object",
+    "x-kg": {
+     "class": "OEO_00000064",
+     "edge_from": {
+      "label": "has author",
+      "node": "studyreport",
+      "predicate": "OEO_00000506",
+      "prefix": "oeo"
+     },
+     "node": "author",
+     "note": "One node per distinct name. Two spellings of one person are one node and keep both passages.",
+     "property": {
+      "label": "label",
+      "predicate": "label",
+      "prefix": "rdfs"
+     }
+    }
    },
    "tuple_publication_date": {
     "additionalProperties": false,
@@ -711,7 +735,17 @@
      "provenance",
      "value"
     ],
-    "type": "object"
+    "type": "object",
+    "x-kg": {
+     "node": "studyreport",
+     "note": "A PDF states a year; the serializer pads it to YYYY-01-01T00:00:00, which the document does not say. The day and the month are the datatype's, not the paper's.",
+     "property": {
+      "datatype": "xsd:dateTime",
+      "label": "has publication date",
+      "predicate": "OEO_00390096",
+      "prefix": "oeo"
+     }
+    }
    },
    "tuple_publication_doi": {
     "additionalProperties": false,
@@ -852,7 +886,15 @@
      "provenance",
      "value"
     ],
-    "type": "object"
+    "type": "object",
+    "x-kg": {
+     "node": "studyreport",
+     "property": {
+      "label": "has doi",
+      "predicate": "OEO_00390098",
+      "prefix": "oeo"
+     }
+    }
    },
    "tuple_publication_title": {
     "additionalProperties": false,
@@ -993,7 +1035,17 @@
      "provenance",
      "value"
     ],
-    "type": "object"
+    "type": "object",
+    "x-kg": {
+     "class": "OEO_00020012",
+     "node": "studyreport",
+     "note": "Mints the study report. The title is also the bundle's label when no project name was read, and half of every scenario factsheet's IRI. Mint recipes are prose here, not keys: see the _comment.",
+     "property": {
+      "label": "label",
+      "predicate": "label",
+      "prefix": "rdfs"
+     }
+    }
    },
    "tuple_scenario_abstract": {
     "additionalProperties": false,
@@ -1131,6 +1183,18 @@
        "string",
        "null"
       ],
+      "x-kg": {
+       "class": "OEO_00000365",
+       "linked_by": {
+        "label": "has part",
+        "node": "scenariobundle",
+        "predicate": "BFO_0000051",
+        "prefix": "obo"
+       },
+       "node": "scenariofactsheet",
+       "note": "Which factsheet holds the value. Unlike the kwp `parent` axis there is no map from the answer to a container class: the answer IS the identity of a node minted per document from the AR6 run the wording resolves to. A wording that resolves to no run is its own factsheet, and an out: entry is none at all.",
+       "role": "parent"
+      },
       "x-question": "Auf welches Szenario dieser Publikation bezieht sich der Wert? Die Liste führt die Laufkennungen, die genau diese Publikation in der AR6-Datenbank dokumentiert. Im Text stehen sie fast nie, dort heißt dasselbe Szenario \"Current Policies\" oder \"the NDC scenario\". Nennt das Dokument nur die Familie, ist \"Szenario-Familie\" die richtige Antwort und keine Kennung."
      },
      "scenario_quote": {
@@ -1235,7 +1299,14 @@
      "scenario",
      "scenario_state"
     ],
-    "type": "object"
+    "type": "object",
+    "x-kg": {
+     "node": "scenariofactsheet",
+     "property": {
+      "predicate": "abstract",
+      "prefix": "dc"
+     }
+    }
    },
    "tuple_scenario_label": {
     "additionalProperties": false,
@@ -1376,7 +1447,21 @@
      "provenance",
      "value"
     ],
-    "type": "object"
+    "type": "object",
+    "x-kg": {
+     "also": {
+      "predicate": "acronym",
+      "prefix": "dc"
+     },
+     "class": "OEO_00000365",
+     "node": "scenariofactsheet",
+     "note": "The AR6 run name labels the factsheet; the document's own wording is the acronym beside it. With no long name known for a run both carry the same string, which is the usual case in this corpus.",
+     "property": {
+      "label": "label",
+      "predicate": "label",
+      "prefix": "rdfs"
+     }
+    }
    },
    "tuple_scenario_region": {
     "additionalProperties": false,
@@ -1514,6 +1599,18 @@
        "string",
        "null"
       ],
+      "x-kg": {
+       "class": "OEO_00000365",
+       "linked_by": {
+        "label": "has part",
+        "node": "scenariobundle",
+        "predicate": "BFO_0000051",
+        "prefix": "obo"
+       },
+       "node": "scenariofactsheet",
+       "note": "Which factsheet holds the value. Unlike the kwp `parent` axis there is no map from the answer to a container class: the answer IS the identity of a node minted per document from the AR6 run the wording resolves to. A wording that resolves to no run is its own factsheet, and an out: entry is none at all.",
+       "role": "parent"
+      },
       "x-question": "Auf welches Szenario dieser Publikation bezieht sich der Wert? Die Liste führt die Laufkennungen, die genau diese Publikation in der AR6-Datenbank dokumentiert. Im Text stehen sie fast nie, dort heißt dasselbe Szenario \"Current Policies\" oder \"the NDC scenario\". Nennt das Dokument nur die Familie, ist \"Szenario-Familie\" die richtige Antwort und keine Kennung."
      },
      "scenario_quote": {
@@ -1618,7 +1715,16 @@
      "scenario",
      "scenario_state"
     ],
-    "type": "object"
+    "type": "object",
+    "x-kg": {
+     "node": "scenariofactsheet",
+     "note": "The object is an OEKG region individual that already exists over there and is only referenced. A wording the list did not hold mints nothing: writing our own gloss under oekg/region/ would put a 250th region beside the 249 real ones.",
+     "property": {
+      "label": "has study region",
+      "predicate": "OEO_00020220",
+      "prefix": "oeo"
+     }
+    }
    },
    "tuple_scenario_type": {
     "additionalProperties": false,
@@ -1756,6 +1862,18 @@
        "string",
        "null"
       ],
+      "x-kg": {
+       "class": "OEO_00000365",
+       "linked_by": {
+        "label": "has part",
+        "node": "scenariobundle",
+        "predicate": "BFO_0000051",
+        "prefix": "obo"
+       },
+       "node": "scenariofactsheet",
+       "note": "Which factsheet holds the value. Unlike the kwp `parent` axis there is no map from the answer to a container class: the answer IS the identity of a node minted per document from the AR6 run the wording resolves to. A wording that resolves to no run is its own factsheet, and an out: entry is none at all.",
+       "role": "parent"
+      },
       "x-question": "Auf welches Szenario dieser Publikation bezieht sich der Wert? Die Liste führt die Laufkennungen, die genau diese Publikation in der AR6-Datenbank dokumentiert. Im Text stehen sie fast nie, dort heißt dasselbe Szenario \"Current Policies\" oder \"the NDC scenario\". Nennt das Dokument nur die Familie, ist \"Szenario-Familie\" die richtige Antwort und keine Kennung."
      },
      "scenario_quote": {
@@ -1860,7 +1978,16 @@
      "scenario",
      "scenario_state"
     ],
-    "type": "object"
+    "type": "object",
+    "x-kg": {
+     "node": "scenariofactsheet",
+     "note": "The object is one of the classes the shapes accept, chosen from the list, never written. Every factsheet additionally carries OEO_00020517 IAM scenario, which is not behind a harvested value and stands in the serializer.",
+     "property": {
+      "label": "has scenario type",
+      "predicate": "OEO_00390073",
+      "prefix": "oeo"
+     }
+    }
    },
    "tuple_scenario_year": {
     "additionalProperties": false,
@@ -1998,6 +2125,18 @@
        "string",
        "null"
       ],
+      "x-kg": {
+       "class": "OEO_00000365",
+       "linked_by": {
+        "label": "has part",
+        "node": "scenariobundle",
+        "predicate": "BFO_0000051",
+        "prefix": "obo"
+       },
+       "node": "scenariofactsheet",
+       "note": "Which factsheet holds the value. Unlike the kwp `parent` axis there is no map from the answer to a container class: the answer IS the identity of a node minted per document from the AR6 run the wording resolves to. A wording that resolves to no run is its own factsheet, and an out: entry is none at all.",
+       "role": "parent"
+      },
       "x-question": "Auf welches Szenario dieser Publikation bezieht sich der Wert? Die Liste führt die Laufkennungen, die genau diese Publikation in der AR6-Datenbank dokumentiert. Im Text stehen sie fast nie, dort heißt dasselbe Szenario \"Current Policies\" oder \"the NDC scenario\". Nennt das Dokument nur die Familie, ist \"Szenario-Familie\" die richtige Antwort und keine Kennung."
      },
      "scenario_quote": {
@@ -2102,7 +2241,17 @@
      "scenario",
      "scenario_state"
     ],
-    "type": "object"
+    "type": "object",
+    "x-kg": {
+     "node": "scenariofactsheet",
+     "note": "One triple per distinct four-digit year on the factsheet, padded to the first of January as the datatype demands.",
+     "property": {
+      "datatype": "xsd:dateTime",
+      "label": "has scenario year value",
+      "predicate": "OEO_00020440",
+      "prefix": "oeo"
+     }
+    }
    },
    "tuple_study_acronym": {
     "additionalProperties": false,
@@ -2243,7 +2392,14 @@
      "provenance",
      "value"
     ],
-    "type": "object"
+    "type": "object",
+    "x-kg": {
+     "node": "scenariobundle",
+     "property": {
+      "predicate": "acronym",
+      "prefix": "dc"
+     }
+    }
    },
    "tuple_study_funder": {
     "additionalProperties": false,
@@ -2384,7 +2540,22 @@
      "provenance",
      "value"
     ],
-    "type": "object"
+    "type": "object",
+    "x-kg": {
+     "class": "OEO_00090001",
+     "edge_from": {
+      "label": "has funding source",
+      "node": "scenariobundle",
+      "predicate": "OEO_00000509",
+      "prefix": "oeo"
+     },
+     "node": "funder",
+     "property": {
+      "label": "label",
+      "predicate": "label",
+      "prefix": "rdfs"
+     }
+    }
    },
    "tuple_study_organisation": {
     "additionalProperties": false,
@@ -2525,7 +2696,22 @@
      "provenance",
      "value"
     ],
-    "type": "object"
+    "type": "object",
+    "x-kg": {
+     "class": "OEO_00030022",
+     "edge_from": {
+      "label": "has organisation",
+      "node": "scenariobundle",
+      "predicate": "OEO_00000510",
+      "prefix": "oeo"
+     },
+     "node": "organisation",
+     "property": {
+      "label": "label",
+      "predicate": "label",
+      "prefix": "rdfs"
+     }
+    }
    },
    "tuple_study_project_name": {
     "additionalProperties": false,
@@ -2666,7 +2852,17 @@
      "provenance",
      "value"
     ],
-    "type": "object"
+    "type": "object",
+    "x-kg": {
+     "class": "OEO_00020227",
+     "node": "scenariobundle",
+     "note": "Mints the bundle and labels it. Falls back to the publication title where the document names no project.",
+     "property": {
+      "label": "label",
+      "predicate": "label",
+      "prefix": "rdfs"
+     }
+    }
    }
   },
   "$id": "https://openenergyplatform.org/schema/mhpkg/extraction/harvest-line",
