@@ -365,6 +365,29 @@ def cell_index(quote: str, value) -> Optional[tuple]:
     return (hits[0], len(cells)) if len(hits) == 1 else None
 
 
+def _invented_wording(claim: dict) -> bool:
+    """A non-numeric value that its own quote does not contain.
+
+    Numbers are left to the verifier: it collapses whitespace, repairs a
+    retyped table row and knows the German decimal mark, and duplicating any
+    of that here would refuse claims the verifier would have taken. A wording
+    needs none of it — either the passage says it or the model wrote it down
+    from somewhere else.
+    """
+    value = claim.get("value")
+    if not isinstance(value, str) or canonical_number(value) is not None:
+        return False
+    # value_raw first, exactly as _value_in_quote does it. A choice carries
+    # the class in `value` and the document's own wording in `value_raw`, and
+    # holding the class name against the passage would refuse every correctly
+    # evidenced choice in the corpus.
+    wording = claim.get("value_raw") or value
+    quote = claim.get("quote")
+    if not isinstance(quote, str):
+        return True
+    return flat(str(wording)).casefold() not in flat(quote).casefold()
+
+
 def rows_from_reply(batch: Batch, reply: Optional[dict]) -> tuple:
     """(rows, orphans) from the value request — the only request that counts.
 
@@ -377,6 +400,17 @@ def rows_from_reply(batch: Batch, reply: Optional[dict]) -> tuple:
     rows: list = []
     for item_index, claims in enumerate(routed):
         for claim in claims:
+            if _invented_wording(claim):
+                # A wording that is not in the passage it cites is not a
+                # reading, and the cheapest place to say so is here, before
+                # it becomes a row. It used to become one and was refused at
+                # the very end, after every coordinate had been swept for it:
+                # measured on Kassel, the office name the prompt's own
+                # example suggested cost 24 windows and 80.3 seconds and
+                # reached the graph never. The claim still travels on and is
+                # still refused with its own reason, it just costs nothing.
+                orphans.append(dict(claim, _why="text value not in its quote"))
+                continue
             rows.append(Row(label=row_label(len(rows)),
                             item_index=item_index, claim=dict(claim)))
     return rows, orphans
@@ -879,8 +913,10 @@ def fold_fieldwise(batch: Batch, rows: list, orphans: list,
     for item, claims in zip(batch.items, rows_by_item(batch, rows)):
         fold_claims(item, claims, report, locate=locate, spec=spec)
     for claim in orphans:
+        claim = dict(claim)
+        why = claim.pop("_why", "claim names no source")
         report.refusals.append(
-            {"parameter": batch_uri(batch), "reason": "claim names no source",
+            {"parameter": batch_uri(batch), "reason": why,
              "claim": claim,
              "owner": [batch.items[0].source.owner_kind,
                        batch.items[0].source.owner_id]})

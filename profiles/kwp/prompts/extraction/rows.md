@@ -14,13 +14,13 @@ Du bekommst ein JSON-Objekt mit diesen Feldern:
 
 Gib ausschließlich ein JSON-Objekt in dieser Form zurück, in EINER Zeile, OHNE Einrückung:
 
-{"tuples": [{"source": "Q2", "value": 126656132, "unit": "kWh/a", "unit_raw": "kWh/a", "quote": "| Gas H | 126.656.132 | 520.465.057 | 1.036.767.833 |"}, {"source": "Q5", "value": "Kassel Wärme Ingenieurbüro", "unit": "", "unit_raw": "", "quote": "Auftragnehmer: Kassel Wärme Ingenieurbüro GmbH, Bearbeitung: Dipl.-Ing. M. Wagner."}], "status": "complete", "need_more": []}
+{"tuples": [{"source": "Q2", "value": 126656132, "unit": "kWh/a", "unit_raw": "kWh/a", "quote": "| Gas H | 126.656.132 | 520.465.057 | 1.036.767.833 |"}, {"source": "Q5", "value": "endura kommunal", "unit": "", "unit_raw": "", "quote": "Bearbeitung durch das Projektkonsortium: endura kommunal GmbH Emmy-Noether-Str. 2 79110 Freiburg"}], "status": "complete", "need_more": []}
 
 Ein Wert pro Eintrag, und zwar VOLLSTÄNDIG: JEDER Wert in JEDER der Quellen, der zu einem der gesuchten Felder gehören kann, bekommt seinen Eintrag — jede Zeile und jede Spalte einer Tabelle einzeln. Eine Tabelle mit 13 Zeilen und 3 Zahlenspalten ergibt 39 Einträge. Eine leere Liste {"tuples": []} ist nur dann das Ergebnis, wenn keine der Quellen einen Wert zu einem der gesuchten Felder enthält.
 
 Jeder Eintrag wird maschinell und wörtlich gegen die Quelle geprüft; was die Prüfung nicht besteht, wird verworfen. Deshalb gelten diese Regeln:
 
-1. "value": bei einem Textfeld die Bezeichnung, wie das Dokument sie schreibt, ohne Rechtsform: aus "Kassel Wärme Ingenieurbüro GmbH" wird "Kassel Wärme Ingenieurbüro". Sonst die Zahl EXAKT wie gedruckt, nur ohne Tausendertrennzeichen und mit Dezimalpunkt (aus "126.656.132" wird 126656132, aus "1.036.767,8" wird 1036767.8). Rechne NICHT im Kopf: weder addieren noch runden noch umrechnen. Eine im Kopf gerechnete Zahl hat keinen Beleg und wird verworfen. Wenn gerechnet werden MUSS, gibt es dafür die Sandbox, siehe Regel 6.
+1. "value": bei einem Textfeld die Bezeichnung, wie das Dokument sie schreibt, ohne Rechtsform: aus "endura kommunal GmbH" wird "endura kommunal". Sonst die Zahl EXAKT wie gedruckt, nur ohne Tausendertrennzeichen und mit Dezimalpunkt (aus "126.656.132" wird 126656132, aus "1.036.767,8" wird 1036767.8). Rechne NICHT im Kopf: weder addieren noch runden noch umrechnen. Eine im Kopf gerechnete Zahl hat keinen Beleg und wird verworfen. Wenn gerechnet werden MUSS, gibt es dafür die Sandbox, siehe Regel 6.
    FALSCH: 126.656.132 und 520.465.057 addieren und die Summe ausgeben.
    FALSCH: 126.656.132 kWh/a in 126656.132 MWh/a umrechnen — die Umrechnung macht die Prüfung anhand der gewählten Einheit.
 
@@ -33,7 +33,7 @@ Jeder Eintrag wird maschinell und wörtlich gegen die Quelle geprüft; was die P
 
 3. "source": die Kennung der Quelle, in der der WERT steht — "Q1", "Q2" und so weiter. Das Feld entscheidet, gegen welchen Text dein "quote" geprüft wird.
 
-4. "quote": eine wörtliche, zusammenhängende Zeichenkette aus dem Text GENAU DIESER Quelle (mindestens 8 Zeichen), die den Wert EXAKT wie gedruckt enthält — bei einem Textfeld die Bezeichnung samt Rechtsform, also die Zeile, in der sie steht — am besten die komplette Tabellenzeile. Zeichen für Zeichen kopieren, nichts umformatieren, nichts auslassen.
+4. "quote": eine wörtliche, zusammenhängende Zeichenkette aus dem Text GENAU DIESER Quelle (mindestens 8 Zeichen), die den Wert EXAKT wie gedruckt enthält. Bei einem Textfeld wird das MASCHINELL geprüft: steht die Bezeichnung nicht wörtlich in deinem "quote", wird der Eintrag sofort verworfen. Die Namen im Beispiel oben stammen aus einem anderen Plan — übernimm sie nie, sondern nur, was in DIESEN Quellen steht — bei einem Textfeld die Bezeichnung samt Rechtsform, also die Zeile, in der sie steht — am besten die komplette Tabellenzeile. Zeichen für Zeichen kopieren, nichts umformatieren, nichts auslassen.
    FALSCH: "Erdgas: 126656132 kWh/a" — umformatiert, steht so nicht in der Quelle.
    RICHTIG: "| Erdgas | 126.656.132 | 520.465.057 | 1.036.767.833 |"
    Steht dieselbe Zahl mehrfach in derselben Zeile, zitier die ganze Zeile: welche Spalte gemeint ist, wird im nächsten Schritt geklärt.

@@ -1,4 +1,5 @@
 """The kwp extraction profile: spec, prompts, and the MHPKG serializer."""
+import logging
 import re
 import sqlite3
 
@@ -560,3 +561,33 @@ def test_a_real_contradiction_about_the_plan_area_is_still_dropped(tmp_path):
     assert '"241.0"' not in ttl and '"999.0"' not in ttl, (
         "one place cannot hold two different numbers for one coordinate")
     assert '"5.0"^^xsd:float' in ttl, "and the untouched value survives"
+
+
+def test_a_conflict_counts_every_claimant_and_a_repeat_counts_as_one(tmp_path, caplog):
+    """The promise: the conflict count is the number of tuples that left the
+    graph, and a second reading of the same number is counted as a repeat.
+
+    Counting only the later claimant made every report short by one per
+    contested identity. Measured over Kassel: the log said 217 where 317
+    tuples were lost across 100 identities, so every estimate built on it was
+    optimistic by exactly those 100.
+    """
+    serializer = kg.make_serializer(_database(tmp_path))
+    with caplog.at_level(logging.INFO, logger="profiles.kwp.kg"):
+        ttl = serializer("waermeplan_kassel_20240315", [
+            _row(), _row(), _row(value_target=242.0)])
+    assert ttl is None, "a contested identity keeps nothing"
+    line = " ".join(r.getMessage() for r in caplog.records)
+    assert "'conflict': 2" in line, "both claimants, not just the second"
+    assert "'duplicate': 1" in line, "and the repeat is not swallowed"
+
+
+def test_a_repeat_alone_still_serializes_one_node(tmp_path, caplog):
+    """The other half: two passages that agree are one node and no loss."""
+    serializer = kg.make_serializer(_database(tmp_path))
+    with caplog.at_level(logging.INFO, logger="profiles.kwp.kg"):
+        ttl = serializer("waermeplan_kassel_20240315", [_row(), _row()])
+    assert ttl.count("a oeo:OEO_00050016") == 1
+    line = " ".join(r.getMessage() for r in caplog.records)
+    assert "'conflict'" not in line
+    assert "'duplicate': 1" in line
