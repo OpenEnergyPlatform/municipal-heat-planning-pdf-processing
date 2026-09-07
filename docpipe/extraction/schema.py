@@ -503,6 +503,12 @@ def stamp_schema() -> dict:
                                "units, its own vocabulary and the example. A "
                                "new option on ONE axis must not make every "
                                "value of the parameter stale."},
+            "^value/[^/]+$": {
+                **sha,
+                "description": "The list a category parameter answers from. "
+                               "Its own key, because a moved option can be "
+                               "re-mapped from the wording the harvest kept "
+                               "while a rewritten question cannot."},
             "^axis/[^/]+/[^/]+$": {
                 **sha,
                 "description": "What this coordinate asks and what it may "
