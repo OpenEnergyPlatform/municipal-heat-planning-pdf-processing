@@ -370,3 +370,11 @@ def test_the_two_fingerprints_are_independent_of_each_other():
     keys = spec_mod.fingerprints(spec)
     assert keys["parameter/energy"] == of_parameter
     assert keys["axis/energy/carrier"] == of_axis
+
+
+def test_value_fingerprint_is_empty_for_a_parameter_with_no_list():
+    """The key only exists where there is an answer space to name. An empty
+    string for every numeric parameter would put a key in the stamp that
+    stands for nothing and can never go stale."""
+    assert spec_mod.value_fingerprint(_spec_of().parameters[0]) == ""
+    assert "value/energy" not in spec_mod.fingerprints(_spec_of())

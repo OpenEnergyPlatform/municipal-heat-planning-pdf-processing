@@ -2774,6 +2774,13 @@ def main(argv: Optional[list] = None) -> int:
                              "and clear the stamps so the next run redoes them")
     parser.add_argument("--keep-stamps", action="store_true",
                         help="--recheck only: leave the resume stamps in place")
+    parser.add_argument("--remap", action="store_true",
+                        help="map every coordinate's recorded wording onto "
+                             "the vocabulary as the spec reads today, over "
+                             "the harvest in --out. No model. Carries a "
+                             "document's stamp forward for every answer "
+                             "space it could fully re-map, so a grown option "
+                             "list costs minutes instead of a corpus run")
     add_profile_argument(parser)
     args = parser.parse_args(argv)
     logging.basicConfig(level=args.log_level,
@@ -2793,6 +2800,24 @@ def main(argv: Optional[list] = None) -> int:
         log.info("recheck: %d of %d coordinates survive the rule (%.1f%%), "
                  "over %d tuple(s)", stats["read"], stats["coordinates"],
                  100.0 * stats["read"] / total, stats["tuples"])
+        return 0
+    if args.remap:
+        raw_spec_path = profile.component("extraction", "SPEC_PATH")
+        if raw_spec_path is None:
+            parser.error(f"profile {profile.name!r} does not configure the "
+                         f"extraction stage")
+        spec_path = Path(raw_spec_path)
+        spec = load_spec(spec_path)
+        from .remap import run as remap_run
+        stats = remap_run(args.out, spec,
+                          _stamp_current(hashlib.sha256(spec_path.read_bytes()).hexdigest(),
+                                        "", spec))
+        settled = stats["unchanged"] + stats["remapped"] \
+            + stats["remapped (required)"] + stats["newly mapped"]
+        log.info("remap: %d of %d coordinate(s) map onto the current lists, "
+                 "%d document(s) carried their stamp forward", settled,
+                 settled + stats["no wording"] + stats["not listed"],
+                 stats["stamps carried forward"])
         return 0
     if args.serialize is not None:
         factory = profile.component("kg", "make_serializer")

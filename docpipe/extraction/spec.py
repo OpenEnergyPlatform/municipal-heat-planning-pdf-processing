@@ -531,11 +531,15 @@ def axis_fingerprint(axis: "Axis") -> str:
 
 
 def parameter_fingerprint(parameter: "Parameter") -> str:
-    """What this parameter asks, WITHOUT its axes.
+    """What this parameter asks, WITHOUT its axes and without its own list.
 
     Without, because that is the whole point: a new energy carrier must open
     the carrier coordinate of the rows that could carry it, not every value
-    of the parameter. The axes have fingerprints of their own.
+    of the parameter. The axes have fingerprints of their own, and so does
+    the list a category parameter answers from -- an answer space that can
+    be re-mapped from the wording is a different kind of change from a
+    rewritten question, and a stamp that cannot tell them apart cannot say
+    which one a run has to redo.
     """
     return _digest({
         "uri": parameter.uri,
@@ -544,11 +548,18 @@ def parameter_fingerprint(parameter: "Parameter") -> str:
         "value_type": parameter.value_type,
         "unit_target": parameter.unit_target,
         "units": sorted(parameter.units_accepted or {}),
-        "vocabulary": {uri: sorted(map(str, labels or []))
-                       for uri, labels
-                       in (parameter.vocabulary or {}).items()},
-        "vocabulary_dynamic": parameter.vocabulary_dynamic,
         "example": parameter.example,
+    })
+
+
+def value_fingerprint(parameter: "Parameter") -> str:
+    """The list a category parameter answers from, or "" when it has none."""
+    if not parameter.vocabulary and not parameter.vocabulary_dynamic:
+        return ""
+    return _digest({
+        "dynamic": parameter.vocabulary_dynamic,
+        "options": {uri: sorted(map(str, labels or []))
+                    for uri, labels in (parameter.vocabulary or {}).items()},
     })
 
 
@@ -563,6 +574,9 @@ def fingerprints(spec: "Spec") -> dict:
     out = {}
     for parameter in spec.parameters:
         out[f"parameter/{parameter.uri}"] = parameter_fingerprint(parameter)
+        value = value_fingerprint(parameter)
+        if value:
+            out[f"value/{parameter.uri}"] = value
         for name, axis in (parameter.axes or {}).items():
             out[f"axis/{parameter.uri}/{name}"] = axis_fingerprint(axis)
     return out
