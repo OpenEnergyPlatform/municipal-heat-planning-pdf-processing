@@ -239,6 +239,33 @@ def audit(profile: str) -> None:
               "" if current else
               f"python -m docpipe.extraction.schema {profile} --write")
 
+    # Every ontology identifier this spec names, held against the pinned
+    # ontology: does the term exist, is it deprecated, is a sector a sector
+    # and a carrier a carrier. Hand-typed identifiers next to hand-typed
+    # labels were checked by nobody, and the ontology moves.
+    vocabulary = base / "vocabulary.py"
+    if vocabulary.is_file():
+        import importlib
+        module = importlib.import_module(f"profiles.{profile}.vocabulary")
+        snapshot_file = getattr(module, "VOCABULARY_PATH", None)
+        if check(profile, "Vokabular-Schnappschuss vorhanden",
+                 bool(snapshot_file and snapshot_file.is_file()),
+                 str(snapshot_file)):
+            snapshot = module.load()
+            problems = module.check(
+                json.loads(spec_file.read_text(encoding="utf-8")), snapshot)
+            check(profile, "jede Ontologie-Id passt zum Pin", not problems,
+                  "; ".join(problems[:3]))
+            check(profile, "Pin benannt",
+                  bool(snapshot.get("pin", {}).get("oeo_version_iri")),
+                  snapshot.get("pin", {}).get("oeo_version_iri") or "")
+            foreign = {u for _w, u, _l, _o in
+                       module.foreign_labels(
+                           json.loads(spec_file.read_text(encoding="utf-8")),
+                           snapshot)}
+            check(profile, "Beschriftungen aus dem Korpus statt der Ontologie",
+                  not foreign, f"{len(foreign)} Eintrag/Eintraege", fatal=False)
+
     # A coordinate the graph takes has to say what it becomes there. Not
     # every axis does -- some are read for the record and never serialized --
     # but an axis with no kg block at all is one nobody decided about.

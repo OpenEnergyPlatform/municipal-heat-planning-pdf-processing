@@ -263,7 +263,18 @@
             "role": "edge",
             "predicate": "OEO_00000523",
             "label": "covers energy carrier",
-            "note": "Object is an OEO class (punning). The edge is dropped, and the value kept, for the nine classes OEO does not place under energy carrier -- district heat, electricity, solar thermal, geothermal and the ambient heat sources."
+            "note": "Object is an OEO class (punning). Nine of the offered classes are not under energy carrier in OEO -- district heat, electricity, solar thermal, geothermal and the ambient heat sources -- and for those the value keeps its node and loses only the edge. Naming them at all is the point: without the classes the model mapped 36 of them onto solar thermal energy, a wrong triple rather than a missing one.",
+            "no_edge_for": {
+              "OEO_00000132": "district heating",
+              "OEO_00000139": "electrical energy",
+              "OEO_00000388": "solar thermal energy",
+              "OEO_00000191": "geothermal energy",
+              "OEO_00010114": "waste heat",
+              "OEO_00310004": "industrial waste heat",
+              "OEO_00000056": "ambient heat",
+              "OEO_00140105": "waste water heat",
+              "OEO_00140104": "surface water heat"
+            }
           }
         },
         "sector": {
@@ -779,7 +790,18 @@
             "role": "edge",
             "predicate": "OEO_00000523",
             "label": "covers energy carrier",
-            "note": "Object is an OEO class (punning). The edge is dropped, and the value kept, for the nine classes OEO does not place under energy carrier -- district heat, electricity, solar thermal, geothermal and the ambient heat sources."
+            "note": "Object is an OEO class (punning). Nine of the offered classes are not under energy carrier in OEO -- district heat, electricity, solar thermal, geothermal and the ambient heat sources -- and for those the value keeps its node and loses only the edge. Naming them at all is the point: without the classes the model mapped 36 of them onto solar thermal energy, a wrong triple rather than a missing one.",
+            "no_edge_for": {
+              "OEO_00000132": "district heating",
+              "OEO_00000139": "electrical energy",
+              "OEO_00000388": "solar thermal energy",
+              "OEO_00000191": "geothermal energy",
+              "OEO_00010114": "waste heat",
+              "OEO_00310004": "industrial waste heat",
+              "OEO_00000056": "ambient heat",
+              "OEO_00140105": "waste water heat",
+              "OEO_00140104": "surface water heat"
+            }
           }
         },
         "sector": {

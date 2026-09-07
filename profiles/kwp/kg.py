@@ -34,29 +34,18 @@ NS_MHPKG = uuid.uuid5(uuid.NAMESPACE_URL, BASE)
 AGGREGATION_INTEGRAL = "OEO_00140070"
 
 # `covers energy carrier` (OEO_00000523) has range `energy carrier`
-# (OEO_00020039), checked in oeo-closure.owl. Three classes the plans name in
-# their carrier column are NOT under it: district heating is a grid-bound heat
-# transfer, electrical energy sits under energy and commodity, solar thermal
-# energy under thermal energy. Asserting them as carriers would contradict the
-# TBox, so those rows are counted out of the TTL instead of quietly widening a
-# range. They stay in the JSONL harvest, and the count is the argument for the
-# carrier axioms the ontology side is currently adding.
-NOT_AN_ENERGY_CARRIER = {
-    "OEO_00000132": "district heating",
-    "OEO_00000139": "electrical energy",
-    "OEO_00000388": "solar thermal energy",
-    # Ambient and waste heat. The plans name these in the carrier column
-    # constantly and OEO does not place them under `energy carrier` either,
-    # so the value keeps its node and loses only the edge. Naming them at all
-    # is the point: without the classes the model mapped 36 of these onto
-    # solar thermal energy, which is a wrong triple rather than a missing one.
-    "OEO_00000191": "geothermal energy",
-    "OEO_00010114": "waste heat",
-    "OEO_00310004": "industrial waste heat",
-    "OEO_00000056": "ambient heat",
-    "OEO_00140105": "waste water heat",
-    "OEO_00140104": "surface water heat",
-}
+# (OEO_00020039). Nine classes the plans name in their carrier column are NOT
+# under it -- district heating is a grid-bound heat transfer, electrical
+# energy sits under energy and commodity, solar thermal energy under thermal
+# energy, and the ambient heat sources under thermal energy too. Asserting
+# them as carriers would contradict the TBox, so the edge is left out and the
+# value kept, and the count is the argument for the carrier axioms the
+# ontology side is adding.
+#
+# WHICH nine is the spec's to declare (`kg.no_edge_for` on the carrier axis)
+# and the pinned closure's to confirm: profiles/kwp/vocabulary.py refuses a
+# carrier that is neither under the root nor declared, so a tenth cannot be
+# added here by forgetting to mention it.
 LEGAL = r"(gmbh\s*&\s*co\.?\s*kg|gmbh|mbh|ag|kg|ohg|e\.?\s*v\.?|gbr|se|ug)"
 
 _SPEC = json.loads(
@@ -143,6 +132,25 @@ PARTS = {
     "trend": ("oeo:OEO_00020314", "referencescenario", "Trendszenario"),
     "target": ("mhpo:MHPO_00020007", "targetscenario", "Zielszenario"),
 }
+
+def _no_edge_for() -> dict:
+    """The carrier classes OEO does not place under `energy carrier`.
+
+    Declared in the spec's kg block and read from there, not listed twice.
+    The plans write these in the carrier column constantly -- district heat,
+    electricity, solar thermal, the ambient heat sources -- and the value
+    keeps its node and loses only that one edge. Offering them at all is the
+    point: without the classes the model mapped 36 of them onto solar thermal
+    energy, which is a wrong triple rather than a missing one.
+    """
+    out: dict = {}
+    for par in _SPEC["parameters"]:
+        block = ((par.get("axes") or {}).get("carrier") or {}).get("kg") or {}
+        out.update(block.get("no_edge_for") or {})
+    return out
+
+
+NOT_AN_ENERGY_CARRIER = _no_edge_for()
 
 ORGANISATION = "planning_organisation"
 CLS_ORGANISATION = "OEO_00030022"        # organisation
