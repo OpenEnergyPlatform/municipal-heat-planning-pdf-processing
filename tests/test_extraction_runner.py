@@ -1449,11 +1449,11 @@ def test_without_the_detail_the_file_sha_decides_again(tmp_path, monkeypatch):
         == ["spec"]
 
 
-def test_a_dropped_parameter_is_seen_by_the_one_key_that_can(tmp_path,
-                                                             monkeypatch):
-    """Every other key is written from what the spec still has, and a stamp is
-    compared against those. So a parameter that is gone is in no key at all --
-    except the one that carries the list the model chooses from."""
+def test_a_dropped_parameter_is_reported_whole(tmp_path, monkeypatch):
+    """Its own keys, because they are gone, AND the slot key, because the list
+    the model chooses from is one shorter. Both halves are wanted: the first
+    says which coordinates the file still answers for and no run asks about,
+    the second says every OTHER document was read against a longer list."""
     monkeypatch.setattr(runner.prompts, "versions",
                         lambda ids: {i: "v1" for i in ids})
     two = _spec(second=True)
@@ -1461,13 +1461,26 @@ def test_a_dropped_parameter_is_seen_by_the_one_key_that_can(tmp_path,
     stamp.write_text(json.dumps(runner._stamp_current(
         "sha-1", runner.anchors_key(), two)), encoding="utf-8")
 
-    one = _spec()
     changed = runner.stale(stamp, runner._stamp_current(
-        "sha-1", runner.anchors_key(), one))
-    assert "slot/parameter" in changed, changed
-    assert not [k for k in changed
-                if k.startswith(("parameter/", "value/", "axis/"))], (
-        "nothing per parameter can report a parameter that is not there")
+        "sha-1", runner.anchors_key(), _spec()))
+    assert set(changed) == {"slot/parameter", "parameter/OEO_00010079",
+                            "axis/OEO_00010079/carrier",
+                            "axis/OEO_00010079/year"}, changed
+
+
+def test_the_slot_key_moves_for_what_no_gone_key_could_say(monkeypatch):
+    """The parameter list can change without a parameter disappearing: a
+    reworded question, a renamed label. Nothing vanishes then, so the rule
+    about keys the stamp still carries says nothing, and this key is the only
+    one that does."""
+    monkeypatch.setattr(runner.prompts, "versions",
+                        lambda ids: {i: "v1" for i in ids})
+    from docpipe.extraction.spec import parameter_slot_fingerprint as slot
+
+    base = slot(_spec(parameter_question="Welche Kennzahl steht hier?"))
+    assert base != slot(_spec(parameter_question="Welche Groesse ist das?"))
+    assert base != slot(_spec(parameter_question="Welche Kennzahl steht hier?",
+                              label="Endenergiebedarf"))
 
 
 def test_a_changed_question_moves_a_stamp_key_even_though_anchors_no_longer_does(
@@ -1492,10 +1505,7 @@ def test_a_changed_question_moves_a_stamp_key_even_though_anchors_no_longer_does
         return runner.stale(stamp, runner._stamp_current(
             "sha", runner.anchors_key(), spec))
 
-    one, two = _spec(), _spec(second=True)
-    # A dropped parameter, which no per-parameter key can report: those are
-    # written from what the spec still has.
-    assert changed(two, one) == ["slot/parameter"]
+    one = _spec()
     assert changed(one, _spec(label="Endenergiebedarf")) \
         == ["parameter/OEO_00050016", "slot/parameter"]
     assert changed(one, _spec(year_question="Auf welches Bilanzjahr?")) \
@@ -1505,6 +1515,61 @@ def test_a_changed_question_moves_a_stamp_key_even_though_anchors_no_longer_does
     # The counter-case: an option reaches no anchor and moves only its axis.
     assert changed(one, _spec(more_carriers=True)) \
         == ["axis/OEO_00050016/carrier"]
+
+
+def test_a_coordinate_the_spec_no_longer_asks_is_reported(tmp_path,
+                                                         monkeypatch):
+    """Every key is written from what the spec still HAS, so a question that
+    is gone is in no current key -- and a stamp compared only against the
+    current keys never looks at it. Dropping an axis moved nothing, and a
+    document harvested while that coordinate was still asked read as current
+    under a spec that no longer asks it.
+
+    The whole-file sha used to catch it and stopped the moment it was no
+    longer compared. `slot/parameter` covers the parameter case and only that
+    one, which is exactly why reading it as the general answer was wrong.
+    """
+    monkeypatch.setattr(runner.prompts, "versions",
+                        lambda ids: {i: "v1" for i in ids})
+    stamp = tmp_path / "plan.stamp.json"
+    both = _spec()
+    stamp.write_text(json.dumps(runner._stamp_current(
+        "sha", runner.anchors_key(), both)), encoding="utf-8")
+
+    fewer = load({"parameters": [{
+        "uri": "OEO_00050016", "label": "Endenergieverbrauch",
+        "description": "Endenergieverbrauch je Energieträger, Sektor und "
+                       "Jahr, wie im Plan bilanziert.",
+        "unit_target": "OEO_00050008", "units_accepted": {"MWh/a": 1.0},
+        "axes": {"carrier": {"vocabulary": {"OEO_00000292": ["Erdgas",
+                                                             "Gas"]}}},
+        "example": {"source": "| Erdgas | 42.005 | MWh/a | im Jahr 2020 |",
+                    "tuples": [{"value": 42005, "unit_raw": "MWh/a"}]},
+    }]})
+    assert runner.stale(stamp, runner._stamp_current(
+        "sha", runner.anchors_key(), fewer)) == ["axis/OEO_00050016/year"]
+    # And the same stamp against the spec it was written from is current, or
+    # the rule reports on every document forever.
+    assert runner.stale(stamp, runner._stamp_current(
+        "sha", runner.anchors_key(), both)) == []
+
+
+def test_what_the_stamp_records_about_the_document_never_redoes_it(
+        tmp_path, monkeypatch):
+    """How many pages a model read rather than the PDF is a fact about the
+    DOCUMENT, not about what produced the harvest. The published stamp says a
+    harvest may carry it, so a run that does not write it must not read such a
+    document as stale -- it would stay that way forever, and every run would
+    report it."""
+    monkeypatch.setattr(runner.prompts, "versions",
+                        lambda ids: {i: "v1" for i in ids})
+    spec = _spec()
+    stamp = tmp_path / "plan.stamp.json"
+    stamp.write_text(json.dumps(dict(
+        runner._stamp_current("sha", runner.anchors_key(), spec),
+        page_text_transcribed=12)), encoding="utf-8")
+    assert runner.stale(stamp, runner._stamp_current(
+        "sha", runner.anchors_key(), spec)) == []
 
 
 def test_the_anchors_stamp_key_carries_only_what_no_other_key_does(monkeypatch):
@@ -1628,10 +1693,13 @@ def test_one_changed_question_rewrites_one_anchor_set_and_no_other(
         "every other set comes back the way it was written")
 
 
-def test_a_new_model_or_prompt_rewrites_every_anchor_set(tmp_path, monkeypatch):
+@pytest.mark.parametrize("what", ["prompt", "model"])
+def test_a_new_model_or_prompt_rewrites_every_anchor_set(what, tmp_path,
+                                                         monkeypatch):
     """The other half. A set is only reusable while the model that wrote it
     and the prompt it was written from still hold -- per question is finer,
-    not weaker."""
+    not weaker. Both, because a test that says "or" and moves one of them
+    leaves the other unheld."""
     monkeypatch.setattr(runner.prompts, "versions",
                         lambda ids: {i: "v1" for i in ids})
     monkeypatch.setattr(runner.prompts, "load",
@@ -1641,9 +1709,13 @@ def test_a_new_model_or_prompt_rewrites_every_anchor_set(tmp_path, monkeypatch):
     store = tmp_path / "anchors.json"
     runner.make_anchors(_spec(), store=store, key=runner.anchors_key())
     wrote = len(calls)
+    assert wrote > 2
 
-    monkeypatch.setattr(runner.prompts, "versions",
-                        lambda ids: {i: "v2" for i in ids})
+    if what == "prompt":
+        monkeypatch.setattr(runner.prompts, "versions",
+                            lambda ids: {i: "v2" for i in ids})
+    else:
+        monkeypatch.setattr(runner, "LLM_MODEL", "ein-anderes-modell")
     runner.make_anchors(_spec(), store=store, key=runner.anchors_key())
     assert len(calls) == 2 * wrote
 
@@ -1669,9 +1741,13 @@ def test_a_store_that_cannot_say_which_question_is_reused_for_nothing(
                                  "anchors": {"OEO_00050016": ["Ein Satz."]}}),
                      encoding="utf-8")
     assert runner.load_anchors(store, key, targets) == {}
-    # And a caller with no spec to hand still gets what is there, which is
-    # what it can honestly do.
-    assert runner.load_anchors(store, key) == {"OEO_00050016": ["Ein Satz."]}
+    # And the real file from before the map: it does not even reach that
+    # check, because the whole-file key was computed another way. Named
+    # separately, or the test above reads as covering a case it never sees.
+    store.write_text(json.dumps({"key": "1d97bfa2e0def6a3", "model": "m",
+                                 "anchors": {"OEO_00050016": ["Ein Satz."]}}),
+                     encoding="utf-8")
+    assert runner.load_anchors(store, key, targets) == {}
 
 
 def test_a_set_for_a_question_this_spec_no_longer_asks_is_not_carried_forward(
