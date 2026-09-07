@@ -30,6 +30,7 @@ from pathlib import Path
 from .fields import DERIVED, NUMBER, READ, UNANSWERED, asked_slots
 from .pipeline import answer_in_quote
 from .spec import Spec
+from .trust import document_summary
 from .verify import quote_in
 
 log = logging.getLogger(__name__)
@@ -70,9 +71,15 @@ def recheck_row(row: dict, slots: list) -> Counter:
 
 
 def recheck_file(path: Path, spec: Spec) -> Counter:
-    """Rewrite one harvest file in place. Returns what it dropped and why."""
+    """Rewrite one harvest file in place. Returns what it dropped and why.
+
+    The summary line is recomputed rather than carried over: it counts the
+    trust levels of the tuples above it, and this pass is in the business of
+    demoting them. A kept summary would report the run that no longer exists.
+    """
     stats: Counter = Counter()
     lines = []
+    tuples, refusals, document_id = [], [], None
     for line in Path(path).read_text(encoding="utf-8").splitlines():
         if not line.strip():
             continue
@@ -82,19 +89,31 @@ def recheck_file(path: Path, spec: Spec) -> Counter:
             stats["unreadable line kept"] += 1
             lines.append(line)
             continue
+        if row.get("kind") == "summary":
+            document_id = row.get("document_id")
+            stats["summaries rewritten"] += 1
+            continue
         if row.get("kind") != "tuple":
+            refusals.append(row)
             lines.append(line)
             continue
         parameter = spec.by_uri.get(row.get("parameter"))
         if parameter is None:
             stats["unknown parameter kept"] += 1
+            tuples.append(row)
             lines.append(line)
             continue
         slots = asked_slots(parameter)
         stats["tuples"] += 1
         stats["coordinates"] += len(slots)
         stats.update(recheck_row(row, slots))
+        tuples.append(row)
         lines.append(json.dumps(row, ensure_ascii=False))
+    if document_id is not None:
+        lines.append(json.dumps(
+            {"kind": "summary",
+             **document_summary(document_id, tuples, refusals)},
+            ensure_ascii=False))
     tmp = Path(path).with_suffix(".jsonl.tmp")
     tmp.write_text("\n".join(lines) + "\n", encoding="utf-8")
     tmp.replace(path)

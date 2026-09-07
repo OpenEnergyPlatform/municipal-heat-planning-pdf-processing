@@ -38,10 +38,29 @@ from pathlib import Path
 
 from . import fields
 from .spec import load as load_spec
+from .trust import FLAG_REASONS, LEVEL_A, LEVEL_B, LEVEL_C
 from .verify import MIN_QUOTE_CHARS, TIER_TEXT, TIER_VISUAL
 
 SCHEMA_NAME = "extraction_schema.json"
 BASE_ID = "https://openenergyplatform.org/schema/mhpkg/extraction"
+
+# The levels and the reason families of trust.py, so the published schema and
+# the code that fills it cannot drift: a level the schema does not list is a
+# level nobody downstream can act on.
+TRUST_LEVELS = (LEVEL_A, LEVEL_B, LEVEL_C)
+
+TRUST_LEVEL_DOC = {
+    LEVEL_A: "read off its own passage, in the plan's own text",
+    LEVEL_B: "the same, but out of an image transcription or a page a model "
+             "transcribed",
+    LEVEL_C: "something is off; see reasons",
+}
+
+# Anchored, so "nonlocal" alone or a reason nobody named cannot slip in.
+TRUST_REASONS = tuple(
+    [f"^{r}$" for r in sorted(FLAG_REASONS.values())]
+    + ["^conflict$", "^page_transcribed$", "^review:disagree$",
+       r"^(nonlocal|exhausted|unbacked):[a-z_]+$"])
 
 # What a coordinate's state can be, and what each one is a finding ABOUT. The
 # distinction is the whole point of carrying seven of them instead of a null:
@@ -311,11 +330,14 @@ def harvest_schema(spec) -> dict:
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "$id": f"{BASE_ID}/harvest-line",
         "title": "docpipe extraction harvest line (one JSON object per line)",
-        "description": "An accepted tuple (kind=tuple) or a refused claim "
-                       "(kind=refusal). Generated from the profile's "
-                       "extraction_spec.json by docpipe/extraction/schema.py.",
+        "description": "An accepted tuple (kind=tuple), a refused claim "
+                       "(kind=refusal), or the document's own summary "
+                       "(kind=summary, the last line of the file). Generated "
+                       "from the profile's extraction_spec.json by "
+                       "docpipe/extraction/schema.py.",
         "oneOf": [{"$ref": f"#/$defs/tuple_{p.uri}"} for p in spec.parameters]
-                 + [{"$ref": "#/$defs/refusal"}],
+                 + [{"$ref": "#/$defs/refusal"},
+                    {"$ref": "#/$defs/summary"}],
         "$defs": {
             "state": {"enum": STATES, "x-doc": STATE_DOC},
             "provenance": {
@@ -394,6 +416,46 @@ def harvest_schema(spec) -> dict:
                     "owner": _owner(),
                 },
                 "required": ["kind", "parameter", "reason", "claim", "owner"],
+                "additionalProperties": False,
+            },
+            "summary": {
+                "type": "object",
+                "description": "The last line of the file: how this "
+                               "document's own values are distributed. A "
+                               "contested identity is decided by the "
+                               "serializer and a second reading is a later "
+                               "pass, so neither is counted here -- the "
+                               "levels are a floor, and the graph side "
+                               "recomputes them.",
+                "properties": {
+                    "kind": {"const": "summary"},
+                    "document_id": {"type": "integer"},
+                    "tuples": {"type": "integer"},
+                    "refusals": {"type": "integer"},
+                    "levels": {
+                        "type": "object",
+                        "description": "How many values reached each level.",
+                        "properties": {level: {"type": "integer"}
+                                       for level in TRUST_LEVELS},
+                        "required": list(TRUST_LEVELS),
+                        "additionalProperties": False,
+                        "x-doc": TRUST_LEVEL_DOC},
+                    "reasons": {
+                        "type": "object",
+                        "description": "Why values are not an A, counted. "
+                                       "A closed list: a reason nobody can "
+                                       "enumerate is a reason nobody can "
+                                       "count.",
+                        "propertyNames": {
+                            "anyOf": [{"pattern": p} for p in TRUST_REASONS]},
+                        "additionalProperties": {"type": "integer"}},
+                    "image_origin": {
+                        "type": "integer",
+                        "description": "Values read out of a table or figure "
+                                       "image rather than the plan's text."},
+                },
+                "required": ["kind", "document_id", "tuples", "refusals",
+                             "levels", "reasons", "image_origin"],
                 "additionalProperties": False,
             },
             **{f"tuple_{p.uri}": _tuple_schema(spec, p)

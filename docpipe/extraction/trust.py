@@ -141,3 +141,38 @@ def sentence(verdict: dict, row: Optional[dict] = None) -> str:
     if verdict["level"] == LEVEL_C:
         parts.append("Prüfung empfohlen")
     return " · ".join(parts)
+
+
+def document_summary(document_id, tuples, refusals) -> dict:
+    """One `kind: summary` line per document: the harvest's view of its run.
+
+    A corpus of 1.082 plans cannot be read tuple by tuple, and the question a
+    reader actually has -- "how much of this plan can I use" -- has no answer
+    in a file of 559 rows. So every harvest file ends with the distribution
+    over its own values.
+
+    Called a summary and not a plan line because the trace schema already
+    has a `plan` kind, and there it means a planned source. Two files, two
+    meanings, one word is how a reader ends up counting the wrong thing.
+
+    What it cannot say is in here by its absence. A contested identity is
+    decided by the serializer, when two tuples turn out to mint the same
+    value IRI, and a second reading is a later pass: neither exists yet when
+    this line is written, so neither is counted. `trust` takes them as
+    arguments for exactly that reason, and the graph side recomputes the
+    levels with them. The levels here are the floor: a value that is a C
+    already will not become an A later.
+    """
+    levels = {LEVEL_A: 0, LEVEL_B: 0, LEVEL_C: 0}
+    why: dict = {}
+    image = 0
+    for row in tuples:
+        verdict = trust(row)
+        levels[verdict["level"]] += 1
+        image += bool(verdict["image_origin"])
+        for reason in verdict["reasons"]:
+            why[reason] = why.get(reason, 0) + 1
+    return {"document_id": document_id, "tuples": len(tuples),
+            "refusals": len(refusals), "levels": levels,
+            "reasons": {k: why[k] for k in sorted(why)},
+            "image_origin": image}

@@ -195,7 +195,9 @@ def test_the_report_file_is_the_audit_trail(tmp_path):
     write_report(report, out)
     rows = [json.loads(l) for l in out.read_text(encoding="utf-8").splitlines()]
     kinds = {r["kind"] for r in rows}
-    assert kinds == {"tuple", "refusal"}
+    assert kinds == {"tuple", "refusal", "summary"}
+    # The summary is last, because it is computed from everything above it.
+    assert rows[-1]["kind"] == "summary" and rows[-1]["document_id"] == 7
     accepted = [r for r in rows if r["kind"] == "tuple"][0]
     assert accepted["provenance"]["owner_id"] == 1
     assert accepted["provenance"]["page"] == 31

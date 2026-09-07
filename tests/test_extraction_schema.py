@@ -242,7 +242,9 @@ def test_a_row_the_schema_refuses_is_written_and_counted(monkeypatch, tmp_path):
     from docpipe.extraction.pipeline import write_report
     out = tmp_path / "plan.jsonl"
     write_report(report, out)
-    assert len(out.read_text(encoding="utf-8").strip().splitlines()) == 2
+    lines = out.read_text(encoding="utf-8").strip().splitlines()
+    assert len(lines) == 3                       # two tuples + the summary
+    assert json.loads(lines[-1])["kind"] == "summary"
 
 
 def test_the_invalid_event_is_itself_in_the_trace_schema():
@@ -267,5 +269,60 @@ def test_two_profiles_in_one_process_are_checked_against_their_own_schema():
     for first, second in ((kwp, other), (other, kwp)):
         _harvest_validators(first)
         got = _harvest_validators(second)
-        assert set(got) == {("refusal", None)} | {
+        assert set(got) == {("refusal", None), ("summary", None)} | {
             ("tuple", p.uri) for p in second.parameters}
+
+
+# ---------------------------------------------------------------------------
+# The summary line
+# ---------------------------------------------------------------------------
+def test_the_summary_line_is_the_last_one_and_matches_its_own_branch(
+        monkeypatch, tmp_path):
+    """A corpus of 1.082 plans is not read tuple by tuple, and "how much of
+    this plan can I use" has no answer in a file of 559 rows. The line that
+    answers it is only worth writing if everyone downstream can read it, so
+    it is a branch of the published schema like the other two."""
+    from docpipe.extraction.pipeline import DocumentReport, write_report
+    spec = load_spec(PROFILES / "kwp" / "extraction_spec.json")
+    good, *_rest = _tuples(monkeypatch, spec)
+    report = DocumentReport(document_id=7)
+    report.tuples = [dict(good), dict(good)]
+    report.refusals = [{"parameter": None, "reason": "value is not a number",
+                        "claim": {}, "owner": ["table", 1]}]
+
+    out = tmp_path / "plan.jsonl"
+    write_report(report, out)
+    rows = [json.loads(line) for line
+            in out.read_text(encoding="utf-8").strip().splitlines()]
+    summary = rows[-1]
+    assert summary["kind"] == "summary"
+    assert summary["document_id"] == 7
+    assert summary["tuples"] == 2 and summary["refusals"] == 1
+    assert sum(summary["levels"].values()) == 2
+
+    validator = VALIDATOR({**build(spec)["harvest"]})
+    for row in rows:
+        assert validator.is_valid(row), row
+
+
+def test_the_summary_names_only_reasons_the_schema_knows():
+    """The reasons are a closed list precisely so they can be counted. A
+    reason the schema does not describe is a column nobody downstream can
+    add up, and "nonlocal" without its axis is exactly that."""
+    spec = load_spec(PROFILES / "kwp" / "extraction_spec.json")
+    validator = VALIDATOR({**build(spec)["harvest"]})
+    line = {"kind": "summary", "document_id": 7, "tuples": 1, "refusals": 0,
+            "levels": {"A": 0, "B": 0, "C": 1}, "image_origin": 0,
+            "reasons": {"nonlocal:year": 1}}
+    assert validator.is_valid(line)
+    assert validator.is_valid({**line, "reasons": {"exhausted:carrier": 1,
+                                                   "conflict": 1,
+                                                   "page_transcribed": 1,
+                                                   "repaired": 0}})
+    for bad in ({"nonlocal": 1}, {"nonlocal:Jahr": 1}, {"erfunden": 1},
+                {"nonlocal:year extra": 1}):
+        assert not validator.is_valid({**line, "reasons": bad}), bad
+    # A level the schema does not list is a level nobody can act on.
+    assert not validator.is_valid({**line, "levels": {"A": 0, "B": 0, "C": 1,
+                                                      "D": 0}})
+    assert not validator.is_valid({**line, "levels": {"A": 0, "B": 0}})
