@@ -178,3 +178,64 @@ def test_the_table_a_run_reads_carries_the_resolved_title(tmp_path):
     assert captions["p86_tbl0"].startswith("Tabelle 18")
     section = fetch_owner_content(conn, "section", 349525)
     assert "[p86_tbl0: Tabelle 18" in section["text"]
+
+
+# ---------------------------------------------------------------------------
+# Plans with no PDF text layer
+#
+# Eleven plans of the corpus have none. Stage 1 renders those pages and a
+# model transcribes them, and from there everything runs unchanged: the
+# section text of such a plan is itself a model reading, and so is every
+# quote verified against it.
+#
+# The text below is verbatim from waermeplan_vg_maikammer_20260320.pdf
+# (document 210), section 434053, and from waermeplan_leipzig_20260301.pdf
+# (795), section 434... -- both transcribed pages, not PDF text.
+# ---------------------------------------------------------------------------
+
+MAIKAMMER_434053 = (
+    "Nachfolgend nicht aufgeführt sind zusätzliche bilaterale Kontakte "
+    "zwischen dem beauftragten Büro und diversen Akteur*innen zur Abstimmung "
+    "einzelner Sachverhalte. Tabelle 1: Termine im Rahmen der Erarbeitung des "
+    "Wärmeplans für die Verbandsgemeinde Maikammer [p16_tbl0] Mit den "
+    "erfolgten Beteiligungsschritten sind die Vorgaben des WPG für beide "
+    "Beteiligungsphasen erfüllt.")
+
+# What Stage 2 stored for that table: the vision model's own reading of the
+# same line, which is a paraphrase and carries no number.
+MAIKAMMER_STORED = ("Zeitplan und Beteiligungsprozess der Kommunalen "
+                    "Wärmeplanung für Maikammer")
+
+
+def test_a_transcribed_page_still_yields_the_documents_own_caption():
+    """Measured over the three textless plans (795 Leipzig, 1082
+    Grevesmuehlen, 210 VG Maikammer): 169 tables, not one with a caption
+    Stage 2 linked as a caption, and 23 whose numbered sentence stands in the
+    transcribed section text and resolves. The stored caption is a paraphrase
+    of the same line; the resolved one is the plan's own words, which is what
+    a quote needs."""
+    got = resolve_title(MAIKAMMER_STORED, MAIKAMMER_434053, "p16_tbl0")
+    assert got.startswith("Tabelle 1: Termine im Rahmen")
+    assert got.endswith("Verbandsgemeinde Maikammer")
+    assert "Mit den erfolgten" not in got, "it stops at its own placeholder"
+
+
+def test_a_caption_followed_by_prose_ends_where_the_caption_ends():
+    """In a transcribed plan the caption and the paragraph after it are one
+    run and the placeholder follows the paragraph. One of the 23 resolved
+    titles carried sixty characters of the next sentence with it -- and a
+    title is quoted for a table's year, so what rides along is what a model
+    is invited to cite."""
+    stored = "Endenergieverbrauch aufgeteilt nach Sektoren (2020)"
+    content = ("Tabelle 3-2: Endenergieverbrauch aufgeteilt nach Sektoren "
+               "(2020) Wie sich der sektorspezifische Wärmeverbrauch in den "
+               "zurückliegenden Jahren entwickelt hat, zeigt die folgende "
+               "Abbildung. [p19_tbl0]")
+    got = resolve_title(stored, content, "p19_tbl0")
+    assert got == "Tabelle 3-2: " + stored
+    assert "Wie sich der" not in got
+
+    # And the cut only fires where the document's own sentence really
+    # contains the stored caption: Kassel's footnote is not in its title.
+    assert resolve_title(FOOTNOTE, KASSEL_349525, "p85_tbl0").startswith(
+        "Tabelle 17")

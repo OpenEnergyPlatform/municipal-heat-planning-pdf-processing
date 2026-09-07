@@ -32,6 +32,7 @@ from .database import (
     update_database,
     document_id,
     enrich_bbox,
+    enrich_page_source,
     get_existing_embeddings,
     clear_embedding_ids,
     drop_embeddings_missing_from_index,
@@ -99,7 +100,8 @@ def run(
     Run the pipeline over the PDF subdirectories of `data_dir`.
 
     `step` limits the run to 'merge', 'db', 'embed' or the standalone
-    'enrich-bbox'; None runs merge → db → embed. `force` ignores caches and
+    'enrich-bbox' or 'enrich-page-source'; None runs merge → db → embed (the
+    db step backfills the page source itself). `force` ignores caches and
     clears old embeddings.
     """
     data_dir = Path(data_dir)
@@ -107,6 +109,13 @@ def run(
     index_path = Path(index_path)
 
     # Standalone maintenance step: never part of the default merge→db→embed run.
+    if step == "enrich-page-source":
+        # Which plans are a reading of a reading. Standalone like enrich-bbox,
+        # and run at the end of the db step too, so a new document carries it
+        # without anyone remembering to ask.
+        enrich_page_source(db_path, data_dir, force=force)
+        return
+
     if step == "enrich-bbox":
         sep = "=" * 60
         log.info(sep)
@@ -140,6 +149,11 @@ def run(
         log.info("Step 2: Updating database")
         log.info(sep)
         update_database(db_path, data_dir, force=force)
+        # Which of these documents are a reading of a reading. One JSON read
+        # per directory, no model, and it has to happen here or the eleven
+        # textless plans are indistinguishable from the other 1,071 the
+        # moment they are in the database.
+        enrich_page_source(db_path, data_dir, force=force)
 
     if "embed" in steps:
         sep = "=" * 60
@@ -284,10 +298,13 @@ Examples:
     p.add_argument("index_path", nargs="?", default=None,
                    help="FAISS index (default: the profile's)")
     p.add_argument(
-        "--step", choices=["merge", "db", "embed", "enrich-bbox"], default=None,
+        "--step", choices=["merge", "db", "embed", "enrich-bbox",
+                           "enrich-page-source"], default=None,
         help="Run only a specific step (default: merge, db, embed). "
              "'enrich-bbox' additively backfills segment/table/image bbox from "
-             "re-run Stage-3 outputs without re-embedding (index_path is ignored).",
+             "re-run Stage-3 outputs without re-embedding (index_path is ignored). "
+             "'enrich-page-source' additively backfills how many pages of each "
+             "document a model transcribed, from the preprocessing report.",
     )
     add_profile_argument(p)
     p.add_argument("--force", action="store_true", help="Force re-processing")

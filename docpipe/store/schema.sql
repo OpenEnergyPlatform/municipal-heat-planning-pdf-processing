@@ -28,6 +28,13 @@ CREATE TABLE IF NOT EXISTS "Documents" (
     "filename"    TEXT NOT NULL UNIQUE,
     "published"   TEXT,
     "num_pages"   INTEGER,
+    -- How many of this document's pages a MODEL read rather than the PDF.
+    -- Eleven plans of the heat-plan corpus carry no text layer: their pages
+    -- are rendered and transcribed, and from there everything runs unchanged.
+    -- So their section text is itself a model reading, and so is every quote
+    -- verified against it. NULL means nobody looked, 0 means the PDF had its
+    -- own text.
+    "page_text_transcribed" INTEGER,
     "added"       TEXT,
     "is_current"  INTEGER NOT NULL DEFAULT 1,
     "supersedes"  INTEGER REFERENCES "Documents"("id") ON DELETE SET NULL

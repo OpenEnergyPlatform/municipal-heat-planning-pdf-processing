@@ -5,6 +5,7 @@ Author: Felix Vossel
 """
 
 from docpipe.artifacts import (DOCUMENT_JSON,            # noqa: F401  (re-exported)
+                               PAGE_TRANSCRIPTION_REPORT_JSON,
                                SECTIONS_JSON, SECTIONS_REFINED_JSON, VISUALS_JSON)
 
 # One definition, imported — not a second copy. These were declared here as
