@@ -182,6 +182,11 @@ def _row(**overrides):
            "value_target": 241.0, "unit_raw": "kWh/a",
            "quantity": "OEO_00050016", "quantity_raw": "Endenergieverbrauch",
            "carrier": "OEO_00000292", "sector": None, "year": 2030,
+           # Explicit, because it used to be absent and a default filled it:
+           # every row of every test here was written into the graph as an
+           # annual sum without one line saying so.
+           "aggregation": "OEO_00140070", "aggregation_state": "derived",
+           "aggregation_raw": "kWh/a",
            "scenario": "target", "spatial_scope": "municipality",
            "tier": "pdf_verified", "provenance": {"document_id": 857}}
     row.update(overrides)
@@ -382,6 +387,11 @@ def test_one_heat_plan_comes_out_as_the_published_example(tmp_path):
          "value": 241.0, "value_target": 241.0, "unit_raw": "MWh",
          "quantity": "OEO_00050016", "quantity_raw": "Endenergieverbrauch",
          "carrier": "OEO_00000292", "sector": "OEO_00000214", "year": 2030,
+         # The example carries `has aggregation type integral` and the
+         # serializer no longer invents it: a value whose aggregation nothing
+         # decided is counted, not written down as a year's sum.
+         "aggregation": "OEO_00140070", "aggregation_state": "derived",
+         "aggregation_raw": "MWh",
          "scenario": "target", "spatial_scope": "municipality",
          "provenance": {"document_id": 857}},
         {"kind": "tuple", "parameter": "planning_organisation",
@@ -591,3 +601,67 @@ def test_a_repeat_alone_still_serializes_one_node(tmp_path, caplog):
     line = " ".join(r.getMessage() for r in caplog.records)
     assert "'conflict'" not in line
     assert "'duplicate': 1" in line
+
+
+def test_the_units_of_the_two_numeric_parameters_share_no_spelling():
+    """The promise the derivation rests on: no unit belongs to two numeric
+    parameters, so the unit alone says which parameter a row is.
+
+    The spec says it in prose ("the unit separates the two parameters") and
+    nothing held it to it. If it stopped being true the derivation would pick
+    the first parameter silently, which is the guess-written-down-as-a-reading
+    this stage exists to prevent. Nine energy spellings against forty-two
+    emission spellings today, no overlap.
+    """
+    from docpipe.extraction import fields
+    numeric = [p for p in SPEC.parameters if p.is_numeric]
+    assert len(numeric) >= 2
+    for i, first in enumerate(numeric):
+        for second in numeric[i + 1:]:
+            shared = {u for u in first.units_accepted
+                      if second.unit_factor(u) is not None}
+            assert not shared, (
+                f"{first.label} and {second.label} share {sorted(shared)}, so "
+                f"the unit no longer settles the parameter")
+    for parameter in numeric:
+        for unit in parameter.units_accepted:
+            got = fields.derive_parameter(SPEC, {"value": 1, "unit": unit})
+            assert got is parameter, f"{unit!r} did not settle on {parameter.label}"
+
+
+def test_a_value_whose_aggregation_nothing_decided_is_counted_not_summed(
+        tmp_path, caplog):
+    """The promise: no node without an aggregation, and the evidence says how
+    the aggregation was arrived at.
+
+    `row.get("aggregation") or AGGREGATION_INTEGRAL` wrote a year's sum for
+    every row that carried none, which is a claim about the value that nothing
+    in the document made: a peak load written down as an annual total is wrong
+    in a way no reader of the graph can see. It never showed in a test because
+    the test helper never omitted the key.
+    """
+    serializer = kg.make_serializer(_database(tmp_path))
+    row = _row()
+    row.pop("aggregation")
+    row.pop("aggregation_state")
+    with caplog.at_level(logging.INFO, logger="profiles.kwp.kg"):
+        assert serializer("waermeplan_kassel_20240315", [row]) is None
+    assert "'aggregation_missing': 1" in " ".join(
+        r.getMessage() for r in caplog.records)
+
+
+def test_the_evidence_says_whether_the_aggregation_was_read_or_derived(tmp_path):
+    """Derived is not a weaker reading than read, it is a different one, and a
+    reader of the graph has to be able to tell them apart."""
+    serializer = kg.make_serializer(_database(tmp_path))
+    ttl = serializer("waermeplan_kassel_20240315", [_row()])
+    assert "# Aggregation: OEO_00140070 (aus der Einheit kWh/a)" in ttl
+
+    second = tmp_path / "second"
+    second.mkdir()
+    ttl = kg.make_serializer(_database(second))(
+        "waermeplan_kassel_20240315",
+        [_row(aggregation="OEO_00140073", aggregation_state="read",
+              aggregation_raw="Spitzenlast")])
+    assert "# Aggregation: OEO_00140073 „Spitzenlast“" in ttl
+    assert "aus der Einheit" not in ttl

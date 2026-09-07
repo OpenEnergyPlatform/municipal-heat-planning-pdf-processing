@@ -499,7 +499,9 @@ def anchor_targets(spec: Spec) -> list:
     for parameter in spec.parameters:
         out.append((anchor_key(parameter.uri), parameter.label,
                     parameter.description, None))
-        for slot in fields.axis_slots(parameter):
+        # asked_slots, not axis_slots: an anchor is a sentence to search
+        # with, and a coordinate the spec derives is never searched for.
+        for slot in fields.asked_slots(parameter):
             out.append((anchor_key(parameter.uri, slot.name),
                         f"{parameter.label} / {slot.name}",
                         parameter.description, slot.question))
@@ -1878,9 +1880,30 @@ def make_fieldwise_harvester(image_root: Optional[Path] = None,
             # which coordinates the row even has. One request, one quote, and
             # a row it cannot answer for gets no axes rather than the axes of
             # a guess.
+            #
+            # Asked only where the unit leaves it open. The spec says it
+            # itself — "the unit separates the two parameters" — and over the
+            # kwp spec the nine energy units and the forty-two emission units
+            # share not one spelling. Asking anyway cost 322 of 1,043 field
+            # windows on Kassel, 30.9 percent, for a coordinate not one of
+            # 559 accepted tuples contradicted.
             slot = fields.parameter_slot(spec)
-            counts[slot.name] = sweep_field(batch, rows, slot,
-                                            PARAMETER_ANCHOR)
+            undecided = []
+            for row in rows:
+                parameter = fields.derive_parameter(spec, row.claim)
+                if parameter is None:
+                    undecided.append(row)
+                    continue
+                row.claim["parameter"] = parameter.label
+                row.claim["parameter_state"] = fields.DERIVED
+                wording = row.claim.get("unit_raw") or row.claim.get("unit")
+                if wording:
+                    row.claim["parameter_raw"] = wording
+                if row.claim.get("quote"):
+                    row.claim["parameter_quote"] = row.claim["quote"]
+            if undecided:
+                counts[slot.name] = sweep_field(batch, undecided, slot,
+                                                PARAMETER_ANCHOR)
             uri_of = {opt.label: opt.uri for opt in slot.options}
             grouped: dict = {}
             for row in rows:
@@ -1894,6 +1917,14 @@ def make_fieldwise_harvester(image_root: Optional[Path] = None,
                 axes = fields.axis_slots(spec.by_uri[uri])
                 for row in group:
                     slots_of[row.label] = [slot] + axes
+                # What the spec decides is written before anything is asked,
+                # and before the gate: a row that leaves at the gate still
+                # carries the coordinates that never needed a request, so
+                # `out_of_slice` says "never asked" about the axes that
+                # really were not asked and about no others.
+                for axis in axes:
+                    fields.apply_derived(group, axis)
+                axes = [axis for axis in axes if not axis.derive]
                 by_name = {axis.name: axis for axis in axes}
                 gate = [by_name[name] for name in (slice_gate or {})
                         if name in by_name]
@@ -1930,6 +1961,9 @@ def make_fieldwise_harvester(image_root: Optional[Path] = None,
             axes = fields.axis_slots(batch.parameter)
             for row in rows:
                 slots_of[row.label] = axes
+            for axis in axes:
+                fields.apply_derived(rows, axis)
+            axes = [axis for axis in axes if not axis.derive]
             if axes:
                 jobs.append((rows, axes,
                              anchor_key(batch.parameter.uri, axes[0].name)))
