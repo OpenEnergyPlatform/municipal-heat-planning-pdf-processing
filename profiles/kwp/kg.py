@@ -95,6 +95,39 @@ UNIT_TARGET = {uri: par["unit_target"]
 AGGREGATIONS = {uri for par in _SPEC["parameters"]
                 if "aggregation" in par.get("axes", {})
                 for uri in par["axes"]["aggregation"]["vocabulary"]}
+def _predicate(name: str) -> str:
+    """The predicate the spec's `kg` block gives this axis.
+
+    Written down once. The predicate used to stand as a literal here and be
+    described a second time wherever the graph was documented, and a change
+    in one place left the other describing a graph nobody was writing. The
+    JSON schema publishes the same block, so what a reader is told and what
+    is emitted are one string.
+    """
+    for par in _SPEC["parameters"]:
+        axis = (par.get("axes") or {}).get(name) or {}
+        block = axis.get("kg") or {}
+        if block.get("role") == "edge" and block.get("predicate"):
+            return block["predicate"]
+    raise KeyError(f"no kg edge predicate for axis {name!r} in the spec")
+
+
+def _value_predicate(key: str) -> str:
+    """The predicate carrying a value's number or its unit."""
+    for par in _SPEC["parameters"]:
+        block = (par.get("kg") or {}).get(key) or {}
+        if block.get("predicate"):
+            return block["predicate"]
+    raise KeyError(f"no kg {key} predicate in the spec")
+
+
+P_NUMBER = _value_predicate("number")           # has number
+P_UNIT = _value_predicate("unit")               # has unit
+P_CARRIER = _predicate("carrier")               # covers energy carrier
+P_SECTOR = _predicate("sector")                 # covers sector
+P_YEAR = _predicate("year")                     # has scenario year value
+P_AGGREGATION = _predicate("aggregation")       # has aggregation type
+
 ORGANISATION = "planning_organisation"
 CLS_ORGANISATION = "OEO_00030022"        # organisation
 CLS_PLAN_AREA = "MHPO_00020018"          # heat plan area
@@ -415,8 +448,8 @@ def make_serializer(db_path: Path):
             lines = evidence_comment(row, name)
             lines += [f"<{iri}>",
                       f"    a oeo:{row['quantity']} ;",
-                     f"    oeo:OEO_00140178 \"{float(row['value_target'])!r}\"^^xsd:float ;",
-                     f"    oeo:OEO_00040010 oeo:{UNIT_TARGET[row['quantity']]} ;"]
+                     f"    oeo:{P_NUMBER} \"{float(row['value_target'])!r}\"^^xsd:float ;",
+                     f"    oeo:{P_UNIT} oeo:{UNIT_TARGET[row['quantity']]} ;"]
             carrier = row.get("carrier")
             if carrier and is_class(carrier):
                 if carrier in NOT_AN_ENERGY_CARRIER:
@@ -429,11 +462,11 @@ def make_serializer(db_path: Path):
                     # than no value at all.
                     skip(f"carrier_not_in_oeo:{NOT_AN_ENERGY_CARRIER[carrier]}")
                 else:
-                    lines.append(f"    oeo:OEO_00000523 oeo:{carrier} ;")
+                    lines.append(f"    oeo:{P_CARRIER} oeo:{carrier} ;")
             if row.get("sector") and is_class(row["sector"]):
-                lines.append(f"    oeo:OEO_00000505 oeo:{row['sector']} ;")
-            lines.append(f"    oeo:OEO_00020440 \"{row['year']}\"^^xsd:integer ;")
-            lines.append(f"    oeo:OEO_00390023 oeo:{row['aggregation']} .")
+                lines.append(f"    oeo:{P_SECTOR} oeo:{row['sector']} ;")
+            lines.append(f"    oeo:{P_YEAR} \"{row['year']}\"^^xsd:integer ;")
+            lines.append(f"    oeo:{P_AGGREGATION} oeo:{row['aggregation']} .")
             parts.append("\n".join(lines) + "\n")
         for iri, label in office_iris.items():
             parts.append(f"<{iri}>\n"

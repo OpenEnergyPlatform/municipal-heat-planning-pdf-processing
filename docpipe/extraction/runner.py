@@ -2420,7 +2420,8 @@ def run_document(document_id: int, name: str, out_dir: Path, spec: Spec,
                               more_sources=deps.get("more_sources"),
                               extra_probes=deps.get("anchors"),
                               prose_top=PROSE_TOP)
-    finish_document(report, name, out_dir, spec_sha, anchors_sha)
+    finish_document(report, name, out_dir, spec_sha, anchors_sha,
+                    spec=spec)
     return True
 
 
@@ -2460,7 +2461,8 @@ UNREACHABLE_LIMIT = 0.5
 
 
 def finish_document(report, name: str, out_dir: Path, spec_sha: str,
-                    anchors_sha: str = "", answered: Optional[int] = None) -> None:
+                    anchors_sha: str = "", answered: Optional[int] = None,
+                    spec: Optional[Spec] = None) -> None:
     """Write one document's JSONL and stamp it with what produced it.
 
     The stamp is what a resume trusts, so it is withheld when the harvest did
@@ -2481,6 +2483,8 @@ def finish_document(report, name: str, out_dir: Path, spec_sha: str,
               if r.get("claim", {}).get("_harvest_failed")]
     if failed:
         log.warning("extraction: %s: %d source(s) never answered", name, len(failed))
+    if spec is not None:
+        check_against_schema(report, name, spec)
     write_report(report, out_dir / f"{name}.jsonl")
     unreachable = sum(1 for r in failed
                       if r.get("claim", {}).get("_why") == "unreachable")
@@ -2497,6 +2501,90 @@ def finish_document(report, name: str, out_dir: Path, spec_sha: str,
     (out_dir / f"{name}.stamp.json").write_text(
         json.dumps(_stamp_current(spec_sha, anchors_sha), indent=2),
         encoding="utf-8")
+
+
+def _harvest_validators(spec):
+    """One validator per branch of the harvest schema, or None.
+
+    Per branch and not one for the whole file, because the schema is a oneOf
+    over the parameters: a row that breaks in one key fails every branch, and
+    the only message the outer validator can give is "matches none of them"
+    followed by the row itself. Which branch a row belongs to is written on
+    the row (its kind, and for a tuple its parameter), so it is looked up
+    rather than searched for.
+
+    Built once per process and cached: compiling the schema per document
+    would cost more than the check it pays for.
+    """
+    # Keyed by the profile the spec describes, not cached once for the
+    # process: two profiles in one process would otherwise have the second
+    # checked against the first one's schema, and every row of it would be
+    # reported invalid.
+    key = tuple(p.uri for p in spec.parameters)
+    cache = getattr(_harvest_validators, "_cached", None)
+    if cache is None:
+        cache = _harvest_validators._cached = {}
+    if key not in cache:
+        try:
+            import jsonschema
+
+            from .schema import build
+            harvest = build(spec)["harvest"]
+            defs = harvest["$defs"]
+            base = {"$schema": harvest["$schema"], "$defs": defs}
+            cache[key] = {
+                branch_key: jsonschema.Draft202012Validator(
+                    {**base, **defs[branch]})
+                for branch_key, branch in
+                [(("refusal", None), "refusal")]
+                + [(("tuple", p.uri), f"tuple_{p.uri}")
+                   for p in spec.parameters]}
+        except Exception as exc:              # pragma: no cover - defensive
+            log.warning("extraction: no schema check (%s)", exc)
+            cache[key] = False
+    return cache[key] or None
+
+
+def check_against_schema(report, name: str, spec) -> int:
+    """Count the rows this document would write that the schema refuses.
+
+    Counted and traced, never blocking. The harvest is the durable artifact
+    and a row the schema does not recognise is still evidence; refusing to
+    write it would turn a documentation defect into a data loss. What it must
+    not do is pass unnoticed, because the schema is what everyone downstream
+    reads instead of this file.
+    """
+    validators = _harvest_validators(spec)
+    if validators is None:
+        return 0
+    invalid = 0
+    for kind, rows in (("tuple", report.tuples), ("refusal", report.refusals)):
+        for row in rows:
+            key = (kind, row.get("parameter") if kind == "tuple" else None)
+            validator = validators.get(key)
+            if validator is None:
+                # No branch claims it. That is a finding of its own: the row
+                # names a parameter this spec does not have.
+                invalid += 1
+                trace.event("invalid", report.document_id, kind=kind,
+                            where="parameter", why="oneOf",
+                            detail=f"no branch for {key[1]!r}")
+                continue
+            errors = list(validator.iter_errors({"kind": kind, **row}))
+            if not errors:
+                continue
+            invalid += 1
+            first = min(errors, key=lambda e: (e.validator == "oneOf",
+                                               -len(list(e.absolute_path))))
+            trace.event("invalid", report.document_id, kind=kind,
+                        where="/".join(str(p) for p in first.absolute_path),
+                        why=str(first.validator),
+                        detail=first.message[:200])
+    if invalid:
+        log.warning("extraction: %s: %d of %d row(s) do not match the "
+                    "published schema", name, invalid,
+                    len(report.tuples) + len(report.refusals))
+    return invalid
 
 
 def resolve_image_root(pdf_root: Optional[Path],
@@ -2908,7 +2996,7 @@ def main(argv: Optional[list] = None) -> int:
                         reason=refusal.get("reason"),
                         owner=refusal.get("owner"))
         finish_document(report, name, args.out, spec_sha, anchors_sha,
-                        answered=replies)
+                        answered=replies, spec=spec)
         trace.flush(report.document_id)
 
     started = time.time()

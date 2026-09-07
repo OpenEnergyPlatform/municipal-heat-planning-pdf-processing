@@ -150,6 +150,12 @@ class Axis:
     # five-field request for a coordinate the spec knew. What the unit does
     # NOT fix stays a question — the profile decides which is which.
     derive: Optional[dict] = None
+    # What this coordinate becomes in the graph: {"role": "type"|"edge"|
+    # "parent"|"comment", ...}. The serializer reads the predicate from here
+    # and the JSON schema publishes it, so the two cannot drift: a predicate
+    # changed in one place used to leave the other describing a graph nobody
+    # was writing.
+    kg: Optional[dict] = None
 
     def label_to_uri(self) -> dict:
         """Corpus label (folded) -> URI. Built once, used per tuple."""
@@ -174,6 +180,11 @@ class Parameter:
     # A category whose closed list is real but per document, filled in by the
     # profile before the harvest. Same rule as a dynamic axis, one level up.
     vocabulary_dynamic: bool = False
+    # What a row of this parameter becomes in the graph: which node, which
+    # class, which predicate carries the number and which the unit. Read by
+    # the serializer and published by the JSON schema, so neither can drift
+    # from the other.
+    kg: Optional[dict] = None
 
     @property
     def is_numeric(self) -> bool:
@@ -227,6 +238,15 @@ def _validate_axis(path: str, name: str, raw) -> Axis:
     axis_type = raw.get("type")
     enum = raw.get("enum")
     dynamic = bool(raw.get("dynamic", False))
+    kg = raw.get("kg")
+    if kg is not None:
+        if not isinstance(kg, dict) or not kg:
+            _fail(path, "kg must be a non-empty object")
+        role = kg.get("role")
+        if role not in ("type", "edge", "parent", "comment"):
+            _fail(path, "kg.role must be one of: type, edge, parent, comment")
+        if role == "edge" and not str(kg.get("predicate") or "").strip():
+            _fail(path, "an edge names the predicate it writes")
     evidence = raw.get("evidence", "any")
     if evidence not in ("own", "local", "any"):
         _fail(path, "evidence must be one of: own, local, any")
@@ -276,7 +296,7 @@ def _validate_axis(path: str, name: str, raw) -> Axis:
     return Axis(name=name, vocabulary=vocabulary, type=axis_type,
                 enum=enum, required=bool(raw.get("required", False)),
                 dynamic=dynamic, question=question, derive=derive,
-                evidence=evidence)
+                evidence=evidence, kg=kg)
 
 
 def _validate_example(path: str, raw, value_type: str,
@@ -397,7 +417,7 @@ def _validate_parameter(path: str, raw) -> Parameter:
                      unit_target=unit_target, units_accepted=units,
                      vocabulary=vocabulary,
                      vocabulary_dynamic=vocabulary_dynamic,
-                     axes=axes, example=example)
+                     axes=axes, example=example, kg=raw.get("kg"))
 
 
 def load(source: Union[Path, str, dict]) -> Spec:

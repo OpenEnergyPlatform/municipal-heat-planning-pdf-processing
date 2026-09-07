@@ -378,29 +378,39 @@ def _short(term: str) -> str:
     return term
 
 
+# The plan behind the published example: one energy value and the office
+# that wrote it. Module level, so the schema test can serialize the same
+# plan instead of keeping a second copy of it.
+KASSEL_ROWS = [
+    {"kind": "tuple", "parameter": "energy_consumption",
+     "value": 241.0, "value_target": 241.0, "unit_raw": "MWh",
+     "quantity": "OEO_00050016", "quantity_raw": "Endenergieverbrauch",
+     "carrier": "OEO_00000292", "sector": "OEO_00000214", "year": 2030,
+     # The example carries `has aggregation type integral` and the
+     # serializer no longer invents it: a value whose aggregation nothing
+     # decided is counted, not written down as a year's sum.
+     "aggregation": "OEO_00140070", "aggregation_state": "derived",
+     "aggregation_raw": "MWh",
+     "scenario": "target", "spatial_scope": "municipality",
+     "provenance": {"document_id": 857}},
+    {"kind": "tuple", "parameter": "planning_organisation",
+     "value": "Kassel Wärme Ingenieurbüro GmbH",
+     "quote": "Auftragnehmer: Kassel Wärme Ingenieurbüro GmbH",
+     "provenance": {"document_id": 857}},
+]
+
+
+def one_plan_turtle(tmp_path):
+    """The Turtle the serializer writes for the published example."""
+    return kg.make_serializer(_database(tmp_path))(
+        "waermeplan_kassel_20240315", KASSEL_ROWS)
+
+
 def test_one_heat_plan_comes_out_as_the_published_example(tmp_path):
     """The whole point of the pilot, as one assertion: feed the serializer what
     Kassel's plan says and the output is the schema repo's kassel_valid.ttl —
     every node, every predicate, both directions."""
-    rows = [
-        {"kind": "tuple", "parameter": "energy_consumption",
-         "value": 241.0, "value_target": 241.0, "unit_raw": "MWh",
-         "quantity": "OEO_00050016", "quantity_raw": "Endenergieverbrauch",
-         "carrier": "OEO_00000292", "sector": "OEO_00000214", "year": 2030,
-         # The example carries `has aggregation type integral` and the
-         # serializer no longer invents it: a value whose aggregation nothing
-         # decided is counted, not written down as a year's sum.
-         "aggregation": "OEO_00140070", "aggregation_state": "derived",
-         "aggregation_raw": "MWh",
-         "scenario": "target", "spatial_scope": "municipality",
-         "provenance": {"document_id": 857}},
-        {"kind": "tuple", "parameter": "planning_organisation",
-         "value": "Kassel Wärme Ingenieurbüro GmbH",
-         "quote": "Auftragnehmer: Kassel Wärme Ingenieurbüro GmbH",
-         "provenance": {"document_id": 857}},
-    ]
-    ttl = kg.make_serializer(_database(tmp_path))(
-        "waermeplan_kassel_20240315", rows)
+    ttl = one_plan_turtle(tmp_path)
     ours = _triples(ttl)
     # The value node's IRI is ours to mint, so its identity is compared as
     # VALUE; that the scenario points at it is asserted separately.

@@ -1,0 +1,3697 @@
+{
+ "harvest": {
+  "$defs": {
+   "provenance": {
+    "additionalProperties": false,
+    "properties": {
+     "block_id": {
+      "description": "Placeholder of the item in that section, e.g. p85_tbl0.",
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "document_id": {
+      "description": "Documents.id. The AGS and the publication date, which the heat plan IRI is minted from, are joined from the database by the serializer rather than carried here.",
+      "type": "integer"
+     },
+     "image": {
+      "description": "Crop path relative to the image root.",
+      "type": "string"
+     },
+     "owner_id": {
+      "description": "Sections.id, Tables.id or Images.id.",
+      "type": "integer"
+     },
+     "owner_kind": {
+      "enum": [
+       "section",
+       "table",
+       "figure"
+      ]
+     },
+     "page": {
+      "description": "1-based PDF page of the owner.",
+      "type": [
+       "integer",
+       "null"
+      ]
+     },
+     "parent_section": {
+      "description": "Sections.id of the section a table or figure stands in.",
+      "type": [
+       "integer",
+       "null"
+      ]
+     },
+     "rects": {
+      "description": "Highlight boxes on the page, when the passage could be located.",
+      "type": "array"
+     },
+     "section_number": {
+      "type": [
+       "integer",
+       "null"
+      ]
+     },
+     "section_title": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "title": {
+      "description": "The section title, or a table's or figure's caption -- resolved to the sentence before its placeholder where the stored caption is a footnote.",
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "via": {
+      "description": "How this source reached the window: a retrieval probe, or 'parent' for the section a table stands in.",
+      "type": "string"
+     }
+    },
+    "required": [
+     "document_id",
+     "owner_kind",
+     "owner_id"
+    ],
+    "type": "object"
+   },
+   "refusal": {
+    "additionalProperties": false,
+    "properties": {
+     "claim": {
+      "description": "The claim as the model returned it. A dead-server sentinel carries _harvest_failed with _why, or _cut_off.",
+      "properties": {
+       "_cut_off": {
+        "const": true
+       },
+       "_harvest_failed": {
+        "const": true
+       },
+       "_why": {
+        "enum": [
+         "unreachable",
+         "no_answer"
+        ]
+       }
+      },
+      "type": "object"
+     },
+     "kind": {
+      "const": "refusal"
+     },
+     "owner": {
+      "description": "[owner_kind, owner_id]",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "section",
+         "table",
+         "figure"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
+     "parameter": {
+      "description": "The spec parameter, or whatever the claim named.",
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "reason": {
+      "anyOf": [
+       {
+        "pattern": "^claim names no parameter of the spec$"
+       },
+       {
+        "pattern": "^claim names no source$"
+       },
+       {
+        "pattern": "^tuple is not an object$"
+       },
+       {
+        "pattern": "^value is not a number$"
+       },
+       {
+        "pattern": "^unit .* not in units_accepted \\(.*\\)$"
+       },
+       {
+        "pattern": "^a (text|category) parameter needs a non-empty string value$"
+       },
+       {
+        "pattern": "^required axis '.*' (missing|is empty)$"
+       },
+       {
+        "pattern": "^axis '.*': .* (not in vocabulary and axis is required|is not an integer|not in enum .*)$"
+       },
+       {
+        "pattern": "^quote missing or too short to identify anything$"
+       },
+       {
+        "pattern": "^quote not found in the source it cites$"
+       },
+       {
+        "pattern": "^value .* does not occur in the quote$"
+       },
+       {
+        "pattern": "^text value not in its quote$"
+       }
+      ],
+      "description": "Why the claim was refused; one of the reason families of verify.py and pipeline.py.",
+      "type": "string"
+     }
+    },
+    "required": [
+     "kind",
+     "parameter",
+     "reason",
+     "claim",
+     "owner"
+    ],
+    "type": "object"
+   },
+   "state": {
+    "enum": [
+     "read",
+     "derived",
+     "unstated",
+     "unanswered",
+     "exhausted",
+     "unbacked",
+     "out_of_slice"
+    ],
+    "x-doc": {
+     "derived": "not asked: the spec decides this coordinate from something already on the row (the unit)",
+     "exhausted": "still open when the window budget ended with the document unread. A finding about the run",
+     "out_of_slice": "never asked: a gate coordinate (the profile's SLICE) had already put the row outside what this run serializes",
+     "read": "answered, and the cited passage carries the answer",
+     "unanswered": "the field reply never mentioned this row. A finding about the model",
+     "unbacked": "answered, but no shown passage carried the answer, or the passage belonged to another row, and no later window fixed it",
+     "unstated": "answered: the passages shown do not state it. A finding about the plan, and only final once the sweep ran out of document"
+    }
+   },
+   "tuple_emission": {
+    "additionalProperties": false,
+    "allOf": [
+     {
+      "else": {
+       "properties": {
+        "quantity": {
+         "type": "null"
+        }
+       }
+      },
+      "if": {
+       "properties": {
+        "quantity_state": {
+         "enum": [
+          "read",
+          "derived"
+         ]
+        }
+       },
+       "required": [
+        "quantity_state"
+       ]
+      },
+      "then": {
+       "properties": {
+        "quantity": {
+         "type": "string"
+        }
+       },
+       "required": [
+        "quantity"
+       ]
+      }
+     },
+     {
+      "else": {
+       "properties": {
+        "aggregation": {
+         "type": "null"
+        }
+       }
+      },
+      "if": {
+       "properties": {
+        "aggregation_state": {
+         "enum": [
+          "read",
+          "derived"
+         ]
+        }
+       },
+       "required": [
+        "aggregation_state"
+       ]
+      },
+      "then": {
+       "properties": {
+        "aggregation": {
+         "type": "string"
+        }
+       },
+       "required": [
+        "aggregation"
+       ]
+      }
+     },
+     {
+      "else": {
+       "properties": {
+        "carrier": {
+         "type": "null"
+        }
+       }
+      },
+      "if": {
+       "properties": {
+        "carrier_state": {
+         "enum": [
+          "read",
+          "derived"
+         ]
+        }
+       },
+       "required": [
+        "carrier_state"
+       ]
+      },
+      "then": {
+       "properties": {
+        "carrier": {
+         "type": "string"
+        }
+       },
+       "required": [
+        "carrier"
+       ]
+      }
+     },
+     {
+      "else": {
+       "properties": {
+        "sector": {
+         "type": "null"
+        }
+       }
+      },
+      "if": {
+       "properties": {
+        "sector_state": {
+         "enum": [
+          "read",
+          "derived"
+         ]
+        }
+       },
+       "required": [
+        "sector_state"
+       ]
+      },
+      "then": {
+       "properties": {
+        "sector": {
+         "type": "string"
+        }
+       },
+       "required": [
+        "sector"
+       ]
+      }
+     },
+     {
+      "else": {
+       "properties": {
+        "year": {
+         "type": "null"
+        }
+       }
+      },
+      "if": {
+       "properties": {
+        "year_state": {
+         "enum": [
+          "read",
+          "derived"
+         ]
+        }
+       },
+       "required": [
+        "year_state"
+       ]
+      },
+      "then": {
+       "properties": {
+        "year": {
+         "type": "integer"
+        }
+       },
+       "required": [
+        "year"
+       ]
+      }
+     },
+     {
+      "else": {
+       "properties": {
+        "scenario": {
+         "type": "null"
+        }
+       }
+      },
+      "if": {
+       "properties": {
+        "scenario_state": {
+         "enum": [
+          "read",
+          "derived"
+         ]
+        }
+       },
+       "required": [
+        "scenario_state"
+       ]
+      },
+      "then": {
+       "properties": {
+        "scenario": {
+         "type": "string"
+        }
+       },
+       "required": [
+        "scenario"
+       ]
+      }
+     },
+     {
+      "else": {
+       "properties": {
+        "spatial_scope": {
+         "type": "null"
+        }
+       }
+      },
+      "if": {
+       "properties": {
+        "spatial_scope_state": {
+         "enum": [
+          "read",
+          "derived"
+         ]
+        }
+       },
+       "required": [
+        "spatial_scope_state"
+       ]
+      },
+      "then": {
+       "properties": {
+        "spatial_scope": {
+         "type": "string"
+        }
+       },
+       "required": [
+        "spatial_scope"
+       ]
+      }
+     }
+    ],
+    "properties": {
+     "aggregation": {
+      "description": "Axis 'aggregation' of Emissionen. A closed list; an entry beginning 'out:' is a deliberate non-class answer and mints no node. null unless aggregation_state is 'read' or 'derived'.",
+      "enum": [
+       "OEO_00140070",
+       "OEO_00140071",
+       "OEO_00140069",
+       "OEO_00140073",
+       "OEO_00140072",
+       null
+      ],
+      "type": [
+       "string",
+       "null"
+      ],
+      "x-kg": {
+       "label": "has aggregation type",
+       "note": "Object is a named individual of OEO_00140068 aggregation type. Derived from the unit, never asked: every accepted unit of both parameters is an extensive amount.",
+       "predicate": "OEO_00390023",
+       "role": "edge"
+      },
+      "x-options": {
+       "arithmetic mean": {
+        "spellings": [
+         "Mittelwert",
+         "Durchschnitt"
+        ],
+        "uri": "OEO_00140071"
+       },
+       "instantaneous": {
+        "spellings": [
+         "Momentanwert zu einem Zeitpunkt"
+        ],
+        "uri": "OEO_00140069"
+       },
+       "integral": {
+        "spellings": [
+         "Summe oder Integral über einen Zeitraum oder ein Gebiet",
+         "Jahreswert",
+         "Jahressumme"
+        ],
+        "uri": "OEO_00140070"
+       },
+       "maximum": {
+        "spellings": [
+         "Maximum",
+         "Spitzenwert",
+         "Spitzenlast"
+        ],
+        "uri": "OEO_00140073"
+       },
+       "minimum": {
+        "spellings": [
+         "Minimum",
+         "Tiefstwert"
+        ],
+        "uri": "OEO_00140072"
+       }
+      },
+      "x-question": "Wie ist der Wert über Zeit oder Raum zusammengefasst? Der Normalfall ist \"integral\", also eine Jahressumme. \"maximum\" bei einer Spitzenlast oder einem Höchstwert, \"arithmetic mean\" bei einem Durchschnitt je Gebäude oder je Jahr, \"instantaneous\" bei einem Momentanwert."
+     },
+     "aggregation_quote": {
+      "description": "The verbatim passage carrying 'aggregation'. Present exactly when aggregation_state is 'read'.",
+      "minLength": 8,
+      "type": "string"
+     },
+     "aggregation_raw": {
+      "description": "The document's own wording 'aggregation' was read from. This is what a later re-mapping onto a changed vocabulary works on, so a choice without it is counted (raw_missing).",
+      "type": "string"
+     },
+     "aggregation_raw_foreign": {
+      "description": "The wording does not name the option chosen for 'aggregation' -- the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.",
+      "type": "boolean"
+     },
+     "aggregation_seen": {
+      "description": "A wording the model noticed for 'aggregation' while answering 'not stated'. Vocabulary review material, never evidence.",
+      "type": "string"
+     },
+     "aggregation_source": {
+      "description": "Which source the passage for 'aggregation' was found in. How far that may be from the row is the axis' own rule (own | local | any).",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "section",
+         "table",
+         "figure"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
+     "aggregation_state": {
+      "$ref": "#/$defs/state",
+      "description": "How the coordinate 'aggregation' ended. Always present: a missing key and a refused reading must not look alike."
+     },
+     "aggregation_window": {
+      "description": "[stage, index] of the window 'aggregation' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts.",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "own",
+         "retrieval",
+         "rest"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
+     "carrier": {
+      "description": "Axis 'carrier' of Emissionen. A closed list; an entry beginning 'out:' is a deliberate non-class answer and mints no node. null unless carrier_state is 'read' or 'derived'.",
+      "enum": [
+       "OEO_00000292",
+       "OEO_00000211",
+       "OEO_00000132",
+       "OEO_00000139",
+       "OEO_00000449",
+       "OEO_00000074",
+       "OEO_00000388",
+       "OEO_00000251",
+       "OEO_00320011",
+       "OEO_00000220",
+       "OEO_00000204",
+       "OEO_00010215",
+       "OEO_00000332",
+       "OEO_00010214",
+       "OEO_00000088",
+       "OEO_00000290",
+       "OEO_00000356",
+       "OEO_00000439",
+       "OEO_00020495",
+       "OEO_00010155",
+       "OEO_00000191",
+       "OEO_00010114",
+       "OEO_00310004",
+       "OEO_00000056",
+       "OEO_00140105",
+       "OEO_00140104",
+       "out:total",
+       "out:other",
+       null
+      ],
+      "type": [
+       "string",
+       "null"
+      ],
+      "x-kg": {
+       "label": "covers energy carrier",
+       "note": "Object is an OEO class (punning). The edge is dropped, and the value kept, for the nine classes OEO does not place under energy carrier -- district heat, electricity, solar thermal, geothermal and the ambient heat sources.",
+       "predicate": "OEO_00000523",
+       "role": "edge"
+      },
+      "x-options": {
+       "Abwasserwärme": {
+        "spellings": [
+         "Abwasser"
+        ],
+        "uri": "OEO_00140105"
+       },
+       "Abwärme": {
+        "spellings": [
+         "unvermeidbare Abwärme"
+        ],
+        "uri": "OEO_00010114"
+       },
+       "Biogas": {
+        "spellings": [],
+        "uri": "OEO_00000074"
+       },
+       "Biogut": {
+        "spellings": [
+         "Gartenabfälle",
+         "Grünschnitt"
+        ],
+        "uri": "OEO_00000356"
+       },
+       "Biomasse": {
+        "spellings": [
+         "pflanzliche Biomasse",
+         "landwirtschaftliche Biomasse"
+        ],
+        "uri": "OEO_00010214"
+       },
+       "Biomethan": {
+        "spellings": [],
+        "uri": "OEO_00010215"
+       },
+       "Braunkohle": {
+        "spellings": [],
+        "uri": "OEO_00000251"
+       },
+       "Erdgas": {
+        "spellings": [
+         "Gas"
+        ],
+        "uri": "OEO_00000292"
+       },
+       "Fernwärme": {
+        "spellings": [
+         "Wärmenetze",
+         "Wärmenetz"
+        ],
+        "uri": "OEO_00000132"
+       },
+       "Flüssiggas": {
+        "spellings": [],
+        "uri": "OEO_00320011"
+       },
+       "Geothermie": {
+        "spellings": [
+         "Erdwärme",
+         "oberflächennahe Geothermie",
+         "Tiefengeothermie",
+         "Erdwärmesonde",
+         "Erdwärmekollektor"
+        ],
+        "uri": "OEO_00000191"
+       },
+       "Heizöl": {
+        "spellings": [
+         "Öl"
+        ],
+        "uri": "OEO_00000211"
+       },
+       "Holz": {
+        "spellings": [
+         "Holzpellets",
+         "Pellets"
+        ],
+        "uri": "OEO_00000449"
+       },
+       "Klärschlamm": {
+        "spellings": [],
+        "uri": "OEO_00000439"
+       },
+       "Kohle": {
+        "spellings": [],
+        "uri": "OEO_00000088"
+       },
+       "Oberflächengewässer": {
+        "spellings": [
+         "Seethermie",
+         "Flusswärme"
+        ],
+        "uri": "OEO_00140104"
+       },
+       "Siedlungsabfälle": {
+        "spellings": [
+         "Abfall",
+         "thermische Abfallverwertung"
+        ],
+        "uri": "OEO_00000290"
+       },
+       "Solarthermie": {
+        "spellings": [],
+        "uri": "OEO_00000388"
+       },
+       "Sonstige": {
+        "spellings": [
+         "Andere",
+         "sonstige Energieträger"
+        ],
+        "uri": "out:other"
+       },
+       "Steinkohle": {
+        "spellings": [],
+        "uri": "OEO_00000204"
+       },
+       "Strom": {
+        "spellings": [
+         "Elektrizität"
+        ],
+        "uri": "OEO_00000139"
+       },
+       "Summe": {
+        "spellings": [
+         "Gesamt",
+         "Gesamtwert",
+         "Gesamtsumme",
+         "alle Energieträger",
+         "insgesamt"
+        ],
+        "uri": "out:total"
+       },
+       "Umweltwärme": {
+        "spellings": [],
+        "uri": "OEO_00000056"
+       },
+       "Wasserstoff": {
+        "spellings": [],
+        "uri": "OEO_00000220"
+       },
+       "biogener Festbrennstoff": {
+        "spellings": [
+         "biogene Festbrennstoffe",
+         "sonstige biogene Festbrennstoffe"
+        ],
+        "uri": "OEO_00000332"
+       },
+       "grüne Gase": {
+        "spellings": [
+         "synthetische Gase"
+        ],
+        "uri": "OEO_00010155"
+       },
+       "industrielle Abwärme": {
+        "spellings": [],
+        "uri": "OEO_00310004"
+       },
+       "tierische Exkremente": {
+        "spellings": [
+         "Schlachtreste"
+        ],
+        "uri": "OEO_00020495"
+       }
+      },
+      "x-question": "Welcher Energieträger? Die Bezeichnung steht in der Zeilenbeschriftung, im Spaltenkopf oder in der Blocküberschrift, fast nie in der Schreibweise der Klassenliste: \"Gas H\" und \"Erdgas (netzgebunden)\" meinen die Klasse Erdgas, \"Nahwärme\" und \"Wärmenetz\" die Klasse Fernwärme. Eine Summenzeile (\"Summe\", \"Gesamt\", \"alle Energieträger\") ist \"out:total\", eine Restposition (\"Sonstige\", \"Andere\") ist \"out:other\". Passt fachlich weder eine Klasse noch einer dieser Einträge, etwa weil in der Spalte ein Gebäudetyp steht, dann lass die Zeile weg."
+     },
+     "carrier_quote": {
+      "description": "The verbatim passage carrying 'carrier'. Present exactly when carrier_state is 'read'.",
+      "minLength": 8,
+      "type": "string"
+     },
+     "carrier_raw": {
+      "description": "The document's own wording 'carrier' was read from. This is what a later re-mapping onto a changed vocabulary works on, so a choice without it is counted (raw_missing).",
+      "type": "string"
+     },
+     "carrier_raw_foreign": {
+      "description": "The wording does not name the option chosen for 'carrier' -- the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.",
+      "type": "boolean"
+     },
+     "carrier_seen": {
+      "description": "A wording the model noticed for 'carrier' while answering 'not stated'. Vocabulary review material, never evidence.",
+      "type": "string"
+     },
+     "carrier_source": {
+      "description": "Which source the passage for 'carrier' was found in. How far that may be from the row is the axis' own rule (own | local | any).",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "section",
+         "table",
+         "figure"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
+     "carrier_state": {
+      "$ref": "#/$defs/state",
+      "description": "How the coordinate 'carrier' ended. Always present: a missing key and a refused reading must not look alike."
+     },
+     "carrier_window": {
+      "description": "[stage, index] of the window 'carrier' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts.",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "own",
+         "retrieval",
+         "rest"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
+     "compute": {
+      "description": "The sandbox runs behind a computed value: {code, stdout, ok, error}.",
+      "items": {
+       "type": "object"
+      },
+      "type": "array"
+     },
+     "computed": {
+      "description": "The value came out of the sandbox, not off the page; the quote proves the inputs it was computed from.",
+      "type": "boolean"
+     },
+     "flags": {
+      "description": "Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping a word the spec does not list; period:* says whether a bare amount was shown to be a yearly one.",
+      "items": {
+       "pattern": "^(mapped:[a-z_]+:[\\s\\S]*->[\\s\\S]*|unmapped:[a-z_]+:[\\s\\S]*|unit_not_chosen:[\\s\\S]*|unit_spelling:[\\s\\S]*|period:(annual_in_quote|unstated)|quote_repaired|computed|not_located)$",
+       "type": "string"
+      },
+      "type": "array"
+     },
+     "kind": {
+      "const": "tuple"
+     },
+     "parameter": {
+      "const": "emission",
+      "description": "Spec parameter: Emissionen.",
+      "x-description-de": "Eine im Wärmeplan bilanzierte Emissionsmenge, je Energieträger, Sektor und Jahr. Welche Größe es ist, wählst du in \"quantity\" aus der Liste. Die Ontologie definiert die beiden Klassen so: CO2 emission value ist \"a greenhouse gas emission value that quantifies a CO2 emission rate and has a mass unit\", also reines Kohlendioxid. carbon dioxide equivalent quantity value ist \"the combined effect of all emitted greenhouse gases by giving an equivalent amount of CO2\", also alle Treibhausgase in CO2-Äquivalenten. Die Einheit verrät es meist: t CO2 gegen t CO2-Äq. Die übrigen Einträge der Liste beginnen mit \"out:\": das sind Größen, die der Graph NICHT aufnimmt, etwa eine kumulierte Summe über mehrere Jahre, eine vermiedene Emission oder eine abgeschiedene Menge aus einer CCS-Anlage. Wähle den passenden davon, wenn die Zahl eine davon ist. Das ist ein richtiges Ergebnis, kein Fehler.",
+      "x-question": "Um WELCHE Kennzahl handelt es sich bei dieser Zahl? Entscheide danach, was die Quelle über sie sagt: die Einheit, die Spalten- oder Zeilenbeschriftung und die Tabellen- oder Abschnittsüberschrift. Eine Angabe in t CO2 ist eine Emission, eine Angabe in MWh oder GWh ein Energieverbrauch. Zitiere die Stelle, aus der das hervorgeht."
+     },
+     "parameter_quote": {
+      "description": "The verbatim passage carrying 'parameter'. Present exactly when parameter_state is 'read'.",
+      "minLength": 8,
+      "type": "string"
+     },
+     "parameter_raw": {
+      "description": "The document's own wording 'parameter' was read from. This is what a later re-mapping onto a changed vocabulary works on, so a choice without it is counted (raw_missing).",
+      "type": "string"
+     },
+     "parameter_raw_foreign": {
+      "description": "The wording does not name the option chosen for 'parameter' -- the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.",
+      "type": "boolean"
+     },
+     "parameter_seen": {
+      "description": "A wording the model noticed for 'parameter' while answering 'not stated'. Vocabulary review material, never evidence.",
+      "type": "string"
+     },
+     "parameter_source": {
+      "description": "Which source the passage for 'parameter' was found in. How far that may be from the row is the axis' own rule (own | local | any).",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "section",
+         "table",
+         "figure"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
+     "parameter_state": {
+      "$ref": "#/$defs/state",
+      "description": "How the coordinate 'parameter' ended. Always present: a missing key and a refused reading must not look alike."
+     },
+     "parameter_window": {
+      "description": "[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts.",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "own",
+         "retrieval",
+         "rest"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
+     "provenance": {
+      "$ref": "#/$defs/provenance"
+     },
+     "quantity": {
+      "description": "Axis 'quantity' of Emissionen. A closed list; an entry beginning 'out:' is a deliberate non-class answer and mints no node. null unless quantity_state is 'read' or 'derived'.",
+      "enum": [
+       "OEO_00340066",
+       "OEO_00140083",
+       "out:cumulative",
+       "out:avoided",
+       "out:captured",
+       "out:factor",
+       "out:share",
+       "out:specific",
+       "out:other",
+       null
+      ],
+      "type": [
+       "string",
+       "null"
+      ],
+      "x-kg": {
+       "note": "The class of the value node itself (rdf:type). An out:* answer is a deliberate non-class and mints no node.",
+       "role": "type"
+      },
+      "x-options": {
+       "Anteil in Prozent": {
+        "spellings": [
+         "Anteil an den Gesamtemissionen"
+        ],
+        "uri": "out:share"
+       },
+       "CO2 emission value": {
+        "spellings": [
+         "CO2-Emissionen",
+         "Kohlendioxidemissionen",
+         "CO2-Ausstoß"
+        ],
+        "uri": "OEO_00340066"
+       },
+       "Emission je Kopf oder je Einwohner": {
+        "spellings": [],
+        "uri": "out:specific"
+       },
+       "Emissionsfaktor je Kilowattstunde": {
+        "spellings": [],
+        "uri": "out:factor"
+       },
+       "abgeschiedene oder gespeicherte Emission": {
+        "spellings": [
+         "CO2-Abscheidung",
+         "CCS",
+         "CCU",
+         "Senke"
+        ],
+        "uri": "out:captured"
+       },
+       "carbon dioxide equivalent quantity value": {
+        "spellings": [
+         "Treibhausgasemissionen",
+         "THG-Emissionen",
+         "CO2-Äquivalente",
+         "CO2e-Emissionen",
+         "THG",
+         "CO2e"
+        ],
+        "uri": "OEO_00140083"
+       },
+       "etwas anderes": {
+        "spellings": [],
+        "uri": "out:other"
+       },
+       "kumulierte Emission über mehrere Jahre": {
+        "spellings": [
+         "kumulierte Emissionen",
+         "Emissionsbudget"
+        ],
+        "uri": "out:cumulative"
+       },
+       "vermiedene oder eingesparte Emission": {
+        "spellings": [
+         "THG-Minderung",
+         "THG-Einsparung",
+         "Emissionsreduktion"
+        ],
+        "uri": "out:avoided"
+       }
+      },
+      "x-question": "Welche Größe ist diese Zahl? Das ist die wichtigste Entscheidung des Tupels, denn sie bestimmt, als welche Klasse der Wert im Graphen steht. Entscheide nach der Definition der Klasse, nicht nach der Ähnlichkeit der Wörter. \"CO2 emission value\" ist reines Kohlendioxid, \"carbon dioxide equivalent quantity value\" sind alle Treibhausgase, in CO2-Äquivalenten zusammengefasst. Die Einheit verrät es meist: t CO2 gegen t CO2-Äq. Sagt der Plan an anderer Stelle, dass seine Emissionen in CO2-Äquivalenten angegeben sind (\"Die zugehörigen Treibhausgasemissionen - angegeben in Tonnen CO2-Äquivalenten - sind gesondert aufgeführt\"), dann gilt das auch für eine Tabelle, deren Kopfzeile nur \"CO2-Emissionen\" schreibt: der Methodiksatz schlägt die Kopfzeile. Eine kumulierte Emission über mehrere Jahre, eine vermiedene oder eingesparte Emission und eine abgeschiedene Menge sind das Gegenteil einer im Bilanzjahr ausgestoßenen und haben ihre eigenen Einträge."
+     },
+     "quantity_quote": {
+      "description": "The verbatim passage carrying 'quantity'. Present exactly when quantity_state is 'read'.",
+      "minLength": 8,
+      "type": "string"
+     },
+     "quantity_raw": {
+      "description": "The document's own wording 'quantity' was read from. This is what a later re-mapping onto a changed vocabulary works on, so a choice without it is counted (raw_missing).",
+      "type": "string"
+     },
+     "quantity_raw_foreign": {
+      "description": "The wording does not name the option chosen for 'quantity' -- the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.",
+      "type": "boolean"
+     },
+     "quantity_seen": {
+      "description": "A wording the model noticed for 'quantity' while answering 'not stated'. Vocabulary review material, never evidence.",
+      "type": "string"
+     },
+     "quantity_source": {
+      "description": "Which source the passage for 'quantity' was found in. How far that may be from the row is the axis' own rule (own | local | any).",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "section",
+         "table",
+         "figure"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
+     "quantity_state": {
+      "$ref": "#/$defs/state",
+      "description": "How the coordinate 'quantity' ended. Always present: a missing key and a refused reading must not look alike."
+     },
+     "quantity_window": {
+      "description": "[stage, index] of the window 'quantity' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts.",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "own",
+         "retrieval",
+         "rest"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
+     "quote": {
+      "description": "The passage of the owner source that contains the value. Whitespace-collapsed containment; a retyped table row may be repaired, which sets the flag quote_repaired.",
+      "minLength": 8,
+      "type": "string"
+     },
+     "scenario": {
+      "description": "Axis 'scenario' of Emissionen. A closed list; an entry beginning 'out:' is a deliberate non-class answer and mints no node. null unless scenario_state is 'read' or 'derived'.",
+      "enum": [
+       "target",
+       "trend",
+       "status_quo",
+       "out:variant",
+       null
+      ],
+      "type": [
+       "string",
+       "null"
+      ],
+      "x-kg": {
+       "map": {
+        "out:variant": "not serialized",
+        "status_quo": "MHPO_00020005 aggregated inventory analysis",
+        "target": "MHPO_00020007 target scenario",
+        "trend": "OEO_00020314 reference scenario"
+       },
+       "note": "Which container node holds the value: plan BFO_0000051 has part -> container OEO_00140002 has quantity value -> value. Only the target scenario is serialized today (G2).",
+       "role": "parent"
+      },
+      "x-options": {
+       "Bestand": {
+        "spellings": [
+         "Ist-Zustand",
+         "Bilanzjahr",
+         "Status quo",
+         "Bestandsanalyse"
+        ],
+        "uri": "status_quo"
+       },
+       "Trendszenario": {
+        "spellings": [
+         "Referenzszenario",
+         "Weiter-wie-bisher",
+         "Business as usual"
+        ],
+        "uri": "trend"
+       },
+       "Variante oder Sensitivität neben dem Szenario": {
+        "spellings": [
+         "Variante",
+         "Sensitivität",
+         "Bandbreite"
+        ],
+        "uri": "out:variant"
+       },
+       "Zielszenario": {
+        "spellings": [
+         "Zielbild",
+         "Zielwert",
+         "Zielpfad",
+         "Umsetzungsszenario",
+         "Transformationspfad"
+        ],
+        "uri": "target"
+       }
+      },
+      "x-question": "Auf welchen Zustand bezieht sich der Wert? Der Bezug steht selten in der Zeile selbst, sondern im Titel der eigenen Tabelle, in der Abschnittsüberschrift oder in dem Satz, der die Tabelle ankündigt. Bestand heißt: erhoben oder bilanziert für ein vergangenes oder das laufende Jahr. Daran zu erkennen sind Bestandsanalyse, Ist-Zustand, Bilanzjahr, Ausgangslage, Energiebilanz, \"bislang\", \"derzeit\", \"wird verbraucht\", oder ein Jahr vor der Erstellung des Plans im Titel. Ein Satz wie \"wie viel Wärme pro Jahr verbraucht wird und welche Energieträger dafür bislang eingesetzt werden\" ist ein Bestand, auch wenn das Wort Bestandsanalyse nicht fällt. Trendszenario ist die Fortschreibung ohne zusätzliche Maßnahmen. Zielszenario ist der angestrebte Zustand, auch wenn der Plan ihm einen eigenen Namen gibt (\"bei erhöhter Energieeinsparung\", \"Umsetzungsszenario 2\", \"Transformationspfad\"); nennt die Quelle mehrere Zielszenarien nebeneinander, gehört der Name des konkreten in value_raw. Steht in der eigenen Quelle, in ihrem Abschnitt und in dem Satz davor nichts über den Zustand, dann ist das \"out:unstated\" und keine Schätzung."
+     },
+     "scenario_quote": {
+      "description": "The verbatim passage carrying 'scenario'. Present exactly when scenario_state is 'read'.",
+      "minLength": 8,
+      "type": "string"
+     },
+     "scenario_raw": {
+      "description": "The document's own wording 'scenario' was read from. This is what a later re-mapping onto a changed vocabulary works on, so a choice without it is counted (raw_missing).",
+      "type": "string"
+     },
+     "scenario_raw_foreign": {
+      "description": "The wording does not name the option chosen for 'scenario' -- the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.",
+      "type": "boolean"
+     },
+     "scenario_seen": {
+      "description": "A wording the model noticed for 'scenario' while answering 'not stated'. Vocabulary review material, never evidence.",
+      "type": "string"
+     },
+     "scenario_source": {
+      "description": "Which source the passage for 'scenario' was found in. How far that may be from the row is the axis' own rule (own | local | any).",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "section",
+         "table",
+         "figure"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
+     "scenario_state": {
+      "$ref": "#/$defs/state",
+      "description": "How the coordinate 'scenario' ended. Always present: a missing key and a refused reading must not look alike."
+     },
+     "scenario_window": {
+      "description": "[stage, index] of the window 'scenario' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts.",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "own",
+         "retrieval",
+         "rest"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
+     "sector": {
+      "description": "Axis 'sector' of Emissionen. A closed list; an entry beginning 'out:' is a deliberate non-class answer and mints no node. null unless sector_state is 'read' or 'derived'.",
+      "enum": [
+       "OEO_00000214",
+       "OEO_00000405",
+       "OEO_00000227",
+       "OEO_00000422",
+       "OEO_00010035",
+       "out:total",
+       null
+      ],
+      "type": [
+       "string",
+       "null"
+      ],
+      "x-kg": {
+       "label": "covers sector",
+       "note": "Object is an OEO sector class.",
+       "predicate": "OEO_00000505",
+       "role": "edge"
+      },
+      "x-options": {
+       "GHD": {
+        "spellings": [
+         "Gewerbe, Handel, Dienstleistungen",
+         "Gewerbe/Handel/Dienstleistungen",
+         "öffentliche Gebäude",
+         "öffentliche Liegenschaften",
+         "kommunale Einrichtungen",
+         "GHD/Kommune",
+         "Gewerbe",
+         "wirtschaftlich genutzte Gebäude"
+        ],
+        "uri": "OEO_00000405"
+       },
+       "Industrie": {
+        "spellings": [],
+        "uri": "OEO_00000227"
+       },
+       "Landwirtschaft": {
+        "spellings": [
+         "Land- und Forstwirtschaft"
+        ],
+        "uri": "OEO_00010035"
+       },
+       "Private Haushalte": {
+        "spellings": [
+         "Haushalte",
+         "Privathaushalte",
+         "Wohnen",
+         "Wohngebäude"
+        ],
+        "uri": "OEO_00000214"
+       },
+       "Summe": {
+        "spellings": [
+         "Gesamt",
+         "alle Sektoren",
+         "insgesamt"
+        ],
+        "uri": "out:total"
+       },
+       "Verkehr": {
+        "spellings": [],
+        "uri": "OEO_00000422"
+       }
+      },
+      "x-question": "Welcher Verbrauchssektor? Die Bezeichnung steht in der Zeilenbeschriftung, im Spaltenkopf oder in der Blocküberschrift DERSELBEN Tabelle: \"Wohnen\" und \"Wohngebäude\" meinen die Klasse Private Haushalte, \"GHD/Kommune\", \"Gewerbe\" und \"wirtschaftlich genutzte Gebäude\" die Klasse GHD. Ein GEBIET ist kein Sektor: \"Gesamtstadt\", \"Stadtgebiet\", \"Gemeinde\" und \"Plangebiet\" sagen, WO die Zahl gilt, nicht für welchen Verbraucher, und sie sind auch keine Summe über die Sektoren. Eine Zeile, die ausdrücklich über alle Sektoren summiert (\"Summe\", \"Gesamt\", \"insgesamt\" als Zeilen- oder Spaltenkopf), ist \"out:total\". Hat die eigene Tabelle keine Sektorspalte und nennt ihr Titel keinen Sektor, dann ist das keine Klasse, sondern eine fehlende Angabe: antworte mit \"out:unstated\"."
+     },
+     "sector_quote": {
+      "description": "The verbatim passage carrying 'sector'. Present exactly when sector_state is 'read'.",
+      "minLength": 8,
+      "type": "string"
+     },
+     "sector_raw": {
+      "description": "The document's own wording 'sector' was read from. This is what a later re-mapping onto a changed vocabulary works on, so a choice without it is counted (raw_missing).",
+      "type": "string"
+     },
+     "sector_raw_foreign": {
+      "description": "The wording does not name the option chosen for 'sector' -- the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.",
+      "type": "boolean"
+     },
+     "sector_seen": {
+      "description": "A wording the model noticed for 'sector' while answering 'not stated'. Vocabulary review material, never evidence.",
+      "type": "string"
+     },
+     "sector_source": {
+      "description": "Which source the passage for 'sector' was found in. How far that may be from the row is the axis' own rule (own | local | any).",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "section",
+         "table",
+         "figure"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
+     "sector_state": {
+      "$ref": "#/$defs/state",
+      "description": "How the coordinate 'sector' ended. Always present: a missing key and a refused reading must not look alike."
+     },
+     "sector_window": {
+      "description": "[stage, index] of the window 'sector' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts.",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "own",
+         "retrieval",
+         "rest"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
+     "spatial_scope": {
+      "description": "Axis 'spatial_scope' of Emissionen. A closed list; an entry beginning 'out:' is a deliberate non-class answer and mints no node. null unless spatial_scope_state is 'read' or 'derived'.",
+      "enum": [
+       "municipality",
+       "sub_area",
+       null
+      ],
+      "type": [
+       "string",
+       "null"
+      ],
+      "x-kg": {
+       "map": {
+        "municipality": "the plan's own area",
+        "sub_area": "MHPO_00020018 heat plan area, BFO_0000050 part of the municipality area"
+       },
+       "note": "No relation from a value to its area exists in the schema yet, so a sub_area value is not serialized (TERM REQUEST 1).",
+       "role": "parent"
+      },
+      "x-options": {
+       "Gemeindegebiet": {
+        "spellings": [
+         "Gesamtstadt",
+         "Stadtgebiet",
+         "gesamtes Plangebiet",
+         "Gemeinde insgesamt"
+        ],
+        "uri": "municipality"
+       },
+       "Teilgebiet": {
+        "spellings": [
+         "Fokusgebiet",
+         "Quartier",
+         "Stadtteil",
+         "Baublock",
+         "Wärmenetzgebiet",
+         "Ortsteil"
+        ],
+        "uri": "sub_area"
+       }
+      },
+      "x-question": "Auf welches Gebiet bezieht sich der Wert? Sieh ZUERST in der Zeile selbst nach: benennt die Zeilenbeschriftung ein Gebiet — einen Quartiersnamen, ein Eignungsgebiet, eine Straße —, dann ist DAS das Gebiet dieser Zeile und die Überschrift gilt für sie nicht. Eine Steckbrief- oder Quartierstabelle hat in jeder Zeile ein anderes Gebiet und in der Überschrift nur den Gemeindenamen; wer dann die Überschrift nimmt, legt vierzig Quartiere auf eine Koordinate. Erst wenn die Zeile kein Gebiet nennt, gilt die Überschrift oder die Caption. Bei einem Teilgebiet gehört sein NAME wörtlich in value_raw (\"Fokusgebiet Eicken\", \"Quartier Nordstadt\", \"Wärmenetzgebiet 3\"), ohne den Namen sind zwei Teilgebiete im Graphen nicht auseinanderzuhalten. Beim ganzen Gemeindegebiet reicht die Klasse."
+     },
+     "spatial_scope_quote": {
+      "description": "The verbatim passage carrying 'spatial_scope'. Present exactly when spatial_scope_state is 'read'.",
+      "minLength": 8,
+      "type": "string"
+     },
+     "spatial_scope_raw": {
+      "description": "The document's own wording 'spatial_scope' was read from. This is what a later re-mapping onto a changed vocabulary works on, so a choice without it is counted (raw_missing).",
+      "type": "string"
+     },
+     "spatial_scope_raw_foreign": {
+      "description": "The wording does not name the option chosen for 'spatial_scope' -- the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.",
+      "type": "boolean"
+     },
+     "spatial_scope_seen": {
+      "description": "A wording the model noticed for 'spatial_scope' while answering 'not stated'. Vocabulary review material, never evidence.",
+      "type": "string"
+     },
+     "spatial_scope_source": {
+      "description": "Which source the passage for 'spatial_scope' was found in. How far that may be from the row is the axis' own rule (own | local | any).",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "section",
+         "table",
+         "figure"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
+     "spatial_scope_state": {
+      "$ref": "#/$defs/state",
+      "description": "How the coordinate 'spatial_scope' ended. Always present: a missing key and a refused reading must not look alike."
+     },
+     "spatial_scope_window": {
+      "description": "[stage, index] of the window 'spatial_scope' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts.",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "own",
+         "retrieval",
+         "rest"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
+     "tier": {
+      "description": "text_located: the quote sits in the document's own refined text, so it can be checked against the PDF. visual_source: it sits in a table transcription, a caption or a figure description, which are model output and want human curation.",
+      "enum": [
+       "text_located",
+       "visual_source"
+      ]
+     },
+     "unit": {
+      "description": "The unit, chosen from units_accepted (Mio. t CO2/a, Mio. t CO2eq, Mio. t CO2eq/a, Mt, Mt/a, Tonnen, Tonnen CO2, Tonnen CO2 im Jahr, Tonnen CO2 jährlich, Tonnen CO2 pro Jahr, Tonnen CO2eq/a, Tonnen CO2äquivalent, Tonnen pro Jahr, Tsd. t, Tsd. t/a, kt, kt CO2 pro Jahr, kt CO2-Äq./a, kt CO2/a, kt CO2eq, kt CO2eq/a, kt/a, kt/a CO2, t, t CO2, t CO2-eq./a, t CO2-eq/a, t CO2-Äq./a, t CO2-Äq/a, t CO2-Äquivalent, t CO2-Äquivalente/a, t CO2/a, t CO2e, t CO2e/a, t CO2eq, t CO2eq/a, t CO2äq, t CO2äq., t/a, t/a CO2eq, tCO2, tCO2/a). A spelling the list does not hold is accepted with the flag unit_spelling.",
+      "type": "string"
+     },
+     "unit_raw": {
+      "description": "The unit exactly as the source writes it. This is evidence and is never looked up.",
+      "type": "string"
+     },
+     "value": {
+      "description": "The number as the document prints it, with the grouping removed and a decimal point.",
+      "type": "number"
+     },
+     "value_target": {
+      "description": "value x factor(unit), in the spec's unit_target OEO_00010137. This is the number the graph carries.",
+      "type": "number"
+     },
+     "year": {
+      "description": "Axis 'year' of Emissionen. null unless year_state is 'read' or 'derived'.",
+      "type": [
+       "integer",
+       "null"
+      ],
+      "x-kg": {
+       "datatype": "xsd:integer",
+       "label": "has scenario year value",
+       "note": "The calendar year the aggregation is integrated over, not a label. A unit without a per-year marker carries the flag period:annual_in_quote or period:unstated.",
+       "predicate": "OEO_00020440",
+       "role": "edge"
+      },
+      "x-question": "Für welches Kalenderjahr gilt diese Jahressumme? Vierstellig. Das Jahr steht fast nie in der Zeile der Zahl selbst. Sieh in dieser Reihenfolge nach: (1) die Kopfzelle der Spalte, in der die Zahl steht, (2) der Titel der eigenen Tabelle, (3) der Satz, der die Tabelle in ihrem Abschnitt ankündigt (\"Für das Jahr 2040 ergeben sich die in den nachfolgenden Tabellen zusammengestellten Kennzahlen\"), (4) die Überschrift des Abschnitts. Das Jahr im Titel einer ANDEREN Tabelle gilt nicht, auch wenn dieser Titel im selben Abschnitt steht. Nennt die Quelle einen Zeitraum statt eines Jahres (\"Durchschnittswert der Jahre 2022-2024\"), dann gehört das LETZTE Jahr in value und der Zeitraum wörtlich in value_raw."
+     },
+     "year_quote": {
+      "description": "The verbatim passage carrying 'year'. Present exactly when year_state is 'read'.",
+      "minLength": 8,
+      "type": "string"
+     },
+     "year_raw": {
+      "description": "The document's own wording 'year' was read from. This is what a later re-mapping onto a changed vocabulary works on, so a choice without it is counted (raw_missing).",
+      "type": "string"
+     },
+     "year_raw_foreign": {
+      "description": "The wording does not name the option chosen for 'year' -- the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.",
+      "type": "boolean"
+     },
+     "year_seen": {
+      "description": "A wording the model noticed for 'year' while answering 'not stated'. Vocabulary review material, never evidence.",
+      "type": "string"
+     },
+     "year_source": {
+      "description": "Which source the passage for 'year' was found in. How far that may be from the row is the axis' own rule (own | local | any).",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "section",
+         "table",
+         "figure"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
+     "year_state": {
+      "$ref": "#/$defs/state",
+      "description": "How the coordinate 'year' ended. Always present: a missing key and a refused reading must not look alike."
+     },
+     "year_window": {
+      "description": "[stage, index] of the window 'year' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts.",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "own",
+         "retrieval",
+         "rest"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     }
+    },
+    "required": [
+     "kind",
+     "parameter",
+     "parameter_state",
+     "quote",
+     "tier",
+     "provenance",
+     "value",
+     "unit",
+     "unit_raw",
+     "value_target",
+     "quantity",
+     "quantity_state",
+     "aggregation",
+     "aggregation_state",
+     "carrier",
+     "carrier_state",
+     "sector",
+     "sector_state",
+     "year",
+     "year_state",
+     "scenario",
+     "scenario_state",
+     "spatial_scope",
+     "spatial_scope_state"
+    ],
+    "type": "object",
+    "x-kg": {
+     "class_from": "quantity",
+     "node": "value",
+     "number": {
+      "datatype": "xsd:float",
+      "from": "value_target",
+      "label": "has number",
+      "predicate": "OEO_00140178"
+     },
+     "unit": {
+      "from": "unit_target",
+      "label": "has unit",
+      "predicate": "OEO_00040010"
+     }
+    }
+   },
+   "tuple_energy_consumption": {
+    "additionalProperties": false,
+    "allOf": [
+     {
+      "else": {
+       "properties": {
+        "quantity": {
+         "type": "null"
+        }
+       }
+      },
+      "if": {
+       "properties": {
+        "quantity_state": {
+         "enum": [
+          "read",
+          "derived"
+         ]
+        }
+       },
+       "required": [
+        "quantity_state"
+       ]
+      },
+      "then": {
+       "properties": {
+        "quantity": {
+         "type": "string"
+        }
+       },
+       "required": [
+        "quantity"
+       ]
+      }
+     },
+     {
+      "else": {
+       "properties": {
+        "aggregation": {
+         "type": "null"
+        }
+       }
+      },
+      "if": {
+       "properties": {
+        "aggregation_state": {
+         "enum": [
+          "read",
+          "derived"
+         ]
+        }
+       },
+       "required": [
+        "aggregation_state"
+       ]
+      },
+      "then": {
+       "properties": {
+        "aggregation": {
+         "type": "string"
+        }
+       },
+       "required": [
+        "aggregation"
+       ]
+      }
+     },
+     {
+      "else": {
+       "properties": {
+        "carrier": {
+         "type": "null"
+        }
+       }
+      },
+      "if": {
+       "properties": {
+        "carrier_state": {
+         "enum": [
+          "read",
+          "derived"
+         ]
+        }
+       },
+       "required": [
+        "carrier_state"
+       ]
+      },
+      "then": {
+       "properties": {
+        "carrier": {
+         "type": "string"
+        }
+       },
+       "required": [
+        "carrier"
+       ]
+      }
+     },
+     {
+      "else": {
+       "properties": {
+        "sector": {
+         "type": "null"
+        }
+       }
+      },
+      "if": {
+       "properties": {
+        "sector_state": {
+         "enum": [
+          "read",
+          "derived"
+         ]
+        }
+       },
+       "required": [
+        "sector_state"
+       ]
+      },
+      "then": {
+       "properties": {
+        "sector": {
+         "type": "string"
+        }
+       },
+       "required": [
+        "sector"
+       ]
+      }
+     },
+     {
+      "else": {
+       "properties": {
+        "year": {
+         "type": "null"
+        }
+       }
+      },
+      "if": {
+       "properties": {
+        "year_state": {
+         "enum": [
+          "read",
+          "derived"
+         ]
+        }
+       },
+       "required": [
+        "year_state"
+       ]
+      },
+      "then": {
+       "properties": {
+        "year": {
+         "type": "integer"
+        }
+       },
+       "required": [
+        "year"
+       ]
+      }
+     },
+     {
+      "else": {
+       "properties": {
+        "scenario": {
+         "type": "null"
+        }
+       }
+      },
+      "if": {
+       "properties": {
+        "scenario_state": {
+         "enum": [
+          "read",
+          "derived"
+         ]
+        }
+       },
+       "required": [
+        "scenario_state"
+       ]
+      },
+      "then": {
+       "properties": {
+        "scenario": {
+         "type": "string"
+        }
+       },
+       "required": [
+        "scenario"
+       ]
+      }
+     },
+     {
+      "else": {
+       "properties": {
+        "spatial_scope": {
+         "type": "null"
+        }
+       }
+      },
+      "if": {
+       "properties": {
+        "spatial_scope_state": {
+         "enum": [
+          "read",
+          "derived"
+         ]
+        }
+       },
+       "required": [
+        "spatial_scope_state"
+       ]
+      },
+      "then": {
+       "properties": {
+        "spatial_scope": {
+         "type": "string"
+        }
+       },
+       "required": [
+        "spatial_scope"
+       ]
+      }
+     }
+    ],
+    "properties": {
+     "aggregation": {
+      "description": "Axis 'aggregation' of Energieverbrauch. A closed list; an entry beginning 'out:' is a deliberate non-class answer and mints no node. null unless aggregation_state is 'read' or 'derived'.",
+      "enum": [
+       "OEO_00140070",
+       "OEO_00140071",
+       "OEO_00140069",
+       "OEO_00140073",
+       "OEO_00140072",
+       null
+      ],
+      "type": [
+       "string",
+       "null"
+      ],
+      "x-kg": {
+       "label": "has aggregation type",
+       "note": "Object is a named individual of OEO_00140068 aggregation type. Derived from the unit, never asked: every accepted unit of both parameters is an extensive amount.",
+       "predicate": "OEO_00390023",
+       "role": "edge"
+      },
+      "x-options": {
+       "arithmetic mean": {
+        "spellings": [
+         "Mittelwert",
+         "Durchschnitt"
+        ],
+        "uri": "OEO_00140071"
+       },
+       "instantaneous": {
+        "spellings": [
+         "Momentanwert zu einem Zeitpunkt"
+        ],
+        "uri": "OEO_00140069"
+       },
+       "integral": {
+        "spellings": [
+         "Summe oder Integral über einen Zeitraum oder ein Gebiet",
+         "Jahreswert",
+         "Jahressumme"
+        ],
+        "uri": "OEO_00140070"
+       },
+       "maximum": {
+        "spellings": [
+         "Maximum",
+         "Spitzenwert",
+         "Spitzenlast"
+        ],
+        "uri": "OEO_00140073"
+       },
+       "minimum": {
+        "spellings": [
+         "Minimum",
+         "Tiefstwert"
+        ],
+        "uri": "OEO_00140072"
+       }
+      },
+      "x-question": "Wie ist der Wert über Zeit oder Raum zusammengefasst? Der Normalfall ist \"integral\", also eine Jahressumme. \"maximum\" bei einer Spitzenlast oder einem Höchstwert, \"arithmetic mean\" bei einem Durchschnitt je Gebäude oder je Jahr, \"instantaneous\" bei einem Momentanwert."
+     },
+     "aggregation_quote": {
+      "description": "The verbatim passage carrying 'aggregation'. Present exactly when aggregation_state is 'read'.",
+      "minLength": 8,
+      "type": "string"
+     },
+     "aggregation_raw": {
+      "description": "The document's own wording 'aggregation' was read from. This is what a later re-mapping onto a changed vocabulary works on, so a choice without it is counted (raw_missing).",
+      "type": "string"
+     },
+     "aggregation_raw_foreign": {
+      "description": "The wording does not name the option chosen for 'aggregation' -- the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.",
+      "type": "boolean"
+     },
+     "aggregation_seen": {
+      "description": "A wording the model noticed for 'aggregation' while answering 'not stated'. Vocabulary review material, never evidence.",
+      "type": "string"
+     },
+     "aggregation_source": {
+      "description": "Which source the passage for 'aggregation' was found in. How far that may be from the row is the axis' own rule (own | local | any).",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "section",
+         "table",
+         "figure"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
+     "aggregation_state": {
+      "$ref": "#/$defs/state",
+      "description": "How the coordinate 'aggregation' ended. Always present: a missing key and a refused reading must not look alike."
+     },
+     "aggregation_window": {
+      "description": "[stage, index] of the window 'aggregation' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts.",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "own",
+         "retrieval",
+         "rest"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
+     "carrier": {
+      "description": "Axis 'carrier' of Energieverbrauch. A closed list; an entry beginning 'out:' is a deliberate non-class answer and mints no node. null unless carrier_state is 'read' or 'derived'.",
+      "enum": [
+       "OEO_00000292",
+       "OEO_00000211",
+       "OEO_00000132",
+       "OEO_00000139",
+       "OEO_00000449",
+       "OEO_00000074",
+       "OEO_00000388",
+       "OEO_00000251",
+       "OEO_00320011",
+       "OEO_00000220",
+       "OEO_00000204",
+       "OEO_00010215",
+       "OEO_00000332",
+       "OEO_00010214",
+       "OEO_00000088",
+       "OEO_00000290",
+       "OEO_00000356",
+       "OEO_00000439",
+       "OEO_00020495",
+       "OEO_00010155",
+       "OEO_00000191",
+       "OEO_00010114",
+       "OEO_00310004",
+       "OEO_00000056",
+       "OEO_00140105",
+       "OEO_00140104",
+       "out:total",
+       "out:other",
+       null
+      ],
+      "type": [
+       "string",
+       "null"
+      ],
+      "x-kg": {
+       "label": "covers energy carrier",
+       "note": "Object is an OEO class (punning). The edge is dropped, and the value kept, for the nine classes OEO does not place under energy carrier -- district heat, electricity, solar thermal, geothermal and the ambient heat sources.",
+       "predicate": "OEO_00000523",
+       "role": "edge"
+      },
+      "x-options": {
+       "Abwasserwärme": {
+        "spellings": [
+         "Abwasser"
+        ],
+        "uri": "OEO_00140105"
+       },
+       "Abwärme": {
+        "spellings": [
+         "unvermeidbare Abwärme"
+        ],
+        "uri": "OEO_00010114"
+       },
+       "Biogas": {
+        "spellings": [],
+        "uri": "OEO_00000074"
+       },
+       "Biogut": {
+        "spellings": [
+         "Gartenabfälle",
+         "Grünschnitt"
+        ],
+        "uri": "OEO_00000356"
+       },
+       "Biomasse": {
+        "spellings": [
+         "pflanzliche Biomasse",
+         "landwirtschaftliche Biomasse"
+        ],
+        "uri": "OEO_00010214"
+       },
+       "Biomethan": {
+        "spellings": [],
+        "uri": "OEO_00010215"
+       },
+       "Braunkohle": {
+        "spellings": [],
+        "uri": "OEO_00000251"
+       },
+       "Erdgas": {
+        "spellings": [
+         "Gas"
+        ],
+        "uri": "OEO_00000292"
+       },
+       "Fernwärme": {
+        "spellings": [
+         "Wärmenetze",
+         "Wärmenetz"
+        ],
+        "uri": "OEO_00000132"
+       },
+       "Flüssiggas": {
+        "spellings": [],
+        "uri": "OEO_00320011"
+       },
+       "Geothermie": {
+        "spellings": [
+         "Erdwärme",
+         "oberflächennahe Geothermie",
+         "Tiefengeothermie",
+         "Erdwärmesonde",
+         "Erdwärmekollektor"
+        ],
+        "uri": "OEO_00000191"
+       },
+       "Heizöl": {
+        "spellings": [
+         "Öl"
+        ],
+        "uri": "OEO_00000211"
+       },
+       "Holz": {
+        "spellings": [
+         "Holzpellets",
+         "Pellets"
+        ],
+        "uri": "OEO_00000449"
+       },
+       "Klärschlamm": {
+        "spellings": [],
+        "uri": "OEO_00000439"
+       },
+       "Kohle": {
+        "spellings": [],
+        "uri": "OEO_00000088"
+       },
+       "Oberflächengewässer": {
+        "spellings": [
+         "Seethermie",
+         "Flusswärme"
+        ],
+        "uri": "OEO_00140104"
+       },
+       "Siedlungsabfälle": {
+        "spellings": [
+         "Abfall",
+         "thermische Abfallverwertung"
+        ],
+        "uri": "OEO_00000290"
+       },
+       "Solarthermie": {
+        "spellings": [],
+        "uri": "OEO_00000388"
+       },
+       "Sonstige": {
+        "spellings": [
+         "Andere",
+         "sonstige Energieträger"
+        ],
+        "uri": "out:other"
+       },
+       "Steinkohle": {
+        "spellings": [],
+        "uri": "OEO_00000204"
+       },
+       "Strom": {
+        "spellings": [
+         "Elektrizität"
+        ],
+        "uri": "OEO_00000139"
+       },
+       "Summe": {
+        "spellings": [
+         "Gesamt",
+         "Gesamtwert",
+         "Gesamtsumme",
+         "alle Energieträger",
+         "insgesamt"
+        ],
+        "uri": "out:total"
+       },
+       "Umweltwärme": {
+        "spellings": [],
+        "uri": "OEO_00000056"
+       },
+       "Wasserstoff": {
+        "spellings": [],
+        "uri": "OEO_00000220"
+       },
+       "biogener Festbrennstoff": {
+        "spellings": [
+         "biogene Festbrennstoffe",
+         "sonstige biogene Festbrennstoffe"
+        ],
+        "uri": "OEO_00000332"
+       },
+       "grüne Gase": {
+        "spellings": [
+         "synthetische Gase"
+        ],
+        "uri": "OEO_00010155"
+       },
+       "industrielle Abwärme": {
+        "spellings": [],
+        "uri": "OEO_00310004"
+       },
+       "tierische Exkremente": {
+        "spellings": [
+         "Schlachtreste"
+        ],
+        "uri": "OEO_00020495"
+       }
+      },
+      "x-question": "Welcher Energieträger? Die Bezeichnung steht in der Zeilenbeschriftung, im Spaltenkopf oder in der Blocküberschrift, fast nie in der Schreibweise der Klassenliste: \"Gas H\" und \"Erdgas (netzgebunden)\" meinen die Klasse Erdgas, \"Nahwärme\" und \"Wärmenetz\" die Klasse Fernwärme. Eine Summenzeile (\"Summe\", \"Gesamt\", \"alle Energieträger\") ist \"out:total\", eine Restposition (\"Sonstige\", \"Andere\") ist \"out:other\". Passt fachlich weder eine Klasse noch einer dieser Einträge, etwa weil in der Spalte ein Gebäudetyp steht, dann lass die Zeile weg."
+     },
+     "carrier_quote": {
+      "description": "The verbatim passage carrying 'carrier'. Present exactly when carrier_state is 'read'.",
+      "minLength": 8,
+      "type": "string"
+     },
+     "carrier_raw": {
+      "description": "The document's own wording 'carrier' was read from. This is what a later re-mapping onto a changed vocabulary works on, so a choice without it is counted (raw_missing).",
+      "type": "string"
+     },
+     "carrier_raw_foreign": {
+      "description": "The wording does not name the option chosen for 'carrier' -- the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.",
+      "type": "boolean"
+     },
+     "carrier_seen": {
+      "description": "A wording the model noticed for 'carrier' while answering 'not stated'. Vocabulary review material, never evidence.",
+      "type": "string"
+     },
+     "carrier_source": {
+      "description": "Which source the passage for 'carrier' was found in. How far that may be from the row is the axis' own rule (own | local | any).",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "section",
+         "table",
+         "figure"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
+     "carrier_state": {
+      "$ref": "#/$defs/state",
+      "description": "How the coordinate 'carrier' ended. Always present: a missing key and a refused reading must not look alike."
+     },
+     "carrier_window": {
+      "description": "[stage, index] of the window 'carrier' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts.",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "own",
+         "retrieval",
+         "rest"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
+     "compute": {
+      "description": "The sandbox runs behind a computed value: {code, stdout, ok, error}.",
+      "items": {
+       "type": "object"
+      },
+      "type": "array"
+     },
+     "computed": {
+      "description": "The value came out of the sandbox, not off the page; the quote proves the inputs it was computed from.",
+      "type": "boolean"
+     },
+     "flags": {
+      "description": "Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping a word the spec does not list; period:* says whether a bare amount was shown to be a yearly one.",
+      "items": {
+       "pattern": "^(mapped:[a-z_]+:[\\s\\S]*->[\\s\\S]*|unmapped:[a-z_]+:[\\s\\S]*|unit_not_chosen:[\\s\\S]*|unit_spelling:[\\s\\S]*|period:(annual_in_quote|unstated)|quote_repaired|computed|not_located)$",
+       "type": "string"
+      },
+      "type": "array"
+     },
+     "kind": {
+      "const": "tuple"
+     },
+     "parameter": {
+      "const": "energy_consumption",
+      "description": "Spec parameter: Energieverbrauch.",
+      "x-description-de": "Eine im Wärmeplan bilanzierte Energiemenge, je Energieträger, Sektor und Jahr. Welche Größe es ist, wählst du in \"quantity\" aus der Liste. Die Ontologie definiert die beiden Klassen so: final energy consumption value ist \"the energy delivered to and consumed by end users\". Darunter fällt BEIDES, was ein deutscher Wärmeplan Verbrauch nennt und was er Bedarf nennt: für ein Zielszenario ist nichts gemessen, jede Zahl ist gerechnet, und die Definition spricht nicht von Messung. Ein Wärmebedarf, ein Endenergiebedarf und ein zu deckender Wärmebedarf sind also diese Klasse. primary energy consumption value ist \"the total consumption of energy in a spatial region excluding the non-energetic use of fuels\", also die Bilanz vor der Umwandlung. Die übrigen Einträge der Liste beginnen mit \"out:\": das sind Größen, die der Graph NICHT aufnimmt. Wähle den passenden davon, wenn die Zahl eine davon ist. Das ist ein richtiges Ergebnis, kein Fehler.",
+      "x-question": "Um WELCHE Kennzahl handelt es sich bei dieser Zahl? Entscheide danach, was die Quelle über sie sagt: die Einheit, die Spalten- oder Zeilenbeschriftung und die Tabellen- oder Abschnittsüberschrift. Eine Angabe in t CO2 ist eine Emission, eine Angabe in MWh oder GWh ein Energieverbrauch. Zitiere die Stelle, aus der das hervorgeht."
+     },
+     "parameter_quote": {
+      "description": "The verbatim passage carrying 'parameter'. Present exactly when parameter_state is 'read'.",
+      "minLength": 8,
+      "type": "string"
+     },
+     "parameter_raw": {
+      "description": "The document's own wording 'parameter' was read from. This is what a later re-mapping onto a changed vocabulary works on, so a choice without it is counted (raw_missing).",
+      "type": "string"
+     },
+     "parameter_raw_foreign": {
+      "description": "The wording does not name the option chosen for 'parameter' -- the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.",
+      "type": "boolean"
+     },
+     "parameter_seen": {
+      "description": "A wording the model noticed for 'parameter' while answering 'not stated'. Vocabulary review material, never evidence.",
+      "type": "string"
+     },
+     "parameter_source": {
+      "description": "Which source the passage for 'parameter' was found in. How far that may be from the row is the axis' own rule (own | local | any).",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "section",
+         "table",
+         "figure"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
+     "parameter_state": {
+      "$ref": "#/$defs/state",
+      "description": "How the coordinate 'parameter' ended. Always present: a missing key and a refused reading must not look alike."
+     },
+     "parameter_window": {
+      "description": "[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts.",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "own",
+         "retrieval",
+         "rest"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
+     "provenance": {
+      "$ref": "#/$defs/provenance"
+     },
+     "quantity": {
+      "description": "Axis 'quantity' of Energieverbrauch. A closed list; an entry beginning 'out:' is a deliberate non-class answer and mints no node. null unless quantity_state is 'read' or 'derived'.",
+      "enum": [
+       "OEO_00050016",
+       "OEO_00050018",
+       "out:potential",
+       "out:generation",
+       "out:useful_energy",
+       "out:saving",
+       "out:share",
+       "out:specific",
+       "out:other",
+       null
+      ],
+      "type": [
+       "string",
+       "null"
+      ],
+      "x-kg": {
+       "note": "The class of the value node itself (rdf:type). An out:* answer is a deliberate non-class and mints no node.",
+       "role": "type"
+      },
+      "x-options": {
+       "Anteil in Prozent": {
+        "spellings": [
+         "Anteil am Gesamtverbrauch"
+        ],
+        "uri": "out:share"
+       },
+       "Einsparung": {
+        "spellings": [
+         "Reduktion gegenüber einem Vergleichsjahr"
+        ],
+        "uri": "out:saving"
+       },
+       "Erzeugung oder Bereitstellung": {
+        "spellings": [
+         "Wärmeerzeugung",
+         "Einspeisung",
+         "Wärmebereitstellung",
+         "Absatz"
+        ],
+        "uri": "out:generation"
+       },
+       "Nutzenergie": {
+        "spellings": [
+         "Nutzwärme",
+         "Heizwärme"
+        ],
+        "uri": "out:useful_energy"
+       },
+       "Potenzial": {
+        "spellings": [
+         "Ausbaupotenzial",
+         "technisches Potenzial",
+         "erschließbares Potenzial"
+        ],
+        "uri": "out:potential"
+       },
+       "etwas anderes": {
+        "spellings": [],
+        "uri": "out:other"
+       },
+       "final energy consumption value": {
+        "spellings": [
+         "Endenergieverbrauch",
+         "Endenergie",
+         "Endenergiebedarf",
+         "Wärmeverbrauch",
+         "Wärmebedarf",
+         "Fernwärmeverbrauch",
+         "Stromverbrauch",
+         "Erdgasverbrauch",
+         "zu deckender Wärmebedarf"
+        ],
+        "uri": "OEO_00050016"
+       },
+       "primary energy consumption value": {
+        "spellings": [
+         "Primärenergieverbrauch",
+         "Primärenergie"
+        ],
+        "uri": "OEO_00050018"
+       },
+       "spezifischer Wert je Fläche, Kopf oder Einwohner": {
+        "spellings": [],
+        "uri": "out:specific"
+       }
+      },
+      "x-question": "Welche Größe ist diese Zahl? Das ist die wichtigste Entscheidung des Tupels, denn sie bestimmt, als welche Klasse der Wert im Graphen steht. Entscheide nach der Definition der Klasse, nicht nach der Ähnlichkeit der Wörter. Die Bezeichnung steht in der Zeile, im Spaltenkopf, in der Blocküberschrift oder im Titel der eigenen Tabelle. \"final energy consumption value\" ist definiert als die an Endverbraucher gelieferte und dort verbrauchte Energie. Darunter fällt BEIDES, was ein Plan Verbrauch nennt und was er Bedarf nennt: in einem Szenario ist nichts gemessen, jede Zahl ist gerechnet, und die Definition spricht nicht von Messung. Endenergieverbrauch, Endenergiebedarf, Wärmebedarf und ein zu deckender Wärmebedarf sind also diese Klasse. \"primary energy consumption value\" ist die Bilanz vor der Umwandlung. Nutzwärme, Heizwärme, Raumwärme und Nutzenergie sind dagegen NICHT Endenergie, sondern die Wärme hinter dem Erzeuger: \"out:useful_energy\", auch im Zielszenario. Ein Anteil in Prozent und ein Wert je Fläche oder Kopf sind eigene Einträge und keine Verbrauchsmenge."
+     },
+     "quantity_quote": {
+      "description": "The verbatim passage carrying 'quantity'. Present exactly when quantity_state is 'read'.",
+      "minLength": 8,
+      "type": "string"
+     },
+     "quantity_raw": {
+      "description": "The document's own wording 'quantity' was read from. This is what a later re-mapping onto a changed vocabulary works on, so a choice without it is counted (raw_missing).",
+      "type": "string"
+     },
+     "quantity_raw_foreign": {
+      "description": "The wording does not name the option chosen for 'quantity' -- the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.",
+      "type": "boolean"
+     },
+     "quantity_seen": {
+      "description": "A wording the model noticed for 'quantity' while answering 'not stated'. Vocabulary review material, never evidence.",
+      "type": "string"
+     },
+     "quantity_source": {
+      "description": "Which source the passage for 'quantity' was found in. How far that may be from the row is the axis' own rule (own | local | any).",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "section",
+         "table",
+         "figure"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
+     "quantity_state": {
+      "$ref": "#/$defs/state",
+      "description": "How the coordinate 'quantity' ended. Always present: a missing key and a refused reading must not look alike."
+     },
+     "quantity_window": {
+      "description": "[stage, index] of the window 'quantity' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts.",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "own",
+         "retrieval",
+         "rest"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
+     "quote": {
+      "description": "The passage of the owner source that contains the value. Whitespace-collapsed containment; a retyped table row may be repaired, which sets the flag quote_repaired.",
+      "minLength": 8,
+      "type": "string"
+     },
+     "scenario": {
+      "description": "Axis 'scenario' of Energieverbrauch. A closed list; an entry beginning 'out:' is a deliberate non-class answer and mints no node. null unless scenario_state is 'read' or 'derived'.",
+      "enum": [
+       "target",
+       "trend",
+       "status_quo",
+       "out:variant",
+       null
+      ],
+      "type": [
+       "string",
+       "null"
+      ],
+      "x-kg": {
+       "map": {
+        "out:variant": "not serialized",
+        "status_quo": "MHPO_00020005 aggregated inventory analysis",
+        "target": "MHPO_00020007 target scenario",
+        "trend": "OEO_00020314 reference scenario"
+       },
+       "note": "Which container node holds the value: plan BFO_0000051 has part -> container OEO_00140002 has quantity value -> value. Only the target scenario is serialized today (G2).",
+       "role": "parent"
+      },
+      "x-options": {
+       "Bestand": {
+        "spellings": [
+         "Ist-Zustand",
+         "Bilanzjahr",
+         "Status quo",
+         "Bestandsanalyse"
+        ],
+        "uri": "status_quo"
+       },
+       "Trendszenario": {
+        "spellings": [
+         "Referenzszenario",
+         "Weiter-wie-bisher",
+         "Business as usual"
+        ],
+        "uri": "trend"
+       },
+       "Variante oder Sensitivität neben dem Szenario": {
+        "spellings": [
+         "Variante",
+         "Sensitivität",
+         "Bandbreite"
+        ],
+        "uri": "out:variant"
+       },
+       "Zielszenario": {
+        "spellings": [
+         "Zielbild",
+         "Zielwert",
+         "Zielpfad",
+         "Umsetzungsszenario",
+         "Transformationspfad"
+        ],
+        "uri": "target"
+       }
+      },
+      "x-question": "Auf welchen Zustand bezieht sich der Wert? Der Bezug steht selten in der Zeile selbst, sondern im Titel der eigenen Tabelle, in der Abschnittsüberschrift oder in dem Satz, der die Tabelle ankündigt. Bestand heißt: erhoben oder bilanziert für ein vergangenes oder das laufende Jahr. Daran zu erkennen sind Bestandsanalyse, Ist-Zustand, Bilanzjahr, Ausgangslage, Energiebilanz, \"bislang\", \"derzeit\", \"wird verbraucht\", oder ein Jahr vor der Erstellung des Plans im Titel. Ein Satz wie \"wie viel Wärme pro Jahr verbraucht wird und welche Energieträger dafür bislang eingesetzt werden\" ist ein Bestand, auch wenn das Wort Bestandsanalyse nicht fällt. Trendszenario ist die Fortschreibung ohne zusätzliche Maßnahmen. Zielszenario ist der angestrebte Zustand, auch wenn der Plan ihm einen eigenen Namen gibt (\"bei erhöhter Energieeinsparung\", \"Umsetzungsszenario 2\", \"Transformationspfad\"); nennt die Quelle mehrere Zielszenarien nebeneinander, gehört der Name des konkreten in value_raw. Steht in der eigenen Quelle, in ihrem Abschnitt und in dem Satz davor nichts über den Zustand, dann ist das \"out:unstated\" und keine Schätzung."
+     },
+     "scenario_quote": {
+      "description": "The verbatim passage carrying 'scenario'. Present exactly when scenario_state is 'read'.",
+      "minLength": 8,
+      "type": "string"
+     },
+     "scenario_raw": {
+      "description": "The document's own wording 'scenario' was read from. This is what a later re-mapping onto a changed vocabulary works on, so a choice without it is counted (raw_missing).",
+      "type": "string"
+     },
+     "scenario_raw_foreign": {
+      "description": "The wording does not name the option chosen for 'scenario' -- the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.",
+      "type": "boolean"
+     },
+     "scenario_seen": {
+      "description": "A wording the model noticed for 'scenario' while answering 'not stated'. Vocabulary review material, never evidence.",
+      "type": "string"
+     },
+     "scenario_source": {
+      "description": "Which source the passage for 'scenario' was found in. How far that may be from the row is the axis' own rule (own | local | any).",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "section",
+         "table",
+         "figure"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
+     "scenario_state": {
+      "$ref": "#/$defs/state",
+      "description": "How the coordinate 'scenario' ended. Always present: a missing key and a refused reading must not look alike."
+     },
+     "scenario_window": {
+      "description": "[stage, index] of the window 'scenario' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts.",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "own",
+         "retrieval",
+         "rest"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
+     "sector": {
+      "description": "Axis 'sector' of Energieverbrauch. A closed list; an entry beginning 'out:' is a deliberate non-class answer and mints no node. null unless sector_state is 'read' or 'derived'.",
+      "enum": [
+       "OEO_00000214",
+       "OEO_00000405",
+       "OEO_00000227",
+       "OEO_00000422",
+       "OEO_00010035",
+       "out:total",
+       null
+      ],
+      "type": [
+       "string",
+       "null"
+      ],
+      "x-kg": {
+       "label": "covers sector",
+       "note": "Object is an OEO sector class.",
+       "predicate": "OEO_00000505",
+       "role": "edge"
+      },
+      "x-options": {
+       "GHD": {
+        "spellings": [
+         "Gewerbe, Handel, Dienstleistungen",
+         "Gewerbe/Handel/Dienstleistungen",
+         "öffentliche Gebäude",
+         "öffentliche Liegenschaften",
+         "kommunale Einrichtungen",
+         "GHD/Kommune",
+         "Gewerbe",
+         "wirtschaftlich genutzte Gebäude"
+        ],
+        "uri": "OEO_00000405"
+       },
+       "Industrie": {
+        "spellings": [],
+        "uri": "OEO_00000227"
+       },
+       "Landwirtschaft": {
+        "spellings": [
+         "Land- und Forstwirtschaft"
+        ],
+        "uri": "OEO_00010035"
+       },
+       "Private Haushalte": {
+        "spellings": [
+         "Haushalte",
+         "Privathaushalte",
+         "Wohnen",
+         "Wohngebäude"
+        ],
+        "uri": "OEO_00000214"
+       },
+       "Summe": {
+        "spellings": [
+         "Gesamt",
+         "alle Sektoren",
+         "insgesamt"
+        ],
+        "uri": "out:total"
+       },
+       "Verkehr": {
+        "spellings": [],
+        "uri": "OEO_00000422"
+       }
+      },
+      "x-question": "Welcher Verbrauchssektor? Die Bezeichnung steht in der Zeilenbeschriftung, im Spaltenkopf oder in der Blocküberschrift DERSELBEN Tabelle: \"Wohnen\" und \"Wohngebäude\" meinen die Klasse Private Haushalte, \"GHD/Kommune\", \"Gewerbe\" und \"wirtschaftlich genutzte Gebäude\" die Klasse GHD. Ein GEBIET ist kein Sektor: \"Gesamtstadt\", \"Stadtgebiet\", \"Gemeinde\" und \"Plangebiet\" sagen, WO die Zahl gilt, nicht für welchen Verbraucher, und sie sind auch keine Summe über die Sektoren. Eine Zeile, die ausdrücklich über alle Sektoren summiert (\"Summe\", \"Gesamt\", \"insgesamt\" als Zeilen- oder Spaltenkopf), ist \"out:total\". Hat die eigene Tabelle keine Sektorspalte und nennt ihr Titel keinen Sektor, dann ist das keine Klasse, sondern eine fehlende Angabe: antworte mit \"out:unstated\"."
+     },
+     "sector_quote": {
+      "description": "The verbatim passage carrying 'sector'. Present exactly when sector_state is 'read'.",
+      "minLength": 8,
+      "type": "string"
+     },
+     "sector_raw": {
+      "description": "The document's own wording 'sector' was read from. This is what a later re-mapping onto a changed vocabulary works on, so a choice without it is counted (raw_missing).",
+      "type": "string"
+     },
+     "sector_raw_foreign": {
+      "description": "The wording does not name the option chosen for 'sector' -- the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.",
+      "type": "boolean"
+     },
+     "sector_seen": {
+      "description": "A wording the model noticed for 'sector' while answering 'not stated'. Vocabulary review material, never evidence.",
+      "type": "string"
+     },
+     "sector_source": {
+      "description": "Which source the passage for 'sector' was found in. How far that may be from the row is the axis' own rule (own | local | any).",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "section",
+         "table",
+         "figure"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
+     "sector_state": {
+      "$ref": "#/$defs/state",
+      "description": "How the coordinate 'sector' ended. Always present: a missing key and a refused reading must not look alike."
+     },
+     "sector_window": {
+      "description": "[stage, index] of the window 'sector' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts.",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "own",
+         "retrieval",
+         "rest"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
+     "spatial_scope": {
+      "description": "Axis 'spatial_scope' of Energieverbrauch. A closed list; an entry beginning 'out:' is a deliberate non-class answer and mints no node. null unless spatial_scope_state is 'read' or 'derived'.",
+      "enum": [
+       "municipality",
+       "sub_area",
+       null
+      ],
+      "type": [
+       "string",
+       "null"
+      ],
+      "x-kg": {
+       "map": {
+        "municipality": "the plan's own area",
+        "sub_area": "MHPO_00020018 heat plan area, BFO_0000050 part of the municipality area"
+       },
+       "note": "No relation from a value to its area exists in the schema yet, so a sub_area value is not serialized (TERM REQUEST 1).",
+       "role": "parent"
+      },
+      "x-options": {
+       "Gemeindegebiet": {
+        "spellings": [
+         "Gesamtstadt",
+         "Stadtgebiet",
+         "gesamtes Plangebiet",
+         "Gemeinde insgesamt"
+        ],
+        "uri": "municipality"
+       },
+       "Teilgebiet": {
+        "spellings": [
+         "Fokusgebiet",
+         "Quartier",
+         "Stadtteil",
+         "Baublock",
+         "Wärmenetzgebiet",
+         "Ortsteil"
+        ],
+        "uri": "sub_area"
+       }
+      },
+      "x-question": "Auf welches Gebiet bezieht sich der Wert? Sieh ZUERST in der Zeile selbst nach: benennt die Zeilenbeschriftung ein Gebiet — einen Quartiersnamen, ein Eignungsgebiet, eine Straße —, dann ist DAS das Gebiet dieser Zeile und die Überschrift gilt für sie nicht. Eine Steckbrief- oder Quartierstabelle hat in jeder Zeile ein anderes Gebiet und in der Überschrift nur den Gemeindenamen; wer dann die Überschrift nimmt, legt vierzig Quartiere auf eine Koordinate. Erst wenn die Zeile kein Gebiet nennt, gilt die Überschrift oder die Caption. Bei einem Teilgebiet gehört sein NAME wörtlich in value_raw (\"Fokusgebiet Eicken\", \"Quartier Nordstadt\", \"Wärmenetzgebiet 3\"), ohne den Namen sind zwei Teilgebiete im Graphen nicht auseinanderzuhalten. Beim ganzen Gemeindegebiet reicht die Klasse."
+     },
+     "spatial_scope_quote": {
+      "description": "The verbatim passage carrying 'spatial_scope'. Present exactly when spatial_scope_state is 'read'.",
+      "minLength": 8,
+      "type": "string"
+     },
+     "spatial_scope_raw": {
+      "description": "The document's own wording 'spatial_scope' was read from. This is what a later re-mapping onto a changed vocabulary works on, so a choice without it is counted (raw_missing).",
+      "type": "string"
+     },
+     "spatial_scope_raw_foreign": {
+      "description": "The wording does not name the option chosen for 'spatial_scope' -- the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.",
+      "type": "boolean"
+     },
+     "spatial_scope_seen": {
+      "description": "A wording the model noticed for 'spatial_scope' while answering 'not stated'. Vocabulary review material, never evidence.",
+      "type": "string"
+     },
+     "spatial_scope_source": {
+      "description": "Which source the passage for 'spatial_scope' was found in. How far that may be from the row is the axis' own rule (own | local | any).",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "section",
+         "table",
+         "figure"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
+     "spatial_scope_state": {
+      "$ref": "#/$defs/state",
+      "description": "How the coordinate 'spatial_scope' ended. Always present: a missing key and a refused reading must not look alike."
+     },
+     "spatial_scope_window": {
+      "description": "[stage, index] of the window 'spatial_scope' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts.",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "own",
+         "retrieval",
+         "rest"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
+     "tier": {
+      "description": "text_located: the quote sits in the document's own refined text, so it can be checked against the PDF. visual_source: it sits in a table transcription, a caption or a figure description, which are model output and want human curation.",
+      "enum": [
+       "text_located",
+       "visual_source"
+      ]
+     },
+     "unit": {
+      "description": "The unit, chosen from units_accepted (GWh, GWh/a, MWh, MWh/a, Mrd. kWh, TWh, TWh/a, kWh, kWh/a). A spelling the list does not hold is accepted with the flag unit_spelling.",
+      "type": "string"
+     },
+     "unit_raw": {
+      "description": "The unit exactly as the source writes it. This is evidence and is never looked up.",
+      "type": "string"
+     },
+     "value": {
+      "description": "The number as the document prints it, with the grouping removed and a decimal point.",
+      "type": "number"
+     },
+     "value_target": {
+      "description": "value x factor(unit), in the spec's unit_target OEO_00050008. This is the number the graph carries.",
+      "type": "number"
+     },
+     "year": {
+      "description": "Axis 'year' of Energieverbrauch. null unless year_state is 'read' or 'derived'.",
+      "type": [
+       "integer",
+       "null"
+      ],
+      "x-kg": {
+       "datatype": "xsd:integer",
+       "label": "has scenario year value",
+       "note": "The calendar year the aggregation is integrated over, not a label. A unit without a per-year marker carries the flag period:annual_in_quote or period:unstated.",
+       "predicate": "OEO_00020440",
+       "role": "edge"
+      },
+      "x-question": "Für welches Kalenderjahr gilt diese Jahressumme? Vierstellig. Das Jahr steht fast nie in der Zeile der Zahl selbst. Sieh in dieser Reihenfolge nach: (1) die Kopfzelle der Spalte, in der die Zahl steht, (2) der Titel der eigenen Tabelle, (3) der Satz, der die Tabelle in ihrem Abschnitt ankündigt (\"Für das Jahr 2040 ergeben sich die in den nachfolgenden Tabellen zusammengestellten Kennzahlen\"), (4) die Überschrift des Abschnitts. Das Jahr im Titel einer ANDEREN Tabelle gilt nicht, auch wenn dieser Titel im selben Abschnitt steht. Nennt die Quelle einen Zeitraum statt eines Jahres (\"Durchschnittswert der Jahre 2022-2024\"), dann gehört das LETZTE Jahr in value und der Zeitraum wörtlich in value_raw."
+     },
+     "year_quote": {
+      "description": "The verbatim passage carrying 'year'. Present exactly when year_state is 'read'.",
+      "minLength": 8,
+      "type": "string"
+     },
+     "year_raw": {
+      "description": "The document's own wording 'year' was read from. This is what a later re-mapping onto a changed vocabulary works on, so a choice without it is counted (raw_missing).",
+      "type": "string"
+     },
+     "year_raw_foreign": {
+      "description": "The wording does not name the option chosen for 'year' -- the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.",
+      "type": "boolean"
+     },
+     "year_seen": {
+      "description": "A wording the model noticed for 'year' while answering 'not stated'. Vocabulary review material, never evidence.",
+      "type": "string"
+     },
+     "year_source": {
+      "description": "Which source the passage for 'year' was found in. How far that may be from the row is the axis' own rule (own | local | any).",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "section",
+         "table",
+         "figure"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
+     "year_state": {
+      "$ref": "#/$defs/state",
+      "description": "How the coordinate 'year' ended. Always present: a missing key and a refused reading must not look alike."
+     },
+     "year_window": {
+      "description": "[stage, index] of the window 'year' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts.",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "own",
+         "retrieval",
+         "rest"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     }
+    },
+    "required": [
+     "kind",
+     "parameter",
+     "parameter_state",
+     "quote",
+     "tier",
+     "provenance",
+     "value",
+     "unit",
+     "unit_raw",
+     "value_target",
+     "quantity",
+     "quantity_state",
+     "aggregation",
+     "aggregation_state",
+     "carrier",
+     "carrier_state",
+     "sector",
+     "sector_state",
+     "year",
+     "year_state",
+     "scenario",
+     "scenario_state",
+     "spatial_scope",
+     "spatial_scope_state"
+    ],
+    "type": "object",
+    "x-kg": {
+     "class_from": "quantity",
+     "node": "value",
+     "number": {
+      "datatype": "xsd:float",
+      "from": "value_target",
+      "label": "has number",
+      "predicate": "OEO_00140178"
+     },
+     "unit": {
+      "from": "unit_target",
+      "label": "has unit",
+      "predicate": "OEO_00040010"
+     }
+    }
+   },
+   "tuple_planning_organisation": {
+    "additionalProperties": false,
+    "properties": {
+     "compute": {
+      "description": "The sandbox runs behind a computed value: {code, stdout, ok, error}.",
+      "items": {
+       "type": "object"
+      },
+      "type": "array"
+     },
+     "computed": {
+      "description": "The value came out of the sandbox, not off the page; the quote proves the inputs it was computed from.",
+      "type": "boolean"
+     },
+     "flags": {
+      "description": "Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping a word the spec does not list; period:* says whether a bare amount was shown to be a yearly one.",
+      "items": {
+       "pattern": "^(mapped:[a-z_]+:[\\s\\S]*->[\\s\\S]*|unmapped:[a-z_]+:[\\s\\S]*|unit_not_chosen:[\\s\\S]*|unit_spelling:[\\s\\S]*|period:(annual_in_quote|unstated)|quote_repaired|computed|not_located)$",
+       "type": "string"
+      },
+      "type": "array"
+     },
+     "kind": {
+      "const": "tuple"
+     },
+     "parameter": {
+      "const": "planning_organisation",
+      "description": "Spec parameter: Beauftragtes Planungsbüro.",
+      "x-description-de": "Das Ingenieur-, Planungs- oder Beratungsbüro, das die Wärmeplanung im Auftrag der Kommune erstellt hat. Ein Tupel je Büro, in der Schreibweise des Dokuments, ohne Rechtsform. Zu finden im Impressum, auf der Titelseite, unter Auftragnehmer, Bearbeitung, Erstellt durch oder Verfasser. NICHT die Kommune selbst, die ist die Auftraggeberin. NICHT Fördermittelgeber, Datenlieferanten, Netzbetreiber oder im Text erwähnte Firmen.",
+      "x-question": "Um WELCHE Kennzahl handelt es sich bei dieser Zahl? Entscheide danach, was die Quelle über sie sagt: die Einheit, die Spalten- oder Zeilenbeschriftung und die Tabellen- oder Abschnittsüberschrift. Eine Angabe in t CO2 ist eine Emission, eine Angabe in MWh oder GWh ein Energieverbrauch. Zitiere die Stelle, aus der das hervorgeht."
+     },
+     "parameter_quote": {
+      "description": "The verbatim passage carrying 'parameter'. Present exactly when parameter_state is 'read'.",
+      "minLength": 8,
+      "type": "string"
+     },
+     "parameter_raw": {
+      "description": "The document's own wording 'parameter' was read from. This is what a later re-mapping onto a changed vocabulary works on, so a choice without it is counted (raw_missing).",
+      "type": "string"
+     },
+     "parameter_raw_foreign": {
+      "description": "The wording does not name the option chosen for 'parameter' -- the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.",
+      "type": "boolean"
+     },
+     "parameter_seen": {
+      "description": "A wording the model noticed for 'parameter' while answering 'not stated'. Vocabulary review material, never evidence.",
+      "type": "string"
+     },
+     "parameter_source": {
+      "description": "Which source the passage for 'parameter' was found in. How far that may be from the row is the axis' own rule (own | local | any).",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "section",
+         "table",
+         "figure"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
+     "parameter_state": {
+      "$ref": "#/$defs/state",
+      "description": "How the coordinate 'parameter' ended. Always present: a missing key and a refused reading must not look alike."
+     },
+     "parameter_window": {
+      "description": "[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts.",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "own",
+         "retrieval",
+         "rest"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
+     "provenance": {
+      "$ref": "#/$defs/provenance"
+     },
+     "quote": {
+      "description": "The passage of the owner source that contains the value. Whitespace-collapsed containment; a retyped table row may be repaired, which sets the flag quote_repaired.",
+      "minLength": 8,
+      "type": "string"
+     },
+     "tier": {
+      "description": "text_located: the quote sits in the document's own refined text, so it can be checked against the PDF. visual_source: it sits in a table transcription, a caption or a figure description, which are model output and want human curation.",
+      "enum": [
+       "text_located",
+       "visual_source"
+      ]
+     },
+     "unit": {
+      "description": "Empty: a wording has no unit. The key is present so every row has the same shape.",
+      "maxLength": 0,
+      "type": "string"
+     },
+     "unit_raw": {
+      "description": "Empty, as unit.",
+      "maxLength": 0,
+      "type": "string"
+     },
+     "value": {
+      "description": "The wording as the document writes it.",
+      "minLength": 1,
+      "type": "string"
+     },
+     "value_raw": {
+      "description": "The wording before any tidying (an organisation's legal form, a title's line break).",
+      "type": "string"
+     },
+     "value_uri": {
+      "description": "The entry of the parameter's own vocabulary the wording resolved to, where the parameter has one; null when the list did not hold it.",
+      "type": [
+       "string",
+       "null"
+      ]
+     }
+    },
+    "required": [
+     "kind",
+     "parameter",
+     "parameter_state",
+     "quote",
+     "tier",
+     "provenance",
+     "value"
+    ],
+    "type": "object",
+    "x-kg": {
+     "class": "OEO_00030022 organisation",
+     "edge_from_plan": {
+      "label": "has organisation",
+      "predicate": "OEO_00000510"
+     },
+     "label": "rdfs:label, legal form stripped",
+     "node": "organisation"
+    }
+   }
+  },
+  "$id": "https://openenergyplatform.org/schema/mhpkg/extraction/harvest-line",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "An accepted tuple (kind=tuple) or a refused claim (kind=refusal). Generated from the profile's extraction_spec.json by docpipe/extraction/schema.py.",
+  "oneOf": [
+   {
+    "$ref": "#/$defs/tuple_energy_consumption"
+   },
+   {
+    "$ref": "#/$defs/tuple_emission"
+   },
+   {
+    "$ref": "#/$defs/tuple_planning_organisation"
+   },
+   {
+    "$ref": "#/$defs/refusal"
+   }
+  ],
+  "title": "docpipe extraction harvest line (one JSON object per line)"
+ },
+ "stamp": {
+  "$id": "https://openenergyplatform.org/schema/mhpkg/extraction/stamp",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Any key that differs from the current run makes the document stale and it is harvested again. Withheld when the harvest did not happen.",
+  "patternProperties": {
+   "^extraction/(harvest|queries|anchors|rows|field)$": {
+    "description": "sha256 of the prompt file",
+    "pattern": "^[0-9a-f]{64}$",
+    "type": "string"
+   }
+  },
+  "properties": {
+   "anchors": {
+    "description": "spec sha and frozen-anchor sha together; empty when anchors were off",
+    "pattern": "^([0-9a-f]{16})?$",
+    "type": "string"
+   },
+   "model": {
+    "description": "the serving model",
+    "type": "string"
+   },
+   "page_text_transcribed": {
+    "description": "How many pages of this document a model read rather than the PDF. A harvest from a transcribed plan is a reading of a reading.",
+    "type": [
+     "integer",
+     "null"
+    ]
+   },
+   "spec": {
+    "description": "sha256 of extraction_spec.json",
+    "pattern": "^[0-9a-f]{64}$",
+    "type": "string"
+   }
+  },
+  "required": [
+   "spec",
+   "model",
+   "anchors",
+   "extraction/harvest",
+   "extraction/queries",
+   "extraction/anchors",
+   "extraction/rows",
+   "extraction/field"
+  ],
+  "title": "docpipe extraction resume stamp",
+  "type": "object"
+ },
+ "trace": {
+  "$id": "https://openenergyplatform.org/schema/mhpkg/extraction/trace-record",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "One event per line; `t` names it and `doc` the document. Read by scripts/trace_report.py.",
+  "oneOf": [
+   {
+    "additionalProperties": false,
+    "properties": {
+     "chars": {
+      "type": "integer"
+     },
+     "doc": {
+      "type": "integer"
+     },
+     "image": {
+      "type": "boolean"
+     },
+     "kind": {
+      "enum": [
+       "section",
+       "table",
+       "figure"
+      ]
+     },
+     "origin": {
+      "enum": [
+       "structure",
+       "retrieval"
+      ]
+     },
+     "owner": {
+      "type": "integer"
+     },
+     "rank": {
+      "type": [
+       "integer",
+       "null"
+      ]
+     },
+     "t": {
+      "const": "plan"
+     }
+    },
+    "required": [
+     "t",
+     "doc",
+     "rank",
+     "origin",
+     "kind",
+     "owner",
+     "chars",
+     "image"
+    ],
+    "type": "object"
+   },
+   {
+    "additionalProperties": false,
+    "properties": {
+     "attempt": {
+      "type": "integer"
+     },
+     "completion_tokens": {
+      "type": [
+       "integer",
+       "null"
+      ]
+     },
+     "doc": {
+      "type": "integer"
+     },
+     "ms": {
+      "type": "integer"
+     },
+     "origins": {
+      "type": "array"
+     },
+     "prompt": {
+      "type": "string"
+     },
+     "prompt_tokens": {
+      "type": [
+       "integer",
+       "null"
+      ]
+     },
+     "ranks": {
+      "type": "array"
+     },
+     "rows": {
+      "type": "integer"
+     },
+     "sources": {
+      "items": {
+       "description": "[owner_kind, owner_id]",
+       "maxItems": 2,
+       "minItems": 2,
+       "prefixItems": [
+        {
+         "enum": [
+          "section",
+          "table",
+          "figure"
+         ]
+        },
+        {
+         "type": "integer"
+        }
+       ],
+       "type": "array"
+      },
+      "type": "array"
+     },
+     "status": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "t": {
+      "const": "rows"
+     }
+    },
+    "required": [
+     "t",
+     "doc",
+     "prompt",
+     "attempt",
+     "rows",
+     "ranks",
+     "origins"
+    ],
+    "type": "object"
+   },
+   {
+    "additionalProperties": false,
+    "properties": {
+     "anchor": {
+      "type": "string"
+     },
+     "attempt": {
+      "type": "integer"
+     },
+     "completion_tokens": {
+      "type": [
+       "integer",
+       "null"
+      ]
+     },
+     "doc": {
+      "type": "integer"
+     },
+     "filled": {
+      "type": "integer"
+     },
+     "filled_by": {
+      "additionalProperties": {
+       "type": "integer"
+      },
+      "type": "object"
+     },
+     "ms": {
+      "type": "integer"
+     },
+     "open": {
+      "type": "integer"
+     },
+     "parameter": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "prompt_tokens": {
+      "type": [
+       "integer",
+       "null"
+      ]
+     },
+     "raw_foreign": {
+      "type": "integer"
+     },
+     "raw_missing": {
+      "type": "integer"
+     },
+     "reply": {
+      "type": "boolean"
+     },
+     "shown": {
+      "items": {
+       "description": "[owner_kind, owner_id]",
+       "maxItems": 2,
+       "minItems": 2,
+       "prefixItems": [
+        {
+         "enum": [
+          "section",
+          "table",
+          "figure"
+         ]
+        },
+        {
+         "type": "integer"
+        }
+       ],
+       "type": "array"
+      },
+      "type": "array"
+     },
+     "slot": {
+      "type": "string"
+     },
+     "stage": {
+      "enum": [
+       "own",
+       "retrieval",
+       "rest"
+      ]
+     },
+     "t": {
+      "const": "field"
+     },
+     "unbacked": {
+      "type": "integer"
+     },
+     "unbacked_by": {
+      "additionalProperties": {
+       "type": "integer"
+      },
+      "type": "object"
+     },
+     "unquoted": {
+      "type": "integer"
+     },
+     "unstated": {
+      "type": "integer"
+     },
+     "window": {
+      "type": "integer"
+     }
+    },
+    "required": [
+     "t",
+     "doc",
+     "anchor",
+     "window",
+     "stage",
+     "attempt",
+     "parameter",
+     "open",
+     "reply",
+     "shown",
+     "filled",
+     "unquoted",
+     "unbacked",
+     "unstated"
+    ],
+    "type": "object"
+   },
+   {
+    "additionalProperties": false,
+    "properties": {
+     "anchor": {
+      "type": "string"
+     },
+     "asked": {
+      "type": "integer"
+     },
+     "combed": {
+      "type": "boolean"
+     },
+     "doc": {
+      "type": "integer"
+     },
+     "exhausted": {
+      "type": "integer"
+     },
+     "filled": {
+      "type": "integer"
+     },
+     "raw_foreign": {
+      "type": "integer"
+     },
+     "raw_missing": {
+      "type": "integer"
+     },
+     "retried": {
+      "type": "integer"
+     },
+     "rows": {
+      "type": "integer"
+     },
+     "slot": {
+      "type": "string"
+     },
+     "t": {
+      "const": "sweep"
+     },
+     "unbacked": {
+      "type": "integer"
+     },
+     "unquoted": {
+      "type": "integer"
+     },
+     "unstated": {
+      "type": "integer"
+     },
+     "windows": {
+      "type": "integer"
+     }
+    },
+    "required": [
+     "t",
+     "doc",
+     "anchor",
+     "windows",
+     "rows",
+     "combed",
+     "retried",
+     "asked",
+     "exhausted",
+     "filled",
+     "unquoted",
+     "unbacked",
+     "unstated"
+    ],
+    "type": "object"
+   },
+   {
+    "additionalProperties": false,
+    "properties": {
+     "attempt": {
+      "type": "integer"
+     },
+     "doc": {
+      "type": "integer"
+     },
+     "field": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "row": {
+      "pattern": "^R[0-9]+$",
+      "type": "string"
+     },
+     "slot": {
+      "type": "string"
+     },
+     "t": {
+      "const": "drop"
+     },
+     "why": {
+      "enum": [
+       "quote_not_in_source",
+       "quote_not_local",
+       "quote_too_short",
+       "answer_not_in_quote",
+       "unbacked"
+      ]
+     },
+     "window": {
+      "type": "integer"
+     }
+    },
+    "required": [
+     "t",
+     "doc",
+     "window",
+     "attempt",
+     "row"
+    ],
+    "type": "object"
+   },
+   {
+    "additionalProperties": false,
+    "properties": {
+     "attempt": {
+      "type": "integer"
+     },
+     "detail": {
+      "type": "string"
+     },
+     "doc": {
+      "type": "integer"
+     },
+     "finish": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "kind": {
+      "enum": [
+       "unparsable",
+       "exception",
+       "gave_up"
+      ]
+     },
+     "ms": {
+      "type": "integer"
+     },
+     "slot": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "sources": {
+      "items": {
+       "description": "[owner_kind, owner_id]",
+       "maxItems": 2,
+       "minItems": 2,
+       "prefixItems": [
+        {
+         "enum": [
+          "section",
+          "table",
+          "figure"
+         ]
+        },
+        {
+         "type": "integer"
+        }
+       ],
+       "type": "array"
+      },
+      "type": "array"
+     },
+     "status": {
+      "type": [
+       "integer",
+       "string",
+       "null"
+      ]
+     },
+     "t": {
+      "const": "error"
+     },
+     "where": {
+      "type": "string"
+     },
+     "why": {
+      "enum": [
+       "unreachable",
+       "no_answer"
+      ]
+     }
+    },
+    "required": [
+     "t",
+     "doc",
+     "where",
+     "kind",
+     "attempt"
+    ],
+    "type": "object"
+   },
+   {
+    "additionalProperties": false,
+    "properties": {
+     "doc": {
+      "type": "integer"
+     },
+     "kind": {
+      "enum": [
+       "section",
+       "table",
+       "figure"
+      ]
+     },
+     "owner": {
+      "type": "integer"
+     },
+     "parameter": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "states": {
+      "additionalProperties": {
+       "enum": [
+        "read",
+        "derived",
+        "unstated",
+        "unanswered",
+        "exhausted",
+        "unbacked",
+        "out_of_slice"
+       ]
+      },
+      "type": "object"
+     },
+     "t": {
+      "const": "coord"
+     },
+     "tier": {
+      "enum": [
+       "text_located",
+       "visual_source"
+      ]
+     },
+     "unit": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "value": {}
+    },
+    "required": [
+     "t",
+     "doc",
+     "parameter",
+     "value",
+     "unit",
+     "tier",
+     "kind",
+     "owner",
+     "states"
+    ],
+    "type": "object"
+   },
+   {
+    "additionalProperties": false,
+    "properties": {
+     "doc": {
+      "type": "integer"
+     },
+     "owner": {
+      "description": "[owner_kind, owner_id]",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "section",
+         "table",
+         "figure"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
+     "parameter": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "reason": {
+      "type": "string"
+     },
+     "t": {
+      "const": "refusal"
+     }
+    },
+    "required": [
+     "t",
+     "doc",
+     "parameter",
+     "reason",
+     "owner"
+    ],
+    "type": "object"
+   },
+   {
+    "additionalProperties": false,
+    "properties": {
+     "detail": {
+      "type": "string"
+     },
+     "doc": {
+      "type": "integer"
+     },
+     "kind": {
+      "enum": [
+       "tuple",
+       "refusal"
+      ]
+     },
+     "t": {
+      "const": "invalid"
+     },
+     "where": {
+      "type": "string"
+     },
+     "why": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "t",
+     "doc",
+     "kind",
+     "where"
+    ],
+    "type": "object"
+   }
+  ],
+  "title": "docpipe extraction trace record"
+ }
+}
