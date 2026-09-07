@@ -907,7 +907,7 @@ def test_the_anchors_are_frozen_so_a_restart_searches_the_same_way(tmp_path, mon
 
     import openai
     monkeypatch.setattr(openai, "OpenAI", Client)
-    store, key = tmp_path / "anchors.json", runner.anchors_key(SPEC)
+    store, key = tmp_path / "anchors.json", runner.anchors_key()
 
     first = runner.make_anchors(SPEC, store=store, key=key)
     wanted = len(runner.anchor_targets(SPEC))
@@ -1143,8 +1143,12 @@ def test_the_frozen_anchor_is_the_one_that_plans(tmp_path):
     and over whatever a previous run of the same output directory wrote."""
     uri = SPEC.parameters[0].uri
     store = tmp_path / "store.json"
+    # With its targets, so the set really is read back and really loses.
+    # Written without them it would be dropped as unplaceable, and the store
+    # half of the promise below would pass for the wrong reason.
     runner.save_anchors(store, "k", {uri: ["Ein alter Satz aus einem "
-                                           "frueheren Lauf des Verzeichnisses."]})
+                                           "frueheren Lauf des Verzeichnisses."]},
+                        runner.anchor_targets(SPEC))
     frozen, sha = runner.frozen_anchors(_FrozenProfile(
         _anchor_file(tmp_path, {uri: [REAL]})), SPEC)
     assert sha, "a frozen set has to be identifiable"
@@ -1253,7 +1257,7 @@ def test_the_kwp_profile_freezes_anchors_its_own_spec_asks_for():
     # The key a run reads its own anchors.json back under has to move with the
     # file, or changing it leaves every existing output directory on the old
     # set with no line anywhere saying so.
-    assert runner.anchors_key(spec, sha) != runner.anchors_key(spec)
+    assert runner.anchors_key(sha) != runner.anchors_key()
 
 
 def test_a_document_no_reply_ever_came_back_for_is_not_stamped(tmp_path, monkeypatch):
@@ -1402,9 +1406,9 @@ def test_a_spec_edit_no_question_is_asked_through_costs_nothing(tmp_path,
     plain, annotated = _spec(), _spec(kg={"node": "heatplan", "role": "parent"})
     stamp = tmp_path / "plan.stamp.json"
     stamp.write_text(json.dumps(runner._stamp_current(
-        "sha-vorher", runner.anchors_key(plain), plain)), encoding="utf-8")
+        "sha-vorher", runner.anchors_key(), plain)), encoding="utf-8")
 
-    now = runner._stamp_current("sha-nachher", runner.anchors_key(annotated),
+    now = runner._stamp_current("sha-nachher", runner.anchors_key(),
                                 annotated)
     assert runner.stale(stamp, now) == [], (
         "the graph block reaches no model, so it re-reads no document")
@@ -1422,11 +1426,11 @@ def test_a_changed_question_still_stales_and_names_itself(tmp_path,
     before = _spec()
     stamp = tmp_path / "plan.stamp.json"
     stamp.write_text(json.dumps(runner._stamp_current(
-        "sha-1", runner.anchors_key(before), before)), encoding="utf-8")
+        "sha-1", runner.anchors_key(), before)), encoding="utf-8")
 
     after = _spec(year_question="Auf welches Bilanzjahr bezieht sich der Wert?")
     changed = runner.stale(stamp, runner._stamp_current(
-        "sha-1", runner.anchors_key(after), after))
+        "sha-1", runner.anchors_key(), after))
     assert "axis/OEO_00050016/year" in changed, changed
     assert "parameter/OEO_00050016" not in changed, (
         "and only it: the value's own question did not move")
@@ -1455,41 +1459,72 @@ def test_a_dropped_parameter_is_seen_by_the_one_key_that_can(tmp_path,
     two = _spec(second=True)
     stamp = tmp_path / "plan.stamp.json"
     stamp.write_text(json.dumps(runner._stamp_current(
-        "sha-1", runner.anchors_key(two), two)), encoding="utf-8")
+        "sha-1", runner.anchors_key(), two)), encoding="utf-8")
 
     one = _spec()
     changed = runner.stale(stamp, runner._stamp_current(
-        "sha-1", runner.anchors_key(one), one))
+        "sha-1", runner.anchors_key(), one))
     assert "slot/parameter" in changed, changed
     assert not [k for k in changed
                 if k.startswith(("parameter/", "value/", "axis/"))], (
         "nothing per parameter can report a parameter that is not there")
 
 
-def test_the_anchor_key_follows_the_questions_and_only_them(monkeypatch):
-    """The anchors decide which passages the whole corpus is read from, and
-    two calls in one job shared 0 of 18 strings. Keyed on the sha of the spec
-    file, every edit anywhere in it missed the cache and had the model rewrite
-    all nineteen sets -- so a comment changed the corpus's retrieval.
+def test_a_changed_question_moves_a_stamp_key_even_though_anchors_no_longer_does(
+        tmp_path, monkeypatch):
+    """The stamp's `anchors` key stopped carrying the questions, so the
+    per-question keys have to carry all of them -- or a document harvested
+    under an older wording would read as current.
 
-    A new energy carrier is the case that matters: an anchor is a sentence
-    written from a label, a description and a wording, and a grown list
-    changes none of the three. That is also what a new OEO release brings, by
-    the dozen. The file case is the same property one level up and is not
-    asserted here, because a key built from the spec object cannot see a
-    comment in the file and the assertion could never fail.
+    Held over the whole stamp and not over one key, because it is the stamp a
+    resume asks. Each case is a legal edit to the spec, and each must be
+    reported: a dropped parameter, a renamed label, a rewritten axis question,
+    a rewritten parameter question. The last row is the counter-case -- a new
+    option reaches no anchor, so it must move its axis and nothing else.
     """
     monkeypatch.setattr(runner.prompts, "versions",
                         lambda ids: {i: "v1" for i in ids})
-    assert runner.anchors_key(_spec()) \
-        == runner.anchors_key(_spec(more_carriers=True))
-    for other in (_spec(label="Endenergiebedarf"),
-                  _spec(description="Etwas anderes, in genügend Worten "
-                                    "gesagt damit die Spec es annimmt."),
-                  _spec(year_question="Auf welches Bilanzjahr?")):
-        assert runner.anchors_key(_spec()) != runner.anchors_key(other), (
-            "an anchor is written from the label, the description and the "
-            "question, so each of them moves it")
+    stamp = tmp_path / "plan.stamp.json"
+
+    def changed(base, spec):
+        stamp.write_text(json.dumps(runner._stamp_current(
+            "sha", runner.anchors_key(), base)), encoding="utf-8")
+        return runner.stale(stamp, runner._stamp_current(
+            "sha", runner.anchors_key(), spec))
+
+    one, two = _spec(), _spec(second=True)
+    # A dropped parameter, which no per-parameter key can report: those are
+    # written from what the spec still has.
+    assert changed(two, one) == ["slot/parameter"]
+    assert changed(one, _spec(label="Endenergiebedarf")) \
+        == ["parameter/OEO_00050016", "slot/parameter"]
+    assert changed(one, _spec(year_question="Auf welches Bilanzjahr?")) \
+        == ["axis/OEO_00050016/year"]
+    assert changed(one, _spec(parameter_question="Welche Groesse ist das?")) \
+        == ["slot/parameter"]
+    # The counter-case: an option reaches no anchor and moves only its axis.
+    assert changed(one, _spec(more_carriers=True)) \
+        == ["axis/OEO_00050016/carrier"]
+
+
+def test_the_anchors_stamp_key_carries_only_what_no_other_key_does(monkeypatch):
+    """It used to hash the questions too, and then ONE changed question made
+    every document in the corpus stale -- which is the bill the per-question
+    keys exist to avoid. What is left is the target-set version and the
+    profile's frozen file, and neither is anywhere else in the stamp."""
+    monkeypatch.setattr(runner.prompts, "versions",
+                        lambda ids: {i: "v1" for i in ids})
+    plain, frozen = runner.anchors_key(), runner.anchors_key("frozen-b")
+    assert plain != frozen, "the profile's frozen file is in no other key"
+    assert len(plain) == 16
+    # The prompt and the model ARE elsewhere in the stamp, and belong here as
+    # well: this key is also what the anchor CACHE is stored under, and a set
+    # another model wrote is not this run's set.
+    monkeypatch.setattr(runner.prompts, "versions",
+                        lambda ids: {i: "v2" for i in ids})
+    assert runner.anchors_key() != plain
+    monkeypatch.setattr(runner, "LLM_MODEL", "ein-anderes-modell")
+    assert runner.anchors_key() not in (plain, frozen)
 
 
 def test_the_written_summary_is_judged_by_the_specs_own_rule(tmp_path,
@@ -1540,3 +1575,140 @@ def test_the_written_summary_is_judged_by_the_specs_own_rule(tmp_path,
     other = json.loads((tmp_path / "plan_y.jsonl")
                        .read_text(encoding="utf-8").strip().splitlines()[-1])
     assert other["reasons"] == {"nonlocal:carrier": 1}
+
+
+def _anchor_client(monkeypatch, calls):
+    """A model that writes one distinguishable sentence per call."""
+    class Client:
+        def __init__(self, **kw):
+            self.chat = self
+
+        @property
+        def completions(self):
+            return self
+
+        def create(self, **kw):
+            calls.append(kw)
+            body = json.dumps({"anchors": [f"Ein Satz wie im Plan {len(calls)}"]})
+            return type("R", (), {"choices": [type("C", (), {
+                "message": type("M", (), {"content": body})()})()]})()
+
+    import openai
+    monkeypatch.setattr(openai, "OpenAI", Client)
+
+
+def test_one_changed_question_rewrites_one_anchor_set_and_no_other(
+        tmp_path, monkeypatch):
+    """The anchors decide which passages a document is read from. Cached
+    all-or-nothing, editing the year question had the model rewrite the
+    carrier's anchors too -- so a coordinate nobody had touched was suddenly
+    harvested out of other passages, and no line anywhere said so. Two calls
+    in one job shared 0 of 18 strings, so "it writes them again" is not the
+    same set.
+    """
+    monkeypatch.setattr(runner.prompts, "versions",
+                        lambda ids: {i: "v1" for i in ids})
+    monkeypatch.setattr(runner.prompts, "load",
+                        lambda _id: type("P", (), {"text": "sys", "meta": {}})())
+    calls = []
+    _anchor_client(monkeypatch, calls)
+    store, key = tmp_path / "anchors.json", runner.anchors_key()
+
+    first = runner.make_anchors(_spec(), store=store, key=key)
+    wrote = len(calls)
+    assert wrote == len(runner.anchor_targets(_spec())) > 2
+
+    moved = _spec(year_question="Auf welches Bilanzjahr bezieht sich das?")
+    second = runner.make_anchors(moved, store=store, key=key)
+    assert len(calls) == wrote + 1, "exactly the one question that moved"
+    year = runner.anchor_key("OEO_00050016", "year")
+    assert second[year] != first[year]
+    assert {k: v for k, v in second.items() if k != year} \
+        == {k: v for k, v in first.items() if k != year}, (
+        "every other set comes back the way it was written")
+
+
+def test_a_new_model_or_prompt_rewrites_every_anchor_set(tmp_path, monkeypatch):
+    """The other half. A set is only reusable while the model that wrote it
+    and the prompt it was written from still hold -- per question is finer,
+    not weaker."""
+    monkeypatch.setattr(runner.prompts, "versions",
+                        lambda ids: {i: "v1" for i in ids})
+    monkeypatch.setattr(runner.prompts, "load",
+                        lambda _id: type("P", (), {"text": "sys", "meta": {}})())
+    calls = []
+    _anchor_client(monkeypatch, calls)
+    store = tmp_path / "anchors.json"
+    runner.make_anchors(_spec(), store=store, key=runner.anchors_key())
+    wrote = len(calls)
+
+    monkeypatch.setattr(runner.prompts, "versions",
+                        lambda ids: {i: "v2" for i in ids})
+    runner.make_anchors(_spec(), store=store, key=runner.anchors_key())
+    assert len(calls) == 2 * wrote
+
+
+def test_a_store_that_cannot_say_which_question_is_reused_for_nothing(
+        tmp_path, monkeypatch):
+    """A file written before the per-question map existed carries none of it.
+    Reading its sets as still valid is guessing, and the guess is paid for by
+    a corpus harvested from passages nobody checked -- the same rule as the
+    stamp from before the per-question keys."""
+    monkeypatch.setattr(runner.prompts, "versions",
+                        lambda ids: {i: "v1" for i in ids})
+    key = runner.anchors_key()
+    store = tmp_path / "anchors.json"
+    store.write_text(json.dumps({"key": key, "model": "m",
+                                 "anchors": {"OEO_00050016": ["Ein Satz."]}}),
+                     encoding="utf-8")
+    targets = runner.anchor_targets(_spec())
+    assert runner.load_anchors(store, key, targets) == {}
+    # A map that is there but is not a map is the same case, and must not be
+    # a crash in the middle of a run either.
+    store.write_text(json.dumps({"key": key, "model": "m", "questions": [],
+                                 "anchors": {"OEO_00050016": ["Ein Satz."]}}),
+                     encoding="utf-8")
+    assert runner.load_anchors(store, key, targets) == {}
+    # And a caller with no spec to hand still gets what is there, which is
+    # what it can honestly do.
+    assert runner.load_anchors(store, key) == {"OEO_00050016": ["Ein Satz."]}
+
+
+def test_a_set_for_a_question_this_spec_no_longer_asks_is_not_carried_forward(
+        tmp_path, monkeypatch):
+    """Dropping a parameter leaves its anchors in the file. Handed back they
+    would be searched with, for a question the run does not ask."""
+    monkeypatch.setattr(runner.prompts, "versions",
+                        lambda ids: {i: "v1" for i in ids})
+    key = runner.anchors_key()
+    store = tmp_path / "anchors.json"
+    targets = runner.anchor_targets(_spec(second=True))
+    runner.save_anchors(store, key, {t[0]: ["Ein Satz."] for t in targets},
+                        targets)
+    kept = runner.load_anchors(store, key, runner.anchor_targets(_spec()))
+    assert "OEO_00010079" not in kept
+    assert "OEO_00050016" in kept
+    # The same set with no recorded question at all: a file can be written
+    # half, or by hand. Not a target and not placeable is two reasons to
+    # leave it, and either alone has to be enough.
+    stored = json.loads(store.read_text(encoding="utf-8"))
+    stored["questions"].pop("OEO_00010079")
+    store.write_text(json.dumps(stored), encoding="utf-8")
+    assert "OEO_00010079" not in runner.load_anchors(
+        store, key, runner.anchor_targets(_spec()))
+
+
+def test_the_store_says_which_question_each_set_answers(tmp_path, monkeypatch):
+    """Without it the file is a list of sentences nobody can place, and the
+    next run is back to all-or-nothing."""
+    monkeypatch.setattr(runner.prompts, "versions",
+                        lambda ids: {i: "v1" for i in ids})
+    store = tmp_path / "anchors.json"
+    targets = runner.anchor_targets(_spec())
+    runner.save_anchors(store, "k", {targets[0][0]: ["Ein Satz."]}, targets)
+    stored = json.loads(store.read_text(encoding="utf-8"))
+    assert list(stored["questions"]) == [targets[0][0]], (
+        "one entry per SAVED set, not one per question of the spec"
+    )
+    assert stored["questions"][targets[0][0]] \
+        == runner.anchor_question_key(targets[0])

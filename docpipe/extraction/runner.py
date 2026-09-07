@@ -547,30 +547,48 @@ def fill_dynamic_axes(spec: Spec, vocabularies: Optional[dict]) -> Spec:
 ANCHOR_SCHEMA = "per-question-1"
 
 
-def anchors_key(spec: Spec, frozen_sha: str = "") -> str:
-    """What an anchor set depends on: the questions it is written for, the
-    anchor prompt, the model, and whatever the profile froze.
-
-    The questions, not the sha of the spec file. An anchor is a sentence
-    written from one question's label, description and wording, so those are
-    what it depends on; a comment, an indent or a graph annotation elsewhere
-    in the file is not. Keyed on the file, every such edit missed the cache,
-    had the model rewrite all nineteen sets, and thereby changed which
-    passages the corpus is read from -- two calls in one job shared 0 of 18
-    strings. The ontology work produces those edits by the dozen.
-
-    The frozen part belongs in the key because a run reads its own
-    anchors.json back. Without it, changing the profile's file would leave
-    every output directory that already holds one searching with the old set,
-    and no line anywhere would say so.
-    """
+def _key16(raw: str) -> str:
+    """Sixteen hex characters. Long enough that two configurations do not
+    collide, short enough to read in a stamp beside twenty-nine other keys."""
     import hashlib
-    versions = prompts.versions((ANCHORS_PROMPT_ID,))
-    targets = json.dumps(anchor_targets(spec), ensure_ascii=False,
-                         sort_keys=True, separators=(",", ":"))
-    raw = (f"{targets}|{versions.get(ANCHORS_PROMPT_ID)}|{LLM_MODEL}"
-           f"|{ANCHOR_SCHEMA}|{frozen_sha}")
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16]
+
+
+def anchor_question_key(target) -> str:
+    """The one question a stored anchor set was written for.
+
+    An anchor is a sentence written from a label, a description and a
+    wording. Those three and the anchor's own id are the target tuple, so the
+    tuple IS the question, and a set is reusable exactly while its tuple has
+    not moved.
+    """
+    return _key16(json.dumps(list(target), ensure_ascii=False,
+                             sort_keys=True, separators=(",", ":")))
+
+
+def anchors_key(frozen_sha: str = "") -> str:
+    """Everything an anchor set depends on that is NOT one question: the
+    anchor prompt, the model, the version of the target SET, and whatever the
+    profile froze. The cache is stored under it and the stamp records it.
+
+    Not the questions, though it used to hash them. Everything a target tuple
+    carries is already a stamp key of its own -- a parameter's label and
+    description in `parameter/<uri>`, an axis' question in
+    `axis/<uri>/<name>`, the spec's own question and the parameter list in
+    `slot/parameter` -- and the anchor prompt and the model are stamp keys too
+    (`extraction/anchors`, `model`). Hashing the targets in here as well made
+    every document in the corpus stale over ONE changed question, which is
+    exactly what the per-question keys were written to stop.
+
+    The frozen sha belongs in here rather than per question, because a
+    question DROPPED from the profile's file would otherwise keep being
+    answered out of the frozen text a previous run had written into the
+    store. Paid for by rewriting every model-written set when that file
+    changes, which is a rare and deliberate edit.
+    """
+    versions = prompts.versions((ANCHORS_PROMPT_ID,))
+    return _key16(f"{versions.get(ANCHORS_PROMPT_ID)}|{LLM_MODEL}"
+                  f"|{ANCHOR_SCHEMA}|{frozen_sha}")
 
 
 def anchor_key(parameter_uri: str, slot_name: Optional[str] = None) -> str:
@@ -647,8 +665,22 @@ def frozen_anchors(profile, spec: Spec) -> tuple:
     return out, hashlib.sha256(raw).hexdigest()[:16]
 
 
-def load_anchors(path: Path, key: str) -> dict:
-    """The anchors a previous run of this same configuration wrote."""
+def load_anchors(path: Path, key: str, targets: Optional[list] = None) -> dict:
+    """The anchor sets a previous run wrote that are still the answer to the
+    same question.
+
+    Per question, not per file. One changed question used to miss the whole
+    cache and have the model rewrite all nineteen sets, and those sets decide
+    which passages a document is read from -- so an edit to the year question
+    changed the retrieval of the carrier coordinate, which nothing had asked
+    for and no line anywhere reported.
+
+    Without `targets` the whole file is taken, which is what a caller that has
+    no spec to hand can honestly do. A file written before the per-question
+    map existed carries none of it and is therefore reused for nothing: it
+    cannot say which of its sets still answer, and guessing is how a run comes
+    to search with a set nobody checked.
+    """
     try:
         stored = json.loads(Path(path).read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
@@ -656,13 +688,30 @@ def load_anchors(path: Path, key: str) -> dict:
     if not isinstance(stored, dict) or stored.get("key") != key:
         return {}
     anchors = stored.get("anchors")
-    return anchors if isinstance(anchors, dict) else {}
+    if not isinstance(anchors, dict):
+        return {}
+    if targets is None:
+        return anchors
+    questions = stored.get("questions")
+    if not isinstance(questions, dict):
+        # Absent, or something other than a map. Either way the file cannot
+        # say which of its sets still answer, so none of them is taken.
+        questions = {}
+    want = {target[0]: anchor_question_key(target) for target in targets}
+    return {anchor_id: texts for anchor_id, texts in anchors.items()
+            if anchor_id in want and questions.get(anchor_id) == want[anchor_id]}
 
 
-def save_anchors(path: Path, key: str, anchors: dict) -> None:
+def save_anchors(path: Path, key: str, anchors: dict,
+                 targets: Optional[list] = None) -> None:
+    """Write the sets and, beside each, the question it answers."""
+    questions = {target[0]: anchor_question_key(target)
+                 for target in (targets or [])}
     Path(path).parent.mkdir(parents=True, exist_ok=True)
     Path(path).write_text(
-        json.dumps({"key": key, "model": LLM_MODEL, "anchors": anchors},
+        json.dumps({"key": key, "model": LLM_MODEL, "anchors": anchors,
+                    "questions": {k: v for k, v in questions.items()
+                                  if k in anchors}},
                    ensure_ascii=False, indent=2), encoding="utf-8")
 
 
@@ -685,7 +734,9 @@ def make_anchors(spec: Spec, client=None, *, store: Optional[Path] = None,
     # a different document set with nothing in any of the 1082 output files
     # saying which set had found it. The file carries the reproducibility;
     # the temperature stays where it is.
-    out: dict = dict(load_anchors(store, key)) if store is not None else {}
+    targets = anchor_targets(spec)
+    out: dict = (dict(load_anchors(store, key, targets))
+                 if store is not None else {})
     # The profile's frozen anchors win over anything a previous run wrote for
     # the same question: those are the model's guess, these are measured.
     frozen = frozen or {}
@@ -693,7 +744,7 @@ def make_anchors(spec: Spec, client=None, *, store: Optional[Path] = None,
         out.update({k: list(v) for k, v in frozen.items()})
         log.info("extraction: %d anchor set(s) frozen in the profile: %s",
                  len(frozen), ", ".join(sorted(frozen)))
-    todo = [t for t in anchor_targets(spec) if not out.get(t[0])]
+    todo = [t for t in targets if not out.get(t[0])]
     if store is not None and out:
         log.info("extraction: %d anchor set(s) reused from %s, %d to write",
                  len(out), store, len(todo))
@@ -738,7 +789,7 @@ def make_anchors(spec: Spec, client=None, *, store: Optional[Path] = None,
         for uri, anchors in pool.map(one, todo):
             out[uri] = anchors
     if store is not None:
-        save_anchors(store, key, out)
+        save_anchors(store, key, out, targets)
     log.info("extraction: %d anchor(s) over %d question(s)",
              sum(len(v) for v in out.values()), len(out))
     for uri, anchors in out.items():
@@ -2902,7 +2953,7 @@ def main(argv: Optional[list] = None) -> int:
         log.info("extraction: slice gate on %s — a row that falls out here "
                  "is not asked for its other coordinates",
                  ", ".join(sorted(slice_gate)))
-    anchors_sha = anchors_key(spec, frozen_sha)
+    anchors_sha = anchors_key(frozen_sha)
     templates = [line for line in
                  prompts.load(QUERIES_PROMPT_ID).text.splitlines()
                  if line.strip() and not line.lstrip().startswith("#")]
