@@ -51,6 +51,10 @@ ANSWER_IMAGE_MAX_SIDE = int(os.environ.get("ANSWER_IMAGE_MAX_SIDE", "1280"))
 # per answer batch. 0 turns the action off.
 REQUEST_IMAGE_MAX = int(os.environ.get("REQUEST_IMAGE_MAX", "2"))
 
+# Documents one comparison turn may ask. Each costs a full retrieval and answer
+# loop of its own, so the cap is a latency budget, not a modelling limit.
+COMPARE_MAX_DOCUMENTS = int(os.environ.get("COMPARE_MAX_DOCUMENTS", "5"))
+
 READOFF_MAX_CALLS = int(os.environ.get("READOFF_MAX_CALLS", "3"))
 READOFF_IMAGE_MAX_SIDE = int(os.environ.get("READOFF_IMAGE_MAX_SIDE", "1600"))
 

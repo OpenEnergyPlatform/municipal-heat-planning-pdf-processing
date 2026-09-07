@@ -9,7 +9,7 @@ filename-and-date labels and no filters.
 
 ## Flow (per query)
 
-1. Filter and pick one document.
+1. Filter and pick one document, or up to `COMPARE_MAX_DOCUMENTS` to compare.
 2. Pick search scopes (multi-select). Tables and figures are each embedded twice, so each is
    offered as two scopes: `*_vl` ("Bild + Beschreibung") = the rendered image plus its
    caption/description; `*_text` ("nur Beschreibung") = only the caption/description text.
@@ -26,6 +26,10 @@ filename-and-date labels and no filters.
 7. The hits are fed to the LLM one chunk at a time (max 10 chunks). The first chunk that
    yields `{"found": true, ...}` produces the answer + citation (document / section / page).
    Otherwise: "not found in the selected scope".
+8. With several documents selected, steps 4-7 run once per document, each with its own
+   retrieval and its own citations, and one final call compares the finished answers.
+   That call is given the labels and the answers only, never a source passage: it is the
+   one output on the screen that no citation backs.
 
 ## Architecture
 
@@ -103,6 +107,7 @@ numpy/pandas/pymupdf are available; there is no network inside the sandbox. The 
 | `CODE_EXEC_TOKEN` | from `.env` | Bearer token for the sandbox (matches its `KWP_SANDBOX_TOKEN`). |
 | `CODE_EXEC_MAX_ROUNDS` | `2` | Max code runs the model may request per answer batch. |
 | `CODE_EXEC_TIMEOUT` | `45` | HTTP timeout for a sandbox call (s). |
+| `COMPARE_MAX_DOCUMENTS` | `5` | Documents one comparison turn may ask; each costs a full retrieval + answer loop. |
 
 ## Source-PDF deep links
 
