@@ -28,6 +28,7 @@ wrong and neither should find that out in production.
 """
 from __future__ import annotations
 
+import json
 import logging
 import os
 import re
@@ -62,25 +63,111 @@ COLLECTIONS = {
     "studyregion": "region",
 }
 
-# Classes the shapes require at the end of each path.
-CLS_BUNDLE = "OEO_00020227"        # scenario bundle (StudyShape target)
-CLS_REPORT = "OEO_00020012"        # study report (PublicationShape target)
-CLS_AUTHOR = "OEO_00000064"        # author
-CLS_ORGANISATION = "OEO_00030022"  # organisation
-CLS_FUNDER = "OEO_00090001"        # funder
-CLS_SCENARIO = "OEO_00000365"      # scenario factsheet (ScenarioShape target)
+# The namespaces the Turtle header declares. Up here because the
+# predicates below are checked against it as they are read.
+PREFIXES = """@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd:  <http://www.w3.org/2001/XMLSchema#> .
+@prefix dc:   <http://purl.org/dc/terms/> .
+@prefix obo:  <http://purl.obolibrary.org/obo/> .
+@prefix oeo:  <https://openenergyplatform.org/ontology/oeo/> .
+@prefix oekgprov: <https://openenergyplatform.org/ontology/oekg/provenance/> .
+"""
 
-# Paths, from the shapes file.
-P_UUID = "OEO_00390095"            # has uuid
-P_AUTHOR = "OEO_00000506"          # has author
-P_PUBDATE = "OEO_00390096"         # has publication date
-P_DOI = "OEO_00390098"             # has doi
-P_ORGANISATION = "OEO_00000510"    # has organisation
-P_FUNDER = "OEO_00000509"          # has funding source
-P_HAS_PART = "BFO_0000051"         # has part
-P_SCENARIO_TYPE = "OEO_00390073"   # has scenario type
-P_STUDY_REGION = "OEO_00020220"    # has study region
-P_SCENARIO_YEAR = "OEO_00020440"   # has scenario year value
+
+_SPEC = json.loads(
+    Path(__file__).with_name("extraction_spec.json").read_text(encoding="utf-8"))
+
+
+def _kg(uri: str) -> dict:
+    """The `kg` block of one parameter of this profile's spec."""
+    for parameter in _SPEC["parameters"]:
+        if parameter["uri"] == uri:
+            block = parameter.get("kg")
+            if not block:
+                raise KeyError(f"parameter {uri!r} says nothing about the "
+                               f"graph; add a kg block to the spec")
+            return block
+    raise KeyError(f"no parameter {uri!r} in the spec")
+
+
+def _name(block: dict) -> str:
+    """`{"prefix": "oeo", "predicate": "OEO_00000506"}` -> "oeo:OEO_00000506".
+
+    Qualified, and the prefix comes out of the spec rather than out of an
+    f-string here. scenarios writes four namespaces where kwp writes one, so
+    a bare identifier does not say what it is: OEO_00390096 and `label` need
+    different prefixes and both are predicates of this graph.
+    """
+    prefix, predicate = block.get("prefix"), block.get("predicate")
+    if not prefix or not predicate:
+        raise KeyError(f"{block!r} is no predicate: prefix and predicate")
+    if f"@prefix {prefix}:" not in PREFIXES:
+        raise KeyError(f"prefix {prefix!r} is not declared in the header, so "
+                       f"the Turtle would not parse")
+    return f"{prefix}:{predicate}"
+
+
+def _property(uri: str, key: str = "property") -> str:
+    """The predicate a parameter's own value becomes on its node."""
+    return _name(_kg(uri)[key])
+
+
+def _edge(uri: str) -> str:
+    """The predicate hanging a parameter's own node off another one."""
+    return _name(_kg(uri)["edge_from"])
+
+
+def _class(uri: str) -> str:
+    """The OEO class of the node a parameter mints. Bare: every class of this
+    graph is an OEO class, and it is only ever written as `a oeo:<id>`."""
+    block = _kg(uri)
+    if "class" not in block:
+        raise KeyError(f"parameter {uri!r} mints no node of its own")
+    return block["class"]
+
+
+def _linked_by(axis: str = "scenario") -> str:
+    """The predicate that hangs the node an axis names off its parent."""
+    for parameter in _SPEC["parameters"]:
+        block = ((parameter.get("axes") or {}).get(axis) or {}).get("kg") or {}
+        if block.get("role") == "parent" and block.get("linked_by"):
+            return _name(block["linked_by"])
+    raise KeyError(f"no kg parent link for axis {axis!r} in the spec")
+
+
+# Classes the shapes require at the end of each path, read from the parameter
+# that mints each node. Written down twice, they drifted: the test that says
+# the graph holds no predicate the shapes do not name carried a third copy.
+CLS_BUNDLE = _class("study_project_name")      # scenario bundle (StudyShape)
+CLS_REPORT = _class("publication_title")       # study report (PublicationShape)
+CLS_AUTHOR = _class("publication_author")      # author
+CLS_ORGANISATION = _class("study_organisation")
+CLS_FUNDER = _class("study_funder")
+CLS_SCENARIO = _class("scenario_label")        # factsheet (ScenarioShape)
+
+# Paths, from the spec, which is what the published JSON schema shows a reader
+# as `x-kg`. What a reader is told and what is written are one string.
+P_LABEL = _property("publication_title")       # rdfs:label
+P_ACRONYM = _property("study_acronym")         # dc:acronym
+P_ABSTRACT = _property("publication_abstract")  # dc:abstract
+P_AUTHOR = _edge("publication_author")         # has author
+P_PUBDATE = _property("publication_date")      # has publication date
+P_DOI = _property("publication_doi")           # has doi
+P_ORGANISATION = _edge("study_organisation")   # has organisation
+P_FUNDER = _edge("study_funder")               # has funding source
+P_HAS_PART = _linked_by()                      # has part
+P_SCENARIO_TYPE = _property("scenario_type")   # has scenario type
+P_STUDY_REGION = _property("scenario_region")  # has study region
+P_SCENARIO_YEAR = _property("scenario_year")   # has scenario year value
+
+# Behind no harvested value, so behind no parameter: every node carries a uuid
+# because the OEKG mints them that way.
+P_SCENARIO_ACRONYM = _property("scenario_label", "also")   # dc:acronym
+P_SCENARIO_ABSTRACT = _property("scenario_abstract")       # dc:abstract
+
+# Behind no harvested value, so behind no parameter: every node carries a uuid
+# because the OEKG mints them that way.
+P_UUID = "oeo:OEO_00390095"        # has uuid
 
 # Mirjam: "alle IAM scenarios bekommen erst mal die Annotation". JH notes it is
 # not in the release nor in the shape's sh:in list yet, so a graph written
@@ -90,22 +177,17 @@ IAM_SCENARIO = "OEO_00020517"
 # What the shapes allow at most once. Everything else may repeat.
 SINGLE = ("publication_title", "publication_date", "publication_doi",
           "publication_abstract", "study_project_name", "study_acronym")
-# Scenario-scope fields. Everything but the label carries a `scenario` axis
-# naming, in the document's own words, which scenario it belongs to.
-SCENARIO_FIELDS = ("scenario_type", "scenario_abstract",
-                   "scenario_region", "scenario_year")
+# Scenario-scope fields: everything carrying a `scenario` axis, which names
+# in the document's own words which scenario the value belongs to. Read from
+# the spec, because a fifteenth parameter added there would otherwise be
+# missing from four loops here and reach no factsheet, silently.
+SCENARIO_FIELDS = tuple(
+    parameter["uri"] for parameter in _SPEC["parameters"]
+    if "scenario" in (parameter.get("axes") or {}))
 # What the shapes demand at least once (sh:minCount 1). A document missing one
 # of these produces a node that will fail validation, so it is reported.
 REQUIRED = ("publication_title", "publication_date", "publication_author")
 
-PREFIXES = """\
-@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
-@prefix xsd:  <http://www.w3.org/2001/XMLSchema#> .
-@prefix dc:   <http://purl.org/dc/terms/> .
-@prefix obo:  <http://purl.obolibrary.org/obo/> .
-@prefix oeo:  <https://openenergyplatform.org/ontology/oeo/> .
-@prefix oekgprov: <https://openenergyplatform.org/ontology/oekg/provenance/> .
-"""
 
 _LEGAL = r"(gmbh|mbh|ag|kg|ohg|e\.?\s*v\.?|gbr|se|ug|inc|ltd|llc)"
 NL = "\n"
@@ -597,8 +679,8 @@ def make_serializer(db_path: Path):
                 iri = mint(collection, label)
                 links.append(f"<{iri}>")
                 block = [f"<{iri}>", f"    a oeo:{cls} ;"]
-                block += evidence_for(iri, "rdfs:label", sources)
-                block.append(f"    rdfs:label {literal(label)} .")
+                block += evidence_for(iri, P_LABEL, sources)
+                block.append(f"    {P_LABEL} {literal(label)} .")
                 nodes.append(NL.join(block) + NL)
             return links, nodes
 
@@ -611,26 +693,26 @@ def make_serializer(db_path: Path):
 
         # ---- the study report ---------------------------------------------
         pub: list = [f"<{report}>", f"    a oeo:{CLS_REPORT} ;",
-                     f"    oeo:{P_UUID} {literal(uuid_of(report))} ;"]
-        pub += evidence_for(report, "rdfs:label",
+                     f"    {P_UUID} {literal(uuid_of(report))} ;"]
+        pub += evidence_for(report, P_LABEL,
                             rows_for("publication_title", value=title))
-        pub.append(f"    rdfs:label {literal(title)} ;")
+        pub.append(f"    {P_LABEL} {literal(title)} ;")
         if author_links:
-            pub.append(f"    oeo:{P_AUTHOR} " +
+            pub.append(f"    {P_AUTHOR} " +
                        " ,\n        ".join(author_links) + " ;")
         if chosen.get("publication_date"):
             stamp = _publication_date(chosen["publication_date"])
             if stamp:
                 pub += evidence_for(
-                    report, f"oeo:{P_PUBDATE}",
+                    report, P_PUBDATE,
                     rows_for("publication_date",
                              value=chosen["publication_date"]))
-                pub.append(f'    oeo:{P_PUBDATE} "{stamp}"^^xsd:dateTime ;')
+                pub.append(f'    {P_PUBDATE} "{stamp}"^^xsd:dateTime ;')
         if chosen.get("publication_doi"):
-            pub += evidence_for(report, f"oeo:{P_DOI}",
+            pub += evidence_for(report, P_DOI,
                                 rows_for("publication_doi",
                                          value=chosen["publication_doi"]))
-            pub.append(f"    oeo:{P_DOI} {literal(chosen['publication_doi'])} ;")
+            pub.append(f"    {P_DOI} {literal(chosen['publication_doi'])} ;")
         pub[-1] = pub[-1].rstrip(" ;") + " ."
 
         # ---- the scenarios --------------------------------------------------
@@ -675,13 +757,13 @@ def make_serializer(db_path: Path):
             iri = mint("scenariofactsheet", f"{title}|{ident}")
             scenario_links.append(f"<{iri}>")
             block = [f"<{iri}>", f"    a oeo:{CLS_SCENARIO} ;",
-                     f"    oeo:{P_UUID} {literal(uuid_of(iri))} ;"]
-            block += evidence_for(iri, "rdfs:label",
+                     f"    {P_UUID} {literal(uuid_of(iri))} ;"]
+            block += evidence_for(iri, P_LABEL,
                                   rows_for("scenario_label", scenario=norm))
             # Mirjam: with no long name beside the acronym, both carry the same
             # string. That is the usual case in this corpus.
-            block.append(f"    rdfs:label {literal(known.get(norm, ident))} ;")
-            block.append(f"    dc:acronym {literal(label or ident)} ;")
+            block.append(f"    {P_LABEL} {literal(known.get(norm, ident))} ;")
+            block.append(f"    {P_SCENARIO_ACRONYM} {literal(label or ident)} ;")
 
             # The types the model chose from the shapes' own list, each with
             # the passage it read them in. On top of that Mirjam asks every IAM
@@ -692,17 +774,17 @@ def make_serializer(db_path: Path):
                 if in_graph(row.get("value_uri")):
                     types.setdefault(row["value_uri"], []).append(row)
             for type_iri, sources in types.items():
-                block += evidence_for(iri, f"oeo:{P_SCENARIO_TYPE}", sources)
-                block.append(f"    oeo:{P_SCENARIO_TYPE} <{type_iri}> ;")
-            block.append(f"    oeo:{P_SCENARIO_TYPE} oeo:{IAM_SCENARIO} ;")
+                block += evidence_for(iri, P_SCENARIO_TYPE, sources)
+                block.append(f"    {P_SCENARIO_TYPE} <{type_iri}> ;")
+            block.append(f"    {P_SCENARIO_TYPE} oeo:{IAM_SCENARIO} ;")
 
             described = rows_for("scenario_abstract", scenario=norm)
             if described:
                 best, _ = _pick_one(described)
-                block += evidence_for(iri, "dc:abstract",
+                block += evidence_for(iri, P_SCENARIO_ABSTRACT,
                                       rows_for("scenario_abstract", value=best,
                                                scenario=norm))
-                block.append(f"    dc:abstract {literal(best)} ;")
+                block.append(f"    {P_SCENARIO_ABSTRACT} {literal(best)} ;")
 
             # A region the model picked already exists in the OEKG under
             # its own IRI (oekg/region/Germany), so it is referenced, not
@@ -722,39 +804,39 @@ def make_serializer(db_path: Path):
                 if in_graph(row.get("value_uri")):
                     regions.setdefault(row["value_uri"], []).append(row)
             for region_iri, sources in regions.items():
-                block += evidence_for(iri, f"oeo:{P_STUDY_REGION}", sources)
-                block.append(f"    oeo:{P_STUDY_REGION} <{region_iri}> ;")
+                block += evidence_for(iri, P_STUDY_REGION, sources)
+                block.append(f"    {P_STUDY_REGION} <{region_iri}> ;")
 
             years = sorted({re.search(r"\d{4}", str(r["value"])).group(0)
                             for r in rows_for("scenario_year", scenario=norm)
                             if re.search(r"\d{4}", str(r["value"]))})
             for year in years:
-                block.append(f'    oeo:{P_SCENARIO_YEAR} '
+                block.append(f'    {P_SCENARIO_YEAR} '
                              f'"{year}-01-01T00:00:00"^^xsd:dateTime ;')
             block[-1] = block[-1].rstrip(" ;") + " ."
             scenario_nodes.append(NL.join(block) + NL)
 
         # ---- the bundle -----------------------------------------------------
         std: list = [f"<{bundle}>", f"    a oeo:{CLS_BUNDLE} ;",
-                     f"    oeo:{P_UUID} {literal(uuid_of(bundle))} ;",
-                     f"    rdfs:label "
+                     f"    {P_UUID} {literal(uuid_of(bundle))} ;",
+                     f"    {P_LABEL} "
                      f"{literal(chosen.get('study_project_name') or title)} ;"]
         if chosen.get("study_acronym"):
-            std.append(f"    dc:acronym {literal(chosen['study_acronym'])} ;")
+            std.append(f"    {P_ACRONYM} {literal(chosen['study_acronym'])} ;")
         if chosen.get("publication_abstract"):
-            std += evidence_for(bundle, "dc:abstract",
+            std += evidence_for(bundle, P_ABSTRACT,
                                 rows_for("publication_abstract",
                                          value=chosen["publication_abstract"]))
-            std.append(f"    dc:abstract "
+            std.append(f"    {P_ABSTRACT} "
                        f"{literal(chosen['publication_abstract'])} ;")
         if org_links:
-            std.append(f"    oeo:{P_ORGANISATION} " +
+            std.append(f"    {P_ORGANISATION} " +
                        " ,\n        ".join(org_links) + " ;")
         if funder_links:
-            std.append(f"    oeo:{P_FUNDER} " +
+            std.append(f"    {P_FUNDER} " +
                        " ,\n        ".join(funder_links) + " ;")
         for part in [f"<{report}>"] + scenario_links:
-            std.append(f"    obo:{P_HAS_PART} {part} ;")
+            std.append(f"    {P_HAS_PART} {part} ;")
         std[-1] = std[-1].rstrip(" ;") + " ."
 
         log.info("kg: %s: 1 report, 1 bundle, %d scenario(s), %d author(s), "

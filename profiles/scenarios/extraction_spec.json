@@ -42,6 +42,16 @@
             "quote": "Global Energy and Climate Outlook 2023: Transforming Energy Systems for a Net Zero Future. JRC Science for Policy Report."
           }
         ]
+      },
+      "kg": {
+        "node": "studyreport",
+        "class": "OEO_00020012",
+        "property": {
+          "prefix": "rdfs",
+          "predicate": "label",
+          "label": "label"
+        },
+        "note": "Mints the study report. The title is also the bundle's label when no project name was read, and half of every scenario factsheet's IRI. Mint recipes are prose here, not keys: see the _comment."
       }
     },
     {
@@ -61,6 +71,22 @@
             "quote": "Keramidas, K., Fosse, F., Diaz Vazquez, A., Dowling, P., Garaffa, R., Després, J."
           }
         ]
+      },
+      "kg": {
+        "node": "author",
+        "class": "OEO_00000064",
+        "property": {
+          "prefix": "rdfs",
+          "predicate": "label",
+          "label": "label"
+        },
+        "edge_from": {
+          "node": "studyreport",
+          "prefix": "oeo",
+          "predicate": "OEO_00000506",
+          "label": "has author"
+        },
+        "note": "One node per distinct name. Two spellings of one person are one node and keep both passages."
       }
     },
     {
@@ -76,6 +102,16 @@
             "quote": "Publications Office of the European Union, Luxembourg, 2023, doi:10.2760/58255, JRC135619."
           }
         ]
+      },
+      "kg": {
+        "node": "studyreport",
+        "property": {
+          "prefix": "oeo",
+          "predicate": "OEO_00390096",
+          "label": "has publication date",
+          "datatype": "xsd:dateTime"
+        },
+        "note": "A PDF states a year; the serializer pads it to YYYY-01-01T00:00:00, which the document does not say. The day and the month are the datatype's, not the paper's."
       }
     },
     {
@@ -91,6 +127,14 @@
             "quote": "Publications Office of the European Union, Luxembourg, 2023, doi:10.2760/58255, JRC135619."
           }
         ]
+      },
+      "kg": {
+        "node": "studyreport",
+        "property": {
+          "prefix": "oeo",
+          "predicate": "OEO_00390098",
+          "label": "has doi"
+        }
       }
     },
     {
@@ -106,6 +150,14 @@
             "quote": "Abstract This report presents the results of the 2023 edition of the Global Energy and Climate Outlook, which assesses the implications of current climate pledges for the global energy system."
           }
         ]
+      },
+      "kg": {
+        "node": "scenariobundle",
+        "property": {
+          "prefix": "dc",
+          "predicate": "abstract"
+        },
+        "note": "On the bundle, not on the report: the shapes carry the study's abstract there."
       }
     },
     {
@@ -125,6 +177,21 @@
             "quote": "European Commission, Joint Research Centre (JRC), Seville, Spain, and Potsdam Institute for Climate Impact Research (PIK)."
           }
         ]
+      },
+      "kg": {
+        "node": "organisation",
+        "class": "OEO_00030022",
+        "property": {
+          "prefix": "rdfs",
+          "predicate": "label",
+          "label": "label"
+        },
+        "edge_from": {
+          "node": "scenariobundle",
+          "prefix": "oeo",
+          "predicate": "OEO_00000510",
+          "label": "has organisation"
+        }
       }
     },
     {
@@ -140,6 +207,21 @@
             "quote": "This work was funded by the German Federal Ministry of Education and Research under grant 01LA1809A."
           }
         ]
+      },
+      "kg": {
+        "node": "funder",
+        "class": "OEO_00090001",
+        "property": {
+          "prefix": "rdfs",
+          "predicate": "label",
+          "label": "label"
+        },
+        "edge_from": {
+          "node": "scenariobundle",
+          "prefix": "oeo",
+          "predicate": "OEO_00000509",
+          "label": "has funding source"
+        }
       }
     },
     {
@@ -155,6 +237,16 @@
             "quote": "This report was prepared within the project Enabling Ambitious Climate Policy Assessment (ENGAGE), funded under Horizon 2020."
           }
         ]
+      },
+      "kg": {
+        "node": "scenariobundle",
+        "class": "OEO_00020227",
+        "property": {
+          "prefix": "rdfs",
+          "predicate": "label",
+          "label": "label"
+        },
+        "note": "Mints the bundle and labels it. Falls back to the publication title where the document names no project."
       }
     },
     {
@@ -170,6 +262,13 @@
             "quote": "This report was prepared within the project Enabling Ambitious Climate Policy Assessment (ENGAGE), funded under Horizon 2020."
           }
         ]
+      },
+      "kg": {
+        "node": "scenariobundle",
+        "property": {
+          "prefix": "dc",
+          "predicate": "acronym"
+        }
       }
     },
     {
@@ -197,7 +296,21 @@
           }
         ]
       },
-      "vocabulary_dynamic": true
+      "vocabulary_dynamic": true,
+      "kg": {
+        "node": "scenariofactsheet",
+        "class": "OEO_00000365",
+        "property": {
+          "prefix": "rdfs",
+          "predicate": "label",
+          "label": "label"
+        },
+        "also": {
+          "prefix": "dc",
+          "predicate": "acronym"
+        },
+        "note": "The AR6 run name labels the factsheet; the document's own wording is the acronym beside it. With no long name known for a run both carry the same string, which is the usual case in this corpus."
+      }
     },
     {
       "uri": "scenario_type",
@@ -291,7 +404,19 @@
         "scenario": {
           "dynamic": true,
           "required": false,
-          "question": "Auf welches Szenario dieser Publikation bezieht sich der Wert? Die Liste führt die Laufkennungen, die genau diese Publikation in der AR6-Datenbank dokumentiert. Im Text stehen sie fast nie, dort heißt dasselbe Szenario \"Current Policies\" oder \"the NDC scenario\". Nennt das Dokument nur die Familie, ist \"Szenario-Familie\" die richtige Antwort und keine Kennung."
+          "question": "Auf welches Szenario dieser Publikation bezieht sich der Wert? Die Liste führt die Laufkennungen, die genau diese Publikation in der AR6-Datenbank dokumentiert. Im Text stehen sie fast nie, dort heißt dasselbe Szenario \"Current Policies\" oder \"the NDC scenario\". Nennt das Dokument nur die Familie, ist \"Szenario-Familie\" die richtige Antwort und keine Kennung.",
+          "kg": {
+            "role": "parent",
+            "node": "scenariofactsheet",
+            "class": "OEO_00000365",
+            "linked_by": {
+              "node": "scenariobundle",
+              "prefix": "obo",
+              "predicate": "BFO_0000051",
+              "label": "has part"
+            },
+            "note": "Which factsheet holds the value. Unlike the kwp `parent` axis there is no map from the answer to a container class: the answer IS the identity of a node minted per document from the AR6 run the wording resolves to. A wording that resolves to no run is its own factsheet, and an out: entry is none at all."
+          }
         }
       },
       "example": {
@@ -312,6 +437,15 @@
             "quote": "The CurPol scenario includes only those climate policies that had been adopted and implemented by the end of 2021, and reports greenhouse gas emission trajectories to 2100."
           }
         ]
+      },
+      "kg": {
+        "node": "scenariofactsheet",
+        "property": {
+          "prefix": "oeo",
+          "predicate": "OEO_00390073",
+          "label": "has scenario type"
+        },
+        "note": "The object is one of the classes the shapes accept, chosen from the list, never written. Every factsheet additionally carries OEO_00020517 IAM scenario, which is not behind a harvested value and stands in the serializer."
       }
     },
     {
@@ -323,7 +457,19 @@
         "scenario": {
           "dynamic": true,
           "required": false,
-          "question": "Auf welches Szenario dieser Publikation bezieht sich der Wert? Die Liste führt die Laufkennungen, die genau diese Publikation in der AR6-Datenbank dokumentiert. Im Text stehen sie fast nie, dort heißt dasselbe Szenario \"Current Policies\" oder \"the NDC scenario\". Nennt das Dokument nur die Familie, ist \"Szenario-Familie\" die richtige Antwort und keine Kennung."
+          "question": "Auf welches Szenario dieser Publikation bezieht sich der Wert? Die Liste führt die Laufkennungen, die genau diese Publikation in der AR6-Datenbank dokumentiert. Im Text stehen sie fast nie, dort heißt dasselbe Szenario \"Current Policies\" oder \"the NDC scenario\". Nennt das Dokument nur die Familie, ist \"Szenario-Familie\" die richtige Antwort und keine Kennung.",
+          "kg": {
+            "role": "parent",
+            "node": "scenariofactsheet",
+            "class": "OEO_00000365",
+            "linked_by": {
+              "node": "scenariobundle",
+              "prefix": "obo",
+              "predicate": "BFO_0000051",
+              "label": "has part"
+            },
+            "note": "Which factsheet holds the value. Unlike the kwp `parent` axis there is no map from the answer to a container class: the answer IS the identity of a node minted per document from the AR6 run the wording resolves to. A wording that resolves to no run is its own factsheet, and an out: entry is none at all."
+          }
         }
       },
       "example": {
@@ -335,6 +481,13 @@
             "quote": "The CurPol scenario assumes that no additional climate policies are introduced beyond those already legislated by the end of 2021."
           }
         ]
+      },
+      "kg": {
+        "node": "scenariofactsheet",
+        "property": {
+          "prefix": "dc",
+          "predicate": "abstract"
+        }
       }
     },
     {
@@ -346,7 +499,19 @@
         "scenario": {
           "dynamic": true,
           "required": false,
-          "question": "Auf welches Szenario dieser Publikation bezieht sich der Wert? Die Liste führt die Laufkennungen, die genau diese Publikation in der AR6-Datenbank dokumentiert. Im Text stehen sie fast nie, dort heißt dasselbe Szenario \"Current Policies\" oder \"the NDC scenario\". Nennt das Dokument nur die Familie, ist \"Szenario-Familie\" die richtige Antwort und keine Kennung."
+          "question": "Auf welches Szenario dieser Publikation bezieht sich der Wert? Die Liste führt die Laufkennungen, die genau diese Publikation in der AR6-Datenbank dokumentiert. Im Text stehen sie fast nie, dort heißt dasselbe Szenario \"Current Policies\" oder \"the NDC scenario\". Nennt das Dokument nur die Familie, ist \"Szenario-Familie\" die richtige Antwort und keine Kennung.",
+          "kg": {
+            "role": "parent",
+            "node": "scenariofactsheet",
+            "class": "OEO_00000365",
+            "linked_by": {
+              "node": "scenariobundle",
+              "prefix": "obo",
+              "predicate": "BFO_0000051",
+              "label": "has part"
+            },
+            "note": "Which factsheet holds the value. Unlike the kwp `parent` axis there is no map from the answer to a container class: the answer IS the identity of a node minted per document from the AR6 run the wording resolves to. A wording that resolves to no run is its own factsheet, and an out: entry is none at all."
+          }
         }
       },
       "example": {
@@ -382,7 +547,16 @@
           }
         ]
       },
-      "vocabulary_dynamic": true
+      "vocabulary_dynamic": true,
+      "kg": {
+        "node": "scenariofactsheet",
+        "property": {
+          "prefix": "oeo",
+          "predicate": "OEO_00020220",
+          "label": "has study region"
+        },
+        "note": "The object is an OEKG region individual that already exists over there and is only referenced. A wording the list did not hold mints nothing: writing our own gloss under oekg/region/ would put a 250th region beside the 249 real ones."
+      }
     },
     {
       "uri": "scenario_year",
@@ -393,7 +567,19 @@
         "scenario": {
           "dynamic": true,
           "required": false,
-          "question": "Auf welches Szenario dieser Publikation bezieht sich der Wert? Die Liste führt die Laufkennungen, die genau diese Publikation in der AR6-Datenbank dokumentiert. Im Text stehen sie fast nie, dort heißt dasselbe Szenario \"Current Policies\" oder \"the NDC scenario\". Nennt das Dokument nur die Familie, ist \"Szenario-Familie\" die richtige Antwort und keine Kennung."
+          "question": "Auf welches Szenario dieser Publikation bezieht sich der Wert? Die Liste führt die Laufkennungen, die genau diese Publikation in der AR6-Datenbank dokumentiert. Im Text stehen sie fast nie, dort heißt dasselbe Szenario \"Current Policies\" oder \"the NDC scenario\". Nennt das Dokument nur die Familie, ist \"Szenario-Familie\" die richtige Antwort und keine Kennung.",
+          "kg": {
+            "role": "parent",
+            "node": "scenariofactsheet",
+            "class": "OEO_00000365",
+            "linked_by": {
+              "node": "scenariobundle",
+              "prefix": "obo",
+              "predicate": "BFO_0000051",
+              "label": "has part"
+            },
+            "note": "Which factsheet holds the value. Unlike the kwp `parent` axis there is no map from the answer to a container class: the answer IS the identity of a node minted per document from the AR6 run the wording resolves to. A wording that resolves to no run is its own factsheet, and an out: entry is none at all."
+          }
         }
       },
       "example": {
@@ -410,6 +596,16 @@
             "quote": "Results for the CurPol scenario are reported for 2030, 2050 and 2070."
           }
         ]
+      },
+      "kg": {
+        "node": "scenariofactsheet",
+        "property": {
+          "prefix": "oeo",
+          "predicate": "OEO_00020440",
+          "label": "has scenario year value",
+          "datatype": "xsd:dateTime"
+        },
+        "note": "One triple per distinct four-digit year on the factsheet, padded to the first of January as the datatype demands."
       }
     }
   ]
