@@ -29,7 +29,7 @@ from pathlib import Path
 
 from .fields import DERIVED, NUMBER, READ, UNANSWERED, asked_slots
 from .pipeline import answer_in_quote
-from .spec import Spec
+from .spec import Spec, own_evidence
 from .trust import document_summary
 from .verify import quote_in
 
@@ -112,7 +112,8 @@ def recheck_file(path: Path, spec: Spec) -> Counter:
     if document_id is not None:
         lines.append(json.dumps(
             {"kind": "summary",
-             **document_summary(document_id, tuples, refusals)},
+             **document_summary(document_id, tuples, refusals,
+                                own=own_evidence(spec))},
             ensure_ascii=False))
     tmp = Path(path).with_suffix(".jsonl.tmp")
     tmp.write_text("\n".join(lines) + "\n", encoding="utf-8")

@@ -44,7 +44,7 @@ from .pipeline import (Source, WorkItem, batch_uri, build_sweeps,
 from .fields import EXHAUSTED
 from .queries import expand as expand_queries
 from .trust import document_summary
-from .spec import Spec, fingerprints, load as load_spec
+from .spec import Spec, fingerprints, load as load_spec, own_evidence
 
 log = logging.getLogger(__name__)
 
@@ -2510,9 +2510,10 @@ def finish_document(report, name: str, out_dir: Path, spec_sha: str,
               if r.get("claim", {}).get("_harvest_failed")]
     if failed:
         log.warning("extraction: %s: %d source(s) never answered", name, len(failed))
+    own = own_evidence(spec) if spec is not None else None
     if spec is not None:
         check_against_schema(report, name, spec)
-    write_report(report, out_dir / f"{name}.jsonl")
+    write_report(report, out_dir / f"{name}.jsonl", own)
     unreachable = sum(1 for r in failed
                       if r.get("claim", {}).get("_why") == "unreachable")
     sources = max(report.owners_harvested, len(failed))
@@ -2590,7 +2591,7 @@ def check_against_schema(report, name: str, spec) -> int:
     # it is built here the same way and checked with everything else. A line
     # the schema refuses is a line downstream cannot read, whoever wrote it.
     summary = document_summary(report.document_id, report.tuples,
-                               report.refusals)
+                               report.refusals, own=own_evidence(spec))
     for kind, rows in (("tuple", report.tuples), ("refusal", report.refusals),
                        ("summary", [summary])):
         for row in rows:

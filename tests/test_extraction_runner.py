@@ -1350,3 +1350,53 @@ def test_a_stamp_from_before_the_detail_is_stale_in_all_of_it(tmp_path,
                            for c in changed), changed
     # Nothing else moved: the coarse keys still match.
     assert "spec" not in changed and "model" not in changed
+
+
+def test_the_written_summary_is_judged_by_the_specs_own_rule(tmp_path,
+                                                             monkeypatch):
+    """finish_document is where a harvest file gets its summary line, and the
+    line is what a reader of 1.082 plans reads. Computed without the spec's
+    per-axis evidence rule it holds every coordinate to the row's own source
+    and reports a clean run as a broken one -- a year the rule lets stand a
+    page away would come out as a doubt."""
+    from docpipe.extraction.pipeline import DocumentReport
+
+    monkeypatch.setattr(runner.prompts, "versions",
+                        lambda ids: {i: "v1" for i in ids})
+    spec = load({"parameters": [{
+        "uri": "OEO_00050016",
+        "label": "Endenergieverbrauch",
+        "description": "Endenergieverbrauch je Energietraeger und Jahr, wie "
+                       "im Plan bilanziert.",
+        "unit_target": "OEO_00050008",
+        "units_accepted": {"MWh/a": 1.0},
+        "axes": {"carrier": {"vocabulary": {"OEO_00000292": ["Erdgas"]},
+                             "evidence": "own"},
+                 # No rule: the plan may name the year anywhere.
+                 "year": {"type": "int"}},
+        "example": {"source": "| Erdgas | 42.005 | MWh/a | im Jahr 2020 |",
+                    "tuples": [{"value": 42005, "unit_raw": "MWh/a"}]},
+    }]})
+    row = {"parameter": "OEO_00050016", "value": 42005, "tier": "text_located",
+           "carrier": "OEO_00000292", "carrier_state": "read",
+           "carrier_source": ["table", 1],
+           "year": 2020, "year_state": "read",
+           "year_source": ["table", 99],          # legal: no rule on year
+           "provenance": {"document_id": 7, "owner_kind": "table",
+                          "owner_id": 1, "parent_section": 5}}
+    report = DocumentReport(document_id=7)
+    report.tuples = [row]
+
+    runner.finish_document(report, "plan_x", tmp_path, "sha", spec=spec)
+    summary = json.loads((tmp_path / "plan_x.jsonl")
+                         .read_text(encoding="utf-8").strip().splitlines()[-1])
+    assert summary["kind"] == "summary"
+    assert summary["reasons"] == {}, "the year broke no rule"
+    assert summary["levels"] == {"A": 1, "B": 0, "C": 0}
+
+    # And the axis the spec does hold to its own source still counts.
+    report.tuples = [{**row, "carrier_source": ["table", 99]}]
+    runner.finish_document(report, "plan_y", tmp_path, "sha", spec=spec)
+    other = json.loads((tmp_path / "plan_y.jsonl")
+                       .read_text(encoding="utf-8").strip().splitlines()[-1])
+    assert other["reasons"] == {"nonlocal:carrier": 1}

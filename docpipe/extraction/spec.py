@@ -580,3 +580,24 @@ def fingerprints(spec: "Spec") -> dict:
         for name, axis in (parameter.axes or {}).items():
             out[f"axis/{parameter.uri}/{name}"] = axis_fingerprint(axis)
     return out
+
+
+def own_evidence(spec: "Spec") -> frozenset:
+    """(parameter uri, axis name) for every axis whose evidence rule is `own`.
+
+    The rule is per axis and the profile sets it: a row label is read off the
+    table it is in, a scenario is often named a page earlier, a class is
+    argued in a methods chapter anywhere in the plan. Only `own` can be
+    checked from what a harvest row records -- an owner and an id -- because
+    `local` is a statement about pages and `any` is no restriction at all.
+
+    So this is the set of axes a later reader may hold to the row's own
+    source. Everything outside it was already judged by the harvest, where
+    the pages were still in hand.
+    """
+    out = set()
+    for parameter in spec.parameters:
+        for name, axis in (parameter.axes or {}).items():
+            if axis.evidence == "own":
+                out.add((parameter.uri, name))
+    return frozenset(out)

@@ -902,17 +902,37 @@ def test_the_same_value_is_a_from_a_pdf_and_b_from_a_transcribed_plan(tmp_path):
 
 def test_the_graph_says_which_values_want_looking_at(tmp_path):
     """A reader of the Turtle sees the number and the level next to it, and a
-    C names what is wrong with it. Without that a year read off another
-    table's caption is presented as a fact."""
+    C names what is wrong with it. Without that a carrier read off another
+    table is presented as a fact.
+
+    The carrier and not the year, because the spec holds only the carrier and
+    the sector to the row's own source. The year may stand a page away, so a
+    year cited from elsewhere is the rule working as written -- reporting it
+    would put a warning on readings that broke nothing.
+    """
+    serializer = kg.make_serializer(_database(tmp_path))
+    own = _row(provenance={"document_id": 857, "owner_kind": "table",
+                           "owner_id": 87457, "parent_section": 349525},
+               carrier_state="read", carrier_source=["table", 87517])
+    ttl = serializer("waermeplan_kassel_20240315", [own])
+    assert "# Vertrauen: C" in ttl
+    assert "nonlocal:carrier" in ttl
+    assert "Prüfung empfohlen" in ttl
+
+
+def test_a_coordinate_the_spec_lets_read_a_page_away_is_no_warning(tmp_path):
+    """The same shape on the year, which the spec sets to "local". The
+    harvest already refused what broke that rule; a second, stricter judge in
+    the serializer would mark 370 of Kassel's 455 year readings as doubtful
+    for doing what they were told."""
     serializer = kg.make_serializer(_database(tmp_path))
     ttl = serializer("waermeplan_kassel_20240315", [
         _row(provenance={"document_id": 857, "owner_kind": "table",
                          "owner_id": 87457, "parent_section": 349525},
              year_state="read", year_source=["table", 87517]),
     ])
-    assert "# Vertrauen: C" in ttl
-    assert "nonlocal:year" in ttl
-    assert "Prüfung empfohlen" in ttl
+    assert "nonlocal:year" not in ttl
+    assert "# Vertrauen: B" in ttl, "out of a table image, and nothing else"
 
 
 def test_the_spellings_the_corpus_writes_are_in_the_lists():

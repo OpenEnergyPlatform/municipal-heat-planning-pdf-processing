@@ -160,3 +160,74 @@ def test_a_document_with_nothing_in_it_still_has_a_summary():
     got = document_summary(1082, [], [])
     assert got["tuples"] == 0 and got["refusals"] == 0
     assert got["levels"] == {LEVEL_A: 0, LEVEL_B: 0, LEVEL_C: 0}
+
+
+# ---------------------------------------------------------------------------
+# Which axes may be held to the row's own source
+# ---------------------------------------------------------------------------
+OWN = frozenset({("energy_consumption", "carrier"),
+                 ("energy_consumption", "sector")})
+
+
+def test_an_axis_the_spec_lets_read_a_page_away_is_not_a_doubt():
+    """The rule is per axis. A row label is read off its own table, a
+    scenario is often named a page earlier, a class is argued in a methods
+    chapter. The harvest enforces each one and writes `unbacked` when it is
+    broken, so a foreign passage on a `local` or `any` axis is the rule
+    working -- reporting it here would fire on the whole corpus and separate
+    nothing, which is why image origin is not a reason either."""
+    foreign = _row(year_source=["table", 87517])
+    assert trust(foreign)["level"] == LEVEL_C, "no rule known: judge it"
+    assert trust(foreign, own=OWN) == {"level": LEVEL_A, "reasons": [],
+                                       "image_origin": False,
+                                       "corroborated": False}
+
+
+def test_the_axis_the_spec_does_hold_to_its_own_source_still_counts():
+    """Otherwise the fix would silence the finding instead of aiming it: the
+    carrier is the one coordinate the row itself really carries."""
+    verdict = trust(_row(carrier_source=["table", 87517]), own=OWN)
+    assert verdict["level"] == LEVEL_C
+    assert verdict["reasons"] == ["nonlocal:carrier"]
+
+
+def test_the_rule_is_read_per_parameter_not_per_axis_name():
+    """Two parameters may name an axis the same way and hold it differently,
+    so the pair decides. A set keyed by the bare name would carry one
+    parameter's rule onto the other's coordinate."""
+    row = _row(parameter="emission", carrier_source=["table", 87517])
+    assert trust(row, own=OWN)["reasons"] == [], "OWN names only the other one"
+    both = OWN | {("emission", "carrier")}
+    assert trust(row, own=both)["reasons"] == ["nonlocal:carrier"]
+
+
+def test_the_summary_hands_the_rule_down():
+    """It is the line a reader of 1.082 plans actually reads; computed
+    against the wrong rule it reports a clean run as a broken one."""
+    rows = [_row(year_source=["table", 87517]) for _ in range(3)]
+    assert document_summary(857, rows, [])["levels"][LEVEL_C] == 3
+    with_rule = document_summary(857, rows, [], own=OWN)
+    assert with_rule["levels"] == {LEVEL_A: 3, LEVEL_B: 0, LEVEL_C: 0}
+    assert with_rule["reasons"] == {}
+
+
+def test_own_evidence_reads_the_rule_off_the_spec():
+    """The set has one source, and it is the spec the run was made with."""
+    import json
+    from pathlib import Path
+
+    from docpipe.extraction.spec import load as load_spec, own_evidence
+
+    root = Path(__file__).resolve().parent.parent
+    spec = load_spec(json.loads(
+        (root / "profiles" / "kwp" / "extraction_spec.json")
+        .read_text(encoding="utf-8")))
+    got = own_evidence(spec)
+    assert ("energy_consumption", "carrier") in got
+    assert ("energy_consumption", "sector") in got
+    # Measured against the spec as it reads: year and scenario are "local",
+    # aggregation and spatial_scope have no rule at all.
+    for name in ("year", "scenario", "quantity", "aggregation",
+                 "spatial_scope"):
+        assert ("energy_consumption", name) not in got, name
+    assert {axis for _uri, axis in got} == {"carrier", "sector"}

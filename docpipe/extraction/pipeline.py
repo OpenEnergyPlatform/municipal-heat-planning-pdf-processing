@@ -1032,7 +1032,8 @@ def fold_fieldwise(batch: Batch, rows: list, orphans: list,
         report.owners_harvested += len(batch.items)
 
 
-def write_report(report: DocumentReport, out_path: Path) -> None:
+def write_report(report: DocumentReport, out_path: Path,
+                 own: Optional[frozenset] = None) -> None:
     """Tuples, refusals and one summary line as a JSONL, written atomically.
 
     Refusals are rows too (kind=refusal): the file is the audit trail, and an
@@ -1041,7 +1042,10 @@ def write_report(report: DocumentReport, out_path: Path) -> None:
     The last line (kind=summary) is the distribution over this document's own
     values, so "how much of this plan can I use" has an answer that does not
     require reading 559 rows. It goes last because it is computed from
-    everything above it.
+    everything above it. `own` names the axes whose evidence rule is
+    `own` (spec.own_evidence); without it the summary holds every coordinate
+    to the row's own source, which over-reports on a harvest written under
+    the rule.
     """
     out_path.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.NamedTemporaryFile(
@@ -1056,7 +1060,7 @@ def write_report(report: DocumentReport, out_path: Path) -> None:
         handle.write(json.dumps(
             {"kind": "summary",
              **document_summary(report.document_id, report.tuples,
-                                report.refusals)},
+                                report.refusals, own=own)},
             ensure_ascii=False) + "\n")
         temp = Path(handle.name)
     temp.replace(out_path)

@@ -24,6 +24,7 @@ from pathlib import Path
 from typing import Optional
 
 from docpipe.extraction.fields import DERIVED
+from docpipe.extraction.spec import load as load_spec, own_evidence
 from docpipe.extraction.trust import sentence as trust_sentence, trust
 
 log = logging.getLogger(__name__)
@@ -117,6 +118,13 @@ P_CARRIER = _predicate("carrier")               # covers energy carrier
 P_SECTOR = _predicate("sector")                 # covers sector
 P_YEAR = _predicate("year")                     # has scenario year value
 P_AGGREGATION = _predicate("aggregation")       # has aggregation type
+
+# Which coordinate a reader of the graph may hold to the row's own source.
+# The spec sets it per axis, and only `own` is checkable from what a
+# harvest row records: `local` is a statement about pages and `any` is no
+# restriction. Judging all seven by the strictest rule marked every legal
+# reading as a doubt, which is a warning that fires on the whole corpus.
+OWN_EVIDENCE = own_evidence(load_spec(_SPEC))
 
 # Which part of a heat plan a value hangs under, by the scenario it belongs
 # to. The law names three of them and MHPO asserts the has-part edges for
@@ -301,7 +309,8 @@ def evidence_comment(row: dict, document: str, *,
     # is a floor and not a grade: a value with every coordinate read off its
     # own table and one with its year read off another table's caption both
     # clear it, and the graph showed a reader two numbers.
-    verdict = trust(row, transcribed=transcribed, conflict=conflict)
+    verdict = trust(row, transcribed=transcribed, conflict=conflict,
+                    own=OWN_EVIDENCE)
     prov = row.get("provenance") or {}
     where = [f"{document}.pdf"]
     if prov.get("page"):
