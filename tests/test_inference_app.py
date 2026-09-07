@@ -6,6 +6,7 @@ Covers db.py (candidate-faiss-id UNION + content/citation lookup), chunker.py
 key derivation). Streamlit / FAISS / torch paths are exercised on the server,
 not here.
 """
+import json
 import sqlite3
 
 import pytest
@@ -855,3 +856,51 @@ def test_fetching_a_table_owner_costs_one_statement(corpus):
     assert content["section_title"] == "Wärmebedarf"
     assert content["image_path"] == "doc/images/p12_tbl0.png"
     assert len(statements) == 1, statements
+
+
+def test_compare_answers_keeps_the_answers_when_the_call_fails(monkeypatch):
+    """The per-document answers are grounded and already on screen. A failed
+    comparison must cost the comparison, not the answers."""
+    llm = pytest.importorskip("docpipe.inference.llm_client")
+    monkeypatch.setattr(llm, "LLM_STUB_MODE", False)
+    plans = [{"label": "Kassel", "answer": "1 Prozent."},
+             {"label": "Leipzig", "answer": None}]
+    monkeypatch.setattr(llm, "_chat_json",
+                        lambda m, temperature: {"comparison": "K 1, L nichts."})
+    assert llm.compare_answers("Rate?", plans) == "K 1, L nichts."
+    monkeypatch.setattr(llm, "_chat_json",
+                        lambda m, temperature: (_ for _ in ()).throw(RuntimeError("down")))
+    assert llm.compare_answers("Rate?", plans) is None
+    # An empty comparison is no comparison either.
+    monkeypatch.setattr(llm, "_chat_json", lambda m, temperature: {"comparison": "  "})
+    assert llm.compare_answers("Rate?", plans) is None
+
+
+def test_compare_answers_sends_only_labels_and_answers(monkeypatch):
+    """The one prompt on this screen that no citation backs. What it is handed
+    is the whole guarantee: a source passage in here could become a statement
+    about a plan that never said it."""
+    llm = pytest.importorskip("docpipe.inference.llm_client")
+    monkeypatch.setattr(llm, "LLM_STUB_MODE", False)
+    sent = {}
+
+    def _chat(messages, temperature):
+        sent["text"] = messages[0]["content"]
+        return {"comparison": "V"}
+    monkeypatch.setattr(llm, "_chat_json", _chat)
+    llm.compare_answers("Rate?", [{"label": "Kassel", "answer": "1 Prozent."}])
+    payload = json.loads(sent["text"][len(llm.COMPARE_PROMPT):].strip())
+    assert payload == {"task": "Rate?",
+                       "documents": [{"label": "Kassel", "answer": "1 Prozent."}]}
+
+
+def test_compare_prompt_forbids_inventing_and_computing():
+    """Three failure modes the answers cannot defend against, because the call
+    sees no sources: filling an empty answer, converting a unit, and averaging
+    across plans whose reference years differ."""
+    llm = pytest.importorskip("docpipe.inference.llm_client")
+    text = llm.COMPARE_PROMPT
+    assert "null" in text and "rate nicht" in text
+    assert "Rechne nichts um" in text
+    assert "Bezugsjahre" in text and "vergleiche nicht" in text
+    assert '{"comparison"' in text

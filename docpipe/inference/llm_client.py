@@ -65,6 +65,11 @@ _ANSWER_SPEC_JSON = prompts.text("inference/answer_spec_json")
 
 JSON_FORMAT_PROMPT = prompts.text("inference/json_format")
 
+# One comparison over the finished per-document answers. Its own prompt:
+# the answering prompt is written to stay inside one document, and the
+# comparison has no document in front of it at all.
+COMPARE_PROMPT = prompts.text("inference/compare")
+
 # Appended to the answer prompt only when a code-exec sandbox is available: the
 # model answers with an action object, the caller runs it and feeds the printed
 # output back, then the model finalises.
@@ -645,3 +650,26 @@ def format_as_json(task: str, answer_text: str) -> str:
     messages = [{"role": "user", "content": f"{JSON_FORMAT_PROMPT}\n\n{payload}"}]
     obj = _chat_json(messages, temperature=LLM_TEMPERATURE)
     return json.dumps(obj, ensure_ascii=False, indent=2)
+
+
+def compare_answers(task: str, plans: list) -> Optional[str]:
+    """Compare the finished answers of several documents. None on any failure.
+
+    `plans` is [{"label", "answer"}] and that is all the call gets: no source
+    text, no quotes, no pages. With the passages in front of it the model can
+    ground a claim about one document in another document's sentence, and the
+    citations shown under the table are per document -- they would not show
+    it. An entry whose answer is None found nothing grounded, which the prompt
+    is told to report rather than fill in.
+    """
+    if LLM_STUB_MODE:
+        return "\n".join(f"{p['label']}: {p['answer'] or '-'}" for p in plans)
+    payload = json.dumps({"task": task, "documents": plans}, ensure_ascii=False)
+    try:
+        parsed = _chat_json(
+            [{"role": "user", "content": f"{COMPARE_PROMPT}\n\n{payload}"}],
+            temperature=LLM_TEMPERATURE)
+    except Exception as e:
+        log.warning("Comparison failed, keeping the per-document answers: %s", e)
+        return None
+    return str(parsed.get("comparison") or "").strip() or None
