@@ -1560,7 +1560,8 @@ def make_field_asker(image_root: Optional[Path] = None) -> Callable:
 
     def ask(shown: list, rows: list, slots,
             corrections: Optional[list] = None,
-            document_id: Optional[int] = None) -> Optional[dict]:
+            document_id: Optional[int] = None,
+            usage_out: Optional[dict] = None) -> Optional[dict]:
         slots = list(slots) if isinstance(slots, (list, tuple)) else [slots]
         name = "+".join(s.name for s in slots)
         payload = json.dumps(_field_payload(shown, rows, slots, corrections),
@@ -1596,7 +1597,17 @@ def make_field_asker(image_root: Optional[Path] = None) -> Callable:
                     extra_body={"chat_template_kwargs": {"enable_thinking": False}},
                 )
                 reply = response.choices[0]
-                _observe_usage(getattr(response, "usage", None))
+                usage = getattr(response, "usage", None)
+                _observe_usage(usage)
+                if usage_out is not None:
+                    # Per request, not only in the run's total. The field
+                    # requests are the bulk of a document and nothing said how
+                    # much any single one cost, so no ceiling could be set
+                    # from the trace.
+                    usage_out["prompt_tokens"] = getattr(
+                        usage, "prompt_tokens", None)
+                    usage_out["completion_tokens"] = getattr(
+                        usage, "completion_tokens", None)
                 answer = _loads_object(reply.message.content)
                 closed = False
                 if answer is None and reply.finish_reason == "stop":
@@ -1692,7 +1703,7 @@ def make_fieldwise_harvester(image_root: Optional[Path] = None,
         slots = list(slots) if isinstance(slots, (list, tuple)) else [slots]
         name = "+".join(slot.name for slot in slots)
         totals = {"filled": 0, "unquoted": 0, "unbacked": 0, "unstated": 0,
-                  "retried": 0}
+                  "raw_missing": 0, "retried": 0}
         seen = {(i.source.owner_kind, i.source.owner_id) for i in batch.items}
         state = {"asked": 0, "answer": None, "stage": "own"}
 
@@ -1723,8 +1734,9 @@ def make_fieldwise_harvester(image_root: Optional[Path] = None,
                         return False
                     state["asked"] += 1
                     started = time.time()
+                    usage: dict = {}
                     state["answer"] = ask(shown, todo, slots, corrections,
-                                          batch.document_id)
+                                          batch.document_id, usage)
                     # Checked against the window AND the passages the rows
                     # carry. A row's own quote is shown to the model in the
                     # rows list, so citing it is legitimate — and from the
@@ -1739,15 +1751,33 @@ def make_fieldwise_harvester(image_root: Optional[Path] = None,
                     if not isinstance(answered, dict):
                         answered = {}
                     counts = {"filled": 0, "unquoted": 0, "unbacked": 0,
-                              "unstated": 0, "failed": []}
+                              "unstated": 0, "raw_missing": 0, "failed": []}
+                    # Which FIELD filled and which failed, not only how many.
+                    # Five fields answer in one reply, and a run that logs
+                    # "aggregation+carrier+sector+year+spatial_scope: 3 of 5"
+                    # cannot say which two were dropped: 7,738 unbacked and
+                    # 3,110 unquoted answers of one corpus group were not
+                    # attributable to a coordinate.
+                    filled_by: dict = {}
+                    unbacked_by: dict = {}
                     for slot in slots:
                         got = merge_field(rows, list(shown) + batch.sources,
-                                          slot, answered.get(slot.name))
+                                          slot, answered.get(slot.name),
+                                          window=(state["stage"],
+                                                  state["asked"]))
                         for key in ("filled", "unquoted", "unbacked",
-                                    "unstated"):
+                                    "unstated", "raw_missing"):
                             counts[key] += got[key]
-                        counts["failed"].extend(got["failed"])
-                    for key in ("filled", "unquoted", "unbacked", "unstated"):
+                        if got["filled"]:
+                            filled_by[slot.name] = got["filled"]
+                        if got["unquoted"] or got["unbacked"]:
+                            unbacked_by[slot.name] = (got["unquoted"]
+                                                      + got["unbacked"])
+                        for bad in got["failed"]:
+                            counts["failed"].append(dict(bad,
+                                                         field=slot.name))
+                    for key in ("filled", "unquoted", "unbacked", "unstated",
+                                "raw_missing"):
                         totals[key] += counts[key]
                     totals["retried"] += 1 if attempt else 0
                     # The window this coordinate was asked in, what was shown,
@@ -1763,11 +1793,16 @@ def make_fieldwise_harvester(image_root: Optional[Path] = None,
                                 shown=[[x.owner_kind, x.owner_id]
                                        for x in shown],
                                 ms=int((time.time() - started) * 1000),
+                                filled_by=filled_by, unbacked_by=unbacked_by,
+                                prompt_tokens=usage.get("prompt_tokens"),
+                                completion_tokens=usage.get(
+                                    "completion_tokens"),
                                 **{k: counts[k] for k in
                                    ("filled", "unquoted", "unbacked",
-                                    "unstated")})
+                                    "unstated", "raw_missing")})
                     for bad in counts["failed"]:
                         trace.event("drop", batch.document_id, slot=name,
+                                    field=bad.get("field"),
                                     window=state["asked"], attempt=attempt,
                                     row=bad.get("row"),
                                     why=bad.get("why") or "unbacked")

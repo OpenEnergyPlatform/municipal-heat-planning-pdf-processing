@@ -67,6 +67,9 @@ def main(argv=None) -> int:
     errors = collections.Counter()
     latency = collections.defaultdict(list)
     tokens = collections.defaultdict(list)
+    filled_by_field = collections.Counter()
+    unbacked_by_field = collections.Counter()
+    drops_by_field = collections.Counter()
     documents = set()
 
     for rec in read(args.directory):
@@ -80,7 +83,7 @@ def main(argv=None) -> int:
             latency["rows"].append(rec.get("ms") or 0)
             for value in ("prompt_tokens", "completion_tokens"):
                 if isinstance(rec.get(value), int):
-                    tokens[value].append(rec[value])
+                    tokens["rows " + value].append(rec[value])
             for rank, owner in zip(rec.get("ranks") or [],
                                    rec.get("sources") or []):
                 rows_per_rank[rank] += rec.get("rows") or 0
@@ -89,10 +92,22 @@ def main(argv=None) -> int:
             stage_hits[rec.get("stage")] += rec.get("filled") or 0
             if rec.get("filled"):
                 window_of_read[rec.get("slot")].append(rec.get("window") or 0)
+            # The field requests are the bulk of a document. Their cost was
+            # measured only in the run's total, so no ceiling could be set
+            # from the distribution.
+            for value in ("prompt_tokens", "completion_tokens"):
+                if isinstance(rec.get(value), int):
+                    tokens["field " + value].append(rec[value])
+            for field, n in (rec.get("filled_by") or {}).items():
+                filled_by_field[field] += n
+            for field, n in (rec.get("unbacked_by") or {}).items():
+                unbacked_by_field[field] += n
         elif kind == "sweep":
             windows[rec.get("slot")].append(rec.get("windows") or 0)
         elif kind == "drop":
             drops[rec.get("why")] += 1
+            drops_by_field[(rec.get("field") or rec.get("slot"),
+                            rec.get("why"))] += 1
         elif kind == "error":
             errors[(rec.get("where"), rec.get("kind"))] += 1
         elif kind == "coord":
@@ -140,6 +155,18 @@ def main(argv=None) -> int:
               % (axis, 100.0 * counts.get("read", 0) / n, dict(counts)))
     if drops:
         print("  verworfen: " + ", ".join(f"{k}={v}" for k, v in drops.most_common()))
+    # Per COORDINATE, not per request. Five fields answer in one reply, so a
+    # count that names the request names five things at once and points at
+    # none of them.
+    if filled_by_field or unbacked_by_field:
+        print("  je Koordinate (gefuellt / ohne Beleg):")
+        for field in sorted(set(filled_by_field) | set(unbacked_by_field)):
+            print("    %-16s %7d / %7d" % (field, filled_by_field[field],
+                                           unbacked_by_field[field]))
+    if drops_by_field:
+        print("  verworfen je Koordinate und Grund:")
+        for (field, why), count in drops_by_field.most_common(args.top):
+            print(f"    {field}/{why}: {count}")
     if errors:
         print("  Fehler:")
         for (where, why), count in errors.most_common(args.top):

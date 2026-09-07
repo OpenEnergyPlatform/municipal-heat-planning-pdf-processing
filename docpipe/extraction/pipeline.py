@@ -30,10 +30,10 @@ from typing import Callable, Optional
 
 from . import queries as queries_mod
 from .spec import Spec
-from .fields import (NUMBER, READ, SAID_UNSTATED, UNANSWERED, UNBACKED,
-                     UNSTATED)
-from .verify import (Refusal, Verified, canonical_number, flat, numbers_in,
-                     quote_in, verify_tuple)
+from .fields import (CHOICE, NUMBER, READ, SAID_UNSTATED, UNANSWERED,
+                     UNBACKED, UNSTATED)
+from .verify import (MIN_QUOTE_CHARS, Refusal, Verified, canonical_number,
+                     flat, numbers_in, quote_in, verify_tuple)
 
 log = logging.getLogger(__name__)
 
@@ -402,8 +402,15 @@ def answer_in_quote(slot, given, wording: Optional[str], quote: str) -> bool:
     return flat(shown).casefold() in flat(quote).casefold()
 
 
-def merge_field(rows: list, sources: list, slot, reply: Optional[dict]) -> dict:
+def merge_field(rows: list, sources: list, slot, reply: Optional[dict],
+                *, window: Optional[tuple] = None) -> dict:
     """Fold one field's answers. Returns {"filled", "unquoted", "unbacked"}.
+
+    *window* is (stage, index) and is written next to each coordinate this
+    call reads, together with the source the passage was found in. Which
+    passage proved a coordinate is the one thing a later audit cannot
+    reconstruct: measured on Kassel, 370 of 455 year readings cited a passage
+    outside the row's own table and its section, and none of them said so.
 
     Every answer brings its own passage, and that passage has to pass exactly
     what the value's own quote passes: it sits verbatim in one of the sources
@@ -433,7 +440,7 @@ def merge_field(rows: list, sources: list, slot, reply: Optional[dict]) -> dict:
         for label in group.get("rows") or ():
             pairs.append((label, group))
     by_label = {row.label: row for row in rows}
-    filled = unquoted = unbacked = unstated = 0
+    filled = unquoted = unbacked = unstated = raw_missing = 0
     # Not just how many failed but which, and why. A model that is told "R7:
     # the passage you cited is in none of the sources" can fix R7; a model
     # that is told nothing repeats itself, and the same window is worth
@@ -443,12 +450,19 @@ def merge_field(rows: list, sources: list, slot, reply: Optional[dict]) -> dict:
         row = by_label.get(str(label).strip())
         if row is None or not isinstance(answer, dict):
             continue
+        if row.claim.get(f"{slot.name}_state") == READ:
+            # Read and backed once, and that is the reading. A later window
+            # shows other passages, and letting the last speaker win is how
+            # table 10 of Kassel lost its class and its carrier to the
+            # appendix: 7 value nodes carried what a second window had put
+            # there, 10 more collided with the first reading and took their
+            # whole identity down with them. The state belongs to the
+            # coordinate, not to whoever answered most recently.
+            continue
         given = answer.get("value")
         if given is None or (isinstance(given, str) and not given.strip()):
             continue
         if str(given).strip() == UNSTATED:
-            if row.claim.get(f"{slot.name}_state") == READ:
-                continue          # an earlier window already read it
             # "Not stated" needs no passage, and the model sometimes supplies
             # one anyway — usually the row's own label. That is not evidence
             # and is not treated as any, but it is not noise either: it is the
@@ -466,10 +480,16 @@ def merge_field(rows: list, sources: list, slot, reply: Optional[dict]) -> dict:
             unstated += 1
             continue
         quote = answer.get("quote")
-        if not (isinstance(quote, str)
-                and any(quote_in(s.text or "", quote) for s in sources)):
-            if row.claim.get(f"{slot.name}_state") != READ:
-                row.claim[f"{slot.name}_state"] = UNBACKED
+        # WHICH source, not whether any. The passage a coordinate was read in
+        # decides whether the reading is local to the row or borrowed from
+        # somewhere else in the document, and that question cannot be asked
+        # afterwards from a boolean.
+        found = None
+        if isinstance(quote, str):
+            found = next((s for s in sources if quote_in(s.text or "", quote)),
+                         None)
+        if found is None:
+            row.claim[f"{slot.name}_state"] = UNBACKED
             failed.append({"row": row.label, "why": "quote_not_in_source",
                            "reason": (
                 "Dein \"quote\" steht in keiner der gezeigten Quellen. "
@@ -477,12 +497,20 @@ def merge_field(rows: list, sources: list, slot, reply: Optional[dict]) -> dict:
                 "oder aus dem \"quote\" der Zeile selbst.")})
             unquoted += 1
             continue
+        if len(quote.strip()) < MIN_QUOTE_CHARS:
+            row.claim[f"{slot.name}_state"] = UNBACKED
+            failed.append({"row": row.label, "why": "quote_too_short",
+                           "reason": (
+                f"Dein \"quote\" ist zu kurz, um eine Stelle zu benennen "
+                f"(mindestens {MIN_QUOTE_CHARS} Zeichen). Zitier den ganzen "
+                f"Satz oder die ganze Zeile, in der die Antwort steht.")})
+            unbacked += 1
+            continue
         wording = answer.get("value_raw")
         wording = wording.strip() if isinstance(wording, str) and wording.strip() \
             else None
         if not answer_in_quote(slot, given, wording, quote):
-            if row.claim.get(f"{slot.name}_state") != READ:
-                row.claim[f"{slot.name}_state"] = UNBACKED
+            row.claim[f"{slot.name}_state"] = UNBACKED
             shown_answer = wording or given
             failed.append({"row": row.label, "why": "answer_not_in_quote",
                            "given": given, "raw": wording, "reason": (
@@ -495,13 +523,25 @@ def merge_field(rows: list, sources: list, slot, reply: Optional[dict]) -> dict:
         row.claim[slot.name] = given
         if wording:
             row.claim[f"{slot.name}_raw"] = wording
+        elif slot.kind == CHOICE:
+            # A choice without the words it was read from cannot be re-mapped
+            # when the vocabulary moves: the URI is all that survives, and
+            # which wording the model resolved to it is gone. That is the
+            # difference between minutes of re-mapping and 93 GPU hours of
+            # re-harvesting the corpus, so it is counted rather than shrugged
+            # at. The absence of the key IS the marker a later top-up looks
+            # for; nothing is invented to fill it.
+            raw_missing += 1
         # The passage this one coordinate was read in, kept next to it. A
         # value and its year are two findings, and a graph that cites one
         # sentence for both is citing the wrong one for at least one of them.
         row.claim[f"{slot.name}_quote"] = quote
+        row.claim[f"{slot.name}_source"] = [found.owner_kind, found.owner_id]
+        if window is not None:
+            row.claim[f"{slot.name}_window"] = list(window)
         filled += 1
     return {"filled": filled, "unquoted": unquoted, "unbacked": unbacked,
-            "unstated": unstated, "failed": failed}
+            "unstated": unstated, "raw_missing": raw_missing, "failed": failed}
 
 
 def open_rows(rows: list, slot) -> list:
