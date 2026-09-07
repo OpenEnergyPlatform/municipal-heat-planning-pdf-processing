@@ -146,3 +146,35 @@ def test_two_spellings_of_one_label_may_not_map_to_two_classes():
     with pytest.raises(SpecError) as excinfo:
         load(raw)
     assert "already maps to" in str(excinfo.value)
+
+
+def test_an_entry_may_carry_what_it_means_and_a_list_still_loads():
+    """Two spec forms, one meaning. The list is the short form and stays the
+    common one; the object adds the sentence the list could not carry."""
+    raw = _minimal()
+    raw["parameters"][0]["axes"]["carrier"] = {"vocabulary": {
+        "OEO_00000292": {"label": "Erdgas", "spellings": ["Gas"],
+                         "definition": "Natural gas is a gas mixture."},
+        "OEO_00000211": ["Heizöl", "Öl"]}}
+    axis = load(raw).parameters[0].axes["carrier"]
+    assert axis.vocabulary == {"OEO_00000292": ["Erdgas", "Gas"],
+                               "OEO_00000211": ["Heizöl", "Öl"]}
+    assert axis.definitions == {
+        "OEO_00000292": "Natural gas is a gas mixture."}
+    assert axis.label_to_uri()["gas"] == "OEO_00000292"
+
+
+@pytest.mark.parametrize("entry,message", [
+    ({"spellings": ["Gas"]}, "needs a label"),
+    ({"label": "", "spellings": []}, "needs a label"),
+    ({"label": "Erdgas", "spellings": "Gas"}, "spellings must be a list"),
+    ({"label": "Erdgas", "definition": "  "}, "definition must be a sentence"),
+])
+def test_a_broken_entry_object_dies_at_load_time_naming_its_field(entry,
+                                                                  message):
+    raw = _minimal()
+    raw["parameters"][0]["axes"]["carrier"] = {
+        "vocabulary": {"OEO_00000292": entry}}
+    with pytest.raises(SpecError) as excinfo:
+        load(raw)
+    assert message in str(excinfo.value)

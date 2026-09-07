@@ -80,6 +80,7 @@ class Option:
     label: str                  # what the model answers
     uri: str                    # what the label resolves to
     synonyms: tuple = ()        # the other spellings the spec knows
+    definition: str = ""        # what the ontology says the term means
 
 
 @dataclass(frozen=True)
@@ -108,25 +109,44 @@ class Slot:
         and not in the options, which asks the model to remember a rule instead
         of reading a row.
         """
+        # With a meaning where the ontology gives one. The prompt has
+        # promised since the first run that the question names what each
+        # entry means, and nothing did: the model was handed a class
+        # identifier and a list of German words and asked to decide by
+        # meaning rather than by which word looks nearest. Where no entry
+        # has a meaning the short form stays, so a profile that has not
+        # written any pays nothing for the promise.
+        if any(opt.definition for opt in self.options):
+            out = {opt.label: {"bedeutet": opt.definition,
+                               "Schreibweisen": list(opt.synonyms)}
+                   if opt.definition else {"Schreibweisen": list(opt.synonyms)}
+                   for opt in self.options}
+            out[UNSTATED] = {"bedeutet": "in diesen Passagen steht es nicht"}
+            return out
         out = {opt.label: list(opt.synonyms) for opt in self.options}
         out[UNSTATED] = ["steht in diesen Passagen nicht"]
         return out
 
 
-def _options(vocabulary: dict) -> tuple:
+def _options(vocabulary: dict, definitions: Optional[dict] = None) -> tuple:
     """The closed list as options — first label canonical, rest synonyms.
 
     The spec writes a vocabulary as uri -> [labels] and the first label is the
     one the class is called by; the others exist so a document's own spelling
     still resolves. Only the canonical one is offered, or the list the model
     reads would be four times as long for no added choice.
+
+    The meaning rides along where the spec carries one, because "decide by
+    the definition and not by the nearest word" is a rule that needs the
+    definition in the request to be followable.
     """
     out = []
     for uri, labels in (vocabulary or {}).items():
         labels = [l for l in labels if isinstance(l, str) and l.strip()]
         if not labels:
             continue
-        out.append(Option(label=labels[0], uri=uri, synonyms=tuple(labels[1:])))
+        out.append(Option(label=labels[0], uri=uri, synonyms=tuple(labels[1:]),
+                          definition=(definitions or {}).get(uri, "")))
     return tuple(out)
 
 
@@ -212,7 +232,8 @@ def value_slot(parameter: Parameter) -> Slot:
                     question=parameter.description)
     return Slot(name="value", kind=VALUE, required=True,
                 question=parameter.description,
-                options=_options(parameter.vocabulary))
+                options=_options(parameter.vocabulary,
+                                 getattr(parameter, "definitions", None)))
 
 
 def axis_slots(parameter: Parameter) -> list:
@@ -226,7 +247,8 @@ def axis_slots(parameter: Parameter) -> list:
     for name, axis in parameter.axes.items():
         if axis.vocabulary:
             slot = Slot(name=name, kind=CHOICE, required=axis.required,
-                        question=axis.question, options=_options(axis.vocabulary),
+                        question=axis.question,
+                        options=_options(axis.vocabulary, axis.definitions),
                         derive=axis.derive, evidence=axis.evidence)
         elif axis.enum:
             slot = Slot(name=name, kind=CHOICE, required=axis.required,

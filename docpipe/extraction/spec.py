@@ -118,6 +118,11 @@ class Axis:
     """
     name: str
     vocabulary: Optional[dict] = None      # target URI -> corpus labels
+    # target URI -> what the ontology says the term means, one sentence. The
+    # field prompt has promised since the first run that the question names
+    # what each entry means, and nothing did: the model was given a class
+    # identifier and a list of German words and asked to decide by meaning.
+    definitions: dict = field(default_factory=dict)
     type: Optional[str] = None             # "int" for years, "text" for wording
     enum: Optional[tuple] = None
     required: bool = False
@@ -231,10 +236,42 @@ class Spec:
         self.by_uri = {p.uri: p for p in self.parameters}
 
 
+def _vocabulary(path: str, raw):
+    """(uri -> spellings, uri -> definition) from either spec form.
+
+    A list is the short form and still the common one: the entry is its
+    spellings and the first is what the model is offered. An object adds the
+    one thing the list could not carry -- what the term MEANS, in the
+    ontology's own words -- without moving the spellings anywhere else.
+    """
+    if raw is None:
+        return None, {}
+    if not isinstance(raw, dict) or not raw:
+        _fail(path, "vocabulary must be a non-empty object of uri -> labels")
+    spellings, definitions = {}, {}
+    for uri, entry in raw.items():
+        if isinstance(entry, dict):
+            label = entry.get("label")
+            rest = entry.get("spellings") or []
+            if not isinstance(label, str) or not label.strip():
+                _fail(f"{path}.{uri}", "an entry object needs a label")
+            if not isinstance(rest, list):
+                _fail(f"{path}.{uri}", "spellings must be a list")
+            spellings[uri] = [label] + list(rest)
+            meaning = entry.get("definition")
+            if meaning is not None:
+                if not isinstance(meaning, str) or not meaning.strip():
+                    _fail(f"{path}.{uri}", "definition must be a sentence")
+                definitions[uri] = meaning.strip()
+        else:
+            spellings[uri] = entry
+    return spellings, definitions
+
+
 def _validate_axis(path: str, name: str, raw) -> Axis:
     if not isinstance(raw, dict):
         _fail(path, "axis must be an object")
-    vocabulary = raw.get("vocabulary")
+    vocabulary, definitions = _vocabulary(path, raw.get("vocabulary"))
     axis_type = raw.get("type")
     enum = raw.get("enum")
     dynamic = bool(raw.get("dynamic", False))
@@ -296,7 +333,7 @@ def _validate_axis(path: str, name: str, raw) -> Axis:
     return Axis(name=name, vocabulary=vocabulary, type=axis_type,
                 enum=enum, required=bool(raw.get("required", False)),
                 dynamic=dynamic, question=question, derive=derive,
-                evidence=evidence, kg=kg)
+                evidence=evidence, kg=kg, definitions=definitions)
 
 
 def _validate_example(path: str, raw, value_type: str,

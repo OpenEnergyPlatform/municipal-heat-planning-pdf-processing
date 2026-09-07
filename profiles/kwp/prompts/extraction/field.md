@@ -55,7 +55,8 @@ Regeln:
 
 6. Enthält "options" Einträge, die ausdrücklich das Gegenteil einer Klasse sind — eine Summenzeile, eine Restposition, ein ausdrücklich unbekannter Wert, ein Prozentanteil, ein Potenzial —, dann sind das richtige Antworten und keine Notlösung. Wähle sie. Passt fachlich weder eine Klasse noch einer dieser Einträge, obwohl die Passage die Angabe nennt, dann gib die Bezeichnung in "value_raw" und lass "value" weg.
 
-7. Entscheide nach der Definition, nicht nach der Ähnlichkeit der Wörter. Die Frage nennt zu jedem Eintrag, was er bedeutet.
+7. Entscheide nach der Bedeutung, nicht nach der Ähnlichkeit der Wörter. Trägt ein Eintrag ein "bedeutet", dann ist das die Definition der Klasse aus der Ontologie, und sie entscheidet. Die "Schreibweisen" sind nur Beispiele dafür, wie der Eintrag im Korpus schon dastand: eine Schreibweise, die zufällig passt, macht den Eintrag nicht richtig, und eine fehlende macht ihn nicht falsch.
+   Steht in der Passage eine Bezeichnung, die zu keiner Definition passt, dann nimm nicht die nächstbeste. Dafür gibt es die Einträge, die mit "out:" beginnen, und "out:unstated".
 
 8. "need_more": bekommst du die Angabe aus diesen Passagen nicht, kannst du zusätzlich ein bis drei Sätze angeben, nach denen gesucht werden soll — so, wie sie im Dokument STEHEN würden. Danach wird per Ähnlichkeit gesucht, und was gefunden wird, kommt als nächste Anfrage mit denselben Zeilen.
    RICHTIG: "Die Energiebilanz bezieht sich auf das Bezugsjahr 2021."

@@ -913,3 +913,41 @@ def test_the_graph_says_which_values_want_looking_at(tmp_path):
     assert "# Vertrauen: C" in ttl
     assert "nonlocal:year" in ttl
     assert "Prüfung empfohlen" in ttl
+
+
+def test_the_spellings_the_corpus_writes_are_in_the_lists():
+    """From the KWW parameter list: words German heat plans really use that
+    ours did not hold. "Nahwärme" is the one that matters most -- a plan
+    writes it as often as Fernwärme, and without it the reading resolved to
+    nothing."""
+    energy = SPEC.parameters[0]
+    carrier = energy.axes["carrier"].label_to_uri()
+    assert carrier["nahwärme"] == "OEO_00000132"
+    assert carrier["hackschnitzel"] == carrier["brennholz"] == "OEO_00000449"
+    assert carrier["heizungsstrom"] == "OEO_00000139"
+    assert carrier["h2"] == "OEO_00000220"
+    assert carrier["umgebungswärme"] == "OEO_00000056"
+
+    sector = energy.axes["sector"].label_to_uri()
+    assert sector["verarbeitendes gewerbe"] == "OEO_00000227"
+    assert sector["haushaltssektor"] == "OEO_00000214"
+
+    scenario = energy.axes["scenario"].label_to_uri()
+    for word in ("basisjahr", "ist-zustandsanalyse", "erstellungsjahr"):
+        assert scenario[word] == "status_quo", word
+
+    # An emission factor is a property of a carrier and not a quantity of
+    # emitted gas, and three spellings of it now leave the graph as one.
+    emission = SPEC.parameters[1].axes["quantity"].label_to_uri()
+    for word in ("emissionsfaktor", "co2-faktor", "spezifische emissionen"):
+        assert emission[word] == "out:factor", word
+
+
+def test_every_option_the_graph_does_not_take_says_what_it_excludes():
+    """An out:* entry is a correct answer and the model has to be able to
+    pick it on purpose. It can only do that if the entry says what it is."""
+    for parameter in NUMERIC:
+        for name, axis in parameter.axes.items():
+            for uri in axis.vocabulary or {}:
+                if uri.startswith("out:"):
+                    assert axis.definitions.get(uri), f"{parameter.uri}.{name}.{uri}"
