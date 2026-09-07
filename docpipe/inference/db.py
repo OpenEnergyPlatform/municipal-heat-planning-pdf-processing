@@ -271,7 +271,8 @@ def fetch_owner_content(
                        else ("Images", "description"))
         row = conn.execute(
             f"SELECT o.caption, o.block_id, o.{body} AS body, o.page_number, "
-            f"       o.path, s.section_number, s.title AS section_title, "
+            f"       o.path, s.id AS section_id, s.section_number, "
+            f"       s.title AS section_title, "
             f"       s.content AS section_content, s.document, d.filename "
             f"FROM {table} o "
             f"JOIN Sections s ON o.section = s.id "
@@ -291,6 +292,11 @@ def fetch_owner_content(
             "title": resolve_title(row["caption"], row["section_content"],
                                    row["block_id"]),
             "caption_stored": row["caption"],
+            # Which section it stands in, and under which placeholder. The
+            # section is where the sentence announcing the table lives, and
+            # the placeholder is where in that section to look.
+            "section_id": row["section_id"],
+            "block_id": row["block_id"],
             "text": row["body"] or "",
             "page_number": row["page_number"],
             "image_path": _asset_path(_folder_name(row["filename"]), row["path"]),

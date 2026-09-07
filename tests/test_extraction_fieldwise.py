@@ -1076,3 +1076,117 @@ def test_the_row_prompt_example_names_no_place_this_corpus_contains(profile):
     if name == "kwp":
         assert "MASCHINELL" in text, "the check is promised where it applies"
         assert "anderen Plan" in text
+
+
+def test_the_own_window_shows_the_section_a_table_stands_in(monkeypatch):
+    """The promise: the first window a coordinate is asked in holds the table
+    AND the section around it, each section once.
+
+    The own window used to be the batch's tables and nothing else, and the
+    coordinates a table does not carry live one level up. Measured on Kassel,
+    section 349525 appeared in 0 of 1,043 field windows while its three tables
+    were asked for their year 39 times, and 69 tuples from inventory tables
+    came back as target-scenario values because no window ever showed the word
+    for what they are.
+    """
+    spec, rows_reply = _two_row_spec_and_reply()
+    shown_per_window = []
+
+    monkeypatch.setattr(runner, "make_harvester",
+                        lambda *a, **kw: (lambda batch, prior=None: rows_reply))
+
+    def make_asker(image_root=None):
+        def ask(shown, rows, slots, corrections=None, document_id=None,
+                usage_out=None):
+            shown_per_window.append([(s.owner_kind, s.owner_id) for s in shown])
+            return {"fields": {}}
+        return ask
+
+    monkeypatch.setattr(runner, "make_field_asker", make_asker)
+    section = Source("section", 349525,
+                     "Für das Jahr 2040 ergeben sich die Kennzahlen. "
+                     "Tabelle 17: Endenergieverbrauch im Zielszenario 2040 "
+                     "[p85_tbl0]", {"title": "Zielszenario"})
+    calls = []
+
+    def parents(sources):
+        calls.append(len(sources))
+        return [section]
+
+    harvest = runner.make_fieldwise_harvester(spec=spec, slice_gate={},
+                                              parents=parents)
+    harvest(_document_batch(sources=2))
+
+    assert calls, "the parent was asked for"
+    first = shown_per_window[0]
+    assert ("section", 349525) in first, "the section rides in the first window"
+    assert sum(1 for kind, _ in first if kind == "table") == 2, (
+        "and the tables are still there")
+    assert first.count(("section", 349525)) == 1, "once, not once per table"
+
+
+def test_a_parent_section_is_not_fetched_twice_and_a_long_one_is_cut(tmp_path):
+    """Two tables of one section share one parent, and a section too long for
+    the window is cut around the table's own placeholder rather than dropped:
+    the sentence that dates a table stands next to its placeholder and
+    nowhere else."""
+    import sqlite3
+    from docpipe.extraction.runner import PARENT_CHARS, make_parents, _around
+
+    db = tmp_path / "mini.db"
+    conn = sqlite3.connect(db)
+    filler = "Fülltext. " * 800
+    conn.executescript("""
+        CREATE TABLE Documents (id INTEGER PRIMARY KEY, filename TEXT);
+        CREATE TABLE Sections (id INTEGER PRIMARY KEY, document INTEGER,
+                               section_number INTEGER, title TEXT,
+                               content TEXT, page_number INTEGER);
+        CREATE TABLE Tables (id INTEGER PRIMARY KEY, section INTEGER,
+                             block_id TEXT, caption TEXT, markdown TEXT,
+                             page_number INTEGER, path TEXT);
+        CREATE TABLE Images (id INTEGER PRIMARY KEY, section INTEGER,
+                             block_id TEXT, caption TEXT, description TEXT,
+                             page_number INTEGER, path TEXT);
+    """)
+    conn.execute("INSERT INTO Documents VALUES (7, 'plan.pdf')")
+    conn.execute("INSERT INTO Sections VALUES (5, 7, 1, 'Zielszenario', ?, 86)",
+                 (filler + "Tabelle 17: Verbrauch im Zielszenario 2040 "
+                  "[p85_tbl0]" + filler,))
+    conn.commit()
+    conn.close()
+
+    parents = make_parents(db)
+    sources = [Source("table", n, "| Erdgas | 1 |",
+                      {"parent_section": 5, "block_id": f"p85_tbl{n}"})
+               for n in range(2)]
+    got = parents(sources)
+    assert len(got) == 1, "two tables of one section share one parent"
+    assert len(got[0].text) <= PARENT_CHARS + 200
+    assert "Tabelle 17" in got[0].text, "cut around the placeholder, not off it"
+
+    # A source with no parent asks for nothing, and a section already shown is
+    # not shown again.
+    assert parents([Source("section", 5, "x", {})]) == []
+    assert _around("abcdef", "cd", 4) == "abcd", "no room to centre, so from 0"
+    assert _around("xxxxxxxxNEEDLExxxxxxxx", "NEEDLE", 10) == "xxxxxNEEDL", (
+        "the window opens half a budget before the needle")
+    assert _around("abcdef", "zz", 3) == "abc", "needle absent, head of the text"
+
+
+def test_the_request_says_where_a_source_stands(monkeypatch):
+    """Which source is the table and which is the section around it is a fact
+    the request carries, not one the model infers from the order."""
+    spec, _reply = _two_row_spec_and_reply()
+    parameter = spec.parameters[0]
+    batch = _batch(parameter)
+    rows, _ = rows_from_reply(batch, _value_reply(parameter, batch.label(0)))
+    table = Source("table", 87457, "| Erdgas | 1 |",
+                   {"page": 86, "block_id": "p85_tbl0", "title": "Tabelle 17"})
+    section = Source("section", 349525, "Für das Jahr 2040 ...",
+                     {"page": 86, "via": "parent", "title": "Zielszenario"})
+    payload = runner._field_payload([table, section], rows,
+                                    fields.asked_slots(parameter))
+    first, second = payload["sources"]
+    assert first["block_id"] == "p85_tbl0" and first["page"] == 86
+    assert "holds" not in first
+    assert second["holds"], "the parent says what it is"
