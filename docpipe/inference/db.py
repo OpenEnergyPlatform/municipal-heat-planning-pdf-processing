@@ -171,6 +171,18 @@ def resolve_title(caption, content, block_id) -> str:
     if not starts:
         return caption
     title = tail[starts[-1].start():].strip()
+    # Where the caption ends is not always where the placeholder starts. In a
+    # plan whose text layer was transcribed page by page, the caption and the
+    # paragraph after it are one run and the placeholder follows the
+    # paragraph: measured over the three textless plans of the corpus (795
+    # Leipzig, 1082 Grevesmuehlen, 210 VG Maikammer), 23 of 169 tables
+    # resolved a title and one of them carried 60 characters of prose behind
+    # it. When Stage 2 stored a caption of its own -- the vision model's
+    # reading of the same line -- and the document's sentence contains it,
+    # that is where the caption ends.
+    stored = (caption or "").strip()
+    if stored and stored in title:
+        title = title[:title.index(stored) + len(stored)]
     return title[:_CAPTION_LIMIT] if title else caption
 
 

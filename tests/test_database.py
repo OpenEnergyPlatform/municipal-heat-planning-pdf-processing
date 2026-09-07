@@ -263,3 +263,39 @@ def test_existing_embeddings_resolves_document_without_pdf_suffix(kwp_db):
 
     # _resolve_document_id falls back to the bare name when '<name>.pdf' misses.
     assert DB.get_existing_embeddings(db, "bare") == {(C.EMBEDDING_TYPE_SECTION_TEXT, 0, None)}
+
+
+def test_page_source_is_additive_and_says_which_plans_a_model_read(kwp_db,
+                                                                   tmp_path):
+    """Eleven plans of the corpus have no PDF text layer: a model transcribes
+    their pages and everything downstream runs unchanged, so their section
+    text is itself a model reading and so is every quote verified against it.
+    The count already existed per document; it never reached the database,
+    and nothing downstream could tell the two kinds of plan apart.
+    """
+    import json
+    db, con = kwp_db
+    con.execute("INSERT INTO Documents (id, filename, num_pages) "
+                "VALUES (2, 'scan.pdf', 40)")
+    con.commit()
+    root = tmp_path / "processed"
+    for name, transcribed in (("doc.pdf", 0), ("scan.pdf", 40)):
+        report = root / name / C.PAGE_TRANSCRIPTION_REPORT_JSON
+        report.parent.mkdir(parents=True, exist_ok=True)
+        report.write_text(json.dumps(
+            {"pages_total": 40, "pages_missing_text": transcribed,
+             "pages_transcribed": transcribed, "pages_empty": 0,
+             "pages_failed": 0, "blocks_added": transcribed}), encoding="utf-8")
+
+    stats = DB.enrich_page_source(db, root)
+    assert stats == {"documents": 2, "transcribed": 1, "pages": 40}
+    got = dict(con.execute("SELECT filename, page_text_transcribed "
+                           "FROM Documents").fetchall())
+    assert got == {"doc.pdf": 0, "scan.pdf": 40}
+
+    # A second pass writes nothing: 0 is an answer, not a missing one, so a
+    # plan with a text layer is not re-examined every run.
+    assert DB.enrich_page_source(db, root)["documents"] == 0
+    con.execute("UPDATE Documents SET num_pages = 41 WHERE id = 2")
+    con.commit()
+    assert DB.enrich_page_source(db, root, force=True)["documents"] == 2

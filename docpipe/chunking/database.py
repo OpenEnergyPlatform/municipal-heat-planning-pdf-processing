@@ -21,6 +21,7 @@ from typing import Optional
 
 from .config import (
     DOCUMENT_JSON,
+    PAGE_TRANSCRIPTION_REPORT_JSON,
     SECTIONS_JSON,
     EMBEDDING_TYPE_SECTION_TEXT,
     EMBEDDING_TYPE_SECTION_TITLE,
@@ -129,6 +130,71 @@ def _ensure_bbox_columns(connection: sqlite3.Connection) -> None:
         cols = {row[1] for row in connection.execute(f'PRAGMA table_info("{table}")')}
         if "bbox" not in cols:
             connection.execute(f'ALTER TABLE "{table}" ADD COLUMN "bbox" TEXT')
+
+
+def _ensure_page_source_column(connection: sqlite3.Connection) -> None:
+    """Add `page_text_transcribed` to Documents on a DB that predates it."""
+    cols = {row[1] for row in connection.execute('PRAGMA table_info("Documents")')}
+    if "page_text_transcribed" not in cols:
+        connection.execute(
+            'ALTER TABLE "Documents" ADD COLUMN "page_text_transcribed" INTEGER')
+
+
+def enrich_page_source(db_path: Path, root_dir: Path,
+                       *, force: bool = False) -> dict:
+    """Record, per document, how many of its pages the MODEL read.
+
+    Eleven plans of the heat-plan corpus have no PDF text layer. Stage 1
+    renders those pages and a model transcribes them, and from there Stage 2,
+    Stage 3, refinement, chunking and embedding run unchanged and know nothing
+    about where the text came from. The section text of those plans is
+    therefore itself a model reading, and so is every quote verified against
+    it -- a passage can be found, be shown, and still be a transcription of
+    something the page did not say.
+
+    The count already exists: preprocessing writes it per document. It just
+    never reached the database, so nothing downstream could tell the two
+    kinds of plan apart. Additive, no model, one JSON read per directory.
+    """
+    root_dir = Path(root_dir)
+    stats = {"documents": 0, "transcribed": 0, "pages": 0}
+    candidates = sorted(
+        d for d in root_dir.iterdir()
+        if d.is_dir() and (d / PAGE_TRANSCRIPTION_REPORT_JSON).exists())
+    if not candidates:
+        log.warning("enrich-page-source: no transcription report under '%s'.",
+                    root_dir)
+        return stats
+
+    cond = "" if force else " AND page_text_transcribed IS NULL"
+    with closing(connect(db_path)) as conn:
+        _ensure_page_source_column(conn)
+        for pdf_dir in candidates:
+            doc_id = _resolve_document_id(pdf_dir.name, conn)
+            if doc_id is None:
+                continue
+            try:
+                with open(pdf_dir / PAGE_TRANSCRIPTION_REPORT_JSON,
+                          "r", encoding="utf-8") as f:
+                    report = json.load(f)
+            except (OSError, ValueError) as exc:
+                log.warning("enrich-page-source: %s unreadable: %s",
+                            pdf_dir.name, exc)
+                continue
+            pages = int(report.get("pages_transcribed") or 0)
+            changed = conn.execute(
+                "UPDATE Documents SET page_text_transcribed = ? "
+                f"WHERE id = ?{cond}", (pages, doc_id)).rowcount
+            if changed:
+                stats["documents"] += 1
+                stats["pages"] += pages
+                if pages:
+                    stats["transcribed"] += 1
+        conn.commit()
+    log.info("enrich-page-source: %d document(s), %d of them model-read "
+             "(%d page(s))", stats["documents"], stats["transcribed"],
+             stats["pages"])
+    return stats
 
 
 def _bbox_json(item: dict) -> Optional[str]:
@@ -434,7 +500,7 @@ def enrich_bbox(db_path: Path, root_dir: Path, *, force: bool = False) -> dict:
         return stats
 
     log.info("enrich-bbox: %d documents", len(candidates))
-    cond = "" if force else " AND bbox IS NULL"
+    cond = "" if force else " AND page_text_transcribed IS NULL" if force else " AND bbox IS NULL"
 
     with closing(connect(db_path)) as conn:
         _ensure_bbox_columns(conn)
