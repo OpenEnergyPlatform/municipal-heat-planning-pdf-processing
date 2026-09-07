@@ -1796,6 +1796,12 @@ def make_fieldwise_harvester(image_root: Optional[Path] = None,
         """
         slots = list(slots) if isinstance(slots, (list, tuple)) else [slots]
         name = "+".join(slot.name for slot in slots)
+        # Which source each row came from. The evidence rule is about the
+        # distance between a passage and the row it is offered for, and that
+        # distance cannot be measured from the reply alone.
+        owner_of = {row.label: batch.items[row.item_index].source
+                    for row in rows
+                    if 0 <= row.item_index < len(batch.items)}
         totals = {"filled": 0, "unquoted": 0, "unbacked": 0, "unstated": 0,
                   "raw_missing": 0, "retried": 0}
         seen = {(i.source.owner_kind, i.source.owner_id) for i in batch.items}
@@ -1858,7 +1864,8 @@ def make_fieldwise_harvester(image_root: Optional[Path] = None,
                         got = merge_field(rows, list(shown) + batch.sources,
                                           slot, answered.get(slot.name),
                                           window=(state["stage"],
-                                                  state["asked"]))
+                                                  state["asked"]),
+                                          owner_of=owner_of)
                         for key in ("filled", "unquoted", "unbacked",
                                     "unstated", "raw_missing"):
                             counts[key] += got[key]

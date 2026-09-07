@@ -92,6 +92,8 @@ class Slot:
     options: tuple = ()
     # {"from": "unit", "value": uri} when the spec decides this coordinate.
     derive: Optional[dict] = None
+    # "own" | "local" | "any" — how far from the row its evidence may stand.
+    evidence: str = "any"
 
     @property
     def is_closed(self) -> bool:
@@ -225,17 +227,17 @@ def axis_slots(parameter: Parameter) -> list:
         if axis.vocabulary:
             slot = Slot(name=name, kind=CHOICE, required=axis.required,
                         question=axis.question, options=_options(axis.vocabulary),
-                        derive=axis.derive)
+                        derive=axis.derive, evidence=axis.evidence)
         elif axis.enum:
             slot = Slot(name=name, kind=CHOICE, required=axis.required,
-                        question=axis.question,
+                        question=axis.question, evidence=axis.evidence,
                         options=tuple(Option(label=e, uri=e) for e in axis.enum))
         elif axis.type == "int":
             slot = Slot(name=name, kind=NUMBER, required=axis.required,
-                        question=axis.question)
+                        question=axis.question, evidence=axis.evidence)
         else:
             slot = Slot(name=name, kind=TEXT, required=axis.required,
-                        question=axis.question)
+                        question=axis.question, evidence=axis.evidence)
         out.append(slot)
     return out
 

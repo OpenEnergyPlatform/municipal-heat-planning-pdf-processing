@@ -436,8 +436,40 @@ def answer_in_quote(slot, given, wording: Optional[str], quote: str) -> bool:
     return flat(shown).casefold() in flat(quote).casefold()
 
 
+def evidence_is_local(slot, found, own) -> bool:
+    """May this passage be the evidence for a coordinate of THIS row?
+
+    A row label and a column header are read off the table the row is in. A
+    scenario is usually named in the section around it or a page earlier. A
+    class is argued in a methods chapter that can be anywhere. So the answer
+    depends on the axis, and the axis says which of the three it is.
+
+    The measured need: 370 of Kassel's 455 year readings cited a passage
+    outside the row's own table and its section, 146 of them the annotated
+    placeholder of a different table, and every one of those verified --
+    the passage was real, it was shown, and it carried a year. It was just
+    not this row's year.
+    """
+    rule = getattr(slot, "evidence", None) or "any"
+    if rule == "any" or own is None or found is None:
+        return True
+    if (found.owner_kind, found.owner_id) == (own.owner_kind, own.owner_id):
+        return True
+    parent = (own.provenance or {}).get("parent_section")
+    if (parent is not None and found.owner_kind == "section"
+            and found.owner_id == parent):
+        return True
+    if rule == "local":
+        here = (own.provenance or {}).get("page")
+        there = (found.provenance or {}).get("page")
+        if isinstance(here, int) and isinstance(there, int):
+            return abs(here - there) <= 1
+    return False
+
+
 def merge_field(rows: list, sources: list, slot, reply: Optional[dict],
-                *, window: Optional[tuple] = None) -> dict:
+                *, window: Optional[tuple] = None,
+                owner_of: Optional[dict] = None) -> dict:
     """Fold one field's answers. Returns {"filled", "unquoted", "unbacked"}.
 
     *window* is (stage, index) and is written next to each coordinate this
@@ -530,6 +562,19 @@ def merge_field(rows: list, sources: list, slot, reply: Optional[dict],
                 "Kopiere eine Passage Zeichen für Zeichen aus \"sources\" "
                 "oder aus dem \"quote\" der Zeile selbst.")})
             unquoted += 1
+            continue
+        if not evidence_is_local(slot, found, (owner_of or {}).get(row.label)):
+            # Refused, and the row stays OPEN. The passage is real and it
+            # carries the answer -- it just carries somebody else's. The next
+            # window shows other passages, so this is a reason to ask again
+            # and not a reason to write the coordinate off.
+            row.claim[f"{slot.name}_state"] = UNBACKED
+            failed.append({"row": row.label, "why": "quote_not_local",
+                           "reason": (
+                "Dein \"quote\" steht in einer anderen Quelle als der Zeile "
+                "selbst. Zitier aus der Quelle, in der die Zeile steht, oder "
+                "aus dem Abschnitt, in dem diese Quelle steht.")})
+            unbacked += 1
             continue
         if len(quote.strip()) < MIN_QUOTE_CHARS:
             row.claim[f"{slot.name}_state"] = UNBACKED

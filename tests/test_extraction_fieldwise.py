@@ -1190,3 +1190,92 @@ def test_the_request_says_where_a_source_stands(monkeypatch):
     assert first["block_id"] == "p85_tbl0" and first["page"] == 86
     assert "holds" not in first
     assert second["holds"], "the parent says what it is"
+
+
+# ---------------------------------------------------------------------------
+# How far from a row its evidence may stand
+#
+# 370 of Kassel's 455 year readings cited a passage outside the row's own
+# table and its section, 146 of them the annotated placeholder of a DIFFERENT
+# table, and every one of them verified: the passage was real, it was shown,
+# and it carried a year. It was just not this row's year.
+# ---------------------------------------------------------------------------
+
+def _sources_near_and_far():
+    table = Source("table", 87458, "| Erdgas | 42.005 | MWh/a |",
+                   {"page": 87, "parent_section": 349525})
+    parent = Source("section", 349525,
+                    "Tabelle 18: CO2-Emissionen im Zielszenario 2040",
+                    {"page": 86})
+    neighbour = Source("table", 87457, "| Erdgas | 1 | 2040 |", {"page": 86})
+    far = Source("table", 87517, "| Erdgas | 9 | 2030 |", {"page": 163})
+    return table, parent, neighbour, far
+
+
+@pytest.mark.parametrize("rule,which,allowed", [
+    ("own", "own", True), ("own", "parent", True),
+    ("own", "neighbour", False), ("own", "far", False),
+    ("local", "own", True), ("local", "parent", True),
+    ("local", "neighbour", True), ("local", "far", False),
+    ("any", "own", True), ("any", "neighbour", True), ("any", "far", True),
+])
+def test_the_axis_decides_how_far_its_evidence_may_stand(rule, which, allowed):
+    from docpipe.extraction.pipeline import evidence_is_local
+    table, parent, neighbour, far = _sources_near_and_far()
+    found = {"own": table, "parent": parent, "neighbour": neighbour,
+             "far": far}[which]
+    slot = fields.Slot(name="year", kind=fields.NUMBER, question="?",
+                       evidence=rule)
+    assert evidence_is_local(slot, found, table) is allowed
+
+
+def test_a_passage_from_another_table_leaves_the_coordinate_open(profile):
+    """The promise: a reading whose passage belongs to another row is refused
+    AND the row stays open, because the next window shows other passages.
+
+    Refusing without leaving it open would trade a wrong year for a missing
+    one. The passage is real and it carries an answer, it just carries
+    somebody else's.
+    """
+    from docpipe.extraction.pipeline import merge_field as merge, open_rows
+    batch, rows, slot = _one_row(profile, kind=fields.CHOICE)
+    if batch is None:
+        pytest.skip("this profile has no choice axis")
+    strict = fields.Slot(name=slot.name, kind=slot.kind, question=slot.question,
+                         options=slot.options, evidence="own")
+    own = batch.items[rows[0].item_index].source
+    label = strict.options[0].label
+    far = Source("table", 999999, f"Ganz woanders: {label} steht hier.",
+                 {"page": 900})
+    counts = merge(rows, [far], strict, {"answers": {rows[0].label: {
+        "value": label, "value_raw": label,
+        "quote": f"Ganz woanders: {label} steht hier."}}},
+        owner_of={rows[0].label: own})
+    assert counts["filled"] == 0
+    assert [f["why"] for f in counts["failed"]] == ["quote_not_local"]
+    assert rows[0] in open_rows(rows, strict), "open, so the next window asks"
+
+    # The same reading from the row's own source is taken.
+    near = Source(own.owner_kind, own.owner_id,
+                  f"In der eigenen Tabelle: {label}.", own.provenance)
+    counts = merge(rows, [near], strict, {"answers": {rows[0].label: {
+        "value": label, "value_raw": label,
+        "quote": f"In der eigenen Tabelle: {label}."}}},
+        owner_of={rows[0].label: own})
+    assert counts["filled"] == 1
+
+
+def test_the_kwp_axes_carry_the_rule_their_measurement_calls_for():
+    """A row label is read off its own table, a scenario is named nearby, a
+    class is argued in a methods chapter anywhere in the plan."""
+    spec = load_spec(json.loads(
+        (PROFILES / "kwp" / "extraction_spec.json").read_text(encoding="utf-8")))
+    for parameter in spec.parameters:
+        rules = {s.name: s.evidence for s in fields.axis_slots(parameter)}
+        if not rules:
+            continue
+        assert rules.get("carrier") == "own"
+        assert rules.get("sector") == "own"
+        assert rules.get("year") == "local"
+        assert rules.get("scenario") == "local"
+        assert rules.get("quantity") == "local"
