@@ -43,6 +43,8 @@ _PER_YEAR = re.compile(r"pro\s*jahr|/\s*jahr|jährlich|jaehrlich|im\s*jahr"
 # "CO2-Äq", the underscore in "t_CO2_äq", brackets, and every dash the corpus
 # uses. A slash is NOT here: "t CO2/a" and "t CO2/Kopf" are different things.
 _SEPARATORS = re.compile(r"[\s.\-_()\[\]‐-―]+")
+# The canonical per-year suffix itself: "MWh/a", "t / a". Not "/ab".
+_PER_A = re.compile(r"/\s*a(?![a-zäöüß])")
 
 
 def normalise_unit(raw) -> str:
@@ -59,6 +61,22 @@ def normalise_unit(raw) -> str:
     s = _PER_YEAR.sub("/a", s)
     s = _SEPARATORS.sub("", s)
     return re.sub(r"co2e(?!q)", "co2eq", s)
+
+
+def states_a_year(raw) -> bool:
+    """Does this text say the amount is per year?
+
+    The same marker normalise_unit folds into "/a", asked of any text rather
+    than of a unit. It exists because the year on a tuple is not a label but
+    the period the amount is integrated over, and a unit that does not say
+    "per year" leaves that period to the passage: measured on Kassel, 23
+    accepted tuples carried a bare GWh or t, 11 of them in a sentence that
+    says "pro Jahr", and 3 were a storage capacity that is not a rate at all.
+    """
+    text = unicodedata.normalize("NFKC", str(raw)).casefold()
+    # "/a" is what normalise_unit folds the German phrasings INTO, so it is
+    # the one form the regex itself never matches.
+    return bool(_PER_YEAR.search(text) or _PER_A.search(text))
 
 
 def fold_label(raw) -> str:
