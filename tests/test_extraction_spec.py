@@ -112,3 +112,37 @@ def test_duplicate_parameter_uris_are_refused():
 def test_a_missing_file_names_the_path(tmp_path):
     with pytest.raises(SpecError, match=r"not found"):
         load(tmp_path / "nope.json")
+
+
+def test_a_subscript_two_is_the_same_spelling_as_the_digit():
+    """A plan prints "CO₂-Emissionen" with U+2082; every spec, schema and
+    ontology writes it with the digit. Casefold alone leaves the two strings
+    different, so 132 of Kassel's 204 emission readings were recorded as the
+    model's own judgement call over one character — and a reply that answers
+    with the document's spelling resolves to no class at all.
+    """
+    from docpipe.extraction.spec import fold_label
+    raw = _minimal()
+    axes = raw["parameters"][0]["axes"]
+    axes["carrier"] = {"vocabulary": {"OEO_00340066": ["CO2-Emissionen"]}}
+    axis = load(raw).parameters[0].axes["carrier"]
+    table = axis.label_to_uri()
+    assert table[fold_label("CO₂-Emissionen")] == "OEO_00340066"
+    assert table[fold_label("co2-emissionen")] == "OEO_00340066"
+    # It folds the two spellings and nothing else: a label that differs in a
+    # real character stays a different label.
+    assert fold_label("CO2 Emissionen") not in table
+    assert fold_label("CO2-Emissionen je Kopf") not in table
+
+
+def test_two_spellings_of_one_label_may_not_map_to_two_classes():
+    """The same fold, on the guard side: "CO₂-Emissionen" under one class and
+    "CO2-Emissionen" under another is the coin toss the load-time check
+    exists to refuse, and casefold alone let it through."""
+    raw = _minimal()
+    raw["parameters"][0]["axes"]["carrier"] = {"vocabulary": {
+        "OEO_00340066": ["CO2-Emissionen"],
+        "OEO_00140083": ["CO₂-Emissionen"]}}
+    with pytest.raises(SpecError) as excinfo:
+        load(raw)
+    assert "already maps to" in str(excinfo.value)

@@ -32,7 +32,7 @@ import re
 from dataclasses import dataclass, field
 from typing import Callable, Optional
 
-from .spec import Parameter
+from .spec import Parameter, fold_label
 
 TIER_TEXT = "text_located"
 TIER_VISUAL = "visual_source"
@@ -167,7 +167,7 @@ def _check_value(raw: dict, parameter: Parameter, flags: list):
         return None, Refusal(raw, f"a {parameter.value_type} parameter needs a "
                                   f"non-empty string value")
     if parameter.value_type == "category":
-        uri = parameter.value_to_uri().get(value.strip().casefold())
+        uri = parameter.value_to_uri().get(fold_label(value.strip()))
         if uri is None:
             # The model was handed the closed class list and still found
             # nothing that fits. That is a mapping gap to review, not a
@@ -176,7 +176,7 @@ def _check_value(raw: dict, parameter: Parameter, flags: list):
         out["value_uri"] = uri
         if wording:
             out["value_raw"] = wording
-            if wording.casefold() not in parameter.value_to_uri():
+            if fold_label(wording) not in parameter.value_to_uri():
                 flags.append(f"mapped:value:{wording}->{uri}")
     return out, None
 
@@ -337,7 +337,7 @@ def verify_tuple(raw: dict, parameter: Parameter, source_text: str, *,
             if given in axis.vocabulary:           # already a URI
                 uri = given
             else:
-                uri = axis.label_to_uri().get(str(given).casefold())
+                uri = axis.label_to_uri().get(fold_label(given))
             if uri is None:
                 # The model chooses the class from the list it was given, so
                 # a value outside that list means it found nothing fitting
@@ -359,7 +359,7 @@ def verify_tuple(raw: dict, parameter: Parameter, source_text: str, *,
                     # model made a judgement call, and those are flagged so
                     # a review sees every mapping the table did not decide.
                     resolved[f"{name}_raw"] = wording
-                    if wording.casefold() not in axis.label_to_uri():
+                    if fold_label(wording) not in axis.label_to_uri():
                         flags.append(f"mapped:{name}:{wording}->{uri}")
         elif axis.type == "text" or axis.dynamic:
             # No list to check against, so nothing to refuse: the coordinate

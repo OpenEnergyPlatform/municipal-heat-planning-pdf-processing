@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import tempfile
 import threading
 from dataclasses import dataclass, field
@@ -29,7 +30,7 @@ from pathlib import Path
 from typing import Callable, Optional
 
 from . import queries as queries_mod
-from .spec import Spec
+from .spec import Spec, fold_label
 from .fields import (CHOICE, NUMBER, READ, SAID_UNSTATED, UNANSWERED,
                      UNBACKED, UNSTATED)
 from .verify import (MIN_QUOTE_CHARS, Refusal, Verified, canonical_number,
@@ -436,6 +437,57 @@ def answer_in_quote(slot, given, wording: Optional[str], quote: str) -> bool:
     return flat(shown).casefold() in flat(quote).casefold()
 
 
+# Where one word ends and the next begins, for a language that writes ae
+# with an umlaut and joins nouns with a hyphen.
+_WORD_EDGE = re.compile(r"[^0-9A-Za-zÀ-ɏ]+")
+# Past this a "wording" is a sentence that happens to contain the label. The
+# longest spelling any kwp axis lists is 44 characters ("Gewerbe, Handel,
+# Dienstleistungen" and "Reduktion gegenueber einem Vergleichsjahr"), so 80
+# leaves room for a compound the spec did not foresee and refuses a footnote.
+MAX_WORDING_CHARS = 80
+
+
+def _tokens(text: str) -> list:
+    return [t for t in _WORD_EDGE.split(fold_label(text)) if t]
+
+
+def wording_names_option(slot, given, wording) -> bool:
+    """Does `value_raw` name the option the answer chose?
+
+    field.md rule 2 says the wording is what the mapping is checked against,
+    and until now nothing checked it. A reply could answer "Biogas" with the
+    wording "Klärgas" and the quote would verify -- the passage really does
+    say Klärgas -- while the graph carried Biogas on the strength of it.
+
+    Whole tokens, not substrings: "Gas" inside "Erdgas" is a different word,
+    and a containment test would call every carrier evidence for every other.
+    A wording longer than a label is not one either; measured on Kassel, the
+    rounding footnote was offered as `value_raw` 15 times.
+
+    This is a COUNT, not a refusal. 29 of Kassel's carrier readings map
+    Klärgas onto Biogas and 17 map "Holzige Festbrennstoffe" onto woody
+    biomass, and both are right: the model is allowed to decide that a
+    document's word belongs to a class the spec spells differently. What we
+    have no measurement of is how often it decides wrongly, and that is
+    exactly what this counter is for.
+    """
+    if slot.kind != CHOICE or not slot.options or not wording:
+        return True
+    if len(wording) > MAX_WORDING_CHARS:
+        return False
+    chosen = next((o for o in slot.options if fold_label(o.label)
+                   == fold_label(given)), None)
+    if chosen is None:
+        return True                 # not one of the options: another check's
+    said = _tokens(wording)
+    for spelling in (chosen.label,) + tuple(chosen.synonyms):
+        want = _tokens(spelling)
+        if want and any(said[i:i + len(want)] == want
+                        for i in range(len(said) - len(want) + 1)):
+            return True
+    return False
+
+
 def evidence_is_local(slot, found, own) -> bool:
     """May this passage be the evidence for a coordinate of THIS row?
 
@@ -506,7 +558,7 @@ def merge_field(rows: list, sources: list, slot, reply: Optional[dict],
         for label in group.get("rows") or ():
             pairs.append((label, group))
     by_label = {row.label: row for row in rows}
-    filled = unquoted = unbacked = unstated = raw_missing = 0
+    filled = unquoted = unbacked = unstated = raw_missing = raw_foreign = 0
     # Not just how many failed but which, and why. A model that is told "R7:
     # the passage you cited is in none of the sources" can fix R7; a model
     # that is told nothing repeats itself, and the same window is worth
@@ -602,6 +654,15 @@ def merge_field(rows: list, sources: list, slot, reply: Optional[dict],
         row.claim[slot.name] = given
         if wording:
             row.claim[f"{slot.name}_raw"] = wording
+            if not wording_names_option(slot, given, wording):
+                # The wording does not say the option that was chosen. Kept,
+                # counted and marked, because a mapping the spec did not
+                # foresee is the model doing its job and a mapping onto the
+                # wrong class is the failure this whole run is about -- and
+                # from one corpus run of these we can tell which is which
+                # without guessing at the ratio now.
+                row.claim[f"{slot.name}_raw_foreign"] = True
+                raw_foreign += 1
         elif slot.kind == CHOICE:
             # A choice without the words it was read from cannot be re-mapped
             # when the vocabulary moves: the URI is all that survives, and
@@ -620,7 +681,8 @@ def merge_field(rows: list, sources: list, slot, reply: Optional[dict],
             row.claim[f"{slot.name}_window"] = list(window)
         filled += 1
     return {"filled": filled, "unquoted": unquoted, "unbacked": unbacked,
-            "unstated": unstated, "raw_missing": raw_missing, "failed": failed}
+            "unstated": unstated, "raw_missing": raw_missing,
+            "raw_foreign": raw_foreign, "failed": failed}
 
 
 def open_rows(rows: list, slot) -> list:

@@ -70,6 +70,11 @@ def main(argv=None) -> int:
     filled_by_field = collections.Counter()
     unbacked_by_field = collections.Counter()
     drops_by_field = collections.Counter()
+    # A reading kept but not proved by its own wording, and a choice with no
+    # wording at all. Both are written per field request and neither was ever
+    # read: the first is the measurement that decides whether the wording
+    # check may start refusing, the second is what a later re-mapping needs.
+    wording = collections.Counter()
     documents = set()
 
     for rec in read(args.directory):
@@ -102,6 +107,8 @@ def main(argv=None) -> int:
                 filled_by_field[field] += n
             for field, n in (rec.get("unbacked_by") or {}).items():
                 unbacked_by_field[field] += n
+            for key in ("raw_missing", "raw_foreign"):
+                wording[key] += rec.get(key) or 0
         elif kind == "sweep":
             windows[rec.get("slot")].append(rec.get("windows") or 0)
         elif kind == "drop":
@@ -163,6 +170,10 @@ def main(argv=None) -> int:
         for field in sorted(set(filled_by_field) | set(unbacked_by_field)):
             print("    %-16s %7d / %7d" % (field, filled_by_field[field],
                                            unbacked_by_field[field]))
+    if any(wording.values()):
+        print("  Wortlaut: %d Auswahl(en) ohne value_raw, %d, deren value_raw "
+              "die gewaehlte Option nicht nennt"
+              % (wording["raw_missing"], wording["raw_foreign"]))
     if drops_by_field:
         print("  verworfen je Koordinate und Grund:")
         for (field, why), count in drops_by_field.most_common(args.top):

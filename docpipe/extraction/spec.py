@@ -61,6 +61,24 @@ def normalise_unit(raw) -> str:
     return re.sub(r"co2e(?!q)", "co2eq", s)
 
 
+def fold_label(raw) -> str:
+    """One spelling for a vocabulary label, so a list need not list them all.
+
+    NFKC and casefold, nothing else. It exists for one measured reason: a
+    plan prints "CO₂-Emissionen" with U+2082 and every spec, schema and
+    ontology writes "CO2-Emissionen" with the digit. Casefold alone leaves
+    those two strings different, so 132 of Kassel's 204 emission readings
+    were recorded as the model's own judgement call over one character, and
+    a reading that answers with the document's spelling resolves to no class
+    at all.
+
+    Word order, hyphens and plurals stay distinct. Those are real differences
+    between two labels, and folding them would map "CO2-Emissionen je Kopf"
+    onto "CO2-Emissionen".
+    """
+    return unicodedata.normalize("NFKC", str(raw)).casefold()
+
+
 class SpecError(ValueError):
     """A spec that must not be run with. Message names the offending field."""
 
@@ -116,11 +134,11 @@ class Axis:
     derive: Optional[dict] = None
 
     def label_to_uri(self) -> dict:
-        """Corpus label (casefolded) -> URI. Built once, used per tuple."""
+        """Corpus label (folded) -> URI. Built once, used per tuple."""
         out: dict = {}
         for uri, labels in (self.vocabulary or {}).items():
             for label in labels:
-                out[label.casefold()] = uri
+                out[fold_label(label)] = uri
         return out
 
 
@@ -160,11 +178,11 @@ class Parameter:
         return None
 
     def value_to_uri(self) -> dict:
-        """Corpus label (casefolded) -> URI, for a category parameter."""
+        """Corpus label (folded) -> URI, for a category parameter."""
         out: dict = {}
         for uri, labels in (self.vocabulary or {}).items():
             for label in labels:
-                out[label.casefold()] = uri
+                out[fold_label(label)] = uri
         return out
 
 
@@ -215,12 +233,14 @@ def _validate_axis(path: str, name: str, raw) -> Axis:
                     not all(isinstance(l, str) and l.strip() for l in labels):
                 _fail(f"{path}.{uri}", "labels must be a non-empty list of strings")
             for label in labels:
-                other = seen.get(label.casefold())
+                other = seen.get(fold_label(label))
                 if other and other != uri:
                     # One label mapping to two URIs would make every match a
                     # coin toss; better to refuse the spec than to guess later.
+                    # Folded, because "CO₂-Emissionen" under one class and
+                    # "CO2-Emissionen" under another IS that coin toss.
                     _fail(f"{path}.{uri}", f"label {label!r} already maps to {other}")
-                seen[label.casefold()] = uri
+                seen[fold_label(label)] = uri
     # "text" is what a coordinate looks like when the closed list lives
     # somewhere the spec cannot reach — the scenarios of ONE publication, for
     # instance, which differ per document. The wording is carried through and
@@ -335,11 +355,11 @@ def _validate_parameter(path: str, raw) -> Parameter:
                     _fail(f"{path}.vocabulary.{uri}",
                           "labels must be a non-empty list of strings")
                 for label in labels:
-                    other = seen.get(label.casefold())
+                    other = seen.get(fold_label(label))
                     if other and other != uri:
                         _fail(f"{path}.vocabulary.{uri}",
                               f"label {label!r} already maps to {other}")
-                    seen[label.casefold()] = uri
+                    seen[fold_label(label)] = uri
         elif vocabulary is not None or vocabulary_dynamic:
             _fail(f"{path}.vocabulary",
                   "only a category parameter carries a value vocabulary")
