@@ -79,3 +79,12 @@ Neben dem Wert steht immer der Wortlaut (`<achse>_raw`) und die Passage
 (`<achse>_quote`). Deshalb kostet eine gewachsene Optionsliste `--remap`
 statt eines Korpuslaufs, und der Stempel trägt je Parameter und je Achse
 einen Fingerabdruck, damit ein Lauf sieht, welche Frage sich geändert hat.
+
+Verglichen werden nur diese Schlüssel. Der Hash über die ganze Spec-Datei
+steht weiter im Stempel, damit jemand sagen kann, aus welcher Datei eine
+Ernte stammt, entscheidet aber nichts: er bewegt sich bei einem Kommentar,
+einer Einrückung, einem kg-Block, und verglichen überstimmt er jeden
+feineren Schlüssel. Ebenso hängt der Ankerschlüssel an den Fragen und nicht
+an den Dateibytes, sonst schriebe das Modell bei jeder Anmerkung alle Anker
+neu und der Korpus würde aus anderen Passagen gelesen. Nur wenn der Stempel
+die feinen Schlüssel gar nicht hat, entscheidet der Dateihash wieder.

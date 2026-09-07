@@ -907,7 +907,7 @@ def test_the_anchors_are_frozen_so_a_restart_searches_the_same_way(tmp_path, mon
 
     import openai
     monkeypatch.setattr(openai, "OpenAI", Client)
-    store, key = tmp_path / "anchors.json", runner.anchors_key("sha")
+    store, key = tmp_path / "anchors.json", runner.anchors_key(SPEC)
 
     first = runner.make_anchors(SPEC, store=store, key=key)
     wanted = len(runner.anchor_targets(SPEC))
@@ -1253,7 +1253,7 @@ def test_the_kwp_profile_freezes_anchors_its_own_spec_asks_for():
     # The key a run reads its own anchors.json back under has to move with the
     # file, or changing it leaves every existing output directory on the old
     # set with no line anywhere saying so.
-    assert runner.anchors_key("sha", sha) != runner.anchors_key("sha")
+    assert runner.anchors_key(spec, sha) != runner.anchors_key(spec)
 
 
 def test_a_document_no_reply_ever_came_back_for_is_not_stamped(tmp_path, monkeypatch):
@@ -1346,10 +1346,150 @@ def test_a_stamp_from_before_the_detail_is_stale_in_all_of_it(tmp_path,
     old.write_text(json.dumps(runner._stamp_current("sha-1", "anker")),
                    encoding="utf-8")
     changed = runner.stale(old, runner._stamp_current("sha-1", "anker", SPEC))
-    assert changed and all(c.startswith(("parameter/", "axis/"))
-                           for c in changed), changed
+    assert changed and all(c.startswith(("parameter/", "value/", "axis/",
+                                         "slot/")) for c in changed), changed
     # Nothing else moved: the coarse keys still match.
     assert "spec" not in changed and "model" not in changed
+
+
+def _spec(**changes):
+    """SPEC again, with something changed. Written out rather than deep-copied
+    so a reader can see which words the model would be given."""
+    parameter = {
+        "uri": changes.get("uri", "OEO_00050016"),
+        "label": changes.get("label", "Endenergieverbrauch"),
+        "description": changes.get(
+            "description",
+            "Endenergieverbrauch je Energieträger, Sektor und Jahr, "
+            "wie im Plan bilanziert."),
+        "unit_target": "OEO_00050008",
+        "units_accepted": {"MWh/a": 1.0},
+        "axes": {"carrier": {"vocabulary": dict(
+                     {"OEO_00000292": ["Erdgas", "Gas"]},
+                     **({"OEO_00000203": ["Klaergas"]}
+                        if changes.get("more_carriers") else {}))},
+                 "year": dict({"type": "int"},
+                              **({"question": changes["year_question"]}
+                                 if "year_question" in changes else {}))},
+        "example": {"source": "| Erdgas | 42.005 | MWh/a | im Jahr 2020 |",
+                    "tuples": [{"value": 42005, "unit_raw": "MWh/a"}]},
+    }
+    if "kg" in changes:
+        parameter["kg"] = changes["kg"]
+    body = {"parameters": [parameter]}
+    if "parameter_question" in changes:
+        body["parameter_question"] = changes["parameter_question"]
+    if changes.get("second"):
+        body["parameters"].append({**parameter, "uri": "OEO_00010079",
+                                   "label": "Treibhausgasemissionen"})
+    return load(body)
+
+
+def test_a_spec_edit_no_question_is_asked_through_costs_nothing(tmp_path,
+                                                                monkeypatch):
+    """A graph block, a comment, a reindent. The sha of the whole file moves
+    and not one question does.
+
+    Compared, that sha outvotes every finer key: one added byte and all 991
+    stamped documents report stale together, which is about 93 GPU hours over
+    a word no model is ever shown. The ontology this spec is written against
+    keeps moving, so the bill would come again and again -- and the per-
+    question keys were written to answer exactly this and could not, because
+    the coarse key sat next to them and was compared.
+    """
+    monkeypatch.setattr(runner.prompts, "versions",
+                        lambda ids: {i: "v1" for i in ids})
+    plain, annotated = _spec(), _spec(kg={"node": "heatplan", "role": "parent"})
+    stamp = tmp_path / "plan.stamp.json"
+    stamp.write_text(json.dumps(runner._stamp_current(
+        "sha-vorher", runner.anchors_key(plain), plain)), encoding="utf-8")
+
+    now = runner._stamp_current("sha-nachher", runner.anchors_key(annotated),
+                                annotated)
+    assert runner.stale(stamp, now) == [], (
+        "the graph block reaches no model, so it re-reads no document")
+    assert now["spec"] == "sha-nachher", (
+        "and the file is still recorded, or nobody can say which one it was")
+
+
+def test_a_changed_question_still_stales_and_names_itself(tmp_path,
+                                                          monkeypatch):
+    """The other half. Ignoring the coarse key is only safe while the finer
+    ones cover everything a document is asked through, so the case that must
+    still fire is the one where a coordinate really was asked differently."""
+    monkeypatch.setattr(runner.prompts, "versions",
+                        lambda ids: {i: "v1" for i in ids})
+    before = _spec()
+    stamp = tmp_path / "plan.stamp.json"
+    stamp.write_text(json.dumps(runner._stamp_current(
+        "sha-1", runner.anchors_key(before), before)), encoding="utf-8")
+
+    after = _spec(year_question="Auf welches Bilanzjahr bezieht sich der Wert?")
+    changed = runner.stale(stamp, runner._stamp_current(
+        "sha-1", runner.anchors_key(after), after))
+    assert "axis/OEO_00050016/year" in changed, changed
+    assert "parameter/OEO_00050016" not in changed, (
+        "and only it: the value's own question did not move")
+
+
+def test_without_the_detail_the_file_sha_decides_again(tmp_path, monkeypatch):
+    """A caller with no spec to hand writes the old, coarse stamp. For that
+    one the file sha is all there is, and dropping it would make every such
+    document read as current forever."""
+    monkeypatch.setattr(runner.prompts, "versions",
+                        lambda ids: {i: "v1" for i in ids})
+    stamp = tmp_path / "plan.stamp.json"
+    stamp.write_text(json.dumps(runner._stamp_current("sha-1", "anker")),
+                     encoding="utf-8")
+    assert runner.stale(stamp, runner._stamp_current("sha-2", "anker")) \
+        == ["spec"]
+
+
+def test_a_dropped_parameter_is_seen_by_the_one_key_that_can(tmp_path,
+                                                             monkeypatch):
+    """Every other key is written from what the spec still has, and a stamp is
+    compared against those. So a parameter that is gone is in no key at all --
+    except the one that carries the list the model chooses from."""
+    monkeypatch.setattr(runner.prompts, "versions",
+                        lambda ids: {i: "v1" for i in ids})
+    two = _spec(second=True)
+    stamp = tmp_path / "plan.stamp.json"
+    stamp.write_text(json.dumps(runner._stamp_current(
+        "sha-1", runner.anchors_key(two), two)), encoding="utf-8")
+
+    one = _spec()
+    changed = runner.stale(stamp, runner._stamp_current(
+        "sha-1", runner.anchors_key(one), one))
+    assert "slot/parameter" in changed, changed
+    assert not [k for k in changed
+                if k.startswith(("parameter/", "value/", "axis/"))], (
+        "nothing per parameter can report a parameter that is not there")
+
+
+def test_the_anchor_key_follows_the_questions_and_only_them(monkeypatch):
+    """The anchors decide which passages the whole corpus is read from, and
+    two calls in one job shared 0 of 18 strings. Keyed on the sha of the spec
+    file, every edit anywhere in it missed the cache and had the model rewrite
+    all nineteen sets -- so a comment changed the corpus's retrieval.
+
+    A new energy carrier is the case that matters: an anchor is a sentence
+    written from a label, a description and a wording, and a grown list
+    changes none of the three. That is also what a new OEO release brings, by
+    the dozen. The file case is the same property one level up and is not
+    asserted here, because a key built from the spec object cannot see a
+    comment in the file and the assertion could never fail.
+    """
+    monkeypatch.setattr(runner.prompts, "versions",
+                        lambda ids: {i: "v1" for i in ids})
+    assert runner.anchors_key(_spec()) \
+        == runner.anchors_key(_spec(more_carriers=True))
+    for other in (_spec(label="Endenergiebedarf"),
+                  _spec(description="Etwas anderes, in genügend Worten "
+                                    "gesagt damit die Spec es annimmt."),
+                  _spec(year_question="Auf welches Bilanzjahr?")):
+        assert runner.anchors_key(_spec()) != runner.anchors_key(other), (
+            "an anchor is written from the label, the description and the "
+            "question, so each of them moves it")
 
 
 def test_the_written_summary_is_judged_by_the_specs_own_rule(tmp_path,

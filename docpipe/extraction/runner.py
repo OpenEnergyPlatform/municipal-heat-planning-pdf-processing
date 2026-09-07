@@ -547,9 +547,17 @@ def fill_dynamic_axes(spec: Spec, vocabularies: Optional[dict]) -> Spec:
 ANCHOR_SCHEMA = "per-question-1"
 
 
-def anchors_key(spec_sha: str, frozen_sha: str = "") -> str:
-    """What an anchor set depends on: the spec, the anchor prompt, the model,
-    and whatever the profile froze.
+def anchors_key(spec: Spec, frozen_sha: str = "") -> str:
+    """What an anchor set depends on: the questions it is written for, the
+    anchor prompt, the model, and whatever the profile froze.
+
+    The questions, not the sha of the spec file. An anchor is a sentence
+    written from one question's label, description and wording, so those are
+    what it depends on; a comment, an indent or a graph annotation elsewhere
+    in the file is not. Keyed on the file, every such edit missed the cache,
+    had the model rewrite all nineteen sets, and thereby changed which
+    passages the corpus is read from -- two calls in one job shared 0 of 18
+    strings. The ontology work produces those edits by the dozen.
 
     The frozen part belongs in the key because a run reads its own
     anchors.json back. Without it, changing the profile's file would leave
@@ -558,7 +566,9 @@ def anchors_key(spec_sha: str, frozen_sha: str = "") -> str:
     """
     import hashlib
     versions = prompts.versions((ANCHORS_PROMPT_ID,))
-    raw = (f"{spec_sha}|{versions.get(ANCHORS_PROMPT_ID)}|{LLM_MODEL}"
+    targets = json.dumps(anchor_targets(spec), ensure_ascii=False,
+                         sort_keys=True, separators=(",", ":"))
+    raw = (f"{targets}|{versions.get(ANCHORS_PROMPT_ID)}|{LLM_MODEL}"
            f"|{ANCHOR_SCHEMA}|{frozen_sha}")
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16]
 
@@ -2402,16 +2412,34 @@ def _stamp_current(spec_sha: str, anchors_sha: str = "",
     word. The ontology this spec is written against keeps moving, so that
     bill would come again and again. With a key per parameter and per axis,
     a run can see that only `axis/energy_consumption/carrier` changed and
-    open only that coordinate. Reading it that way is a later mode; writing
-    it has to start now, because a stamp that does not carry the detail
+    open only that coordinate. `stale` reads it that way and does not compare
+    `spec` at all, which is why the fine keys have to be written even for a
+    run that never asks for them: a stamp that does not carry the detail
     cannot be asked for it afterwards.
 
     Without a spec the stamp keeps its old shape. That is for callers that
-    have no spec to hand, and it is a coarser stamp, not a wrong one.
+    have no spec to hand, and it is a coarser stamp, not a wrong one -- and
+    with nothing finer to go on `spec` decides again.
     """
     return {"spec": spec_sha, "model": LLM_MODEL, "anchors": anchors_sha,
             **prompts.versions(PROMPT_IDS),
             **(fingerprints(spec) if spec is not None else {})}
+
+
+# The keys a stamp records so a reader can place a harvest, and does not
+# decide by. There is one: the sha of the whole spec file. It moves on a
+# comment, an indent, a reordering, a graph annotation -- none of which any
+# question is asked through, and all of which the ontology work produces by
+# the dozen. Compared, it outvotes every finer key: one added byte and all
+# 991 stamped documents report stale together, which is the bill the finer
+# keys exist to avoid. Recorded, it still says which file a harvest came
+# from, which is what it is good for.
+RECORDED_NOT_COMPARED = ("spec",)
+
+# What a run really asks a document through, one key per question and per
+# answer space. Their presence is what licenses ignoring `spec`: with nothing
+# finer in the stamp there is nothing else to go on.
+QUESTION_KEYS = ("parameter/", "value/", "axis/", "slot/")
 
 
 def stale(stamp_path: Path, current: dict) -> list:
@@ -2421,6 +2449,13 @@ def stale(stamp_path: Path, current: dict) -> list:
     makes a stamp from before the per-parameter keys read as fully stale: it
     cannot vouch for a coordinate it never recorded, and pretending otherwise
     is how a document keeps a harvest nobody can place.
+
+    What it does NOT count is the whole-file sha, once there are per-question
+    keys to go on. That is the point of them: a change no question is asked
+    through must cost nothing. Writing a graph block for all fourteen
+    scenarios parameters moves `spec` and not one question -- measured -- and
+    a run that re-read the corpus over it would be re-reading it over a
+    comment.
     """
     if not stamp_path.is_file():
         return sorted(current)
@@ -2428,7 +2463,10 @@ def stale(stamp_path: Path, current: dict) -> list:
         stored = json.loads(stamp_path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
         return sorted(current)
-    return sorted(k for k, v in current.items() if stored.get(k) != v)
+    asked = [k for k in current
+             if not (k in RECORDED_NOT_COMPARED
+                     and any(o.startswith(QUESTION_KEYS) for o in current))]
+    return sorted(k for k in asked if stored.get(k) != current[k])
 
 
 def run_document(document_id: int, name: str, out_dir: Path, spec: Spec,
@@ -2864,7 +2902,7 @@ def main(argv: Optional[list] = None) -> int:
         log.info("extraction: slice gate on %s — a row that falls out here "
                  "is not asked for its other coordinates",
                  ", ".join(sorted(slice_gate)))
-    anchors_sha = anchors_key(spec_sha, frozen_sha)
+    anchors_sha = anchors_key(spec, frozen_sha)
     templates = [line for line in
                  prompts.load(QUERIES_PROMPT_ID).text.splitlines()
                  if line.strip() and not line.lstrip().startswith("#")]

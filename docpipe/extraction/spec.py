@@ -571,15 +571,43 @@ def value_fingerprint(parameter: "Parameter") -> str:
     })
 
 
+def parameter_slot_fingerprint(spec: "Spec") -> str:
+    """The one coordinate that belongs to no parameter: which quantity a
+    number is.
+
+    It is asked like every other coordinate (`fields.parameter_slot`), with
+    its own question and its own closed list, and that list is the parameters
+    themselves. So it needs its own key, and it is also the only key that
+    moves when a parameter is REMOVED: every other key is written from what
+    the spec still has, and a stamp is compared against those, so a dropped
+    parameter would otherwise leave every document reading current while the
+    model would now be choosing from a shorter list.
+
+    The uri and the label, because both reach the model. The description does
+    not -- it is in `parameter/<uri>` instead, where the question that uses it
+    is.
+    """
+    return _digest({
+        "question": spec.parameter_question,
+        "options": sorted([p.uri, p.label] for p in spec.parameters),
+    })
+
+
 def fingerprints(spec: "Spec") -> dict:
-    """{key: sha} for every parameter and axis of a spec.
+    """{key: sha} for every question of a spec: parameter, answer space, axis.
 
     Flat, and the keys read as what they are: the stamp is compared key by
     key, and "parameter/<uri>" or "axis/<uri>/<name>" is what a run should be
     able to say changed. One nested block would only ever report that
     something inside it moved.
+
+    Together they have to cover everything a document is asked through, or
+    `runner.stale` -- which ignores the whole-file sha once these are present
+    -- would call a document current over a changed question. That is what
+    "slot/parameter" is doing here: without it the spec's own question and
+    the list it offers would be in no key at all.
     """
-    out = {}
+    out = {"slot/parameter": parameter_slot_fingerprint(spec)}
     for parameter in spec.parameters:
         out[f"parameter/{parameter.uri}"] = parameter_fingerprint(parameter)
         value = value_fingerprint(parameter)

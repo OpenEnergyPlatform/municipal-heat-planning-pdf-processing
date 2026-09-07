@@ -407,3 +407,73 @@ def test_a_category_parameters_definitions_are_part_of_its_question():
     # And the parameter itself does not move with its list.
     assert (spec_mod.parameter_fingerprint(meant.parameters[0])
             == spec_mod.parameter_fingerprint(other.parameters[0]))
+
+
+def _two(question=None, label="Treibhausgasemissionen", second=True):
+    """A spec that offers one parameter or two, with the one line that asks
+    which of them a number belongs to."""
+    energy = {
+        "uri": "energy", "label": "Endenergie",
+        "description": "Endenergieverbrauch je Energietraeger, Sektor und "
+                       "Jahr, wie im Plan bilanziert.",
+        "value_type": "float", "unit_target": "kWh",
+        "units_accepted": {"kWh/a": 0.001, "MWh/a": 1.0},
+        "example": {"source": "| Erdgas | 42.005 | MWh/a | im Jahr 2020 |",
+                    "tuples": [{"value": 42005, "unit_raw": "MWh/a"}]},
+        "axes": {},
+    }
+    emission = {**energy, "uri": "emission", "label": label,
+                "unit_target": "t", "units_accepted": {"t CO2-Aeq/a": 1.0},
+                "description": "Treibhausgasemissionen je Traeger und Jahr, "
+                               "wie im Plan bilanziert.",
+                "example": {"source": "| Erdgas | 8.400 | t CO2-Aeq/a |",
+                            "tuples": [{"value": 8400,
+                                        "unit_raw": "t CO2-Aeq/a"}]}}
+    body = {"parameters": [energy] + ([emission] if second else [])}
+    if question:
+        body["parameter_question"] = question
+    return spec_mod.load(body)
+
+
+def test_the_question_that_belongs_to_no_parameter_has_a_key_of_its_own():
+    """Which quantity a number is, is asked like every other coordinate: one
+    question, one closed list, one quote. Its list is the parameters
+    themselves, so nothing per parameter can carry it.
+
+    It is also the only key that can see a parameter DISAPPEAR. Every other
+    key is written from what the spec still has and the stamp is compared
+    against those, so a dropped parameter would leave every document reading
+    current while the model now chooses from a shorter list. That mattered
+    the moment `stale` stopped comparing the sha of the whole file, which was
+    what used to catch it.
+    """
+    asked = "Welche Kennzahl steht in dieser Zeile?"
+    base = spec_mod.parameter_slot_fingerprint(_two(asked))
+
+    # The wording of the question.
+    assert base != spec_mod.parameter_slot_fingerprint(
+        _two("Welche Groesse ist hier gemeint?"))
+    # A label, because that is what the model picks from.
+    assert base != spec_mod.parameter_slot_fingerprint(
+        _two(asked, label="CO2-Emissionen"))
+    # The list itself.
+    dropped = spec_mod.fingerprints(_two(asked, second=False))
+    assert dropped["slot/parameter"] != base
+    assert not [k for k in dropped
+                if k.startswith(("parameter/", "value/", "axis/"))
+                and k not in spec_mod.fingerprints(_two(asked))], (
+        "and no per-parameter key reports it, which is why this one exists")
+
+
+def test_a_parameters_description_is_not_in_the_slot_key():
+    """It is in `parameter/<uri>`, where the question that shows it is. Two
+    keys moving for one edit says nothing about which coordinate to redo, and
+    a slot key that moves with everything is the whole-file sha again."""
+    asked = "Welche Kennzahl steht in dieser Zeile?"
+    wordier = _two(asked)
+    wordier.parameters[0].description = ("Endenergieverbrauch je Traeger, "
+                                         "anders gesagt und laenger.")
+    assert (spec_mod.parameter_slot_fingerprint(wordier)
+            == spec_mod.parameter_slot_fingerprint(_two(asked)))
+    assert (spec_mod.parameter_fingerprint(wordier.parameters[0])
+            != spec_mod.parameter_fingerprint(_two(asked).parameters[0]))

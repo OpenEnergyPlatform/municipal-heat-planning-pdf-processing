@@ -2728,7 +2728,7 @@
   "$id": "https://openenergyplatform.org/schema/mhpkg/extraction/stamp",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
-  "description": "Any key that differs from the current run makes the document stale and it is harvested again. Withheld when the harvest did not happen. The parameter/ and axis/ keys say WHICH question changed, so a moving ontology costs the coordinates it touched rather than a full re-read of the corpus; a stamp written before they existed carries none of them and is therefore stale in all of them.",
+  "description": "A key that differs from the current run makes the document stale and it is harvested again -- every key but `spec`, which is recorded so a reader can say which file a harvest came from and is not compared. Withheld when the harvest did not happen. The parameter/, value/, axis/ and slot/ keys say WHICH question changed, so a moving ontology costs the coordinates it touched rather than a full re-read of the corpus; a stamp written before they existed carries none of them, and for it `spec` decides again, so it is stale in all of them.",
   "patternProperties": {
    "^axis/[^/]+/[^/]+$": {
     "description": "What this coordinate asks and what it may answer: the question, the evidence rule, and the offered list with its spellings and its definitions. Everything the model sees for this axis, and nothing else.",
@@ -2745,6 +2745,11 @@
     "pattern": "^[0-9a-f]{64}$",
     "type": "string"
    },
+   "^slot/parameter$": {
+    "description": "The one coordinate that belongs to no parameter: which quantity a number is. Its question and the parameters it offers, uri and label. Also the only key that moves when a parameter is dropped.",
+    "pattern": "^[0-9a-f]{64}$",
+    "type": "string"
+   },
    "^value/[^/]+$": {
     "description": "The list a category parameter answers from. Its own key, because a moved option can be re-mapped from the wording the harvest kept while a rewritten question cannot.",
     "pattern": "^[0-9a-f]{64}$",
@@ -2753,7 +2758,7 @@
   },
   "properties": {
    "anchors": {
-    "description": "spec sha and frozen-anchor sha together; empty when anchors were off",
+    "description": "The questions the anchors were written for, the anchor prompt, the model and the profile's frozen set, together. The anchors decide which passages a document was read from, so a document read under one set is not the same result as one read under another. Empty when anchors were off.",
     "pattern": "^([0-9a-f]{16})?$",
     "type": "string"
    },
@@ -2769,7 +2774,7 @@
     ]
    },
    "spec": {
-    "description": "sha256 of extraction_spec.json",
+    "description": "sha256 of extraction_spec.json. A record, not a verdict: it moves on a comment, an indent or a graph annotation, none of which any question is asked through. Compared, it would outvote every key below it.",
     "pattern": "^[0-9a-f]{64}$",
     "type": "string"
    }
