@@ -952,6 +952,87 @@ def test_one_object_is_read_and_trailing_anything_is_not(raw, expect):
     assert runner._loads_object(raw) == expect
 
 
+@pytest.mark.parametrize("raw,expect", [
+    # The measured shape: five levels open, four closed, finish=stop. All 20
+    # of the unreadable replies the first corpus group showed ended in }]}}.
+    ('{"fields": {"year": {"groups": [{"rows": ["R1"], "value": 2030, '
+     '"quote": "bis 2030"}]}}',
+     {"fields": {"year": {"groups": [{"rows": ["R1"], "value": 2030,
+                                      "quote": "bis 2030"}]}}}),
+    ('{"a": [1, 2', {"a": [1, 2]}),
+    # Brackets inside a quote are text, an escaped quote does not end it.
+    ('{"quote": "Tabelle {3] zeigt", "a": 1', {"quote": "Tabelle {3] zeigt", "a": 1}),
+    ('{"q": "er sagte \\"ja\\"", "n": 1', {"q": 'er sagte "ja"', "n": 1}),
+    # Nothing to close, and nothing invented.
+    ('{"a": 1}', {"a": 1}),
+    ('{"a": "unterminated', None),
+    ('{"a": 1]', None),
+    ('gar kein json', None),
+])
+def test_a_reply_short_of_its_closers_is_closed_when_asked(raw, expect):
+    assert runner._loads_object(raw, close=True) == expect
+    if expect is not None and raw != '{"a": 1}':
+        assert runner._loads_object(raw) is None, "only when asked"
+
+
+def _stub_client(monkeypatch, replies, finish):
+    seen = []
+
+    class _Msg:
+        def __init__(self, content):
+            self.content = content
+            self.reasoning_content = ""
+
+    class _Choice:
+        def __init__(self, content):
+            self.message = _Msg(content)
+            self.finish_reason = finish
+
+    class _Resp:
+        def __init__(self, content):
+            self.choices = [_Choice(content)]
+            self.usage = None
+
+    queue = iter(replies)
+
+    class _Client:
+        class chat:
+            class completions:
+                @staticmethod
+                def create(**kw):
+                    seen.append(kw["messages"])
+                    return _Resp(next(queue))
+
+    monkeypatch.setattr(runner, "_client", lambda: _Client())
+    monkeypatch.setattr(runner.time, "sleep", lambda s: None)
+    return seen
+
+
+def test_a_stopped_reply_one_brace_short_is_read_on_the_first_attempt(monkeypatch):
+    """1,546 first attempts, 965 second, 947 third: the retry did not help,
+    and every one of those cost the row a window."""
+    from docpipe.extraction import fields
+    short = '{"fields": {"year": {"answers": {"R1": {"value": 2030}}}}'
+    seen = _stub_client(monkeypatch, [short, '{"answers": {}}'], "stop")
+    ask = runner.make_field_asker()
+    slot = fields.Slot(name="year", kind=fields.NUMBER, question="Welches Jahr?")
+    out = ask([], [], slot)
+    assert out == {"fields": {"year": {"answers": {"R1": {"value": 2030}}}}}
+    assert len(seen) == 1, "closed, not retried"
+
+
+def test_a_reply_cut_off_at_the_ceiling_is_not_closed(monkeypatch):
+    """Cut mid-number, closed, it would pass as complete with a wrong value."""
+    from docpipe.extraction import fields
+    short = '{"fields": {"year": {"answers": {"R1": {"value": 20'
+    seen = _stub_client(monkeypatch, [short, '{"answers": {}}'], "length")
+    ask = runner.make_field_asker()
+    slot = fields.Slot(name="year", kind=fields.NUMBER, question="Welches Jahr?")
+    out = ask([], [], slot)
+    assert out == {"answers": {}}
+    assert len(seen) == 2, "a cut-off reply is still retried"
+
+
 def test_an_unreadable_reply_is_sent_back_with_the_reason(monkeypatch):
     """A model error goes to the model, like a verification failure does.
 

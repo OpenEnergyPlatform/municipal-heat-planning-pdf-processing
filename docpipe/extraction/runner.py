@@ -805,7 +805,45 @@ def _client():
                   timeout=LLM_TIMEOUT, max_retries=0)
 
 
-def _loads_object(raw_text: str) -> Optional[dict]:
+def _close_open_brackets(text: str) -> str:
+    """The closers a reply stopped short of, appended. Delimiters only.
+
+    Measured on the first corpus group under the multi-field request: 1,546
+    of roughly 8,000 five-field replies ended in `}]}}` where `}]}}}` was
+    due. The model closes the last field and forgets the object around them,
+    every time with finish=stop, and told to try again it repeated it 62% and
+    then 98% of the time. No content is added: a bracket inside a string is
+    text, a reply that stops inside a string is left as it is, and a closer
+    that does not match what is open is somebody else's shape.
+    """
+    start = text.find("{")
+    if start == -1:
+        return text
+    stack: list = []
+    in_string = escaped = False
+    for ch in text[start:]:
+        if in_string:
+            if escaped:
+                escaped = False
+            elif ch == "\\":
+                escaped = True
+            elif ch == '"':
+                in_string = False
+            continue
+        if ch == '"':
+            in_string = True
+        elif ch in "{[":
+            stack.append("}" if ch == "{" else "]")
+        elif ch in "}]":
+            if not stack or stack[-1] != ch:
+                return text
+            stack.pop()
+    if in_string or not stack:
+        return text
+    return text + "".join(reversed(stack))
+
+
+def _loads_object(raw_text: str, close: bool = False) -> Optional[dict]:
     """The JSON object in a reply, whatever it is wrapped in.
 
     The fallback used to be a greedy {.*} span, which is the one shape that
@@ -830,7 +868,16 @@ def _loads_object(raw_text: str) -> Optional[dict]:
         try:
             data, _end = _DECODER.raw_decode(text, start)
         except json.JSONDecodeError:
-            return None
+            # *close* is the caller saying the model stopped on its own: a
+            # reply cut off at the token ceiling may end after a complete
+            # value that is not the whole value, and closed it would pass.
+            closed = _close_open_brackets(text) if close else text
+            if closed == text:
+                return None
+            try:
+                data, _end = _DECODER.raw_decode(closed, start)
+            except json.JSONDecodeError:
+                return None
     return data if isinstance(data, dict) else None
 
 
@@ -1551,10 +1598,19 @@ def make_field_asker(image_root: Optional[Path] = None) -> Callable:
                 reply = response.choices[0]
                 _observe_usage(getattr(response, "usage", None))
                 answer = _loads_object(reply.message.content)
+                closed = False
+                if answer is None and reply.finish_reason == "stop":
+                    answer = _loads_object(reply.message.content, close=True)
+                    closed = answer is not None
                 if answer is None:
                     answer = _loads_object(
                         getattr(reply.message, "reasoning_content", None))
                 if isinstance(answer, dict):
+                    if closed:
+                        # Counted, not hidden: the trace says how often the
+                        # reply had to be closed for it.
+                        trace.event("error", document_id, where="field",
+                                    kind="closed", slot=name, attempt=attempt)
                     return answer
                 log.warning("   field %s attempt %d: unreadable reply%s",
                             name, attempt, _unparsable(reply))
