@@ -89,7 +89,11 @@
           },
           "required": false,
           "question": "Welche Größe ist diese Zahl? Das ist die wichtigste Entscheidung des Tupels, denn sie bestimmt, als welche Klasse der Wert im Graphen steht. Entscheide nach der Definition der Klasse, nicht nach der Ähnlichkeit der Wörter. Die Bezeichnung steht in der Zeile, im Spaltenkopf, in der Blocküberschrift oder im Titel der eigenen Tabelle. \"final energy consumption value\" ist definiert als die an Endverbraucher gelieferte und dort verbrauchte Energie. Darunter fällt BEIDES, was ein Plan Verbrauch nennt und was er Bedarf nennt: in einem Szenario ist nichts gemessen, jede Zahl ist gerechnet, und die Definition spricht nicht von Messung. Endenergieverbrauch, Endenergiebedarf, Wärmebedarf und ein zu deckender Wärmebedarf sind also diese Klasse. \"primary energy consumption value\" ist die Bilanz vor der Umwandlung. Nutzwärme, Heizwärme, Raumwärme und Nutzenergie sind dagegen NICHT Endenergie, sondern die Wärme hinter dem Erzeuger: \"out:useful_energy\", auch im Zielszenario. Ein Anteil in Prozent und ein Wert je Fläche oder Kopf sind eigene Einträge und keine Verbrauchsmenge.",
-          "evidence": "local"
+          "evidence": "local",
+          "kg": {
+            "role": "type",
+            "note": "The class of the value node itself (rdf:type). An out:* answer is a deliberate non-class and mints no node."
+          }
         },
         "aggregation": {
           "vocabulary": {
@@ -125,6 +129,12 @@
           "derive": {
             "from": "unit",
             "value": "OEO_00140070"
+          },
+          "kg": {
+            "role": "edge",
+            "predicate": "OEO_00390023",
+            "label": "has aggregation type",
+            "note": "Object is a named individual of OEO_00140068 aggregation type. Derived from the unit, never asked: every accepted unit of both parameters is an extensive amount."
           }
         },
         "carrier": {
@@ -248,7 +258,13 @@
             ]
           },
           "question": "Welcher Energieträger? Die Bezeichnung steht in der Zeilenbeschriftung, im Spaltenkopf oder in der Blocküberschrift, fast nie in der Schreibweise der Klassenliste: \"Gas H\" und \"Erdgas (netzgebunden)\" meinen die Klasse Erdgas, \"Nahwärme\" und \"Wärmenetz\" die Klasse Fernwärme. Eine Summenzeile (\"Summe\", \"Gesamt\", \"alle Energieträger\") ist \"out:total\", eine Restposition (\"Sonstige\", \"Andere\") ist \"out:other\". Passt fachlich weder eine Klasse noch einer dieser Einträge, etwa weil in der Spalte ein Gebäudetyp steht, dann lass die Zeile weg.",
-          "evidence": "own"
+          "evidence": "own",
+          "kg": {
+            "role": "edge",
+            "predicate": "OEO_00000523",
+            "label": "covers energy carrier",
+            "note": "Object is an OEO class (punning). The edge is dropped, and the value kept, for the nine classes OEO does not place under energy carrier -- district heat, electricity, solar thermal, geothermal and the ambient heat sources."
+          }
         },
         "sector": {
           "vocabulary": {
@@ -288,12 +304,25 @@
             ]
           },
           "question": "Welcher Verbrauchssektor? Die Bezeichnung steht in der Zeilenbeschriftung, im Spaltenkopf oder in der Blocküberschrift DERSELBEN Tabelle: \"Wohnen\" und \"Wohngebäude\" meinen die Klasse Private Haushalte, \"GHD/Kommune\", \"Gewerbe\" und \"wirtschaftlich genutzte Gebäude\" die Klasse GHD. Ein GEBIET ist kein Sektor: \"Gesamtstadt\", \"Stadtgebiet\", \"Gemeinde\" und \"Plangebiet\" sagen, WO die Zahl gilt, nicht für welchen Verbraucher, und sie sind auch keine Summe über die Sektoren. Eine Zeile, die ausdrücklich über alle Sektoren summiert (\"Summe\", \"Gesamt\", \"insgesamt\" als Zeilen- oder Spaltenkopf), ist \"out:total\". Hat die eigene Tabelle keine Sektorspalte und nennt ihr Titel keinen Sektor, dann ist das keine Klasse, sondern eine fehlende Angabe: antworte mit \"out:unstated\".",
-          "evidence": "own"
+          "evidence": "own",
+          "kg": {
+            "role": "edge",
+            "predicate": "OEO_00000505",
+            "label": "covers sector",
+            "note": "Object is an OEO sector class."
+          }
         },
         "year": {
           "type": "int",
           "question": "Für welches Kalenderjahr gilt diese Jahressumme? Vierstellig. Das Jahr steht fast nie in der Zeile der Zahl selbst. Sieh in dieser Reihenfolge nach: (1) die Kopfzelle der Spalte, in der die Zahl steht, (2) der Titel der eigenen Tabelle, (3) der Satz, der die Tabelle in ihrem Abschnitt ankündigt (\"Für das Jahr 2040 ergeben sich die in den nachfolgenden Tabellen zusammengestellten Kennzahlen\"), (4) die Überschrift des Abschnitts. Das Jahr im Titel einer ANDEREN Tabelle gilt nicht, auch wenn dieser Titel im selben Abschnitt steht. Nennt die Quelle einen Zeitraum statt eines Jahres (\"Durchschnittswert der Jahre 2022-2024\"), dann gehört das LETZTE Jahr in value und der Zeitraum wörtlich in value_raw.",
-          "evidence": "local"
+          "evidence": "local",
+          "kg": {
+            "role": "edge",
+            "predicate": "OEO_00020440",
+            "label": "has scenario year value",
+            "datatype": "xsd:integer",
+            "note": "The calendar year the aggregation is integrated over, not a label. A unit without a per-year marker carries the flag period:annual_in_quote or period:unstated."
+          }
         },
         "scenario": {
           "vocabulary": {
@@ -327,7 +356,17 @@
           },
           "required": false,
           "question": "Auf welchen Zustand bezieht sich der Wert? Der Bezug steht selten in der Zeile selbst, sondern im Titel der eigenen Tabelle, in der Abschnittsüberschrift oder in dem Satz, der die Tabelle ankündigt. Bestand heißt: erhoben oder bilanziert für ein vergangenes oder das laufende Jahr. Daran zu erkennen sind Bestandsanalyse, Ist-Zustand, Bilanzjahr, Ausgangslage, Energiebilanz, \"bislang\", \"derzeit\", \"wird verbraucht\", oder ein Jahr vor der Erstellung des Plans im Titel. Ein Satz wie \"wie viel Wärme pro Jahr verbraucht wird und welche Energieträger dafür bislang eingesetzt werden\" ist ein Bestand, auch wenn das Wort Bestandsanalyse nicht fällt. Trendszenario ist die Fortschreibung ohne zusätzliche Maßnahmen. Zielszenario ist der angestrebte Zustand, auch wenn der Plan ihm einen eigenen Namen gibt (\"bei erhöhter Energieeinsparung\", \"Umsetzungsszenario 2\", \"Transformationspfad\"); nennt die Quelle mehrere Zielszenarien nebeneinander, gehört der Name des konkreten in value_raw. Steht in der eigenen Quelle, in ihrem Abschnitt und in dem Satz davor nichts über den Zustand, dann ist das \"out:unstated\" und keine Schätzung.",
-          "evidence": "local"
+          "evidence": "local",
+          "kg": {
+            "role": "parent",
+            "map": {
+              "target": "MHPO_00020007 target scenario",
+              "status_quo": "MHPO_00020005 aggregated inventory analysis",
+              "trend": "OEO_00020314 reference scenario",
+              "out:variant": "not serialized"
+            },
+            "note": "Which container node holds the value: plan BFO_0000051 has part -> container OEO_00140002 has quantity value -> value. Only the target scenario is serialized today (G2)."
+          }
         },
         "spatial_scope": {
           "vocabulary": {
@@ -349,7 +388,15 @@
             ]
           },
           "required": false,
-          "question": "Auf welches Gebiet bezieht sich der Wert? Sieh ZUERST in der Zeile selbst nach: benennt die Zeilenbeschriftung ein Gebiet — einen Quartiersnamen, ein Eignungsgebiet, eine Straße —, dann ist DAS das Gebiet dieser Zeile und die Überschrift gilt für sie nicht. Eine Steckbrief- oder Quartierstabelle hat in jeder Zeile ein anderes Gebiet und in der Überschrift nur den Gemeindenamen; wer dann die Überschrift nimmt, legt vierzig Quartiere auf eine Koordinate. Erst wenn die Zeile kein Gebiet nennt, gilt die Überschrift oder die Caption. Bei einem Teilgebiet gehört sein NAME wörtlich in value_raw (\"Fokusgebiet Eicken\", \"Quartier Nordstadt\", \"Wärmenetzgebiet 3\"), ohne den Namen sind zwei Teilgebiete im Graphen nicht auseinanderzuhalten. Beim ganzen Gemeindegebiet reicht die Klasse."
+          "question": "Auf welches Gebiet bezieht sich der Wert? Sieh ZUERST in der Zeile selbst nach: benennt die Zeilenbeschriftung ein Gebiet — einen Quartiersnamen, ein Eignungsgebiet, eine Straße —, dann ist DAS das Gebiet dieser Zeile und die Überschrift gilt für sie nicht. Eine Steckbrief- oder Quartierstabelle hat in jeder Zeile ein anderes Gebiet und in der Überschrift nur den Gemeindenamen; wer dann die Überschrift nimmt, legt vierzig Quartiere auf eine Koordinate. Erst wenn die Zeile kein Gebiet nennt, gilt die Überschrift oder die Caption. Bei einem Teilgebiet gehört sein NAME wörtlich in value_raw (\"Fokusgebiet Eicken\", \"Quartier Nordstadt\", \"Wärmenetzgebiet 3\"), ohne den Namen sind zwei Teilgebiete im Graphen nicht auseinanderzuhalten. Beim ganzen Gemeindegebiet reicht die Klasse.",
+          "kg": {
+            "role": "parent",
+            "map": {
+              "municipality": "the plan's own area",
+              "sub_area": "MHPO_00020018 heat plan area, BFO_0000050 part of the municipality area"
+            },
+            "note": "No relation from a value to its area exists in the schema yet, so a sub_area value is not serialized (TERM REQUEST 1)."
+          }
         }
       },
       "example": {
@@ -439,6 +486,21 @@
             "quote": "| Heizöl | 1.440.048 | 28.116.204 | 203.458.519 |"
           }
         ]
+      },
+      "kg": {
+        "node": "value",
+        "class_from": "quantity",
+        "number": {
+          "predicate": "OEO_00140178",
+          "label": "has number",
+          "datatype": "xsd:float",
+          "from": "value_target"
+        },
+        "unit": {
+          "predicate": "OEO_00040010",
+          "label": "has unit",
+          "from": "unit_target"
+        }
       }
     },
     {
@@ -543,7 +605,11 @@
           },
           "required": false,
           "question": "Welche Größe ist diese Zahl? Das ist die wichtigste Entscheidung des Tupels, denn sie bestimmt, als welche Klasse der Wert im Graphen steht. Entscheide nach der Definition der Klasse, nicht nach der Ähnlichkeit der Wörter. \"CO2 emission value\" ist reines Kohlendioxid, \"carbon dioxide equivalent quantity value\" sind alle Treibhausgase, in CO2-Äquivalenten zusammengefasst. Die Einheit verrät es meist: t CO2 gegen t CO2-Äq. Sagt der Plan an anderer Stelle, dass seine Emissionen in CO2-Äquivalenten angegeben sind (\"Die zugehörigen Treibhausgasemissionen - angegeben in Tonnen CO2-Äquivalenten - sind gesondert aufgeführt\"), dann gilt das auch für eine Tabelle, deren Kopfzeile nur \"CO2-Emissionen\" schreibt: der Methodiksatz schlägt die Kopfzeile. Eine kumulierte Emission über mehrere Jahre, eine vermiedene oder eingesparte Emission und eine abgeschiedene Menge sind das Gegenteil einer im Bilanzjahr ausgestoßenen und haben ihre eigenen Einträge.",
-          "evidence": "local"
+          "evidence": "local",
+          "kg": {
+            "role": "type",
+            "note": "The class of the value node itself (rdf:type). An out:* answer is a deliberate non-class and mints no node."
+          }
         },
         "aggregation": {
           "vocabulary": {
@@ -579,6 +645,12 @@
           "derive": {
             "from": "unit",
             "value": "OEO_00140070"
+          },
+          "kg": {
+            "role": "edge",
+            "predicate": "OEO_00390023",
+            "label": "has aggregation type",
+            "note": "Object is a named individual of OEO_00140068 aggregation type. Derived from the unit, never asked: every accepted unit of both parameters is an extensive amount."
           }
         },
         "carrier": {
@@ -702,7 +774,13 @@
             ]
           },
           "question": "Welcher Energieträger? Die Bezeichnung steht in der Zeilenbeschriftung, im Spaltenkopf oder in der Blocküberschrift, fast nie in der Schreibweise der Klassenliste: \"Gas H\" und \"Erdgas (netzgebunden)\" meinen die Klasse Erdgas, \"Nahwärme\" und \"Wärmenetz\" die Klasse Fernwärme. Eine Summenzeile (\"Summe\", \"Gesamt\", \"alle Energieträger\") ist \"out:total\", eine Restposition (\"Sonstige\", \"Andere\") ist \"out:other\". Passt fachlich weder eine Klasse noch einer dieser Einträge, etwa weil in der Spalte ein Gebäudetyp steht, dann lass die Zeile weg.",
-          "evidence": "own"
+          "evidence": "own",
+          "kg": {
+            "role": "edge",
+            "predicate": "OEO_00000523",
+            "label": "covers energy carrier",
+            "note": "Object is an OEO class (punning). The edge is dropped, and the value kept, for the nine classes OEO does not place under energy carrier -- district heat, electricity, solar thermal, geothermal and the ambient heat sources."
+          }
         },
         "sector": {
           "vocabulary": {
@@ -742,12 +820,25 @@
             ]
           },
           "question": "Welcher Verbrauchssektor? Die Bezeichnung steht in der Zeilenbeschriftung, im Spaltenkopf oder in der Blocküberschrift DERSELBEN Tabelle: \"Wohnen\" und \"Wohngebäude\" meinen die Klasse Private Haushalte, \"GHD/Kommune\", \"Gewerbe\" und \"wirtschaftlich genutzte Gebäude\" die Klasse GHD. Ein GEBIET ist kein Sektor: \"Gesamtstadt\", \"Stadtgebiet\", \"Gemeinde\" und \"Plangebiet\" sagen, WO die Zahl gilt, nicht für welchen Verbraucher, und sie sind auch keine Summe über die Sektoren. Eine Zeile, die ausdrücklich über alle Sektoren summiert (\"Summe\", \"Gesamt\", \"insgesamt\" als Zeilen- oder Spaltenkopf), ist \"out:total\". Hat die eigene Tabelle keine Sektorspalte und nennt ihr Titel keinen Sektor, dann ist das keine Klasse, sondern eine fehlende Angabe: antworte mit \"out:unstated\".",
-          "evidence": "own"
+          "evidence": "own",
+          "kg": {
+            "role": "edge",
+            "predicate": "OEO_00000505",
+            "label": "covers sector",
+            "note": "Object is an OEO sector class."
+          }
         },
         "year": {
           "type": "int",
           "question": "Für welches Kalenderjahr gilt diese Jahressumme? Vierstellig. Das Jahr steht fast nie in der Zeile der Zahl selbst. Sieh in dieser Reihenfolge nach: (1) die Kopfzelle der Spalte, in der die Zahl steht, (2) der Titel der eigenen Tabelle, (3) der Satz, der die Tabelle in ihrem Abschnitt ankündigt (\"Für das Jahr 2040 ergeben sich die in den nachfolgenden Tabellen zusammengestellten Kennzahlen\"), (4) die Überschrift des Abschnitts. Das Jahr im Titel einer ANDEREN Tabelle gilt nicht, auch wenn dieser Titel im selben Abschnitt steht. Nennt die Quelle einen Zeitraum statt eines Jahres (\"Durchschnittswert der Jahre 2022-2024\"), dann gehört das LETZTE Jahr in value und der Zeitraum wörtlich in value_raw.",
-          "evidence": "local"
+          "evidence": "local",
+          "kg": {
+            "role": "edge",
+            "predicate": "OEO_00020440",
+            "label": "has scenario year value",
+            "datatype": "xsd:integer",
+            "note": "The calendar year the aggregation is integrated over, not a label. A unit without a per-year marker carries the flag period:annual_in_quote or period:unstated."
+          }
         },
         "scenario": {
           "vocabulary": {
@@ -781,7 +872,17 @@
           },
           "required": false,
           "question": "Auf welchen Zustand bezieht sich der Wert? Der Bezug steht selten in der Zeile selbst, sondern im Titel der eigenen Tabelle, in der Abschnittsüberschrift oder in dem Satz, der die Tabelle ankündigt. Bestand heißt: erhoben oder bilanziert für ein vergangenes oder das laufende Jahr. Daran zu erkennen sind Bestandsanalyse, Ist-Zustand, Bilanzjahr, Ausgangslage, Energiebilanz, \"bislang\", \"derzeit\", \"wird verbraucht\", oder ein Jahr vor der Erstellung des Plans im Titel. Ein Satz wie \"wie viel Wärme pro Jahr verbraucht wird und welche Energieträger dafür bislang eingesetzt werden\" ist ein Bestand, auch wenn das Wort Bestandsanalyse nicht fällt. Trendszenario ist die Fortschreibung ohne zusätzliche Maßnahmen. Zielszenario ist der angestrebte Zustand, auch wenn der Plan ihm einen eigenen Namen gibt (\"bei erhöhter Energieeinsparung\", \"Umsetzungsszenario 2\", \"Transformationspfad\"); nennt die Quelle mehrere Zielszenarien nebeneinander, gehört der Name des konkreten in value_raw. Steht in der eigenen Quelle, in ihrem Abschnitt und in dem Satz davor nichts über den Zustand, dann ist das \"out:unstated\" und keine Schätzung.",
-          "evidence": "local"
+          "evidence": "local",
+          "kg": {
+            "role": "parent",
+            "map": {
+              "target": "MHPO_00020007 target scenario",
+              "status_quo": "MHPO_00020005 aggregated inventory analysis",
+              "trend": "OEO_00020314 reference scenario",
+              "out:variant": "not serialized"
+            },
+            "note": "Which container node holds the value: plan BFO_0000051 has part -> container OEO_00140002 has quantity value -> value. Only the target scenario is serialized today (G2)."
+          }
         },
         "spatial_scope": {
           "vocabulary": {
@@ -803,7 +904,15 @@
             ]
           },
           "required": false,
-          "question": "Auf welches Gebiet bezieht sich der Wert? Sieh ZUERST in der Zeile selbst nach: benennt die Zeilenbeschriftung ein Gebiet — einen Quartiersnamen, ein Eignungsgebiet, eine Straße —, dann ist DAS das Gebiet dieser Zeile und die Überschrift gilt für sie nicht. Eine Steckbrief- oder Quartierstabelle hat in jeder Zeile ein anderes Gebiet und in der Überschrift nur den Gemeindenamen; wer dann die Überschrift nimmt, legt vierzig Quartiere auf eine Koordinate. Erst wenn die Zeile kein Gebiet nennt, gilt die Überschrift oder die Caption. Bei einem Teilgebiet gehört sein NAME wörtlich in value_raw (\"Fokusgebiet Eicken\", \"Quartier Nordstadt\", \"Wärmenetzgebiet 3\"), ohne den Namen sind zwei Teilgebiete im Graphen nicht auseinanderzuhalten. Beim ganzen Gemeindegebiet reicht die Klasse."
+          "question": "Auf welches Gebiet bezieht sich der Wert? Sieh ZUERST in der Zeile selbst nach: benennt die Zeilenbeschriftung ein Gebiet — einen Quartiersnamen, ein Eignungsgebiet, eine Straße —, dann ist DAS das Gebiet dieser Zeile und die Überschrift gilt für sie nicht. Eine Steckbrief- oder Quartierstabelle hat in jeder Zeile ein anderes Gebiet und in der Überschrift nur den Gemeindenamen; wer dann die Überschrift nimmt, legt vierzig Quartiere auf eine Koordinate. Erst wenn die Zeile kein Gebiet nennt, gilt die Überschrift oder die Caption. Bei einem Teilgebiet gehört sein NAME wörtlich in value_raw (\"Fokusgebiet Eicken\", \"Quartier Nordstadt\", \"Wärmenetzgebiet 3\"), ohne den Namen sind zwei Teilgebiete im Graphen nicht auseinanderzuhalten. Beim ganzen Gemeindegebiet reicht die Klasse.",
+          "kg": {
+            "role": "parent",
+            "map": {
+              "municipality": "the plan's own area",
+              "sub_area": "MHPO_00020018 heat plan area, BFO_0000050 part of the municipality area"
+            },
+            "note": "No relation from a value to its area exists in the schema yet, so a sub_area value is not serialized (TERM REQUEST 1)."
+          }
         }
       },
       "example": {
@@ -840,6 +949,21 @@
             "quote": "| Gebäude Wärme | 10.123 | 1.843 | 5.292 |"
           }
         ]
+      },
+      "kg": {
+        "node": "value",
+        "class_from": "quantity",
+        "number": {
+          "predicate": "OEO_00140178",
+          "label": "has number",
+          "datatype": "xsd:float",
+          "from": "value_target"
+        },
+        "unit": {
+          "predicate": "OEO_00040010",
+          "label": "has unit",
+          "from": "unit_target"
+        }
       }
     },
     {
@@ -855,6 +979,15 @@
             "quote": "Auftragnehmer: Kassel Wärme Ingenieurbüro GmbH, Bearbeitung: Dipl.-Ing. M. Wagner."
           }
         ]
+      },
+      "kg": {
+        "node": "organisation",
+        "class": "OEO_00030022 organisation",
+        "edge_from_plan": {
+          "predicate": "OEO_00000510",
+          "label": "has organisation"
+        },
+        "label": "rdfs:label, legal form stripped"
       }
     }
   ]

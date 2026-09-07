@@ -1,0 +1,3288 @@
+{
+ "harvest": {
+  "$defs": {
+   "provenance": {
+    "additionalProperties": false,
+    "properties": {
+     "block_id": {
+      "description": "Placeholder of the item in that section, e.g. p85_tbl0.",
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "document_id": {
+      "description": "Documents.id. The AGS and the publication date, which the heat plan IRI is minted from, are joined from the database by the serializer rather than carried here.",
+      "type": "integer"
+     },
+     "image": {
+      "description": "Crop path relative to the image root.",
+      "type": "string"
+     },
+     "owner_id": {
+      "description": "Sections.id, Tables.id or Images.id.",
+      "type": "integer"
+     },
+     "owner_kind": {
+      "enum": [
+       "section",
+       "table",
+       "figure"
+      ]
+     },
+     "page": {
+      "description": "1-based PDF page of the owner.",
+      "type": [
+       "integer",
+       "null"
+      ]
+     },
+     "parent_section": {
+      "description": "Sections.id of the section a table or figure stands in.",
+      "type": [
+       "integer",
+       "null"
+      ]
+     },
+     "rects": {
+      "description": "Highlight boxes on the page, when the passage could be located.",
+      "type": "array"
+     },
+     "section_number": {
+      "type": [
+       "integer",
+       "null"
+      ]
+     },
+     "section_title": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "title": {
+      "description": "The section title, or a table's or figure's caption -- resolved to the sentence before its placeholder where the stored caption is a footnote.",
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "via": {
+      "description": "How this source reached the window: a retrieval probe, or 'parent' for the section a table stands in.",
+      "type": "string"
+     }
+    },
+    "required": [
+     "document_id",
+     "owner_kind",
+     "owner_id"
+    ],
+    "type": "object"
+   },
+   "refusal": {
+    "additionalProperties": false,
+    "properties": {
+     "claim": {
+      "description": "The claim as the model returned it. A dead-server sentinel carries _harvest_failed with _why, or _cut_off.",
+      "properties": {
+       "_cut_off": {
+        "const": true
+       },
+       "_harvest_failed": {
+        "const": true
+       },
+       "_why": {
+        "enum": [
+         "unreachable",
+         "no_answer"
+        ]
+       }
+      },
+      "type": "object"
+     },
+     "kind": {
+      "const": "refusal"
+     },
+     "owner": {
+      "description": "[owner_kind, owner_id]",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "section",
+         "table",
+         "figure"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
+     "parameter": {
+      "description": "The spec parameter, or whatever the claim named.",
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "reason": {
+      "anyOf": [
+       {
+        "pattern": "^claim names no parameter of the spec$"
+       },
+       {
+        "pattern": "^claim names no source$"
+       },
+       {
+        "pattern": "^tuple is not an object$"
+       },
+       {
+        "pattern": "^value is not a number$"
+       },
+       {
+        "pattern": "^unit .* not in units_accepted \\(.*\\)$"
+       },
+       {
+        "pattern": "^a (text|category) parameter needs a non-empty string value$"
+       },
+       {
+        "pattern": "^required axis '.*' (missing|is empty)$"
+       },
+       {
+        "pattern": "^axis '.*': .* (not in vocabulary and axis is required|is not an integer|not in enum .*)$"
+       },
+       {
+        "pattern": "^quote missing or too short to identify anything$"
+       },
+       {
+        "pattern": "^quote not found in the source it cites$"
+       },
+       {
+        "pattern": "^value .* does not occur in the quote$"
+       },
+       {
+        "pattern": "^text value not in its quote$"
+       }
+      ],
+      "description": "Why the claim was refused; one of the reason families of verify.py and pipeline.py.",
+      "type": "string"
+     }
+    },
+    "required": [
+     "kind",
+     "parameter",
+     "reason",
+     "claim",
+     "owner"
+    ],
+    "type": "object"
+   },
+   "state": {
+    "enum": [
+     "read",
+     "derived",
+     "unstated",
+     "unanswered",
+     "exhausted",
+     "unbacked",
+     "out_of_slice"
+    ],
+    "x-doc": {
+     "derived": "not asked: the spec decides this coordinate from something already on the row (the unit)",
+     "exhausted": "still open when the window budget ended with the document unread. A finding about the run",
+     "out_of_slice": "never asked: a gate coordinate (the profile's SLICE) had already put the row outside what this run serializes",
+     "read": "answered, and the cited passage carries the answer",
+     "unanswered": "the field reply never mentioned this row. A finding about the model",
+     "unbacked": "answered, but no shown passage carried the answer, or the passage belonged to another row, and no later window fixed it",
+     "unstated": "answered: the passages shown do not state it. A finding about the plan, and only final once the sweep ran out of document"
+    }
+   },
+   "tuple_publication_abstract": {
+    "additionalProperties": false,
+    "properties": {
+     "compute": {
+      "description": "The sandbox runs behind a computed value: {code, stdout, ok, error}.",
+      "items": {
+       "type": "object"
+      },
+      "type": "array"
+     },
+     "computed": {
+      "description": "The value came out of the sandbox, not off the page; the quote proves the inputs it was computed from.",
+      "type": "boolean"
+     },
+     "flags": {
+      "description": "Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping a word the spec does not list; period:* says whether a bare amount was shown to be a yearly one.",
+      "items": {
+       "pattern": "^(mapped:[a-z_]+:[\\s\\S]*->[\\s\\S]*|unmapped:[a-z_]+:[\\s\\S]*|unit_not_chosen:[\\s\\S]*|unit_spelling:[\\s\\S]*|period:(annual_in_quote|unstated)|quote_repaired|computed|not_located)$",
+       "type": "string"
+      },
+      "type": "array"
+     },
+     "kind": {
+      "const": "tuple"
+     },
+     "parameter": {
+      "const": "publication_abstract",
+      "description": "Spec parameter: Abstract.",
+      "x-description-de": "Die Zusammenfassung des Dokuments, wörtlich und vollständig, so wie sie unter der Überschrift Abstract, Summary, Zusammenfassung oder Executive Summary steht. Keine eigene Zusammenfassung schreiben.",
+      "x-question": "Um WELCHES Feld handelt es sich bei diesem Wert? Entscheide danach, was die Quelle über ihn sagt: die Beschriftung, die Einheit und die Überschrift des Abschnitts. Zitiere die Stelle, aus der das hervorgeht."
+     },
+     "parameter_quote": {
+      "description": "The verbatim passage carrying 'parameter'. Present exactly when parameter_state is 'read'.",
+      "minLength": 8,
+      "type": "string"
+     },
+     "parameter_raw": {
+      "description": "The document's own wording 'parameter' was read from. This is what a later re-mapping onto a changed vocabulary works on, so a choice without it is counted (raw_missing).",
+      "type": "string"
+     },
+     "parameter_raw_foreign": {
+      "description": "The wording does not name the option chosen for 'parameter' -- the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.",
+      "type": "boolean"
+     },
+     "parameter_seen": {
+      "description": "A wording the model noticed for 'parameter' while answering 'not stated'. Vocabulary review material, never evidence.",
+      "type": "string"
+     },
+     "parameter_source": {
+      "description": "Which source the passage for 'parameter' was found in. How far that may be from the row is the axis' own rule (own | local | any).",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "section",
+         "table",
+         "figure"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
+     "parameter_state": {
+      "$ref": "#/$defs/state",
+      "description": "How the coordinate 'parameter' ended. Always present: a missing key and a refused reading must not look alike."
+     },
+     "parameter_window": {
+      "description": "[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts.",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "own",
+         "retrieval",
+         "rest"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
+     "provenance": {
+      "$ref": "#/$defs/provenance"
+     },
+     "quote": {
+      "description": "The passage of the owner source that contains the value. Whitespace-collapsed containment; a retyped table row may be repaired, which sets the flag quote_repaired.",
+      "minLength": 8,
+      "type": "string"
+     },
+     "tier": {
+      "description": "text_located: the quote sits in the document's own refined text, so it can be checked against the PDF. visual_source: it sits in a table transcription, a caption or a figure description, which are model output and want human curation.",
+      "enum": [
+       "text_located",
+       "visual_source"
+      ]
+     },
+     "unit": {
+      "description": "Empty: a wording has no unit. The key is present so every row has the same shape.",
+      "maxLength": 0,
+      "type": "string"
+     },
+     "unit_raw": {
+      "description": "Empty, as unit.",
+      "maxLength": 0,
+      "type": "string"
+     },
+     "value": {
+      "description": "The wording as the document writes it.",
+      "minLength": 1,
+      "type": "string"
+     },
+     "value_raw": {
+      "description": "The wording before any tidying (an organisation's legal form, a title's line break).",
+      "type": "string"
+     },
+     "value_uri": {
+      "description": "The entry of the parameter's own vocabulary the wording resolved to, where the parameter has one; null when the list did not hold it.",
+      "type": [
+       "string",
+       "null"
+      ]
+     }
+    },
+    "required": [
+     "kind",
+     "parameter",
+     "parameter_state",
+     "quote",
+     "tier",
+     "provenance",
+     "value"
+    ],
+    "type": "object"
+   },
+   "tuple_publication_author": {
+    "additionalProperties": false,
+    "properties": {
+     "compute": {
+      "description": "The sandbox runs behind a computed value: {code, stdout, ok, error}.",
+      "items": {
+       "type": "object"
+      },
+      "type": "array"
+     },
+     "computed": {
+      "description": "The value came out of the sandbox, not off the page; the quote proves the inputs it was computed from.",
+      "type": "boolean"
+     },
+     "flags": {
+      "description": "Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping a word the spec does not list; period:* says whether a bare amount was shown to be a yearly one.",
+      "items": {
+       "pattern": "^(mapped:[a-z_]+:[\\s\\S]*->[\\s\\S]*|unmapped:[a-z_]+:[\\s\\S]*|unit_not_chosen:[\\s\\S]*|unit_spelling:[\\s\\S]*|period:(annual_in_quote|unstated)|quote_repaired|computed|not_located)$",
+       "type": "string"
+      },
+      "type": "array"
+     },
+     "kind": {
+      "const": "tuple"
+     },
+     "parameter": {
+      "const": "publication_author",
+      "description": "Spec parameter: Autorin oder Autor.",
+      "x-description-de": "Eine einzelne Person, die als Verfasserin oder Verfasser des Dokuments genannt ist. Ein Tupel je Person, in der Schreibweise der Titelseite. Keine Institutionen, keine Herausgeber, keine Danksagungsempfänger.",
+      "x-question": "Um WELCHES Feld handelt es sich bei diesem Wert? Entscheide danach, was die Quelle über ihn sagt: die Beschriftung, die Einheit und die Überschrift des Abschnitts. Zitiere die Stelle, aus der das hervorgeht."
+     },
+     "parameter_quote": {
+      "description": "The verbatim passage carrying 'parameter'. Present exactly when parameter_state is 'read'.",
+      "minLength": 8,
+      "type": "string"
+     },
+     "parameter_raw": {
+      "description": "The document's own wording 'parameter' was read from. This is what a later re-mapping onto a changed vocabulary works on, so a choice without it is counted (raw_missing).",
+      "type": "string"
+     },
+     "parameter_raw_foreign": {
+      "description": "The wording does not name the option chosen for 'parameter' -- the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.",
+      "type": "boolean"
+     },
+     "parameter_seen": {
+      "description": "A wording the model noticed for 'parameter' while answering 'not stated'. Vocabulary review material, never evidence.",
+      "type": "string"
+     },
+     "parameter_source": {
+      "description": "Which source the passage for 'parameter' was found in. How far that may be from the row is the axis' own rule (own | local | any).",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "section",
+         "table",
+         "figure"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
+     "parameter_state": {
+      "$ref": "#/$defs/state",
+      "description": "How the coordinate 'parameter' ended. Always present: a missing key and a refused reading must not look alike."
+     },
+     "parameter_window": {
+      "description": "[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts.",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "own",
+         "retrieval",
+         "rest"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
+     "provenance": {
+      "$ref": "#/$defs/provenance"
+     },
+     "quote": {
+      "description": "The passage of the owner source that contains the value. Whitespace-collapsed containment; a retyped table row may be repaired, which sets the flag quote_repaired.",
+      "minLength": 8,
+      "type": "string"
+     },
+     "tier": {
+      "description": "text_located: the quote sits in the document's own refined text, so it can be checked against the PDF. visual_source: it sits in a table transcription, a caption or a figure description, which are model output and want human curation.",
+      "enum": [
+       "text_located",
+       "visual_source"
+      ]
+     },
+     "unit": {
+      "description": "Empty: a wording has no unit. The key is present so every row has the same shape.",
+      "maxLength": 0,
+      "type": "string"
+     },
+     "unit_raw": {
+      "description": "Empty, as unit.",
+      "maxLength": 0,
+      "type": "string"
+     },
+     "value": {
+      "description": "The wording as the document writes it.",
+      "minLength": 1,
+      "type": "string"
+     },
+     "value_raw": {
+      "description": "The wording before any tidying (an organisation's legal form, a title's line break).",
+      "type": "string"
+     },
+     "value_uri": {
+      "description": "The entry of the parameter's own vocabulary the wording resolved to, where the parameter has one; null when the list did not hold it.",
+      "type": [
+       "string",
+       "null"
+      ]
+     }
+    },
+    "required": [
+     "kind",
+     "parameter",
+     "parameter_state",
+     "quote",
+     "tier",
+     "provenance",
+     "value"
+    ],
+    "type": "object"
+   },
+   "tuple_publication_date": {
+    "additionalProperties": false,
+    "properties": {
+     "compute": {
+      "description": "The sandbox runs behind a computed value: {code, stdout, ok, error}.",
+      "items": {
+       "type": "object"
+      },
+      "type": "array"
+     },
+     "computed": {
+      "description": "The value came out of the sandbox, not off the page; the quote proves the inputs it was computed from.",
+      "type": "boolean"
+     },
+     "flags": {
+      "description": "Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping a word the spec does not list; period:* says whether a bare amount was shown to be a yearly one.",
+      "items": {
+       "pattern": "^(mapped:[a-z_]+:[\\s\\S]*->[\\s\\S]*|unmapped:[a-z_]+:[\\s\\S]*|unit_not_chosen:[\\s\\S]*|unit_spelling:[\\s\\S]*|period:(annual_in_quote|unstated)|quote_repaired|computed|not_located)$",
+       "type": "string"
+      },
+      "type": "array"
+     },
+     "kind": {
+      "const": "tuple"
+     },
+     "parameter": {
+      "const": "publication_date",
+      "description": "Spec parameter: Erscheinungsjahr.",
+      "x-description-de": "Das Jahr, in dem das Dokument veröffentlicht wurde, vierstellig und genau so, wie es im Dokument steht — Impressum, Titelseite oder Zitationshinweis. Nicht das Jahr der Daten, nicht ein im Text projiziertes Jahr.",
+      "x-question": "Um WELCHES Feld handelt es sich bei diesem Wert? Entscheide danach, was die Quelle über ihn sagt: die Beschriftung, die Einheit und die Überschrift des Abschnitts. Zitiere die Stelle, aus der das hervorgeht."
+     },
+     "parameter_quote": {
+      "description": "The verbatim passage carrying 'parameter'. Present exactly when parameter_state is 'read'.",
+      "minLength": 8,
+      "type": "string"
+     },
+     "parameter_raw": {
+      "description": "The document's own wording 'parameter' was read from. This is what a later re-mapping onto a changed vocabulary works on, so a choice without it is counted (raw_missing).",
+      "type": "string"
+     },
+     "parameter_raw_foreign": {
+      "description": "The wording does not name the option chosen for 'parameter' -- the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.",
+      "type": "boolean"
+     },
+     "parameter_seen": {
+      "description": "A wording the model noticed for 'parameter' while answering 'not stated'. Vocabulary review material, never evidence.",
+      "type": "string"
+     },
+     "parameter_source": {
+      "description": "Which source the passage for 'parameter' was found in. How far that may be from the row is the axis' own rule (own | local | any).",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "section",
+         "table",
+         "figure"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
+     "parameter_state": {
+      "$ref": "#/$defs/state",
+      "description": "How the coordinate 'parameter' ended. Always present: a missing key and a refused reading must not look alike."
+     },
+     "parameter_window": {
+      "description": "[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts.",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "own",
+         "retrieval",
+         "rest"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
+     "provenance": {
+      "$ref": "#/$defs/provenance"
+     },
+     "quote": {
+      "description": "The passage of the owner source that contains the value. Whitespace-collapsed containment; a retyped table row may be repaired, which sets the flag quote_repaired.",
+      "minLength": 8,
+      "type": "string"
+     },
+     "tier": {
+      "description": "text_located: the quote sits in the document's own refined text, so it can be checked against the PDF. visual_source: it sits in a table transcription, a caption or a figure description, which are model output and want human curation.",
+      "enum": [
+       "text_located",
+       "visual_source"
+      ]
+     },
+     "unit": {
+      "description": "Empty: a wording has no unit. The key is present so every row has the same shape.",
+      "maxLength": 0,
+      "type": "string"
+     },
+     "unit_raw": {
+      "description": "Empty, as unit.",
+      "maxLength": 0,
+      "type": "string"
+     },
+     "value": {
+      "description": "The wording as the document writes it.",
+      "minLength": 1,
+      "type": "string"
+     },
+     "value_raw": {
+      "description": "The wording before any tidying (an organisation's legal form, a title's line break).",
+      "type": "string"
+     },
+     "value_uri": {
+      "description": "The entry of the parameter's own vocabulary the wording resolved to, where the parameter has one; null when the list did not hold it.",
+      "type": [
+       "string",
+       "null"
+      ]
+     }
+    },
+    "required": [
+     "kind",
+     "parameter",
+     "parameter_state",
+     "quote",
+     "tier",
+     "provenance",
+     "value"
+    ],
+    "type": "object"
+   },
+   "tuple_publication_doi": {
+    "additionalProperties": false,
+    "properties": {
+     "compute": {
+      "description": "The sandbox runs behind a computed value: {code, stdout, ok, error}.",
+      "items": {
+       "type": "object"
+      },
+      "type": "array"
+     },
+     "computed": {
+      "description": "The value came out of the sandbox, not off the page; the quote proves the inputs it was computed from.",
+      "type": "boolean"
+     },
+     "flags": {
+      "description": "Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping a word the spec does not list; period:* says whether a bare amount was shown to be a yearly one.",
+      "items": {
+       "pattern": "^(mapped:[a-z_]+:[\\s\\S]*->[\\s\\S]*|unmapped:[a-z_]+:[\\s\\S]*|unit_not_chosen:[\\s\\S]*|unit_spelling:[\\s\\S]*|period:(annual_in_quote|unstated)|quote_repaired|computed|not_located)$",
+       "type": "string"
+      },
+      "type": "array"
+     },
+     "kind": {
+      "const": "tuple"
+     },
+     "parameter": {
+      "const": "publication_doi",
+      "description": "Spec parameter: DOI.",
+      "x-description-de": "Der Digital Object Identifier des Dokuments, wie er im Impressum oder im Zitationshinweis steht. Nur die DOI selbst, ohne das Präfix doi: und ohne die URL davor.",
+      "x-question": "Um WELCHES Feld handelt es sich bei diesem Wert? Entscheide danach, was die Quelle über ihn sagt: die Beschriftung, die Einheit und die Überschrift des Abschnitts. Zitiere die Stelle, aus der das hervorgeht."
+     },
+     "parameter_quote": {
+      "description": "The verbatim passage carrying 'parameter'. Present exactly when parameter_state is 'read'.",
+      "minLength": 8,
+      "type": "string"
+     },
+     "parameter_raw": {
+      "description": "The document's own wording 'parameter' was read from. This is what a later re-mapping onto a changed vocabulary works on, so a choice without it is counted (raw_missing).",
+      "type": "string"
+     },
+     "parameter_raw_foreign": {
+      "description": "The wording does not name the option chosen for 'parameter' -- the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.",
+      "type": "boolean"
+     },
+     "parameter_seen": {
+      "description": "A wording the model noticed for 'parameter' while answering 'not stated'. Vocabulary review material, never evidence.",
+      "type": "string"
+     },
+     "parameter_source": {
+      "description": "Which source the passage for 'parameter' was found in. How far that may be from the row is the axis' own rule (own | local | any).",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "section",
+         "table",
+         "figure"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
+     "parameter_state": {
+      "$ref": "#/$defs/state",
+      "description": "How the coordinate 'parameter' ended. Always present: a missing key and a refused reading must not look alike."
+     },
+     "parameter_window": {
+      "description": "[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts.",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "own",
+         "retrieval",
+         "rest"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
+     "provenance": {
+      "$ref": "#/$defs/provenance"
+     },
+     "quote": {
+      "description": "The passage of the owner source that contains the value. Whitespace-collapsed containment; a retyped table row may be repaired, which sets the flag quote_repaired.",
+      "minLength": 8,
+      "type": "string"
+     },
+     "tier": {
+      "description": "text_located: the quote sits in the document's own refined text, so it can be checked against the PDF. visual_source: it sits in a table transcription, a caption or a figure description, which are model output and want human curation.",
+      "enum": [
+       "text_located",
+       "visual_source"
+      ]
+     },
+     "unit": {
+      "description": "Empty: a wording has no unit. The key is present so every row has the same shape.",
+      "maxLength": 0,
+      "type": "string"
+     },
+     "unit_raw": {
+      "description": "Empty, as unit.",
+      "maxLength": 0,
+      "type": "string"
+     },
+     "value": {
+      "description": "The wording as the document writes it.",
+      "minLength": 1,
+      "type": "string"
+     },
+     "value_raw": {
+      "description": "The wording before any tidying (an organisation's legal form, a title's line break).",
+      "type": "string"
+     },
+     "value_uri": {
+      "description": "The entry of the parameter's own vocabulary the wording resolved to, where the parameter has one; null when the list did not hold it.",
+      "type": [
+       "string",
+       "null"
+      ]
+     }
+    },
+    "required": [
+     "kind",
+     "parameter",
+     "parameter_state",
+     "quote",
+     "tier",
+     "provenance",
+     "value"
+    ],
+    "type": "object"
+   },
+   "tuple_publication_title": {
+    "additionalProperties": false,
+    "properties": {
+     "compute": {
+      "description": "The sandbox runs behind a computed value: {code, stdout, ok, error}.",
+      "items": {
+       "type": "object"
+      },
+      "type": "array"
+     },
+     "computed": {
+      "description": "The value came out of the sandbox, not off the page; the quote proves the inputs it was computed from.",
+      "type": "boolean"
+     },
+     "flags": {
+      "description": "Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping a word the spec does not list; period:* says whether a bare amount was shown to be a yearly one.",
+      "items": {
+       "pattern": "^(mapped:[a-z_]+:[\\s\\S]*->[\\s\\S]*|unmapped:[a-z_]+:[\\s\\S]*|unit_not_chosen:[\\s\\S]*|unit_spelling:[\\s\\S]*|period:(annual_in_quote|unstated)|quote_repaired|computed|not_located)$",
+       "type": "string"
+      },
+      "type": "array"
+     },
+     "kind": {
+      "const": "tuple"
+     },
+     "parameter": {
+      "const": "publication_title",
+      "description": "Spec parameter: Titel der Publikation.",
+      "x-description-de": "Der vollständige Titel des Dokuments. In den meisten PDFs ist er die Überschrift des ersten Abschnitts und steht als erste Zeile über der Autorenliste; sonst im Kopf der ersten Seite. Der Wert ist die ganze Titelzeile. Nicht der Kolumnentitel, nicht der Name der Reihe, nicht der Name des Verlags.",
+      "x-question": "Um WELCHES Feld handelt es sich bei diesem Wert? Entscheide danach, was die Quelle über ihn sagt: die Beschriftung, die Einheit und die Überschrift des Abschnitts. Zitiere die Stelle, aus der das hervorgeht."
+     },
+     "parameter_quote": {
+      "description": "The verbatim passage carrying 'parameter'. Present exactly when parameter_state is 'read'.",
+      "minLength": 8,
+      "type": "string"
+     },
+     "parameter_raw": {
+      "description": "The document's own wording 'parameter' was read from. This is what a later re-mapping onto a changed vocabulary works on, so a choice without it is counted (raw_missing).",
+      "type": "string"
+     },
+     "parameter_raw_foreign": {
+      "description": "The wording does not name the option chosen for 'parameter' -- the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.",
+      "type": "boolean"
+     },
+     "parameter_seen": {
+      "description": "A wording the model noticed for 'parameter' while answering 'not stated'. Vocabulary review material, never evidence.",
+      "type": "string"
+     },
+     "parameter_source": {
+      "description": "Which source the passage for 'parameter' was found in. How far that may be from the row is the axis' own rule (own | local | any).",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "section",
+         "table",
+         "figure"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
+     "parameter_state": {
+      "$ref": "#/$defs/state",
+      "description": "How the coordinate 'parameter' ended. Always present: a missing key and a refused reading must not look alike."
+     },
+     "parameter_window": {
+      "description": "[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts.",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "own",
+         "retrieval",
+         "rest"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
+     "provenance": {
+      "$ref": "#/$defs/provenance"
+     },
+     "quote": {
+      "description": "The passage of the owner source that contains the value. Whitespace-collapsed containment; a retyped table row may be repaired, which sets the flag quote_repaired.",
+      "minLength": 8,
+      "type": "string"
+     },
+     "tier": {
+      "description": "text_located: the quote sits in the document's own refined text, so it can be checked against the PDF. visual_source: it sits in a table transcription, a caption or a figure description, which are model output and want human curation.",
+      "enum": [
+       "text_located",
+       "visual_source"
+      ]
+     },
+     "unit": {
+      "description": "Empty: a wording has no unit. The key is present so every row has the same shape.",
+      "maxLength": 0,
+      "type": "string"
+     },
+     "unit_raw": {
+      "description": "Empty, as unit.",
+      "maxLength": 0,
+      "type": "string"
+     },
+     "value": {
+      "description": "The wording as the document writes it.",
+      "minLength": 1,
+      "type": "string"
+     },
+     "value_raw": {
+      "description": "The wording before any tidying (an organisation's legal form, a title's line break).",
+      "type": "string"
+     },
+     "value_uri": {
+      "description": "The entry of the parameter's own vocabulary the wording resolved to, where the parameter has one; null when the list did not hold it.",
+      "type": [
+       "string",
+       "null"
+      ]
+     }
+    },
+    "required": [
+     "kind",
+     "parameter",
+     "parameter_state",
+     "quote",
+     "tier",
+     "provenance",
+     "value"
+    ],
+    "type": "object"
+   },
+   "tuple_scenario_abstract": {
+    "additionalProperties": false,
+    "allOf": [
+     {
+      "else": {
+       "properties": {
+        "scenario": {
+         "type": "null"
+        }
+       }
+      },
+      "if": {
+       "properties": {
+        "scenario_state": {
+         "enum": [
+          "read",
+          "derived"
+         ]
+        }
+       },
+       "required": [
+        "scenario_state"
+       ]
+      },
+      "then": {
+       "properties": {
+        "scenario": {
+         "type": "string"
+        }
+       },
+       "required": [
+        "scenario"
+       ]
+      }
+     }
+    ],
+    "properties": {
+     "compute": {
+      "description": "The sandbox runs behind a computed value: {code, stdout, ok, error}.",
+      "items": {
+       "type": "object"
+      },
+      "type": "array"
+     },
+     "computed": {
+      "description": "The value came out of the sandbox, not off the page; the quote proves the inputs it was computed from.",
+      "type": "boolean"
+     },
+     "flags": {
+      "description": "Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping a word the spec does not list; period:* says whether a bare amount was shown to be a yearly one.",
+      "items": {
+       "pattern": "^(mapped:[a-z_]+:[\\s\\S]*->[\\s\\S]*|unmapped:[a-z_]+:[\\s\\S]*|unit_not_chosen:[\\s\\S]*|unit_spelling:[\\s\\S]*|period:(annual_in_quote|unstated)|quote_repaired|computed|not_located)$",
+       "type": "string"
+      },
+      "type": "array"
+     },
+     "kind": {
+      "const": "tuple"
+     },
+     "parameter": {
+      "const": "scenario_abstract",
+      "description": "Spec parameter: Kurzbeschreibung eines Szenarios.",
+      "x-description-de": "Die Beschreibung, was ein einzelnes Szenario annimmt oder abbildet, wörtlich aus dem Dokument. Nur wenn sich der Satz eindeutig auf ein benanntes Szenario bezieht, dessen Name in derselben Passage steht.",
+      "x-question": "Um WELCHES Feld handelt es sich bei diesem Wert? Entscheide danach, was die Quelle über ihn sagt: die Beschriftung, die Einheit und die Überschrift des Abschnitts. Zitiere die Stelle, aus der das hervorgeht."
+     },
+     "parameter_quote": {
+      "description": "The verbatim passage carrying 'parameter'. Present exactly when parameter_state is 'read'.",
+      "minLength": 8,
+      "type": "string"
+     },
+     "parameter_raw": {
+      "description": "The document's own wording 'parameter' was read from. This is what a later re-mapping onto a changed vocabulary works on, so a choice without it is counted (raw_missing).",
+      "type": "string"
+     },
+     "parameter_raw_foreign": {
+      "description": "The wording does not name the option chosen for 'parameter' -- the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.",
+      "type": "boolean"
+     },
+     "parameter_seen": {
+      "description": "A wording the model noticed for 'parameter' while answering 'not stated'. Vocabulary review material, never evidence.",
+      "type": "string"
+     },
+     "parameter_source": {
+      "description": "Which source the passage for 'parameter' was found in. How far that may be from the row is the axis' own rule (own | local | any).",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "section",
+         "table",
+         "figure"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
+     "parameter_state": {
+      "$ref": "#/$defs/state",
+      "description": "How the coordinate 'parameter' ended. Always present: a missing key and a refused reading must not look alike."
+     },
+     "parameter_window": {
+      "description": "[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts.",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "own",
+         "retrieval",
+         "rest"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
+     "provenance": {
+      "$ref": "#/$defs/provenance"
+     },
+     "quote": {
+      "description": "The passage of the owner source that contains the value. Whitespace-collapsed containment; a retyped table row may be repaired, which sets the flag quote_repaired.",
+      "minLength": 8,
+      "type": "string"
+     },
+     "scenario": {
+      "description": "Axis 'scenario' of Kurzbeschreibung eines Szenarios. null unless scenario_state is 'read' or 'derived'.",
+      "type": [
+       "string",
+       "null"
+      ],
+      "x-question": "Auf welches Szenario dieser Publikation bezieht sich der Wert? Die Liste führt die Laufkennungen, die genau diese Publikation in der AR6-Datenbank dokumentiert. Im Text stehen sie fast nie, dort heißt dasselbe Szenario \"Current Policies\" oder \"the NDC scenario\". Nennt das Dokument nur die Familie, ist \"Szenario-Familie\" die richtige Antwort und keine Kennung."
+     },
+     "scenario_quote": {
+      "description": "The verbatim passage carrying 'scenario'. Present exactly when scenario_state is 'read'.",
+      "minLength": 8,
+      "type": "string"
+     },
+     "scenario_raw": {
+      "description": "The document's own wording 'scenario' was read from. This is what a later re-mapping onto a changed vocabulary works on, so a choice without it is counted (raw_missing).",
+      "type": "string"
+     },
+     "scenario_raw_foreign": {
+      "description": "The wording does not name the option chosen for 'scenario' -- the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.",
+      "type": "boolean"
+     },
+     "scenario_seen": {
+      "description": "A wording the model noticed for 'scenario' while answering 'not stated'. Vocabulary review material, never evidence.",
+      "type": "string"
+     },
+     "scenario_source": {
+      "description": "Which source the passage for 'scenario' was found in. How far that may be from the row is the axis' own rule (own | local | any).",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "section",
+         "table",
+         "figure"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
+     "scenario_state": {
+      "$ref": "#/$defs/state",
+      "description": "How the coordinate 'scenario' ended. Always present: a missing key and a refused reading must not look alike."
+     },
+     "scenario_window": {
+      "description": "[stage, index] of the window 'scenario' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts.",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "own",
+         "retrieval",
+         "rest"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
+     "tier": {
+      "description": "text_located: the quote sits in the document's own refined text, so it can be checked against the PDF. visual_source: it sits in a table transcription, a caption or a figure description, which are model output and want human curation.",
+      "enum": [
+       "text_located",
+       "visual_source"
+      ]
+     },
+     "unit": {
+      "description": "Empty: a wording has no unit. The key is present so every row has the same shape.",
+      "maxLength": 0,
+      "type": "string"
+     },
+     "unit_raw": {
+      "description": "Empty, as unit.",
+      "maxLength": 0,
+      "type": "string"
+     },
+     "value": {
+      "description": "The wording as the document writes it.",
+      "minLength": 1,
+      "type": "string"
+     },
+     "value_raw": {
+      "description": "The wording before any tidying (an organisation's legal form, a title's line break).",
+      "type": "string"
+     },
+     "value_uri": {
+      "description": "The entry of the parameter's own vocabulary the wording resolved to, where the parameter has one; null when the list did not hold it.",
+      "type": [
+       "string",
+       "null"
+      ]
+     }
+    },
+    "required": [
+     "kind",
+     "parameter",
+     "parameter_state",
+     "quote",
+     "tier",
+     "provenance",
+     "value",
+     "scenario",
+     "scenario_state"
+    ],
+    "type": "object"
+   },
+   "tuple_scenario_label": {
+    "additionalProperties": false,
+    "properties": {
+     "compute": {
+      "description": "The sandbox runs behind a computed value: {code, stdout, ok, error}.",
+      "items": {
+       "type": "object"
+      },
+      "type": "array"
+     },
+     "computed": {
+      "description": "The value came out of the sandbox, not off the page; the quote proves the inputs it was computed from.",
+      "type": "boolean"
+     },
+     "flags": {
+      "description": "Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping a word the spec does not list; period:* says whether a bare amount was shown to be a yearly one.",
+      "items": {
+       "pattern": "^(mapped:[a-z_]+:[\\s\\S]*->[\\s\\S]*|unmapped:[a-z_]+:[\\s\\S]*|unit_not_chosen:[\\s\\S]*|unit_spelling:[\\s\\S]*|period:(annual_in_quote|unstated)|quote_repaired|computed|not_located)$",
+       "type": "string"
+      },
+      "type": "array"
+     },
+     "kind": {
+      "const": "tuple"
+     },
+     "parameter": {
+      "const": "scenario_label",
+      "description": "Spec parameter: Name des Szenarios.",
+      "x-description-de": "Das Szenario der AR6-Datenbank, das an dieser Stelle beschrieben wird. Waehle es aus value_classes aus; die Klassennamen sind die Lauf-Kennungen der AR6-Datenbank fuer genau diese Publikation. In value_raw traegst du ein, wie das Dokument das Szenario nennt, woertlich. Ein Tupel je Szenario, und zwar fuer JEDES, das die Passage nennt - auch fuer die, die du nicht zuordnen kannst. Nennt das Dokument nur eine Familie ('NPi', 'NDC'), waehlst du 'Szenario-Familie'; steht das Szenario nicht in der AR6-Liste dieser Publikation, waehlst du 'nicht in AR6'. Bist du unsicher, laesst du value weg und traegst die Bezeichnung trotzdem in value_raw ein. Weglassen ist die einzige falsche Antwort.",
+      "x-question": "Um WELCHES Feld handelt es sich bei diesem Wert? Entscheide danach, was die Quelle über ihn sagt: die Beschriftung, die Einheit und die Überschrift des Abschnitts. Zitiere die Stelle, aus der das hervorgeht."
+     },
+     "parameter_quote": {
+      "description": "The verbatim passage carrying 'parameter'. Present exactly when parameter_state is 'read'.",
+      "minLength": 8,
+      "type": "string"
+     },
+     "parameter_raw": {
+      "description": "The document's own wording 'parameter' was read from. This is what a later re-mapping onto a changed vocabulary works on, so a choice without it is counted (raw_missing).",
+      "type": "string"
+     },
+     "parameter_raw_foreign": {
+      "description": "The wording does not name the option chosen for 'parameter' -- the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.",
+      "type": "boolean"
+     },
+     "parameter_seen": {
+      "description": "A wording the model noticed for 'parameter' while answering 'not stated'. Vocabulary review material, never evidence.",
+      "type": "string"
+     },
+     "parameter_source": {
+      "description": "Which source the passage for 'parameter' was found in. How far that may be from the row is the axis' own rule (own | local | any).",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "section",
+         "table",
+         "figure"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
+     "parameter_state": {
+      "$ref": "#/$defs/state",
+      "description": "How the coordinate 'parameter' ended. Always present: a missing key and a refused reading must not look alike."
+     },
+     "parameter_window": {
+      "description": "[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts.",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "own",
+         "retrieval",
+         "rest"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
+     "provenance": {
+      "$ref": "#/$defs/provenance"
+     },
+     "quote": {
+      "description": "The passage of the owner source that contains the value. Whitespace-collapsed containment; a retyped table row may be repaired, which sets the flag quote_repaired.",
+      "minLength": 8,
+      "type": "string"
+     },
+     "tier": {
+      "description": "text_located: the quote sits in the document's own refined text, so it can be checked against the PDF. visual_source: it sits in a table transcription, a caption or a figure description, which are model output and want human curation.",
+      "enum": [
+       "text_located",
+       "visual_source"
+      ]
+     },
+     "unit": {
+      "description": "Empty: a wording has no unit. The key is present so every row has the same shape.",
+      "maxLength": 0,
+      "type": "string"
+     },
+     "unit_raw": {
+      "description": "Empty, as unit.",
+      "maxLength": 0,
+      "type": "string"
+     },
+     "value": {
+      "description": "The wording as the document writes it.",
+      "minLength": 1,
+      "type": "string"
+     },
+     "value_raw": {
+      "description": "The wording before any tidying (an organisation's legal form, a title's line break).",
+      "type": "string"
+     },
+     "value_uri": {
+      "description": "The entry of the parameter's own vocabulary the wording resolved to, where the parameter has one; null when the list did not hold it.",
+      "type": [
+       "string",
+       "null"
+      ]
+     }
+    },
+    "required": [
+     "kind",
+     "parameter",
+     "parameter_state",
+     "quote",
+     "tier",
+     "provenance",
+     "value"
+    ],
+    "type": "object"
+   },
+   "tuple_scenario_region": {
+    "additionalProperties": false,
+    "allOf": [
+     {
+      "else": {
+       "properties": {
+        "scenario": {
+         "type": "null"
+        }
+       }
+      },
+      "if": {
+       "properties": {
+        "scenario_state": {
+         "enum": [
+          "read",
+          "derived"
+         ]
+        }
+       },
+       "required": [
+        "scenario_state"
+       ]
+      },
+      "then": {
+       "properties": {
+        "scenario": {
+         "type": "string"
+        }
+       },
+       "required": [
+        "scenario"
+       ]
+      }
+     }
+    ],
+    "properties": {
+     "compute": {
+      "description": "The sandbox runs behind a computed value: {code, stdout, ok, error}.",
+      "items": {
+       "type": "object"
+      },
+      "type": "array"
+     },
+     "computed": {
+      "description": "The value came out of the sandbox, not off the page; the quote proves the inputs it was computed from.",
+      "type": "boolean"
+     },
+     "flags": {
+      "description": "Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping a word the spec does not list; period:* says whether a bare amount was shown to be a yearly one.",
+      "items": {
+       "pattern": "^(mapped:[a-z_]+:[\\s\\S]*->[\\s\\S]*|unmapped:[a-z_]+:[\\s\\S]*|unit_not_chosen:[\\s\\S]*|unit_spelling:[\\s\\S]*|period:(annual_in_quote|unstated)|quote_repaired|computed|not_located)$",
+       "type": "string"
+      },
+      "type": "array"
+     },
+     "kind": {
+      "const": "tuple"
+     },
+     "parameter": {
+      "const": "scenario_region",
+      "description": "Spec parameter: Betrachtete Region eines Szenarios.",
+      "x-description-de": "Das Land oder Gebiet, das ein Szenario abbildet. Waehle es aus value_classes aus - das sind die Studienregionen des OEKG, gefiltert auf die, die dieses Dokument nennt. Ein Tupel je Angabe. Die Liste kennt nur Laender: fuer ein weltweites Szenario waehlst du 'global', fuer einen Zusammenschluss oder eine Grossregion, die nicht als Land dasteht (EU27, OECD, Asien, R5), 'mehrere Regionen'. Beides sind richtige Antworten und werden ausgewertet - ein einzelnes Land stattdessen zu nennen, waere erfunden. In value_raw traegst du ein, wie das Dokument die Region nennt. Nur Regionen, die als Betrachtungsraum genannt sind, nicht jede erwaehnte.",
+      "x-question": "Um WELCHES Feld handelt es sich bei diesem Wert? Entscheide danach, was die Quelle über ihn sagt: die Beschriftung, die Einheit und die Überschrift des Abschnitts. Zitiere die Stelle, aus der das hervorgeht."
+     },
+     "parameter_quote": {
+      "description": "The verbatim passage carrying 'parameter'. Present exactly when parameter_state is 'read'.",
+      "minLength": 8,
+      "type": "string"
+     },
+     "parameter_raw": {
+      "description": "The document's own wording 'parameter' was read from. This is what a later re-mapping onto a changed vocabulary works on, so a choice without it is counted (raw_missing).",
+      "type": "string"
+     },
+     "parameter_raw_foreign": {
+      "description": "The wording does not name the option chosen for 'parameter' -- the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.",
+      "type": "boolean"
+     },
+     "parameter_seen": {
+      "description": "A wording the model noticed for 'parameter' while answering 'not stated'. Vocabulary review material, never evidence.",
+      "type": "string"
+     },
+     "parameter_source": {
+      "description": "Which source the passage for 'parameter' was found in. How far that may be from the row is the axis' own rule (own | local | any).",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "section",
+         "table",
+         "figure"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
+     "parameter_state": {
+      "$ref": "#/$defs/state",
+      "description": "How the coordinate 'parameter' ended. Always present: a missing key and a refused reading must not look alike."
+     },
+     "parameter_window": {
+      "description": "[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts.",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "own",
+         "retrieval",
+         "rest"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
+     "provenance": {
+      "$ref": "#/$defs/provenance"
+     },
+     "quote": {
+      "description": "The passage of the owner source that contains the value. Whitespace-collapsed containment; a retyped table row may be repaired, which sets the flag quote_repaired.",
+      "minLength": 8,
+      "type": "string"
+     },
+     "scenario": {
+      "description": "Axis 'scenario' of Betrachtete Region eines Szenarios. null unless scenario_state is 'read' or 'derived'.",
+      "type": [
+       "string",
+       "null"
+      ],
+      "x-question": "Auf welches Szenario dieser Publikation bezieht sich der Wert? Die Liste führt die Laufkennungen, die genau diese Publikation in der AR6-Datenbank dokumentiert. Im Text stehen sie fast nie, dort heißt dasselbe Szenario \"Current Policies\" oder \"the NDC scenario\". Nennt das Dokument nur die Familie, ist \"Szenario-Familie\" die richtige Antwort und keine Kennung."
+     },
+     "scenario_quote": {
+      "description": "The verbatim passage carrying 'scenario'. Present exactly when scenario_state is 'read'.",
+      "minLength": 8,
+      "type": "string"
+     },
+     "scenario_raw": {
+      "description": "The document's own wording 'scenario' was read from. This is what a later re-mapping onto a changed vocabulary works on, so a choice without it is counted (raw_missing).",
+      "type": "string"
+     },
+     "scenario_raw_foreign": {
+      "description": "The wording does not name the option chosen for 'scenario' -- the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.",
+      "type": "boolean"
+     },
+     "scenario_seen": {
+      "description": "A wording the model noticed for 'scenario' while answering 'not stated'. Vocabulary review material, never evidence.",
+      "type": "string"
+     },
+     "scenario_source": {
+      "description": "Which source the passage for 'scenario' was found in. How far that may be from the row is the axis' own rule (own | local | any).",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "section",
+         "table",
+         "figure"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
+     "scenario_state": {
+      "$ref": "#/$defs/state",
+      "description": "How the coordinate 'scenario' ended. Always present: a missing key and a refused reading must not look alike."
+     },
+     "scenario_window": {
+      "description": "[stage, index] of the window 'scenario' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts.",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "own",
+         "retrieval",
+         "rest"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
+     "tier": {
+      "description": "text_located: the quote sits in the document's own refined text, so it can be checked against the PDF. visual_source: it sits in a table transcription, a caption or a figure description, which are model output and want human curation.",
+      "enum": [
+       "text_located",
+       "visual_source"
+      ]
+     },
+     "unit": {
+      "description": "Empty: a wording has no unit. The key is present so every row has the same shape.",
+      "maxLength": 0,
+      "type": "string"
+     },
+     "unit_raw": {
+      "description": "Empty, as unit.",
+      "maxLength": 0,
+      "type": "string"
+     },
+     "value": {
+      "description": "The wording as the document writes it.",
+      "minLength": 1,
+      "type": "string"
+     },
+     "value_raw": {
+      "description": "The wording before any tidying (an organisation's legal form, a title's line break).",
+      "type": "string"
+     },
+     "value_uri": {
+      "description": "The entry of the parameter's own vocabulary the wording resolved to, where the parameter has one; null when the list did not hold it.",
+      "type": [
+       "string",
+       "null"
+      ]
+     }
+    },
+    "required": [
+     "kind",
+     "parameter",
+     "parameter_state",
+     "quote",
+     "tier",
+     "provenance",
+     "value",
+     "scenario",
+     "scenario_state"
+    ],
+    "type": "object"
+   },
+   "tuple_scenario_type": {
+    "additionalProperties": false,
+    "allOf": [
+     {
+      "else": {
+       "properties": {
+        "scenario": {
+         "type": "null"
+        }
+       }
+      },
+      "if": {
+       "properties": {
+        "scenario_state": {
+         "enum": [
+          "read",
+          "derived"
+         ]
+        }
+       },
+       "required": [
+        "scenario_state"
+       ]
+      },
+      "then": {
+       "properties": {
+        "scenario": {
+         "type": "string"
+        }
+       },
+       "required": [
+        "scenario"
+       ]
+      }
+     }
+    ],
+    "properties": {
+     "compute": {
+      "description": "The sandbox runs behind a computed value: {code, stdout, ok, error}.",
+      "items": {
+       "type": "object"
+      },
+      "type": "array"
+     },
+     "computed": {
+      "description": "The value came out of the sandbox, not off the page; the quote proves the inputs it was computed from.",
+      "type": "boolean"
+     },
+     "flags": {
+      "description": "Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping a word the spec does not list; period:* says whether a bare amount was shown to be a yearly one.",
+      "items": {
+       "pattern": "^(mapped:[a-z_]+:[\\s\\S]*->[\\s\\S]*|unmapped:[a-z_]+:[\\s\\S]*|unit_not_chosen:[\\s\\S]*|unit_spelling:[\\s\\S]*|period:(annual_in_quote|unstated)|quote_repaired|computed|not_located)$",
+       "type": "string"
+      },
+      "type": "array"
+     },
+     "kind": {
+      "const": "tuple"
+     },
+     "parameter": {
+      "const": "scenario_type",
+      "description": "Spec parameter: Art des Szenarios.",
+      "x-description-de": "Die Art eines Szenarios, gewaehlt aus value_classes. Das sind die Klassen, die der OEKG fuer dieses Feld zulaesst; die Schreibweisen daneben stammen aus der Ontologie selbst. Nimm die spezifischste Klasse, die der Text belegt: steht dort, dass ein Szenario nur bereits beschlossene Massnahmen enthaelt, ist das 'with existing measures scenario' und nicht blosses 'policy scenario'. Zwei Antworten bedeuten NICHT dasselbe: 'scenario' heisst, der Text sagt nichts Engeres als 'ein Szenario'; 'keine dieser Arten' heisst, der Text nennt sehr wohl eine Art, aber keine der Klassen deckt sie ab. Das zweite ist ein Befund und wird gezaehlt; das erste waere dann eine Behauptung. In value_raw kommt die Formulierung des Dokuments. Ein Tupel je Szenario und Klasse; ein Szenario darf mehrere Klassen tragen, wenn der Text sie belegt.",
+      "x-question": "Um WELCHES Feld handelt es sich bei diesem Wert? Entscheide danach, was die Quelle über ihn sagt: die Beschriftung, die Einheit und die Überschrift des Abschnitts. Zitiere die Stelle, aus der das hervorgeht."
+     },
+     "parameter_quote": {
+      "description": "The verbatim passage carrying 'parameter'. Present exactly when parameter_state is 'read'.",
+      "minLength": 8,
+      "type": "string"
+     },
+     "parameter_raw": {
+      "description": "The document's own wording 'parameter' was read from. This is what a later re-mapping onto a changed vocabulary works on, so a choice without it is counted (raw_missing).",
+      "type": "string"
+     },
+     "parameter_raw_foreign": {
+      "description": "The wording does not name the option chosen for 'parameter' -- the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.",
+      "type": "boolean"
+     },
+     "parameter_seen": {
+      "description": "A wording the model noticed for 'parameter' while answering 'not stated'. Vocabulary review material, never evidence.",
+      "type": "string"
+     },
+     "parameter_source": {
+      "description": "Which source the passage for 'parameter' was found in. How far that may be from the row is the axis' own rule (own | local | any).",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "section",
+         "table",
+         "figure"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
+     "parameter_state": {
+      "$ref": "#/$defs/state",
+      "description": "How the coordinate 'parameter' ended. Always present: a missing key and a refused reading must not look alike."
+     },
+     "parameter_window": {
+      "description": "[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts.",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "own",
+         "retrieval",
+         "rest"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
+     "provenance": {
+      "$ref": "#/$defs/provenance"
+     },
+     "quote": {
+      "description": "The passage of the owner source that contains the value. Whitespace-collapsed containment; a retyped table row may be repaired, which sets the flag quote_repaired.",
+      "minLength": 8,
+      "type": "string"
+     },
+     "scenario": {
+      "description": "Axis 'scenario' of Art des Szenarios. null unless scenario_state is 'read' or 'derived'.",
+      "type": [
+       "string",
+       "null"
+      ],
+      "x-question": "Auf welches Szenario dieser Publikation bezieht sich der Wert? Die Liste führt die Laufkennungen, die genau diese Publikation in der AR6-Datenbank dokumentiert. Im Text stehen sie fast nie, dort heißt dasselbe Szenario \"Current Policies\" oder \"the NDC scenario\". Nennt das Dokument nur die Familie, ist \"Szenario-Familie\" die richtige Antwort und keine Kennung."
+     },
+     "scenario_quote": {
+      "description": "The verbatim passage carrying 'scenario'. Present exactly when scenario_state is 'read'.",
+      "minLength": 8,
+      "type": "string"
+     },
+     "scenario_raw": {
+      "description": "The document's own wording 'scenario' was read from. This is what a later re-mapping onto a changed vocabulary works on, so a choice without it is counted (raw_missing).",
+      "type": "string"
+     },
+     "scenario_raw_foreign": {
+      "description": "The wording does not name the option chosen for 'scenario' -- the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.",
+      "type": "boolean"
+     },
+     "scenario_seen": {
+      "description": "A wording the model noticed for 'scenario' while answering 'not stated'. Vocabulary review material, never evidence.",
+      "type": "string"
+     },
+     "scenario_source": {
+      "description": "Which source the passage for 'scenario' was found in. How far that may be from the row is the axis' own rule (own | local | any).",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "section",
+         "table",
+         "figure"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
+     "scenario_state": {
+      "$ref": "#/$defs/state",
+      "description": "How the coordinate 'scenario' ended. Always present: a missing key and a refused reading must not look alike."
+     },
+     "scenario_window": {
+      "description": "[stage, index] of the window 'scenario' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts.",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "own",
+         "retrieval",
+         "rest"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
+     "tier": {
+      "description": "text_located: the quote sits in the document's own refined text, so it can be checked against the PDF. visual_source: it sits in a table transcription, a caption or a figure description, which are model output and want human curation.",
+      "enum": [
+       "text_located",
+       "visual_source"
+      ]
+     },
+     "unit": {
+      "description": "Empty: a wording has no unit. The key is present so every row has the same shape.",
+      "maxLength": 0,
+      "type": "string"
+     },
+     "unit_raw": {
+      "description": "Empty, as unit.",
+      "maxLength": 0,
+      "type": "string"
+     },
+     "value": {
+      "description": "The wording as the document writes it.",
+      "minLength": 1,
+      "type": "string"
+     },
+     "value_raw": {
+      "description": "The wording before any tidying (an organisation's legal form, a title's line break).",
+      "type": "string"
+     },
+     "value_uri": {
+      "description": "The entry of the parameter's own vocabulary the wording resolved to, where the parameter has one; null when the list did not hold it.",
+      "type": [
+       "string",
+       "null"
+      ]
+     }
+    },
+    "required": [
+     "kind",
+     "parameter",
+     "parameter_state",
+     "quote",
+     "tier",
+     "provenance",
+     "value",
+     "scenario",
+     "scenario_state"
+    ],
+    "type": "object"
+   },
+   "tuple_scenario_year": {
+    "additionalProperties": false,
+    "allOf": [
+     {
+      "else": {
+       "properties": {
+        "scenario": {
+         "type": "null"
+        }
+       }
+      },
+      "if": {
+       "properties": {
+        "scenario_state": {
+         "enum": [
+          "read",
+          "derived"
+         ]
+        }
+       },
+       "required": [
+        "scenario_state"
+       ]
+      },
+      "then": {
+       "properties": {
+        "scenario": {
+         "type": "string"
+        }
+       },
+       "required": [
+        "scenario"
+       ]
+      }
+     }
+    ],
+    "properties": {
+     "compute": {
+      "description": "The sandbox runs behind a computed value: {code, stdout, ok, error}.",
+      "items": {
+       "type": "object"
+      },
+      "type": "array"
+     },
+     "computed": {
+      "description": "The value came out of the sandbox, not off the page; the quote proves the inputs it was computed from.",
+      "type": "boolean"
+     },
+     "flags": {
+      "description": "Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping a word the spec does not list; period:* says whether a bare amount was shown to be a yearly one.",
+      "items": {
+       "pattern": "^(mapped:[a-z_]+:[\\s\\S]*->[\\s\\S]*|unmapped:[a-z_]+:[\\s\\S]*|unit_not_chosen:[\\s\\S]*|unit_spelling:[\\s\\S]*|period:(annual_in_quote|unstated)|quote_repaired|computed|not_located)$",
+       "type": "string"
+      },
+      "type": "array"
+     },
+     "kind": {
+      "const": "tuple"
+     },
+     "parameter": {
+      "const": "scenario_year",
+      "description": "Spec parameter: Projiziertes Jahr eines Szenarios.",
+      "x-description-de": "Ein Jahr, für das ein Szenario Ergebnisse ausweist oder bis zu dem es rechnet, vierstellig und wörtlich aus dem Dokument. Ein Tupel je Jahr. Nicht das Erscheinungsjahr der Publikation und nicht das Basisjahr der Daten.",
+      "x-question": "Um WELCHES Feld handelt es sich bei diesem Wert? Entscheide danach, was die Quelle über ihn sagt: die Beschriftung, die Einheit und die Überschrift des Abschnitts. Zitiere die Stelle, aus der das hervorgeht."
+     },
+     "parameter_quote": {
+      "description": "The verbatim passage carrying 'parameter'. Present exactly when parameter_state is 'read'.",
+      "minLength": 8,
+      "type": "string"
+     },
+     "parameter_raw": {
+      "description": "The document's own wording 'parameter' was read from. This is what a later re-mapping onto a changed vocabulary works on, so a choice without it is counted (raw_missing).",
+      "type": "string"
+     },
+     "parameter_raw_foreign": {
+      "description": "The wording does not name the option chosen for 'parameter' -- the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.",
+      "type": "boolean"
+     },
+     "parameter_seen": {
+      "description": "A wording the model noticed for 'parameter' while answering 'not stated'. Vocabulary review material, never evidence.",
+      "type": "string"
+     },
+     "parameter_source": {
+      "description": "Which source the passage for 'parameter' was found in. How far that may be from the row is the axis' own rule (own | local | any).",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "section",
+         "table",
+         "figure"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
+     "parameter_state": {
+      "$ref": "#/$defs/state",
+      "description": "How the coordinate 'parameter' ended. Always present: a missing key and a refused reading must not look alike."
+     },
+     "parameter_window": {
+      "description": "[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts.",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "own",
+         "retrieval",
+         "rest"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
+     "provenance": {
+      "$ref": "#/$defs/provenance"
+     },
+     "quote": {
+      "description": "The passage of the owner source that contains the value. Whitespace-collapsed containment; a retyped table row may be repaired, which sets the flag quote_repaired.",
+      "minLength": 8,
+      "type": "string"
+     },
+     "scenario": {
+      "description": "Axis 'scenario' of Projiziertes Jahr eines Szenarios. null unless scenario_state is 'read' or 'derived'.",
+      "type": [
+       "string",
+       "null"
+      ],
+      "x-question": "Auf welches Szenario dieser Publikation bezieht sich der Wert? Die Liste führt die Laufkennungen, die genau diese Publikation in der AR6-Datenbank dokumentiert. Im Text stehen sie fast nie, dort heißt dasselbe Szenario \"Current Policies\" oder \"the NDC scenario\". Nennt das Dokument nur die Familie, ist \"Szenario-Familie\" die richtige Antwort und keine Kennung."
+     },
+     "scenario_quote": {
+      "description": "The verbatim passage carrying 'scenario'. Present exactly when scenario_state is 'read'.",
+      "minLength": 8,
+      "type": "string"
+     },
+     "scenario_raw": {
+      "description": "The document's own wording 'scenario' was read from. This is what a later re-mapping onto a changed vocabulary works on, so a choice without it is counted (raw_missing).",
+      "type": "string"
+     },
+     "scenario_raw_foreign": {
+      "description": "The wording does not name the option chosen for 'scenario' -- the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.",
+      "type": "boolean"
+     },
+     "scenario_seen": {
+      "description": "A wording the model noticed for 'scenario' while answering 'not stated'. Vocabulary review material, never evidence.",
+      "type": "string"
+     },
+     "scenario_source": {
+      "description": "Which source the passage for 'scenario' was found in. How far that may be from the row is the axis' own rule (own | local | any).",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "section",
+         "table",
+         "figure"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
+     "scenario_state": {
+      "$ref": "#/$defs/state",
+      "description": "How the coordinate 'scenario' ended. Always present: a missing key and a refused reading must not look alike."
+     },
+     "scenario_window": {
+      "description": "[stage, index] of the window 'scenario' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts.",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "own",
+         "retrieval",
+         "rest"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
+     "tier": {
+      "description": "text_located: the quote sits in the document's own refined text, so it can be checked against the PDF. visual_source: it sits in a table transcription, a caption or a figure description, which are model output and want human curation.",
+      "enum": [
+       "text_located",
+       "visual_source"
+      ]
+     },
+     "unit": {
+      "description": "Empty: a wording has no unit. The key is present so every row has the same shape.",
+      "maxLength": 0,
+      "type": "string"
+     },
+     "unit_raw": {
+      "description": "Empty, as unit.",
+      "maxLength": 0,
+      "type": "string"
+     },
+     "value": {
+      "description": "The wording as the document writes it.",
+      "minLength": 1,
+      "type": "string"
+     },
+     "value_raw": {
+      "description": "The wording before any tidying (an organisation's legal form, a title's line break).",
+      "type": "string"
+     },
+     "value_uri": {
+      "description": "The entry of the parameter's own vocabulary the wording resolved to, where the parameter has one; null when the list did not hold it.",
+      "type": [
+       "string",
+       "null"
+      ]
+     }
+    },
+    "required": [
+     "kind",
+     "parameter",
+     "parameter_state",
+     "quote",
+     "tier",
+     "provenance",
+     "value",
+     "scenario",
+     "scenario_state"
+    ],
+    "type": "object"
+   },
+   "tuple_study_acronym": {
+    "additionalProperties": false,
+    "properties": {
+     "compute": {
+      "description": "The sandbox runs behind a computed value: {code, stdout, ok, error}.",
+      "items": {
+       "type": "object"
+      },
+      "type": "array"
+     },
+     "computed": {
+      "description": "The value came out of the sandbox, not off the page; the quote proves the inputs it was computed from.",
+      "type": "boolean"
+     },
+     "flags": {
+      "description": "Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping a word the spec does not list; period:* says whether a bare amount was shown to be a yearly one.",
+      "items": {
+       "pattern": "^(mapped:[a-z_]+:[\\s\\S]*->[\\s\\S]*|unmapped:[a-z_]+:[\\s\\S]*|unit_not_chosen:[\\s\\S]*|unit_spelling:[\\s\\S]*|period:(annual_in_quote|unstated)|quote_repaired|computed|not_located)$",
+       "type": "string"
+      },
+      "type": "array"
+     },
+     "kind": {
+      "const": "tuple"
+     },
+     "parameter": {
+      "const": "study_acronym",
+      "description": "Spec parameter: Projektakronym.",
+      "x-description-de": "Das Kürzel des Forschungsprojekts, meist in Klammern hinter dem ausgeschriebenen Projektnamen oder als Kopfzeile. Nur das Akronym des Projekts, nicht das eines Modells und nicht das einer Institution.",
+      "x-question": "Um WELCHES Feld handelt es sich bei diesem Wert? Entscheide danach, was die Quelle über ihn sagt: die Beschriftung, die Einheit und die Überschrift des Abschnitts. Zitiere die Stelle, aus der das hervorgeht."
+     },
+     "parameter_quote": {
+      "description": "The verbatim passage carrying 'parameter'. Present exactly when parameter_state is 'read'.",
+      "minLength": 8,
+      "type": "string"
+     },
+     "parameter_raw": {
+      "description": "The document's own wording 'parameter' was read from. This is what a later re-mapping onto a changed vocabulary works on, so a choice without it is counted (raw_missing).",
+      "type": "string"
+     },
+     "parameter_raw_foreign": {
+      "description": "The wording does not name the option chosen for 'parameter' -- the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.",
+      "type": "boolean"
+     },
+     "parameter_seen": {
+      "description": "A wording the model noticed for 'parameter' while answering 'not stated'. Vocabulary review material, never evidence.",
+      "type": "string"
+     },
+     "parameter_source": {
+      "description": "Which source the passage for 'parameter' was found in. How far that may be from the row is the axis' own rule (own | local | any).",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "section",
+         "table",
+         "figure"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
+     "parameter_state": {
+      "$ref": "#/$defs/state",
+      "description": "How the coordinate 'parameter' ended. Always present: a missing key and a refused reading must not look alike."
+     },
+     "parameter_window": {
+      "description": "[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts.",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "own",
+         "retrieval",
+         "rest"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
+     "provenance": {
+      "$ref": "#/$defs/provenance"
+     },
+     "quote": {
+      "description": "The passage of the owner source that contains the value. Whitespace-collapsed containment; a retyped table row may be repaired, which sets the flag quote_repaired.",
+      "minLength": 8,
+      "type": "string"
+     },
+     "tier": {
+      "description": "text_located: the quote sits in the document's own refined text, so it can be checked against the PDF. visual_source: it sits in a table transcription, a caption or a figure description, which are model output and want human curation.",
+      "enum": [
+       "text_located",
+       "visual_source"
+      ]
+     },
+     "unit": {
+      "description": "Empty: a wording has no unit. The key is present so every row has the same shape.",
+      "maxLength": 0,
+      "type": "string"
+     },
+     "unit_raw": {
+      "description": "Empty, as unit.",
+      "maxLength": 0,
+      "type": "string"
+     },
+     "value": {
+      "description": "The wording as the document writes it.",
+      "minLength": 1,
+      "type": "string"
+     },
+     "value_raw": {
+      "description": "The wording before any tidying (an organisation's legal form, a title's line break).",
+      "type": "string"
+     },
+     "value_uri": {
+      "description": "The entry of the parameter's own vocabulary the wording resolved to, where the parameter has one; null when the list did not hold it.",
+      "type": [
+       "string",
+       "null"
+      ]
+     }
+    },
+    "required": [
+     "kind",
+     "parameter",
+     "parameter_state",
+     "quote",
+     "tier",
+     "provenance",
+     "value"
+    ],
+    "type": "object"
+   },
+   "tuple_study_funder": {
+    "additionalProperties": false,
+    "properties": {
+     "compute": {
+      "description": "The sandbox runs behind a computed value: {code, stdout, ok, error}.",
+      "items": {
+       "type": "object"
+      },
+      "type": "array"
+     },
+     "computed": {
+      "description": "The value came out of the sandbox, not off the page; the quote proves the inputs it was computed from.",
+      "type": "boolean"
+     },
+     "flags": {
+      "description": "Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping a word the spec does not list; period:* says whether a bare amount was shown to be a yearly one.",
+      "items": {
+       "pattern": "^(mapped:[a-z_]+:[\\s\\S]*->[\\s\\S]*|unmapped:[a-z_]+:[\\s\\S]*|unit_not_chosen:[\\s\\S]*|unit_spelling:[\\s\\S]*|period:(annual_in_quote|unstated)|quote_repaired|computed|not_located)$",
+       "type": "string"
+      },
+      "type": "array"
+     },
+     "kind": {
+      "const": "tuple"
+     },
+     "parameter": {
+      "const": "study_funder",
+      "description": "Spec parameter: Fördermittelgeber.",
+      "x-description-de": "Eine Einrichtung, die die Arbeit finanziert hat, genannt in einem Abschnitt zu Funding, Förderung, Acknowledgements oder Danksagung. Nur wer zahlt, nicht wer inhaltlich beigetragen hat.",
+      "x-question": "Um WELCHES Feld handelt es sich bei diesem Wert? Entscheide danach, was die Quelle über ihn sagt: die Beschriftung, die Einheit und die Überschrift des Abschnitts. Zitiere die Stelle, aus der das hervorgeht."
+     },
+     "parameter_quote": {
+      "description": "The verbatim passage carrying 'parameter'. Present exactly when parameter_state is 'read'.",
+      "minLength": 8,
+      "type": "string"
+     },
+     "parameter_raw": {
+      "description": "The document's own wording 'parameter' was read from. This is what a later re-mapping onto a changed vocabulary works on, so a choice without it is counted (raw_missing).",
+      "type": "string"
+     },
+     "parameter_raw_foreign": {
+      "description": "The wording does not name the option chosen for 'parameter' -- the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.",
+      "type": "boolean"
+     },
+     "parameter_seen": {
+      "description": "A wording the model noticed for 'parameter' while answering 'not stated'. Vocabulary review material, never evidence.",
+      "type": "string"
+     },
+     "parameter_source": {
+      "description": "Which source the passage for 'parameter' was found in. How far that may be from the row is the axis' own rule (own | local | any).",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "section",
+         "table",
+         "figure"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
+     "parameter_state": {
+      "$ref": "#/$defs/state",
+      "description": "How the coordinate 'parameter' ended. Always present: a missing key and a refused reading must not look alike."
+     },
+     "parameter_window": {
+      "description": "[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts.",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "own",
+         "retrieval",
+         "rest"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
+     "provenance": {
+      "$ref": "#/$defs/provenance"
+     },
+     "quote": {
+      "description": "The passage of the owner source that contains the value. Whitespace-collapsed containment; a retyped table row may be repaired, which sets the flag quote_repaired.",
+      "minLength": 8,
+      "type": "string"
+     },
+     "tier": {
+      "description": "text_located: the quote sits in the document's own refined text, so it can be checked against the PDF. visual_source: it sits in a table transcription, a caption or a figure description, which are model output and want human curation.",
+      "enum": [
+       "text_located",
+       "visual_source"
+      ]
+     },
+     "unit": {
+      "description": "Empty: a wording has no unit. The key is present so every row has the same shape.",
+      "maxLength": 0,
+      "type": "string"
+     },
+     "unit_raw": {
+      "description": "Empty, as unit.",
+      "maxLength": 0,
+      "type": "string"
+     },
+     "value": {
+      "description": "The wording as the document writes it.",
+      "minLength": 1,
+      "type": "string"
+     },
+     "value_raw": {
+      "description": "The wording before any tidying (an organisation's legal form, a title's line break).",
+      "type": "string"
+     },
+     "value_uri": {
+      "description": "The entry of the parameter's own vocabulary the wording resolved to, where the parameter has one; null when the list did not hold it.",
+      "type": [
+       "string",
+       "null"
+      ]
+     }
+    },
+    "required": [
+     "kind",
+     "parameter",
+     "parameter_state",
+     "quote",
+     "tier",
+     "provenance",
+     "value"
+    ],
+    "type": "object"
+   },
+   "tuple_study_organisation": {
+    "additionalProperties": false,
+    "properties": {
+     "compute": {
+      "description": "The sandbox runs behind a computed value: {code, stdout, ok, error}.",
+      "items": {
+       "type": "object"
+      },
+      "type": "array"
+     },
+     "computed": {
+      "description": "The value came out of the sandbox, not off the page; the quote proves the inputs it was computed from.",
+      "type": "boolean"
+     },
+     "flags": {
+      "description": "Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping a word the spec does not list; period:* says whether a bare amount was shown to be a yearly one.",
+      "items": {
+       "pattern": "^(mapped:[a-z_]+:[\\s\\S]*->[\\s\\S]*|unmapped:[a-z_]+:[\\s\\S]*|unit_not_chosen:[\\s\\S]*|unit_spelling:[\\s\\S]*|period:(annual_in_quote|unstated)|quote_repaired|computed|not_located)$",
+       "type": "string"
+      },
+      "type": "array"
+     },
+     "kind": {
+      "const": "tuple"
+     },
+     "parameter": {
+      "const": "study_organisation",
+      "description": "Spec parameter: Beteiligte Institution.",
+      "x-description-de": "Eine Institution, die an der Erstellung des Dokuments beteiligt war: die Affiliation einer Autorin, das herausgebende Institut, die beauftragte Einrichtung. Ein Tupel je Institution, in der Schreibweise des Dokuments.",
+      "x-question": "Um WELCHES Feld handelt es sich bei diesem Wert? Entscheide danach, was die Quelle über ihn sagt: die Beschriftung, die Einheit und die Überschrift des Abschnitts. Zitiere die Stelle, aus der das hervorgeht."
+     },
+     "parameter_quote": {
+      "description": "The verbatim passage carrying 'parameter'. Present exactly when parameter_state is 'read'.",
+      "minLength": 8,
+      "type": "string"
+     },
+     "parameter_raw": {
+      "description": "The document's own wording 'parameter' was read from. This is what a later re-mapping onto a changed vocabulary works on, so a choice without it is counted (raw_missing).",
+      "type": "string"
+     },
+     "parameter_raw_foreign": {
+      "description": "The wording does not name the option chosen for 'parameter' -- the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.",
+      "type": "boolean"
+     },
+     "parameter_seen": {
+      "description": "A wording the model noticed for 'parameter' while answering 'not stated'. Vocabulary review material, never evidence.",
+      "type": "string"
+     },
+     "parameter_source": {
+      "description": "Which source the passage for 'parameter' was found in. How far that may be from the row is the axis' own rule (own | local | any).",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "section",
+         "table",
+         "figure"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
+     "parameter_state": {
+      "$ref": "#/$defs/state",
+      "description": "How the coordinate 'parameter' ended. Always present: a missing key and a refused reading must not look alike."
+     },
+     "parameter_window": {
+      "description": "[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts.",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "own",
+         "retrieval",
+         "rest"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
+     "provenance": {
+      "$ref": "#/$defs/provenance"
+     },
+     "quote": {
+      "description": "The passage of the owner source that contains the value. Whitespace-collapsed containment; a retyped table row may be repaired, which sets the flag quote_repaired.",
+      "minLength": 8,
+      "type": "string"
+     },
+     "tier": {
+      "description": "text_located: the quote sits in the document's own refined text, so it can be checked against the PDF. visual_source: it sits in a table transcription, a caption or a figure description, which are model output and want human curation.",
+      "enum": [
+       "text_located",
+       "visual_source"
+      ]
+     },
+     "unit": {
+      "description": "Empty: a wording has no unit. The key is present so every row has the same shape.",
+      "maxLength": 0,
+      "type": "string"
+     },
+     "unit_raw": {
+      "description": "Empty, as unit.",
+      "maxLength": 0,
+      "type": "string"
+     },
+     "value": {
+      "description": "The wording as the document writes it.",
+      "minLength": 1,
+      "type": "string"
+     },
+     "value_raw": {
+      "description": "The wording before any tidying (an organisation's legal form, a title's line break).",
+      "type": "string"
+     },
+     "value_uri": {
+      "description": "The entry of the parameter's own vocabulary the wording resolved to, where the parameter has one; null when the list did not hold it.",
+      "type": [
+       "string",
+       "null"
+      ]
+     }
+    },
+    "required": [
+     "kind",
+     "parameter",
+     "parameter_state",
+     "quote",
+     "tier",
+     "provenance",
+     "value"
+    ],
+    "type": "object"
+   },
+   "tuple_study_project_name": {
+    "additionalProperties": false,
+    "properties": {
+     "compute": {
+      "description": "The sandbox runs behind a computed value: {code, stdout, ok, error}.",
+      "items": {
+       "type": "object"
+      },
+      "type": "array"
+     },
+     "computed": {
+      "description": "The value came out of the sandbox, not off the page; the quote proves the inputs it was computed from.",
+      "type": "boolean"
+     },
+     "flags": {
+      "description": "Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping a word the spec does not list; period:* says whether a bare amount was shown to be a yearly one.",
+      "items": {
+       "pattern": "^(mapped:[a-z_]+:[\\s\\S]*->[\\s\\S]*|unmapped:[a-z_]+:[\\s\\S]*|unit_not_chosen:[\\s\\S]*|unit_spelling:[\\s\\S]*|period:(annual_in_quote|unstated)|quote_repaired|computed|not_located)$",
+       "type": "string"
+      },
+      "type": "array"
+     },
+     "kind": {
+      "const": "tuple"
+     },
+     "parameter": {
+      "const": "study_project_name",
+      "description": "Spec parameter: Projektname.",
+      "x-description-de": "Der ausgeschriebene Name des Forschungsprojekts, in dessen Rahmen die Studie oder die Szenarien entstanden sind. Nur wenn das Dokument ein Projekt ausdrücklich als seinen Rahmen nennt, nicht der Titel des Dokuments.",
+      "x-question": "Um WELCHES Feld handelt es sich bei diesem Wert? Entscheide danach, was die Quelle über ihn sagt: die Beschriftung, die Einheit und die Überschrift des Abschnitts. Zitiere die Stelle, aus der das hervorgeht."
+     },
+     "parameter_quote": {
+      "description": "The verbatim passage carrying 'parameter'. Present exactly when parameter_state is 'read'.",
+      "minLength": 8,
+      "type": "string"
+     },
+     "parameter_raw": {
+      "description": "The document's own wording 'parameter' was read from. This is what a later re-mapping onto a changed vocabulary works on, so a choice without it is counted (raw_missing).",
+      "type": "string"
+     },
+     "parameter_raw_foreign": {
+      "description": "The wording does not name the option chosen for 'parameter' -- the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.",
+      "type": "boolean"
+     },
+     "parameter_seen": {
+      "description": "A wording the model noticed for 'parameter' while answering 'not stated'. Vocabulary review material, never evidence.",
+      "type": "string"
+     },
+     "parameter_source": {
+      "description": "Which source the passage for 'parameter' was found in. How far that may be from the row is the axis' own rule (own | local | any).",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "section",
+         "table",
+         "figure"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
+     "parameter_state": {
+      "$ref": "#/$defs/state",
+      "description": "How the coordinate 'parameter' ended. Always present: a missing key and a refused reading must not look alike."
+     },
+     "parameter_window": {
+      "description": "[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts.",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "own",
+         "retrieval",
+         "rest"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
+     "provenance": {
+      "$ref": "#/$defs/provenance"
+     },
+     "quote": {
+      "description": "The passage of the owner source that contains the value. Whitespace-collapsed containment; a retyped table row may be repaired, which sets the flag quote_repaired.",
+      "minLength": 8,
+      "type": "string"
+     },
+     "tier": {
+      "description": "text_located: the quote sits in the document's own refined text, so it can be checked against the PDF. visual_source: it sits in a table transcription, a caption or a figure description, which are model output and want human curation.",
+      "enum": [
+       "text_located",
+       "visual_source"
+      ]
+     },
+     "unit": {
+      "description": "Empty: a wording has no unit. The key is present so every row has the same shape.",
+      "maxLength": 0,
+      "type": "string"
+     },
+     "unit_raw": {
+      "description": "Empty, as unit.",
+      "maxLength": 0,
+      "type": "string"
+     },
+     "value": {
+      "description": "The wording as the document writes it.",
+      "minLength": 1,
+      "type": "string"
+     },
+     "value_raw": {
+      "description": "The wording before any tidying (an organisation's legal form, a title's line break).",
+      "type": "string"
+     },
+     "value_uri": {
+      "description": "The entry of the parameter's own vocabulary the wording resolved to, where the parameter has one; null when the list did not hold it.",
+      "type": [
+       "string",
+       "null"
+      ]
+     }
+    },
+    "required": [
+     "kind",
+     "parameter",
+     "parameter_state",
+     "quote",
+     "tier",
+     "provenance",
+     "value"
+    ],
+    "type": "object"
+   }
+  },
+  "$id": "https://openenergyplatform.org/schema/mhpkg/extraction/harvest-line",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "An accepted tuple (kind=tuple) or a refused claim (kind=refusal). Generated from the profile's extraction_spec.json by docpipe/extraction/schema.py.",
+  "oneOf": [
+   {
+    "$ref": "#/$defs/tuple_publication_title"
+   },
+   {
+    "$ref": "#/$defs/tuple_publication_author"
+   },
+   {
+    "$ref": "#/$defs/tuple_publication_date"
+   },
+   {
+    "$ref": "#/$defs/tuple_publication_doi"
+   },
+   {
+    "$ref": "#/$defs/tuple_publication_abstract"
+   },
+   {
+    "$ref": "#/$defs/tuple_study_organisation"
+   },
+   {
+    "$ref": "#/$defs/tuple_study_funder"
+   },
+   {
+    "$ref": "#/$defs/tuple_study_project_name"
+   },
+   {
+    "$ref": "#/$defs/tuple_study_acronym"
+   },
+   {
+    "$ref": "#/$defs/tuple_scenario_label"
+   },
+   {
+    "$ref": "#/$defs/tuple_scenario_type"
+   },
+   {
+    "$ref": "#/$defs/tuple_scenario_abstract"
+   },
+   {
+    "$ref": "#/$defs/tuple_scenario_region"
+   },
+   {
+    "$ref": "#/$defs/tuple_scenario_year"
+   },
+   {
+    "$ref": "#/$defs/refusal"
+   }
+  ],
+  "title": "docpipe extraction harvest line (one JSON object per line)"
+ },
+ "stamp": {
+  "$id": "https://openenergyplatform.org/schema/mhpkg/extraction/stamp",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Any key that differs from the current run makes the document stale and it is harvested again. Withheld when the harvest did not happen.",
+  "patternProperties": {
+   "^extraction/(harvest|queries|anchors|rows|field)$": {
+    "description": "sha256 of the prompt file",
+    "pattern": "^[0-9a-f]{64}$",
+    "type": "string"
+   }
+  },
+  "properties": {
+   "anchors": {
+    "description": "spec sha and frozen-anchor sha together; empty when anchors were off",
+    "pattern": "^([0-9a-f]{16})?$",
+    "type": "string"
+   },
+   "model": {
+    "description": "the serving model",
+    "type": "string"
+   },
+   "page_text_transcribed": {
+    "description": "How many pages of this document a model read rather than the PDF. A harvest from a transcribed plan is a reading of a reading.",
+    "type": [
+     "integer",
+     "null"
+    ]
+   },
+   "spec": {
+    "description": "sha256 of extraction_spec.json",
+    "pattern": "^[0-9a-f]{64}$",
+    "type": "string"
+   }
+  },
+  "required": [
+   "spec",
+   "model",
+   "anchors",
+   "extraction/harvest",
+   "extraction/queries",
+   "extraction/anchors",
+   "extraction/rows",
+   "extraction/field"
+  ],
+  "title": "docpipe extraction resume stamp",
+  "type": "object"
+ },
+ "trace": {
+  "$id": "https://openenergyplatform.org/schema/mhpkg/extraction/trace-record",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "One event per line; `t` names it and `doc` the document. Read by scripts/trace_report.py.",
+  "oneOf": [
+   {
+    "additionalProperties": false,
+    "properties": {
+     "chars": {
+      "type": "integer"
+     },
+     "doc": {
+      "type": "integer"
+     },
+     "image": {
+      "type": "boolean"
+     },
+     "kind": {
+      "enum": [
+       "section",
+       "table",
+       "figure"
+      ]
+     },
+     "origin": {
+      "enum": [
+       "structure",
+       "retrieval"
+      ]
+     },
+     "owner": {
+      "type": "integer"
+     },
+     "rank": {
+      "type": [
+       "integer",
+       "null"
+      ]
+     },
+     "t": {
+      "const": "plan"
+     }
+    },
+    "required": [
+     "t",
+     "doc",
+     "rank",
+     "origin",
+     "kind",
+     "owner",
+     "chars",
+     "image"
+    ],
+    "type": "object"
+   },
+   {
+    "additionalProperties": false,
+    "properties": {
+     "attempt": {
+      "type": "integer"
+     },
+     "completion_tokens": {
+      "type": [
+       "integer",
+       "null"
+      ]
+     },
+     "doc": {
+      "type": "integer"
+     },
+     "ms": {
+      "type": "integer"
+     },
+     "origins": {
+      "type": "array"
+     },
+     "prompt": {
+      "type": "string"
+     },
+     "prompt_tokens": {
+      "type": [
+       "integer",
+       "null"
+      ]
+     },
+     "ranks": {
+      "type": "array"
+     },
+     "rows": {
+      "type": "integer"
+     },
+     "sources": {
+      "items": {
+       "description": "[owner_kind, owner_id]",
+       "maxItems": 2,
+       "minItems": 2,
+       "prefixItems": [
+        {
+         "enum": [
+          "section",
+          "table",
+          "figure"
+         ]
+        },
+        {
+         "type": "integer"
+        }
+       ],
+       "type": "array"
+      },
+      "type": "array"
+     },
+     "status": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "t": {
+      "const": "rows"
+     }
+    },
+    "required": [
+     "t",
+     "doc",
+     "prompt",
+     "attempt",
+     "rows",
+     "ranks",
+     "origins"
+    ],
+    "type": "object"
+   },
+   {
+    "additionalProperties": false,
+    "properties": {
+     "anchor": {
+      "type": "string"
+     },
+     "attempt": {
+      "type": "integer"
+     },
+     "completion_tokens": {
+      "type": [
+       "integer",
+       "null"
+      ]
+     },
+     "doc": {
+      "type": "integer"
+     },
+     "filled": {
+      "type": "integer"
+     },
+     "filled_by": {
+      "additionalProperties": {
+       "type": "integer"
+      },
+      "type": "object"
+     },
+     "ms": {
+      "type": "integer"
+     },
+     "open": {
+      "type": "integer"
+     },
+     "parameter": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "prompt_tokens": {
+      "type": [
+       "integer",
+       "null"
+      ]
+     },
+     "raw_foreign": {
+      "type": "integer"
+     },
+     "raw_missing": {
+      "type": "integer"
+     },
+     "reply": {
+      "type": "boolean"
+     },
+     "shown": {
+      "items": {
+       "description": "[owner_kind, owner_id]",
+       "maxItems": 2,
+       "minItems": 2,
+       "prefixItems": [
+        {
+         "enum": [
+          "section",
+          "table",
+          "figure"
+         ]
+        },
+        {
+         "type": "integer"
+        }
+       ],
+       "type": "array"
+      },
+      "type": "array"
+     },
+     "slot": {
+      "type": "string"
+     },
+     "stage": {
+      "enum": [
+       "own",
+       "retrieval",
+       "rest"
+      ]
+     },
+     "t": {
+      "const": "field"
+     },
+     "unbacked": {
+      "type": "integer"
+     },
+     "unbacked_by": {
+      "additionalProperties": {
+       "type": "integer"
+      },
+      "type": "object"
+     },
+     "unquoted": {
+      "type": "integer"
+     },
+     "unstated": {
+      "type": "integer"
+     },
+     "window": {
+      "type": "integer"
+     }
+    },
+    "required": [
+     "t",
+     "doc",
+     "anchor",
+     "window",
+     "stage",
+     "attempt",
+     "parameter",
+     "open",
+     "reply",
+     "shown",
+     "filled",
+     "unquoted",
+     "unbacked",
+     "unstated"
+    ],
+    "type": "object"
+   },
+   {
+    "additionalProperties": false,
+    "properties": {
+     "anchor": {
+      "type": "string"
+     },
+     "asked": {
+      "type": "integer"
+     },
+     "combed": {
+      "type": "boolean"
+     },
+     "doc": {
+      "type": "integer"
+     },
+     "exhausted": {
+      "type": "integer"
+     },
+     "filled": {
+      "type": "integer"
+     },
+     "raw_foreign": {
+      "type": "integer"
+     },
+     "raw_missing": {
+      "type": "integer"
+     },
+     "retried": {
+      "type": "integer"
+     },
+     "rows": {
+      "type": "integer"
+     },
+     "slot": {
+      "type": "string"
+     },
+     "t": {
+      "const": "sweep"
+     },
+     "unbacked": {
+      "type": "integer"
+     },
+     "unquoted": {
+      "type": "integer"
+     },
+     "unstated": {
+      "type": "integer"
+     },
+     "windows": {
+      "type": "integer"
+     }
+    },
+    "required": [
+     "t",
+     "doc",
+     "anchor",
+     "windows",
+     "rows",
+     "combed",
+     "retried",
+     "asked",
+     "exhausted",
+     "filled",
+     "unquoted",
+     "unbacked",
+     "unstated"
+    ],
+    "type": "object"
+   },
+   {
+    "additionalProperties": false,
+    "properties": {
+     "attempt": {
+      "type": "integer"
+     },
+     "doc": {
+      "type": "integer"
+     },
+     "field": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "row": {
+      "pattern": "^R[0-9]+$",
+      "type": "string"
+     },
+     "slot": {
+      "type": "string"
+     },
+     "t": {
+      "const": "drop"
+     },
+     "why": {
+      "enum": [
+       "quote_not_in_source",
+       "quote_not_local",
+       "quote_too_short",
+       "answer_not_in_quote",
+       "unbacked"
+      ]
+     },
+     "window": {
+      "type": "integer"
+     }
+    },
+    "required": [
+     "t",
+     "doc",
+     "window",
+     "attempt",
+     "row"
+    ],
+    "type": "object"
+   },
+   {
+    "additionalProperties": false,
+    "properties": {
+     "attempt": {
+      "type": "integer"
+     },
+     "detail": {
+      "type": "string"
+     },
+     "doc": {
+      "type": "integer"
+     },
+     "finish": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "kind": {
+      "enum": [
+       "unparsable",
+       "exception",
+       "gave_up"
+      ]
+     },
+     "ms": {
+      "type": "integer"
+     },
+     "slot": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "sources": {
+      "items": {
+       "description": "[owner_kind, owner_id]",
+       "maxItems": 2,
+       "minItems": 2,
+       "prefixItems": [
+        {
+         "enum": [
+          "section",
+          "table",
+          "figure"
+         ]
+        },
+        {
+         "type": "integer"
+        }
+       ],
+       "type": "array"
+      },
+      "type": "array"
+     },
+     "status": {
+      "type": [
+       "integer",
+       "string",
+       "null"
+      ]
+     },
+     "t": {
+      "const": "error"
+     },
+     "where": {
+      "type": "string"
+     },
+     "why": {
+      "enum": [
+       "unreachable",
+       "no_answer"
+      ]
+     }
+    },
+    "required": [
+     "t",
+     "doc",
+     "where",
+     "kind",
+     "attempt"
+    ],
+    "type": "object"
+   },
+   {
+    "additionalProperties": false,
+    "properties": {
+     "doc": {
+      "type": "integer"
+     },
+     "kind": {
+      "enum": [
+       "section",
+       "table",
+       "figure"
+      ]
+     },
+     "owner": {
+      "type": "integer"
+     },
+     "parameter": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "states": {
+      "additionalProperties": {
+       "enum": [
+        "read",
+        "derived",
+        "unstated",
+        "unanswered",
+        "exhausted",
+        "unbacked",
+        "out_of_slice"
+       ]
+      },
+      "type": "object"
+     },
+     "t": {
+      "const": "coord"
+     },
+     "tier": {
+      "enum": [
+       "text_located",
+       "visual_source"
+      ]
+     },
+     "unit": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "value": {}
+    },
+    "required": [
+     "t",
+     "doc",
+     "parameter",
+     "value",
+     "unit",
+     "tier",
+     "kind",
+     "owner",
+     "states"
+    ],
+    "type": "object"
+   },
+   {
+    "additionalProperties": false,
+    "properties": {
+     "doc": {
+      "type": "integer"
+     },
+     "owner": {
+      "description": "[owner_kind, owner_id]",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "section",
+         "table",
+         "figure"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
+     "parameter": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "reason": {
+      "type": "string"
+     },
+     "t": {
+      "const": "refusal"
+     }
+    },
+    "required": [
+     "t",
+     "doc",
+     "parameter",
+     "reason",
+     "owner"
+    ],
+    "type": "object"
+   },
+   {
+    "additionalProperties": false,
+    "properties": {
+     "detail": {
+      "type": "string"
+     },
+     "doc": {
+      "type": "integer"
+     },
+     "kind": {
+      "enum": [
+       "tuple",
+       "refusal"
+      ]
+     },
+     "t": {
+      "const": "invalid"
+     },
+     "where": {
+      "type": "string"
+     },
+     "why": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "t",
+     "doc",
+     "kind",
+     "where"
+    ],
+    "type": "object"
+   }
+  ],
+  "title": "docpipe extraction trace record"
+ }
+}

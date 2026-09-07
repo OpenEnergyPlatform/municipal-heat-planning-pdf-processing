@@ -219,6 +219,34 @@ def audit(profile: str) -> None:
     kg = base / "kg.py"
     check(profile, "Serializer vorhanden", kg.is_file(), str(kg))
 
+    # The published shape of what this run writes. It is generated, so a spec
+    # change that nobody regenerated leaves the schema describing a harvest
+    # nobody produces -- and the schema is what a reader outside this
+    # repository has instead of runner.py.
+    try:
+        import jsonschema                                        # noqa: F401
+        has_jsonschema = True
+    except ImportError:
+        has_jsonschema = False
+    check(profile, "jsonschema importierbar", has_jsonschema,
+          "" if has_jsonschema else "pip install jsonschema")
+    from docpipe.extraction import schema as schema_mod
+    written = schema_mod.schema_path(profile)
+    if check(profile, "Schema vorhanden", written.is_file(), str(written)):
+        current = (written.read_text(encoding="utf-8")
+                   == schema_mod.serialize(schema_mod.build(spec)))
+        check(profile, "Schema aktuell", current,
+              "" if current else
+              f"python -m docpipe.extraction.schema {profile} --write")
+
+    # A coordinate the graph takes has to say what it becomes there. Not
+    # every axis does -- some are read for the record and never serialized --
+    # but an axis with no kg block at all is one nobody decided about.
+    silent = [f"{p.uri}.{name}" for p in spec.parameters
+              for name, axis in p.axes.items() if not axis.kg]
+    check(profile, "jede Achse sagt, was sie im Graphen wird", not silent,
+          ", ".join(silent), fatal=False)
+
 
 def main(argv: list) -> int:
     for profile in (argv or ["kwp", "scenarios"]):
