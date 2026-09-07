@@ -21,8 +21,8 @@ import sqlite3
 
 import pytest
 
-from docpipe.inference.db import (fetch_owner_content, looks_like_a_caption,
-                                  resolve_title, section_item_captions)
+from docpipe.captions import looks_like_a_caption, resolve_title
+from docpipe.inference.db import fetch_owner_content, section_item_captions
 
 # Three tables, three captions, one paragraph. This is the shape the resolver
 # has to get right: the caption of [p86_tbl0] is the sentence between the

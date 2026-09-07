@@ -34,6 +34,7 @@ from .config import (
     clean_data,
     dump_json_atomic,
 )
+from docpipe.captions import resolve_title
 from docpipe.profile import active_profile, profile_value
 
 from .columns import sort_pages
@@ -259,6 +260,16 @@ def build_sections(pages: list[PageData], column_layout: str = "auto") -> list[S
     content before the first title. Section.content carries [block_id] markers
     where a table or figure appears in the reading order.
 
+    A table's caption is settled here, where the section text and the
+    placeholder are both in hand. Stage 2 links a caption block by distance,
+    and in a plan whose tables carry a rounding footnote it links the
+    footnote: 15 of Kassel's 89 tables were captioned "Hinweis: Wegen der
+    Rundung von Zahlenwerten ..." while the sentence naming them stood in the
+    text a few words before their own placeholder. `resolve_title` takes it
+    from there and leaves a caption that already opens like one alone. The
+    sentence stays in the section content: a quote of it has to remain
+    findable where it was read.
+
     *column_layout* (from the profile: auto | single | double) decides whether a
     page is read as one column or column by column.
 
@@ -365,6 +376,9 @@ def build_sections(pages: list[PageData], column_layout: str = "auto") -> list[S
                     current_section.tables.append(ref)
                     sep = " " if current_section.content else ""
                     current_section.content += sep + f"[{block.id}]"
+                    ref.caption = resolve_title(ref.caption,
+                                                current_section.content,
+                                                block.id)
                     seg: dict = {"page": pg.page_number, "kind": "table", "ref": block.id}
                     if rect is not None:
                         seg["bbox"] = [rect]
@@ -385,6 +399,9 @@ def build_sections(pages: list[PageData], column_layout: str = "auto") -> list[S
                     current_section.figures.append(ref)
                     sep = " " if current_section.content else ""
                     current_section.content += sep + f"[{block.id}]"
+                    ref.caption = resolve_title(ref.caption,
+                                                current_section.content,
+                                                block.id)
                     seg = {"page": pg.page_number, "kind": "figure", "ref": block.id}
                     if rect is not None:
                         seg["bbox"] = [rect]

@@ -299,3 +299,104 @@ def test_page_source_is_additive_and_says_which_plans_a_model_read(kwp_db,
     con.execute("UPDATE Documents SET num_pages = 41 WHERE id = 2")
     con.commit()
     assert DB.enrich_page_source(db, root, force=True)["documents"] == 2
+
+
+# ---------------------------------------------------------------------------
+# The title a table is stored under
+# ---------------------------------------------------------------------------
+_FOOTNOTE = "Hinweis: Wegen der Rundung kann es zu Abweichungen kommen."
+
+_CAPTIONS = {
+    "sections": [
+        {"title": "Bestand", "page_number": 5, "pages": [5],
+         "content": ("Tabelle 17: Endenergieverbrauch 2040 [p5_tbl0] "
+                     "Abbildung 3: Waermedichte [p5_img0]"),
+         "segments": [{"page": 5, "kind": "table", "ref": "p5_tbl0"},
+                      {"page": 5, "kind": "figure", "ref": "p5_img0"}],
+         "tables": [{"id": "p5_tbl0", "path": "i/p5_tbl0.png", "page_number": 5,
+                     "caption": _FOOTNOTE, "markdown": "| a |"}],
+         "figures": [{"id": "p5_img0", "path": "i/p5_img0.png", "page_number": 5,
+                      "caption": "Quelle: eigene Darstellung",
+                      "description": "Eine Karte"}]},
+        {"title": "Ziel", "page_number": 6, "pages": [6],
+         "content": "Tabelle 18: Zielszenario 2045 [p6_tbl0]",
+         "segments": [{"page": 6, "kind": "table", "ref": "p6_tbl0"}],
+         "tables": [{"id": "p6_tbl0", "path": "i/p6_tbl0.png", "page_number": 6,
+                     "caption": "Tabelle 18: Zielszenario 2045",
+                     "markdown": "| b |"}],
+         "figures": []},
+    ]
+}
+
+
+def test_enrich_caption_takes_the_title_from_the_section_text(kwp_db):
+    """Stage 2 links a caption block by distance and links the rounding
+    footnote instead: 15 of Kassel's 89 tables. The caption is the only line
+    of a table a model can quote for the table's own year, so 240 of 379
+    tuples from the twelve titled tables carried a foreign year. The corpus
+    was built before Stage 3 settled this, and re-preprocessing 1.082 plans
+    costs GPU days -- the rule is a pure function of the section text, so it
+    runs over the finished database.
+    """
+    db, con = kwp_db
+    DB._insert_sections(1, _CAPTIONS, con)
+    con.commit()
+
+    stats = DB.enrich_caption(db)
+    assert stats == {"documents": 1, "tables": 2, "images": 1, "resolved": 2}
+    got = dict(con.execute(
+        "SELECT block_id, caption FROM Tables "
+        "UNION ALL SELECT block_id, caption FROM Images").fetchall())
+    assert got["p5_tbl0"] == "Tabelle 17: Endenergieverbrauch 2040"
+    assert got["p5_img0"] == "Abbildung 3: Waermedichte"
+    # A caption that already opens like one is left alone: Stage 2 saw the
+    # two blocks on the page, and a link beats a guess.
+    assert got["p6_tbl0"] == "Tabelle 18: Zielszenario 2045"
+    sources = dict(con.execute(
+        "SELECT block_id, caption_source FROM Tables "
+        "UNION ALL SELECT block_id, caption_source FROM Images").fetchall())
+    assert sources == {"p5_tbl0": "section_text", "p5_img0": "section_text",
+                       "p6_tbl0": "stage"}
+
+
+def test_enrich_caption_is_additive_and_never_runs_twice(kwp_db):
+    """A backfill that redoes its work every run is a backfill nobody dares
+    put in the db step. `caption_source` is the marker, and `force` is the
+    only way past it."""
+    db, con = kwp_db
+    DB._insert_sections(1, _CAPTIONS, con)
+    con.commit()
+    assert DB.enrich_caption(db)["tables"] == 2
+
+    second = DB.enrich_caption(db)
+    assert second == {"documents": 0, "tables": 0, "images": 0, "resolved": 0}
+
+    # And it never overwrites a title someone corrected by hand.
+    con.execute("UPDATE Tables SET caption = ? WHERE block_id = ?",
+                ("Tabelle 17: Von Hand berichtigt", "p5_tbl0"))
+    con.commit()
+    DB.enrich_caption(db)
+    assert con.execute("SELECT caption FROM Tables WHERE block_id = ?",
+                       ("p5_tbl0",)).fetchone()[0] == \
+        "Tabelle 17: Von Hand berichtigt"
+
+    assert DB.enrich_caption(db, force=True)["tables"] == 2
+
+
+def test_enrich_caption_leaves_a_table_with_no_sentence_alone(kwp_db):
+    """"Nothing to take it from" is the common case, not a failure: the row
+    keeps the caption it has and is marked seen, or the pass would look at it
+    again on every run."""
+    db, con = kwp_db
+    DB._insert_sections(1, {"sections": [
+        {"title": "Anhang", "page_number": 7, "pages": [7],
+         "content": "Der Verbrauch sinkt. [p7_tbl0]",
+         "segments": [{"page": 7, "kind": "table", "ref": "p7_tbl0"}],
+         "tables": [{"id": "p7_tbl0", "path": "i/p7_tbl0.png", "page_number": 7,
+                     "caption": _FOOTNOTE, "markdown": "| c |"}],
+         "figures": []}]}, con)
+    con.commit()
+
+    assert DB.enrich_caption(db)["resolved"] == 0
+    row = con.execute("SELECT caption, caption_source FROM Tables").fetchone()
+    assert row[0] == _FOOTNOTE and row[1] == "stage"

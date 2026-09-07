@@ -32,6 +32,7 @@ from .database import (
     update_database,
     document_id,
     enrich_bbox,
+    enrich_caption,
     enrich_page_source,
     get_existing_embeddings,
     clear_embedding_ids,
@@ -100,9 +101,9 @@ def run(
     Run the pipeline over the PDF subdirectories of `data_dir`.
 
     `step` limits the run to 'merge', 'db', 'embed' or the standalone
-    'enrich-bbox' or 'enrich-page-source'; None runs merge → db → embed (the
-    db step backfills the page source itself). `force` ignores caches and
-    clears old embeddings.
+    'enrich-bbox', 'enrich-page-source' or 'enrich-caption'; None runs
+    merge → db → embed (the db step backfills the page source and the
+    captions itself). `force` ignores caches and clears old embeddings.
     """
     data_dir = Path(data_dir)
     db_path = Path(db_path)
@@ -114,6 +115,13 @@ def run(
         # and run at the end of the db step too, so a new document carries it
         # without anyone remembering to ask.
         enrich_page_source(db_path, data_dir, force=force)
+        return
+
+    if step == "enrich-caption":
+        # The sentence that names a table, taken from the section text where
+        # Stage 2 linked a footnote instead. Pure SQL over the finished
+        # database, so the corpus does not have to be preprocessed again.
+        enrich_caption(db_path, force=force)
         return
 
     if step == "enrich-bbox":
@@ -154,6 +162,10 @@ def run(
         # textless plans are indistinguishable from the other 1,071 the
         # moment they are in the database.
         enrich_page_source(db_path, data_dir, force=force)
+        # And the title of every table and figure. Stage 3 settles it at write
+        # time, so this finds nothing to do on a freshly preprocessed plan --
+        # it is here for the ones that were processed before it did.
+        enrich_caption(db_path, force=force)
 
     if "embed" in steps:
         sep = "=" * 60
@@ -299,12 +311,15 @@ Examples:
                    help="FAISS index (default: the profile's)")
     p.add_argument(
         "--step", choices=["merge", "db", "embed", "enrich-bbox",
-                           "enrich-page-source"], default=None,
+                           "enrich-page-source", "enrich-caption"], default=None,
         help="Run only a specific step (default: merge, db, embed). "
              "'enrich-bbox' additively backfills segment/table/image bbox from "
              "re-run Stage-3 outputs without re-embedding (index_path is ignored). "
              "'enrich-page-source' additively backfills how many pages of each "
-             "document a model transcribed, from the preprocessing report.",
+             "document a model transcribed, from the preprocessing report. "
+             "'enrich-caption' additively replaces a table/figure caption that "
+             "does not open like one with the sentence before its placeholder "
+             "in the section text (no model, data_dir is ignored).",
     )
     add_profile_argument(p)
     p.add_argument("--force", action="store_true", help="Force re-processing")

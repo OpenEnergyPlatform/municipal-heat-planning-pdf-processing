@@ -19,6 +19,7 @@ from contextlib import closing
 from pathlib import Path
 from typing import Optional
 
+from docpipe.captions import resolve_title
 from .config import (
     DOCUMENT_JSON,
     PAGE_TRANSCRIPTION_REPORT_JSON,
@@ -140,6 +141,15 @@ def _ensure_page_source_column(connection: sqlite3.Connection) -> None:
             'ALTER TABLE "Documents" ADD COLUMN "page_text_transcribed" INTEGER')
 
 
+def _ensure_caption_source_column(connection: sqlite3.Connection) -> None:
+    """Add `caption_source` to Tables/Images on a DB that predates it."""
+    for table in ("Tables", "Images"):
+        cols = {row[1] for row in connection.execute(f'PRAGMA table_info("{table}")')}
+        if "caption_source" not in cols:
+            connection.execute(
+                f'ALTER TABLE "{table}" ADD COLUMN "caption_source" TEXT')
+
+
 def enrich_page_source(db_path: Path, root_dir: Path,
                        *, force: bool = False) -> dict:
     """Record, per document, how many of its pages the MODEL read.
@@ -194,6 +204,67 @@ def enrich_page_source(db_path: Path, root_dir: Path,
     log.info("enrich-page-source: %d document(s), %d of them model-read "
              "(%d page(s))", stats["documents"], stats["transcribed"],
              stats["pages"])
+    return stats
+
+
+def enrich_caption(db_path: Path, *, force: bool = False) -> dict:
+    """Give every table and figure the sentence that names it. No model.
+
+    Stage 2 links a caption block to a table by distance and, in a plan whose
+    tables carry a rounding footnote, links the footnote: 15 of Kassel's 89
+    tables were captioned "Hinweis: Wegen der Rundung von Zahlenwerten ...".
+    The caption is the only line of a table a model can quote for the table's
+    own year, and 240 of 379 tuples from the twelve titled tables carried a
+    year read off another table's caption.
+
+    Stage 3 settles this at write time now, but the corpus was built before
+    that and re-preprocessing 1.082 plans costs GPU days. The rule is a pure
+    function of the section text and the placeholder, so it runs here over
+    the finished database instead: one pass, no model, additive.
+
+    `caption_source` records what happened to each row -- 'stage' when the
+    stored caption was kept, 'section_text' when it was replaced -- and is
+    the resume marker: without `force` a row that already has it is skipped,
+    so a second run updates nothing.
+
+    What it does not reach is the vectors. A table is embedded as caption +
+    markdown, and that text is built from the merged JSON, not from here, so
+    a row marked 'section_text' is a row whose stored vector still encodes
+    the footnote. It is not a regression -- the vector is the one that was
+    always there -- and what a reader and the model are shown is now right.
+    The vector follows when the plan is preprocessed again, where Stage 3
+    settles the caption before anything is embedded.
+    """
+    stats = {"documents": 0, "tables": 0, "images": 0, "resolved": 0}
+    cond = "" if force else " AND i.caption_source IS NULL"
+    with closing(connect(db_path)) as conn:
+        _ensure_caption_source_column(conn)
+        documents = [row[0] for row in
+                     conn.execute("SELECT id FROM Documents ORDER BY id")]
+        for doc_id in documents:
+            touched = False
+            for table, key in (("Tables", "tables"), ("Images", "images")):
+                rows = conn.execute(
+                    f"SELECT i.id, i.block_id, i.caption, s.content "
+                    f"FROM {table} i JOIN Sections s ON i.section = s.id "
+                    f"WHERE s.document = ?{cond}",
+                    (doc_id,)).fetchall()
+                for row_id, block_id, caption, content in rows:
+                    title = resolve_title(caption, content, block_id)
+                    source = "stage" if title == caption else "section_text"
+                    conn.execute(
+                        f"UPDATE {table} SET caption = ?, caption_source = ? "
+                        f"WHERE id = ?", (title, source, row_id))
+                    stats[key] += 1
+                    if source == "section_text":
+                        stats["resolved"] += 1
+                    touched = True
+            if touched:
+                stats["documents"] += 1
+        conn.commit()
+    log.info("enrich-caption: %d document(s), %d table(s) + %d figure(s) seen, "
+             "%d title(s) taken from the section text", stats["documents"],
+             stats["tables"], stats["images"], stats["resolved"])
     return stats
 
 
@@ -500,7 +571,7 @@ def enrich_bbox(db_path: Path, root_dir: Path, *, force: bool = False) -> dict:
         return stats
 
     log.info("enrich-bbox: %d documents", len(candidates))
-    cond = "" if force else " AND page_text_transcribed IS NULL" if force else " AND bbox IS NULL"
+    cond = "" if force else " AND bbox IS NULL"
 
     with closing(connect(db_path)) as conn:
         _ensure_bbox_columns(conn)
