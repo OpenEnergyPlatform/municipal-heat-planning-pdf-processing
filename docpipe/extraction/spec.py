@@ -13,6 +13,7 @@ Author: Felix Vossel
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 import unicodedata
@@ -485,3 +486,83 @@ def load(source: Union[Path, str, dict]) -> Spec:
         _fail("spec.parameter_question", "must be a non-empty string")
     return Spec(parameters=parameters,
                 parameter_question=(question or None))
+
+
+def _digest(parts) -> str:
+    """A stable sha256 over whatever decides a question and its answer space.
+
+    Stable across runs and across machines: the parts go through JSON with
+    sorted keys, so a dict that was built in another order still hashes the
+    same. A fingerprint that moves on its own would mark every document stale
+    once and teach everyone to ignore it.
+    """
+    blob = json.dumps(parts, ensure_ascii=False, sort_keys=True,
+                      separators=(",", ":"))
+    return hashlib.sha256(blob.encode("utf-8")).hexdigest()
+
+
+def axis_fingerprint(axis: "Axis") -> str:
+    """What this coordinate asks and what it may answer.
+
+    Everything the model sees for this axis, and nothing else: a changed
+    comment, a reordered vocabulary or a new parameter elsewhere in the spec
+    must not make a document stale for this axis. Options are sorted for the
+    same reason -- the list is a set, and the order it happens to be written
+    in is not part of the question.
+    """
+    vocabulary = axis.vocabulary or {}
+    return _digest({
+        "name": axis.name,
+        "question": axis.question,
+        "type": axis.type,
+        "enum": sorted(axis.enum) if axis.enum else None,
+        "required": axis.required,
+        "dynamic": axis.dynamic,
+        "evidence": axis.evidence,
+        "derive": axis.derive,
+        # The offered list: identifier, the spellings a plan may use, and the
+        # sentence saying what the term means. All three reach the model, so
+        # all three decide whether an answer is still the answer to this
+        # question.
+        "options": {uri: {"spellings": sorted(map(str, labels or [])),
+                          "definition": (axis.definitions or {}).get(uri)}
+                    for uri, labels in vocabulary.items()},
+    })
+
+
+def parameter_fingerprint(parameter: "Parameter") -> str:
+    """What this parameter asks, WITHOUT its axes.
+
+    Without, because that is the whole point: a new energy carrier must open
+    the carrier coordinate of the rows that could carry it, not every value
+    of the parameter. The axes have fingerprints of their own.
+    """
+    return _digest({
+        "uri": parameter.uri,
+        "label": parameter.label,
+        "description": parameter.description,
+        "value_type": parameter.value_type,
+        "unit_target": parameter.unit_target,
+        "units": sorted(parameter.units_accepted or {}),
+        "vocabulary": {uri: sorted(map(str, labels or []))
+                       for uri, labels
+                       in (parameter.vocabulary or {}).items()},
+        "vocabulary_dynamic": parameter.vocabulary_dynamic,
+        "example": parameter.example,
+    })
+
+
+def fingerprints(spec: "Spec") -> dict:
+    """{key: sha} for every parameter and axis of a spec.
+
+    Flat, and the keys read as what they are: the stamp is compared key by
+    key, and "parameter/<uri>" or "axis/<uri>/<name>" is what a run should be
+    able to say changed. One nested block would only ever report that
+    something inside it moved.
+    """
+    out = {}
+    for parameter in spec.parameters:
+        out[f"parameter/{parameter.uri}"] = parameter_fingerprint(parameter)
+        for name, axis in (parameter.axes or {}).items():
+            out[f"axis/{parameter.uri}/{name}"] = axis_fingerprint(axis)
+    return out

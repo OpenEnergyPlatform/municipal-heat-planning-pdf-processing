@@ -44,7 +44,7 @@ from .pipeline import (Source, WorkItem, batch_uri, build_sweeps,
 from .fields import EXHAUSTED
 from .queries import expand as expand_queries
 from .trust import document_summary
-from .spec import Spec, load as load_spec
+from .spec import Spec, fingerprints, load as load_spec
 
 log = logging.getLogger(__name__)
 
@@ -2381,22 +2381,47 @@ def make_locate(db_path: Path, pdf_root: Optional[Path]) -> Optional[Callable]:
 # Resume stamps and the per-document run
 # ---------------------------------------------------------------------------
 
-def _stamp_current(spec_sha: str, anchors_sha: str = "") -> dict:
-    # The model is part of the stamp: tuples harvested by another model are
-    # not "current" any more than tuples harvested with another prompt.
-    #
-    # So are the anchors. They are the only probes the plan searches with, so
-    # they decide WHICH passages a document was read from, and a document
-    # harvested under one set is not the same result as one harvested under
-    # another. Without this the documents an interrupted run had already
-    # stamped come back "current", stay the only ones on the old set, and
-    # nothing in the corpus says which document was read with what.
+def _stamp_current(spec_sha: str, anchors_sha: str = "",
+                   spec: Optional[Spec] = None) -> dict:
+    """What a harvest was produced by, key by key.
+
+    The model is part of it: tuples harvested by another model are not
+    "current" any more than tuples harvested with another prompt.
+
+    So are the anchors. They are the only probes the plan searches with, so
+    they decide WHICH passages a document was read from, and a document
+    harvested under one set is not the same result as one harvested under
+    another. Without this the documents an interrupted run had already
+    stamped come back "current", stay the only ones on the old set, and
+    nothing in the corpus says which document was read with what.
+
+    And so is every parameter and every coordinate, one key each. `spec` is
+    the sha of the whole file, which answers "did anything change" and
+    nothing else: one new energy carrier moves it, and all 1.082 documents
+    become stale together -- about 93 GPU hours to re-read a corpus over a
+    word. The ontology this spec is written against keeps moving, so that
+    bill would come again and again. With a key per parameter and per axis,
+    a run can see that only `axis/energy_consumption/carrier` changed and
+    open only that coordinate. Reading it that way is a later mode; writing
+    it has to start now, because a stamp that does not carry the detail
+    cannot be asked for it afterwards.
+
+    Without a spec the stamp keeps its old shape. That is for callers that
+    have no spec to hand, and it is a coarser stamp, not a wrong one.
+    """
     return {"spec": spec_sha, "model": LLM_MODEL, "anchors": anchors_sha,
-            **prompts.versions(PROMPT_IDS)}
+            **prompts.versions(PROMPT_IDS),
+            **(fingerprints(spec) if spec is not None else {})}
 
 
 def stale(stamp_path: Path, current: dict) -> list:
-    """Which stamped versions differ from now; everything when unstamped."""
+    """Which stamped versions differ from now; everything when unstamped.
+
+    A key the stored stamp does not have counts as changed, which is what
+    makes a stamp from before the per-parameter keys read as fully stale: it
+    cannot vouch for a coordinate it never recorded, and pretending otherwise
+    is how a document keeps a harvest nobody can place.
+    """
     if not stamp_path.is_file():
         return sorted(current)
     try:
@@ -2411,7 +2436,8 @@ def run_document(document_id: int, name: str, out_dir: Path, spec: Spec,
                  force: bool = False, force_stale: bool = False,
                  anchors_sha: str = "") -> bool:
     if already_done(name, out_dir, spec_sha, force=force,
-                    force_stale=force_stale, anchors_sha=anchors_sha):
+                    force_stale=force_stale, anchors_sha=anchors_sha,
+                    spec=spec):
         return True
     report = harvest_document(document_id, spec, templates,
                               retrieve=deps["retrieve"],
@@ -2428,7 +2454,7 @@ def run_document(document_id: int, name: str, out_dir: Path, spec: Spec,
 
 def already_done(name: str, out_dir: Path, spec_sha: str, *,
                  force: bool = False, force_stale: bool = False,
-                 anchors_sha: str = "") -> bool:
+                 anchors_sha: str = "", spec: Optional[Spec] = None) -> bool:
     """True when this document needs no work: harvested under the current
     spec, prompts, model and anchors — or stale with nobody asking for the
     redo."""
@@ -2444,7 +2470,7 @@ def already_done(name: str, out_dir: Path, spec_sha: str, *,
         # a redo caused every document to be skipped instead.
         log.info("extraction: %s carries no stamp — harvested again", name)
         return False
-    changed = stale(stamp_path, _stamp_current(spec_sha, anchors_sha))
+    changed = stale(stamp_path, _stamp_current(spec_sha, anchors_sha, spec))
     if not changed:
         log.info("extraction: %s is current — skipped", name)
         return True
@@ -2500,7 +2526,7 @@ def finish_document(report, name: str, out_dir: Path, spec_sha: str,
                   "not stamped, so a resume harvests it again", name, sources)
         return
     (out_dir / f"{name}.stamp.json").write_text(
-        json.dumps(_stamp_current(spec_sha, anchors_sha), indent=2),
+        json.dumps(_stamp_current(spec_sha, anchors_sha, spec), indent=2),
         encoding="utf-8")
 
 
@@ -2878,7 +2904,7 @@ def main(argv: Optional[list] = None) -> int:
                  if not already_done(Path(fn).stem, args.out, spec_sha,
                                      force=args.force,
                                      force_stale=args.force_stale,
-                                     anchors_sha=anchors_sha)]
+                                     anchors_sha=anchors_sha, spec=spec)]
     if not documents:
         log.info("extraction: nothing to harvest")
         return 0

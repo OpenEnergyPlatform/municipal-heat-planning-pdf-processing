@@ -5,6 +5,8 @@ into a batch, and never by silently extracting on a guessed vocabulary.
 """
 import pytest
 
+import docpipe.extraction.spec as spec_mod
+
 from docpipe.extraction.spec import Spec, SpecError, load
 
 
@@ -178,3 +180,193 @@ def test_a_broken_entry_object_dies_at_load_time_naming_its_field(entry,
     with pytest.raises(SpecError) as excinfo:
         load(raw)
     assert message in str(excinfo.value)
+
+
+# ---------------------------------------------------------------------------
+# Fingerprints
+#
+# The stamp was one sha over the whole spec file, so one new energy carrier
+# made all 1.082 documents stale at once: about 93 GPU hours to re-read a
+# corpus over a word. The ontology this spec is written against keeps moving,
+# so that bill would come again and again. These hold what a per-parameter and
+# per-axis fingerprint has to answer to -- and, just as important, what it
+# must not.
+# ---------------------------------------------------------------------------
+def _spec_of(**overrides):
+    parameter = {
+        "uri": "energy", "label": "Endenergie",
+        "description": "Endenergieverbrauch je Energietraeger, Sektor und "
+                       "Jahr, wie im Plan bilanziert.",
+        "value_type": "float", "unit_target": "kWh",
+        "units_accepted": {"kWh/a": 0.001, "MWh/a": 1.0},
+        "example": {
+            "source": "| Erdgas | 42.005 | MWh/a | im Jahr 2020 |",
+            "tuples": [{"value": 42005, "unit_raw": "MWh/a",
+                        "carrier": "Erdgas", "year": 2020}]},
+        "axes": {"carrier": {"question": "Welcher Traeger?",
+                             "evidence": "own", "required": True,
+                             "vocabulary": {"oeo:1": {"label": "Erdgas",
+                                                      "spellings": ["Gas"],
+                                                      "definition": "Ein Gas."}}},
+                 "year": {"question": "Welches Jahr?", "type": "int"}},
+    }
+    parameter.update(overrides)
+    return spec_mod.load({"parameters": [parameter]})
+
+
+def test_a_new_option_moves_its_own_axis_and_nothing_else():
+    """The whole point: a carrier added to the list must open the carrier
+    coordinate, not the year, not the parameter, and not another parameter."""
+    before = spec_mod.fingerprints(_spec_of())
+    after = spec_mod.fingerprints(_spec_of(axes={
+        "carrier": {"question": "Welcher Traeger?", "evidence": "own",
+                    "required": True,
+                    "vocabulary": {"oeo:1": {"label": "Erdgas",
+                                             "spellings": ["Gas"],
+                                             "definition": "Ein Gas."},
+                                   "oeo:2": {"label": "Klaergas"}}},
+        "year": {"question": "Welches Jahr?", "type": "int"}}))
+    changed = [k for k in before if before[k] != after[k]]
+    assert changed == ["axis/energy/carrier"]
+    assert set(before) == set(after)
+
+
+@pytest.mark.parametrize("field,value", [
+    ("question", "Welcher Energietraeger steht in dieser Zeile?"),
+    ("evidence", "any"),
+    ("required", False),
+])
+def test_everything_the_model_sees_is_in_the_axis_fingerprint(field, value):
+    """A fingerprint that ignores the question is a fingerprint that says a
+    document read under another question is still current."""
+    axes = {"carrier": {"question": "Welcher Traeger?", "evidence": "own",
+                        "required": True, "vocabulary": {"oeo:1": ["Erdgas"]}},
+            "year": {"question": "Welches Jahr?", "type": "int"}}
+    before = spec_mod.fingerprints(_spec_of(axes=axes))
+    moved = {**axes, "carrier": {**axes["carrier"], field: value}}
+    after = spec_mod.fingerprints(_spec_of(axes=moved))
+    assert before["axis/energy/carrier"] != after["axis/energy/carrier"], field
+    assert before["axis/energy/year"] == after["axis/energy/year"]
+
+
+def test_a_spelling_and_a_definition_are_part_of_the_question():
+    """Both reach the model: the spellings are what a plan may write, the
+    definition is what the term means. A run under a different one is a
+    different reading."""
+    base = {"carrier": {"question": "q", "vocabulary": {
+                "oeo:1": {"label": "Erdgas", "spellings": ["Gas"],
+                          "definition": "Ein Gas."}}}}
+    first = spec_mod.fingerprints(_spec_of(axes=base))["axis/energy/carrier"]
+    spelling = spec_mod.fingerprints(_spec_of(axes={"carrier": {
+        "question": "q", "vocabulary": {"oeo:1": {
+            "label": "Erdgas", "spellings": ["Gas", "Methan"],
+            "definition": "Ein Gas."}}}}))["axis/energy/carrier"]
+    meaning = spec_mod.fingerprints(_spec_of(axes={"carrier": {
+        "question": "q", "vocabulary": {"oeo:1": {
+            "label": "Erdgas", "spellings": ["Gas"],
+            "definition": "Ein anderes Gas."}}}}))["axis/energy/carrier"]
+    assert len({first, spelling, meaning}) == 3
+
+
+def test_the_written_order_of_a_list_is_not_part_of_the_question():
+    """The offered list is a set, and so is the set of options and the set of
+    axes. A fingerprint that moves when someone sorts the JSON differently
+    marks the corpus stale for nothing, and a signal that fires for nothing
+    is a signal everyone learns to ignore."""
+    one = spec_mod.fingerprints(_spec_of(axes={"carrier": {
+        "question": "q", "vocabulary": {"oeo:1": ["Erdgas", "Gas", "Methan"]}}}))
+    other = spec_mod.fingerprints(_spec_of(axes={"carrier": {
+        "question": "q", "vocabulary": {"oeo:1": ["Methan", "Gas", "Erdgas"]}}}))
+    assert one == other
+
+    # Same options, written in the other order. A hash over the dict as it
+    # happens to be built would differ, and every document would be stale
+    # after a reformat of the spec file.
+    first = spec_mod.fingerprints(_spec_of(axes={"carrier": {
+        "question": "q", "vocabulary": {"oeo:1": ["Erdgas"],
+                                        "oeo:2": ["Klaergas"]}}}))
+    second = spec_mod.fingerprints(_spec_of(axes={"carrier": {
+        "question": "q", "vocabulary": {"oeo:2": ["Klaergas"],
+                                        "oeo:1": ["Erdgas"]}}}))
+    assert first == second
+
+    # And the parameter, whose own fields are written in whatever order the
+    # profile keeps them in.
+    assert (spec_mod.fingerprints(_spec_of())["parameter/energy"]
+            == spec_mod.fingerprints(_spec_of(
+                units_accepted={"MWh/a": 1.0, "kWh/a": 0.001}))["parameter/energy"])
+
+
+def test_the_axes_are_not_in_the_parameter_fingerprint():
+    """Otherwise every axis change is a parameter change and the split buys
+    nothing: the parameter key would move whenever any coordinate did, which
+    is the corpus-wide staleness this whole thing exists to avoid."""
+    before = spec_mod.fingerprints(_spec_of())
+    # Three ways an axis can move: its question, its offered list, and one
+    # more axis existing at all. None of them is the parameter's business.
+    for axes in (
+        {"carrier": {"question": "eine ganz andere Frage", "evidence": "own",
+                     "required": True,
+                     "vocabulary": {"oeo:1": {"label": "Erdgas",
+                                              "spellings": ["Gas"],
+                                              "definition": "Ein Gas."}}},
+         "year": {"question": "Welches Jahr?", "type": "int"}},
+        {"carrier": {"question": "Welcher Traeger?", "evidence": "own",
+                     "required": True,
+                     "vocabulary": {"oeo:1": {"label": "Erdgas",
+                                              "spellings": ["Gas"],
+                                              "definition": "Ein Gas."},
+                                    "oeo:2": {"label": "Klaergas"}}},
+         "year": {"question": "Welches Jahr?", "type": "int"}},
+        {"carrier": {"question": "Welcher Traeger?", "evidence": "own",
+                     "required": True,
+                     "vocabulary": {"oeo:1": {"label": "Erdgas",
+                                              "spellings": ["Gas"],
+                                              "definition": "Ein Gas."}}},
+         "year": {"question": "Welches Jahr?", "type": "int"},
+         "sector": {"question": "Welcher Sektor?",
+                    "vocabulary": {"oeo:9": ["Haushalte"]}}},
+    ):
+        after = spec_mod.fingerprints(_spec_of(axes=axes))
+        assert before["parameter/energy"] == after["parameter/energy"], axes
+        assert (before["axis/energy/carrier"] != after["axis/energy/carrier"]
+                or "sector" in axes), axes
+
+
+def test_a_unit_or_an_example_moves_the_parameter():
+    """Both are in the request: the accepted units are the answer space of
+    the unit field, and the example is what the model imitates."""
+    before = spec_mod.fingerprints(_spec_of())["parameter/energy"]
+    units = spec_mod.fingerprints(
+        _spec_of(units_accepted={"MWh/a": 1.0}))["parameter/energy"]
+    example = spec_mod.fingerprints(_spec_of(
+        example={"source": "| Heizoel | 17.300 | MWh/a | 2020 |",
+                 "tuples": [{"value": 17300, "unit_raw": "MWh/a",
+                             "carrier": "Erdgas", "year": 2020}]}
+    ))["parameter/energy"]
+    assert len({before, units, example}) == 3
+
+
+def test_a_fingerprint_is_the_same_on_the_next_run():
+    """It is compared against a file written hours or weeks earlier. A hash
+    that depends on dict order or on id() would mark everything stale once
+    and teach everyone to pass --force-stale by reflex."""
+    assert spec_mod.fingerprints(_spec_of()) == spec_mod.fingerprints(_spec_of())
+    for value in spec_mod.fingerprints(_spec_of()).values():
+        assert len(value) == 64 and value == value.lower()
+
+
+def test_the_two_fingerprints_are_independent_of_each_other():
+    """`fingerprints` is the interface, but the split is the point, so both
+    halves are named here: a parameter's fingerprint and its axes' are
+    computed from disjoint parts and one is never derived from the other."""
+    spec = _spec_of()
+    parameter = spec.parameters[0]
+    axis = parameter.axes["carrier"]
+    of_parameter = spec_mod.parameter_fingerprint(parameter)
+    of_axis = spec_mod.axis_fingerprint(axis)
+    assert of_parameter != of_axis
+    assert len(of_parameter) == len(of_axis) == 64
+    keys = spec_mod.fingerprints(spec)
+    assert keys["parameter/energy"] == of_parameter
+    assert keys["axis/energy/carrier"] == of_axis
