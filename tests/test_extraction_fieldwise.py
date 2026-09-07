@@ -972,3 +972,92 @@ def test_the_trace_names_the_field_that_filled_and_the_field_that_dropped(
     assert {d["field"] for d in dropped} == {"sector"}, (
         "and the drop names the coordinate, not the request")
     assert {d["why"] for d in dropped} == {"quote_not_in_source"}
+
+
+def test_a_status_quo_row_is_asked_its_coordinates(monkeypatch):
+    """The promise: the scenario no longer closes a row, so an inventory value
+    is asked its carrier, sector and year like a target value is.
+
+    It used to close it, and that was the bigger half of the loss: 2,510 of
+    6,763 harvested tuples over 20 plans were dropped for being a status quo,
+    a trend or a potential. MHPO names the inventory analysis and the
+    potential analysis, so those rows have a place in the graph and need
+    their coordinates to reach it.
+    """
+    spec, rows_reply = _two_row_spec_and_reply()
+    answers = _answers_for(
+        spec,
+        quantity_of={"R1": "final energy consumption value",
+                     "R2": "final energy consumption value"},
+        scenario_of={"R1": "Zielszenario", "R2": "Ist-Zustand"})
+    harvest, asked = _gated(monkeypatch, spec, rows_reply, answers,
+                            {"quantity": None})
+    reply = harvest(_document_batch())
+
+    after = {name: rows for name, rows in asked if name not in
+             ("parameter", "quantity", "scenario")}
+    assert after, "the axes behind the gate were asked"
+    assert all(rows == ["R1", "R2"] for rows in after.values()), (
+        "the status quo row is asked too")
+    out = [t for t in reply["tuples"]
+           if t.get(f"carrier_state") == fields.OUT_OF_SLICE]
+    assert not out, "and nothing is stamped out_of_slice for its scenario"
+
+
+def test_the_kwp_gate_holds_only_the_quantity(monkeypatch):
+    """The profile's own choice, not the mechanism's. The gate still exists
+    and still closes a row whose quantity is a deliberate non-class."""
+    from profiles.kwp import extraction as kwp_extraction
+    assert set(kwp_extraction.SLICE) == {"quantity"}
+    assert kwp_extraction.SLICE["quantity"] is None
+
+
+def test_a_wording_its_passage_does_not_carry_never_becomes_a_row(profile):
+    """The promise: a non-numeric value that its own quote does not contain is
+    refused where it arrives, not after every coordinate has been swept for it.
+
+    Measured on Kassel: the office name the prompt's own example suggested was
+    written onto the title page, cost 24 windows and 80.3 seconds of sweeping
+    and reached the graph never. The claim still travels on and is still
+    refused, it just costs nothing now.
+    """
+    _name, spec = profile
+    parameter = spec.parameters[0]
+    batch = _batch(parameter)
+    text = batch.items[0].source.text
+    quote = text[:80]
+    assert len(quote) >= 8
+
+    rows, orphans = rows_from_reply(batch, {"tuples": [
+        {"source": batch.label(0), "value": "Erfundenes Ingenieurbüro",
+         "unit": "", "unit_raw": "", "quote": quote}]})
+    assert rows == [], "no row, so no sweep"
+    assert [o["_why"] for o in orphans] == ["text value not in its quote"]
+
+    # A wording the passage does carry is a reading like any other.
+    word = quote.strip().split()[0]
+    rows, orphans = rows_from_reply(batch, {"tuples": [
+        {"source": batch.label(0), "value": word,
+         "unit": "", "unit_raw": "", "quote": quote}]})
+    assert len(rows) == 1 and not orphans
+
+    # And a number is left to the verifier, which knows the German decimal
+    # mark and repairs a retyped table row. Refusing it here would refuse
+    # claims the verifier would have taken.
+    rows, orphans = rows_from_reply(batch, {"tuples": [
+        {"source": batch.label(0), "value": "1.036.767,8", "unit_raw": "MWh/a",
+         "quote": quote}]})
+    assert len(rows) == 1 and not orphans
+
+
+def test_the_row_prompt_example_names_no_place_this_corpus_contains(profile):
+    """The example is an invitation, and this one was taken: it put a firm
+    named after the city onto the city's own title page. The names in it come
+    from a plan that is not the one being read, and the prompt says so."""
+    name, _spec = profile
+    text = (PROFILES / name / "prompts" / "extraction" / "rows.md").read_text(
+        encoding="utf-8")
+    assert "Kassel Wärme" not in text
+    if name == "kwp":
+        assert "MASCHINELL" in text, "the check is promised where it applies"
+        assert "anderen Plan" in text

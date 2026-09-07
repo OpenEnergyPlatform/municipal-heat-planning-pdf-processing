@@ -261,8 +261,8 @@ def make_serializer(db_path: Path):
     def serializer(name: str, rows: list):
         skipped: dict = {}
 
-        def skip(reason: str) -> None:
-            skipped[reason] = skipped.get(reason, 0) + 1
+        def skip(reason: str, n: int = 1) -> None:
+            skipped[reason] = skipped.get(reason, 0) + n
 
         offices: dict = {}
         kept = []
@@ -332,9 +332,22 @@ def make_serializer(db_path: Path):
             elif other["value_target"] != row["value_target"]:
                 # Same coordinates, different magnitude: a human question,
                 # not a coin toss. Drop both, loudly.
-                skip("conflict")
+                #
+                # BOTH, so the number is the number of tuples that left the
+                # graph. Counting only the second claimant made every report
+                # short by one per contested identity: measured over Kassel,
+                # 217 counted where 317 tuples were lost across 100
+                # identities, and every estimate built on that log line was
+                # optimistic by the same 100.
+                skip("conflict", 2)
                 values.pop(iri)
                 conflicted.add(iri)
+            else:
+                # The same number a second time, from another passage. One
+                # node either way, so this is not a loss — but it is not
+                # nothing, and a repeat absorbed in silence is
+                # indistinguishable from a reading that never happened.
+                skip("duplicate")
         if not values:
             log.info("kg: %s: nothing serializable (skipped %s)", name, skipped)
             return None
