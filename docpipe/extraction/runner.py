@@ -665,7 +665,7 @@ def frozen_anchors(profile, spec: Spec) -> tuple:
     return out, hashlib.sha256(raw).hexdigest()[:16]
 
 
-def load_anchors(path: Path, key: str, targets: Optional[list] = None) -> dict:
+def load_anchors(path: Path, key: str, targets: list) -> dict:
     """The anchor sets a previous run wrote that are still the answer to the
     same question.
 
@@ -675,11 +675,10 @@ def load_anchors(path: Path, key: str, targets: Optional[list] = None) -> dict:
     changed the retrieval of the carrier coordinate, which nothing had asked
     for and no line anywhere reported.
 
-    Without `targets` the whole file is taken, which is what a caller that has
-    no spec to hand can honestly do. A file written before the per-question
-    map existed carries none of it and is therefore reused for nothing: it
-    cannot say which of its sets still answer, and guessing is how a run comes
-    to search with a set nobody checked.
+    A file written before the per-question map existed carries none of it and
+    is therefore reused for nothing: it cannot say which of its sets still
+    answer, and guessing is how a run comes to search with a set nobody
+    checked.
     """
     try:
         stored = json.loads(Path(path).read_text(encoding="utf-8"))
@@ -690,8 +689,6 @@ def load_anchors(path: Path, key: str, targets: Optional[list] = None) -> dict:
     anchors = stored.get("anchors")
     if not isinstance(anchors, dict):
         return {}
-    if targets is None:
-        return anchors
     questions = stored.get("questions")
     if not isinstance(questions, dict):
         # Absent, or something other than a map. Either way the file cannot
@@ -2477,15 +2474,21 @@ def _stamp_current(spec_sha: str, anchors_sha: str = "",
             **(fingerprints(spec) if spec is not None else {})}
 
 
-# The keys a stamp records so a reader can place a harvest, and does not
-# decide by. There is one: the sha of the whole spec file. It moves on a
-# comment, an indent, a reordering, a graph annotation -- none of which any
-# question is asked through, and all of which the ontology work produces by
-# the dozen. Compared, it outvotes every finer key: one added byte and all
-# 991 stamped documents report stale together, which is the bill the finer
-# keys exist to avoid. Recorded, it still says which file a harvest came
-# from, which is what it is good for.
-RECORDED_NOT_COMPARED = ("spec",)
+# Recorded so a reader can place a harvest, and never a reason to redo one:
+# how many pages of the document a model read rather than the PDF is a fact
+# about the DOCUMENT, not about what produced the harvest. Compared, a
+# document that carries it would read stale against every run that does not
+# write it, and stay that way.
+NEVER_COMPARED = ("page_text_transcribed",)
+
+# Recorded, and compared only while there is nothing finer to go on: the sha
+# of the whole spec file. It moves on a comment, an indent, a reordering, a
+# graph annotation -- none of which any question is asked through, and all of
+# which the ontology work produces by the dozen. Compared beside the finer
+# keys it outvotes them: one added byte and all 991 stamped documents report
+# stale together, which is the bill the finer keys exist to avoid. With no
+# finer keys in the stamp it is all there is, and then it decides again.
+COARSE = ("spec",)
 
 # What a run really asks a document through, one key per question and per
 # answer space. Their presence is what licenses ignoring `spec`: with nothing
@@ -2507,6 +2510,12 @@ def stale(stamp_path: Path, current: dict) -> list:
     scenarios parameters moves `spec` and not one question -- measured -- and
     a run that re-read the corpus over it would be re-reading it over a
     comment.
+
+    Both directions, and the second one is why: every key is written from what
+    the spec still HAS, so a question that is gone is in no current key at
+    all. Dropping an axis moved nothing and the document read as current under
+    a spec that no longer asks that coordinate -- the whole-file sha used to
+    catch it, and stopped once it was no longer compared.
     """
     if not stamp_path.is_file():
         return sorted(current)
@@ -2514,10 +2523,13 @@ def stale(stamp_path: Path, current: dict) -> list:
         stored = json.loads(stamp_path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
         return sorted(current)
-    asked = [k for k in current
-             if not (k in RECORDED_NOT_COMPARED
-                     and any(o.startswith(QUESTION_KEYS) for o in current))]
-    return sorted(k for k in asked if stored.get(k) != current[k])
+    detailed = any(k.startswith(QUESTION_KEYS) for k in current)
+    skip = set(NEVER_COMPARED) | (set(COARSE) if detailed else set())
+    changed = {k for k in current
+               if k not in skip and stored.get(k) != current[k]}
+    if detailed:
+        changed |= {k for k in stored if k not in current and k not in skip}
+    return sorted(changed)
 
 
 def run_document(document_id: int, name: str, out_dir: Path, spec: Spec,

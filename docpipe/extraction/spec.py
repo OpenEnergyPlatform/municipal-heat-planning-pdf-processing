@@ -577,11 +577,15 @@ def parameter_slot_fingerprint(spec: "Spec") -> str:
 
     It is asked like every other coordinate (`fields.parameter_slot`), with
     its own question and its own closed list, and that list is the parameters
-    themselves. So it needs its own key, and it is also the only key that
-    moves when a parameter is REMOVED: every other key is written from what
-    the spec still has, and a stamp is compared against those, so a dropped
-    parameter would otherwise leave every document reading current while the
-    model would now be choosing from a shorter list.
+    themselves. So it needs its own key.
+
+    It also moves when a parameter is REMOVED, which no per-parameter key
+    can: every key here is written from what the spec still has. That is not
+    the general answer to a removal, though, and reading it as one is how a
+    dropped AXIS came to move nothing at all. `runner.stale` reports a
+    question key the stored stamp carries and the run no longer asks, which
+    covers every kind; this key earns its place for the question and for the
+    list the model chooses from.
 
     The uri and the label, because both reach the model. The description does
     not -- it is in `parameter/<uri>` instead, where the question that uses it
