@@ -24,7 +24,8 @@ from pathlib import Path
 from typing import Optional
 
 from docpipe.extraction.fields import DERIVED
-from docpipe.extraction.spec import load as load_spec, own_evidence
+from docpipe.extraction.spec import (
+    kg_name, load as load_spec, own_evidence)
 from docpipe.extraction.trust import sentence as trust_sentence, trust
 
 log = logging.getLogger(__name__)
@@ -32,7 +33,16 @@ log = logging.getLogger(__name__)
 BASE = "https://openenergyplatform.org/id/mhpkg/"
 OEO = "https://openenergyplatform.org/ontology/oeo/"
 NS_MHPKG = uuid.uuid5(uuid.NAMESPACE_URL, BASE)
-AGGREGATION_INTEGRAL = "OEO_00140070"
+
+# Up here because every identifier below is qualified against it as it is
+# read, and a prefix this header does not bind writes Turtle nobody can load.
+PREFIXES = """\
+@prefix rdfs:  <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd:   <http://www.w3.org/2001/XMLSchema#> .
+@prefix obo:   <http://purl.obolibrary.org/obo/> .
+@prefix mhpo:  <https://purl.org/mhpo/ontology/> .
+@prefix oeo:   <https://openenergyplatform.org/ontology/oeo/> .
+"""
 
 # `covers energy carrier` (OEO_00000523) has range `energy carrier`
 # (OEO_00020039). Nine classes the plans name in their carrier column are NOT
@@ -87,37 +97,117 @@ AGGREGATIONS = {uri for par in _SPEC["parameters"]
                 if "aggregation" in par.get("axes", {})
                 for uri in par["axes"]["aggregation"]["vocabulary"]}
 def _predicate(name: str) -> str:
-    """The predicate the spec's `kg` block gives this axis.
+    """The predicate the spec's `kg` block gives this axis, qualified.
 
     Written down once. The predicate used to stand as a literal here and be
     described a second time wherever the graph was documented, and a change
     in one place left the other describing a graph nobody was writing. The
     JSON schema publishes the same block, so what a reader is told and what
     is emitted are one string.
+
+    Qualified, because the prefix was the half that stayed behind: the
+    identifier came from the spec and `oeo:` from an f-string here, and this
+    graph writes five namespaces.
     """
     for par in _SPEC["parameters"]:
         axis = (par.get("axes") or {}).get(name) or {}
         block = axis.get("kg") or {}
         if block.get("role") == "edge" and block.get("predicate"):
-            return block["predicate"]
+            return kg_name(block, PREFIXES)
     raise KeyError(f"no kg edge predicate for axis {name!r} in the spec")
 
 
 def _value_predicate(key: str) -> str:
-    """The predicate carrying a value's number or its unit."""
+    """The predicate carrying a value's number or its unit, qualified."""
     for par in _SPEC["parameters"]:
         block = (par.get("kg") or {}).get(key) or {}
         if block.get("predicate"):
-            return block["predicate"]
+            return kg_name(block, PREFIXES)
     raise KeyError(f"no kg {key} predicate in the spec")
 
 
-P_NUMBER = _value_predicate("number")           # has number
-P_UNIT = _value_predicate("unit")               # has unit
-P_CARRIER = _predicate("carrier")               # covers energy carrier
-P_SECTOR = _predicate("sector")                 # covers sector
-P_YEAR = _predicate("year")                     # has scenario year value
-P_AGGREGATION = _predicate("aggregation")       # has aggregation type
+# Which prefix an identifier belongs to, by its family. A class is written as
+# a bare id in the spec -- one spelling in both profiles -- so the prefix is
+# recovered here rather than repeated beside every one of them. Unknown
+# family is an error and not a default: defaulting to oeo: would mint
+# oeo:UO_0000111, an IRI that does not exist, and say nothing.
+_NAMESPACE = {"OEO_": "oeo", "MHPO_": "mhpo", "BFO_": "obo"}
+_IDENTIFIER = re.compile(r"[A-Za-z]+_[0-9]+")
+
+
+def qualified(identifier: str) -> str:
+    """A bare ontology id as this graph writes it."""
+    if not _IDENTIFIER.fullmatch(str(identifier)):
+        raise KeyError(f"{identifier!r} is no bare identifier -- a class is "
+                       f"an id like OEO_00030022, and a family test alone "
+                       f"would qualify a glossed one silently")
+    for family, prefix in _NAMESPACE.items():
+        if identifier.startswith(family):
+            return f"{prefix}:{identifier}"
+    raise KeyError(f"no prefix is bound for the family of {identifier!r}")
+
+
+def _parameter(uri: str) -> dict:
+    for par in _SPEC["parameters"]:
+        if par["uri"] == uri:
+            return par
+    raise KeyError(f"no parameter {uri!r} in the spec")
+
+
+def _class(uri: str) -> str:
+    """The class of the node this parameter mints, qualified."""
+    block = (_parameter(uri).get("kg") or {})
+    if "class" not in block:
+        raise KeyError(f"parameter {uri!r} mints no node of its own")
+    return qualified(block["class"])
+
+
+def _edge_from_plan(uri: str) -> str:
+    """The predicate hanging this parameter's node off the plan."""
+    block = (_parameter(uri).get("kg") or {})
+    if "edge_from_plan" not in block:
+        raise KeyError(f"parameter {uri!r} hangs off no plan")
+    return kg_name(block["edge_from_plan"], PREFIXES)
+
+
+def _parent(axis: str) -> dict:
+    for par in _SPEC["parameters"]:
+        block = ((par.get("axes") or {}).get(axis) or {}).get("kg") or {}
+        if block.get("role") == "parent":
+            return block
+    raise KeyError(f"axis {axis!r} names no parent node in the spec")
+
+
+def _parent_class(axis: str, key: str) -> str:
+    """The bare class one answer of a parent axis puts on its container."""
+    entry = (_parent(axis).get("map") or {}).get(key)
+    if not isinstance(entry, dict) or "class" not in entry:
+        raise KeyError(f"{axis}={key!r} names no class, so it mints no node")
+    return entry["class"]
+
+
+def _parent_link(axis: str, key: str) -> str:
+    """The predicate hanging one answer's node off the node above it."""
+    entry = (_parent(axis).get("map") or {}).get(key)
+    if not isinstance(entry, dict) or "linked_by" not in entry:
+        raise KeyError(f"{axis}={key!r} hangs off nothing")
+    return kg_name(entry["linked_by"], PREFIXES)
+
+
+def _linked_by(axis: str) -> str:
+    """The predicate hanging every container of this axis off the plan."""
+    block = _parent(axis)
+    if "linked_by" not in block:
+        raise KeyError(f"axis {axis!r} says nothing about its edge upward")
+    return kg_name(block["linked_by"], PREFIXES)
+
+
+P_NUMBER = _value_predicate("number")           # oeo: has number
+P_UNIT = _value_predicate("unit")               # oeo: has unit
+P_CARRIER = _predicate("carrier")               # oeo: covers energy carrier
+P_SECTOR = _predicate("sector")                 # oeo: covers sector
+P_YEAR = _predicate("year")                     # oeo: has scenario year value
+P_AGGREGATION = _predicate("aggregation")       # oeo: has aggregation type
 
 # Which coordinate a reader of the graph may hold to the row's own source.
 # The spec sets it per axis, and only `own` is checkable from what a
@@ -135,11 +225,17 @@ OWN_EVIDENCE = own_evidence(load_spec(_SPEC))
 # 45 tuples for the scenario alone, 25 of them a stock take that the plan
 # states as its own starting point. The Waermeplanungsgesetz asks for the
 # inventory in §15 and the graph had no node for it.
-PARTS = {
-    "status_quo": ("mhpo:MHPO_00020005", "inventory", "Bestandsanalyse"),
-    "trend": ("oeo:OEO_00020314", "referencescenario", "Trendszenario"),
-    "target": ("mhpo:MHPO_00020007", "targetscenario", "Zielszenario"),
+# The class is ontology and comes from the spec. The path segment mints node
+# identity (`mint`, below) and the German word is what a reader sees, and
+# neither is a graph identifier -- moving them into the file that is free to
+# edit would make an IRI free to change, which it is not.
+_PART_MINT = {
+    "status_quo": ("inventory", "Bestandsanalyse"),
+    "trend": ("referencescenario", "Trendszenario"),
+    "target": ("targetscenario", "Zielszenario"),
 }
+PARTS = {key: (qualified(_parent_class("scenario", key)), segment, label)
+         for key, (segment, label) in _PART_MINT.items()}
 
 def _no_edge_for() -> dict:
     """The carrier classes OEO does not place under `energy carrier`.
@@ -161,18 +257,20 @@ def _no_edge_for() -> dict:
 NOT_AN_ENERGY_CARRIER = _no_edge_for()
 
 ORGANISATION = "planning_organisation"
-CLS_ORGANISATION = "OEO_00030022"        # organisation
-CLS_PLAN_AREA = "MHPO_00020018"          # heat plan area
-P_ORGANISATION = "OEO_00000510"          # has organisation
-P_PART_OF = "BFO_0000050"                # part of
+CLS_ORGANISATION = _class(ORGANISATION)                    # oeo: organisation
+CLS_PLAN_AREA = qualified(_parent_class("spatial_scope", "sub_area"))
+P_ORGANISATION = _edge_from_plan(ORGANISATION)             # oeo: has organisation
+P_PART_OF = _parent_link("spatial_scope", "sub_area")      # obo: part of
+P_HAS_PART = _linked_by("scenario")                        # obo: has part
 
-PREFIXES = """\
-@prefix rdfs:  <http://www.w3.org/2000/01/rdf-schema#> .
-@prefix xsd:   <http://www.w3.org/2001/XMLSchema#> .
-@prefix obo:   <http://purl.obolibrary.org/obo/> .
-@prefix mhpo:  <https://purl.org/mhpo/ontology/> .
-@prefix oeo:   <https://openenergyplatform.org/ontology/oeo/> .
-"""
+# Behind no harvested value, so behind no parameter, so not in the spec: the
+# plan node and the municipality node exist for every plan whatever the model
+# answers, the publication date is a column of Documents and not a reading,
+# and the hop from a container down to a value has no key in the kg grammar.
+CLS_HEATPLAN = "mhpo:MHPO_00020003"
+CLS_MUNICIPALITY = "mhpo:MHPO_00020017"
+P_PUBLICATION_DATE = "oeo:OEO_00390096"
+P_HAS_QUANTITY_VALUE = "oeo:OEO_00140002"
 
 
 def ns(collection: str) -> uuid.UUID:
@@ -494,7 +592,7 @@ def make_serializer(db_path: Path):
         office_edge = ""
         if office_iris:
             refs = " ,\n        ".join(f"<{i}>" for i in office_iris)
-            office_edge = f"\n    oeo:{P_ORGANISATION} {refs} ;"
+            office_edge = f"\n    {P_ORGANISATION} {refs} ;"
 
         parts = []
         if header_pending[0]:
@@ -502,10 +600,10 @@ def make_serializer(db_path: Path):
             parts.append(PREFIXES)
         parts.append(f"""\
 <{heatplan}>
-    a mhpo:MHPO_00020003 ;
+    a {CLS_HEATPLAN} ;
     rdfs:label "Kommunale Wärmeplanung {place} {published[:4]}" ;
-    oeo:OEO_00390096 "{published}"^^xsd:date ;{office_edge}
-    obo:BFO_0000051 {part_refs} .
+    {P_PUBLICATION_DATE} "{published}"^^xsd:date ;{office_edge}
+    {P_HAS_PART} {part_refs} .
 """)
         for key in PARTS:
             if key not in by_part:
@@ -517,15 +615,15 @@ def make_serializer(db_path: Path):
 <{part_iri[key]}>
     a {cls} ;
     rdfs:label "{label} {place} {published[:4]}" ;
-    oeo:OEO_00140002 {value_refs} .
+    {P_HAS_QUANTITY_VALUE} {value_refs} .
 """)
         for iri, row in values.items():
             lines = evidence_comment(row, name,
                                      transcribed=bool(transcribed))
             lines += [f"<{iri}>",
                       f"    a oeo:{row['quantity']} ;",
-                     f"    oeo:{P_NUMBER} \"{float(row['value_target'])!r}\"^^xsd:float ;",
-                     f"    oeo:{P_UNIT} oeo:{UNIT_TARGET[row['quantity']]} ;"]
+                     f"    {P_NUMBER} \"{float(row['value_target'])!r}\"^^xsd:float ;",
+                     f"    {P_UNIT} oeo:{UNIT_TARGET[row['quantity']]} ;"]
             carrier = row.get("carrier")
             if carrier and is_class(carrier):
                 if carrier in NOT_AN_ENERGY_CARRIER:
@@ -538,15 +636,15 @@ def make_serializer(db_path: Path):
                     # than no value at all.
                     skip(f"carrier_not_in_oeo:{NOT_AN_ENERGY_CARRIER[carrier]}")
                 else:
-                    lines.append(f"    oeo:{P_CARRIER} oeo:{carrier} ;")
+                    lines.append(f"    {P_CARRIER} oeo:{carrier} ;")
             if row.get("sector") and is_class(row["sector"]):
-                lines.append(f"    oeo:{P_SECTOR} oeo:{row['sector']} ;")
-            lines.append(f"    oeo:{P_YEAR} \"{row['year']}\"^^xsd:integer ;")
-            lines.append(f"    oeo:{P_AGGREGATION} oeo:{row['aggregation']} .")
+                lines.append(f"    {P_SECTOR} oeo:{row['sector']} ;")
+            lines.append(f"    {P_YEAR} \"{row['year']}\"^^xsd:integer ;")
+            lines.append(f"    {P_AGGREGATION} oeo:{row['aggregation']} .")
             parts.append("\n".join(lines) + "\n")
         for iri, label in office_iris.items():
             parts.append(f"<{iri}>\n"
-                         f"    a oeo:{CLS_ORGANISATION} ;\n"
+                         f"    a {CLS_ORGANISATION} ;\n"
                          f"    rdfs:label \"{label}\" .\n")
         # Sub-areas exist as nodes and are part of the municipality area. What
         # is missing is the edge from a VALUE to the area it holds for: MHPO
@@ -556,12 +654,12 @@ def make_serializer(db_path: Path):
         # relation is the term request.
         for key, label in sorted(areas.items()):
             parts.append(f"<{mint('heatplanarea', f'{ags}|{key}')}>\n"
-                         f"    a mhpo:{CLS_PLAN_AREA} ;\n"
+                         f"    a {CLS_PLAN_AREA} ;\n"
                          f"    rdfs:label \"{label}\" ;\n"
-                         f"    obo:{P_PART_OF} <{municipality_iri}> .\n")
+                         f"    {P_PART_OF} <{municipality_iri}> .\n")
         parts.append(f"""\
 <{municipality_iri}>
-    a mhpo:MHPO_00020017 ;
+    a {CLS_MUNICIPALITY} ;
     rdfs:label "Gemeindegebiet {place}" .
 """)
         return "\n".join(parts)

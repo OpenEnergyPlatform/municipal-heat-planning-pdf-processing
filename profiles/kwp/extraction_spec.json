@@ -178,7 +178,8 @@
             "role": "edge",
             "predicate": "OEO_00390023",
             "label": "has aggregation type",
-            "note": "Object is a named individual of OEO_00140068 aggregation type. Derived from the unit, never asked: every accepted unit of both parameters is an extensive amount."
+            "note": "Object is a named individual of OEO_00140068 aggregation type. Derived from the unit, never asked: every accepted unit of both parameters is an extensive amount.",
+            "prefix": "oeo"
           }
         },
         "carrier": {
@@ -393,7 +394,8 @@
               "OEO_00000056": "ambient heat",
               "OEO_00140105": "waste water heat",
               "OEO_00140104": "surface water heat"
-            }
+            },
+            "prefix": "oeo"
           }
         },
         "sector": {
@@ -462,7 +464,8 @@
             "role": "edge",
             "predicate": "OEO_00000505",
             "label": "covers sector",
-            "note": "Object is an OEO sector class."
+            "note": "Object is an OEO sector class.",
+            "prefix": "oeo"
           }
         },
         "year": {
@@ -474,7 +477,8 @@
             "predicate": "OEO_00020440",
             "label": "has scenario year value",
             "datatype": "xsd:integer",
-            "note": "The calendar year the aggregation is integrated over, not a label. A unit without a per-year marker carries the flag period:annual_in_quote or period:unstated."
+            "note": "The calendar year the aggregation is integrated over, not a label. A unit without a per-year marker carries the flag period:annual_in_quote or period:unstated.",
+            "prefix": "oeo"
           }
         },
         "scenario": {
@@ -529,12 +533,26 @@
           "kg": {
             "role": "parent",
             "map": {
-              "target": "MHPO_00020007 target scenario",
-              "status_quo": "MHPO_00020005 aggregated inventory analysis",
-              "trend": "OEO_00020314 reference scenario",
-              "out:variant": "not serialized"
+              "target": {
+                "class": "MHPO_00020007"
+              },
+              "status_quo": {
+                "class": "MHPO_00020005"
+              },
+              "trend": {
+                "class": "OEO_00020314"
+              },
+              "out:variant": {
+                "note": "not serialized"
+              }
             },
-            "note": "Which container node holds the value: plan BFO_0000051 has part -> container OEO_00140002 has quantity value -> value. Only the target scenario is serialized today (G2)."
+            "note": "Which container node holds the value: the plan has the container by `linked_by`, and the edge from the container down to the value is structural and named in kg.py. Only the target scenario is serialized today (G2).",
+            "linked_by": {
+              "node": "heatplan",
+              "prefix": "obo",
+              "predicate": "BFO_0000051",
+              "label": "has part"
+            }
           }
         },
         "spatial_scope": {
@@ -567,8 +585,18 @@
           "kg": {
             "role": "parent",
             "map": {
-              "municipality": "the plan's own area",
-              "sub_area": "MHPO_00020018 heat plan area, BFO_0000050 part of the municipality area"
+              "municipality": {
+                "note": "the plan's own area, minted from the AGS"
+              },
+              "sub_area": {
+                "class": "MHPO_00020018",
+                "linked_by": {
+                  "node": "municipality",
+                  "prefix": "obo",
+                  "predicate": "BFO_0000050",
+                  "label": "part of"
+                }
+              }
             },
             "note": "No relation from a value to its area exists in the schema yet, so a sub_area value is not serialized (TERM REQUEST 1)."
           }
@@ -669,12 +697,14 @@
           "predicate": "OEO_00140178",
           "label": "has number",
           "datatype": "xsd:float",
-          "from": "value_target"
+          "from": "value_target",
+          "prefix": "oeo"
         },
         "unit": {
           "predicate": "OEO_00040010",
           "label": "has unit",
-          "from": "unit_target"
+          "from": "unit_target",
+          "prefix": "oeo"
         }
       }
     },
@@ -871,7 +901,8 @@
             "role": "edge",
             "predicate": "OEO_00390023",
             "label": "has aggregation type",
-            "note": "Object is a named individual of OEO_00140068 aggregation type. Derived from the unit, never asked: every accepted unit of both parameters is an extensive amount."
+            "note": "Object is a named individual of OEO_00140068 aggregation type. Derived from the unit, never asked: every accepted unit of both parameters is an extensive amount.",
+            "prefix": "oeo"
           }
         },
         "carrier": {
@@ -1086,7 +1117,8 @@
               "OEO_00000056": "ambient heat",
               "OEO_00140105": "waste water heat",
               "OEO_00140104": "surface water heat"
-            }
+            },
+            "prefix": "oeo"
           }
         },
         "sector": {
@@ -1155,7 +1187,8 @@
             "role": "edge",
             "predicate": "OEO_00000505",
             "label": "covers sector",
-            "note": "Object is an OEO sector class."
+            "note": "Object is an OEO sector class.",
+            "prefix": "oeo"
           }
         },
         "year": {
@@ -1167,7 +1200,8 @@
             "predicate": "OEO_00020440",
             "label": "has scenario year value",
             "datatype": "xsd:integer",
-            "note": "The calendar year the aggregation is integrated over, not a label. A unit without a per-year marker carries the flag period:annual_in_quote or period:unstated."
+            "note": "The calendar year the aggregation is integrated over, not a label. A unit without a per-year marker carries the flag period:annual_in_quote or period:unstated.",
+            "prefix": "oeo"
           }
         },
         "scenario": {
@@ -1222,12 +1256,26 @@
           "kg": {
             "role": "parent",
             "map": {
-              "target": "MHPO_00020007 target scenario",
-              "status_quo": "MHPO_00020005 aggregated inventory analysis",
-              "trend": "OEO_00020314 reference scenario",
-              "out:variant": "not serialized"
+              "target": {
+                "class": "MHPO_00020007"
+              },
+              "status_quo": {
+                "class": "MHPO_00020005"
+              },
+              "trend": {
+                "class": "OEO_00020314"
+              },
+              "out:variant": {
+                "note": "not serialized"
+              }
             },
-            "note": "Which container node holds the value: plan BFO_0000051 has part -> container OEO_00140002 has quantity value -> value. Only the target scenario is serialized today (G2)."
+            "note": "Which container node holds the value: the plan has the container by `linked_by`, and the edge from the container down to the value is structural and named in kg.py. Only the target scenario is serialized today (G2).",
+            "linked_by": {
+              "node": "heatplan",
+              "prefix": "obo",
+              "predicate": "BFO_0000051",
+              "label": "has part"
+            }
           }
         },
         "spatial_scope": {
@@ -1260,8 +1308,18 @@
           "kg": {
             "role": "parent",
             "map": {
-              "municipality": "the plan's own area",
-              "sub_area": "MHPO_00020018 heat plan area, BFO_0000050 part of the municipality area"
+              "municipality": {
+                "note": "the plan's own area, minted from the AGS"
+              },
+              "sub_area": {
+                "class": "MHPO_00020018",
+                "linked_by": {
+                  "node": "municipality",
+                  "prefix": "obo",
+                  "predicate": "BFO_0000050",
+                  "label": "part of"
+                }
+              }
             },
             "note": "No relation from a value to its area exists in the schema yet, so a sub_area value is not serialized (TERM REQUEST 1)."
           }
@@ -1309,12 +1367,14 @@
           "predicate": "OEO_00140178",
           "label": "has number",
           "datatype": "xsd:float",
-          "from": "value_target"
+          "from": "value_target",
+          "prefix": "oeo"
         },
         "unit": {
           "predicate": "OEO_00040010",
           "label": "has unit",
-          "from": "unit_target"
+          "from": "unit_target",
+          "prefix": "oeo"
         }
       }
     },
@@ -1334,10 +1394,11 @@
       },
       "kg": {
         "node": "organisation",
-        "class": "OEO_00030022 organisation",
+        "class": "OEO_00030022",
         "edge_from_plan": {
           "predicate": "OEO_00000510",
-          "label": "has organisation"
+          "label": "has organisation",
+          "prefix": "oeo"
         },
         "label": "rdfs:label, legal form stripped"
       }

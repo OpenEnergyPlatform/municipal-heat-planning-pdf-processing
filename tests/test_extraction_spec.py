@@ -477,3 +477,67 @@ def test_a_parameters_description_is_not_in_the_slot_key():
             == spec_mod.parameter_slot_fingerprint(_two(asked)))
     assert (spec_mod.parameter_fingerprint(wordier.parameters[0])
             != spec_mod.parameter_fingerprint(_two(asked).parameters[0]))
+
+
+def _kg_spec(kg=None, axis_kg=None):
+    """A loadable spec with one kg block put where the caller wants it."""
+    parameter = {
+        "uri": "planning_organisation", "label": "Planende Stelle",
+        "description": "Die Stelle, die den Waermeplan aufgestellt hat, wie "
+                       "sie im Dokument genannt wird.",
+        "value_type": "text", "axes": {},
+        "example": {"source": "Aufgestellt durch das Ingenieurbuero Kassel.",
+                    "tuples": [{"value": "Ingenieurbuero Kassel"}]},
+    }
+    if kg is not None:
+        parameter["kg"] = kg
+    if axis_kg is not None:
+        parameter["axes"] = {"spatial_scope": {"type": "text", "kg": axis_kg}}
+    return {"parameters": [parameter]}
+
+
+@pytest.mark.parametrize("where,block", [
+    ("parameter", {"class": "OEO_00030022 organisation"}),
+    ("parameter", {"class": "organisation"}),
+    ("axis", {"role": "parent",
+              "map": {"sub_area": {"class": "MHPO_00020018 heat plan area, "
+                                            "BFO_0000050 part of the area"}}}),
+])
+def test_a_class_is_an_identifier_and_nothing_else(where, block):
+    """A class is an id. Written as an id plus the words for it, a serializer
+    emits `a oeo:OEO_00030022 organisation`, which is not Turtle -- and that
+    exact string sat in the kwp spec, which is why the class was still a
+    literal in the module.
+
+    Held to the SHAPE and not merely to "no whitespace": "organisation" alone
+    would mint `oeo:organisation`, an IRI that does not exist.
+    """
+    body = (_kg_spec(kg=block) if where == "parameter"
+            else _kg_spec(axis_kg=block))
+    with pytest.raises(SpecError, match="is not an identifier"):
+        load(body)
+
+
+def test_a_predicate_is_one_token():
+    """The same hand-glossing one level down, and it must NOT be held to the
+    id shape: three legal predicates of the scenarios profile are the words
+    `abstract`, `acronym` and `label`."""
+    with pytest.raises(SpecError, match="is not one token"):
+        load(_kg_spec(axis_kg={"role": "parent", "map": {"sub_area": {
+            "linked_by": {"prefix": "obo",
+                          "predicate": "BFO_0000050 part of"}}}}))
+    # And the word predicates still load.
+    load(_kg_spec(kg={"property": {"prefix": "dc", "predicate": "abstract"}}))
+
+
+def test_a_predicate_names_a_prefix_the_header_binds():
+    """`dc:abstract` is legal in the scenarios graph and unwritable in the kwp
+    one, because kwp's Turtle header binds no dc. Qualifying against the
+    profile's own header is what makes the same block honest in both."""
+    header = ("@prefix oeo: <x> ." + chr(10) + "@prefix obo: <y> ." + chr(10))
+    assert spec_mod.kg_name({"prefix": "oeo", "predicate": "OEO_00000506"},
+                            header) == "oeo:OEO_00000506"
+    with pytest.raises(KeyError, match="needs prefix and predicate"):
+        spec_mod.kg_name({"predicate": "OEO_00000506"}, header)
+    with pytest.raises(KeyError):
+        spec_mod.kg_name({"prefix": "dc", "predicate": "abstract"}, header)
