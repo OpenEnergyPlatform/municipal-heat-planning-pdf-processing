@@ -193,22 +193,68 @@ def _row(**overrides):
     return row
 
 
-def test_the_serializer_emits_only_the_target_scenario_slice(tmp_path):
+def test_every_plan_part_the_ontology_names_is_serialized(tmp_path):
+    """A plan has more parts than its target scenario, and only that one was
+    ever written. Everything else the harvest read was collected, verified
+    and dropped at the gate: on Kassel 45 tuples for the scenario alone, 25
+    of them a stock take the law asks for in WPG paragraph 15.
+    """
     serializer = kg.make_serializer(_database(tmp_path))
     ttl = serializer("waermeplan_kassel_20240315", [
         _row(),
-        _row(scenario="status_quo"),
+        _row(scenario="status_quo", year=2022),
+        _row(scenario="trend", year=2035),
         _row(spatial_scope="sub_area"),
         _row(quantity=None, quantity_raw="Endenergiebedarf"),
         _row(year=None),
     ])
     assert f"<{kg.BASE}heatplan/AGS_06611000_2024-03-15>" in ttl
     assert re.search(rf"{kg.BASE}value/{UUID5}", ttl)
-    assert '"241.0"^^xsd:float' in ttl
-    assert '"2030"^^xsd:integer' in ttl
-    assert "oeo:OEO_00000523 oeo:OEO_00000292" in ttl
-    assert ttl.count("a oeo:OEO_00050016") == 1, "the four skipped rows never arrive"
+    assert ttl.count("a oeo:OEO_00050016") == 3, "target, inventory and trend"
     assert "Kommunale Wärmeplanung Kassel 2024" in ttl
+
+    # One node per part that really has a value, with the class the ontology
+    # gives it, and one has-part edge from the plan to each.
+    for segment, cls, label in (
+            ("targetscenario", "mhpo:MHPO_00020007", "Zielszenario"),
+            ("inventory", "mhpo:MHPO_00020005", "Bestandsanalyse"),
+            ("referencescenario", "oeo:OEO_00020314", "Trendszenario")):
+        iri = f"{kg.BASE}{segment}/AGS_06611000_2024-03-15"
+        assert f"<{iri}>" in ttl, segment
+        assert f"a {cls} ;" in ttl, cls
+        assert f'"{label} Kassel 2024"' in ttl
+        assert ttl.count(f"<{iri}>") == 2, "named as a part and as a node"
+
+    # And a value of one part is not a value of another: the same coordinates
+    # under two scenarios are two nodes, which is what the conflict guard
+    # would otherwise drop as one contested identity.
+    values = set(re.findall(rf"{kg.BASE}value/({UUID5})", ttl))
+    assert len(values) == 3
+
+
+def test_a_part_with_no_value_is_neither_a_node_nor_a_has_part_edge(tmp_path):
+    """The plan does not stop having an inventory because we could not read
+    one. The graph must not say we read it."""
+    serializer = kg.make_serializer(_database(tmp_path))
+    ttl = serializer("waermeplan_kassel_20240315", [_row()])
+    assert "inventory/AGS_06611000" not in ttl
+    assert "referencescenario/AGS_06611000" not in ttl
+    assert ttl.count("targetscenario/AGS_06611000_2024-03-15") == 2
+
+
+def test_a_row_whose_scenario_stayed_unread_is_counted_not_guessed(tmp_path,
+                                                                   caplog):
+    """Two different findings that used to be one number: a scenario the
+    graph has no node for, and a scenario nobody read. The second is a
+    coordinate the sweep never closed, and it is the sweep that answers."""
+    serializer = kg.make_serializer(_database(tmp_path))
+    with caplog.at_level(logging.INFO, logger="profiles.kwp.kg"):
+        serializer("waermeplan_kassel_20240315", [
+            _row(), _row(scenario=None), _row(scenario="out:variant")])
+    line = next(r.getMessage() for r in caplog.records if "skipped" in
+                r.getMessage())
+    assert "scenario_unread': 1" in line
+    assert "scenario:out:variant': 1" in line
 
 
 def test_a_carrier_oeo_does_not_call_a_carrier_loses_its_edge_not_its_value(tmp_path):
@@ -239,10 +285,11 @@ def test_a_value_conflict_on_one_coordinate_drops_every_claimant(tmp_path):
     assert '"99.0"^^xsd:float' in ttl and '"241.0"' not in ttl
 
 
-def test_documents_without_target_tuples_or_identity_yield_none(tmp_path):
+def test_documents_without_serializable_tuples_or_identity_yield_none(tmp_path):
     serializer = kg.make_serializer(_database(tmp_path))
+    # A scenario the graph has no node for is still nothing to serialize.
     assert serializer("waermeplan_kassel_20240315",
-                      [_row(scenario="status_quo")]) is None
+                      [_row(scenario="out:variant")]) is None
     assert serializer("unknown_plan", [_row()]) is None
 
 
@@ -797,3 +844,34 @@ def test_the_anchor_prompt_asks_for_the_two_sentences_that_were_missing():
     text = prompts.load("extraction/anchors", _profile()).text
     assert "bislang eingesetzt werden" in text
     assert "CO2-Äquivalenten angegeben" in text
+
+
+def test_the_spec_and_the_serializer_name_the_same_plan_parts():
+    """The spec's kg block is what the JSON schema publishes; kg.PARTS is
+    what is written. Two lists of the same thing drift, so this reads one
+    against the other."""
+    scenario = SPEC.parameters[0].axes["scenario"]
+    mapped = scenario.kg["map"]
+    assert set(mapped) == set(scenario.vocabulary), (
+        "every scenario the model may choose says what it becomes")
+    for key, (cls, _segment, _label) in kg.PARTS.items():
+        assert cls.split(":")[-1] in mapped[key], (key, mapped[key])
+    for key, where in mapped.items():
+        if key not in kg.PARTS:
+            assert "not serialized" in where, key
+
+
+def test_the_same_coordinates_under_two_scenarios_are_two_values(tmp_path):
+    """A trend 2030 and a target 2030 of the same carrier, sector and unit
+    are two different statements about the plan. Minted off the heat plan
+    they are one identity with two magnitudes, which the conflict guard can
+    only drop -- both of them, loudly, as a contested reading."""
+    serializer = kg.make_serializer(_database(tmp_path))
+    ttl = serializer("waermeplan_kassel_20240315", [
+        _row(value_target=241.0),
+        _row(scenario="trend", value_target=298.0),
+    ])
+    assert ttl.count("a oeo:OEO_00050016") == 2, "neither is dropped"
+    assert '"241.0"^^xsd:float' in ttl and '"298.0"^^xsd:float' in ttl
+    assert len(set(re.findall(rf"{kg.BASE}value/({UUID5})", ttl))) == 2, (
+        "two nodes, because the part they hang under is part of the identity")
