@@ -46,7 +46,7 @@ from pathlib import Path
 from typing import Optional
 
 from .fields import CHOICE, axis_slots
-from .spec import Spec, fold_label
+from .spec import Spec, fold_label, own_evidence
 from .trust import document_summary
 
 log = logging.getLogger(__name__)
@@ -234,7 +234,8 @@ def remap_file(path: Path, spec: Spec, current: dict) -> Counter:
         # The levels are computed from the coordinates this pass just moved.
         lines.append(json.dumps(
             {"kind": "summary",
-             **document_summary(document_id, tuples, refusals)},
+             **document_summary(document_id, tuples, refusals,
+                                own=own_evidence(spec))},
             ensure_ascii=False))
     tmp = Path(path).with_suffix(".jsonl.tmp")
     tmp.write_text("\n".join(lines) + "\n", encoding="utf-8")

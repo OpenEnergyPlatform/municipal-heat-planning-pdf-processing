@@ -27,11 +27,25 @@ reason nobody can count. What makes a C is what a curator should look at.
 
 Measured on Kassel's 559 tuples, which is why the levels are cut here and not
 somewhere else: 527 of 559 came out of a table or figure image, so image
-origin alone separates nothing and is not a warning. What does separate: 370
-of 455 year readings cited a passage outside the row's own table and its
-section, 87 percent of the area readings, 47 percent of the scenarios, 49
-percent of the sectors -- and 13 percent of the carriers, which is the one
-coordinate the row itself really carries.
+origin alone separates nothing and is not a warning. What did separate, on
+that run: 370 of 455 year readings cited a passage outside the row's own
+table and its section, 87 percent of the area readings, 47 percent of the
+scenarios, 49 percent of the sectors -- and 13 percent of the carriers, which
+is the one coordinate the row itself really carries.
+
+That run had no evidence rule at all, and this is where the reading of those
+numbers has to be careful. The spec now sets the rule per axis -- own, local
+or any -- and the harvest enforces it: a coordinate that broke its own rule
+comes out `unbacked`, never `read`. So on a harvest written under the rule,
+a passage outside the row's own source is only a finding for an axis whose
+rule is `own`; for the others it is the rule working as written. Judging all
+seven by the strictest one would report every legal reading as a doubt, which
+is a signal that fires on the corpus and separates nothing -- the exact
+mistake image origin was kept out of the reasons for.
+
+Hence `own`: the set of axes a reader may hold to the row's own source. It
+is a property of the spec, so the caller passes it; without it every read
+coordinate is judged, which is right for a harvest from before the rule.
 
 Author: Felix Vossel
 """
@@ -71,14 +85,22 @@ def _owners(row: dict) -> set:
     return out
 
 
-def reasons(row: dict, *, conflict: bool = False,
-            transcribed: bool = False) -> list:
+def reasons(row: dict, *, conflict: bool = False, transcribed: bool = False,
+            own: Optional[frozenset] = None) -> list:
     """Every reason this value is not an A, in a fixed order.
 
     Empty means nothing is wrong with it that the harvest can see.
+
+    `own` is (parameter uri, axis name) for the axes whose evidence rule is
+    `own` -- `spec.own_evidence`. Only those are held to the row's own
+    source; an axis the spec lets read a page away was already judged where
+    the pages were, and reporting it here would mark a legal reading as a
+    doubt. None means judge every axis, which is what a harvest written
+    before the rule existed deserves.
     """
     found: list = []
     local = _owners(row)
+    parameter = row.get("parameter")
     for key in sorted(row):
         if not key.endswith("_state"):
             continue
@@ -92,6 +114,8 @@ def reasons(row: dict, *, conflict: bool = False,
             # row left at the gate: none of those is a doubt about the
             # reading. They are findings about the plan or about this run's
             # scope, and they are recorded as such elsewhere.
+            continue
+        if own is not None and (parameter, name) not in own:
             continue
         source = row.get(f"{name}_source")
         if local and source and tuple(source) not in local:
@@ -112,9 +136,9 @@ def reasons(row: dict, *, conflict: bool = False,
 
 
 def trust(row: dict, *, conflict: bool = False, transcribed: bool = False,
-          corroborated: bool = False) -> dict:
+          corroborated: bool = False, own: Optional[frozenset] = None) -> dict:
     """{level, reasons, image_origin, corroborated} for one accepted tuple."""
-    why = reasons(row, conflict=conflict, transcribed=transcribed)
+    why = reasons(row, conflict=conflict, transcribed=transcribed, own=own)
     hard = [r for r in why if r != "page_transcribed"]
     image = row.get("tier") != TIER_TEXT
     if hard:
@@ -143,7 +167,8 @@ def sentence(verdict: dict, row: Optional[dict] = None) -> str:
     return " · ".join(parts)
 
 
-def document_summary(document_id, tuples, refusals) -> dict:
+def document_summary(document_id, tuples, refusals,
+                     *, own: Optional[frozenset] = None) -> dict:
     """One `kind: summary` line per document: the harvest's view of its run.
 
     A corpus of 1.082 plans cannot be read tuple by tuple, and the question a
@@ -162,12 +187,15 @@ def document_summary(document_id, tuples, refusals) -> dict:
     arguments for exactly that reason, and the graph side recomputes the
     levels with them. The levels here are the floor: a value that is a C
     already will not become an A later.
+
+    `own` is passed straight to `trust`; see there for why an axis the spec
+    lets read a page away is not held to the row's own source.
     """
     levels = {LEVEL_A: 0, LEVEL_B: 0, LEVEL_C: 0}
     why: dict = {}
     image = 0
     for row in tuples:
-        verdict = trust(row)
+        verdict = trust(row, own=own)
         levels[verdict["level"]] += 1
         image += bool(verdict["image_origin"])
         for reason in verdict["reasons"]:

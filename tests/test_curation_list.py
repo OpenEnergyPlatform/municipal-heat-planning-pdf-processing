@@ -120,3 +120,19 @@ def test_a_long_passage_is_cut_where_the_reader_can_see_it(tmp_path):
         _row(year_source=["table", 87517], quote=long_quote)]))
     cell = cl.rows_of("plan_a", tuples, levels={"C"})[0]["quote"]
     assert len(cell) < len(long_quote) and cell.endswith(" …")
+
+
+def test_the_list_holds_only_the_axes_the_spec_holds(tmp_path):
+    """A curation list is a filter, and a filter that fires on readings that
+    broke no rule is a list nobody finishes. The year may stand a page away;
+    the carrier may not."""
+    tuples = cl.read_tuples(_harvest(tmp_path, "plan_a", [
+        _row(year_source=["table", 87517]),
+        _row(carrier_source=["table", 87517]),
+    ]))
+    own = frozenset({("https://x/energy_consumption", "carrier")})
+    got = cl.rows_of("plan_a", tuples, levels={"C"}, own=own)
+    assert [r["reasons"] for r in got] == ["nonlocal:carrier"]
+    # And without a rule every coordinate is judged, which is what a harvest
+    # from before the rule deserves.
+    assert len(cl.rows_of("plan_a", tuples, levels={"C"})) == 2

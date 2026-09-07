@@ -128,30 +128,33 @@ def test_a_rewritten_harvest_gets_a_rewritten_summary(tmp_path):
     Carried over it would report a run that no longer exists, and it is the
     one line a reader of 1.082 plans actually reads.
 
-    The case: a year read off a DIFFERENT table's caption, in a passage that
-    does not carry it. It made the value a C. This pass strips it, and the
-    value is then an ordinary reading with one coordinate fewer -- which is
-    the whole point of applying the rule backwards. A kept summary would go
-    on reporting two unusable values.
+    The case: a carrier read off a DIFFERENT table. The carrier is the one
+    coordinate the spec holds to the row's own source (evidence "own"), so
+    that made the value a C. This pass strips the reading whose passage does
+    not carry it, and that value is then an ordinary one with one coordinate
+    fewer -- the whole point of applying the rule backwards. A kept summary
+    would go on reporting two unusable values.
     """
     spec = _spec()
     parameter = _numeric_parameter(spec)
+    slot = next(s for s in fields.axis_slots(parameter) if s.name == "carrier")
+    listed = next(iter(slot.options)).label
 
-    def _row(year, quote, source):
+    def _row(wording, quote):
         return {"kind": "tuple", "parameter": parameter.uri, "value": 42,
-                "year": year, "year_quote": quote, "year_state": fields.READ,
+                "carrier": wording, "carrier_raw": wording,
+                "carrier_quote": quote, "carrier_state": fields.READ,
                 "provenance": {"document_id": 857, "owner_kind": "table",
                                "owner_id": 1},
-                "year_source": source, "tier": "text_located"}
+                # A foreign table: for an "own" axis that is the finding.
+                "carrier_source": ["table", 87517], "tier": "text_located"}
 
     path = _write(tmp_path, [
-        _row(2040, "Tabelle 5: Endenergieverbrauch im Jahr 2040 [GWh/a]",
-             ["table", 87517]),
-        _row(1990, "Tabelle 1: Bestehende Waermenetze und Heizwerke",
-             ["table", 87517]),
+        _row(listed, f"| {listed} | 42.005 | MWh/a | im Jahr 2020 |"),
+        _row(listed, "Tabelle 1: Bestehende Waermenetze und Heizwerke"),
         {"kind": "summary", "document_id": 857, "tuples": 2, "refusals": 0,
          "levels": {"A": 0, "B": 0, "C": 2},
-         "reasons": {"nonlocal:year": 2}, "image_origin": 0}])
+         "reasons": {"nonlocal:carrier": 2}, "image_origin": 0}])
 
     stats = recheck.recheck_file(path, spec)
     assert stats["summaries rewritten"] == 1
@@ -159,7 +162,8 @@ def test_a_rewritten_harvest_gets_a_rewritten_summary(tmp_path):
             in path.read_text(encoding="utf-8").strip().splitlines()]
     assert len(rows) == 3 and rows[-1]["kind"] == "summary", "still last"
     assert rows[-1]["document_id"] == 857 and rows[-1]["tuples"] == 2
-    # 2040 stands in its own quote and stays, read off a foreign table; 1990
-    # does not and goes. So one value keeps its C and one loses it.
+    # The first quote carries the wording and stays, read off a foreign
+    # table; the second does not and goes. One value keeps its C, one loses
+    # it, and a carried-over summary would report neither.
     assert rows[-1]["levels"] == {"A": 1, "B": 0, "C": 1}
-    assert rows[-1]["reasons"] == {"nonlocal:year": 1}
+    assert rows[-1]["reasons"] == {"nonlocal:carrier": 1}

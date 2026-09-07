@@ -31,7 +31,11 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from docpipe.extraction.trust import LEVEL_A, LEVEL_B, LEVEL_C, trust  # noqa: E402
+from docpipe.extraction.spec import (  # noqa: E402
+    load as load_spec, own_evidence)
+from docpipe.extraction.trust import (  # noqa: E402
+    LEVEL_A, LEVEL_B, LEVEL_C, trust)
+from docpipe.profile import load_profile                     # noqa: E402
 
 # What a curator needs to find the value again, in the order they need it.
 COLUMNS = ("document", "level", "reasons", "parameter", "value", "unit",
@@ -66,11 +70,18 @@ def coordinates(row: dict) -> str:
 
 
 def rows_of(document: str, tuples: list, *, levels: set,
-            reason: str = "") -> list:
-    """The tuples of one document that a curator should see, worst first."""
+            reason: str = "", own=None) -> list:
+    """The tuples of one document that a curator should see, worst first.
+
+    `own` names the axes the spec holds to the row's own source. Without it
+    every coordinate is judged that way, which is right for a harvest from
+    before the spec had per-axis evidence rules and wrong for one after: a
+    year the rule lets stand a page away would fill this list with readings
+    that broke nothing.
+    """
     out = []
     for row in tuples:
-        verdict = trust(row)
+        verdict = trust(row, own=own)
         if verdict["level"] not in levels:
             continue
         why = verdict["reasons"]
@@ -127,6 +138,13 @@ def main(argv=None) -> int:
                         help="only this document (repeatable)")
     parser.add_argument("--limit", type=int, default=0,
                         help="print at most this many rows (0 = all)")
+    parser.add_argument("--profile", default=None,
+                        help="whose spec says which axis is held to the "
+                             "row's own source (default: $DOCPIPE_PROFILE)")
+    parser.add_argument("--strict-locality", action="store_true",
+                        help="hold EVERY coordinate to the row's own source, "
+                             "for a harvest written before the spec had "
+                             "per-axis evidence rules")
     parser.add_argument("--out", type=Path,
                         help="write the whole list as CSV here; without it "
                              "the first rows go to the terminal")
@@ -150,13 +168,23 @@ def main(argv=None) -> int:
         print(f"keine Ernte in {args.directory}", file=sys.stderr)
         return 1
 
+    own = None
+    if not args.strict_locality:
+        profile = load_profile(args.profile)
+        spec_path = profile.component("extraction", "SPEC_PATH")
+        if spec_path is None:
+            print(f"Profil {profile.name!r} hat keine Extraktionsstufe",
+                  file=sys.stderr)
+            return 1
+        own = own_evidence(load_spec(Path(spec_path)))
+
     rows: list = []
     seen = 0
     for path in files:
         tuples = read_tuples(path)
         seen += len(tuples)
         rows.extend(rows_of(path.stem, tuples, levels=levels,
-                            reason=args.reason))
+                            reason=args.reason, own=own))
 
     by_reason: collections.Counter = collections.Counter()
     for row in rows:
@@ -167,6 +195,9 @@ def main(argv=None) -> int:
     print(f"{len(rows)} von {seen} Werten aus {len(files)} Plaenen, "
           f"Stufe {args.level} und schlechter"
           + (f", Grund {args.reason!r}" if args.reason else ""))
+    print("  Beleglokalitaet geprueft fuer: "
+          + (", ".join(sorted({a for _u, a in own})) if own
+             else "jede Koordinate (--strict-locality)"))
     print("  Gruende: " + (", ".join(f"{k}={v}" for k, v
                                      in by_reason.most_common(10)) or "keine"))
 
