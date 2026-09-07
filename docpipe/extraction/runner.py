@@ -194,7 +194,12 @@ def _source_of(hit: dict, via: Optional[str] = None) -> Source:
                   "page": hit.get("page_number"),
                   "section_number": hit.get("section_number"),
                   "section_title": hit.get("section_title"),
-                  "title": hit.get("title")}
+                  "title": hit.get("title"),
+                  # The section a table or figure stands in, and its
+                  # placeholder in that section. Both are how the own window
+                  # is built, and neither can be worked out afterwards.
+                  "parent_section": hit.get("section_id"),
+                  "block_id": hit.get("block_id")}
     if via:
         provenance["via"] = via
     body = hit.get("text") or ""
@@ -331,6 +336,83 @@ def make_structure(conn: sqlite3.Connection,
         return out
 
     return structure
+
+
+# How much of a parent section rides along with its table. Kassel's median
+# section is 894 characters and its longest is 6,038, so most fit whole and
+# the rest are cut around the table's own placeholder rather than dropped:
+# the sentence that dates a table stands next to its placeholder and nowhere
+# else.
+PARENT_CHARS = int(os.environ.get("EXTRACT_PARENT_CHARS", "4000"))
+
+
+def _around(text: str, needle: str, budget: int) -> str:
+    """A window of *budget* characters centred on *needle*."""
+    at = text.find(needle) if needle else -1
+    if at == -1:
+        return text[:budget]
+    start = max(0, at - budget // 2)
+    return text[start:start + budget]
+
+
+def make_parents(db_path: Path) -> Callable:
+    """(sources) -> the section each table or figure stands in, once each.
+
+    The own window used to be the batch's tables and nothing else, and the
+    coordinates a table does not carry live in the section around it: the
+    sentence that dates it ("Für das Jahr 2040 ergeben sich ..."), the
+    heading that names the scenario, the caption Stage 2 failed to link.
+    Measured on Kassel, section 349525 was in 0 of 1,043 field windows while
+    its three tables were asked for their year 39 times, and 69 tuples from
+    inventory tables came back as target-scenario values because no window
+    ever showed the word for what they are.
+
+    Once each: two tables of one section share one parent, and showing it
+    twice is the same passage paying twice.
+
+    Its own connection per thread, like more_sources: this runs inside the
+    harvest pool, and SQLite handles are not shared across a hundred threads.
+    """
+    local = threading.local()
+
+    def fetcher():
+        if getattr(local, "conn", None) is None:
+            local.conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
+            local.conn.row_factory = sqlite3.Row
+            local.fetch = make_content_fetcher()
+        return local.conn, local.fetch
+
+    def parents(sources: list) -> list:
+        conn, fetch = fetcher()
+        seen = {(s.owner_kind, s.owner_id) for s in sources}
+        out: list = []
+        for source in sources:
+            provenance = source.provenance or {}
+            section_id = provenance.get("parent_section")
+            if section_id is None or ("section", section_id) in seen:
+                continue
+            seen.add(("section", section_id))
+            try:
+                content = fetch(conn, "section", section_id)
+            except Exception as exc:            # pragma: no cover - defensive
+                log.warning("   parent section %s unreadable: %s",
+                            section_id, exc)
+                continue
+            if content is None:
+                continue
+            parent = _source_of({"score": None, **content}, via="parent")
+            if len(parent.text or "") > PARENT_CHARS:
+                block = provenance.get("block_id") or ""
+                parent = Source(owner_kind=parent.owner_kind,
+                                owner_id=parent.owner_id,
+                                text=_around(parent.text, f"[{block}",
+                                             PARENT_CHARS),
+                                provenance=parent.provenance,
+                                image_path=parent.image_path)
+            out.append(parent)
+        return out
+
+    return parents
 
 
 def make_rest_of_document(db_path: Path) -> Callable:
@@ -1481,10 +1563,19 @@ def _field_payload(shown: list, rows: list, slots,
     """
     sources = []
     for index, source in enumerate(shown):
-        sources.append({"id": f"Q{index + 1}", "kind": source.owner_kind,
-                        "title": source.provenance.get("title"),
-                        "section": source.provenance.get("section_title"),
-                        "text": source.text})
+        entry = {"id": f"Q{index + 1}", "kind": source.owner_kind,
+                 "title": source.provenance.get("title"),
+                 "section": source.provenance.get("section_title"),
+                 "text": source.text}
+        # Where this source stands, so "the section this table is in" is a
+        # fact the request carries rather than one the model has to infer
+        # from the order the sources happen to be in.
+        for key in ("page", "block_id"):
+            if source.provenance.get(key):
+                entry[key] = source.provenance[key]
+        if source.provenance.get("via") == "parent":
+            entry["holds"] = "der Abschnitt, in dem die Tabelle steht"
+        sources.append(entry)
     listed = []
     for row in rows:
         entry = {"id": row.label,
@@ -1659,7 +1750,8 @@ def make_fieldwise_harvester(image_root: Optional[Path] = None,
                              more_sources: Optional[Callable] = None,
                              rest_of_document: Optional[Callable] = None,
                              spec=None, anchors: Optional[dict] = None,
-                             slice_gate: Optional[dict] = None
+                             slice_gate: Optional[dict] = None,
+                             parents: Optional[Callable] = None
                              ) -> Callable:
     """A harvest(batch, prior) that asks per field and answers like the old one.
 
@@ -1817,7 +1909,14 @@ def make_fieldwise_harvester(image_root: Optional[Path] = None,
                         break
             return True
 
-        combed = run([batch.sources])
+        # The value's own passages AND the sections they stand in. A table
+        # carries its numbers and its row labels; the year, the scenario and
+        # the caption live one level up, and the own window never showed it.
+        own = list(batch.sources)
+        for parent in (parents(batch.sources) if parents else ()):
+            own.append(parent)
+            seen.add((parent.owner_kind, parent.owner_id))
+        combed = run([own])
         state["stage"] = "retrieval"
         for _ in range(FIELD_ROUNDS):
             if not combed or not still_open(rows) or more_sources is None:
@@ -2685,7 +2784,8 @@ def main(argv: Optional[list] = None) -> int:
     harvest = (make_fieldwise_harvester(args.image_root, more_sources,
                                         make_rest_of_document(args.db),
                                         spec=spec, anchors=anchors,
-                                        slice_gate=slice_gate)
+                                        slice_gate=slice_gate,
+                                        parents=make_parents(args.db))
                if FIELDWISE else make_harvester(args.image_root, spec=spec))
 
     def plan(document_id: int, filename: str) -> tuple:
