@@ -85,26 +85,33 @@ CREATE TABLE IF NOT EXISTS "Segments" (
     UNIQUE("section", "ordinal")
 );
 
+-- `caption_source` says what the caption backfill did with this row:
+-- 'stage' = the caption the preprocessing stages stored was kept,
+-- 'section_text' = it was replaced by the sentence standing before this
+-- item's placeholder in the section text, because the stored one did not
+-- open like a caption. NULL = the backfill has not seen the row.
 CREATE TABLE IF NOT EXISTS "Tables" (
-    "id"          INTEGER PRIMARY KEY AUTOINCREMENT,
-    "section"     INTEGER NOT NULL REFERENCES "Sections"("id") ON DELETE CASCADE,
-    "block_id"    TEXT,
-    "path"        TEXT NOT NULL,
-    "page_number" INTEGER,
-    "caption"     TEXT,
-    "markdown"    TEXT,
-    "bbox"        TEXT   -- JSON [[x0,y0,x1,y1]] region in PDF points
+    "id"             INTEGER PRIMARY KEY AUTOINCREMENT,
+    "section"        INTEGER NOT NULL REFERENCES "Sections"("id") ON DELETE CASCADE,
+    "block_id"       TEXT,
+    "path"           TEXT NOT NULL,
+    "page_number"    INTEGER,
+    "caption"        TEXT,
+    "markdown"       TEXT,
+    "bbox"           TEXT,  -- JSON [[x0,y0,x1,y1]] region in PDF points
+    "caption_source" TEXT   -- stage | section_text
 );
 
 CREATE TABLE IF NOT EXISTS "Images" (
-    "id"          INTEGER PRIMARY KEY AUTOINCREMENT,
-    "section"     INTEGER NOT NULL REFERENCES "Sections"("id") ON DELETE CASCADE,
-    "block_id"    TEXT,
-    "path"        TEXT NOT NULL,
-    "page_number" INTEGER,
-    "caption"     TEXT,
-    "description" TEXT,
-    "bbox"        TEXT   -- JSON [[x0,y0,x1,y1]] region in PDF points
+    "id"             INTEGER PRIMARY KEY AUTOINCREMENT,
+    "section"        INTEGER NOT NULL REFERENCES "Sections"("id") ON DELETE CASCADE,
+    "block_id"       TEXT,
+    "path"           TEXT NOT NULL,
+    "page_number"    INTEGER,
+    "caption"        TEXT,
+    "description"    TEXT,
+    "bbox"           TEXT,  -- JSON [[x0,y0,x1,y1]] region in PDF points
+    "caption_source" TEXT   -- see Tables.caption_source
 );
 
 -- One row per embedded vector. `faiss_id` is the id in the FAISS IDMap index.
