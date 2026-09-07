@@ -35,6 +35,7 @@ from .fields import (CHOICE, NUMBER, READ, SAID_UNSTATED, UNANSWERED,
                      UNBACKED, UNSTATED)
 from .verify import (MIN_QUOTE_CHARS, Refusal, Verified, canonical_number,
                      flat, numbers_in, quote_in, verify_tuple)
+from .trust import document_summary
 
 log = logging.getLogger(__name__)
 
@@ -1032,10 +1033,15 @@ def fold_fieldwise(batch: Batch, rows: list, orphans: list,
 
 
 def write_report(report: DocumentReport, out_path: Path) -> None:
-    """Tuples and refusals as one JSONL, written atomically.
+    """Tuples, refusals and one summary line as a JSONL, written atomically.
 
     Refusals are rows too (kind=refusal): the file is the audit trail, and an
     audit that only shows the survivors cannot answer why a value is missing.
+
+    The last line (kind=summary) is the distribution over this document's own
+    values, so "how much of this plan can I use" has an answer that does not
+    require reading 559 rows. It goes last because it is computed from
+    everything above it.
     """
     out_path.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.NamedTemporaryFile(
@@ -1047,6 +1053,11 @@ def write_report(report: DocumentReport, out_path: Path) -> None:
         for refusal in report.refusals:
             handle.write(json.dumps({"kind": "refusal", **refusal},
                                     ensure_ascii=False) + "\n")
+        handle.write(json.dumps(
+            {"kind": "summary",
+             **document_summary(report.document_id, report.tuples,
+                                report.refusals)},
+            ensure_ascii=False) + "\n")
         temp = Path(handle.name)
     temp.replace(out_path)
     leftovers = {k.rsplit("/", 1)[-1]: v["leftover"]

@@ -43,6 +43,7 @@ from .pipeline import (Source, WorkItem, batch_uri, build_sweeps,
                        rows_from_reply, window_sources, write_report)
 from .fields import EXHAUSTED
 from .queries import expand as expand_queries
+from .trust import document_summary
 from .spec import Spec, load as load_spec
 
 log = logging.getLogger(__name__)
@@ -2536,7 +2537,8 @@ def _harvest_validators(spec):
                 branch_key: jsonschema.Draft202012Validator(
                     {**base, **defs[branch]})
                 for branch_key, branch in
-                [(("refusal", None), "refusal")]
+                [(("refusal", None), "refusal"),
+                 (("summary", None), "summary")]
                 + [(("tuple", p.uri), f"tuple_{p.uri}")
                    for p in spec.parameters]}
         except Exception as exc:              # pragma: no cover - defensive
@@ -2558,7 +2560,13 @@ def check_against_schema(report, name: str, spec) -> int:
     if validators is None:
         return 0
     invalid = 0
-    for kind, rows in (("tuple", report.tuples), ("refusal", report.refusals)):
+    # The summary is written by write_report, not carried on the report, so
+    # it is built here the same way and checked with everything else. A line
+    # the schema refuses is a line downstream cannot read, whoever wrote it.
+    summary = document_summary(report.document_id, report.tuples,
+                               report.refusals)
+    for kind, rows in (("tuple", report.tuples), ("refusal", report.refusals),
+                       ("summary", [summary])):
         for row in rows:
             key = (kind, row.get("parameter") if kind == "tuple" else None)
             validator = validators.get(key)
@@ -2583,7 +2591,7 @@ def check_against_schema(report, name: str, spec) -> int:
     if invalid:
         log.warning("extraction: %s: %d of %d row(s) do not match the "
                     "published schema", name, invalid,
-                    len(report.tuples) + len(report.refusals))
+                    len(report.tuples) + len(report.refusals) + 1)
     return invalid
 
 

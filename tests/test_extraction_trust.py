@@ -15,7 +15,8 @@ No model, no GPU.
 import pytest
 
 from docpipe.extraction import fields
-from docpipe.extraction.trust import LEVEL_A, LEVEL_B, LEVEL_C, sentence, trust
+from docpipe.extraction.trust import (LEVEL_A, LEVEL_B, LEVEL_C,
+                                      document_summary, sentence, trust)
 from docpipe.extraction.verify import TIER_TEXT, TIER_VISUAL
 
 
@@ -121,3 +122,41 @@ def test_the_sentence_says_what_to_do_about_it():
     assert "Prüfung empfohlen" in line
     # An A says its level and nothing else: there is nothing to act on.
     assert sentence(trust(_row())) == "Vertrauen: A"
+
+
+# ---------------------------------------------------------------------------
+# One line per document
+# ---------------------------------------------------------------------------
+def test_the_summary_counts_every_value_once_and_names_why():
+    """A corpus of 1.082 plans is not read tuple by tuple. What a reader
+    wants -- how much of this plan is usable -- has to be one line."""
+    rows = [_row(),                                     # A
+            _row(tier=TIER_VISUAL),                     # B
+            _row(year_source=["table", 87517]),         # C, foreign year
+            _row(flags=["computed"])]                   # C, computed
+    got = document_summary(857, rows, [{"reason": "x"}, {"reason": "y"}])
+    assert got == {"document_id": 857, "tuples": 4, "refusals": 2,
+                   "levels": {LEVEL_A: 1, LEVEL_B: 1, LEVEL_C: 2},
+                   "reasons": {"computed": 1, "nonlocal:year": 1},
+                   "image_origin": 1}
+    assert sum(got["levels"].values()) == got["tuples"], "every value, once"
+
+
+def test_the_summary_says_nothing_about_a_conflict_it_cannot_see():
+    """A contested identity is the serializer's finding, and a second reading
+    is a later pass. Both would have to be guessed here, and a guessed C is
+    worse than an honest floor: the graph side recomputes the level with
+    them, and a value that is a C already never becomes an A."""
+    got = document_summary(857, [_row()], [])
+    assert got["levels"] == {LEVEL_A: 1, LEVEL_B: 0, LEVEL_C: 0}
+    assert got["reasons"] == {}
+    # The same value, once the serializer knows the identity is contested.
+    assert trust(_row(), conflict=True)["level"] == LEVEL_C
+
+
+def test_a_document_with_nothing_in_it_still_has_a_summary():
+    """A plan the run found no value in is a finding about the plan. An
+    absent line reads as a plan that was never harvested."""
+    got = document_summary(1082, [], [])
+    assert got["tuples"] == 0 and got["refusals"] == 0
+    assert got["levels"] == {LEVEL_A: 0, LEVEL_B: 0, LEVEL_C: 0}

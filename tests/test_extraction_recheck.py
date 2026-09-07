@@ -121,3 +121,45 @@ def test_keeping_the_stamps_is_something_you_have_to_ask_for(tmp_path):
     stamp.write_text("{}", encoding="utf-8")
     recheck.run(tmp_path, spec, drop_stamps=False)
     assert stamp.exists()
+
+
+def test_a_rewritten_harvest_gets_a_rewritten_summary(tmp_path):
+    """This pass changes what the tuples say, and the summary counts them.
+    Carried over it would report a run that no longer exists, and it is the
+    one line a reader of 1.082 plans actually reads.
+
+    The case: a year read off a DIFFERENT table's caption, in a passage that
+    does not carry it. It made the value a C. This pass strips it, and the
+    value is then an ordinary reading with one coordinate fewer -- which is
+    the whole point of applying the rule backwards. A kept summary would go
+    on reporting two unusable values.
+    """
+    spec = _spec()
+    parameter = _numeric_parameter(spec)
+
+    def _row(year, quote, source):
+        return {"kind": "tuple", "parameter": parameter.uri, "value": 42,
+                "year": year, "year_quote": quote, "year_state": fields.READ,
+                "provenance": {"document_id": 857, "owner_kind": "table",
+                               "owner_id": 1},
+                "year_source": source, "tier": "text_located"}
+
+    path = _write(tmp_path, [
+        _row(2040, "Tabelle 5: Endenergieverbrauch im Jahr 2040 [GWh/a]",
+             ["table", 87517]),
+        _row(1990, "Tabelle 1: Bestehende Waermenetze und Heizwerke",
+             ["table", 87517]),
+        {"kind": "summary", "document_id": 857, "tuples": 2, "refusals": 0,
+         "levels": {"A": 0, "B": 0, "C": 2},
+         "reasons": {"nonlocal:year": 2}, "image_origin": 0}])
+
+    stats = recheck.recheck_file(path, spec)
+    assert stats["summaries rewritten"] == 1
+    rows = [json.loads(line) for line
+            in path.read_text(encoding="utf-8").strip().splitlines()]
+    assert len(rows) == 3 and rows[-1]["kind"] == "summary", "still last"
+    assert rows[-1]["document_id"] == 857 and rows[-1]["tuples"] == 2
+    # 2040 stands in its own quote and stays, read off a foreign table; 1990
+    # does not and goes. So one value keeps its C and one loses it.
+    assert rows[-1]["levels"] == {"A": 1, "B": 0, "C": 1}
+    assert rows[-1]["reasons"] == {"nonlocal:year": 1}

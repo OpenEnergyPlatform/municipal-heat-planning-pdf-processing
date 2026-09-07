@@ -47,8 +47,13 @@ STATE_ORDER = (fields.READ, fields.DERIVED, fields.SAID_UNSTATED,
 
 
 def read_harvest(path: Path) -> tuple:
-    """(tuples, refusals) of one document's JSONL."""
-    tuples, refusals = [], []
+    """(tuples, refusals, summary) of one document's JSONL.
+
+    The summary is the file's own last line and is neither: counting it as a
+    refusal would add one to every document's refusal count, and the ratio
+    that is read off it is the one this whole report exists for.
+    """
+    tuples, refusals, summary = [], [], None
     for line in path.read_text(encoding="utf-8").splitlines():
         if not line.strip():
             continue
@@ -56,8 +61,14 @@ def read_harvest(path: Path) -> tuple:
             row = json.loads(line)
         except json.JSONDecodeError:
             continue
-        (tuples if row.get("kind") == "tuple" else refusals).append(row)
-    return tuples, refusals
+        kind = row.get("kind")
+        if kind == "tuple":
+            tuples.append(row)
+        elif kind == "summary":
+            summary = row
+        else:
+            refusals.append(row)
+    return tuples, refusals, summary
 
 
 def serialize_counts(serializer, name: str, tuples: list, records: list) -> dict:
@@ -184,11 +195,20 @@ def main(argv=None) -> int:
 
     totals: collections.Counter = collections.Counter()
     skipped: collections.Counter = collections.Counter()
+    levels: collections.Counter = collections.Counter()
+    reasons: collections.Counter = collections.Counter()
+    summaries: list = []
     states: dict = collections.defaultdict(collections.Counter)
     per_document: list = []
     for path in files:
         name = path.stem
-        tuples, refusals = read_harvest(path)
+        tuples, refusals, summary = read_harvest(path)
+        if summary:
+            summaries.append((name, summary))
+            for level, count in (summary.get("levels") or {}).items():
+                levels[level] += count
+            for reason, count in (summary.get("reasons") or {}).items():
+                reasons[reason] += count
         got = serialize_counts(serializer, name, tuples, collector.records)
         cost = trace_costs(args.directory, name)
         for row in tuples:
@@ -242,7 +262,7 @@ def main(argv=None) -> int:
             if not path.is_file():
                 print(f"  {name}: keine Ernte")
                 continue
-            tuples, _ = read_harvest(path)
+            tuples, _refusals, _summary = read_harvest(path)
             for coordinate, got in agreement(tuples, wanted).items():
                 total = got["hit"] + got["miss"] or 1
                 print("  %s %-10s richtig %d von %d (%.0f%%)" % (
@@ -250,6 +270,24 @@ def main(argv=None) -> int:
                     100.0 * got["hit"] / total))
                 for entry, count in got["worst"]:
                     print(f"      {entry}: {count}")
+
+    if summaries:
+        total = sum(levels.values()) or 1
+        print("\nVertrauen je Wert (Ernteblick, ohne Konflikt und Zweitlesung)")
+        print("  " + ", ".join("%s=%d (%.0f%%)" % (level, levels[level],
+                                                   100.0 * levels[level] / total)
+                               for level in ("A", "B", "C")))
+        print("  Gruende: " + (", ".join(f"{k}={v}" for k, v
+                                         in reasons.most_common(8)) or "keine"))
+        shares = sorted(
+            ((s["levels"].get("C", 0) / (s["tuples"] or 1), name, s)
+             for name, s in summaries), reverse=True)[:5]
+        print("  Plaene mit dem hoechsten C-Anteil")
+        for share, name, s in shares:
+            print("      %s: %.0f%% von %d Tupeln" % (name, 100.0 * share,
+                                                      s["tuples"]))
+    else:
+        print("\nVertrauen je Wert: keine Zusammenfassungszeile in dieser Ernte")
 
     worst = sorted(per_document, key=lambda r: r[2])[:5]
     print("\nSchwaechste Dokumente (Knoten)")

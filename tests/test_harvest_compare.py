@@ -31,8 +31,8 @@ def test_a_trace_is_not_a_document(tmp_path):
     files = sorted(p for p in tmp_path.glob("*.jsonl")
                    if not p.name.endswith(".trace.jsonl"))
     assert [p.stem for p in files] == ["plan_a"]
-    tuples, refusals = hc.read_harvest(tmp_path / "plan_a.jsonl")
-    assert len(tuples) == 1 and len(refusals) == 1
+    tuples, refusals, summary = hc.read_harvest(tmp_path / "plan_a.jsonl")
+    assert len(tuples) == 1 and len(refusals) == 1 and summary is None
 
 
 def test_the_cost_is_read_from_both_places_a_trace_lives(tmp_path):
@@ -78,3 +78,27 @@ def test_agreement_counts_only_the_owners_the_truth_names(tmp_path):
     got = hc.agreement(tuples, {"scenarios": {"87438": "status_quo",
                                               "87439": "status_quo"}})
     assert (got["scenarios"]["hit"], got["scenarios"]["miss"]) == (1, 1)
+
+
+def test_the_summary_line_is_neither_a_tuple_nor_a_refusal(tmp_path):
+    """It is the file's own last line. Counted as a refusal it adds one to
+    every document in the corpus, and the refusal share is one of the numbers
+    the repair is judged on."""
+    _write(tmp_path / "plan_a.jsonl", [
+        {"kind": "tuple", "value": 1},
+        {"kind": "refusal", "reason": "x"},
+        {"kind": "summary", "document_id": 7, "tuples": 1, "refusals": 1,
+         "levels": {"A": 0, "B": 1, "C": 0}, "reasons": {}, "image_origin": 1},
+    ])
+    tuples, refusals, summary = hc.read_harvest(tmp_path / "plan_a.jsonl")
+    assert len(tuples) == 1
+    assert len(refusals) == 1, "the summary is not one of them"
+    assert summary["levels"] == {"A": 0, "B": 1, "C": 0}
+
+
+def test_a_harvest_without_a_summary_still_reads(tmp_path):
+    """Every file written before the summary existed, and the report has to
+    read those too: this script is how an old run is compared to a new one."""
+    _write(tmp_path / "old.jsonl", [{"kind": "tuple", "value": 1}])
+    tuples, refusals, summary = hc.read_harvest(tmp_path / "old.jsonl")
+    assert tuples and not refusals and summary is None
