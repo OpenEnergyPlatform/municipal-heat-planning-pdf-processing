@@ -161,16 +161,22 @@ def _database(tmp_path):
     conn = sqlite3.connect(db)
     conn.executescript("""
         CREATE TABLE Documents (id INTEGER PRIMARY KEY, filename TEXT,
-                                published TEXT, is_current INTEGER);
+                                published TEXT, is_current INTEGER,
+                                page_text_transcribed INTEGER);
         CREATE TABLE DocumentMeta (document INTEGER, municipality_ags TEXT);
         CREATE TABLE Municipalities (ags TEXT, name TEXT);
         INSERT INTO Documents VALUES (857, 'waermeplan_kassel_20240315.pdf',
-                                      '2024-03-15', 1);
+                                      '2024-03-15', 1, 0);
         INSERT INTO DocumentMeta VALUES (857, '06611000');
         INSERT INTO Documents VALUES (858, 'waermeplan_kassel_alt.pdf',
-                                      '2024-03-15', 0);
+                                      '2024-03-15', 0, 0);
         INSERT INTO DocumentMeta VALUES (858, '06611000');
+        -- A plan with no PDF text layer: every page read by a model.
+        INSERT INTO Documents VALUES (1082, 'waermeplan_ohne_textebene.pdf',
+                                      '2025-09-01', 1, 96);
+        INSERT INTO DocumentMeta VALUES (1082, '13074053');
         INSERT INTO Municipalities VALUES ('06611000', 'Kassel');
+        INSERT INTO Municipalities VALUES ('13074053', 'Grevesmühlen');
     """)
     conn.commit()
     conn.close()
@@ -188,7 +194,7 @@ def _row(**overrides):
            "aggregation": "OEO_00140070", "aggregation_state": "derived",
            "aggregation_raw": "kWh/a",
            "scenario": "target", "spatial_scope": "municipality",
-           "tier": "pdf_verified", "provenance": {"document_id": 857}}
+           "tier": "visual_source", "provenance": {"document_id": 857}}
     row.update(overrides)
     return row
 
@@ -875,3 +881,35 @@ def test_the_same_coordinates_under_two_scenarios_are_two_values(tmp_path):
     assert '"241.0"^^xsd:float' in ttl and '"298.0"^^xsd:float' in ttl
     assert len(set(re.findall(rf"{kg.BASE}value/({UUID5})", ttl))) == 2, (
         "two nodes, because the part they hang under is part of the identity")
+
+
+def test_the_same_value_is_a_from_a_pdf_and_b_from_a_transcribed_plan(tmp_path):
+    """Eleven plans of the corpus have no PDF text layer: a model read their
+    pages, everything downstream ran unchanged, and the section text a quote
+    is verified against is itself a reading. Two identical values differ only
+    in which plan they came out of, and the graph says so."""
+    serializer = kg.make_serializer(_database(tmp_path))
+    with_text = serializer("waermeplan_kassel_20240315",
+                           [_row(tier="text_located")])
+    assert "# Vertrauen: A" in with_text
+
+    transcribed = serializer("waermeplan_ohne_textebene",
+                             [_row(tier="text_located",
+                                   provenance={"document_id": 1082})])
+    assert "# Vertrauen: B · page_transcribed" in transcribed
+    assert "Vertrauen: A" not in transcribed
+
+
+def test_the_graph_says_which_values_want_looking_at(tmp_path):
+    """A reader of the Turtle sees the number and the level next to it, and a
+    C names what is wrong with it. Without that a year read off another
+    table's caption is presented as a fact."""
+    serializer = kg.make_serializer(_database(tmp_path))
+    ttl = serializer("waermeplan_kassel_20240315", [
+        _row(provenance={"document_id": 857, "owner_kind": "table",
+                         "owner_id": 87457, "parent_section": 349525},
+             year_state="read", year_source=["table", 87517]),
+    ])
+    assert "# Vertrauen: C" in ttl
+    assert "nonlocal:year" in ttl
+    assert "Prüfung empfohlen" in ttl
