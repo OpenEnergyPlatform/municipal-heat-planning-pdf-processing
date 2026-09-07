@@ -391,3 +391,32 @@ def test_a_computed_value_still_needs_its_quote_in_the_source():
         _parameter(), "Der Gesamtverbrauch liegt bei 604 GWh/a.")
     assert isinstance(out, Refusal)
     assert "not found in the source" in out.reason
+
+
+def test_a_subscript_two_resolves_to_the_class_and_is_not_flagged():
+    """End to end for the fold: the plan writes "CO₂-Emissionen" with U+2082,
+    the spec lists the digit. Without the fold the axis resolves to nothing
+    and the reading is recorded as the model's own judgement call — 132 of
+    Kassel's 204 emission readings, over one character.
+    """
+    parameter = load({"parameters": [{
+        "uri": "OEO_00340066",
+        "label": "CO2 emission value",
+        "description": "Die im Wärmeplan bilanzierte Emissionsmenge je "
+                       "Energieträger, Sektor und Jahr.",
+        "unit_target": "OEO_00000098",
+        "units_accepted": {"t/a": 1.0},
+        "axes": {"quantity": {"vocabulary": {
+            "OEO_00340066": ["CO2-Emissionen"],
+            "OEO_00140083": ["CO2-Äquivalente"]}}},
+        "example": {"source": "| Erdgas | 1.234 | t/a |",
+                    "tuples": [{"value": 1234, "unit_raw": "t/a"}]},
+    }]}).by_uri["OEO_00340066"]
+    source = "| CO₂-Emissionen | 1.234 | t/a |"
+    out = verify_tuple({"value": 1234, "unit": "t/a", "unit_raw": "t/a",
+                        "quantity": "CO₂-Emissionen",
+                        "quote": "| CO₂-Emissionen | 1.234 | t/a |"},
+                       parameter, source)
+    assert isinstance(out, Verified), getattr(out, "reason", out)
+    assert out.tuple["quantity"] == "OEO_00340066"
+    assert not [f for f in out.flags if f.startswith(("unmapped:", "mapped:"))]

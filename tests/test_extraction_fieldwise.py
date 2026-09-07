@@ -518,7 +518,7 @@ def _fieldwise(monkeypatch, spec, rows_reply, answers):
 
     def make_asker(image_root=None):
         def ask(shown, rows, slots, corrections=None, document_id=None,
-                usage_out=None):
+                usage_out=None, owner_of=None):
             slots = slots if isinstance(slots, (list, tuple)) else [slots]
             for slot in slots:
                 asked.append(slot.name)
@@ -609,7 +609,7 @@ def _gated(monkeypatch, spec, rows_reply, answers, gate):
 
     def make_asker(image_root=None):
         def ask(shown, rows, slots, corrections=None, document_id=None,
-                usage_out=None):
+                usage_out=None, owner_of=None):
             slots = slots if isinstance(slots, (list, tuple)) else [slots]
             labels = sorted(r.label for r in rows)
             for slot in slots:
@@ -750,7 +750,7 @@ def test_the_coordinates_of_a_row_go_out_in_one_request(monkeypatch):
 
     def make_asker(image_root=None):
         def ask(shown, rows, slots, corrections=None, document_id=None,
-                usage_out=None):
+                usage_out=None, owner_of=None):
             slots = slots if isinstance(slots, (list, tuple)) else [slots]
             calls.append([s.name for s in slots])
             out = {}
@@ -1078,6 +1078,27 @@ def test_the_row_prompt_example_names_no_place_this_corpus_contains(profile):
         assert "anderen Plan" in text
 
 
+def test_the_field_prompt_states_the_rule_the_code_enforces(profile):
+    """A rule the request does not state is a rule the model cannot follow.
+    The code refuses a passage from another source; the prompt has to say
+    which source is the row's own and how the request names it."""
+    name, _spec = profile
+    text = (PROFILES / name / "prompts" / "extraction" / "field.md").read_text(
+        encoding="utf-8")
+    if name != "kwp":
+        pytest.skip("the evidence rule is set per profile")
+    for promised in ('"source"', '"section"', '"block_id"', '"holds"',
+                     "EIGENEN Tabelle", "Nachbarseite"):
+        assert promised in text, promised
+    # The two captions the rule turns on, verbatim from Kassel 349525/349566.
+    assert "Tabelle 17: Endenergieverbrauch der Gesamtstadt" in text
+    assert "Tabelle 28: Endenergieverbrauch der Gesamtstadt" in text
+    # And the column rule no longer says the column is the year.
+    rules = text.split("4. Tabellen mit mehreren")[1]
+    column = rules.split(chr(10) + chr(10))[0]
+    assert "SEKTOR" in column and "JAHR" in column
+
+
 def test_the_own_window_shows_the_section_a_table_stands_in(monkeypatch):
     """The promise: the first window a coordinate is asked in holds the table
     AND the section around it, each section once.
@@ -1097,7 +1118,7 @@ def test_the_own_window_shows_the_section_a_table_stands_in(monkeypatch):
 
     def make_asker(image_root=None):
         def ask(shown, rows, slots, corrections=None, document_id=None,
-                usage_out=None):
+                usage_out=None, owner_of=None):
             shown_per_window.append([(s.owner_kind, s.owner_id) for s in shown])
             return {"fields": {}}
         return ask
@@ -1279,3 +1300,108 @@ def test_the_kwp_axes_carry_the_rule_their_measurement_calls_for():
         assert rules.get("year") == "local"
         assert rules.get("scenario") == "local"
         assert rules.get("quantity") == "local"
+
+
+# ---------------------------------------------------------------------------
+# Which source is a row's own, and whether the wording names the class chosen
+#
+# The evidence rule is per axis and about the distance between a passage and
+# THIS row (see above). A rule the request does not state is a rule the model
+# cannot follow: measured on Kassel, 146 year readings cited the annotated
+# placeholder of ANOTHER table out of the passages it was shown, and every one
+# of them verified.
+# ---------------------------------------------------------------------------
+
+def _row_and_its_neighbours():
+    spec, _rows_reply = _two_row_spec_and_reply()
+    parameter = spec.parameters[0]
+    batch = _batch(parameter)
+    rows, _ = rows_from_reply(batch, _value_reply(parameter, batch.label(0)))
+    own = Source("table", 87457, "| Erdgas | 1 |",
+                 {"page": 86, "block_id": "p85_tbl0", "parent_section": 349525})
+    other = Source("table", 87517, "| Erdgas | 9 |",
+                   {"page": 162, "block_id": "p162_tbl0",
+                    "parent_section": 349566})
+    section = Source("section", 349525,
+                     "Für das Jahr 2040 ergeben sich ... [p85_tbl0: Tabelle 17]",
+                     {"page": 86, "via": "parent"})
+    return parameter, rows, own, other, section
+
+
+def test_the_request_tells_each_row_which_source_is_its_own():
+    """By id, not by position: the own table is the SECOND passage here, and
+    a model that assumed the first would date every row off table 28."""
+    parameter, rows, own, other, section = _row_and_its_neighbours()
+    slots = fields.asked_slots(parameter)
+    payload = runner._field_payload([other, own, section], rows, slots, None,
+                                    {r.label: own for r in rows})
+    assert payload["sources"][1]["block_id"] == "p85_tbl0", "Q2 is the own one"
+    assert [r["source"] for r in payload["rows"]] == ["Q2"] * len(rows)
+    assert [r["section"] for r in payload["rows"]] == ["Q3"] * len(rows)
+
+    # Its parent section is NOT among the shown passages: then the row says
+    # nothing about it rather than pointing at whatever else is there.
+    payload = runner._field_payload([other, own], rows, slots, None,
+                                    {r.label: own for r in rows})
+    assert [r["source"] for r in payload["rows"]] == ["Q2"] * len(rows)
+    assert all("section" not in r for r in payload["rows"])
+
+    # And with no ownership handed over, neither key is invented.
+    bare = runner._field_payload([other, own, section], rows, slots)
+    assert all("source" not in r and "section" not in r for r in bare["rows"])
+
+
+@pytest.mark.parametrize("given,wording,names", [
+    ("Erdgas", "Erdgas", True),
+    ("Erdgas", "Gas", True),                    # a listed spelling of its own
+    ("Erdgas", "Erdgas (H-Gas)", True),         # among other words
+    ("Erdgas", "Flüssiggas", False),            # "gas" inside a compound
+    ("Erdgas", "Heizöl", False),                # another class' spelling
+    ("Biogas", "Klärgas", False),               # Kassel: 29 such readings
+    ("Holz", "Holzige Festbrennstoffe", False),  # Kassel: 17
+    ("biogener Festbrennstoff", "sonstige biogene Festbrennstoffe", True),
+    # The label is in there as a whole word, and it is still not a wording:
+    # Kassel offered the rounding footnote as `value_raw` 15 times.
+    ("Erdgas", "Hinweis: Wegen der Rundung können beim Summieren der "
+               "Erdgas-Zellenwerte Abweichungen auftreten.", False),
+])
+def test_a_wording_either_names_the_class_it_was_mapped_to_or_it_does_not(
+        given, wording, names):
+    """field.md rule 2 says the wording is what the mapping is checked
+    against. Until now nothing checked it, so a reply could answer "Biogas"
+    with the wording "Klärgas" and the quote would verify."""
+    from docpipe.extraction.pipeline import wording_names_option
+    spec = load_spec(json.loads(
+        (PROFILES / "kwp" / "extraction_spec.json").read_text(encoding="utf-8")))
+    slot = next(s for s in fields.axis_slots(spec.parameters[0])
+                if s.name == "carrier")
+    assert wording_names_option(slot, given, wording) is names
+
+
+def test_a_wording_that_does_not_name_its_class_is_counted_and_kept(profile):
+    """Counted, not refused. Klärgas IS a biogas and the model is allowed to
+    say so; what we have no measurement of is how often it decides wrongly,
+    and one corpus run of this counter is what settles that."""
+    from docpipe.extraction.pipeline import merge_field as merge
+    batch, rows, slot = _one_row(profile, kind=fields.CHOICE)
+    if batch is None or not slot.options:
+        pytest.skip("this profile has no choice axis")
+    own = batch.items[rows[0].item_index].source
+    label = slot.options[0].label
+    passage = f"In der Zeile steht: Unfugwort und {label} nicht."
+    source = Source(own.owner_kind, own.owner_id, passage, own.provenance)
+    counts = merge(rows, [source], slot, {"answers": {rows[0].label: {
+        "value": label, "value_raw": "Unfugwort", "quote": passage}}})
+    assert counts["filled"] == 1, "read, because the quote holds the wording"
+    assert counts["raw_foreign"] == 1
+    assert rows[0].claim[f"{slot.name}_raw_foreign"] is True
+    assert rows[0].claim[slot.name] == label, "the reading itself is kept"
+
+    # The same reading with the class' own word is not flagged.
+    rows[0].claim.pop(f"{slot.name}_state")
+    rows[0].claim.pop(f"{slot.name}_raw_foreign")
+    passage = f"In der Zeile steht: {label}."
+    source = Source(own.owner_kind, own.owner_id, passage, own.provenance)
+    counts = merge(rows, [source], slot, {"answers": {rows[0].label: {
+        "value": label, "value_raw": label, "quote": passage}}})
+    assert (counts["filled"], counts["raw_foreign"]) == (1, 0)

@@ -30,13 +30,24 @@ Regeln:
 2. "value_raw": IMMER zusätzlich, die Bezeichnung wörtlich so, wie sie in der Quelle steht — die Zeilenbeschriftung, der Spaltenkopf, die Blocküberschrift oder die Caption, aus der du sie hast. Daran wird deine Zuordnung nachträglich geprüft. Bei "year" darf "value_raw" fehlen.
 
 3. "quote": eine wörtliche, zusammenhängende Zeichenkette aus EINER der gezeigten Quellen (mindestens 8 Zeichen), und in der deine Antwort auch wirklich steht. Zeichen für Zeichen kopieren.
-   Das ist FAST NIE die Zeile der Zahl selbst, und oft nicht einmal dieselbe Quelle. Der Energieträger steht in der Zeilenbeschriftung, das Jahr im Spaltenkopf oder in der Tabellenüberschrift, das Szenario im Abschnittstitel, das Gebiet in der Caption. Zitier die Stelle, an der die Angabe wirklich steht.
-   RICHTIG für das Jahr: "Tabelle 3.1: Endenergieverbrauch nach Energieträgern im Jahr 2022 [GWh/a]"
+   Das ist FAST NIE die Zeile der Zahl selbst. Der Energieträger steht in der Zeilenbeschriftung, das Jahr im Spaltenkopf oder im Tabellentitel, das Szenario im Abschnittstitel, das Gebiet in der Caption. Zitier die Stelle, an der die Angabe wirklich steht.
+   AUS WELCHER Quelle du zitieren darfst, hängt vom Feld ab, und die Zeile sagt dir, welche ihre eigene ist: "source" nennt die Quelle, in der die Zahl steht, "section" den Abschnitt, in dem diese Quelle steht (eine Quelle mit "holds" ist so ein Abschnitt).
+   - "carrier" und "sector": nur aus der eigenen Quelle oder ihrem Abschnitt. Beide stehen in der Zeilenbeschriftung oder in der Kopfzeile DERSELBEN Tabelle.
+   - "year", "scenario" und "quantity": zusätzlich aus einer Quelle auf der Nachbarseite ("page" um 1 daneben). Der ankündigende Satz steht oft im Absatz davor.
+   Ein Zitat aus einer anderen Quelle wird abgelehnt, auch wenn es richtig klingt. Die Angabe darin ist echt, sie gehört nur einer anderen Zeile.
+   Im Abschnittstext steht bei jedem Platzhalter der Titel dabei: "[p85_tbl0: Tabelle 17: ... 2040]". Dieser Titel gehört zu GENAU dieser einen Tabelle. Trägt die Quelle, die deine Zeile unter "source" nennt, dieselbe "block_id", ist es ihr Titel. Sonst ist es der Titel einer fremden Tabelle, und er datiert deine Zahl nicht, benennt ihr Szenario nicht und sagt nichts über ihr Gebiet.
+   RICHTIG für das Jahr einer Zahl aus p85_tbl0: "Tabelle 17: Endenergieverbrauch der Gesamtstadt nach Sektor und Energieträger im Zielszenario 2040"
+   FALSCH für dieselbe Zahl: "Tabelle 28: Endenergieverbrauch der Gesamtstadt nach Sektor und Energieträger 2030" — echter Satz, echtes Jahr, andere Tabelle.
    RICHTIG für den Träger: "| Gas H | 126.656.132 | 520.465.057 | 1.036.767.833 |"
    FALSCH: eine Passage, in der deine Antwort gar nicht vorkommt. Ein Zitat, das die Angabe nicht enthält, belegt nichts und wird mitsamt der Antwort verworfen.
 
-4. Tabellen mit mehreren Wertspalten sind der Normalfall, und dann unterscheiden sich die Zeilen genau in dem Feld, das die Spalte bestimmt. Steht der Kopf "| Energieträger | 2022 | 2030 | 2045 |" und hat eine Zeile "column": 2, dann gilt für sie 2022, bei "column": 3 gilt 2030, bei "column": 4 gilt 2045. Zähl die Zellen der Kopfzeile genauso, von links, die erste Zelle ist die 1. Drei Zahlen derselben Tabellenzeile zitieren dieselbe Passage und haben trotzdem drei verschiedene Jahre. Gib in diesem Fall drei Gruppen aus, nicht eine.
+4. Tabellen mit mehreren Wertspalten sind der Normalfall, und dann unterscheiden sich die Zeilen genau in dem Feld, das die Spalte bestimmt. Zähl die Zellen der Kopfzeile von links, die erste Zelle ist die 1: "column": 2 heißt, es gilt, was die ZWEITE Kopfzelle benennt.
    Zähl nicht selbst nach, welche Zahl in welcher Zelle steht: "column" sagt es dir. Deine Aufgabe ist die andere Hälfte, nämlich was die Kopfzelle mit derselben Nummer benennt.
+   Die Kopfzeile ist die der EIGENEN Tabelle, also der Quelle, die deine Zeile unter "source" nennt. Drei Tabellentitel hintereinander in einem Abschnittstext sind keine Kopfzeile.
+   Und was die Spalte bestimmt, ist nicht immer das Jahr. Lies, was dasteht:
+   "| Energieträger | 2022 | 2030 | 2045 |" — die Spalte bestimmt das JAHR. Drei Zahlen einer Zeile zitieren dieselbe Passage und haben trotzdem drei verschiedene Jahre.
+   "| Energieträger | Industrie Endenergie in kWh/a | GHD/Kommune Endenergie in kWh/a | Private Haushalte Endenergie in kWh/a |" — die Spalte bestimmt den SEKTOR. Alle drei Zahlen einer Zeile haben dasselbe Jahr und denselben Träger, und der Sektor der zweiten ist Industrie.
+   Gib so viele Gruppen aus, wie die Spalten unterscheiden, nicht eine.
 
 5. JEDE Zeile bekommt eine Antwort. Auslassen ist keine Antwort und zählt als Fehler.
    Steht die Angabe in KEINER der gezeigten Quellen, dann antworte für diese Zeile mit "value": "out:unstated". Das ist eine richtige Antwort und heißt "in diesen Passagen steht es nicht". Sie braucht kein "quote" und kein "value_raw".

@@ -1548,7 +1548,8 @@ def make_harvester(image_root: Optional[Path] = None,
 
 
 def _field_payload(shown: list, rows: list, slots,
-                   corrections: Optional[list] = None) -> dict:
+                   corrections: Optional[list] = None,
+                   owner_of: Optional[dict] = None) -> dict:
     """The request body of one field request, over the window shown.
 
     Several fields at once. One request per field was one round trip per
@@ -1576,11 +1577,29 @@ def _field_payload(shown: list, rows: list, slots,
         if source.provenance.get("via") == "parent":
             entry["holds"] = "der Abschnitt, in dem die Tabelle steht"
         sources.append(entry)
+    # Which shown source is which, so a row can name its own by id rather
+    # than by the model recognising its own quote among five passages.
+    where = {(s.owner_kind, s.owner_id): f"Q{i + 1}"
+             for i, s in enumerate(shown)}
     listed = []
     for row in rows:
         entry = {"id": row.label,
                  "value": row.claim.get("value"),
                  "quote": row.claim.get("quote")}
+        # The evidence rule is per axis and about the distance between a
+        # passage and THIS row. A rule the request does not state is a rule
+        # the model cannot follow, so the row says which source is its own
+        # and which of the shown passages is the section that source stands
+        # in -- the two the rule lets it quote from.
+        own = (owner_of or {}).get(row.label)
+        if own is not None:
+            here = where.get((own.owner_kind, own.owner_id))
+            if here:
+                entry["source"] = here
+            parent = (own.provenance or {}).get("parent_section")
+            there = where.get(("section", parent)) if parent else None
+            if there:
+                entry["section"] = there
         unit = row.claim.get("unit_raw") or row.claim.get("unit")
         if unit:
             entry["unit"] = unit
@@ -1654,10 +1673,12 @@ def make_field_asker(image_root: Optional[Path] = None) -> Callable:
     def ask(shown: list, rows: list, slots,
             corrections: Optional[list] = None,
             document_id: Optional[int] = None,
-            usage_out: Optional[dict] = None) -> Optional[dict]:
+            usage_out: Optional[dict] = None,
+            owner_of: Optional[dict] = None) -> Optional[dict]:
         slots = list(slots) if isinstance(slots, (list, tuple)) else [slots]
         name = "+".join(s.name for s in slots)
-        payload = json.dumps(_field_payload(shown, rows, slots, corrections),
+        payload = json.dumps(_field_payload(shown, rows, slots, corrections,
+                                            owner_of),
                              ensure_ascii=False, indent=2)
         # The crops ride along, as they do for the value request. A table's
         # transcription is a model's reading of a picture, and the coordinate
@@ -1803,7 +1824,7 @@ def make_fieldwise_harvester(image_root: Optional[Path] = None,
                     for row in rows
                     if 0 <= row.item_index < len(batch.items)}
         totals = {"filled": 0, "unquoted": 0, "unbacked": 0, "unstated": 0,
-                  "raw_missing": 0, "retried": 0}
+                  "raw_missing": 0, "raw_foreign": 0, "retried": 0}
         seen = {(i.source.owner_kind, i.source.owner_id) for i in batch.items}
         state = {"asked": 0, "answer": None, "stage": "own"}
 
@@ -1836,7 +1857,7 @@ def make_fieldwise_harvester(image_root: Optional[Path] = None,
                     started = time.time()
                     usage: dict = {}
                     state["answer"] = ask(shown, todo, slots, corrections,
-                                          batch.document_id, usage)
+                                          batch.document_id, usage, owner_of)
                     # Checked against the window AND the passages the rows
                     # carry. A row's own quote is shown to the model in the
                     # rows list, so citing it is legitimate — and from the
@@ -1851,7 +1872,8 @@ def make_fieldwise_harvester(image_root: Optional[Path] = None,
                     if not isinstance(answered, dict):
                         answered = {}
                     counts = {"filled": 0, "unquoted": 0, "unbacked": 0,
-                              "unstated": 0, "raw_missing": 0, "failed": []}
+                              "unstated": 0, "raw_missing": 0,
+                              "raw_foreign": 0, "failed": []}
                     # Which FIELD filled and which failed, not only how many.
                     # Five fields answer in one reply, and a run that logs
                     # "aggregation+carrier+sector+year+spatial_scope: 3 of 5"
@@ -1867,7 +1889,8 @@ def make_fieldwise_harvester(image_root: Optional[Path] = None,
                                                   state["asked"]),
                                           owner_of=owner_of)
                         for key in ("filled", "unquoted", "unbacked",
-                                    "unstated", "raw_missing"):
+                                    "unstated", "raw_missing",
+                                    "raw_foreign"):
                             counts[key] += got[key]
                         if got["filled"]:
                             filled_by[slot.name] = got["filled"]
@@ -1878,7 +1901,7 @@ def make_fieldwise_harvester(image_root: Optional[Path] = None,
                             counts["failed"].append(dict(bad,
                                                          field=slot.name))
                     for key in ("filled", "unquoted", "unbacked", "unstated",
-                                "raw_missing"):
+                                "raw_missing", "raw_foreign"):
                         totals[key] += counts[key]
                     totals["retried"] += 1 if attempt else 0
                     # The window this coordinate was asked in, what was shown,
@@ -1900,7 +1923,8 @@ def make_fieldwise_harvester(image_root: Optional[Path] = None,
                                     "completion_tokens"),
                                 **{k: counts[k] for k in
                                    ("filled", "unquoted", "unbacked",
-                                    "unstated", "raw_missing")})
+                                    "unstated", "raw_missing",
+                                    "raw_foreign")})
                     for bad in counts["failed"]:
                         trace.event("drop", batch.document_id, slot=name,
                                     field=bad.get("field"),
