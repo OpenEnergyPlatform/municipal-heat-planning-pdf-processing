@@ -378,3 +378,32 @@ def test_value_fingerprint_is_empty_for_a_parameter_with_no_list():
     stands for nothing and can never go stale."""
     assert spec_mod.value_fingerprint(_spec_of().parameters[0]) == ""
     assert "value/energy" not in spec_mod.fingerprints(_spec_of())
+
+
+def test_a_category_parameters_definitions_are_part_of_its_question():
+    """The meaning reaches the model when it picks, exactly as an axis's
+    does. Left out of the fingerprint, a term whose definition was rewritten
+    leaves every stamped document current -- the drift the key exists to
+    catch, in the one answer space that is not an axis."""
+    def _category(vocabulary):
+        return spec_mod.load({"parameters": [{
+            "uri": "scenario_type", "label": "Art des Szenarios",
+            "description": "Die Art eines Szenarios, gewaehlt aus der Liste "
+                           "der Klassen, die dieses Feld zulaesst.",
+            "value_type": "category", "vocabulary": vocabulary, "axes": {},
+            "example": {"source": "Das Zielszenario beschreibt den "
+                                  "angestrebten Zustand im Jahr 2045.",
+                        "tuples": [{"value": "Zielszenario"}]},
+        }]})
+
+    bare = _category({"oeo:target": ["Zielszenario"]})
+    meant = _category({"oeo:target": {"label": "Zielszenario",
+                                      "definition": "Ein Szenario mit Ziel."}})
+    other = _category({"oeo:target": {"label": "Zielszenario",
+                                      "definition": "Etwas ganz anderes."}})
+    keys = [spec_mod.value_fingerprint(s.parameters[0])
+            for s in (bare, meant, other)]
+    assert len(set(keys)) == 3, "spelling and meaning both decide"
+    # And the parameter itself does not move with its list.
+    assert (spec_mod.parameter_fingerprint(meant.parameters[0])
+            == spec_mod.parameter_fingerprint(other.parameters[0]))

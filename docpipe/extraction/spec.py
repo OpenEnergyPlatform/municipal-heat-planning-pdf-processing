@@ -183,6 +183,7 @@ class Parameter:
     unit_target: Optional[str] = None      # numeric parameters only
     units_accepted: dict = field(default_factory=dict)  # unit -> factor
     vocabulary: Optional[dict] = None      # category parameters: uri -> labels
+    definitions: dict = field(default_factory=dict)
     # A category whose closed list is real but per document, filled in by the
     # profile before the harvest. Same rule as a dynamic axis, one level up.
     vocabulary_dynamic: bool = False
@@ -387,7 +388,7 @@ def _validate_parameter(path: str, raw) -> Parameter:
     # numbers-only.
     units: dict = {}
     unit_target = raw.get("unit_target")
-    vocabulary = raw.get("vocabulary")
+    vocabulary, value_definitions = _vocabulary(f"{path}.vocabulary", raw.get("vocabulary"))
     vocabulary_dynamic = bool(raw.get("vocabulary_dynamic", False))
     if value_type in NUMERIC_TYPES:
         if not isinstance(unit_target, str) or not unit_target.strip():
@@ -453,7 +454,7 @@ def _validate_parameter(path: str, raw) -> Parameter:
     return Parameter(uri=raw["uri"], label=raw["label"],
                      description=raw["description"], value_type=value_type,
                      unit_target=unit_target, units_accepted=units,
-                     vocabulary=vocabulary,
+                     vocabulary=vocabulary, definitions=value_definitions,
                      vocabulary_dynamic=vocabulary_dynamic,
                      axes=axes, example=example, kg=raw.get("kg"))
 
@@ -553,12 +554,19 @@ def parameter_fingerprint(parameter: "Parameter") -> str:
 
 
 def value_fingerprint(parameter: "Parameter") -> str:
-    """The list a category parameter answers from, or "" when it has none."""
+    """The list a category parameter answers from, or "" when it has none.
+
+    Spellings AND meanings, the same three things an axis fingerprint takes:
+    all of them reach the model when it picks (`fields.Slot.answerable`), so
+    a changed definition is a changed question. Left out, a term whose
+    meaning was rewritten would leave every document current.
+    """
     if not parameter.vocabulary and not parameter.vocabulary_dynamic:
         return ""
     return _digest({
         "dynamic": parameter.vocabulary_dynamic,
-        "options": {uri: sorted(map(str, labels or []))
+        "options": {uri: {"spellings": sorted(map(str, labels or [])),
+                          "definition": (parameter.definitions or {}).get(uri)}
                     for uri, labels in (parameter.vocabulary or {}).items()},
     })
 
