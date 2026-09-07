@@ -665,3 +665,125 @@ def test_the_evidence_says_whether_the_aggregation_was_read_or_derived(tmp_path)
               aggregation_raw="Spitzenlast")])
     assert "# Aggregation: OEO_00140073 „Spitzenlast“" in ttl
     assert "aus der Einheit" not in ttl
+
+
+# --- the questions, after the Kassel read-through --------------------------
+
+def test_the_two_quantity_questions_are_not_the_same_text():
+    """The emission question was a copy of the energy one, down to the
+    sentence about Nutzwaerme. So the decision between CO2 and CO2eq -- the
+    only thing that question has to settle -- was made on a text about heat
+    demand: Kassel came back with 193 tuples as CO2 and 1 as CO2eq, in a plan
+    whose own methods sentence says every figure is in CO2 equivalents."""
+    energy, emission = SPEC.parameters[0], SPEC.parameters[1]
+    energy_q = energy.axes["quantity"].question
+    emission_q = emission.axes["quantity"].question
+    assert energy_q != emission_q
+    assert "Nutzwärme" in energy_q and "Nutzwärme" not in emission_q
+    assert "CO2-Äquivalenten" in emission_q
+    assert "Methodiksatz schlägt die Kopfzeile" in emission_q
+    # And the energy question states the definition the ontology gives, not a
+    # German word list: demand and consumption are the same class.
+    assert "an Endverbraucher gelieferte" in energy_q
+    assert "Endenergiebedarf" in energy_q and "Wärmebedarf" in energy_q
+
+
+def test_a_region_is_not_a_sector_and_a_table_without_one_says_so():
+    """Measured on Kassel table 17: 39 rows answered "out:total" with the
+    wording "Gesamtstadt", which is where the value stands and not what
+    consumes it. Five contested identities and four wrong nodes came of it,
+    and 39 more tuples took the header of a NEIGHBOURING table."""
+    for parameter in NUMERIC:
+        question = parameter.axes["sector"].question
+        assert "GEBIET ist kein Sektor" in question
+        for word in ("Gesamtstadt", "Stadtgebiet", "Plangebiet"):
+            assert word in question, word
+        assert "keine Sektorspalte" in question
+        assert "out:unstated" in question
+        # The aliases the corpus writes and the list did not hold.
+        table = parameter.axes["sector"].label_to_uri()
+        assert table["wohnen"] == "OEO_00000214"
+        assert table["wohngebäude"] == "OEO_00000214"
+        assert table["ghd/kommune"] == "OEO_00000405"
+        assert table["wirtschaftlich genutzte gebäude"] == "OEO_00000405"
+
+
+def test_gesamtstadt_is_not_a_wording_for_the_sum_over_sectors():
+    """The same finding where the code can see it: "Gesamtstadt" names no
+    spelling of out:total, so a row answered out:total on that wording is
+    counted instead of passing as if the table had said Summe."""
+    from docpipe.extraction import fields
+    from docpipe.extraction.pipeline import wording_names_option
+    slot = next(s for s in fields.axis_slots(SPEC.parameters[0])
+                if s.name == "sector")
+    assert not wording_names_option(slot, "Summe", "Gesamtstadt")
+    assert not wording_names_option(slot, "Summe", "Stadtgebiet")
+    assert wording_names_option(slot, "Summe", "Summe")
+    assert wording_names_option(slot, "Summe", "Gesamt")
+
+
+def test_the_year_question_names_where_to_look_and_in_which_order():
+    """71 percent of Kassel's table tuples carried a foreign year, and the
+    question said only that the year "stands in the column head, the table
+    title, the caption or the section heading" -- four places, no order, and
+    nothing about whose table."""
+    for parameter in NUMERIC:
+        question = parameter.axes["year"].question
+        for step in ("(1) die Kopfzelle", "(2) der Titel", "(3) der Satz",
+                     "(4) die Überschrift"):
+            assert step in question, step
+        assert "ANDEREN Tabelle gilt nicht" in question
+        # A period is a convention, and one the graph has to be told about.
+        assert "LETZTE Jahr in value" in question
+        assert "Zeitraum wörtlich in value_raw" in question
+        assert question.startswith("Für welches Kalenderjahr"), (
+            "the aggregation is an integral over that year, so the question "
+            "asks for the year it is integrated over")
+
+
+def test_the_scenario_question_can_recognise_a_stock_take():
+    """Kassel's inventory chapter never writes "Bestandsanalyse": it writes
+    "welche Energieträger dafür bislang eingesetzt werden". 69 tuples from
+    its two inventory tables came back as target-scenario values."""
+    for parameter in NUMERIC:
+        question = parameter.axes["scenario"].question
+        for word in ("Bilanzjahr", "Ausgangslage", "bislang", "derzeit",
+                     "Jahr vor der Erstellung"):
+            assert word in question, word
+        assert "bislang eingesetzt werden" in question, (
+            "the sentence measured on Kassel 349424, verbatim")
+        assert "eigenen Namen gibt" in question, (
+            "a target scenario under a variant name is still the target")
+        # A variant beside the scenario is its own answer: two variants of one
+        # coordinate both answered "Zielszenario" are two values on one
+        # identity, which the serializer can only drop as a conflict.
+        assert "out:variant" in parameter.axes["scenario"].vocabulary
+
+
+def test_query_templates_cover_every_part_a_plan_has():
+    """The search found the target scenario and nothing else. Measured on
+    Kassel: the appendix section lay in 123 field windows, the inventory
+    chapter in 44, the target chapter in none, and 244 of 552 scenario
+    answers were read off an appendix title."""
+    from docpipe import prompts
+    prompt = prompts.load("extraction/queries", _profile())
+    templates = [line for line in prompt.text.splitlines()
+                 if line.strip() and not line.lstrip().startswith("#")]
+    for part in ("Bestandsanalyse", "Zielszenario", "Trendszenario",
+                 "Potenzialanalyse", "Methodik"):
+        assert any(part in t for t in templates), part
+    # Each one is a probe of its own, not a word bolted onto another.
+    probes = expand(templates, SPEC.parameters[1])
+    assert sum("Bestandsanalyse" in p for p in probes) == 1
+    assert sum("CO2-Äquivalente" in p for p in probes) == 1
+
+
+def test_the_anchor_prompt_asks_for_the_two_sentences_that_were_missing():
+    """An anchor is what retrieval searches with, and it only ever wrote
+    sentences about the quantity. The sentence that dates an inventory and
+    the sentence that says a plan counts in CO2 equivalents never looked like
+    the quantity, so nothing ever searched for them."""
+    from docpipe import prompts
+    text = prompts.load("extraction/anchors", _profile()).text
+    assert "bislang eingesetzt werden" in text
+    assert "CO2-Äquivalenten angegeben" in text
