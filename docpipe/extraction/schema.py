@@ -50,7 +50,7 @@ BASE_ID = "https://openenergyplatform.org/schema/mhpkg/extraction"
 TRUST_LEVELS = (LEVEL_A, LEVEL_B, LEVEL_C)
 
 TRUST_LEVEL_DOC = {
-    LEVEL_A: "read off its own passage, in the plan's own text",
+    LEVEL_A: "read off its own passage, in the document's own text",
     LEVEL_B: "the same, but out of an image transcription or a page a model "
              "transcribed",
     LEVEL_C: "something is off; see reasons",
@@ -70,8 +70,8 @@ STATE_DOC = {
     fields.DERIVED: ("not asked: the spec decides this coordinate from "
                      "something already on the row (the unit)"),
     fields.SAID_UNSTATED: ("answered: the passages shown do not state it. A "
-                           "finding about the plan, and only final once the "
-                           "sweep ran out of document"),
+                           "finding about the document, and only final once "
+                           "the sweep ran out of it"),
     fields.UNANSWERED: ("the field reply never mentioned this row. A finding "
                         "about the model"),
     fields.EXHAUSTED: ("still open when the window budget ended with the "
@@ -176,8 +176,8 @@ def _value_uri(parameter) -> dict:
                                   "and mints no node.")
     # `_slot_value` puts the slot's question on the value it types. Here it
     # would be the parameter's own description, which `parameter` already
-    # publishes as x-description-de -- two copies, one of them under a name
-    # that says it is a question.
+    # publishes as x-description-source -- two copies, one of them under a
+    # name that says it is a question.
     out.pop("x-question", None)
     return out
 
@@ -333,7 +333,7 @@ def _tuple_schema(spec, parameter) -> dict:
     props["parameter"] = {
         "const": parameter.uri,
         "description": f"Spec parameter: {parameter.label}.",
-        "x-description-de": parameter.description,
+        "x-description-source": parameter.description,
         "x-question": parameter_slot.question}
     for slot in fields.axis_slots(parameter):
         closed = ("A closed list; an entry beginning 'out:' is a deliberate "
@@ -379,11 +379,11 @@ def harvest_schema(spec) -> dict:
                 "properties": {
                     "document_id": {
                         "type": "integer",
-                        "description": "Documents.id. The AGS and the "
-                                       "publication date, which the heat "
-                                       "plan IRI is minted from, are joined "
-                                       "from the database by the serializer "
-                                       "rather than carried here."},
+                        "description": "Documents.id. What the serializer "
+                                       "joins from the database to mint the "
+                                       "document's IRI is not carried here: "
+                                       "which columns those are is the "
+                                       "profile's business, not the row's."},
                     "page": {"type": ["integer", "null"],
                              "description": "1-based PDF page of the owner."},
                     "section_number": {"type": ["integer", "null"]},
@@ -486,7 +486,7 @@ def harvest_schema(spec) -> dict:
                     "image_origin": {
                         "type": "integer",
                         "description": "Values read out of a table or figure "
-                                       "image rather than the plan's text."},
+                                       "image rather than the document's text."},
                 },
                 "required": ["kind", "document_id", "tuples", "refusals",
                              "levels", "reasons", "image_origin"],
@@ -547,7 +547,7 @@ def stamp_schema() -> dict:
                 "type": ["integer", "null"],
                 "description": "How many pages of this document a model read "
                                "rather than the PDF. A harvest from a "
-                               "transcribed plan is a reading of a reading."},
+                               "transcribed document is a reading of a reading."},
         },
         "patternProperties": {
             "^extraction/(harvest|queries|anchors|rows|field)$":

@@ -151,20 +151,77 @@ def trust(row: dict, *, conflict: bool = False, transcribed: bool = False,
             "corroborated": bool(corroborated)}
 
 
-def sentence(verdict: dict, row: Optional[dict] = None) -> str:
-    """One line a reader of the graph can act on."""
-    parts = [f"Vertrauen: {verdict['level']}"]
+# The pieces of a trust line, in the order they are said. Names, not words:
+# the level is a fact about the harvest, the sentence is a fact about the
+# reader, and the two corpora do not share a reader. One profile serves German
+# heat plans, the other English scenario studies, and the core cannot know
+# which. So a profile words each of these in its own `kg.TRUST_PROSE`, and
+# `MARKS` is what that table is held against: a mark added here is a missing
+# key there, reported at import, rather than a line nobody notices missing.
+#
+# `image_origin` and `image_origin_named` are one mark with and without its
+# argument. Split here so a profile's half stays a table of strings instead of
+# growing a conditional.
+MARKS = ("level", "image_origin", "image_origin_named", "corroborated",
+         "reasons", "review")
+
+# Inside the reasons mark. The reason tokens themselves are not translated:
+# they are a closed machine vocabulary, anchored by schema.TRUST_REASONS, and
+# a curator greps for `nonlocal:carrier` in either corpus.
+REASON_JOIN = ", "
+
+
+def marks(verdict: dict, row: Optional[dict] = None) -> tuple:
+    """The verdict as ordered (mark, arguments) pairs, only those that apply.
+
+    The arguments come out already rendered to strings, because the profile's
+    half is a table of format strings and a table cannot join a list.
+
+    `row` carries the one thing the verdict does not: the image the value was
+    read out of. Without it the line says a picture was involved but not which
+    picture, which is the difference between a warning and a lead.
+    """
+    out = [("level", {"level": verdict["level"]})]
     if verdict.get("image_origin"):
-        provenance = (row or {}).get("provenance") or {}
-        image = provenance.get("image")
-        parts.append("aus einem Bild" + (f" ({image})" if image else ""))
+        image = ((row or {}).get("provenance") or {}).get("image")
+        out.append(("image_origin_named", {"image": image}) if image
+                   else ("image_origin", {}))
     if verdict.get("corroborated"):
-        parts.append("zweite Quelle bestätigt")
+        out.append(("corroborated", {}))
     if verdict["reasons"]:
-        parts.append(", ".join(verdict["reasons"]))
+        out.append(("reasons",
+                    {"reasons": REASON_JOIN.join(verdict["reasons"])}))
     if verdict["level"] == LEVEL_C:
-        parts.append("Prüfung empfohlen")
-    return " · ".join(parts)
+        out.append(("review", {}))
+    return tuple(out)
+
+
+def check_prose(prose: dict, where: str) -> dict:
+    """`prose` back, or raise if it does not word every mark exactly once.
+
+    Checked when the serializer is imported and not at the first C of a corpus
+    run: a mark nobody worded is one missing piece of one comment line in one
+    document out of a thousand, and nothing reads that.
+    """
+    missing = sorted(set(MARKS) - set(prose))
+    extra = sorted(set(prose) - set(MARKS))
+    if missing or extra:
+        raise LookupError(f"{where} words {missing} nowhere and {extra} for "
+                          f"no mark of trust.MARKS")
+    return prose
+
+
+def render(verdict: dict, prose: dict, *, join: str,
+           row: Optional[dict] = None) -> str:
+    """One line a reader of the graph can act on, in the profile's words.
+
+    The pieces and their order are the core's, every character is the
+    profile's. `row` is keyword-only although the sentence it replaces took it
+    second: a call site left over from then raises rather than quietly losing
+    the image name.
+    """
+    return join.join(prose[mark].format(**args)
+                     for mark, args in marks(verdict, row))
 
 
 def document_summary(document_id, tuples, refusals,

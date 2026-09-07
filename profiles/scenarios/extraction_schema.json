@@ -12,7 +12,7 @@
       ]
      },
      "document_id": {
-      "description": "Documents.id. The AGS and the publication date, which the heat plan IRI is minted from, are joined from the database by the serializer rather than carried here.",
+      "description": "Documents.id. What the serializer joins from the database to mint the document's IRI is not carried here: which columns those are is the profile's business, not the row's.",
       "type": "integer"
      },
      "image": {
@@ -197,7 +197,7 @@
      "read": "answered, and the cited passage carries the answer",
      "unanswered": "the field reply never mentioned this row. A finding about the model",
      "unbacked": "answered, but no shown passage carried the answer, or the passage belonged to another row, and no later window fixed it",
-     "unstated": "answered: the passages shown do not state it. A finding about the plan, and only final once the sweep ran out of document"
+     "unstated": "answered: the passages shown do not state it. A finding about the document, and only final once the sweep ran out of it"
     }
    },
    "summary": {
@@ -208,7 +208,7 @@
       "type": "integer"
      },
      "image_origin": {
-      "description": "Values read out of a table or figure image rather than the plan's text.",
+      "description": "Values read out of a table or figure image rather than the document's text.",
       "type": "integer"
      },
      "kind": {
@@ -235,7 +235,7 @@
       ],
       "type": "object",
       "x-doc": {
-       "A": "read off its own passage, in the plan's own text",
+       "A": "read off its own passage, in the document's own text",
        "B": "the same, but out of an image transcription or a page a model transcribed",
        "C": "something is off; see reasons"
       }
@@ -318,7 +318,7 @@
      "parameter": {
       "const": "publication_abstract",
       "description": "Spec parameter: Abstract.",
-      "x-description-de": "Die Zusammenfassung des Dokuments, wörtlich und vollständig, so wie sie unter der Überschrift Abstract, Summary, Zusammenfassung oder Executive Summary steht. Keine eigene Zusammenfassung schreiben.",
+      "x-description-source": "Die Zusammenfassung des Dokuments, wörtlich und vollständig, so wie sie unter der Überschrift Abstract, Summary, Zusammenfassung oder Executive Summary steht. Keine eigene Zusammenfassung schreiben.",
       "x-question": "Um WELCHES Feld handelt es sich bei diesem Wert? Entscheide danach, was die Quelle über ihn sagt: die Beschriftung, die Einheit und die Überschrift des Abschnitts. Zitiere die Stelle, aus der das hervorgeht."
      },
      "parameter_quote": {
@@ -467,7 +467,7 @@
      "parameter": {
       "const": "publication_author",
       "description": "Spec parameter: Autorin oder Autor.",
-      "x-description-de": "Eine einzelne Person, die als Verfasserin oder Verfasser des Dokuments genannt ist. Ein Tupel je Person, in der Schreibweise der Titelseite. Keine Institutionen, keine Herausgeber, keine Danksagungsempfänger.",
+      "x-description-source": "Eine einzelne Person, die als Verfasserin oder Verfasser des Dokuments genannt ist. Ein Tupel je Person, in der Schreibweise der Titelseite. Keine Institutionen, keine Herausgeber, keine Danksagungsempfänger.",
       "x-question": "Um WELCHES Feld handelt es sich bei diesem Wert? Entscheide danach, was die Quelle über ihn sagt: die Beschriftung, die Einheit und die Überschrift des Abschnitts. Zitiere die Stelle, aus der das hervorgeht."
      },
      "parameter_quote": {
@@ -624,7 +624,7 @@
      "parameter": {
       "const": "publication_date",
       "description": "Spec parameter: Erscheinungsjahr.",
-      "x-description-de": "Das Jahr, in dem das Dokument veröffentlicht wurde, vierstellig und genau so, wie es im Dokument steht — Impressum, Titelseite oder Zitationshinweis. Nicht das Jahr der Daten, nicht ein im Text projiziertes Jahr.",
+      "x-description-source": "Das Jahr, in dem das Dokument veröffentlicht wurde, vierstellig und genau so, wie es im Dokument steht — Impressum, Titelseite oder Zitationshinweis. Nicht das Jahr der Daten, nicht ein im Text projiziertes Jahr.",
       "x-question": "Um WELCHES Feld handelt es sich bei diesem Wert? Entscheide danach, was die Quelle über ihn sagt: die Beschriftung, die Einheit und die Überschrift des Abschnitts. Zitiere die Stelle, aus der das hervorgeht."
      },
      "parameter_quote": {
@@ -775,7 +775,7 @@
      "parameter": {
       "const": "publication_doi",
       "description": "Spec parameter: DOI.",
-      "x-description-de": "Der Digital Object Identifier des Dokuments, wie er im Impressum oder im Zitationshinweis steht. Nur die DOI selbst, ohne das Präfix doi: und ohne die URL davor.",
+      "x-description-source": "Der Digital Object Identifier des Dokuments, wie er im Impressum oder im Zitationshinweis steht. Nur die DOI selbst, ohne das Präfix doi: und ohne die URL davor.",
       "x-question": "Um WELCHES Feld handelt es sich bei diesem Wert? Entscheide danach, was die Quelle über ihn sagt: die Beschriftung, die Einheit und die Überschrift des Abschnitts. Zitiere die Stelle, aus der das hervorgeht."
      },
      "parameter_quote": {
@@ -924,7 +924,7 @@
      "parameter": {
       "const": "publication_title",
       "description": "Spec parameter: Titel der Publikation.",
-      "x-description-de": "Der vollständige Titel des Dokuments. In den meisten PDFs ist er die Überschrift des ersten Abschnitts und steht als erste Zeile über der Autorenliste; sonst im Kopf der ersten Seite. Der Wert ist die ganze Titelzeile. Nicht der Kolumnentitel, nicht der Name der Reihe, nicht der Name des Verlags.",
+      "x-description-source": "Der vollständige Titel des Dokuments. In den meisten PDFs ist er die Überschrift des ersten Abschnitts und steht als erste Zeile über der Autorenliste; sonst im Kopf der ersten Seite. Der Wert ist die ganze Titelzeile. Nicht der Kolumnentitel, nicht der Name der Reihe, nicht der Name des Verlags.",
       "x-question": "Um WELCHES Feld handelt es sich bei diesem Wert? Entscheide danach, was die Quelle über ihn sagt: die Beschriftung, die Einheit und die Überschrift des Abschnitts. Zitiere die Stelle, aus der das hervorgeht."
      },
      "parameter_quote": {
@@ -1109,7 +1109,7 @@
      "parameter": {
       "const": "scenario_abstract",
       "description": "Spec parameter: Kurzbeschreibung eines Szenarios.",
-      "x-description-de": "Die Beschreibung, was ein einzelnes Szenario annimmt oder abbildet, wörtlich aus dem Dokument. Nur wenn sich der Satz eindeutig auf ein benanntes Szenario bezieht, dessen Name in derselben Passage steht.",
+      "x-description-source": "Die Beschreibung, was ein einzelnes Szenario annimmt oder abbildet, wörtlich aus dem Dokument. Nur wenn sich der Satz eindeutig auf ein benanntes Szenario bezieht, dessen Name in derselben Passage steht.",
       "x-question": "Um WELCHES Feld handelt es sich bei diesem Wert? Entscheide danach, was die Quelle über ihn sagt: die Beschriftung, die Einheit und die Überschrift des Abschnitts. Zitiere die Stelle, aus der das hervorgeht."
      },
      "parameter_quote": {
@@ -1336,7 +1336,7 @@
      "parameter": {
       "const": "scenario_label",
       "description": "Spec parameter: Name des Szenarios.",
-      "x-description-de": "Das Szenario der AR6-Datenbank, das an dieser Stelle beschrieben wird. Waehle es aus value_classes aus; die Klassennamen sind die Lauf-Kennungen der AR6-Datenbank fuer genau diese Publikation. In value_raw traegst du ein, wie das Dokument das Szenario nennt, woertlich. Ein Tupel je Szenario, und zwar fuer JEDES, das die Passage nennt - auch fuer die, die du nicht zuordnen kannst. Nennt das Dokument nur eine Familie ('NPi', 'NDC'), waehlst du 'Szenario-Familie'; steht das Szenario nicht in der AR6-Liste dieser Publikation, waehlst du 'nicht in AR6'. Bist du unsicher, laesst du value weg und traegst die Bezeichnung trotzdem in value_raw ein. Weglassen ist die einzige falsche Antwort.",
+      "x-description-source": "Das Szenario der AR6-Datenbank, das an dieser Stelle beschrieben wird. Waehle es aus value_classes aus; die Klassennamen sind die Lauf-Kennungen der AR6-Datenbank fuer genau diese Publikation. In value_raw traegst du ein, wie das Dokument das Szenario nennt, woertlich. Ein Tupel je Szenario, und zwar fuer JEDES, das die Passage nennt - auch fuer die, die du nicht zuordnen kannst. Nennt das Dokument nur eine Familie ('NPi', 'NDC'), waehlst du 'Szenario-Familie'; steht das Szenario nicht in der AR6-Liste dieser Publikation, waehlst du 'nicht in AR6'. Bist du unsicher, laesst du value weg und traegst die Bezeichnung trotzdem in value_raw ein. Weglassen ist die einzige falsche Antwort.",
       "x-question": "Um WELCHES Feld handelt es sich bei diesem Wert? Entscheide danach, was die Quelle über ihn sagt: die Beschriftung, die Einheit und die Überschrift des Abschnitts. Zitiere die Stelle, aus der das hervorgeht."
      },
      "parameter_quote": {
@@ -1525,7 +1525,7 @@
      "parameter": {
       "const": "scenario_region",
       "description": "Spec parameter: Betrachtete Region eines Szenarios.",
-      "x-description-de": "Das Land oder Gebiet, das ein Szenario abbildet. Waehle es aus value_classes aus - das sind die Studienregionen des OEKG, gefiltert auf die, die dieses Dokument nennt. Ein Tupel je Angabe. Die Liste kennt nur Laender: fuer ein weltweites Szenario waehlst du 'global', fuer einen Zusammenschluss oder eine Grossregion, die nicht als Land dasteht (EU27, OECD, Asien, R5), 'mehrere Regionen'. Beides sind richtige Antworten und werden ausgewertet - ein einzelnes Land stattdessen zu nennen, waere erfunden. In value_raw traegst du ein, wie das Dokument die Region nennt. Nur Regionen, die als Betrachtungsraum genannt sind, nicht jede erwaehnte.",
+      "x-description-source": "Das Land oder Gebiet, das ein Szenario abbildet. Waehle es aus value_classes aus - das sind die Studienregionen des OEKG, gefiltert auf die, die dieses Dokument nennt. Ein Tupel je Angabe. Die Liste kennt nur Laender: fuer ein weltweites Szenario waehlst du 'global', fuer einen Zusammenschluss oder eine Grossregion, die nicht als Land dasteht (EU27, OECD, Asien, R5), 'mehrere Regionen'. Beides sind richtige Antworten und werden ausgewertet - ein einzelnes Land stattdessen zu nennen, waere erfunden. In value_raw traegst du ein, wie das Dokument die Region nennt. Nur Regionen, die als Betrachtungsraum genannt sind, nicht jede erwaehnte.",
       "x-question": "Um WELCHES Feld handelt es sich bei diesem Wert? Entscheide danach, was die Quelle über ihn sagt: die Beschriftung, die Einheit und die Überschrift des Abschnitts. Zitiere die Stelle, aus der das hervorgeht."
      },
      "parameter_quote": {
@@ -1788,7 +1788,7 @@
      "parameter": {
       "const": "scenario_type",
       "description": "Spec parameter: Art des Szenarios.",
-      "x-description-de": "Die Art eines Szenarios, gewaehlt aus value_classes. Das sind die Klassen, die der OEKG fuer dieses Feld zulaesst; die Schreibweisen daneben stammen aus der Ontologie selbst. Nimm die spezifischste Klasse, die der Text belegt: steht dort, dass ein Szenario nur bereits beschlossene Massnahmen enthaelt, ist das 'with existing measures scenario' und nicht blosses 'policy scenario'. Zwei Antworten bedeuten NICHT dasselbe: 'scenario' heisst, der Text sagt nichts Engeres als 'ein Szenario'; 'keine dieser Arten' heisst, der Text nennt sehr wohl eine Art, aber keine der Klassen deckt sie ab. Das zweite ist ein Befund und wird gezaehlt; das erste waere dann eine Behauptung. In value_raw kommt die Formulierung des Dokuments. Ein Tupel je Szenario und Klasse; ein Szenario darf mehrere Klassen tragen, wenn der Text sie belegt.",
+      "x-description-source": "Die Art eines Szenarios, gewaehlt aus value_classes. Das sind die Klassen, die der OEKG fuer dieses Feld zulaesst; die Schreibweisen daneben stammen aus der Ontologie selbst. Nimm die spezifischste Klasse, die der Text belegt: steht dort, dass ein Szenario nur bereits beschlossene Massnahmen enthaelt, ist das 'with existing measures scenario' und nicht blosses 'policy scenario'. Zwei Antworten bedeuten NICHT dasselbe: 'scenario' heisst, der Text sagt nichts Engeres als 'ein Szenario'; 'keine dieser Arten' heisst, der Text nennt sehr wohl eine Art, aber keine der Klassen deckt sie ab. Das zweite ist ein Befund und wird gezaehlt; das erste waere dann eine Behauptung. In value_raw kommt die Formulierung des Dokuments. Ein Tupel je Szenario und Klasse; ein Szenario darf mehrere Klassen tragen, wenn der Text sie belegt.",
       "x-question": "Um WELCHES Feld handelt es sich bei diesem Wert? Entscheide danach, was die Quelle über ihn sagt: die Beschriftung, die Einheit und die Überschrift des Abschnitts. Zitiere die Stelle, aus der das hervorgeht."
      },
      "parameter_quote": {
@@ -2201,7 +2201,7 @@
      "parameter": {
       "const": "scenario_year",
       "description": "Spec parameter: Projiziertes Jahr eines Szenarios.",
-      "x-description-de": "Ein Jahr, für das ein Szenario Ergebnisse ausweist oder bis zu dem es rechnet, vierstellig und wörtlich aus dem Dokument. Ein Tupel je Jahr. Nicht das Erscheinungsjahr der Publikation und nicht das Basisjahr der Daten.",
+      "x-description-source": "Ein Jahr, für das ein Szenario Ergebnisse ausweist oder bis zu dem es rechnet, vierstellig und wörtlich aus dem Dokument. Ein Tupel je Jahr. Nicht das Erscheinungsjahr der Publikation und nicht das Basisjahr der Daten.",
       "x-question": "Um WELCHES Feld handelt es sich bei diesem Wert? Entscheide danach, was die Quelle über ihn sagt: die Beschriftung, die Einheit und die Überschrift des Abschnitts. Zitiere die Stelle, aus der das hervorgeht."
      },
      "parameter_quote": {
@@ -2431,7 +2431,7 @@
      "parameter": {
       "const": "study_acronym",
       "description": "Spec parameter: Projektakronym.",
-      "x-description-de": "Das Kürzel des Forschungsprojekts, meist in Klammern hinter dem ausgeschriebenen Projektnamen oder als Kopfzeile. Nur das Akronym des Projekts, nicht das eines Modells und nicht das einer Institution.",
+      "x-description-source": "Das Kürzel des Forschungsprojekts, meist in Klammern hinter dem ausgeschriebenen Projektnamen oder als Kopfzeile. Nur das Akronym des Projekts, nicht das eines Modells und nicht das einer Institution.",
       "x-question": "Um WELCHES Feld handelt es sich bei diesem Wert? Entscheide danach, was die Quelle über ihn sagt: die Beschriftung, die Einheit und die Überschrift des Abschnitts. Zitiere die Stelle, aus der das hervorgeht."
      },
      "parameter_quote": {
@@ -2579,7 +2579,7 @@
      "parameter": {
       "const": "study_funder",
       "description": "Spec parameter: Fördermittelgeber.",
-      "x-description-de": "Eine Einrichtung, die die Arbeit finanziert hat, genannt in einem Abschnitt zu Funding, Förderung, Acknowledgements oder Danksagung. Nur wer zahlt, nicht wer inhaltlich beigetragen hat.",
+      "x-description-source": "Eine Einrichtung, die die Arbeit finanziert hat, genannt in einem Abschnitt zu Funding, Förderung, Acknowledgements oder Danksagung. Nur wer zahlt, nicht wer inhaltlich beigetragen hat.",
       "x-question": "Um WELCHES Feld handelt es sich bei diesem Wert? Entscheide danach, was die Quelle über ihn sagt: die Beschriftung, die Einheit und die Überschrift des Abschnitts. Zitiere die Stelle, aus der das hervorgeht."
      },
      "parameter_quote": {
@@ -2735,7 +2735,7 @@
      "parameter": {
       "const": "study_organisation",
       "description": "Spec parameter: Beteiligte Institution.",
-      "x-description-de": "Eine Institution, die an der Erstellung des Dokuments beteiligt war: die Affiliation einer Autorin, das herausgebende Institut, die beauftragte Einrichtung. Ein Tupel je Institution, in der Schreibweise des Dokuments.",
+      "x-description-source": "Eine Institution, die an der Erstellung des Dokuments beteiligt war: die Affiliation einer Autorin, das herausgebende Institut, die beauftragte Einrichtung. Ein Tupel je Institution, in der Schreibweise des Dokuments.",
       "x-question": "Um WELCHES Feld handelt es sich bei diesem Wert? Entscheide danach, was die Quelle über ihn sagt: die Beschriftung, die Einheit und die Überschrift des Abschnitts. Zitiere die Stelle, aus der das hervorgeht."
      },
      "parameter_quote": {
@@ -2891,7 +2891,7 @@
      "parameter": {
       "const": "study_project_name",
       "description": "Spec parameter: Projektname.",
-      "x-description-de": "Der ausgeschriebene Name des Forschungsprojekts, in dessen Rahmen die Studie oder die Szenarien entstanden sind. Nur wenn das Dokument ein Projekt ausdrücklich als seinen Rahmen nennt, nicht der Titel des Dokuments.",
+      "x-description-source": "Der ausgeschriebene Name des Forschungsprojekts, in dessen Rahmen die Studie oder die Szenarien entstanden sind. Nur wenn das Dokument ein Projekt ausdrücklich als seinen Rahmen nennt, nicht der Titel des Dokuments.",
       "x-question": "Um WELCHES Feld handelt es sich bei diesem Wert? Entscheide danach, was die Quelle über ihn sagt: die Beschriftung, die Einheit und die Überschrift des Abschnitts. Zitiere die Stelle, aus der das hervorgeht."
      },
      "parameter_quote": {
@@ -3113,7 +3113,7 @@
     "type": "string"
    },
    "page_text_transcribed": {
-    "description": "How many pages of this document a model read rather than the PDF. A harvest from a transcribed plan is a reading of a reading.",
+    "description": "How many pages of this document a model read rather than the PDF. A harvest from a transcribed document is a reading of a reading.",
     "type": [
      "integer",
      "null"

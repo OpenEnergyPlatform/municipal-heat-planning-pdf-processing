@@ -12,11 +12,15 @@ another row is the failure the whole repair is about, so it is.
 
 No model, no GPU.
 """
+import importlib
+from pathlib import Path
+
 import pytest
 
 from docpipe.extraction import fields
-from docpipe.extraction.trust import (LEVEL_A, LEVEL_B, LEVEL_C,
-                                      document_summary, sentence, trust)
+from docpipe.extraction.trust import (LEVEL_A, LEVEL_B, LEVEL_C, MARKS,
+                                      check_prose, document_summary, marks,
+                                      render, trust)
 from docpipe.extraction.verify import TIER_TEXT, TIER_VISUAL
 
 
@@ -113,15 +117,144 @@ def test_a_coordinate_the_plan_does_not_state_is_not_a_doubt():
         assert verdict["reasons"] == [], state
 
 
-def test_the_sentence_says_what_to_do_about_it():
-    line = sentence(trust(_row(tier=TIER_VISUAL,
-                               year_source=["table", 87517])),
-                    _row(tier=TIER_VISUAL))
+def test_the_line_says_what_to_do_about_it():
+    """The core no longer writes the words, so this is asked through a
+    profile's table. kwp's, because kwp's German is the published wording."""
+    from profiles.kwp.kg import TRUST_JOIN, TRUST_PROSE
+    line = render(trust(_row(tier=TIER_VISUAL,
+                             year_source=["table", 87517])),
+                  TRUST_PROSE, join=TRUST_JOIN, row=_row(tier=TIER_VISUAL))
     assert line.startswith("Vertrauen: C")
     assert "nonlocal:year" in line
     assert "Prüfung empfohlen" in line
     # An A says its level and nothing else: there is nothing to act on.
-    assert sentence(trust(_row())) == "Vertrauen: A"
+    assert render(trust(_row()), TRUST_PROSE, join=TRUST_JOIN) == "Vertrauen: A"
+
+
+# ---------------------------------------------------------------------------
+# The seam: the marks are the core's, the words are the profile's
+# ---------------------------------------------------------------------------
+
+# Enough verdicts to make the core produce every mark it has, each isolating
+# as few as it can. Not a sample of what a run writes: a matrix of what a line
+# CAN say, which is what a profile has to be able to word.
+_VERDICTS = [
+    ({"level": LEVEL_A, "reasons": [], "image_origin": False,
+      "corroborated": False}, {}),                            # level alone
+    ({"level": LEVEL_B, "reasons": [], "image_origin": True,
+      "corroborated": False}, {"provenance": {}}),            # + unnamed image
+    ({"level": LEVEL_B, "reasons": [], "image_origin": True,
+      "corroborated": False},
+     {"provenance": {"image": "kassel_t_12.png"}}),           # + named image
+    ({"level": LEVEL_B, "reasons": [], "image_origin": False,
+      "corroborated": True}, {}),                             # + second source
+    ({"level": LEVEL_B, "reasons": ["repaired"], "image_origin": False,
+      "corroborated": False}, {}),                            # + one reason
+    ({"level": LEVEL_C, "reasons": [], "image_origin": False,
+      "corroborated": False}, {}),                            # + review, alone
+    ({"level": LEVEL_C, "reasons": ["nonlocal:carrier", "repaired"],
+      "image_origin": False, "corroborated": False}, {}),     # two reasons
+]
+
+
+def _profiles():
+    """Every profile that serializes a graph, found rather than listed."""
+    root = Path(__file__).resolve().parent.parent / "profiles"
+    return sorted(p.parent.name for p in root.glob("*/kg.py"))
+
+
+def test_the_cases_below_produce_every_mark_the_core_has():
+    """A mark no case produces is a mark the profile test never asks about,
+    so the matrix is held against the vocabulary instead of eyeballed. This is
+    the direction a key-set check cannot see: a mark added to MARKS whose
+    branch in `marks()` was forgotten."""
+    seen = {mark for verdict, row in _VERDICTS
+            for mark, _ in marks(verdict, row)}
+    assert seen == set(MARKS), sorted(set(MARKS) ^ seen)
+
+
+def test_every_mark_is_reached_by_a_case_that_isolates_it():
+    """Each mark has a case where it is the only thing said beside the level.
+    Without that, deleting one branch of `marks()` can hide behind another
+    mark that flipped in the same case."""
+    alone = set()
+    for verdict, row in _VERDICTS:
+        pairs = marks(verdict, row)
+        if len(pairs) == 2:
+            alone.add(pairs[1][0])
+    assert alone == set(MARKS) - {"level"}, sorted(alone)
+
+
+@pytest.mark.parametrize("name", _profiles())
+def test_every_profile_words_every_mark_the_core_can_produce(name):
+    """The promise of the split: the marks come from the core. That is only a
+    promise if a profile cannot quietly stop saying one of them."""
+    kg = importlib.import_module("profiles.%s.kg" % name)
+    assert set(kg.TRUST_PROSE) == set(MARKS), (
+        "profiles/%s/kg.py TRUST_PROSE against trust.MARKS" % name)
+    for verdict, row in _VERDICTS:
+        for mark, args in marks(verdict, row):
+            # Wording a mark as the empty string is not a way to silence it.
+            assert kg.TRUST_PROSE[mark].format(**args).strip(), (
+                "profiles/%s/kg.py words %r as nothing" % (name, mark))
+        line = render(verdict, kg.TRUST_PROSE, join=kg.TRUST_JOIN, row=row)
+        assert line.strip()
+        assert all(part.strip() for part in line.split(kg.TRUST_JOIN))
+
+
+def test_a_table_that_words_a_mark_that_is_not_one_is_refused():
+    """And the other direction, at import rather than at the first C of a
+    corpus run: one missing piece of one comment line in one document out of a
+    thousand is not something anybody reads."""
+    complete = {mark: "x" for mark in MARKS}
+    assert check_prose(dict(complete), "here") == complete
+    for broken in (dict(complete, extra="x"),
+                   {k: v for k, v in complete.items() if k != "review"}):
+        with pytest.raises(LookupError):
+            check_prose(broken, "here")
+
+
+def _sentence_before_sc3(verdict, row=None):
+    """`trust.sentence` as it stood before the marks were split out.
+
+    Frozen on purpose. The kwp graph's German is a published artifact and this
+    change was supposed to MOVE it, not rewrite it, so the claim is checked
+    against a copy instead of argued in a commit message.
+    """
+    parts = ["Vertrauen: %s" % verdict["level"]]
+    if verdict.get("image_origin"):
+        image = ((row or {}).get("provenance") or {}).get("image")
+        parts.append("aus einem Bild" + (" (%s)" % image if image else ""))
+    if verdict.get("corroborated"):
+        parts.append("zweite Quelle bestätigt")
+    if verdict["reasons"]:
+        parts.append(", ".join(verdict["reasons"]))
+    if verdict["level"] == LEVEL_C:
+        parts.append("Prüfung empfohlen")
+    return " · ".join(parts)
+
+
+def test_the_german_line_is_the_one_that_stood_there_before():
+    """Every combination, not the seven of the matrix: the order of the marks
+    and the two joins are as easy to get wrong as the words, and only one of
+    the three shows up in a spot check."""
+    from profiles.kwp.kg import TRUST_JOIN, TRUST_PROSE
+    checked = 0
+    for level in (LEVEL_A, LEVEL_B, LEVEL_C):
+        for image_origin in (False, True):
+            for corroborated in (False, True):
+                for why in ([], ["repaired"], ["nonlocal:carrier", "repaired"]):
+                    for image in (None, "kassel_t_12.png"):
+                        verdict = {"level": level, "reasons": list(why),
+                                   "image_origin": image_origin,
+                                   "corroborated": corroborated}
+                        row = {"provenance":
+                               {"image": image} if image else {}}
+                        assert render(verdict, TRUST_PROSE, join=TRUST_JOIN,
+                                      row=row) == _sentence_before_sc3(
+                                          verdict, row), verdict
+                        checked += 1
+    assert checked == 72
 
 
 # ---------------------------------------------------------------------------
