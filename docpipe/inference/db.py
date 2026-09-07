@@ -96,8 +96,15 @@ def get_candidate_faiss_ids(
 _PLACEHOLDER_RE = re.compile(r"\[([a-z0-9_]+)\]")
 
 
-def section_item_captions(conn: sqlite3.Connection, section_id: int) -> dict[str, str]:
-    """block_id -> caption for every table and figure anchored in this section."""
+def section_item_captions(conn: sqlite3.Connection, section_id: int,
+                          content: Optional[str] = None) -> dict[str, str]:
+    """block_id -> caption for every table and figure anchored in this section.
+
+    With the section's own text in hand a caption Stage 2 failed to link is
+    resolved from the sentence before the placeholder — the same rule
+    fetch_owner_content uses, so the name a reader sees in the section and the
+    title the table itself carries are one string and not two.
+    """
     out: dict[str, str] = {}
     for row in conn.execute(
         "SELECT block_id, caption FROM Tables WHERE section = ? "
@@ -105,10 +112,66 @@ def section_item_captions(conn: sqlite3.Connection, section_id: int) -> dict[str
         "SELECT block_id, caption FROM Images WHERE section = ?",
         (section_id, section_id),
     ):
-        caption = (row["caption"] or "").strip()
-        if row["block_id"] and caption:
-            out[row["block_id"]] = caption
+        block_id = row["block_id"]
+        if not block_id:
+            continue
+        caption = (resolve_title(row["caption"], content, block_id) or "").strip()
+        if caption:
+            out[block_id] = caption
     return out
+
+
+# A placeholder as Stage 3 writes it: [p85_tbl0], [p17_img1].
+_ITEM_PLACEHOLDER = re.compile(r"\[p\d+_(?:tbl|img)\d+\]")
+# What a caption looks like in any language a report is written in: a word, a
+# number, a colon. NOT a word list — "Tabelle", "Table", "Abbildung", "Figure"
+# are the profile's business and the shape is not. The number is what carries
+# it: "Hinweis:" is a note, "Tabelle 17:" is a caption.
+_CAPTION_START = re.compile(
+    r"(?:^|(?<=[\s\]]))([A-ZÄÖÜ][A-Za-zÄÖÜäöüß.]{2,14}\s+\d+(?:[-.–]\d+)*\s*:)")
+# Past this a "caption" is a paragraph that happens to start with one.
+_CAPTION_LIMIT = 300
+
+
+def looks_like_a_caption(text) -> bool:
+    """Does this text open the way a caption opens?"""
+    return bool(_CAPTION_START.match((text or "").strip()))
+
+
+def resolve_title(caption, content, block_id) -> str:
+    """The caption of one table or figure, from the section that holds it.
+
+    Stage 2 links a caption block to an item by distance, and in a plan whose
+    tables carry a rounding footnote it links the footnote: measured over
+    Kassel, 15 of 89 tables were captioned "Hinweis: Wegen der Rundung von
+    Zahlenwerten ..." while the sentence that names them stood unlinked in the
+    section text, three words before their own placeholder. The consequence
+    was not cosmetic. The caption is the only line of a table a model can
+    quote for the table's own year, so 240 of 379 tuples from the twelve
+    titled target tables carried a year read off another table's caption, and
+    88 of Kassel's 100 contested value identities were that.
+
+    The sentence is taken from between the PREVIOUS item's placeholder and
+    this one's, because that is where a caption sits and everything before
+    the previous placeholder belongs to the previous item. A stored caption
+    that already opens like a caption is never replaced: it was linked, and a
+    link beats a guess.
+    """
+    if looks_like_a_caption(caption):
+        return caption
+    if not content or not block_id:
+        return caption
+    at = content.find(f"[{block_id}")
+    if at == -1:
+        return caption
+    before = content[:at]
+    ends = [m.end() for m in _ITEM_PLACEHOLDER.finditer(before)]
+    tail = before[ends[-1]:] if ends else before
+    starts = list(_CAPTION_START.finditer(tail))
+    if not starts:
+        return caption
+    title = tail[starts[-1].start():].strip()
+    return title[:_CAPTION_LIMIT] if title else caption
 
 
 def annotate_placeholders(content: str, captions: dict[str, str]) -> str:
@@ -189,8 +252,9 @@ def fetch_owner_content(
             "owner_kind": "section",
             "owner_id": owner_id,
             "title": row["title"],
-            "text": annotate_placeholders(row["content"] or "",
-                                          section_item_captions(conn, owner_id)),
+            "text": annotate_placeholders(
+                row["content"] or "",
+                section_item_captions(conn, owner_id, row["content"])),
             "page_number": row["page_number"],
             "image_path": None,
             "section_number": row["section_number"],
@@ -206,9 +270,9 @@ def fetch_owner_content(
         table, body = (("Tables", "markdown") if owner_kind == "table"
                        else ("Images", "description"))
         row = conn.execute(
-            f"SELECT o.caption, o.{body} AS body, o.page_number, o.path, "
-            f"       s.section_number, s.title AS section_title, s.document, "
-            f"       d.filename "
+            f"SELECT o.caption, o.block_id, o.{body} AS body, o.page_number, "
+            f"       o.path, s.section_number, s.title AS section_title, "
+            f"       s.content AS section_content, s.document, d.filename "
             f"FROM {table} o "
             f"JOIN Sections s ON o.section = s.id "
             f"LEFT JOIN Documents d ON s.document = d.id "
@@ -220,7 +284,13 @@ def fetch_owner_content(
         return {
             "owner_kind": owner_kind,
             "owner_id": owner_id,
-            "title": row["caption"],
+            # The stored caption where Stage 2 linked one, the sentence before
+            # the placeholder where it linked a footnote instead. _source_of
+            # puts this in front of the body, so whichever it is, it is
+            # quotable and the year in it can be cited.
+            "title": resolve_title(row["caption"], row["section_content"],
+                                   row["block_id"]),
+            "caption_stored": row["caption"],
             "text": row["body"] or "",
             "page_number": row["page_number"],
             "image_path": _asset_path(_folder_name(row["filename"]), row["path"]),
