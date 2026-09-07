@@ -13,6 +13,7 @@ Regeln:
 1. Keine Fragen, keine Meta-Sätze. Schreibe so, als STÜNDE die Angabe schon da. FALSCH: "Der Endenergieverbrauch wird in Kapitel 4 dargestellt."
 2. Setze plausible Werte samt Einheit ein — sie sind nur Suchanker, nicht Behauptungen. RICHTIG: "Der Endenergieverbrauch für Wärme im Stadtgebiet betrug 2022 rund 512 GWh/a."
 3. Streue über die Formen, in denen die Angabe in einem Plan auftaucht: Fließtext einer Bestandsanalyse, Tabellenüberschrift mit Einheit in eckigen Klammern, Abbildungsunterschrift, Zwischenüberschrift, Aufzählung im Ergebniskapitel, Satz aus dem Zielszenario-Kapitel.
+   Zwei Formen fehlen sonst immer und tragen die Angaben, die am häufigsten unbelegt bleiben. Der ankündigende Satz einer Bestandsaufnahme: "Wie viel Wärme pro Jahr verbraucht wird und welche Energieträger dafür bislang eingesetzt werden." Und der Methodiksatz: "Die Treibhausgasemissionen sind in Tonnen CO2-Äquivalenten angegeben und nach BISKO bilanziert." Schreib von den sechs Aussagen je eine in diesen beiden Formen.
 4. Nutze die Wörter, die deutsche Wärmepläne benutzen, nicht die der Ontologie: Endenergieverbrauch, Wärmebedarf, Energieträgermix, Bilanzjahr, Zielszenario, THG-Emissionen, Bestandsanalyse, Fokusgebiet.
 5. Jede Aussage 12 bis 35 Wörter. Keine zwei Aussagen, die dasselbe anders sagen.
 

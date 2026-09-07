@@ -88,7 +88,7 @@
             ]
           },
           "required": false,
-          "question": "Welche Größe ist diese Zahl? Das ist die wichtigste Entscheidung des Tupels, denn sie bestimmt, als welche Klasse der Wert im Graphen steht. Entscheide nach der Definition der Klasse, nicht nach der Ähnlichkeit der Wörter. Die Bezeichnung steht in der Zeile, im Spaltenkopf, in der Blocküberschrift oder in der Caption. \"Wärmeverbrauch\" und \"Wärmebedarf\" sind BEIDE \"final energy consumption value\": dessen Definition lautet \"die an Endverbraucher gelieferte und dort verbrauchte Energie\", und ein im Zielszenario zu deckender Bedarf ist genau diese Energie. In einem Szenario ist ohnehin nichts gemessen. \"Kumulierte THG-Emissionen\" dagegen ist die kumulierte Emission über mehrere Jahre, und eine abgeschiedene Menge ist das Gegenteil einer ausgestoßenen.",
+          "question": "Welche Größe ist diese Zahl? Das ist die wichtigste Entscheidung des Tupels, denn sie bestimmt, als welche Klasse der Wert im Graphen steht. Entscheide nach der Definition der Klasse, nicht nach der Ähnlichkeit der Wörter. Die Bezeichnung steht in der Zeile, im Spaltenkopf, in der Blocküberschrift oder im Titel der eigenen Tabelle. \"final energy consumption value\" ist definiert als die an Endverbraucher gelieferte und dort verbrauchte Energie. Darunter fällt BEIDES, was ein Plan Verbrauch nennt und was er Bedarf nennt: in einem Szenario ist nichts gemessen, jede Zahl ist gerechnet, und die Definition spricht nicht von Messung. Endenergieverbrauch, Endenergiebedarf, Wärmebedarf und ein zu deckender Wärmebedarf sind also diese Klasse. \"primary energy consumption value\" ist die Bilanz vor der Umwandlung. Nutzwärme, Heizwärme, Raumwärme und Nutzenergie sind dagegen NICHT Endenergie, sondern die Wärme hinter dem Erzeuger: \"out:useful_energy\", auch im Zielszenario. Ein Anteil in Prozent und ein Wert je Fläche oder Kopf sind eigene Einträge und keine Verbrauchsmenge.",
           "evidence": "local"
         },
         "aggregation": {
@@ -255,7 +255,9 @@
             "OEO_00000214": [
               "Private Haushalte",
               "Haushalte",
-              "Privathaushalte"
+              "Privathaushalte",
+              "Wohnen",
+              "Wohngebäude"
             ],
             "OEO_00000405": [
               "GHD",
@@ -263,7 +265,10 @@
               "Gewerbe/Handel/Dienstleistungen",
               "öffentliche Gebäude",
               "öffentliche Liegenschaften",
-              "kommunale Einrichtungen"
+              "kommunale Einrichtungen",
+              "GHD/Kommune",
+              "Gewerbe",
+              "wirtschaftlich genutzte Gebäude"
             ],
             "OEO_00000227": [
               "Industrie"
@@ -282,12 +287,12 @@
               "insgesamt"
             ]
           },
-          "question": "Welcher Verbrauchssektor? Die Bezeichnung steht in der Zeilenbeschriftung, im Spaltenkopf oder in der Blocküberschrift: \"Wohnen\" meint die Klasse Private Haushalte, \"GHD/Kommune\" und \"Gewerbe\" die Klasse GHD. Eine Zeile über alle Sektoren ist \"out:total\". Nennt die Passage den Sektor gar nicht, ist das keine Klasse, sondern eine fehlende Angabe: antworte dann mit \"out:unstated\".",
+          "question": "Welcher Verbrauchssektor? Die Bezeichnung steht in der Zeilenbeschriftung, im Spaltenkopf oder in der Blocküberschrift DERSELBEN Tabelle: \"Wohnen\" und \"Wohngebäude\" meinen die Klasse Private Haushalte, \"GHD/Kommune\", \"Gewerbe\" und \"wirtschaftlich genutzte Gebäude\" die Klasse GHD. Ein GEBIET ist kein Sektor: \"Gesamtstadt\", \"Stadtgebiet\", \"Gemeinde\" und \"Plangebiet\" sagen, WO die Zahl gilt, nicht für welchen Verbraucher, und sie sind auch keine Summe über die Sektoren. Eine Zeile, die ausdrücklich über alle Sektoren summiert (\"Summe\", \"Gesamt\", \"insgesamt\" als Zeilen- oder Spaltenkopf), ist \"out:total\". Hat die eigene Tabelle keine Sektorspalte und nennt ihr Titel keinen Sektor, dann ist das keine Klasse, sondern eine fehlende Angabe: antworte mit \"out:unstated\".",
           "evidence": "own"
         },
         "year": {
           "type": "int",
-          "question": "Auf welches Bezugsjahr bezieht sich die Zahl? Vierstellig. Das Jahr steht fast nie in der Zeile der Zahl selbst, sondern im Spaltenkopf, im Tabellentitel, in der Caption oder in der Abschnittsüberschrift. Hat die Tabelle mehrere Jahresspalten, dann entscheidet die Position der Zahl in ihrer Zeile, welches Jahr gilt.",
+          "question": "Für welches Kalenderjahr gilt diese Jahressumme? Vierstellig. Das Jahr steht fast nie in der Zeile der Zahl selbst. Sieh in dieser Reihenfolge nach: (1) die Kopfzelle der Spalte, in der die Zahl steht, (2) der Titel der eigenen Tabelle, (3) der Satz, der die Tabelle in ihrem Abschnitt ankündigt (\"Für das Jahr 2040 ergeben sich die in den nachfolgenden Tabellen zusammengestellten Kennzahlen\"), (4) die Überschrift des Abschnitts. Das Jahr im Titel einer ANDEREN Tabelle gilt nicht, auch wenn dieser Titel im selben Abschnitt steht. Nennt die Quelle einen Zeitraum statt eines Jahres (\"Durchschnittswert der Jahre 2022-2024\"), dann gehört das LETZTE Jahr in value und der Zeitraum wörtlich in value_raw.",
           "evidence": "local"
         },
         "scenario": {
@@ -312,10 +317,16 @@
               "Bilanzjahr",
               "Status quo",
               "Bestandsanalyse"
+            ],
+            "out:variant": [
+              "Variante oder Sensitivität neben dem Szenario",
+              "Variante",
+              "Sensitivität",
+              "Bandbreite"
             ]
           },
           "required": false,
-          "question": "Auf welchen Zustand bezieht sich der Wert: den erhobenen Bestand, eine Trendfortschreibung oder ein Zielszenario? Der Bezug steht selten in der Zeile selbst, sondern in der Abschnittsüberschrift, im Tabellentitel oder in der Caption. Nennt die Quelle mehrere Zielszenarien nebeneinander (Umsetzungsszenario 1, Umsetzungsszenario 2), gehört der Name des konkreten in value_raw.",
+          "question": "Auf welchen Zustand bezieht sich der Wert? Der Bezug steht selten in der Zeile selbst, sondern im Titel der eigenen Tabelle, in der Abschnittsüberschrift oder in dem Satz, der die Tabelle ankündigt. Bestand heißt: erhoben oder bilanziert für ein vergangenes oder das laufende Jahr. Daran zu erkennen sind Bestandsanalyse, Ist-Zustand, Bilanzjahr, Ausgangslage, Energiebilanz, \"bislang\", \"derzeit\", \"wird verbraucht\", oder ein Jahr vor der Erstellung des Plans im Titel. Ein Satz wie \"wie viel Wärme pro Jahr verbraucht wird und welche Energieträger dafür bislang eingesetzt werden\" ist ein Bestand, auch wenn das Wort Bestandsanalyse nicht fällt. Trendszenario ist die Fortschreibung ohne zusätzliche Maßnahmen. Zielszenario ist der angestrebte Zustand, auch wenn der Plan ihm einen eigenen Namen gibt (\"bei erhöhter Energieeinsparung\", \"Umsetzungsszenario 2\", \"Transformationspfad\"); nennt die Quelle mehrere Zielszenarien nebeneinander, gehört der Name des konkreten in value_raw. Steht in der eigenen Quelle, in ihrem Abschnitt und in dem Satz davor nichts über den Zustand, dann ist das \"out:unstated\" und keine Schätzung.",
           "evidence": "local"
         },
         "spatial_scope": {
@@ -494,7 +505,9 @@
               "Treibhausgasemissionen",
               "THG-Emissionen",
               "CO2-Äquivalente",
-              "CO2e-Emissionen"
+              "CO2e-Emissionen",
+              "THG",
+              "CO2e"
             ],
             "out:cumulative": [
               "kumulierte Emission über mehrere Jahre",
@@ -529,7 +542,7 @@
             ]
           },
           "required": false,
-          "question": "Welche Größe ist diese Zahl? Das ist die wichtigste Entscheidung des Tupels, denn sie bestimmt, als welche Klasse der Wert im Graphen steht. Entscheide nach der Definition der Klasse, nicht nach der Ähnlichkeit der Wörter. Die Bezeichnung steht in der Zeile, im Spaltenkopf, in der Blocküberschrift oder in der Caption. \"Wärmeverbrauch\" und \"Wärmebedarf\" sind BEIDE \"final energy consumption value\": dessen Definition lautet \"die an Endverbraucher gelieferte und dort verbrauchte Energie\", und ein im Zielszenario zu deckender Bedarf ist genau diese Energie. In einem Szenario ist ohnehin nichts gemessen. \"Kumulierte THG-Emissionen\" dagegen ist die kumulierte Emission über mehrere Jahre, und eine abgeschiedene Menge ist das Gegenteil einer ausgestoßenen.",
+          "question": "Welche Größe ist diese Zahl? Das ist die wichtigste Entscheidung des Tupels, denn sie bestimmt, als welche Klasse der Wert im Graphen steht. Entscheide nach der Definition der Klasse, nicht nach der Ähnlichkeit der Wörter. \"CO2 emission value\" ist reines Kohlendioxid, \"carbon dioxide equivalent quantity value\" sind alle Treibhausgase, in CO2-Äquivalenten zusammengefasst. Die Einheit verrät es meist: t CO2 gegen t CO2-Äq. Sagt der Plan an anderer Stelle, dass seine Emissionen in CO2-Äquivalenten angegeben sind (\"Die zugehörigen Treibhausgasemissionen - angegeben in Tonnen CO2-Äquivalenten - sind gesondert aufgeführt\"), dann gilt das auch für eine Tabelle, deren Kopfzeile nur \"CO2-Emissionen\" schreibt: der Methodiksatz schlägt die Kopfzeile. Eine kumulierte Emission über mehrere Jahre, eine vermiedene oder eingesparte Emission und eine abgeschiedene Menge sind das Gegenteil einer im Bilanzjahr ausgestoßenen und haben ihre eigenen Einträge.",
           "evidence": "local"
         },
         "aggregation": {
@@ -696,7 +709,9 @@
             "OEO_00000214": [
               "Private Haushalte",
               "Haushalte",
-              "Privathaushalte"
+              "Privathaushalte",
+              "Wohnen",
+              "Wohngebäude"
             ],
             "OEO_00000405": [
               "GHD",
@@ -704,7 +719,10 @@
               "Gewerbe/Handel/Dienstleistungen",
               "öffentliche Gebäude",
               "öffentliche Liegenschaften",
-              "kommunale Einrichtungen"
+              "kommunale Einrichtungen",
+              "GHD/Kommune",
+              "Gewerbe",
+              "wirtschaftlich genutzte Gebäude"
             ],
             "OEO_00000227": [
               "Industrie"
@@ -723,12 +741,12 @@
               "insgesamt"
             ]
           },
-          "question": "Welcher Verbrauchssektor? Die Bezeichnung steht in der Zeilenbeschriftung, im Spaltenkopf oder in der Blocküberschrift: \"Wohnen\" meint die Klasse Private Haushalte, \"GHD/Kommune\" und \"Gewerbe\" die Klasse GHD. Eine Zeile über alle Sektoren ist \"out:total\". Nennt die Passage den Sektor gar nicht, ist das keine Klasse, sondern eine fehlende Angabe: antworte dann mit \"out:unstated\".",
+          "question": "Welcher Verbrauchssektor? Die Bezeichnung steht in der Zeilenbeschriftung, im Spaltenkopf oder in der Blocküberschrift DERSELBEN Tabelle: \"Wohnen\" und \"Wohngebäude\" meinen die Klasse Private Haushalte, \"GHD/Kommune\", \"Gewerbe\" und \"wirtschaftlich genutzte Gebäude\" die Klasse GHD. Ein GEBIET ist kein Sektor: \"Gesamtstadt\", \"Stadtgebiet\", \"Gemeinde\" und \"Plangebiet\" sagen, WO die Zahl gilt, nicht für welchen Verbraucher, und sie sind auch keine Summe über die Sektoren. Eine Zeile, die ausdrücklich über alle Sektoren summiert (\"Summe\", \"Gesamt\", \"insgesamt\" als Zeilen- oder Spaltenkopf), ist \"out:total\". Hat die eigene Tabelle keine Sektorspalte und nennt ihr Titel keinen Sektor, dann ist das keine Klasse, sondern eine fehlende Angabe: antworte mit \"out:unstated\".",
           "evidence": "own"
         },
         "year": {
           "type": "int",
-          "question": "Auf welches Bezugsjahr bezieht sich die Zahl? Vierstellig. Das Jahr steht fast nie in der Zeile der Zahl selbst, sondern im Spaltenkopf, im Tabellentitel, in der Caption oder in der Abschnittsüberschrift. Hat die Tabelle mehrere Jahresspalten, dann entscheidet die Position der Zahl in ihrer Zeile, welches Jahr gilt.",
+          "question": "Für welches Kalenderjahr gilt diese Jahressumme? Vierstellig. Das Jahr steht fast nie in der Zeile der Zahl selbst. Sieh in dieser Reihenfolge nach: (1) die Kopfzelle der Spalte, in der die Zahl steht, (2) der Titel der eigenen Tabelle, (3) der Satz, der die Tabelle in ihrem Abschnitt ankündigt (\"Für das Jahr 2040 ergeben sich die in den nachfolgenden Tabellen zusammengestellten Kennzahlen\"), (4) die Überschrift des Abschnitts. Das Jahr im Titel einer ANDEREN Tabelle gilt nicht, auch wenn dieser Titel im selben Abschnitt steht. Nennt die Quelle einen Zeitraum statt eines Jahres (\"Durchschnittswert der Jahre 2022-2024\"), dann gehört das LETZTE Jahr in value und der Zeitraum wörtlich in value_raw.",
           "evidence": "local"
         },
         "scenario": {
@@ -753,10 +771,16 @@
               "Bilanzjahr",
               "Status quo",
               "Bestandsanalyse"
+            ],
+            "out:variant": [
+              "Variante oder Sensitivität neben dem Szenario",
+              "Variante",
+              "Sensitivität",
+              "Bandbreite"
             ]
           },
           "required": false,
-          "question": "Auf welchen Zustand bezieht sich der Wert: den erhobenen Bestand, eine Trendfortschreibung oder ein Zielszenario? Der Bezug steht selten in der Zeile selbst, sondern in der Abschnittsüberschrift, im Tabellentitel oder in der Caption. Nennt die Quelle mehrere Zielszenarien nebeneinander (Umsetzungsszenario 1, Umsetzungsszenario 2), gehört der Name des konkreten in value_raw.",
+          "question": "Auf welchen Zustand bezieht sich der Wert? Der Bezug steht selten in der Zeile selbst, sondern im Titel der eigenen Tabelle, in der Abschnittsüberschrift oder in dem Satz, der die Tabelle ankündigt. Bestand heißt: erhoben oder bilanziert für ein vergangenes oder das laufende Jahr. Daran zu erkennen sind Bestandsanalyse, Ist-Zustand, Bilanzjahr, Ausgangslage, Energiebilanz, \"bislang\", \"derzeit\", \"wird verbraucht\", oder ein Jahr vor der Erstellung des Plans im Titel. Ein Satz wie \"wie viel Wärme pro Jahr verbraucht wird und welche Energieträger dafür bislang eingesetzt werden\" ist ein Bestand, auch wenn das Wort Bestandsanalyse nicht fällt. Trendszenario ist die Fortschreibung ohne zusätzliche Maßnahmen. Zielszenario ist der angestrebte Zustand, auch wenn der Plan ihm einen eigenen Namen gibt (\"bei erhöhter Energieeinsparung\", \"Umsetzungsszenario 2\", \"Transformationspfad\"); nennt die Quelle mehrere Zielszenarien nebeneinander, gehört der Name des konkreten in value_raw. Steht in der eigenen Quelle, in ihrem Abschnitt und in dem Satz davor nichts über den Zustand, dann ist das \"out:unstated\" und keine Schätzung.",
           "evidence": "local"
         },
         "spatial_scope": {
