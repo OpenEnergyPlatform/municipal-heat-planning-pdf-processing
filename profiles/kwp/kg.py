@@ -128,6 +128,21 @@ P_SECTOR = _predicate("sector")                 # covers sector
 P_YEAR = _predicate("year")                     # has scenario year value
 P_AGGREGATION = _predicate("aggregation")       # has aggregation type
 
+# Which part of a heat plan a value hangs under, by the scenario it belongs
+# to. The law names three of them and MHPO asserts the has-part edges for
+# them (mhpo-edit.owl L123-125), so this is a table and not a judgement.
+#
+# Only the target scenario was ever written. Everything else the harvest read
+# was collected, verified and then dropped at the gate: measured on Kassel,
+# 45 tuples for the scenario alone, 25 of them a stock take that the plan
+# states as its own starting point. The Waermeplanungsgesetz asks for the
+# inventory in §15 and the graph had no node for it.
+PARTS = {
+    "status_quo": ("mhpo:MHPO_00020005", "inventory", "Bestandsanalyse"),
+    "trend": ("oeo:OEO_00020314", "referencescenario", "Trendszenario"),
+    "target": ("mhpo:MHPO_00020007", "targetscenario", "Zielszenario"),
+}
+
 ORGANISATION = "planning_organisation"
 CLS_ORGANISATION = "OEO_00030022"        # organisation
 CLS_PLAN_AREA = "MHPO_00020018"          # heat plan area
@@ -328,8 +343,14 @@ def make_serializer(db_path: Path):
             quantity = row.get("quantity")
             scope = row.get("spatial_scope")
             area = (row.get("spatial_scope_raw") or "").strip()
-            if row.get("scenario") != "target":
-                skip("scenario")
+            if row.get("scenario") not in PARTS:
+                # A scenario nobody read is not the same finding as one the
+                # graph has no node for, and counting them together hid the
+                # first: a row with no scenario at all is a coordinate the
+                # sweep never closed, and it is the sweep that has to answer
+                # for it.
+                skip("scenario_unread" if not row.get("scenario")
+                     else f"scenario:{row['scenario']}")
             elif scope not in ("municipality", "sub_area"):
                 skip("spatial_scope")
             elif scope == "sub_area" and not area:
@@ -372,14 +393,15 @@ def make_serializer(db_path: Path):
                       name, ags, published, owner, len(kept))
             return None
         heatplan = f"{BASE}heatplan/AGS_{ags}_{published}"
-        scenario_iri = f"{BASE}targetscenario/AGS_{ags}_{published}"
+        part_iri = {key: f"{BASE}{segment}/AGS_{ags}_{published}"
+                    for key, (_cls, segment, _label) in PARTS.items()}
         municipality_iri = f"{BASE}municipality/AGS_{ags}"
         place = municipality or f"AGS {ags}"
 
         values: dict = {}
         conflicted: set = set()
         for row in kept:
-            iri = _value_iri(heatplan, row)
+            iri = _value_iri(part_iri[row["scenario"]], row)
             if iri in conflicted:
                 skip("conflict")
                 continue
@@ -421,6 +443,16 @@ def make_serializer(db_path: Path):
                  for r in values.values()
                  if r.get("spatial_scope") == "sub_area"
                  and (r.get("spatial_scope_raw") or "").strip()}
+        # Which parts this plan really has. A node for a part with no
+        # value in it would be an empty claim, and a has-part edge to it
+        # a wrong one: the plan does not stop having an inventory because
+        # we could not read one, but the graph must not say we read it.
+        by_part: dict = {}
+        for iri, row in values.items():
+            by_part.setdefault(row["scenario"], {})[iri] = row
+        part_refs = " ,\n        ".join(
+            f"<{part_iri[key]}>" for key in PARTS if key in by_part)
+
         office_edge = ""
         if office_iris:
             refs = " ,\n        ".join(f"<{i}>" for i in office_iris)
@@ -435,13 +467,18 @@ def make_serializer(db_path: Path):
     a mhpo:MHPO_00020003 ;
     rdfs:label "Kommunale Wärmeplanung {place} {published[:4]}" ;
     oeo:OEO_00390096 "{published}"^^xsd:date ;{office_edge}
-    obo:BFO_0000051 <{scenario_iri}> .
+    obo:BFO_0000051 {part_refs} .
 """)
-        value_refs = " ,\n        ".join(f"<{iri}>" for iri in values)
-        parts.append(f"""\
-<{scenario_iri}>
-    a mhpo:MHPO_00020007 ;
-    rdfs:label "Zielszenario {place} {published[:4]}" ;
+        for key in PARTS:
+            if key not in by_part:
+                continue
+            cls, _segment, label = PARTS[key]
+            value_refs = " ,\n        ".join(
+                f"<{iri}>" for iri in by_part[key])
+            parts.append(f"""\
+<{part_iri[key]}>
+    a {cls} ;
+    rdfs:label "{label} {place} {published[:4]}" ;
     oeo:OEO_00140002 {value_refs} .
 """)
         for iri, row in values.items():
