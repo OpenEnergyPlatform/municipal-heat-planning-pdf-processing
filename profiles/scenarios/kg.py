@@ -39,6 +39,8 @@ from collections import Counter
 from pathlib import Path
 from typing import Optional
 
+from docpipe.extraction.spec import kg_name
+
 log = logging.getLogger(__name__)
 
 # Where individuals live. The shapes only fix the ontology prefixes, so this
@@ -93,18 +95,11 @@ def _kg(uri: str) -> dict:
 def _name(block: dict) -> str:
     """`{"prefix": "oeo", "predicate": "OEO_00000506"}` -> "oeo:OEO_00000506".
 
-    Qualified, and the prefix comes out of the spec rather than out of an
-    f-string here. scenarios writes four namespaces where kwp writes one, so
-    a bare identifier does not say what it is: OEO_00390096 and `label` need
-    different prefixes and both are predicates of this graph.
+    Against THIS profile's header: scenarios binds dc: and kwp does not, so
+    the same block is legal in one graph and unwritable in the other. The rule
+    itself is the core's, or there would be two live copies of it.
     """
-    prefix, predicate = block.get("prefix"), block.get("predicate")
-    if not prefix or not predicate:
-        raise KeyError(f"{block!r} is no predicate: prefix and predicate")
-    if f"@prefix {prefix}:" not in PREFIXES:
-        raise KeyError(f"prefix {prefix!r} is not declared in the header, so "
-                       f"the Turtle would not parse")
-    return f"{prefix}:{predicate}"
+    return kg_name(block, PREFIXES)
 
 
 def _property(uri: str, key: str = "property") -> str:
@@ -160,8 +155,9 @@ P_SCENARIO_TYPE = _property("scenario_type")   # has scenario type
 P_STUDY_REGION = _property("scenario_region")  # has study region
 P_SCENARIO_YEAR = _property("scenario_year")   # has scenario year value
 
-# Behind no harvested value, so behind no parameter: every node carries a uuid
-# because the OEKG mints them that way.
+# The two a factsheet writes. They spell the same as the bundle's, and they
+# are a different parameter's promise: the bundle's abstract is the study's,
+# the factsheet's is one scenario's.
 P_SCENARIO_ACRONYM = _property("scenario_label", "also")   # dc:acronym
 P_SCENARIO_ABSTRACT = _property("scenario_abstract")       # dc:abstract
 

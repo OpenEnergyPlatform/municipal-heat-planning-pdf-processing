@@ -193,26 +193,46 @@ def test_the_stamp_the_runner_writes_validates():
         {k: v for k, v in stamp.items() if k != "spec"})
 
 
+def kwp_promises(spec) -> set:
+    """Every predicate a kwp kg block names, qualified.
+
+    Every place a block can hold one: the value's number and unit, the edge a
+    parameter hangs off the plan by, every role=edge axis, the edge a parent
+    axis hangs its container by, and the one inside a map entry. The last two
+    were written as prose inside a `note` and reached no reader at all.
+    """
+    from profiles.kwp.kg import PREFIXES
+    from docpipe.extraction.spec import kg_name
+    out = set()
+    for parameter in spec.parameters:
+        blocks, stack = [], [parameter.kg or {}]
+        stack += [axis.kg or {} for axis in parameter.axes.values()]
+        while stack:
+            block = stack.pop()
+            blocks.append(block)
+            stack.extend(v for v in block.values() if isinstance(v, dict))
+        for block in blocks:
+            if block.get("predicate"):
+                out.add(kg_name(block, PREFIXES))
+    return out
+
+
 def test_the_kg_block_names_the_predicates_the_serializer_writes(tmp_path):
     """The spec says what each coordinate becomes; the serializer writes it.
     Read the promise out of the spec and the fact out of the Turtle, so the
-    two cannot be kept in step by being copied from one another."""
+    two cannot be kept in step by being copied from one another.
+
+    Over every namespace, not just oeo: since the map entries were opened up
+    the spec also promises obo:BFO_0000050, and a collector that only reads
+    oeo: would call that kept without looking.
+    """
     import re
-    from tests.test_kwp_extraction import one_plan_turtle
-    turtle = one_plan_turtle(tmp_path)
+    from tests.test_kwp_extraction import full_turtle
+    turtle = full_turtle(tmp_path)
     spec = load_spec(PROFILES / "kwp" / "extraction_spec.json")
-    written = set(re.findall(r"oeo:(OEO_\d+)\s", turtle))
-    promised = set()
-    for parameter in spec.parameters:
-        for key in ("number", "unit"):
-            block = (parameter.kg or {}).get(key) or {}
-            if block.get("predicate"):
-                promised.add(block["predicate"])
-        for axis in parameter.axes.values():
-            block = axis.kg or {}
-            if block.get("role") == "edge":
-                promised.add(block["predicate"])
-    assert promised, "the spec promises no predicate at all"
+    written = set(re.findall(r"\b([a-z]+:[A-Za-z]+_\d+)\s", turtle))
+    promised = kwp_promises(spec)
+    assert len(promised) == 9, sorted(promised)
     missing = promised - written
     assert not missing, f"promised in the spec, absent from the Turtle: {missing}"
 

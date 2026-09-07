@@ -537,6 +537,7 @@
        "label": "has aggregation type",
        "note": "Object is a named individual of OEO_00140068 aggregation type. Derived from the unit, never asked: every accepted unit of both parameters is an extensive amount.",
        "predicate": "OEO_00390023",
+       "prefix": "oeo",
        "role": "edge"
       },
       "x-options": {
@@ -693,6 +694,7 @@
        },
        "note": "Object is an OEO class (punning). Nine of the offered classes are not under energy carrier in OEO -- district heat, electricity, solar thermal, geothermal and the ambient heat sources -- and for those the value keeps its node and loses only the edge. Naming them at all is the point: without the classes the model mapped 36 of them onto solar thermal energy, a wrong triple rather than a missing one.",
        "predicate": "OEO_00000523",
+       "prefix": "oeo",
        "role": "edge"
       },
       "x-options": {
@@ -1206,13 +1208,27 @@
        "null"
       ],
       "x-kg": {
-       "map": {
-        "out:variant": "not serialized",
-        "status_quo": "MHPO_00020005 aggregated inventory analysis",
-        "target": "MHPO_00020007 target scenario",
-        "trend": "OEO_00020314 reference scenario"
+       "linked_by": {
+        "label": "has part",
+        "node": "heatplan",
+        "predicate": "BFO_0000051",
+        "prefix": "obo"
        },
-       "note": "Which container node holds the value: plan BFO_0000051 has part -> container OEO_00140002 has quantity value -> value. Only the target scenario is serialized today (G2).",
+       "map": {
+        "out:variant": {
+         "note": "not serialized"
+        },
+        "status_quo": {
+         "class": "MHPO_00020005"
+        },
+        "target": {
+         "class": "MHPO_00020007"
+        },
+        "trend": {
+         "class": "OEO_00020314"
+        }
+       },
+       "note": "Which container node holds the value: the plan has the container by `linked_by`, and the edge from the container down to the value is structural and named in kg.py. Only the target scenario is serialized today (G2).",
        "role": "parent"
       },
       "x-options": {
@@ -1338,6 +1354,7 @@
        "label": "covers sector",
        "note": "Object is an OEO sector class.",
        "predicate": "OEO_00000505",
+       "prefix": "oeo",
        "role": "edge"
       },
       "x-options": {
@@ -1471,8 +1488,18 @@
       ],
       "x-kg": {
        "map": {
-        "municipality": "the plan's own area",
-        "sub_area": "MHPO_00020018 heat plan area, BFO_0000050 part of the municipality area"
+        "municipality": {
+         "note": "the plan's own area, minted from the AGS"
+        },
+        "sub_area": {
+         "class": "MHPO_00020018",
+         "linked_by": {
+          "label": "part of",
+          "node": "municipality",
+          "predicate": "BFO_0000050",
+          "prefix": "obo"
+         }
+        }
        },
        "note": "No relation from a value to its area exists in the schema yet, so a sub_area value is not serialized (TERM REQUEST 1).",
        "role": "parent"
@@ -1594,6 +1621,7 @@
        "label": "has scenario year value",
        "note": "The calendar year the aggregation is integrated over, not a label. A unit without a per-year marker carries the flag period:annual_in_quote or period:unstated.",
        "predicate": "OEO_00020440",
+       "prefix": "oeo",
        "role": "edge"
       },
       "x-question": "Für welches Kalenderjahr gilt diese Jahressumme? Vierstellig. Das Jahr steht fast nie in der Zeile der Zahl selbst. Sieh in dieser Reihenfolge nach: (1) die Kopfzelle der Spalte, in der die Zahl steht, (2) der Titel der eigenen Tabelle, (3) der Satz, der die Tabelle in ihrem Abschnitt ankündigt (\"Für das Jahr 2040 ergeben sich die in den nachfolgenden Tabellen zusammengestellten Kennzahlen\"), (4) die Überschrift des Abschnitts. Das Jahr im Titel einer ANDEREN Tabelle gilt nicht, auch wenn dieser Titel im selben Abschnitt steht. Nennt die Quelle einen Zeitraum statt eines Jahres (\"Durchschnittswert der Jahre 2022-2024\"), dann gehört das LETZTE Jahr in value und der Zeitraum wörtlich in value_raw."
@@ -1690,12 +1718,14 @@
       "datatype": "xsd:float",
       "from": "value_target",
       "label": "has number",
-      "predicate": "OEO_00140178"
+      "predicate": "OEO_00140178",
+      "prefix": "oeo"
      },
      "unit": {
       "from": "unit_target",
       "label": "has unit",
-      "predicate": "OEO_00040010"
+      "predicate": "OEO_00040010",
+      "prefix": "oeo"
      }
     }
    },
@@ -1946,6 +1976,7 @@
        "label": "has aggregation type",
        "note": "Object is a named individual of OEO_00140068 aggregation type. Derived from the unit, never asked: every accepted unit of both parameters is an extensive amount.",
        "predicate": "OEO_00390023",
+       "prefix": "oeo",
        "role": "edge"
       },
       "x-options": {
@@ -2102,6 +2133,7 @@
        },
        "note": "Object is an OEO class (punning). Nine of the offered classes are not under energy carrier in OEO -- district heat, electricity, solar thermal, geothermal and the ambient heat sources -- and for those the value keeps its node and loses only the edge. Naming them at all is the point: without the classes the model mapped 36 of them onto solar thermal energy, a wrong triple rather than a missing one.",
        "predicate": "OEO_00000523",
+       "prefix": "oeo",
        "role": "edge"
       },
       "x-options": {
@@ -2616,13 +2648,27 @@
        "null"
       ],
       "x-kg": {
-       "map": {
-        "out:variant": "not serialized",
-        "status_quo": "MHPO_00020005 aggregated inventory analysis",
-        "target": "MHPO_00020007 target scenario",
-        "trend": "OEO_00020314 reference scenario"
+       "linked_by": {
+        "label": "has part",
+        "node": "heatplan",
+        "predicate": "BFO_0000051",
+        "prefix": "obo"
        },
-       "note": "Which container node holds the value: plan BFO_0000051 has part -> container OEO_00140002 has quantity value -> value. Only the target scenario is serialized today (G2).",
+       "map": {
+        "out:variant": {
+         "note": "not serialized"
+        },
+        "status_quo": {
+         "class": "MHPO_00020005"
+        },
+        "target": {
+         "class": "MHPO_00020007"
+        },
+        "trend": {
+         "class": "OEO_00020314"
+        }
+       },
+       "note": "Which container node holds the value: the plan has the container by `linked_by`, and the edge from the container down to the value is structural and named in kg.py. Only the target scenario is serialized today (G2).",
        "role": "parent"
       },
       "x-options": {
@@ -2748,6 +2794,7 @@
        "label": "covers sector",
        "note": "Object is an OEO sector class.",
        "predicate": "OEO_00000505",
+       "prefix": "oeo",
        "role": "edge"
       },
       "x-options": {
@@ -2881,8 +2928,18 @@
       ],
       "x-kg": {
        "map": {
-        "municipality": "the plan's own area",
-        "sub_area": "MHPO_00020018 heat plan area, BFO_0000050 part of the municipality area"
+        "municipality": {
+         "note": "the plan's own area, minted from the AGS"
+        },
+        "sub_area": {
+         "class": "MHPO_00020018",
+         "linked_by": {
+          "label": "part of",
+          "node": "municipality",
+          "predicate": "BFO_0000050",
+          "prefix": "obo"
+         }
+        }
        },
        "note": "No relation from a value to its area exists in the schema yet, so a sub_area value is not serialized (TERM REQUEST 1).",
        "role": "parent"
@@ -3004,6 +3061,7 @@
        "label": "has scenario year value",
        "note": "The calendar year the aggregation is integrated over, not a label. A unit without a per-year marker carries the flag period:annual_in_quote or period:unstated.",
        "predicate": "OEO_00020440",
+       "prefix": "oeo",
        "role": "edge"
       },
       "x-question": "Für welches Kalenderjahr gilt diese Jahressumme? Vierstellig. Das Jahr steht fast nie in der Zeile der Zahl selbst. Sieh in dieser Reihenfolge nach: (1) die Kopfzelle der Spalte, in der die Zahl steht, (2) der Titel der eigenen Tabelle, (3) der Satz, der die Tabelle in ihrem Abschnitt ankündigt (\"Für das Jahr 2040 ergeben sich die in den nachfolgenden Tabellen zusammengestellten Kennzahlen\"), (4) die Überschrift des Abschnitts. Das Jahr im Titel einer ANDEREN Tabelle gilt nicht, auch wenn dieser Titel im selben Abschnitt steht. Nennt die Quelle einen Zeitraum statt eines Jahres (\"Durchschnittswert der Jahre 2022-2024\"), dann gehört das LETZTE Jahr in value und der Zeitraum wörtlich in value_raw."
@@ -3100,12 +3158,14 @@
       "datatype": "xsd:float",
       "from": "value_target",
       "label": "has number",
-      "predicate": "OEO_00140178"
+      "predicate": "OEO_00140178",
+      "prefix": "oeo"
      },
      "unit": {
       "from": "unit_target",
       "label": "has unit",
-      "predicate": "OEO_00040010"
+      "predicate": "OEO_00040010",
+      "prefix": "oeo"
      }
     }
    },
@@ -3250,10 +3310,11 @@
     ],
     "type": "object",
     "x-kg": {
-     "class": "OEO_00030022 organisation",
+     "class": "OEO_00030022",
      "edge_from_plan": {
       "label": "has organisation",
-      "predicate": "OEO_00000510"
+      "predicate": "OEO_00000510",
+      "prefix": "oeo"
      },
      "label": "rdfs:label, legal form stripped",
      "node": "organisation"

@@ -286,6 +286,7 @@ def _validate_axis(path: str, name: str, raw) -> Axis:
             _fail(path, "kg.role must be one of: type, edge, parent, comment")
         if role == "edge" and not str(kg.get("predicate") or "").strip():
             _fail(path, "an edge names the predicate it writes")
+        _validate_kg_ids(path, kg)
     evidence = raw.get("evidence", "any")
     if evidence not in ("own", "local", "any"):
         _fail(path, "evidence must be one of: own, local, any")
@@ -451,6 +452,10 @@ def _validate_parameter(path: str, raw) -> Parameter:
             for name, a in axes_raw.items()}
     example = _validate_example(f"{path}.example", raw.get("example"),
                                 value_type, units)
+    if raw.get("kg") is not None:
+        # The parameter's block used to be passed through unvalidated, which
+        # is the hole "OEO_00030022 organisation" came through.
+        _validate_kg_ids(path, raw["kg"])
     return Parameter(uri=raw["uri"], label=raw["label"],
                      description=raw["description"], value_type=value_type,
                      unit_target=unit_target, units_accepted=units,
@@ -620,6 +625,64 @@ def fingerprints(spec: "Spec") -> dict:
         for name, axis in (parameter.axes or {}).items():
             out[f"axis/{parameter.uri}/{name}"] = axis_fingerprint(axis)
     return out
+
+
+_KG_ID = re.compile(r"^[A-Za-z]+_[0-9]+$")
+
+
+def kg_name(block: dict, prefixes: str) -> str:
+    """`{"prefix": "oeo", "predicate": "OEO_00000506"}` -> "oeo:OEO_00000506".
+
+    Qualified from the spec rather than from an f-string in a serializer, and
+    only against a prefix the profile's own Turtle header binds: the scenarios
+    graph writes four namespaces where kwp writes five, and the same block is
+    legal in one profile and unwritable in the other. `dc:abstract` in a kwp
+    block would look right in the diff and produce a file no reader can load.
+    """
+    prefix, predicate = block.get("prefix"), block.get("predicate")
+    if not prefix or not predicate:
+        raise KeyError(f"{block!r} is no predicate: it needs prefix and "
+                       f"predicate")
+    if f"@prefix {prefix}:" not in prefixes:
+        raise KeyError(f"prefix {prefix!r} is not declared in this profile's "
+                       f"header, so the Turtle would not parse")
+    return f"{prefix}:{predicate}"
+
+
+def _validate_kg_ids(path: str, kg) -> None:
+    """A class is an identifier and a predicate is one token.
+
+    Both were written by hand as an identifier plus a gloss -- "OEO_00030022
+    organisation", and worse "MHPO_00020018 heat plan area, BFO_0000050 part
+    of the municipality area" -- and a serializer reading that emits
+    `a oeo:OEO_00030022 organisation`, which is not Turtle. Refused where the
+    spec is read, so it cannot reach a graph.
+
+    A class is held to the identifier SHAPE and not merely to "no whitespace":
+    "organisation" alone would mint `oeo:organisation`. A predicate is held
+    only to being one token, because three legal predicates of the scenarios
+    profile are the words `abstract`, `acronym` and `label`.
+    """
+    if not isinstance(kg, dict):
+        return
+    # Every depth: a class sits on the block, on a map entry and on an axis'
+    # `linked_by` alike, and the worst string in the tree was three levels in.
+    blocks, stack = [], [kg]
+    while stack:
+        block = stack.pop()
+        blocks.append(block)
+        stack.extend(v for v in block.values() if isinstance(v, dict))
+    for block in blocks:
+        klass = block.get("class")
+        if klass is not None and not _KG_ID.match(str(klass)):
+            _fail(path, f"kg class {klass!r} is not an identifier: a class is "
+                        f"an id like OEO_00030022, and the words for it "
+                        f"belong in a label or a note")
+        predicate = block.get("predicate")
+        if predicate is not None:
+            text = str(predicate)
+            if not text.strip() or text.split() != [text]:
+                _fail(path, f"kg predicate {predicate!r} is not one token")
 
 
 def own_evidence(spec: "Spec") -> frozenset:

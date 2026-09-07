@@ -459,6 +459,20 @@ def one_plan_turtle(tmp_path):
         "waermeplan_kassel_20240315", KASSEL_ROWS)
 
 
+def full_turtle(tmp_path):
+    """The same plan plus a sub-area, so every predicate the spec promises is
+    really written. KASSEL_ROWS is all `municipality`, so `part of` -- the
+    only predicate on the spatial_scope map -- never appears in it, and a test
+    reading the promise against that render would report it missing. Not
+    folded into one_plan_turtle: that one is compared against the published
+    kassel_valid.ttl as a triple set.
+    """
+    return kg.make_serializer(_database(tmp_path))(
+        "waermeplan_kassel_20240315",
+        KASSEL_ROWS + [_row(spatial_scope="sub_area",
+                            spatial_scope_raw="Quartier Nordstadt")])
+
+
 def test_one_heat_plan_comes_out_as_the_published_example(tmp_path):
     """The whole point of the pilot, as one assertion: feed the serializer what
     Kassel's plan says and the output is the schema repo's kassel_valid.ttl —
@@ -516,9 +530,11 @@ def test_two_sub_areas_are_two_values_not_one(tmp_path):
     ])
     assert ttl.count("a oeo:OEO_00050016") == 2
     assert '"64000.0"^^xsd:float' in ttl and '"9100.0"^^xsd:float' in ttl
-    assert ttl.count(f"a mhpo:{kg.CLS_PLAN_AREA}") == 2
+    # Typed out, not interpolated: a test that builds its pattern from the
+    # constant it checks agrees with a wrong constant just as happily.
+    assert ttl.count("a mhpo:MHPO_00020018") == 2
     assert "Quartier Nordstadt" in ttl and "Quartier Süd" in ttl
-    assert f"obo:{kg.P_PART_OF} <{kg.BASE}municipality/AGS_06611000>" in ttl
+    assert f"obo:BFO_0000050 <{kg.BASE}municipality/AGS_06611000>" in ttl
 
 
 def test_an_unnamed_sub_area_is_counted_out(tmp_path):
@@ -855,16 +871,20 @@ def test_the_anchor_prompt_asks_for_the_two_sentences_that_were_missing():
 def test_the_spec_and_the_serializer_name_the_same_plan_parts():
     """The spec's kg block is what the JSON schema publishes; kg.PARTS is
     what is written. Two lists of the same thing drift, so this reads one
-    against the other."""
+    against the other -- and "is it serialized" is not a flag beside the
+    class, it IS having a class."""
     scenario = SPEC.parameters[0].axes["scenario"]
     mapped = scenario.kg["map"]
     assert set(mapped) == set(scenario.vocabulary), (
         "every scenario the model may choose says what it becomes")
-    for key, (cls, _segment, _label) in kg.PARTS.items():
-        assert cls.split(":")[-1] in mapped[key], (key, mapped[key])
-    for key, where in mapped.items():
-        if key not in kg.PARTS:
-            assert "not serialized" in where, key
+    assert {key for key, entry in mapped.items() if "class" in entry} \
+        == set(kg._PART_MINT), (
+        "exactly the answers that name a class are the ones that mint a node")
+    # The other half -- that the class the spec names is the class the plan
+    # carries -- is not asserted here and must not be: PARTS is built from
+    # this map, so both sides would be the same read. It is pinned as typed
+    # literals against the rendered Turtle in
+    # test_every_plan_part_the_ontology_names_is_serialized.
 
 
 def test_the_same_coordinates_under_two_scenarios_are_two_values(tmp_path):
@@ -971,3 +991,74 @@ def test_every_option_the_graph_does_not_take_says_what_it_excludes():
             for uri in axis.vocabulary or {}:
                 if uri.startswith("out:"):
                     assert axis.definitions.get(uri), f"{parameter.uri}.{name}.{uri}"
+
+
+def test_a_class_id_says_its_own_namespace():
+    """The spec writes a class as a bare id -- one spelling in both profiles --
+    so the prefix is recovered from the family. An unbound family must be an
+    error and not a default: UO_0000111 occurs 45 times in this profile's
+    pinned vocabulary and would silently become oeo:UO_0000111, an IRI that
+    does not exist."""
+    assert kg.qualified("OEO_00030022") == "oeo:OEO_00030022"
+    assert kg.qualified("MHPO_00020018") == "mhpo:MHPO_00020018"
+    assert kg.qualified("BFO_0000050") == "obo:BFO_0000050"
+    for bad in ("UO_0000111", "OEO_00030022 organisation", "organisation"):
+        with pytest.raises(KeyError):
+            kg.qualified(bad)
+
+
+# Behind no harvested value, so promised by no kg block. Named, so that "the
+# spec did not promise it" stays a finding instead of quietly growing.
+STRUCTURAL = {"a", "rdfs:label", kg.P_PUBLICATION_DATE,
+              kg.P_HAS_QUANTITY_VALUE}
+
+
+def _predicates_in(ttl):
+    """First token of a four-space-indented line: an object continued at eight
+    spaces is not a predicate, and a comment is not a triple."""
+    return {line.split()[0] for line in ttl.splitlines()
+            if line.startswith("    ") and not line.startswith("        ")
+            and line.strip() and not line.lstrip().startswith("#")}
+
+
+def test_nothing_the_module_keeps_a_literal_is_unaccounted_for(tmp_path):
+    """Every predicate in the Turtle is either a promise of the spec or one of
+    four the module keeps on purpose. Without the union pin a fifth literal can
+    be added quietly, which is how the four in this list got there."""
+    from tests.test_extraction_schema import kwp_promises
+    allowed = kwp_promises(SPEC) | STRUCTURAL
+    assert len(allowed) == 13, sorted(allowed)
+    used = _predicates_in(full_turtle(tmp_path))
+    assert used <= allowed, used - allowed
+
+
+def test_the_two_value_parameters_ask_the_graph_for_the_same_thing():
+    """energy_consumption and emission are mirrored blocks, and every reader
+    here returns the FIRST match -- so a wrong identifier in the second one
+    reaches the graph for emission values and nothing reports. This commit
+    doubled what lives in those blocks."""
+    energy, emission = SPEC.parameters[0], SPEC.parameters[1]
+    assert energy.uri == "energy_consumption" and emission.uri == "emission"
+    assert energy.kg == emission.kg
+    assert {n: a.kg for n, a in energy.axes.items()} \
+        == {n: a.kg for n, a in emission.axes.items()}
+
+
+def test_the_constants_are_reads_and_not_literals():
+    """Each reader refuses rather than returning None: a None reaches the
+    Turtle as `    None <iri> ;`, which parses as nothing and is written
+    without a word. And each constant is what its reader returns, so wrapping
+    an assignment in a fallback would report."""
+    assert kg.P_ORGANISATION == kg._edge_from_plan(kg.ORGANISATION)
+    assert kg.CLS_ORGANISATION == kg._class(kg.ORGANISATION)
+    assert kg.P_PART_OF == kg._parent_link("spatial_scope", "sub_area")
+    assert kg.P_HAS_PART == kg._linked_by("scenario")
+    for call in (lambda: kg._class("energy_consumption"),
+                 lambda: kg._class("no_such_parameter"),
+                 lambda: kg._edge_from_plan("energy_consumption"),
+                 lambda: kg._parent_class("scenario", "out:variant"),
+                 lambda: kg._parent_link("scenario", "target"),
+                 lambda: kg._linked_by("spatial_scope"),
+                 lambda: kg._parent("carrier")):
+        with pytest.raises(KeyError):
+            call()
