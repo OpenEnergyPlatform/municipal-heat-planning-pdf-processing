@@ -413,7 +413,7 @@
       "type": "string"
      },
      "value_uri": {
-      "description": "The entry of the parameter's own vocabulary the wording resolved to, where the parameter has one; null when the list did not hold it.",
+      "description": "The entry of the parameter's own vocabulary the wording resolved to; null when the list did not hold it. Only a category parameter has a vocabulary, so this one never writes the key at all.",
       "type": [
        "string",
        "null"
@@ -562,7 +562,7 @@
       "type": "string"
      },
      "value_uri": {
-      "description": "The entry of the parameter's own vocabulary the wording resolved to, where the parameter has one; null when the list did not hold it.",
+      "description": "The entry of the parameter's own vocabulary the wording resolved to; null when the list did not hold it. Only a category parameter has a vocabulary, so this one never writes the key at all.",
       "type": [
        "string",
        "null"
@@ -719,7 +719,7 @@
       "type": "string"
      },
      "value_uri": {
-      "description": "The entry of the parameter's own vocabulary the wording resolved to, where the parameter has one; null when the list did not hold it.",
+      "description": "The entry of the parameter's own vocabulary the wording resolved to; null when the list did not hold it. Only a category parameter has a vocabulary, so this one never writes the key at all.",
       "type": [
        "string",
        "null"
@@ -870,7 +870,7 @@
       "type": "string"
      },
      "value_uri": {
-      "description": "The entry of the parameter's own vocabulary the wording resolved to, where the parameter has one; null when the list did not hold it.",
+      "description": "The entry of the parameter's own vocabulary the wording resolved to; null when the list did not hold it. Only a category parameter has a vocabulary, so this one never writes the key at all.",
       "type": [
        "string",
        "null"
@@ -1019,7 +1019,7 @@
       "type": "string"
      },
      "value_uri": {
-      "description": "The entry of the parameter's own vocabulary the wording resolved to, where the parameter has one; null when the list did not hold it.",
+      "description": "The entry of the parameter's own vocabulary the wording resolved to; null when the list did not hold it. Only a category parameter has a vocabulary, so this one never writes the key at all.",
       "type": [
        "string",
        "null"
@@ -1281,7 +1281,7 @@
       "type": "string"
      },
      "value_uri": {
-      "description": "The entry of the parameter's own vocabulary the wording resolved to, where the parameter has one; null when the list did not hold it.",
+      "description": "The entry of the parameter's own vocabulary the wording resolved to; null when the list did not hold it. Only a category parameter has a vocabulary, so this one never writes the key at all.",
       "type": [
        "string",
        "null"
@@ -1431,7 +1431,7 @@
       "type": "string"
      },
      "value_uri": {
-      "description": "The entry of the parameter's own vocabulary the wording resolved to, where the parameter has one; null when the list did not hold it.",
+      "description": "The entry of the parameter's own vocabulary the wording resolved to; null when the list did not hold it. The list is per document: the profile supplies it before the harvest, so it is not in this schema.",
       "type": [
        "string",
        "null"
@@ -1697,7 +1697,7 @@
       "type": "string"
      },
      "value_uri": {
-      "description": "The entry of the parameter's own vocabulary the wording resolved to, where the parameter has one; null when the list did not hold it.",
+      "description": "The entry of the parameter's own vocabulary the wording resolved to; null when the list did not hold it. The list is per document: the profile supplies it before the harvest, so it is not in this schema.",
       "type": [
        "string",
        "null"
@@ -1960,11 +1960,161 @@
       "type": "string"
      },
      "value_uri": {
-      "description": "The entry of the parameter's own vocabulary the wording resolved to, where the parameter has one; null when the list did not hold it.",
+      "description": "The entry of the parameter's own vocabulary the wording resolved to; null when the list did not hold it. The list is closed; an entry beginning 'out:' is a deliberate non-class answer and mints no node.",
+      "enum": [
+       "https://openenergyplatform.org/ontology/oeo/OEO_00020309",
+       "https://openenergyplatform.org/ontology/oeo/OEO_00020310",
+       "https://openenergyplatform.org/ontology/oeo/OEO_00020311",
+       "https://openenergyplatform.org/ontology/oeo/OEO_00020312",
+       "https://openenergyplatform.org/ontology/oeo/OEO_00020314",
+       "https://openenergyplatform.org/ontology/oeo/OEO_00020247",
+       "https://openenergyplatform.org/ontology/oeo/OEO_00020248",
+       "https://openenergyplatform.org/ontology/oeo/OEO_00020345",
+       "https://openenergyplatform.org/ontology/oeo/OEO_00020411",
+       "https://openenergyplatform.org/ontology/oeo/OEO_00020412",
+       "https://openenergyplatform.org/ontology/oeo/OEO_00030007",
+       "https://openenergyplatform.org/ontology/oeo/OEO_00030008",
+       "https://openenergyplatform.org/ontology/oeo/OEO_00030009",
+       "https://openenergyplatform.org/ontology/oeo/OEO_00020317",
+       "https://openenergyplatform.org/ontology/oeo/OEO_00020321",
+       "https://openenergyplatform.org/ontology/oeo/OEO_00030010",
+       "https://openenergyplatform.org/ontology/oeo/OEO_00000364",
+       "out:not_in_list",
+       null
+      ],
       "type": [
        "string",
        "null"
-      ]
+      ],
+      "x-options": {
+       "CO2 emission scenario": {
+        "meaning": "A CO2 emission scenario is an emission scenario that describes a possible CO2 emission trajectory.",
+        "uri": "https://openenergyplatform.org/ontology/oeo/OEO_00020321"
+       },
+       "climate scenario": {
+        "meaning": "A climate scenario is a scenario that describes a possible future state of a climate system.",
+        "spellings": [
+         "Klimaszenario"
+        ],
+        "uri": "https://openenergyplatform.org/ontology/oeo/OEO_00030007"
+       },
+       "economic scenario": {
+        "meaning": "An economic scenario is a scenario that describes a possible future state of economic systems.",
+        "spellings": [
+         "Wirtschaftsszenario"
+        ],
+        "uri": "https://openenergyplatform.org/ontology/oeo/OEO_00030008"
+       },
+       "emission scenario": {
+        "meaning": "An emission scenario is a scenario that describes a possible emission trajectory.",
+        "spellings": [
+         "emissions scenario",
+         "Emissionsszenario"
+        ],
+        "uri": "https://openenergyplatform.org/ontology/oeo/OEO_00030009"
+       },
+       "energy scenario": {
+        "meaning": "An energy scenario is a scenario that describes a possible future state of an energy system.",
+        "spellings": [
+         "Energieszenario"
+        ],
+        "uri": "https://openenergyplatform.org/ontology/oeo/OEO_00030010"
+       },
+       "explorative scenario": {
+        "meaning": "An explorative scenario is a scenario that contains certain constraints / statements regarding measures that are taken in the near future / today to explore where these measures will lead to in a later future. The later future is not predefined in the scenario.",
+        "spellings": [
+         "exploratory scenario",
+         "exploratives Szenario"
+        ],
+        "uri": "https://openenergyplatform.org/ontology/oeo/OEO_00020248"
+       },
+       "greenhouse gas emission scenario": {
+        "meaning": "A greenhouse gas emission scenario is an emission scenario that describes a possible greenhouse gas emission trajectory.",
+        "spellings": [
+         "GHG emission scenario"
+        ],
+        "uri": "https://openenergyplatform.org/ontology/oeo/OEO_00020317"
+       },
+       "keine dieser Arten": {
+        "meaning": "Der Text nennt eine Art, die keine dieser Klassen trifft. Nicht zu verwechseln damit, dass der Text gar keine Art nennt: das ist die Antwort, dass es in diesen Passagen nicht steht.",
+        "spellings": [
+         "die Art, die der Text nennt, steht nicht in der Liste"
+        ],
+        "uri": "out:not_in_list"
+       },
+       "policy scenario": {
+        "meaning": "A policy scenario is a scenario in which certain policy instruments or transformative measures and their impacts are assessed.",
+        "uri": "https://openenergyplatform.org/ontology/oeo/OEO_00020309"
+       },
+       "reference scenario": {
+        "meaning": "A reference scenario is a scenario that is used as a reference, e.g. in a scenario comparison. It has the reference role.",
+        "spellings": [
+         "reference case"
+        ],
+        "uri": "https://openenergyplatform.org/ontology/oeo/OEO_00020314"
+       },
+       "robust system scenario": {
+        "meaning": "A robust system scenario is an explorative scenario that describes an energy system that is designed to evolve in a robust way.",
+        "spellings": [
+         "robust investment decision",
+         "robust transformation pathway"
+        ],
+        "uri": "https://openenergyplatform.org/ontology/oeo/OEO_00020411"
+       },
+       "scenario": {
+        "meaning": "A scenario is an information content entity that contains statements about a possible future development based on a coherent and internally consistent set of assumptions and their motivation.",
+        "spellings": [
+         "Szenario",
+         "narrative",
+         "storyline"
+        ],
+        "uri": "https://openenergyplatform.org/ontology/oeo/OEO_00000364"
+       },
+       "statistically robust scenario": {
+        "meaning": "A statistically robust scenario is a scenario that is the basis for statistically robust projection data.",
+        "uri": "https://openenergyplatform.org/ontology/oeo/OEO_00020412"
+       },
+       "sufficiency scenario": {
+        "meaning": "A sufficiency scenario is a scenario that comprises sufficiency strategies.",
+        "uri": "https://openenergyplatform.org/ontology/oeo/OEO_00020345"
+       },
+       "target driven scenario": {
+        "meaning": "A target driven scenario is a scenario that contains certain target constraints/ statements that in a possible future shall be realized. The path how the targets will be met is not predefined in the scenario.",
+        "spellings": [
+         "normative scenario",
+         "backcasting scenario",
+         "Zielszenario"
+        ],
+        "uri": "https://openenergyplatform.org/ontology/oeo/OEO_00020247"
+       },
+       "with additional measures scenario": {
+        "meaning": "A with additional measures scenario (WAM) is a policy scenario that includes policy instruments and transformative measures which have been adopted and implemented to mitigate climate change or meet energy objectives, as well as policy instruments and transformative measures which are planned for that purpose.",
+        "spellings": [
+         "WAM",
+         "with additional measures",
+         "WAM scenario"
+        ],
+        "uri": "https://openenergyplatform.org/ontology/oeo/OEO_00020312"
+       },
+       "with existing measures scenario": {
+        "meaning": "A with existing measures scenario (WEM) is a policy scenario that includes policy instruments and transformative measures that have been adopted and implemented.",
+        "spellings": [
+         "WEM",
+         "with existing measures",
+         "WEM scenario"
+        ],
+        "uri": "https://openenergyplatform.org/ontology/oeo/OEO_00020311"
+       },
+       "without measures scenario": {
+        "meaning": "A without measures scenario (WOM) is a policy scenario that excludes all policy instruments and transformative measures which are planned, adopted or implemented.",
+        "spellings": [
+         "WOM",
+         "without measures",
+         "WOM scenario"
+        ],
+        "uri": "https://openenergyplatform.org/ontology/oeo/OEO_00020310"
+       }
+      }
      }
     },
     "required": [
@@ -2223,7 +2373,7 @@
       "type": "string"
      },
      "value_uri": {
-      "description": "The entry of the parameter's own vocabulary the wording resolved to, where the parameter has one; null when the list did not hold it.",
+      "description": "The entry of the parameter's own vocabulary the wording resolved to; null when the list did not hold it. Only a category parameter has a vocabulary, so this one never writes the key at all.",
       "type": [
        "string",
        "null"
@@ -2376,7 +2526,7 @@
       "type": "string"
      },
      "value_uri": {
-      "description": "The entry of the parameter's own vocabulary the wording resolved to, where the parameter has one; null when the list did not hold it.",
+      "description": "The entry of the parameter's own vocabulary the wording resolved to; null when the list did not hold it. Only a category parameter has a vocabulary, so this one never writes the key at all.",
       "type": [
        "string",
        "null"
@@ -2524,7 +2674,7 @@
       "type": "string"
      },
      "value_uri": {
-      "description": "The entry of the parameter's own vocabulary the wording resolved to, where the parameter has one; null when the list did not hold it.",
+      "description": "The entry of the parameter's own vocabulary the wording resolved to; null when the list did not hold it. Only a category parameter has a vocabulary, so this one never writes the key at all.",
       "type": [
        "string",
        "null"
@@ -2680,7 +2830,7 @@
       "type": "string"
      },
      "value_uri": {
-      "description": "The entry of the parameter's own vocabulary the wording resolved to, where the parameter has one; null when the list did not hold it.",
+      "description": "The entry of the parameter's own vocabulary the wording resolved to; null when the list did not hold it. Only a category parameter has a vocabulary, so this one never writes the key at all.",
       "type": [
        "string",
        "null"
@@ -2836,7 +2986,7 @@
       "type": "string"
      },
      "value_uri": {
-      "description": "The entry of the parameter's own vocabulary the wording resolved to, where the parameter has one; null when the list did not hold it.",
+      "description": "The entry of the parameter's own vocabulary the wording resolved to; null when the list did not hold it. Only a category parameter has a vocabulary, so this one never writes the key at all.",
       "type": [
        "string",
        "null"
@@ -2937,7 +3087,7 @@
     "type": "string"
    },
    "^parameter/[^/]+$": {
-    "description": "What this parameter asks, without its axes: label, description, value type, accepted units, its own vocabulary and the example. A new option on ONE axis must not make every value of the parameter stale.",
+    "description": "What this parameter asks, without its axes and without its own list: label, description, value type, accepted units and the example. A new option on ONE axis, or in the list the parameter answers from, must not make every value of the parameter stale -- those have keys of their own.",
     "pattern": "^[0-9a-f]{64}$",
     "type": "string"
    },
