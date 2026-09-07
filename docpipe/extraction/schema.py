@@ -471,22 +471,37 @@ def stamp_schema() -> dict:
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "$id": f"{BASE_ID}/stamp",
         "title": "docpipe extraction resume stamp",
-        "description": "Any key that differs from the current run makes the "
-                       "document stale and it is harvested again. Withheld "
-                       "when the harvest did not happen. The parameter/ and "
-                       "axis/ keys say WHICH question changed, so a moving "
-                       "ontology costs the coordinates it touched rather "
-                       "than a full re-read of the corpus; a stamp written "
-                       "before they existed carries none of them and is "
-                       "therefore stale in all of them.",
+        "description": "A key that differs from the current run makes the "
+                       "document stale and it is harvested again -- every "
+                       "key but `spec`, which is recorded so a reader can "
+                       "say which file a harvest came from and is not "
+                       "compared. Withheld when the harvest did not happen. "
+                       "The parameter/, value/, axis/ and slot/ keys say "
+                       "WHICH question changed, so a moving ontology costs "
+                       "the coordinates it touched rather than a full "
+                       "re-read of the corpus; a stamp written before they "
+                       "existed carries none of them, and for it `spec` "
+                       "decides again, so it is stale in all of them.",
         "type": "object",
         "properties": {
-            "spec": {**sha, "description": "sha256 of extraction_spec.json"},
+            "spec": {**sha,
+                     "description": "sha256 of extraction_spec.json. A "
+                                    "record, not a verdict: it moves on a "
+                                    "comment, an indent or a graph "
+                                    "annotation, none of which any question "
+                                    "is asked through. Compared, it would "
+                                    "outvote every key below it."},
             "model": {"type": "string", "description": "the serving model"},
             "anchors": {"type": "string", "pattern": "^([0-9a-f]{16})?$",
-                        "description": "spec sha and frozen-anchor sha "
-                                       "together; empty when anchors were "
-                                       "off"},
+                        "description": "The questions the anchors were "
+                                       "written for, the anchor prompt, the "
+                                       "model and the profile's frozen set, "
+                                       "together. The anchors decide which "
+                                       "passages a document was read from, "
+                                       "so a document read under one set is "
+                                       "not the same result as one read "
+                                       "under another. Empty when anchors "
+                                       "were off."},
             "page_text_transcribed": {
                 "type": ["integer", "null"],
                 "description": "How many pages of this document a model read "
@@ -509,6 +524,13 @@ def stamp_schema() -> dict:
                                "Its own key, because a moved option can be "
                                "re-mapped from the wording the harvest kept "
                                "while a rewritten question cannot."},
+            "^slot/parameter$": {
+                **sha,
+                "description": "The one coordinate that belongs to no "
+                               "parameter: which quantity a number is. Its "
+                               "question and the parameters it offers, uri "
+                               "and label. Also the only key that moves when "
+                               "a parameter is dropped."},
             "^axis/[^/]+/[^/]+$": {
                 **sha,
                 "description": "What this coordinate asks and what it may "
