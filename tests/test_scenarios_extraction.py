@@ -1208,3 +1208,54 @@ def test_the_preflight_names_a_parameter_that_says_nothing():
         {"uri": "a", "kg": {"node": "studyreport"}},
         {"uri": "b"}]}) == ["b"]
     assert pre.silent_parameters({"parameters": []}) == []
+
+
+def test_a_value_with_no_scenario_to_hang_on_is_counted_by_its_state(caplog):
+    """Verified, quoted, located — and it reaches no factsheet, because the
+    coordinate that says WHICH scenario it belongs to never came back.
+
+    `out_of_graph` cannot see it: the region itself resolved to a real OEKG
+    individual and carries no out: entry, so the row left the file without a
+    triple, a comment or a number. Measured over the 164-document ar6 harvest,
+    298 of 11.129 scenario-scope tuples land here.
+
+    Keyed on the state, because the two are opposite findings: `exhausted` is
+    about this run's window budget and is fixed by raising it, `unstated` is
+    about the paper and is not fixable at all. A single number would let 289
+    of the first hide as if they were the second.
+    """
+    where = {"page": 9, "owner_kind": "section", "owner_id": 9}
+    rows = _rows() + [
+        {"parameter": "scenario_region", "value": "Germany",
+         "value_uri": "https://openenergyplatform.org/ontology/oekg/region/Germany",
+         "scenario_state": "exhausted", "tier": "text_located",
+         "quote": "the run covers Germany", "provenance": where},
+        {"parameter": "scenario_year", "value": "2050", "tier": "text_located",
+         "scenario_state": "unstated", "quote": "by 2050", "provenance": where},
+    ]
+    with caplog.at_level(logging.INFO, logger="profiles.scenarios.kg"):
+        ttl = _ttl(rows)
+    assert "no scenario to hang them on" in caplog.text
+    assert "'scenario_region:exhausted': 1" in caplog.text
+    assert "'scenario_year:unstated': 1" in caplog.text
+    # And it really is absent, which is what makes the count the only trace.
+    assert "region/Germany" not in ttl
+    assert "a oeo:OEO_00000365" not in ttl
+
+
+def test_a_value_that_names_its_scenario_is_not_counted_as_lost(caplog):
+    """The counter fires on the whole scope otherwise, and a number that fires
+    on every row is one nobody reads. A row whose wording places it — even
+    with no AR6 run behind that wording — reaches a factsheet of its own."""
+    where = {"page": 9, "owner_kind": "section", "owner_id": 9}
+    rows = _rows() + [
+        {"parameter": "scenario_year", "value": "2050",
+         "scenario_raw": "the NDC scenario", "scenario_state": "read",
+         "tier": "text_located", "quote": "the NDC scenario reaches 2050",
+         "provenance": where},
+    ]
+    with caplog.at_level(logging.INFO, logger="profiles.scenarios.kg"):
+        ttl = _ttl(rows)
+    assert "no scenario to hang them on" not in caplog.text
+    assert "a oeo:OEO_00000365 ;" in ttl
+    assert '"2050-01-01T00:00:00"^^xsd:dateTime' in ttl

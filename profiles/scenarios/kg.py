@@ -719,6 +719,16 @@ def make_serializer(db_path: Path):
         # A scenario is named by scenario_label, or by any scenario-scope value
         # that says which scenario it belongs to. Both are the document's own
         # wording; `known` is the AR6 list it is matched against.
+        # A scenario-scope value whose own `scenario` coordinate never came
+        # back has nothing to hang on, and until this counter it left the file
+        # without a triple, a comment or a number: the value itself resolved,
+        # so `out_of_graph` cannot see it, and `rows_for` simply never matches
+        # it. Measured over the 164-document ar6 harvest, 298 of 11.129
+        # scenario-scope tuples -- 289 of them `exhausted`, which is a finding
+        # about this run's window budget and not about the papers, and 9
+        # `unstated`, which is the opposite. Thrown together they say nothing,
+        # so the state is what the count is keyed on.
+        unplaceable: Counter = Counter()
         wanted: dict = {}
         for key in ("scenario_label",) + SCENARIO_FIELDS:
             for row in by_param.get(key, ()):
@@ -726,6 +736,9 @@ def make_serializer(db_path: Path):
                                             known, synonyms)
                 if ident:
                     wanted.setdefault(normalise(ident), (ident, label))
+                elif key != "scenario_label":
+                    state = row.get("scenario_state") or "missing"
+                    unplaceable[f"{key}:{state}"] += 1
 
         # One wording, several runs the model proposed for it: the guard drops
         # every one of those links, so the rows land on one factsheet. Whether
@@ -840,7 +853,7 @@ def make_serializer(db_path: Path):
         std[-1] = std[-1].rstrip(" ;") + " ."
 
         log.info("kg: %s: 1 report, 1 bundle, %d scenario(s), %d author(s), "
-                 "%d organisation(s), %d funder(s)%s%s%s%s%s", name,
+                 "%d organisation(s), %d funder(s)%s%s%s%s%s%s", name,
                  len(scenario_links), len(author_links), len(org_links),
                  len(funder_links),
                  f", contested {contested}" if contested else "",
@@ -849,6 +862,8 @@ def make_serializer(db_path: Path):
                  f"{unplaced[:5]}" if unplaced else "",
                  f", not in the graph by choice: {dict(out_of_graph)}"
                  if out_of_graph else "",
+                 f", no scenario to hang them on: {dict(unplaceable)}"
+                 if unplaceable else "",
                  f", {rescued} link(s) the list settled after the model gave up"
                  if rescued else "")
 
