@@ -530,11 +530,18 @@ def _fieldwise(monkeypatch, spec, rows_reply, answers):
     return runner.make_fieldwise_harvester(spec=spec), asked
 
 
-def test_which_quantity_a_number_is_gets_asked_before_its_axes(monkeypatch):
-    """The plan used to fix the parameter, so a table holding a consumption and
-    an emission was retrieved, read and paid for twice — 804 planned sources
-    against 234 owners. Asked instead of assumed, it is a coordinate like any
-    other and decides which coordinates the row even has."""
+def test_which_quantity_a_number_is_follows_its_unit_and_decides_its_axes(
+        monkeypatch):
+    """The promise: the parameter is not fixed by the plan and not asked for
+    either — the unit settles it, and it decides which coordinates the row has.
+
+    The plan used to fix it, so a table holding a consumption and an emission
+    was retrieved, read and paid for twice: 804 planned sources against 234
+    owners. Asking instead was right about the shape and wrong about the cost:
+    the spec says itself that the unit separates the two parameters, their
+    nine and forty-two spellings share none, and not one of Kassel's 559
+    accepted tuples contradicted its unit. The question cost 322 of 1,043
+    field windows, 30.9 percent."""
     spec = load_spec(json.loads(
         (PROFILES / "kwp" / "extraction_spec.json").read_text(encoding="utf-8")))
     consumption = spec.parameters[0]
@@ -543,37 +550,35 @@ def test_which_quantity_a_number_is_gets_asked_before_its_axes(monkeypatch):
                               "quote": "| Erdgas | 42.005 | MWh/a |"}],
                   "status": "complete", "need_more": []}
 
-    def answers(slot, rows):
-        if slot.name == "parameter":
-            # The wording the passage really carries is the unit, and the
-            # class it stands for is the quantity. That is what value_raw is
-            # for: a plan hardly ever prints the word "Endenergieverbrauch"
-            # next to the number, it prints MWh/a.
-            return {"answers": {"R1": {
-                "value": consumption.label, "value_raw": "MWh/a",
-                "quote": "| Erdgas | 42.005 | MWh/a |"}}}
-        return {"answers": {}}
-
-    harvest, asked = _fieldwise(monkeypatch, spec, rows_reply, answers)
+    harvest, asked = _fieldwise(monkeypatch, spec, rows_reply,
+                                lambda slot, rows: {"answers": {}})
     reply = harvest(_document_batch())
 
-    assert asked[0] == "parameter", "the parameter gates the rest"
-    axes = {s.name for s in fields.axis_slots(consumption)}
-    assert axes <= set(asked[1:]), "then the axes of the parameter it turned out to be"
-    assert reply["tuples"][0]["parameter"] == consumption.uri, (
-        "the label the model picked is stored as the class it stands for")
+    assert "parameter" not in asked, "MWh/a settles it, so nothing asks"
+    axes = {s.name for s in fields.asked_slots(consumption)}
+    assert axes <= set(asked), "the axes of the parameter it turned out to be"
+    row = reply["tuples"][0]
+    assert row["parameter"] == consumption.uri, (
+        "and it is stored as the class, not as the label")
+    assert row["parameter_state"] == fields.DERIVED, (
+        "derived, because nothing read it")
+    assert row["parameter_raw"] == "MWh/a", "the wording it was derived from"
 
 
 def test_a_row_whose_quantity_stayed_unread_is_not_given_a_guessed_axis(
         monkeypatch):
     """Refusing it later is the point: a row with no parameter has no
     coordinates to fill, and filling the first parameter's would be a guess
-    written down as a reading."""
+    written down as a reading.
+
+    The unit here is one no parameter accepts, so nothing can be derived and
+    the question is a real one. Kassel had three such rows, all of them
+    amounts in EUR from a cost table."""
     spec = load_spec(json.loads(
         (PROFILES / "kwp" / "extraction_spec.json").read_text(encoding="utf-8")))
-    rows_reply = {"tuples": [{"source": "Q1", "value": 42005, "unit": "MWh/a",
-                              "unit_raw": "MWh/a",
-                              "quote": "| Erdgas | 42.005 | MWh/a |"}],
+    rows_reply = {"tuples": [{"source": "Q1", "value": 42005, "unit": "EUR",
+                              "unit_raw": "EUR",
+                              "quote": "| Erdgas | 42.005 | EUR |"}],
                   "status": "complete", "need_more": []}
 
     harvest, asked = _fieldwise(
@@ -660,20 +665,25 @@ def test_a_row_outside_the_slice_is_not_asked_for_its_other_axes(monkeypatch):
                             {"quantity": None, "scenario": ("target",)})
     reply = harvest(_document_batch())
 
-    gate_order = [name for name, _rows in asked][:3]
-    assert gate_order == ["parameter", "quantity", "scenario"], (
-        "the gate is asked first and in order")
-    after = {name: rows for name, rows in asked[3:]}
+    gate_order = [name for name, _rows in asked][:2]
+    assert gate_order == ["quantity", "scenario"], (
+        "the gate is asked first and in order, the parameter came from the unit")
+    after = {name: rows for name, rows in asked[2:]}
     assert after, "the row that stayed is still asked for its axes"
     assert all(rows == ["R1"] for rows in after.values()), (
         "and only that row: R2 fell out at the quantity")
 
     out = next(t for t in reply["tuples"] if t.get("value") == 99)
-    for axis in fields.axis_slots(spec.parameters[0]):
+    for axis in fields.asked_slots(spec.parameters[0]):
         if axis.name in ("quantity", "scenario"):
             continue
         assert out.get(f"{axis.name}_state") == fields.OUT_OF_SLICE, (
             f"{axis.name} was never asked and has to say so")
+    # And what the spec decided is on the row anyway: a coordinate that never
+    # needed a request is not "never asked", and saying so would be a second
+    # kind of silence.
+    assert out.get("aggregation_state") == fields.DERIVED
+    assert out.get("aggregation") == "OEO_00140070"
 
 
 def test_a_scenario_the_slice_does_not_hold_closes_the_row(monkeypatch):
@@ -766,12 +776,12 @@ def test_the_coordinates_of_a_row_go_out_in_one_request(monkeypatch):
         spec=spec, slice_gate={"quantity": None, "scenario": ("target",)})
     reply = harvest(_document_batch())
 
-    assert len(calls) == 3, (
-        "one for the parameter, one for the gate, one for the rest — not one "
+    assert len(calls) == 2, (
+        "one for the gate, one for the rest — the parameter came from the "
+        "unit and the aggregation from the spec, not one "
         "per coordinate: %s" % calls)
-    assert calls[0] == ["parameter"]
-    assert calls[1] == ["quantity", "scenario"]
-    assert len(calls[2]) == len(fields.axis_slots(consumption)) - 2
+    assert calls[0] == ["quantity", "scenario"]
+    assert len(calls[1]) == len(fields.asked_slots(consumption)) - 2
 
     # Every field of the one reply is folded on its own.
     row = reply["tuples"][0]
@@ -779,6 +789,11 @@ def test_the_coordinates_of_a_row_go_out_in_one_request(monkeypatch):
     assert row["scenario_state"] == fields.READ
     assert row["carrier_state"] == fields.READ
     assert row["carrier_quote"] == quote, "and carries its own evidence"
+    # And the two the spec settled carry their own state and their own
+    # wording, so nothing on the row is silent about where it came from.
+    assert row["parameter_state"] == fields.DERIVED
+    assert row["aggregation_state"] == fields.DERIVED
+    assert row["aggregation_raw"] == "MWh/a"
 
 
 # ---------------------------------------------------------------------------

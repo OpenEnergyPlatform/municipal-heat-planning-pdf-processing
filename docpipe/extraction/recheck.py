@@ -27,7 +27,7 @@ import logging
 from collections import Counter
 from pathlib import Path
 
-from .fields import NUMBER, READ, UNANSWERED, axis_slots
+from .fields import DERIVED, NUMBER, READ, UNANSWERED, asked_slots
 from .pipeline import answer_in_quote
 from .spec import Spec
 from .verify import quote_in
@@ -44,6 +44,13 @@ def recheck_row(row: dict, slots: list) -> Counter:
         quote = row.get(f"{name}_quote")
         if given in (None, ""):
             row.setdefault(f"{name}_state", UNANSWERED)
+            continue
+        if row.get(f"{name}_state") == DERIVED:
+            # The spec decided this one, so no passage was ever claimed to
+            # carry it and the evidence rule has nothing to say about it.
+            # Holding it to the rule would strip a correct coordinate for
+            # failing a test it was never entered into.
+            dropped["derived"] += 1
             continue
         if not quote:
             # Written by the whole-tuple contract, which never asked for one.
@@ -83,7 +90,7 @@ def recheck_file(path: Path, spec: Spec) -> Counter:
             stats["unknown parameter kept"] += 1
             lines.append(line)
             continue
-        slots = axis_slots(parameter)
+        slots = asked_slots(parameter)
         stats["tuples"] += 1
         stats["coordinates"] += len(slots)
         stats.update(recheck_row(row, slots))

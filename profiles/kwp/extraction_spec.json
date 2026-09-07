@@ -120,7 +120,11 @@
             ]
           },
           "required": false,
-          "question": "Wie ist der Wert über Zeit oder Raum zusammengefasst? Der Normalfall ist \"integral\", also eine Jahressumme. \"maximum\" bei einer Spitzenlast oder einem Höchstwert, \"arithmetic mean\" bei einem Durchschnitt je Gebäude oder je Jahr, \"instantaneous\" bei einem Momentanwert."
+          "question": "Wie ist der Wert über Zeit oder Raum zusammengefasst? Der Normalfall ist \"integral\", also eine Jahressumme. \"maximum\" bei einer Spitzenlast oder einem Höchstwert, \"arithmetic mean\" bei einem Durchschnitt je Gebäude oder je Jahr, \"instantaneous\" bei einem Momentanwert.",
+          "derive": {
+            "from": "unit",
+            "value": "OEO_00140070"
+          }
         },
         "carrier": {
           "vocabulary": {
@@ -552,7 +556,11 @@
             ]
           },
           "required": false,
-          "question": "Wie ist der Wert über Zeit oder Raum zusammengefasst? Der Normalfall ist \"integral\", also eine Jahressumme. \"maximum\" bei einer Spitzenlast oder einem Höchstwert, \"arithmetic mean\" bei einem Durchschnitt je Gebäude oder je Jahr, \"instantaneous\" bei einem Momentanwert."
+          "question": "Wie ist der Wert über Zeit oder Raum zusammengefasst? Der Normalfall ist \"integral\", also eine Jahressumme. \"maximum\" bei einer Spitzenlast oder einem Höchstwert, \"arithmetic mean\" bei einem Durchschnitt je Gebäude oder je Jahr, \"instantaneous\" bei einem Momentanwert.",
+          "derive": {
+            "from": "unit",
+            "value": "OEO_00140070"
+          }
         },
         "carrier": {
           "vocabulary": {

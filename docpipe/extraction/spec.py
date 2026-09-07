@@ -91,6 +91,17 @@ class Axis:
     # fields at once is a rule the model can skip, and skipping is what cost
     # the corpus run 63.5% of its years.
     question: Optional[str] = None
+    # A coordinate the SPEC already decides, so no request asks for it:
+    # {"from": "unit", "value": "<a key of this axis' vocabulary>"}.
+    #
+    # Principle one, applied one step further. The structure of a tuple is
+    # deterministic, and so is a coordinate every accepted unit of the
+    # parameter fixes: measured over Kassel, all 452 aggregations the model
+    # answered were `integral`, every one of them evidenced by the unit string
+    # it had just been handed. Asking cost a fifth of the reply of every
+    # five-field request for a coordinate the spec knew. What the unit does
+    # NOT fix stays a question — the profile decides which is which.
+    derive: Optional[dict] = None
 
     def label_to_uri(self) -> dict:
         """Corpus label (casefolded) -> URI. Built once, used per tuple."""
@@ -168,6 +179,15 @@ def _validate_axis(path: str, name: str, raw) -> Axis:
     axis_type = raw.get("type")
     enum = raw.get("enum")
     dynamic = bool(raw.get("dynamic", False))
+    derive = raw.get("derive")
+    if derive is not None:
+        if not isinstance(derive, dict):
+            _fail(path, "derive must be an object")
+        if derive.get("from") != "unit":
+            _fail(path, "derive.from must be 'unit' (nothing else derives yet)")
+        if not isinstance(vocabulary, dict) or derive.get("value") not in vocabulary:
+            _fail(path, f"derive.value {derive.get('value')!r} is not a key of "
+                        f"this axis' vocabulary")
     kinds = sum(x is not None for x in (vocabulary, axis_type, enum)) + int(dynamic)
     if kinds != 1:
         _fail(path, "an axis is exactly one of: vocabulary, type, enum, dynamic")
@@ -202,7 +222,7 @@ def _validate_axis(path: str, name: str, raw) -> Axis:
         _fail(path, "question must be a non-empty string when given")
     return Axis(name=name, vocabulary=vocabulary, type=axis_type,
                 enum=enum, required=bool(raw.get("required", False)),
-                dynamic=dynamic, question=question)
+                dynamic=dynamic, question=question, derive=derive)
 
 
 def _validate_example(path: str, raw, value_type: str,

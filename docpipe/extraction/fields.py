@@ -59,6 +59,13 @@ EXHAUSTED = "exhausted"
 # module exists to stop making. It stays OPEN — a later window can still read
 # the coordinate properly — and only survives to the end if none does.
 UNBACKED = "unbacked"
+# Filled without asking, because the spec already decides it: the parameter a
+# unit belongs to, the aggregation every accepted unit of a parameter implies.
+# Its own state, because "the spec knew this" and "the model read this" are a
+# different finding about the corpus, and a coordinate that carries evidence
+# it was never given evidence for is the one thing this module exists to
+# prevent. What is derived still carries the wording it was derived FROM.
+DERIVED = "derived"
 # Never asked, because a gate coordinate already put this row outside what
 # this run serializes. A finding about the RUN'S SCOPE, and neither about the
 # plan nor about the model, so it is not "unstated" and not "unanswered". It
@@ -83,6 +90,8 @@ class Slot:
     required: bool = False
     question: Optional[str] = None
     options: tuple = ()
+    # {"from": "unit", "value": uri} when the spec decides this coordinate.
+    derive: Optional[dict] = None
 
     @property
     def is_closed(self) -> bool:
@@ -138,6 +147,62 @@ def parameter_slot(spec) -> Slot:
                               for p in spec.parameters))
 
 
+def asked_slots(parameter: Parameter) -> list:
+    """The coordinates a request has to ask for: every axis the spec does not
+    already decide."""
+    return [slot for slot in axis_slots(parameter) if not slot.derive]
+
+
+def derive_parameter(spec, claim: dict):
+    """Which parameter this row belongs to, from its unit alone, or None.
+
+    The spec says it itself: "the unit separates the two parameters". Measured
+    over the kwp spec the nine energy units and the forty-two emission units
+    share not one spelling, and over Kassel not one of 559 accepted tuples
+    contradicted its unit. Asking anyway cost 322 of 1,043 field windows, 30.9
+    percent, and 18.0 of 187.5 field minutes per plan.
+
+    None whenever the unit does not settle it: no unit, a unit no parameter
+    accepts (the row is refused later, with the unit as the reason), or a unit
+    two parameters accept. Then the question is a real question and is asked.
+    """
+    from .verify import canonical_number
+    value = claim.get("value")
+    if isinstance(value, str) and canonical_number(value) is None:
+        text = [p for p in spec.parameters if not p.is_numeric]
+        return text[0] if len(text) == 1 else None
+    unit = claim.get("unit") or claim.get("unit_raw")
+    if not isinstance(unit, str) or not unit.strip():
+        return None
+    holders = [p for p in spec.parameters
+               if p.is_numeric and p.unit_factor(unit) is not None]
+    return holders[0] if len(holders) == 1 else None
+
+
+def apply_derived(rows: list, slot: Slot) -> int:
+    """Write a derived coordinate onto every row that has none. Returns how many.
+
+    The wording it was derived from is kept, and so is the row's own passage:
+    a derived coordinate is not evidence-free, it is evidenced by the unit the
+    value request already quoted.
+    """
+    if not slot.derive:
+        return 0
+    done = 0
+    for row in rows:
+        if row.claim.get(f"{slot.name}_state"):
+            continue
+        row.claim[slot.name] = slot.derive["value"]
+        row.claim[f"{slot.name}_state"] = DERIVED
+        wording = row.claim.get("unit_raw") or row.claim.get("unit")
+        if wording:
+            row.claim[f"{slot.name}_raw"] = wording
+        if row.claim.get("quote"):
+            row.claim[f"{slot.name}_quote"] = row.claim["quote"]
+        done += 1
+    return done
+
+
 def value_slot(parameter: Parameter) -> Slot:
     """The row maker: the one request that decides how many values there are."""
     if parameter.is_numeric:
@@ -159,7 +224,8 @@ def axis_slots(parameter: Parameter) -> list:
     for name, axis in parameter.axes.items():
         if axis.vocabulary:
             slot = Slot(name=name, kind=CHOICE, required=axis.required,
-                        question=axis.question, options=_options(axis.vocabulary))
+                        question=axis.question, options=_options(axis.vocabulary),
+                        derive=axis.derive)
         elif axis.enum:
             slot = Slot(name=name, kind=CHOICE, required=axis.required,
                         question=axis.question,

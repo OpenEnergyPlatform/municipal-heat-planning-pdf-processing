@@ -23,6 +23,8 @@ import uuid
 from pathlib import Path
 from typing import Optional
 
+from docpipe.extraction.fields import DERIVED
+
 log = logging.getLogger(__name__)
 
 BASE = "https://openenergyplatform.org/id/mhpkg/"
@@ -204,7 +206,7 @@ def _value_iri(heatplan: str, row: dict) -> str:
         f"{OEO}{row['carrier']}" if row.get("carrier") else "",
         f"{OEO}{row['sector']}" if row.get("sector") else "",
         str(row["year"]),
-        f"{OEO}{row.get('aggregation') or AGGREGATION_INTEGRAL}",
+        f"{OEO}{row['aggregation']}",
         area,
     ])
     return mint("value", coordinates)
@@ -239,6 +241,20 @@ def evidence_comment(row: dict, document: str) -> list:
     if row.get("quote"):
         lines.append(_ttl_comment(f"„{row['quote']}“"))
     lines.append(_ttl_comment(", ".join(where)))
+    aggregation = row.get("aggregation")
+    if aggregation:
+        # How this coordinate was arrived at, in the one place a reader of the
+        # graph looks. `derived` is not a weaker reading than `read`, it is a
+        # different one: the spec decided it from the unit the value request
+        # had already quoted, and saying so is the difference between a fact
+        # and a default.
+        raw = (row.get("aggregation_raw") or "").strip()
+        if row.get("aggregation_state") == DERIVED:
+            note = f"Aggregation: {aggregation}"
+            lines.append(_ttl_comment(
+                note + (f" (aus der Einheit {raw})" if raw else "")))
+        elif raw:
+            lines.append(_ttl_comment(f"Aggregation: {aggregation} „{raw}“"))
     if row.get("compute"):
         # A value the sandbox computed carries the code and its inputs, so the
         # arithmetic is checkable without re-running anything.
@@ -293,7 +309,15 @@ def make_serializer(db_path: Path):
                 # a potential, a cumulative sum, a captured amount. Counted by
                 # what it chose, which is the useful thing to read.
                 skip(f"not_a_class:{quantity or row.get('quantity_raw') or '?'}")
-            elif row.get("aggregation") and row["aggregation"] not in AGGREGATIONS:
+            elif not row.get("aggregation"):
+                # No aggregation, no node. It used to become a year's sum by
+                # default, which is a claim about the value that nothing in
+                # the document made: a peak load written down as an annual
+                # total is wrong in a way no reader can see. Every accepted
+                # unit of both parameters now derives `integral` in the
+                # harvest, so this is the row the derivation could not reach.
+                skip("aggregation_missing")
+            elif row["aggregation"] not in AGGREGATIONS:
                 skip(f"aggregation:{row['aggregation']}")
             else:
                 kept.append(row)
@@ -409,8 +433,7 @@ def make_serializer(db_path: Path):
             if row.get("sector") and is_class(row["sector"]):
                 lines.append(f"    oeo:OEO_00000505 oeo:{row['sector']} ;")
             lines.append(f"    oeo:OEO_00020440 \"{row['year']}\"^^xsd:integer ;")
-            lines.append(f"    oeo:OEO_00390023 "
-                         f"oeo:{row.get('aggregation') or AGGREGATION_INTEGRAL} .")
+            lines.append(f"    oeo:OEO_00390023 oeo:{row['aggregation']} .")
             parts.append("\n".join(lines) + "\n")
         for iri, label in office_iris.items():
             parts.append(f"<{iri}>\n"

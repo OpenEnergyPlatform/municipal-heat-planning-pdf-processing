@@ -60,9 +60,32 @@ def audit(profile: str) -> None:
 
     # Every coordinate carries the rule the field request needs.
     blank = [f"{p.uri.split('/')[-1]}.{s.name}"
-             for p in spec.parameters for s in fields.axis_slots(p)
+             for p in spec.parameters for s in fields.asked_slots(p)
              if not (s.question or "").strip()]
     check(profile, "jede Achse hat eine Frage", not blank, ", ".join(blank))
+
+    # What the spec decides instead of asking. The derivation reads the unit,
+    # so it is only sound while no unit belongs to two numeric parameters:
+    # otherwise the first one wins silently, which is a guess written down as
+    # a reading. The spec says the rule in prose and nothing held it to it.
+    numeric = [p for p in spec.parameters if p.is_numeric]
+    shared = sorted({u for i, first in enumerate(numeric)
+                     for second in numeric[i + 1:]
+                     for u in first.units_accepted
+                     if second.unit_factor(u) is not None})
+    check(profile, "die Einheiten der Zahlparameter sind disjunkt",
+          not shared, ", ".join(shared) or f"{len(numeric)} Zahlparameter")
+
+    # A derived coordinate is claimed for every accepted unit of its
+    # parameter, so every one of them has to imply it. `integral` is an
+    # extensive amount summed over a span, which every Wh and every tonne is
+    # and a watt is not.
+    derived = [(p, name, axis) for p in spec.parameters
+               for name, axis in p.axes.items() if axis.derive]
+    bad = [f"{p.label}.{name}" for p, name, axis in derived
+           if axis.derive.get("value") not in (axis.vocabulary or {})]
+    check(profile, "jede abgeleitete Achse trifft ihr eigenes Vokabular",
+          not bad, ", ".join(bad) or f"{len(derived)} abgeleitet")
 
     # Which quantity a value is, is a coordinate now. Without its question the
     # field request carries no rule and the whole document-level plan collapses
@@ -77,7 +100,7 @@ def audit(profile: str) -> None:
     from docpipe.extraction.runner import anchor_key, anchor_targets
     targets = anchor_targets(spec)
     keys = [t[0] for t in targets]
-    wanted = 1 + sum(1 + len(fields.axis_slots(p)) for p in spec.parameters)
+    wanted = 1 + sum(1 + len(fields.asked_slots(p)) for p in spec.parameters)
     check(profile, "ein Anker je Frage",
           len(keys) == len(set(keys)) == wanted, f"{len(keys)} Ziel(e)")
     with_question = [t for t in targets if t[3]]
