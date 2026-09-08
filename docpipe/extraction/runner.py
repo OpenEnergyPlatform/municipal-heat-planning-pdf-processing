@@ -155,6 +155,11 @@ FIELD_MAX_WINDOWS = int(os.environ.get("EXTRACT_FIELD_MAX_WINDOWS", "24"))
 # How often one window is asked when the answers came back unbackable. The
 # retry carries the reason per row, so it is a correction and not a repeat.
 FIELD_ATTEMPTS = int(os.environ.get("EXTRACT_FIELD_ATTEMPTS", "3"))
+# What the last stage may spend. Its own number rather than a share of the
+# one above: reading the rest of a plan is a different search from ranking
+# passages out of it, and the two sharing a budget is what left the stage
+# unreachable for every sweep that needed it.
+REST_MAX_WINDOWS = int(os.environ.get("EXTRACT_REST_MAX_WINDOWS", "12"))
 
 _THINK_RE = re.compile(r"<think>.*?</think>", re.DOTALL)
 _FENCE_OPEN = re.compile(r"^```(?:json)?\s*")
@@ -1909,7 +1914,14 @@ def make_fieldwise_harvester(image_root: Optional[Path] = None,
                 if not todo:
                     return True
                 corrections = None
-                for attempt in range(FIELD_ATTEMPTS):
+                # Only where a retry pays. Measured on the M3 run: a retry of
+                # the OWN window fills 4.88 rows, a third of what a fresh own
+                # window fills; a retry further out fills 0.10, a seventh of
+                # the fresh window it displaces. 145 of 149 third attempts
+                # filled nothing at all, and 263 of 334 retries came back with
+                # exactly the same failures as the attempt before them.
+                attempts = FIELD_ATTEMPTS if state["stage"] == "own" else 1
+                for attempt in range(attempts):
                     if state["asked"] >= FIELD_MAX_WINDOWS:
                         return False
                     state["asked"] += 1
@@ -2028,10 +2040,25 @@ def make_fieldwise_harvester(image_root: Optional[Path] = None,
                 seen.add((source.owner_kind, source.owner_id))
             combed = run(window_sources(fresh, FIELD_WINDOW, FIELD_OVERLAP))
 
-        if combed and still_open(rows) and rest_of_document is not None:
+        if still_open(rows) and rest_of_document is not None:
             # Retrieval has nothing left to offer and the coordinate is still
             # open. Read the rest of the plan rather than call it unstated on
             # the strength of what a ranking happened to surface.
+            #
+            # Not `combed and ...`: `run` returns False exactly when the
+            # budget ran out, and a sweep with budget left has no open rows.
+            # So the old condition was never both true at once -- 0 of the 70
+            # sweeps of the M3 run entered this stage, and 32 of the 33 that
+            # hit the cap had had exactly one retrieval round out of four.
+            # The stage that exists to keep "we stopped looking" apart from
+            # "the plan does not say it" was unreachable, and the harvest
+            # shows it: 789 exhausted and 0 unstated.
+            #
+            # Its own allowance, not a reset: it is a different search, and
+            # bounded, because 33 sweeps of that run hit the cap and an
+            # unbounded second pass would put the requests per document over
+            # the 1161 the acceptance allows.
+            state["asked"] = max(0, FIELD_MAX_WINDOWS - REST_MAX_WINDOWS)
             rest = rest_of_document(batch.document_id, set(seen)) or []
             state["stage"] = "rest"
             combed = run(window_sources(rest, FIELD_WINDOW, FIELD_OVERLAP))
@@ -2081,6 +2108,14 @@ def make_fieldwise_harvester(image_root: Optional[Path] = None,
             for row in rows:
                 parameter = fields.derive_parameter(spec, row.claim)
                 if parameter is None:
+                    if fields.parameter_undecidable(spec, row.claim):
+                        # No parameter of the spec can hold this row, so the
+                        # sweep has no answer to find: whatever it returned,
+                        # `verify` refuses it on the same unit lookup. The row
+                        # still goes on to be refused with the unit as the
+                        # reason -- it is just not asked about first.
+                        row.claim["parameter_state"] = fields.OUT_OF_SLICE
+                        continue
                     undecided.append(row)
                     continue
                 row.claim["parameter"] = parameter.label

@@ -571,9 +571,16 @@ def test_a_row_whose_quantity_stayed_unread_is_not_given_a_guessed_axis(
     coordinates to fill, and filling the first parameter's would be a guess
     written down as a reading.
 
-    The unit here is one no parameter accepts, so nothing can be derived and
-    the question is a real one. Kassel had three such rows, all of them
-    amounts in EUR from a cost table."""
+    The unit here is one no parameter accepts. That used to be swept as a real
+    question and it is not one: `verify._check_value` refuses on the very
+    `unit_factor` lookup `derive_parameter` just failed, so every answer the
+    model could give is already decided against. Measured on the M3 run, 69
+    such rows cost 178 of 853 field requests, 20.9 percent, and the five
+    answers they produced were all refused afterwards. Kassel had three of
+    them, amounts in EUR from a cost table.
+
+    So nothing is asked, and the row keeps a state saying it was never in
+    range rather than one saying we ran out of document."""
     spec = load_spec(json.loads(
         (PROFILES / "kwp" / "extraction_spec.json").read_text(encoding="utf-8")))
     rows_reply = {"tuples": [{"source": "Q1", "value": 42005, "unit": "EUR",
@@ -586,10 +593,50 @@ def test_a_row_whose_quantity_stayed_unread_is_not_given_a_guessed_axis(
         lambda slot, rows: {"answers": {"R1": {"value": fields.UNSTATED}}})
     reply = harvest(_document_batch())
 
-    assert asked == ["parameter"], "no axis is asked for a row with no quantity"
+    assert asked == [], "not even the parameter question, which has no answer"
     row = reply["tuples"][0]
-    assert row["parameter_state"] in (fields.EXHAUSTED, fields.SAID_UNSTATED)
+    assert row["parameter_state"] == fields.OUT_OF_SLICE
     assert not any(k.endswith("_state") and k != "parameter_state" for k in row)
+    # And skipping the question is safe only because every answer it could
+    # have produced is refused anyway, on the same lookup that just failed.
+    # Asserted through the verifier rather than argued in the comment.
+    from docpipe.extraction import verify
+    for parameter in spec.parameters:
+        if not parameter.is_numeric:
+            continue
+        _kept, refusal = verify._check_value(
+            {"value": 42005, "unit": "EUR", "unit_raw": "EUR"}, parameter, [])
+        assert refusal is not None and "EUR" in refusal.reason, parameter.uri
+
+
+def test_a_unit_two_parameters_accept_is_still_a_real_question(monkeypatch):
+    """The other half of the same guard. `derive_parameter` returns None for
+    three situations and only this one is a question the model can answer, so
+    the skip must not swallow it: a spec whose parameters share a unit still
+    gets asked.
+
+    Built here rather than taken from kwp, whose nine energy units and
+    forty-two emission units share not one spelling -- which is why the case
+    never arises there and the sweep looked harmless.
+    """
+    raw = json.loads((PROFILES / "kwp" / "extraction_spec.json")
+                     .read_text(encoding="utf-8"))
+    for parameter in raw["parameters"]:
+        if parameter.get("units_accepted"):
+            parameter["units_accepted"]["GWh"] = 1.0
+    spec = load_spec(raw)
+    assert fields.derive_parameter(spec, {"value": 1, "unit": "GWh"}) is None
+    assert not fields.parameter_undecidable(spec, {"value": 1, "unit": "GWh"})
+
+    rows_reply = {"tuples": [{"source": "Q1", "value": 12, "unit": "GWh",
+                              "unit_raw": "GWh",
+                              "quote": "| Erdgas | 12 | GWh |"}],
+                  "status": "complete", "need_more": []}
+    harvest, asked = _fieldwise(
+        monkeypatch, spec, rows_reply,
+        lambda slot, rows: {"answers": {"R1": {"value": fields.UNSTATED}}})
+    harvest(_document_batch())
+    assert asked == ["parameter"], "two holders, so the model decides"
 
 
 # ---------------------------------------------------------------------------
@@ -1437,3 +1484,131 @@ def test_an_option_list_without_meanings_keeps_the_short_form():
     assert slot.answerable() == {
         "Erdgas": ["Gas"],
         fields.UNSTATED: ["steht in diesen Passagen nicht"]}
+
+
+# ---------------------------------------------------------------------------
+# The sweep's stages
+#
+# Measured on the M3 acceptance run (2026-09-08, 483 tuples, 853 field
+# requests). Both promises below were broken there and neither had a test.
+# ---------------------------------------------------------------------------
+
+def _sweeping(monkeypatch, spec, rows_reply, *, more=None, rest=None,
+              answer=None):
+    """A harvester whose field asker records the passages it was shown.
+
+    Answers nothing, ever, so every row stays open and the sweep walks all its
+    stages -- which is the only way to see which stages it reaches.
+    """
+    shown_at = []
+    monkeypatch.setattr(runner, "make_harvester",
+                        lambda *a, **kw: (lambda batch, prior=None: rows_reply))
+
+    def make_asker(image_root=None):
+        def ask(shown, rows, slots, corrections=None, document_id=None,
+                usage_out=None, owner_of=None):
+            shown_at.append([s.owner_id for s in shown])
+            if answer is None:
+                return {"fields": {}}
+            slots = slots if isinstance(slots, (list, tuple)) else [slots]
+            return {"fields": {slot.name: answer(slot, rows) for slot in slots}}
+        return ask
+
+    monkeypatch.setattr(runner, "make_field_asker", make_asker)
+    return runner.make_fieldwise_harvester(
+        spec=spec, more_sources=more, rest_of_document=rest), shown_at
+
+
+def _far_source(owner_id):
+    """A section somewhere else in the plan, saying nothing useful."""
+    return Source("section", owner_id, "Nichts hierzu.",
+                  {"document_id": 7, "page": owner_id})
+
+
+def test_a_sweep_that_ran_out_of_budget_still_reads_the_rest_of_the_plan(
+        monkeypatch):
+    """`run` returns False exactly when the budget ran out, and a sweep with
+    budget left has no open rows -- so `combed and still_open(rows)` was never
+    both true, and the rest stage was dead code. 0 of the 70 sweeps of the M3
+    run entered it, and the harvest shows what that cost: 789 coordinates
+    exhausted and not one unstated. The stage exists to keep "we stopped
+    looking" apart from "the plan does not say it", and it never once ran.
+    """
+    spec = load_spec(json.loads(
+        (PROFILES / "kwp" / "extraction_spec.json").read_text(encoding="utf-8")))
+    rows_reply = {"tuples": [{"source": "Q1", "value": 42005, "unit": "MWh/a",
+                              "unit_raw": "MWh/a",
+                              "quote": "| Erdgas | 42.005 | MWh/a |"}],
+                  "status": "complete", "need_more": []}
+
+    asked_rest = []
+    served = []
+
+    def more(document_id, queries, exclude):
+        # Enough passages in one round to make more windows than the budget
+        # allows, so retrieval really runs out. That is the state the old
+        # condition could not survive: `run` returns False, `combed` is False,
+        # and `combed and still_open(rows)` skipped the stage.
+        if served:
+            return []
+        served.extend(_far_source(9000 + n)
+                      for n in range(runner.FIELD_MAX_WINDOWS * 4))
+        return list(served)
+
+    def rest(document_id, exclude):
+        asked_rest.append(len(exclude))
+        return [_far_source(7001), _far_source(7002)]
+
+    harvest, shown = _sweeping(monkeypatch, spec, rows_reply,
+                               more=more, rest=rest)
+    harvest(_document_batch())
+
+    assert asked_rest, "the rest of the plan was never read"
+    # It really was the exhausted case, not a sweep that had budget left.
+    assert len([w for w in shown if w and min(w) >= 9000])         == runner.FIELD_MAX_WINDOWS - 1, shown   # the own window took one
+    # And the last stage got its own bounded allowance rather than the
+    # leftovers of a budget retrieval had already spent to the last request.
+    from_rest = [w for w in shown if 7001 in w or 7002 in w]
+    assert from_rest, "no allowance, so the stage ran and asked nothing"
+    assert len(from_rest) <= runner.REST_MAX_WINDOWS, len(from_rest)
+
+
+def test_a_window_is_asked_again_only_where_asking_again_pays(monkeypatch):
+    """A retry of the OWN window filled 4.88 rows on the M3 run, a third of
+    what a fresh own window fills. A retry further out filled 0.10, a seventh
+    of the fresh window it displaces, and 145 of 149 third attempts filled
+    nothing at all. `state["asked"]` counts every attempt against the budget,
+    so out there a retry is a window spent on a question that already failed.
+    """
+    spec = load_spec(json.loads(
+        (PROFILES / "kwp" / "extraction_spec.json").read_text(encoding="utf-8")))
+    rows_reply = {"tuples": [{"source": "Q1", "value": 42005, "unit": "MWh/a",
+                              "unit_raw": "MWh/a",
+                              "quote": "| Erdgas | 42.005 | MWh/a |"}],
+                  "status": "complete", "need_more": []}
+
+    rounds = []
+
+    def more(document_id, queries, exclude):
+        rounds.append(len(rounds))
+        return [_far_source(9100 + len(rounds))] if len(rounds) <= 2 else []
+
+    def unbackable(slot, rows):
+        # An answer whose quote is in none of the shown passages. That is what
+        # makes a window worth asking again -- and what made 334 of the M3
+        # run's 853 requests a repeat of a question that had already failed.
+        return {"answers": {row.label: {"value": "Erdgas",
+                                        "quote": "steht in keiner Passage"}
+                            for row in rows}}
+
+    harvest, shown = _sweeping(monkeypatch, spec, rows_reply, more=more,
+                               answer=unbackable)
+    harvest(_document_batch())
+
+    from collections import Counter
+    per_window = Counter(tuple(sorted(w)) for w in shown)
+    own = [n for window, n in per_window.items() if 0 in window]
+    far = [n for window, n in per_window.items()
+           if window and min(window) >= 9100]
+    assert own and all(n == runner.FIELD_ATTEMPTS for n in own), per_window
+    assert far and all(n == 1 for n in far), per_window

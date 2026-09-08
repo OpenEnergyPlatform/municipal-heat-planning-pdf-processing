@@ -201,6 +201,33 @@ def derive_parameter(spec, claim: dict):
     return holders[0] if len(holders) == 1 else None
 
 
+def parameter_undecidable(spec, claim: dict) -> bool:
+    """True when NO parameter of the spec could hold this row.
+
+    `derive_parameter` returns None for three different situations and only
+    one of them is a question: a unit two parameters accept. The other two --
+    no unit at all, and a unit no parameter accepts -- are already decided
+    AGAINST every answer the model could give, because `verify._check_value`
+    refuses on the same `unit_factor` lookup that just failed.
+
+    Measured on the M3 acceptance run: 69 rows reached the parameter sweep,
+    45 with a unit no parameter accepts and 24 with no unit. Not one was
+    ambiguous, because the kwp spec's two numeric unit lists share no
+    spelling. They cost 178 of 853 field requests, 20.9 percent, and every
+    one of the five answers they produced was refused afterwards anyway.
+    """
+    from .verify import canonical_number
+    value = claim.get("value")
+    if isinstance(value, str) and canonical_number(value) is None:
+        # A non-numeric value needs a text parameter, and one is a decision.
+        return not [p for p in spec.parameters if not p.is_numeric]
+    unit = claim.get("unit") or claim.get("unit_raw")
+    if not isinstance(unit, str) or not unit.strip():
+        return True
+    return not [p for p in spec.parameters
+                if p.is_numeric and p.unit_factor(unit) is not None]
+
+
 def apply_derived(rows: list, slot: Slot) -> int:
     """Write a derived coordinate onto every row that has none. Returns how many.
 
