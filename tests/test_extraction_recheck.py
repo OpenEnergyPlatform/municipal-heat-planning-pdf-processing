@@ -167,3 +167,31 @@ def test_a_rewritten_harvest_gets_a_rewritten_summary(tmp_path):
     # it, and a carried-over summary would report neither.
     assert rows[-1]["levels"] == {"A": 1, "B": 0, "C": 1}
     assert rows[-1]["reasons"] == {"nonlocal:carrier": 1}
+
+def test_a_recheck_does_not_turn_a_parameter_state_into_a_refusal(tmp_path):
+    """This pass rewrites the tuples and rebuilds the summary from them, and
+    everything else it keeps byte for byte. A parameter_state line counted as
+    a refusal on the way through adds one per parameter of the spec to the
+    rebuilt count, and that count is read as a model-error rate."""
+    spec = _spec()
+    parameter = _numeric_parameter(spec)
+    state = {"kind": "parameter_state", "document_id": 857,
+             "parameter": "planning_organisation", "state": "unstated",
+             "tuples": 0, "refusals": 0}
+    path = _write(tmp_path, [
+        {"kind": "tuple", "parameter": parameter.uri, "value": 42,
+         "year": 2022,
+         "year_quote": "Tabelle 3.1: Endenergieverbrauch im Jahr 2022 [GWh/a]",
+         "provenance": {"document_id": 857, "owner_kind": "table",
+                        "owner_id": 1}, "tier": "text_located"},
+        state,
+        {"kind": "summary", "document_id": 857, "tuples": 1, "refusals": 0,
+         "levels": {"A": 1, "B": 0, "C": 0}, "reasons": {},
+         "image_origin": 0}])
+
+    recheck.recheck_file(path, spec)
+    rows = [json.loads(line) for line
+            in path.read_text(encoding="utf-8").strip().splitlines()]
+    assert rows[1] == state, "kept byte for byte, and before the summary"
+    assert rows[-1]["kind"] == "summary"
+    assert rows[-1]["refusals"] == 0

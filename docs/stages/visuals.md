@@ -1,0 +1,66 @@
+# 5. Reading the pictures
+
+| | |
+|---|---|
+| **In** | sections_refined.json or sections.json (structure), sections.json's source_text (QA only), and the images/ directory's table/figure PNGs. |
+| **Out** | visuals.json (per-item markdown/description/caption/qa_warning) and the .prompt_versions.json stamp next to it. |
+| **Resumes on** | An item already carrying markdown/description is skipped on rerun; --force-stale redoes only items whose prompts changed since, --force redoes every item regardless. |
+
+Stage 5 turns the pictures on a page into text a retrieval system can search and quote. A section's body still carries a placeholder token -- `[p13_tbl0]` -- wherever Stage 3 cut a table or figure out of the page image; nothing downstream can index or answer from a token. This stage sends each cropped table and figure PNG to a vision-language model and writes back a Markdown transcription for tables, a textual description for figures, and, wherever Stage 3 found none, a generated caption. Skip it and Stage 6's merge step has nothing to substitute for the placeholders, and four of the six embedding types (`table_text`, `table_vl`, `figure_text`, `figure_vl`) have nothing to embed.
+
+It reads `sections_refined.json` if Stage 4 ran, else falls back to `sections.json` from Stage 3 (`_resolve_input`). Either way it also reads `sections.json` a second time on its own, because that file is the only place a table's `source_text` -- the PyMuPDF text found under it, used only for the QA check below -- survives; Stage 4's output does not carry it forward. Table and figure images come from the `images/` directory named in each item's `path`. Output is `visuals.json`: the same section structure, with each table gaining a `markdown` key and each figure a `description` key, written atomically (temp file, then `os.replace`) so a crash mid-write can't leave a half-written file for the next run to mistake for a finished one. A prompt-hash stamp (`.prompt_versions.json`) is written next to it, for the staleness check described below.
+
+Caching is per item, not per document. An item that already carries `markdown` or `description` in a previous `visuals.json` is loaded and never resent to the model, which is what makes a killed batch resumable: rerun the same command and only the items still missing that key go back out. What a reader would get wrong is what a changed prompt does to that cache -- the stage does compare every cached item's recorded prompt hash against today's prompt text (`prompts.check`) and warns when they differ, but the mismatch by itself changes nothing. Redoing the stale items takes `--force-stale`; redoing everything takes `--force`. Edit a prompt file and rerun without either flag, and the old text stays in the output.
+
+Tables are transcribed at temperature 0.1, near-deterministic, because a transcription is supposed to be verbatim; figure descriptions run at the higher default (0.6), where some paraphrase is fine. A table's Markdown then passes a QA gate: coverage of the source text's salient tokens (numbers, and words of two or more letters) and the fraction of duplicate rows. Coverage comes back as `None` rather than pass or fail when the source has fewer than 8 salient tokens -- an image-only table with no text layer -- and that `None` is reported as unknown, never as a pass, so a corpus with scanned tables in it doesn't read back as a corpus that was flawlessly checked. A gate failure buys exactly one retry, with a stronger prompt hint and a higher repetition penalty; whichever attempt is better (a pass beats a fail, else higher coverage) is kept, and only that losing table has its stuttering duplicate rows collapsed -- a table that passed keeps them, since a real table can legitimately repeat a row.
+
+The model is the same one Stage 4 uses, Qwen3.5-122B-A10B-FP8, but served by its own vLLM instance so the two stages are not waiting on each other's GPU. Each item is one request, bounded client-side by a 180s timeout and up to 4 attempts -- the timeout, not the retry count, is what actually limits how long a stuck request can hold a slot. Concurrency multiplies across two independent knobs: `VLM_NUM_PARALLEL` (default 8) items in flight per document, times `DOC_PARALLEL` (default 8) documents at once in batch mode, so on the order of 64 requests can be outstanding against the server at once. If the server is unreachable, or reachable but not serving the named model, `check_model_available` catches it, logs the models it does serve, and `run_single` returns `None` without writing anything. If the server's `--max-model-len` is smaller than a request can cost -- the longer of the two system prompts, plus 4096 image tokens, plus the 8192-token reply budget (`max_request_tokens()`) -- the CLI's preflight check refuses to start the run at all, instead of letting it fail request by request hours in; `--print-context-budget` prints that number so a job script can read the figure from the code instead of restating it in a comment.
+
+Two failure shapes get different treatment inside one item's retries. A 4xx from the server fails the item at once, since an identical request would be rejected identically; a timeout, 429, or 5xx gets a backoff and another attempt, because those are about the server being busy rather than the request being wrong. A sparse table -- a Gantt-style schedule -- can make the model lose count and emit empty cells until it hits the token limit, cutting the JSON off mid-answer; a regex catches that pattern in the raw response and restarts from the original prompt with an escalating repetition penalty, rather than asking the model to "fix" JSON that was never going to parse. Once every JSON attempt is exhausted, one more call asks for the content as plain text with no envelope at all -- this rescue exists because a review of one run's parse failures found the model had usually already answered correctly and was only refusing the JSON wrapper, so discarding that answer would throw away real content; a rescued item is marked `vlm_status: "plain_text"` so it stays identifiable later. A missing image file, or an item's own exception, is caught and counted rather than allowed to fail the whole document, and a missing input file just logs an error and returns `None` instead of raising into the batch loop.
+
+## The modules
+
+Verbatim from the module docstrings, generated by `scripts/build_docs.py`. Edit the docstring, not this page.
+
+### `docpipe/visuals/__init__.py`
+
+visuals – Vision-LLM enrichment of tables and figures.
+
+Reads the preprocessing pipeline's structured output plus its images/
+directory and adds Markdown tables and figure descriptions.
+
+### `docpipe/visuals/pipeline.py`
+
+pipeline.py – Orchestration of the imageprocessing module.
+
+Enriches one PDF's output directory, or all PDF subdirectories under a root
+(--batch), via a vision LLM. See ``_build_parser`` for the CLI.
+
+Author: Felix Vossel
+
+### `docpipe/visuals/vision.py`
+
+vision.py – Vision-model interaction layer (OpenAI-compatible API).
+
+Client creation, model availability checks, and the chat-completions call with
+a base64 image + JSON response parsing.
+
+Author: Felix Vossel
+
+### `docpipe/visuals/qa.py`
+
+qa.py – Quality checks for VLM table extraction.
+
+Pure helpers that judge a vision model's Markdown transcription of a table:
+coverage against the PyMuPDF source text (catches truncation) and row
+duplication (catches repetition loops).
+
+Author: Felix Vossel
+
+### `docpipe/visuals/process.py`
+
+process.py – Core processing logic for table and figure enrichment.
+
+Author: Felix Vossel
+
+[Back to the index](../README.md)

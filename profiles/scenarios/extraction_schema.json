@@ -1,6 +1,51 @@
 {
  "harvest": {
   "$defs": {
+   "parameter_state": {
+    "additionalProperties": false,
+    "description": "What one parameter of the spec came to in this document. Every other state in this file belongs to a row, so a parameter that produced no row left no byte at all and \"the document does not carry it\" and \"it was never asked\" were the same empty file.",
+    "properties": {
+     "document_id": {
+      "type": "integer"
+     },
+     "kind": {
+      "const": "parameter_state"
+     },
+     "parameter": {
+      "description": "The spec's uri for the parameter, the same key a tuple carries.",
+      "type": "string"
+     },
+     "refusals": {
+      "type": "integer"
+     },
+     "state": {
+      "enum": [
+       "read",
+       "unbacked",
+       "exhausted",
+       "unstated"
+      ],
+      "x-doc": {
+       "exhausted": "no value, and the run did not finish this document. Document-wide: there is no per-parameter run signal, so a truncated run marks every unanswered parameter exhausted together",
+       "read": "at least one value of this parameter was read and accepted",
+       "unbacked": "no value survived, and at least one was refused. A finding about the model or about the passages, not about the document",
+       "unstated": "no value and nothing refused: the document was read and does not carry this parameter. The one of the four that is a finding about the document rather than about the run"
+      }
+     },
+     "tuples": {
+      "type": "integer"
+     }
+    },
+    "required": [
+     "kind",
+     "document_id",
+     "parameter",
+     "state",
+     "tuples",
+     "refusals"
+    ],
+    "type": "object"
+   },
    "provenance": {
     "additionalProperties": false,
     "properties": {
@@ -257,13 +302,13 @@
          "pattern": "^repaired$"
         },
         {
+         "pattern": "^review:disagree$"
+        },
+        {
          "pattern": "^conflict$"
         },
         {
          "pattern": "^page_transcribed$"
-        },
-        {
-         "pattern": "^review:disagree$"
         },
         {
          "pattern": "^(nonlocal|exhausted|unbacked):[a-z_]+$"
@@ -305,9 +350,9 @@
       "type": "boolean"
      },
      "flags": {
-      "description": "Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping a word the spec does not list; period:* says whether a bare amount was shown to be a yearly one.",
+      "description": "Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping a word the spec does not list; period:* says whether a bare amount was shown to be a yearly one; review:* is what a second reading of this value under a narrower window came to, and only review:disagree is a reason.",
       "items": {
-       "pattern": "^(mapped:[a-z_]+:[\\s\\S]*->[\\s\\S]*|unmapped:[a-z_]+:[\\s\\S]*|unit_not_chosen:[\\s\\S]*|unit_spelling:[\\s\\S]*|period:(annual_in_quote|unstated)|quote_repaired|computed|not_located)$",
+       "pattern": "^(mapped:[a-z_]+:[\\s\\S]*->[\\s\\S]*|unmapped:[a-z_]+:[\\s\\S]*|unit_not_chosen:[\\s\\S]*|unit_spelling:[\\s\\S]*|period:(annual_in_quote|unstated)|review:(agree|disagree|unbacked)|quote_repaired|computed|not_located)$",
        "type": "string"
       },
       "type": "array"
@@ -455,9 +500,9 @@
       "type": "boolean"
      },
      "flags": {
-      "description": "Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping a word the spec does not list; period:* says whether a bare amount was shown to be a yearly one.",
+      "description": "Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping a word the spec does not list; period:* says whether a bare amount was shown to be a yearly one; review:* is what a second reading of this value under a narrower window came to, and only review:disagree is a reason.",
       "items": {
-       "pattern": "^(mapped:[a-z_]+:[\\s\\S]*->[\\s\\S]*|unmapped:[a-z_]+:[\\s\\S]*|unit_not_chosen:[\\s\\S]*|unit_spelling:[\\s\\S]*|period:(annual_in_quote|unstated)|quote_repaired|computed|not_located)$",
+       "pattern": "^(mapped:[a-z_]+:[\\s\\S]*->[\\s\\S]*|unmapped:[a-z_]+:[\\s\\S]*|unit_not_chosen:[\\s\\S]*|unit_spelling:[\\s\\S]*|period:(annual_in_quote|unstated)|review:(agree|disagree|unbacked)|quote_repaired|computed|not_located)$",
        "type": "string"
       },
       "type": "array"
@@ -613,9 +658,9 @@
       "type": "boolean"
      },
      "flags": {
-      "description": "Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping a word the spec does not list; period:* says whether a bare amount was shown to be a yearly one.",
+      "description": "Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping a word the spec does not list; period:* says whether a bare amount was shown to be a yearly one; review:* is what a second reading of this value under a narrower window came to, and only review:disagree is a reason.",
       "items": {
-       "pattern": "^(mapped:[a-z_]+:[\\s\\S]*->[\\s\\S]*|unmapped:[a-z_]+:[\\s\\S]*|unit_not_chosen:[\\s\\S]*|unit_spelling:[\\s\\S]*|period:(annual_in_quote|unstated)|quote_repaired|computed|not_located)$",
+       "pattern": "^(mapped:[a-z_]+:[\\s\\S]*->[\\s\\S]*|unmapped:[a-z_]+:[\\s\\S]*|unit_not_chosen:[\\s\\S]*|unit_spelling:[\\s\\S]*|period:(annual_in_quote|unstated)|review:(agree|disagree|unbacked)|quote_repaired|computed|not_located)$",
        "type": "string"
       },
       "type": "array"
@@ -765,9 +810,9 @@
       "type": "boolean"
      },
      "flags": {
-      "description": "Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping a word the spec does not list; period:* says whether a bare amount was shown to be a yearly one.",
+      "description": "Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping a word the spec does not list; period:* says whether a bare amount was shown to be a yearly one; review:* is what a second reading of this value under a narrower window came to, and only review:disagree is a reason.",
       "items": {
-       "pattern": "^(mapped:[a-z_]+:[\\s\\S]*->[\\s\\S]*|unmapped:[a-z_]+:[\\s\\S]*|unit_not_chosen:[\\s\\S]*|unit_spelling:[\\s\\S]*|period:(annual_in_quote|unstated)|quote_repaired|computed|not_located)$",
+       "pattern": "^(mapped:[a-z_]+:[\\s\\S]*->[\\s\\S]*|unmapped:[a-z_]+:[\\s\\S]*|unit_not_chosen:[\\s\\S]*|unit_spelling:[\\s\\S]*|period:(annual_in_quote|unstated)|review:(agree|disagree|unbacked)|quote_repaired|computed|not_located)$",
        "type": "string"
       },
       "type": "array"
@@ -915,9 +960,9 @@
       "type": "boolean"
      },
      "flags": {
-      "description": "Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping a word the spec does not list; period:* says whether a bare amount was shown to be a yearly one.",
+      "description": "Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping a word the spec does not list; period:* says whether a bare amount was shown to be a yearly one; review:* is what a second reading of this value under a narrower window came to, and only review:disagree is a reason.",
       "items": {
-       "pattern": "^(mapped:[a-z_]+:[\\s\\S]*->[\\s\\S]*|unmapped:[a-z_]+:[\\s\\S]*|unit_not_chosen:[\\s\\S]*|unit_spelling:[\\s\\S]*|period:(annual_in_quote|unstated)|quote_repaired|computed|not_located)$",
+       "pattern": "^(mapped:[a-z_]+:[\\s\\S]*->[\\s\\S]*|unmapped:[a-z_]+:[\\s\\S]*|unit_not_chosen:[\\s\\S]*|unit_spelling:[\\s\\S]*|period:(annual_in_quote|unstated)|review:(agree|disagree|unbacked)|quote_repaired|computed|not_located)$",
        "type": "string"
       },
       "type": "array"
@@ -1101,9 +1146,9 @@
       "type": "boolean"
      },
      "flags": {
-      "description": "Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping a word the spec does not list; period:* says whether a bare amount was shown to be a yearly one.",
+      "description": "Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping a word the spec does not list; period:* says whether a bare amount was shown to be a yearly one; review:* is what a second reading of this value under a narrower window came to, and only review:disagree is a reason.",
       "items": {
-       "pattern": "^(mapped:[a-z_]+:[\\s\\S]*->[\\s\\S]*|unmapped:[a-z_]+:[\\s\\S]*|unit_not_chosen:[\\s\\S]*|unit_spelling:[\\s\\S]*|period:(annual_in_quote|unstated)|quote_repaired|computed|not_located)$",
+       "pattern": "^(mapped:[a-z_]+:[\\s\\S]*->[\\s\\S]*|unmapped:[a-z_]+:[\\s\\S]*|unit_not_chosen:[\\s\\S]*|unit_spelling:[\\s\\S]*|period:(annual_in_quote|unstated)|review:(agree|disagree|unbacked)|quote_repaired|computed|not_located)$",
        "type": "string"
       },
       "type": "array"
@@ -1201,7 +1246,7 @@
        "note": "Which factsheet holds the value. Unlike the kwp `parent` axis there is no map from the answer to a container class: the answer IS the identity of a node minted per document from the AR6 run the wording resolves to. A wording that resolves to no run is its own factsheet, and an out: entry is none at all.",
        "role": "parent"
       },
-      "x-question": "Auf welches Szenario dieser Publikation bezieht sich der Wert? Die Liste führt die Laufkennungen, die genau diese Publikation in der AR6-Datenbank dokumentiert. Im Text stehen sie fast nie, dort heißt dasselbe Szenario \"Current Policies\" oder \"the NDC scenario\". Nennt das Dokument nur die Familie, ist \"Szenario-Familie\" die richtige Antwort und keine Kennung."
+      "x-question": "Auf welches Szenario dieser Publikation bezieht sich der Wert? Die Liste führt die Laufkennungen, die genau diese Publikation in der AR6-Datenbank dokumentiert. Im Text stehen sie fast nie, dort heißt dasselbe Szenario \"Current Policies\" oder \"the NDC scenario\". Nennt das Dokument nur die Familie, ist \"Szenario-Familie\" die richtige Antwort und keine Kennung. Belege mit einer Passage aus der Quelle der Zeile selbst oder aus dem Abschnitt, in dem diese Quelle steht. Steht die eigene Quelle unter den gezeigten, nennt die Anfrage sie als \"source\"; steht auch ihr Abschnitt darunter, als \"section\"."
      },
      "scenario_quote": {
       "description": "The verbatim passage carrying 'scenario'. Present exactly when scenario_state is 'read'.",
@@ -1330,9 +1375,9 @@
       "type": "boolean"
      },
      "flags": {
-      "description": "Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping a word the spec does not list; period:* says whether a bare amount was shown to be a yearly one.",
+      "description": "Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping a word the spec does not list; period:* says whether a bare amount was shown to be a yearly one; review:* is what a second reading of this value under a narrower window came to, and only review:disagree is a reason.",
       "items": {
-       "pattern": "^(mapped:[a-z_]+:[\\s\\S]*->[\\s\\S]*|unmapped:[a-z_]+:[\\s\\S]*|unit_not_chosen:[\\s\\S]*|unit_spelling:[\\s\\S]*|period:(annual_in_quote|unstated)|quote_repaired|computed|not_located)$",
+       "pattern": "^(mapped:[a-z_]+:[\\s\\S]*->[\\s\\S]*|unmapped:[a-z_]+:[\\s\\S]*|unit_not_chosen:[\\s\\S]*|unit_spelling:[\\s\\S]*|period:(annual_in_quote|unstated)|review:(agree|disagree|unbacked)|quote_repaired|computed|not_located)$",
        "type": "string"
       },
       "type": "array"
@@ -1520,9 +1565,9 @@
       "type": "boolean"
      },
      "flags": {
-      "description": "Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping a word the spec does not list; period:* says whether a bare amount was shown to be a yearly one.",
+      "description": "Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping a word the spec does not list; period:* says whether a bare amount was shown to be a yearly one; review:* is what a second reading of this value under a narrower window came to, and only review:disagree is a reason.",
       "items": {
-       "pattern": "^(mapped:[a-z_]+:[\\s\\S]*->[\\s\\S]*|unmapped:[a-z_]+:[\\s\\S]*|unit_not_chosen:[\\s\\S]*|unit_spelling:[\\s\\S]*|period:(annual_in_quote|unstated)|quote_repaired|computed|not_located)$",
+       "pattern": "^(mapped:[a-z_]+:[\\s\\S]*->[\\s\\S]*|unmapped:[a-z_]+:[\\s\\S]*|unit_not_chosen:[\\s\\S]*|unit_spelling:[\\s\\S]*|period:(annual_in_quote|unstated)|review:(agree|disagree|unbacked)|quote_repaired|computed|not_located)$",
        "type": "string"
       },
       "type": "array"
@@ -1620,7 +1665,7 @@
        "note": "Which factsheet holds the value. Unlike the kwp `parent` axis there is no map from the answer to a container class: the answer IS the identity of a node minted per document from the AR6 run the wording resolves to. A wording that resolves to no run is its own factsheet, and an out: entry is none at all.",
        "role": "parent"
       },
-      "x-question": "Auf welches Szenario dieser Publikation bezieht sich der Wert? Die Liste führt die Laufkennungen, die genau diese Publikation in der AR6-Datenbank dokumentiert. Im Text stehen sie fast nie, dort heißt dasselbe Szenario \"Current Policies\" oder \"the NDC scenario\". Nennt das Dokument nur die Familie, ist \"Szenario-Familie\" die richtige Antwort und keine Kennung."
+      "x-question": "Auf welches Szenario dieser Publikation bezieht sich der Wert? Die Liste führt die Laufkennungen, die genau diese Publikation in der AR6-Datenbank dokumentiert. Im Text stehen sie fast nie, dort heißt dasselbe Szenario \"Current Policies\" oder \"the NDC scenario\". Nennt das Dokument nur die Familie, ist \"Szenario-Familie\" die richtige Antwort und keine Kennung. Belege mit einer Passage aus der Quelle der Zeile, aus dem Abschnitt, in dem sie steht, oder von der Nachbarseite. Die ersten beiden nennt die Anfrage als \"source\" und \"section\", soweit sie mitgezeigt werden."
      },
      "scenario_quote": {
       "description": "The verbatim passage carrying 'scenario'. Present exactly when scenario_state is 'read'.",
@@ -1785,9 +1830,9 @@
       "type": "boolean"
      },
      "flags": {
-      "description": "Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping a word the spec does not list; period:* says whether a bare amount was shown to be a yearly one.",
+      "description": "Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping a word the spec does not list; period:* says whether a bare amount was shown to be a yearly one; review:* is what a second reading of this value under a narrower window came to, and only review:disagree is a reason.",
       "items": {
-       "pattern": "^(mapped:[a-z_]+:[\\s\\S]*->[\\s\\S]*|unmapped:[a-z_]+:[\\s\\S]*|unit_not_chosen:[\\s\\S]*|unit_spelling:[\\s\\S]*|period:(annual_in_quote|unstated)|quote_repaired|computed|not_located)$",
+       "pattern": "^(mapped:[a-z_]+:[\\s\\S]*->[\\s\\S]*|unmapped:[a-z_]+:[\\s\\S]*|unit_not_chosen:[\\s\\S]*|unit_spelling:[\\s\\S]*|period:(annual_in_quote|unstated)|review:(agree|disagree|unbacked)|quote_repaired|computed|not_located)$",
        "type": "string"
       },
       "type": "array"
@@ -1885,7 +1930,7 @@
        "note": "Which factsheet holds the value. Unlike the kwp `parent` axis there is no map from the answer to a container class: the answer IS the identity of a node minted per document from the AR6 run the wording resolves to. A wording that resolves to no run is its own factsheet, and an out: entry is none at all.",
        "role": "parent"
       },
-      "x-question": "Auf welches Szenario dieser Publikation bezieht sich der Wert? Die Liste führt die Laufkennungen, die genau diese Publikation in der AR6-Datenbank dokumentiert. Im Text stehen sie fast nie, dort heißt dasselbe Szenario \"Current Policies\" oder \"the NDC scenario\". Nennt das Dokument nur die Familie, ist \"Szenario-Familie\" die richtige Antwort und keine Kennung."
+      "x-question": "Auf welches Szenario dieser Publikation bezieht sich der Wert? Die Liste führt die Laufkennungen, die genau diese Publikation in der AR6-Datenbank dokumentiert. Im Text stehen sie fast nie, dort heißt dasselbe Szenario \"Current Policies\" oder \"the NDC scenario\". Nennt das Dokument nur die Familie, ist \"Szenario-Familie\" die richtige Antwort und keine Kennung. Belege mit einer Passage aus der Quelle der Zeile selbst oder aus dem Abschnitt, in dem diese Quelle steht. Steht die eigene Quelle unter den gezeigten, nennt die Anfrage sie als \"source\"; steht auch ihr Abschnitt darunter, als \"section\"."
      },
      "scenario_quote": {
       "description": "The verbatim passage carrying 'scenario'. Present exactly when scenario_state is 'read'.",
@@ -2200,9 +2245,9 @@
       "type": "boolean"
      },
      "flags": {
-      "description": "Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping a word the spec does not list; period:* says whether a bare amount was shown to be a yearly one.",
+      "description": "Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping a word the spec does not list; period:* says whether a bare amount was shown to be a yearly one; review:* is what a second reading of this value under a narrower window came to, and only review:disagree is a reason.",
       "items": {
-       "pattern": "^(mapped:[a-z_]+:[\\s\\S]*->[\\s\\S]*|unmapped:[a-z_]+:[\\s\\S]*|unit_not_chosen:[\\s\\S]*|unit_spelling:[\\s\\S]*|period:(annual_in_quote|unstated)|quote_repaired|computed|not_located)$",
+       "pattern": "^(mapped:[a-z_]+:[\\s\\S]*->[\\s\\S]*|unmapped:[a-z_]+:[\\s\\S]*|unit_not_chosen:[\\s\\S]*|unit_spelling:[\\s\\S]*|period:(annual_in_quote|unstated)|review:(agree|disagree|unbacked)|quote_repaired|computed|not_located)$",
        "type": "string"
       },
       "type": "array"
@@ -2300,7 +2345,7 @@
        "note": "Which factsheet holds the value. Unlike the kwp `parent` axis there is no map from the answer to a container class: the answer IS the identity of a node minted per document from the AR6 run the wording resolves to. A wording that resolves to no run is its own factsheet, and an out: entry is none at all.",
        "role": "parent"
       },
-      "x-question": "Auf welches Szenario dieser Publikation bezieht sich der Wert? Die Liste führt die Laufkennungen, die genau diese Publikation in der AR6-Datenbank dokumentiert. Im Text stehen sie fast nie, dort heißt dasselbe Szenario \"Current Policies\" oder \"the NDC scenario\". Nennt das Dokument nur die Familie, ist \"Szenario-Familie\" die richtige Antwort und keine Kennung."
+      "x-question": "Auf welches Szenario dieser Publikation bezieht sich der Wert? Die Liste führt die Laufkennungen, die genau diese Publikation in der AR6-Datenbank dokumentiert. Im Text stehen sie fast nie, dort heißt dasselbe Szenario \"Current Policies\" oder \"the NDC scenario\". Nennt das Dokument nur die Familie, ist \"Szenario-Familie\" die richtige Antwort und keine Kennung. Belege mit einer Passage aus der Quelle der Zeile selbst oder aus dem Abschnitt, in dem diese Quelle steht. Steht die eigene Quelle unter den gezeigten, nennt die Anfrage sie als \"source\"; steht auch ihr Abschnitt darunter, als \"section\"."
      },
      "scenario_quote": {
       "description": "The verbatim passage carrying 'scenario'. Present exactly when scenario_state is 'read'.",
@@ -2432,9 +2477,9 @@
       "type": "boolean"
      },
      "flags": {
-      "description": "Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping a word the spec does not list; period:* says whether a bare amount was shown to be a yearly one.",
+      "description": "Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping a word the spec does not list; period:* says whether a bare amount was shown to be a yearly one; review:* is what a second reading of this value under a narrower window came to, and only review:disagree is a reason.",
       "items": {
-       "pattern": "^(mapped:[a-z_]+:[\\s\\S]*->[\\s\\S]*|unmapped:[a-z_]+:[\\s\\S]*|unit_not_chosen:[\\s\\S]*|unit_spelling:[\\s\\S]*|period:(annual_in_quote|unstated)|quote_repaired|computed|not_located)$",
+       "pattern": "^(mapped:[a-z_]+:[\\s\\S]*->[\\s\\S]*|unmapped:[a-z_]+:[\\s\\S]*|unit_not_chosen:[\\s\\S]*|unit_spelling:[\\s\\S]*|period:(annual_in_quote|unstated)|review:(agree|disagree|unbacked)|quote_repaired|computed|not_located)$",
        "type": "string"
       },
       "type": "array"
@@ -2581,9 +2626,9 @@
       "type": "boolean"
      },
      "flags": {
-      "description": "Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping a word the spec does not list; period:* says whether a bare amount was shown to be a yearly one.",
+      "description": "Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping a word the spec does not list; period:* says whether a bare amount was shown to be a yearly one; review:* is what a second reading of this value under a narrower window came to, and only review:disagree is a reason.",
       "items": {
-       "pattern": "^(mapped:[a-z_]+:[\\s\\S]*->[\\s\\S]*|unmapped:[a-z_]+:[\\s\\S]*|unit_not_chosen:[\\s\\S]*|unit_spelling:[\\s\\S]*|period:(annual_in_quote|unstated)|quote_repaired|computed|not_located)$",
+       "pattern": "^(mapped:[a-z_]+:[\\s\\S]*->[\\s\\S]*|unmapped:[a-z_]+:[\\s\\S]*|unit_not_chosen:[\\s\\S]*|unit_spelling:[\\s\\S]*|period:(annual_in_quote|unstated)|review:(agree|disagree|unbacked)|quote_repaired|computed|not_located)$",
        "type": "string"
       },
       "type": "array"
@@ -2738,9 +2783,9 @@
       "type": "boolean"
      },
      "flags": {
-      "description": "Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping a word the spec does not list; period:* says whether a bare amount was shown to be a yearly one.",
+      "description": "Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping a word the spec does not list; period:* says whether a bare amount was shown to be a yearly one; review:* is what a second reading of this value under a narrower window came to, and only review:disagree is a reason.",
       "items": {
-       "pattern": "^(mapped:[a-z_]+:[\\s\\S]*->[\\s\\S]*|unmapped:[a-z_]+:[\\s\\S]*|unit_not_chosen:[\\s\\S]*|unit_spelling:[\\s\\S]*|period:(annual_in_quote|unstated)|quote_repaired|computed|not_located)$",
+       "pattern": "^(mapped:[a-z_]+:[\\s\\S]*->[\\s\\S]*|unmapped:[a-z_]+:[\\s\\S]*|unit_not_chosen:[\\s\\S]*|unit_spelling:[\\s\\S]*|period:(annual_in_quote|unstated)|review:(agree|disagree|unbacked)|quote_repaired|computed|not_located)$",
        "type": "string"
       },
       "type": "array"
@@ -2895,9 +2940,9 @@
       "type": "boolean"
      },
      "flags": {
-      "description": "Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping a word the spec does not list; period:* says whether a bare amount was shown to be a yearly one.",
+      "description": "Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping a word the spec does not list; period:* says whether a bare amount was shown to be a yearly one; review:* is what a second reading of this value under a narrower window came to, and only review:disagree is a reason.",
       "items": {
-       "pattern": "^(mapped:[a-z_]+:[\\s\\S]*->[\\s\\S]*|unmapped:[a-z_]+:[\\s\\S]*|unit_not_chosen:[\\s\\S]*|unit_spelling:[\\s\\S]*|period:(annual_in_quote|unstated)|quote_repaired|computed|not_located)$",
+       "pattern": "^(mapped:[a-z_]+:[\\s\\S]*->[\\s\\S]*|unmapped:[a-z_]+:[\\s\\S]*|unit_not_chosen:[\\s\\S]*|unit_spelling:[\\s\\S]*|period:(annual_in_quote|unstated)|review:(agree|disagree|unbacked)|quote_repaired|computed|not_located)$",
        "type": "string"
       },
       "type": "array"
@@ -3035,7 +3080,7 @@
   },
   "$id": "https://openenergyplatform.org/schema/mhpkg/extraction/harvest-line",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "description": "An accepted tuple (kind=tuple), a refused claim (kind=refusal), or the document's own summary (kind=summary, the last line of the file). Generated from the profile's extraction_spec.json by docpipe/extraction/schema.py.",
+  "description": "An accepted tuple (kind=tuple), a refused claim (kind=refusal), what a whole parameter came to (kind=parameter_state, one per parameter of the spec), or the document's own summary (kind=summary, the last line of the file). Generated from the profile's extraction_spec.json by docpipe/extraction/schema.py.",
   "oneOf": [
    {
     "$ref": "#/$defs/tuple_publication_title"
@@ -3083,6 +3128,9 @@
     "$ref": "#/$defs/refusal"
    },
    {
+    "$ref": "#/$defs/parameter_state"
+   },
+   {
     "$ref": "#/$defs/summary"
    }
   ],
@@ -3115,6 +3163,10 @@
      "type": "string"
     },
     "type": "array"
+   },
+   "^review/(prompt|model)$": {
+    "description": "What read this document a second time. Recorded and never compared: the review does not decide whether the harvest is current, and comparing it would report every reviewed document stale the day the review prompt changes.",
+    "type": "string"
    },
    "^slot/parameter$": {
     "description": "The one coordinate that belongs to no parameter: which quantity a number is. Its question and the parameters it offers, uri and label. Also the only key that moves when a parameter is dropped.",
@@ -3857,7 +3909,8 @@
      "kind": {
       "enum": [
        "tuple",
-       "refusal"
+       "refusal",
+       "parameter_state"
       ]
      },
      "t": {

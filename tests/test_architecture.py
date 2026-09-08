@@ -63,7 +63,8 @@ def _requested_prompt_ids(*roots):
 
 # Stages a profile opts into via a component; their prompts are required
 # exactly when the profile provides that component.
-OPTIONAL_STAGES = {"extraction": ("extraction", "SPEC_PATH")}
+OPTIONAL_STAGES = {"extraction": ("extraction", "SPEC_PATH"),
+                   "kg": ("kg", "VALUE_QUERY")}
 
 
 def _required_for(profile, requested):

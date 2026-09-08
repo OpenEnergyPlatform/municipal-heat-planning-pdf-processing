@@ -19,6 +19,22 @@ NON_ANCHOR = re.compile(
     r"keine\s+(?:ähnlich\w*|angaben|information\w*|daten|diagramm\w*|abbildung\w*))"
 )
 
+# Why the graph route did not answer, one sentence per reason token of
+# docpipe.inference.kg_route.REASONS. Held against that tuple when the route
+# is built, so a token nobody worded is a finding at start-up and not a blank
+# caption once in a thousand turns.
+ROUTE_NOTES = {
+    "no_graph": "Kein Wissensgraph geladen.",
+    "no_plan": ("Dieser Plan hat keinen Knoten im Wissensgraphen: ohne AGS "
+                "und Veröffentlichungsdatum wird keiner geprägt."),
+    "no_coordinates": ("Die Frage nennt weder eine Größe noch ein Szenario "
+                       "noch ein Jahr, nach denen der Graph gefragt werden "
+                       "könnte."),
+    "no_rows": "Der Wissensgraph hat zu diesen Koordinaten keinen Wert.",
+    "no_trust": ("Ein gefundener Wert trägt keine Vertrauenszeile, deshalb "
+                 "wird aus dem Graphen nichts angezeigt."),
+}
+
 READOFF_MARKER = "abgelesen"
 READOFF_NOTE = ("(Hinweis: Werte teilweise aus Abbildungen abgelesen "
                 "– Schätzwerte, Ablesefehler möglich.)")

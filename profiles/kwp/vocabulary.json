@@ -4118,6 +4118,19 @@
     "OEO_00140127"
    ]
   },
+  "OEO_00390001": {
+   "alt_labels": [
+    "MW"
+   ],
+   "definition": "A power unit which is equal to one million watts.",
+   "deprecated": false,
+   "kind": "class",
+   "label": "megawatt",
+   "parents": [
+    "UO_0000114",
+    "UO_1000114"
+   ]
+  },
   "OEO_00390023": {
    "alt_labels": [],
    "definition": "A relation between a data item or data set and an aggregation type that indicates the method of data aggregation applied to the data set.",
@@ -4213,6 +4226,26 @@
     "UO_1000112"
    ]
   },
+  "UO_0000113": {
+   "alt_labels": [],
+   "definition": "\"A unit which is a standard measure power or the rate of doing work.\" [NIST:NIST]",
+   "deprecated": false,
+   "kind": "class",
+   "label": "power unit",
+   "parents": [
+    "OEO_00010490"
+   ]
+  },
+  "UO_0000114": {
+   "alt_labels": [],
+   "definition": "\"A power unit which is equal to the power used when work is done at the rate of 1 joule per second.\" [NIST:NIST]",
+   "deprecated": false,
+   "kind": "class",
+   "label": "watt",
+   "parents": [
+    "UO_1000114"
+   ]
+  },
   "UO_0000223": {
    "alt_labels": [],
    "definition": "\"An energy unit which is equal to the amount of electrical energy equivalent to a one-watt load drawing power for one hour.\" [Wikipedia:Wikipedia]",
@@ -4253,6 +4286,16 @@
    "label": "joule based unit",
    "parents": [
     "UO_0000111"
+   ]
+  },
+  "UO_1000114": {
+   "alt_labels": [],
+   "definition": null,
+   "deprecated": false,
+   "kind": "class",
+   "label": "watt based unit",
+   "parents": [
+    "UO_0000113"
    ]
   },
   "UO_1000223": {

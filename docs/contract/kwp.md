@@ -1,0 +1,1782 @@
+# The harvest contract: kwp
+
+Generated from `profiles/kwp/extraction_schema.json` by `scripts/build_docs.py`, which is itself generated from the profile's `extraction_spec.json` by `docpipe/extraction/schema.py`. Edit neither: change the spec and regenerate.
+
+One JSON object per line of a harvest file. Every line is one of the kinds below and nothing else, and each of them is closed (`additionalProperties: false`) — a new record kind costs a branch in `docpipe/extraction/schema.py`, a regeneration of both checked-in schemas, and a branch in `read_harvest` in `scripts/harvest_compare.py`.
+
+## `parameter_state`
+
+What one parameter of the spec came to in this document. Every other state in this file belongs to a row, so a parameter that produced no row left no byte at all and "the document does not carry it" and "it was never asked" were the same empty file.
+
+### `document_id`
+
+### `kind`
+
+### `parameter`
+
+The spec's uri for the parameter, the same key a tuple carries.
+
+### `refusals`
+
+### `state`
+
+### `tuples`
+
+## `refusal`
+
+### `claim`
+
+The claim as the model returned it. A dead-server sentinel carries _harvest_failed with _why, or _cut_off.
+
+### `kind`
+
+### `owner`
+
+[owner_kind, owner_id]
+
+### `parameter`
+
+The spec parameter, or whatever the claim named.
+
+### `reason`
+
+Why the claim was refused; one of the reason families of verify.py and pipeline.py.
+
+## `summary`
+
+The last line of the file: how this document's own values are distributed. A contested identity is decided by the serializer and a second reading is a later pass, so neither is counted here -- the levels are a floor, and the graph side recomputes them.
+
+### `document_id`
+
+### `image_origin`
+
+Values read out of a table or figure image rather than the document's text.
+
+### `kind`
+
+### `levels`
+
+How many values reached each level.
+
+### `reasons`
+
+Why values are not an A, counted. A closed list: a reason nobody can enumerate is a reason nobody can count.
+
+### `refusals`
+
+### `tuples`
+
+## `emission`
+
+How the row becomes a node:
+
+- `class_from`: `quantity`
+- `node`: `value`
+- `number`: `{'datatype': 'xsd:float', 'from': 'value_target', 'label': 'has number', 'predicate': 'OEO_00140178', 'prefix': 'oeo'}`
+- `unit`: `{'from': 'unit_target', 'label': 'has unit', 'predicate': 'OEO_00040010', 'prefix': 'oeo'}`
+
+### `aggregation`
+
+Axis 'aggregation' of Emissionen. A closed list; an entry beginning 'out:' is a deliberate non-class answer and mints no node. null unless aggregation_state is 'read' or 'derived'.
+
+The prompt's own wording:
+
+> Wie ist der Wert über Zeit oder Raum zusammengefasst? Der Normalfall ist "integral", also eine Jahressumme. "maximum" bei einer Spitzenlast oder einem Höchstwert, "arithmetic mean" bei einem Durchschnitt je Gebäude oder je Jahr, "instantaneous" bei einem Momentanwert.
+
+<details><summary>What it may answer (5)</summary>
+
+- **arithmetic mean** → `OEO_00140071` — average value calculated by arithmetic mean over a set of data values, e.g. within a time step or spatial region
+  - also written: Mittelwert, Durchschnitt
+- **instantaneous** → `OEO_00140069` — value measured at or modelled for exactly one 0-dim temporal region, referenced by a time stamp, e.g. to represent a time step in a time series
+  - also written: Momentanwert zu einem Zeitpunkt
+- **integral** → `OEO_00140070` — sum or integral of values, e.g. within a time step or a spatial region
+  - also written: Summe oder Integral über einen Zeitraum oder ein Gebiet, Jahreswert, Jahressumme
+- **maximum** → `OEO_00140073` — maximum value within a set of data values, e.g. in a time step or spatial region
+  - also written: Maximum, Spitzenwert, Spitzenlast
+- **minimum** → `OEO_00140072` — minimum value within a set of data values, e.g. in a time step or spatial region
+  - also written: Minimum, Tiefstwert
+
+</details>
+
+- `label`: `has aggregation type`
+- `predicate`: `OEO_00390023`
+- `prefix`: `oeo`
+- `role`: `edge`
+
+<details><summary>Why</summary>
+
+Object is a named individual of OEO_00140068 aggregation type. Derived from the unit, never asked: every accepted unit of both parameters is an extensive amount.
+
+</details>
+
+### `aggregation_quote`
+
+The verbatim passage carrying 'aggregation'. Present exactly when aggregation_state is 'read'.
+
+### `aggregation_raw`
+
+The document's own wording 'aggregation' was read from. This is what a later re-mapping onto a changed vocabulary works on, so a choice without it is counted (raw_missing).
+
+### `aggregation_raw_foreign`
+
+The wording does not name the option chosen for 'aggregation' -- the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.
+
+### `aggregation_seen`
+
+A wording the model noticed for 'aggregation' while answering 'not stated'. Vocabulary review material, never evidence.
+
+### `aggregation_source`
+
+Which source the passage for 'aggregation' was found in. How far that may be from the row is the axis' own rule (own | local | any).
+
+### `aggregation_state`
+
+How the coordinate 'aggregation' ended. Always present: a missing key and a refused reading must not look alike.
+
+### `aggregation_window`
+
+[stage, index] of the window 'aggregation' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from.
+
+### `carrier`
+
+Axis 'carrier' of Emissionen. A closed list; an entry beginning 'out:' is a deliberate non-class answer and mints no node. null unless carrier_state is 'read' or 'derived'.
+
+The prompt's own wording:
+
+> Welcher Energieträger? Die Bezeichnung steht in der Zeilenbeschriftung, im Spaltenkopf oder in der Blocküberschrift, fast nie in der Schreibweise der Klassenliste: "Gas H" und "Erdgas (netzgebunden)" meinen die Klasse Erdgas, "Nahwärme" und "Wärmenetz" die Klasse Fernwärme. Eine Summenzeile ("Summe", "Gesamt", "alle Energieträger") ist "out:total", eine Restposition ("Sonstige", "Andere") ist "out:other". Passt fachlich weder eine Klasse noch einer dieser Einträge, etwa weil in der Spalte ein Gebäudetyp steht, dann lass die Zeile weg.
+
+<details><summary>What it may answer (29)</summary>
+
+- **Abfallbrennstoff** → `OEO_00000439` — A waste fuel is a fuel in which the material entity is waste.
+  - also written: Klärschlamm, EBS
+- **Abwärme** → `OEO_00010114`
+  - also written: unvermeidbare Abwärme
+- **Biogas** → `OEO_00000074`
+  - also written: aufbereitetes Biogas, Klärgas, Faulgas, Klärschlammgas
+- **Biomasse** → `OEO_00010214`
+  - also written: pflanzliche Biomasse, landwirtschaftliche Biomasse
+- **Biomethan** → `OEO_00010215`
+- **Braunkohle** → `OEO_00000251`
+- **Erdgas** → `OEO_00000292`
+  - also written: Gas
+- **Fernwärme** → `OEO_00000132`
+  - also written: Wärmenetze, Wärmenetz, Nahwärme
+- **Flüssiggas** → `OEO_00320011` — Liquefied petroleum gas (LPG) is gas mixture of hydrocarbon gases, mainly propane and butane.
+- **Geothermie** → `OEO_00000191`
+  - also written: Erdwärme, oberflächennahe Geothermie, Tiefengeothermie, Erdwärmesonde, Erdwärmekollektor, Oberflächengeothermie
+- **Heizöl** → `OEO_00000211`
+  - also written: Öl
+- **Holz** → `OEO_00000449`
+  - also written: Holzpellets, Pellets, Hackschnitzel, Brennholz, Holzenergie
+- **Kohle** → `OEO_00000088`
+- **Siedlungsabfälle** → `OEO_00000290` — A municipal waste fuel is waste fuel produced by households or non-industrial commercial activities.
+  - also written: Abfall, thermische Abfallverwertung
+- **Solarthermie** → `OEO_00000388`
+  - also written: solare Wärme
+- **Sonstige** → `out:other` — Etwas, das keiner der übrigen Einträge dieser Liste ist.
+  - also written: Andere, sonstige Energieträger, Sonstige Wärmequellen, Rest
+- **Steinkohle** → `OEO_00000204`
+- **Strom** → `OEO_00000139` — Electrical energy is a form of energy derived from the potential or kinetic energy of charged particles.
+  - also written: Elektrizität, Heizungsstrom, Wärmestrom, Direktstrom
+- **Summe** → `out:total` — Eine Zeile, die ausdrücklich über alle Einträge summiert.
+  - also written: Gesamt, Gesamtwert, Gesamtsumme, alle Energieträger, insgesamt
+- **Umweltwärme** → `OEO_00000056` — Ambient thermal energy is thermal energy that is stored in the ambient air, beneath the surface of solid earth or in surface water. It is captured by heat pumps.
+  - also written: Umgebungswärme, Umgebungsluft
+- **Wasserstoff** → `OEO_00000220`
+  - also written: H2
+- **anthropogene Umweltwärme** → `OEO_00140105` — Artificial ambient thermal energy is ambient thermal energy that has an anthropogenic origin.
+  - also written: Abwasserwärme, Abwasser, Abwasserwärmenutzung
+- **biogener Abfallbrennstoff** → `OEO_00010223` — A biogenic waste fuel is a waste fuel that has a biogenic origin.
+  - also written: Altholz, Altholzheizung, biogene Abfälle
+- **biogener Festbrennstoff** → `OEO_00000332`
+  - also written: biogene Festbrennstoffe, sonstige biogene Festbrennstoffe
+- **biogener Siedlungsabfall** → `OEO_00000356` — A biogenic municipal waste fuel is a municipal waste fuel that has a biogenic origin.
+  - also written: Biogut, Gartenabfälle, Grünschnitt
+- **industrielle Abwärme** → `OEO_00310004`
+- **landwirtschaftlicher Abfallbrennstoff** → `OEO_00020495` — An angricultural waste fuel is waste fuel produced by agriculture.
+  - also written: tierische Exkremente, Gülle, Mist
+- **natürliche Umweltwärme** → `OEO_00140104` — Natural ambient thermal energy is ambient thermal energy that has a renewable origin.
+  - also written: Oberflächengewässer, Seethermie, Flusswärme
+- **synthetische Gase** → `OEO_00010155`
+  - also written: grüne Gase, E-Gas, SNG
+
+</details>
+
+- `label`: `is about`
+- `outside_root`: `{'OEO_00000056': 'ambient heat', 'OEO_00000132': 'district heating', 'OEO_00000139': 'electrical energy', 'OEO_00000191': 'geothermal energy', 'OEO_00000388': 'solar thermal energy', 'OEO_00010114': 'waste heat', 'OEO_00140104': 'surface water heat', 'OEO_00140105': 'waste water heat', 'OEO_00310004': 'industrial waste heat'}`
+- `predicate`: `IAO_0000136`
+- `prefix`: `obo`
+- `role`: `edge`
+
+<details><summary>Why</summary>
+
+Object is an OEO class (punning). `is about` (obo:IAO_0000136), whose domain is information content entity and which our value classes are under. NOT oeo:OEO_00000523 covers energy carrier / oeo:OEO_00000505 covers sector: both are domained on oeo:OEO_00020011 study, an occurrent, while every quantity value is a continuant, and the pin asserts obo:BFO_0000002 disjointWith obo:BFO_0000003 -- so those two edges made the whole graph unsatisfiable. Nothing in the pinned release both ranges over carrier or sector and accepts a value as its subject; `is about` is what OEO itself writes on this class (OEO_00240019, the parent of OEO_00050016, carries two of them). The role of an object is read from its own class: energy carrier is under BFO_0000040 and sector under BFO_0000031, and those two are disjoint, so carrier and sector stay apart. `outside_root` names the nine classes the plans write in the carrier column that OEO does not place under energy carrier -- district heat, electricity, solar thermal, geothermal and the ambient heat sources. They used to lose this edge, because `covers energy carrier` ranges over energy carrier and asserting them would have contradicted the TBox; `is about` declares no range, so they keep it and only the count remains, as the argument for the axioms the ontology side is adding.
+
+</details>
+
+### `carrier_quote`
+
+The verbatim passage carrying 'carrier'. Present exactly when carrier_state is 'read'.
+
+### `carrier_raw`
+
+The document's own wording 'carrier' was read from. This is what a later re-mapping onto a changed vocabulary works on, so a choice without it is counted (raw_missing).
+
+### `carrier_raw_foreign`
+
+The wording does not name the option chosen for 'carrier' -- the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.
+
+### `carrier_seen`
+
+A wording the model noticed for 'carrier' while answering 'not stated'. Vocabulary review material, never evidence.
+
+### `carrier_source`
+
+Which source the passage for 'carrier' was found in. How far that may be from the row is the axis' own rule (own | local | any).
+
+### `carrier_state`
+
+How the coordinate 'carrier' ended. Always present: a missing key and a refused reading must not look alike.
+
+### `carrier_window`
+
+[stage, index] of the window 'carrier' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from.
+
+### `compute`
+
+The sandbox runs behind a computed value: {code, stdout, ok, error}.
+
+### `computed`
+
+The value came out of the sandbox, not off the page; the quote proves the inputs it was computed from.
+
+### `flags`
+
+Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping a word the spec does not list; period:* says whether a bare amount was shown to be a yearly one; review:* is what a second reading of this value under a narrower window came to, and only review:disagree is a reason.
+
+### `kind`
+
+### `parameter`
+
+Spec parameter: Emissionen.
+
+The prompt's own wording:
+
+> Um WELCHE Kennzahl handelt es sich bei dieser Zahl? Entscheide danach, was die Quelle über sie sagt: die Einheit, die Spalten- oder Zeilenbeschriftung und die Tabellen- oder Abschnittsüberschrift. Eine Angabe in t CO2 ist eine Emission, eine Angabe in MWh oder GWh ein Energieverbrauch. Zitiere die Stelle, aus der das hervorgeht. Eine Angabe in kW, MW oder GW ist eine Leistung.
+
+### `parameter_quote`
+
+The verbatim passage carrying 'parameter'. Present exactly when parameter_state is 'read'.
+
+### `parameter_raw`
+
+The document's own wording 'parameter' was read from. This is what a later re-mapping onto a changed vocabulary works on, so a choice without it is counted (raw_missing).
+
+### `parameter_raw_foreign`
+
+The wording does not name the option chosen for 'parameter' -- the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.
+
+### `parameter_seen`
+
+A wording the model noticed for 'parameter' while answering 'not stated'. Vocabulary review material, never evidence.
+
+### `parameter_source`
+
+Which source the passage for 'parameter' was found in. How far that may be from the row is the axis' own rule (own | local | any).
+
+### `parameter_state`
+
+How the coordinate 'parameter' ended. Always present: a missing key and a refused reading must not look alike.
+
+### `parameter_window`
+
+[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from.
+
+### `provenance`
+
+### `quantity`
+
+Axis 'quantity' of Emissionen. A closed list; an entry beginning 'out:' is a deliberate non-class answer and mints no node. null unless quantity_state is 'read' or 'derived'.
+
+The prompt's own wording:
+
+> Welche Größe ist diese Zahl? Das ist die wichtigste Entscheidung des Tupels, denn sie bestimmt, als welche Klasse der Wert im Graphen steht. Entscheide nach der Definition der Klasse, nicht nach der Ähnlichkeit der Wörter. "CO2 emission value" ist reines Kohlendioxid, "carbon dioxide equivalent quantity value" sind alle Treibhausgase, in CO2-Äquivalenten zusammengefasst. Die Einheit verrät es meist: t CO2 gegen t CO2-Äq. Sagt der Plan an anderer Stelle, dass seine Emissionen in CO2-Äquivalenten angegeben sind ("Die zugehörigen Treibhausgasemissionen - angegeben in Tonnen CO2-Äquivalenten - sind gesondert aufgeführt"), dann gilt das auch für eine Tabelle, deren Kopfzeile nur "CO2-Emissionen" schreibt: der Methodiksatz schlägt die Kopfzeile. Eine kumulierte Emission über mehrere Jahre, eine vermiedene oder eingesparte Emission und eine abgeschiedene Menge sind das Gegenteil einer im Bilanzjahr ausgestoßenen und haben ihre eigenen Einträge.
+
+<details><summary>What it may answer (9)</summary>
+
+- **Anteil in Prozent** → `out:share` — Ein Anteil in Prozent, keine Menge.
+  - also written: Anteil an den Gesamtemissionen, EE-Anteil, Anteil erneuerbarer Energien
+- **CO2 emission value** → `OEO_00340066` — A CO2 emission value is a greenhouse gas emission value that quantifies a CO2 emission rate and has a mass unit.
+  - also written: CO2-Emissionen, Kohlendioxidemissionen, CO2-Ausstoß
+- **Emission je Kopf oder je Einwohner** → `out:specific` — Ein Wert je Fläche, Kopf, Gebäude oder Kilowattstunde, keine Gesamtmenge.
+- **Emissionsfaktor je Kilowattstunde** → `out:factor` — Emission je Kilowattstunde, eine Eigenschaft des Energieträgers und keine Menge.
+  - also written: Emissionsfaktor, CO2-Faktor, spezifische Emissionen
+- **abgeschiedene oder gespeicherte Emission** → `out:captured` — Eine abgeschiedene oder gespeicherte Menge, das Gegenteil einer ausgestoßenen.
+  - also written: CO2-Abscheidung, CCS, CCU, Senke
+- **carbon dioxide equivalent quantity value** → `OEO_00140083` — A carbon dioxide equivalent quantity is a greenhouse gas emission value that quantifies the combined effect of all emitted greenhouse gases by giving an equivalent amount of CO2 which would have the same effect on the climate.
+  - also written: Treibhausgasemissionen, THG-Emissionen, CO2-Äquivalente, CO2e-Emissionen, THG, CO2e, Treibhausgas
+- **etwas anderes** → `out:other` — Etwas, das keiner der übrigen Einträge dieser Liste ist.
+- **kumulierte Emission über mehrere Jahre** → `out:cumulative` — Über mehrere Jahre aufsummiert, keine Jahresmenge.
+  - also written: kumulierte Emissionen, Emissionsbudget
+- **vermiedene oder eingesparte Emission** → `out:avoided` — Eine vermiedene oder eingesparte Emission, das Gegenteil einer ausgestoßenen.
+  - also written: THG-Minderung, THG-Einsparung, Emissionsreduktion
+
+</details>
+
+- `role`: `type`
+
+<details><summary>Why</summary>
+
+The class of the value node itself (rdf:type). An out:* answer is a deliberate non-class and mints no node.
+
+</details>
+
+### `quantity_quote`
+
+The verbatim passage carrying 'quantity'. Present exactly when quantity_state is 'read'.
+
+### `quantity_raw`
+
+The document's own wording 'quantity' was read from. This is what a later re-mapping onto a changed vocabulary works on, so a choice without it is counted (raw_missing).
+
+### `quantity_raw_foreign`
+
+The wording does not name the option chosen for 'quantity' -- the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.
+
+### `quantity_seen`
+
+A wording the model noticed for 'quantity' while answering 'not stated'. Vocabulary review material, never evidence.
+
+### `quantity_source`
+
+Which source the passage for 'quantity' was found in. How far that may be from the row is the axis' own rule (own | local | any).
+
+### `quantity_state`
+
+How the coordinate 'quantity' ended. Always present: a missing key and a refused reading must not look alike.
+
+### `quantity_window`
+
+[stage, index] of the window 'quantity' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from.
+
+### `quote`
+
+The passage of the owner source that contains the value. Whitespace-collapsed containment; a retyped table row may be repaired, which sets the flag quote_repaired.
+
+### `scenario`
+
+Axis 'scenario' of Emissionen. A closed list; an entry beginning 'out:' is a deliberate non-class answer and mints no node. null unless scenario_state is 'read' or 'derived'.
+
+The prompt's own wording:
+
+> Auf welchen Zustand bezieht sich der Wert? Der Bezug steht selten in der Zeile selbst, sondern im Titel der eigenen Tabelle, in der Abschnittsüberschrift oder in dem Satz, der die Tabelle ankündigt. Bestand heißt: erhoben oder bilanziert für ein vergangenes oder das laufende Jahr. Daran zu erkennen sind Bestandsanalyse, Ist-Zustand, Bilanzjahr, Ausgangslage, Energiebilanz, "bislang", "derzeit", "wird verbraucht", oder ein Jahr vor der Erstellung des Plans im Titel. Ein Satz wie "wie viel Wärme pro Jahr verbraucht wird und welche Energieträger dafür bislang eingesetzt werden" ist ein Bestand, auch wenn das Wort Bestandsanalyse nicht fällt. Trendszenario ist die Fortschreibung ohne zusätzliche Maßnahmen. Zielszenario ist der angestrebte Zustand, auch wenn der Plan ihm einen eigenen Namen gibt ("bei erhöhter Energieeinsparung", "Umsetzungsszenario 2", "Transformationspfad"); nennt die Quelle mehrere Zielszenarien nebeneinander, gehört der Name des konkreten in value_raw. Steht in der eigenen Quelle, in ihrem Abschnitt und in dem Satz davor nichts über den Zustand, dann ist das "out:unstated" und keine Schätzung.
+
+<details><summary>What it may answer (4)</summary>
+
+- **Bestand** → `status_quo` — Erhoben oder bilanziert für ein vergangenes oder das laufende Jahr.
+  - also written: Ist-Zustand, Bilanzjahr, Status quo, Bestandsanalyse, Basisjahr, Ist-Zustandsanalyse, Ist-Analyse, Erstellungsjahr
+- **Trendszenario** → `trend` — Die Fortschreibung ohne zusätzliche Maßnahmen.
+  - also written: Referenzszenario, Weiter-wie-bisher, Business as usual
+- **Variante oder Sensitivität neben dem Szenario** → `out:variant` — Eine Rechenvariante, die der Plan neben sein Szenario stellt, um eine Bandbreite zu zeigen.
+  - also written: Variante, Sensitivität, Bandbreite
+- **Zielszenario** → `target` — Der angestrebte Zustand eines künftigen Jahres, wie der Plan ihn erreichen will.
+  - also written: Zielbild, Zielwert, Zielpfad, Umsetzungsszenario, Transformationspfad
+
+</details>
+
+- `linked_by`: `{'label': 'has part', 'node': 'heatplan', 'predicate': 'BFO_0000051', 'prefix': 'obo'}`
+- `map`: `{'out:variant': {'note': 'not serialized'}, 'status_quo': {'class': 'MHPO_00020005'}, 'target': {'class': 'MHPO_00020007'}, 'trend': {'class': 'OEO_00020311', 'note': 'with existing measures scenario. Not OEO_00020314 reference scenario: that one is defined by a ROLE (`scenario and has role some reference role`) and carries no content, so it says a scenario was used as a comparison and not what it assumes. A Trendszenario is the continuation under the measures already decided, which is what WEM means.'}}`
+- `role`: `parent`
+
+<details><summary>Why</summary>
+
+Which container node holds the value: the plan has the container by `linked_by`, and the edge from the container down to the value is structural and named in kg.py. Only the target scenario is serialized today (G2).
+
+</details>
+
+### `scenario_quote`
+
+The verbatim passage carrying 'scenario'. Present exactly when scenario_state is 'read'.
+
+### `scenario_raw`
+
+The document's own wording 'scenario' was read from. This is what a later re-mapping onto a changed vocabulary works on, so a choice without it is counted (raw_missing).
+
+### `scenario_raw_foreign`
+
+The wording does not name the option chosen for 'scenario' -- the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.
+
+### `scenario_seen`
+
+A wording the model noticed for 'scenario' while answering 'not stated'. Vocabulary review material, never evidence.
+
+### `scenario_source`
+
+Which source the passage for 'scenario' was found in. How far that may be from the row is the axis' own rule (own | local | any).
+
+### `scenario_state`
+
+How the coordinate 'scenario' ended. Always present: a missing key and a refused reading must not look alike.
+
+### `scenario_window`
+
+[stage, index] of the window 'scenario' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from.
+
+### `sector`
+
+Axis 'sector' of Emissionen. A closed list; an entry beginning 'out:' is a deliberate non-class answer and mints no node. null unless sector_state is 'read' or 'derived'.
+
+The prompt's own wording:
+
+> Welcher Verbrauchssektor? Die Bezeichnung steht in der Zeilenbeschriftung, im Spaltenkopf oder in der Blocküberschrift DERSELBEN Tabelle: "Wohnen" und "Wohngebäude" meinen die Klasse Private Haushalte, "GHD/Kommune", "Gewerbe" und "wirtschaftlich genutzte Gebäude" die Klasse GHD. Ein GEBIET ist kein Sektor: "Gesamtstadt", "Stadtgebiet", "Gemeinde" und "Plangebiet" sagen, WO die Zahl gilt, nicht für welchen Verbraucher, und sie sind auch keine Summe über die Sektoren. Eine Zeile, die ausdrücklich über alle Sektoren summiert ("Summe", "Gesamt", "insgesamt" als Zeilen- oder Spaltenkopf), ist "out:total". Hat die eigene Tabelle keine Sektorspalte und nennt ihr Titel keinen Sektor, dann ist das keine Klasse, sondern eine fehlende Angabe: antworte mit "out:unstated".
+
+<details><summary>What it may answer (6)</summary>
+
+- **GHD** → `OEO_00000405` — A commercial sector is a sector that covers non-industrial commercial activities.
+  - also written: Gewerbe, Handel, Dienstleistungen, Gewerbe/Handel/Dienstleistungen, öffentliche Gebäude, öffentliche Liegenschaften, kommunale Einrichtungen, GHD/Kommune, Gewerbe, wirtschaftlich genutzte Gebäude, kommerzieller Sektor
+- **Industrie** → `OEO_00000227` — An industry sector is a sector that covers industrial activities with other main purposes of energy transformation.
+  - also written: Industriesektor, verarbeitendes Gewerbe
+- **Landwirtschaft** → `OEO_00010035` — A agriculture, forestry and land use (AFOLU) sector is a sector that covers activities and natural processes from agriculture, forestry, land use and land use change.
+  - also written: Land- und Forstwirtschaft
+- **Private Haushalte** → `OEO_00000214` — A household sector is a sector that covers households.
+  - also written: Haushalte, Privathaushalte, Wohnen, Wohngebäude, Haushaltssektor
+- **Summe** → `out:total` — Eine Zeile, die ausdrücklich über alle Einträge summiert.
+  - also written: Gesamt, alle Sektoren, insgesamt
+- **Verkehr** → `OEO_00000422` — A transport sector is a sector that covers transport of people and/or goods.
+  - also written: Verkehrssektor
+
+</details>
+
+- `label`: `is about`
+- `predicate`: `IAO_0000136`
+- `prefix`: `obo`
+- `role`: `edge`
+
+<details><summary>Why</summary>
+
+Object is an OEO sector class. `is about` (obo:IAO_0000136), whose domain is information content entity and which our value classes are under. NOT oeo:OEO_00000523 covers energy carrier / oeo:OEO_00000505 covers sector: both are domained on oeo:OEO_00020011 study, an occurrent, while every quantity value is a continuant, and the pin asserts obo:BFO_0000002 disjointWith obo:BFO_0000003 -- so those two edges made the whole graph unsatisfiable. Nothing in the pinned release both ranges over carrier or sector and accepts a value as its subject; `is about` is what OEO itself writes on this class (OEO_00240019, the parent of OEO_00050016, carries two of them). The role of an object is read from its own class: energy carrier is under BFO_0000040 and sector under BFO_0000031, and those two are disjoint, so carrier and sector stay apart.
+
+</details>
+
+### `sector_quote`
+
+The verbatim passage carrying 'sector'. Present exactly when sector_state is 'read'.
+
+### `sector_raw`
+
+The document's own wording 'sector' was read from. This is what a later re-mapping onto a changed vocabulary works on, so a choice without it is counted (raw_missing).
+
+### `sector_raw_foreign`
+
+The wording does not name the option chosen for 'sector' -- the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.
+
+### `sector_seen`
+
+A wording the model noticed for 'sector' while answering 'not stated'. Vocabulary review material, never evidence.
+
+### `sector_source`
+
+Which source the passage for 'sector' was found in. How far that may be from the row is the axis' own rule (own | local | any).
+
+### `sector_state`
+
+How the coordinate 'sector' ended. Always present: a missing key and a refused reading must not look alike.
+
+### `sector_window`
+
+[stage, index] of the window 'sector' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from.
+
+### `spatial_scope`
+
+Axis 'spatial_scope' of Emissionen. A closed list; an entry beginning 'out:' is a deliberate non-class answer and mints no node. null unless spatial_scope_state is 'read' or 'derived'.
+
+The prompt's own wording:
+
+> Auf welches Gebiet bezieht sich der Wert? Sieh ZUERST in der Zeile selbst nach: benennt die Zeilenbeschriftung ein Gebiet — einen Quartiersnamen, ein Eignungsgebiet, eine Straße —, dann ist DAS das Gebiet dieser Zeile und die Überschrift gilt für sie nicht. Eine Steckbrief- oder Quartierstabelle hat in jeder Zeile ein anderes Gebiet und in der Überschrift nur den Gemeindenamen; wer dann die Überschrift nimmt, legt vierzig Quartiere auf eine Koordinate. Erst wenn die Zeile kein Gebiet nennt, gilt die Überschrift oder die Caption. Bei einem Teilgebiet gehört sein NAME wörtlich in value_raw ("Fokusgebiet Eicken", "Quartier Nordstadt", "Wärmenetzgebiet 3"), ohne den Namen sind zwei Teilgebiete im Graphen nicht auseinanderzuhalten. Beim ganzen Gemeindegebiet reicht die Klasse.
+
+<details><summary>What it may answer (2)</summary>
+
+- **Gemeindegebiet** → `municipality` — Das ganze Gemeinde- oder Stadtgebiet des Plans.
+  - also written: Gesamtstadt, Stadtgebiet, gesamtes Plangebiet, Gemeinde insgesamt
+- **Teilgebiet** → `sub_area` — Ein benannter Teil davon: ein Quartier, ein Fokusgebiet, ein Wärmenetzgebiet.
+  - also written: Fokusgebiet, Quartier, Stadtteil, Baublock, Wärmenetzgebiet, Ortsteil
+
+</details>
+
+- `map`: `{'municipality': {'note': "the plan's own area, minted from the AGS"}, 'sub_area': {'class': 'MHPO_00020019', 'linked_by': {'label': 'part of', 'node': 'municipality', 'predicate': 'BFO_0000050', 'prefix': 'obo'}}}`
+- `role`: `parent`
+
+<details><summary>Why</summary>
+
+No relation from a value to its area exists in the schema yet, so a sub_area value is not serialized (TERM REQUEST 1).
+
+</details>
+
+### `spatial_scope_quote`
+
+The verbatim passage carrying 'spatial_scope'. Present exactly when spatial_scope_state is 'read'.
+
+### `spatial_scope_raw`
+
+The document's own wording 'spatial_scope' was read from. This is what a later re-mapping onto a changed vocabulary works on, so a choice without it is counted (raw_missing).
+
+### `spatial_scope_raw_foreign`
+
+The wording does not name the option chosen for 'spatial_scope' -- the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.
+
+### `spatial_scope_seen`
+
+A wording the model noticed for 'spatial_scope' while answering 'not stated'. Vocabulary review material, never evidence.
+
+### `spatial_scope_source`
+
+Which source the passage for 'spatial_scope' was found in. How far that may be from the row is the axis' own rule (own | local | any).
+
+### `spatial_scope_state`
+
+How the coordinate 'spatial_scope' ended. Always present: a missing key and a refused reading must not look alike.
+
+### `spatial_scope_window`
+
+[stage, index] of the window 'spatial_scope' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from.
+
+### `tier`
+
+text_located: the quote sits in the document's own refined text, so it can be checked against the PDF. visual_source: it sits in a table transcription, a caption or a figure description, which are model output and want human curation.
+
+### `unit`
+
+The unit, chosen from units_accepted (Mio. t CO2/a, Mio. t CO2eq, Mio. t CO2eq/a, Mt, Mt/a, Tonnen, Tonnen CO2, Tonnen CO2 im Jahr, Tonnen CO2 jährlich, Tonnen CO2 pro Jahr, Tonnen CO2eq/a, Tonnen CO2äquivalent, Tonnen pro Jahr, Tsd. t, Tsd. t/a, kt, kt CO2 pro Jahr, kt CO2-Äq./a, kt CO2/a, kt CO2eq, kt CO2eq/a, kt/a, kt/a CO2, t, t CO2, t CO2-eq./a, t CO2-eq/a, t CO2-Äq./a, t CO2-Äq/a, t CO2-Äquivalent, t CO2-Äquivalente/a, t CO2/a, t CO2e, t CO2e/a, t CO2eq, t CO2eq/a, t CO2äq, t CO2äq., t/a, t/a CO2eq, tCO2, tCO2/a). A spelling the list does not hold is accepted with the flag unit_spelling.
+
+### `unit_raw`
+
+The unit exactly as the source writes it. This is evidence and is never looked up.
+
+### `value`
+
+The number as the document prints it, with the grouping removed and a decimal point.
+
+### `value_target`
+
+value x factor(unit), in the spec's unit_target OEO_00010137. This is the number the graph carries.
+
+### `year`
+
+Axis 'year' of Emissionen. null unless year_state is 'read' or 'derived'.
+
+The prompt's own wording:
+
+> Für welches Kalenderjahr gilt diese Jahressumme? Vierstellig. Das Jahr steht fast nie in der Zeile der Zahl selbst. Sieh in dieser Reihenfolge nach: (1) die Kopfzelle der Spalte, in der die Zahl steht, (2) der Titel der eigenen Tabelle, (3) der Satz, der die Tabelle in ihrem Abschnitt ankündigt ("Für das Jahr 2040 ergeben sich die in den nachfolgenden Tabellen zusammengestellten Kennzahlen"), (4) die Überschrift des Abschnitts. Das Jahr im Titel einer ANDEREN Tabelle gilt nicht, auch wenn dieser Titel im selben Abschnitt steht. Nennt die Quelle einen Zeitraum statt eines Jahres ("Durchschnittswert der Jahre 2022-2024"), dann gehört das LETZTE Jahr in value und der Zeitraum wörtlich in value_raw.
+
+- `label`: `is about`
+- `object_class`: `OEO_00030033`
+- `predicate`: `IAO_0000136`
+- `prefix`: `obo`
+- `role`: `edge`
+
+<details><summary>Why</summary>
+
+The calendar year the aggregation is integrated over, as a node and no longer as a literal. A unit without a per-year marker carries the flag period:annual_in_quote or period:unstated. It was oeo:OEO_00020440 has scenario year value, which is wrong twice: its domain is oeo:OEO_00000365 scenario factsheet, so every value node was typed a factsheet and through it a document, and its declared range is xsd:dateTime while we wrote xsd:integer, which is an ill-typed literal. The pinned release has NO property at all whose domain a quantity value satisfies and whose range is a time, so the year becomes an object: `is about` a node of oeo:OEO_00030033 time step, "a one-dimensional temporal region that has a start time and an ending time". oeo:OEO_00020097 scenario year would be the narrower class and is not used, because it is defined as part of a scenario horizon and the inventory years are not. Cost, stated: the number 2030 is no longer a literal a reasoner can compare -- it is the node's IRI, its label, and part of the value's own identity. The term request is a property from quantity value to temporal region, and a way to write a year onto one.
+
+</details>
+
+### `year_quote`
+
+The verbatim passage carrying 'year'. Present exactly when year_state is 'read'.
+
+### `year_raw`
+
+The document's own wording 'year' was read from. This is what a later re-mapping onto a changed vocabulary works on, so a choice without it is counted (raw_missing).
+
+### `year_raw_foreign`
+
+The wording does not name the option chosen for 'year' -- the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.
+
+### `year_seen`
+
+A wording the model noticed for 'year' while answering 'not stated'. Vocabulary review material, never evidence.
+
+### `year_source`
+
+Which source the passage for 'year' was found in. How far that may be from the row is the axis' own rule (own | local | any).
+
+### `year_state`
+
+How the coordinate 'year' ended. Always present: a missing key and a refused reading must not look alike.
+
+### `year_window`
+
+[stage, index] of the window 'year' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from.
+
+A coordinate is `null` unless its `<axis>_state` says it was read or derived — that is what the `allOf` branches encode, one per coordinate.
+
+## `energy_consumption`
+
+How the row becomes a node:
+
+- `class_from`: `quantity`
+- `node`: `value`
+- `number`: `{'datatype': 'xsd:float', 'from': 'value_target', 'label': 'has number', 'predicate': 'OEO_00140178', 'prefix': 'oeo'}`
+- `unit`: `{'from': 'unit_target', 'label': 'has unit', 'predicate': 'OEO_00040010', 'prefix': 'oeo'}`
+
+### `aggregation`
+
+Axis 'aggregation' of Energieverbrauch. A closed list; an entry beginning 'out:' is a deliberate non-class answer and mints no node. null unless aggregation_state is 'read' or 'derived'.
+
+The prompt's own wording:
+
+> Wie ist der Wert über Zeit oder Raum zusammengefasst? Der Normalfall ist "integral", also eine Jahressumme. "maximum" bei einer Spitzenlast oder einem Höchstwert, "arithmetic mean" bei einem Durchschnitt je Gebäude oder je Jahr, "instantaneous" bei einem Momentanwert.
+
+<details><summary>What it may answer (5)</summary>
+
+- **arithmetic mean** → `OEO_00140071` — average value calculated by arithmetic mean over a set of data values, e.g. within a time step or spatial region
+  - also written: Mittelwert, Durchschnitt
+- **instantaneous** → `OEO_00140069` — value measured at or modelled for exactly one 0-dim temporal region, referenced by a time stamp, e.g. to represent a time step in a time series
+  - also written: Momentanwert zu einem Zeitpunkt
+- **integral** → `OEO_00140070` — sum or integral of values, e.g. within a time step or a spatial region
+  - also written: Summe oder Integral über einen Zeitraum oder ein Gebiet, Jahreswert, Jahressumme
+- **maximum** → `OEO_00140073` — maximum value within a set of data values, e.g. in a time step or spatial region
+  - also written: Maximum, Spitzenwert, Spitzenlast
+- **minimum** → `OEO_00140072` — minimum value within a set of data values, e.g. in a time step or spatial region
+  - also written: Minimum, Tiefstwert
+
+</details>
+
+- `label`: `has aggregation type`
+- `predicate`: `OEO_00390023`
+- `prefix`: `oeo`
+- `role`: `edge`
+
+<details><summary>Why</summary>
+
+Object is a named individual of OEO_00140068 aggregation type. Derived from the unit, never asked: every accepted unit of both parameters is an extensive amount.
+
+</details>
+
+### `aggregation_quote`
+
+The verbatim passage carrying 'aggregation'. Present exactly when aggregation_state is 'read'.
+
+### `aggregation_raw`
+
+The document's own wording 'aggregation' was read from. This is what a later re-mapping onto a changed vocabulary works on, so a choice without it is counted (raw_missing).
+
+### `aggregation_raw_foreign`
+
+The wording does not name the option chosen for 'aggregation' -- the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.
+
+### `aggregation_seen`
+
+A wording the model noticed for 'aggregation' while answering 'not stated'. Vocabulary review material, never evidence.
+
+### `aggregation_source`
+
+Which source the passage for 'aggregation' was found in. How far that may be from the row is the axis' own rule (own | local | any).
+
+### `aggregation_state`
+
+How the coordinate 'aggregation' ended. Always present: a missing key and a refused reading must not look alike.
+
+### `aggregation_window`
+
+[stage, index] of the window 'aggregation' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from.
+
+### `carrier`
+
+Axis 'carrier' of Energieverbrauch. A closed list; an entry beginning 'out:' is a deliberate non-class answer and mints no node. null unless carrier_state is 'read' or 'derived'.
+
+The prompt's own wording:
+
+> Welcher Energieträger? Die Bezeichnung steht in der Zeilenbeschriftung, im Spaltenkopf oder in der Blocküberschrift, fast nie in der Schreibweise der Klassenliste: "Gas H" und "Erdgas (netzgebunden)" meinen die Klasse Erdgas, "Nahwärme" und "Wärmenetz" die Klasse Fernwärme. Eine Summenzeile ("Summe", "Gesamt", "alle Energieträger") ist "out:total", eine Restposition ("Sonstige", "Andere") ist "out:other". Passt fachlich weder eine Klasse noch einer dieser Einträge, etwa weil in der Spalte ein Gebäudetyp steht, dann lass die Zeile weg.
+
+<details><summary>What it may answer (29)</summary>
+
+- **Abfallbrennstoff** → `OEO_00000439` — A waste fuel is a fuel in which the material entity is waste.
+  - also written: Klärschlamm, EBS
+- **Abwärme** → `OEO_00010114`
+  - also written: unvermeidbare Abwärme
+- **Biogas** → `OEO_00000074`
+  - also written: aufbereitetes Biogas, Klärgas, Faulgas, Klärschlammgas
+- **Biomasse** → `OEO_00010214`
+  - also written: pflanzliche Biomasse, landwirtschaftliche Biomasse
+- **Biomethan** → `OEO_00010215`
+- **Braunkohle** → `OEO_00000251`
+- **Erdgas** → `OEO_00000292`
+  - also written: Gas
+- **Fernwärme** → `OEO_00000132`
+  - also written: Wärmenetze, Wärmenetz, Nahwärme
+- **Flüssiggas** → `OEO_00320011` — Liquefied petroleum gas (LPG) is gas mixture of hydrocarbon gases, mainly propane and butane.
+- **Geothermie** → `OEO_00000191`
+  - also written: Erdwärme, oberflächennahe Geothermie, Tiefengeothermie, Erdwärmesonde, Erdwärmekollektor, Oberflächengeothermie
+- **Heizöl** → `OEO_00000211`
+  - also written: Öl
+- **Holz** → `OEO_00000449`
+  - also written: Holzpellets, Pellets, Hackschnitzel, Brennholz, Holzenergie
+- **Kohle** → `OEO_00000088`
+- **Siedlungsabfälle** → `OEO_00000290` — A municipal waste fuel is waste fuel produced by households or non-industrial commercial activities.
+  - also written: Abfall, thermische Abfallverwertung
+- **Solarthermie** → `OEO_00000388`
+  - also written: solare Wärme
+- **Sonstige** → `out:other` — Etwas, das keiner der übrigen Einträge dieser Liste ist.
+  - also written: Andere, sonstige Energieträger, Sonstige Wärmequellen, Rest
+- **Steinkohle** → `OEO_00000204`
+- **Strom** → `OEO_00000139` — Electrical energy is a form of energy derived from the potential or kinetic energy of charged particles.
+  - also written: Elektrizität, Heizungsstrom, Wärmestrom, Direktstrom
+- **Summe** → `out:total` — Eine Zeile, die ausdrücklich über alle Einträge summiert.
+  - also written: Gesamt, Gesamtwert, Gesamtsumme, alle Energieträger, insgesamt
+- **Umweltwärme** → `OEO_00000056` — Ambient thermal energy is thermal energy that is stored in the ambient air, beneath the surface of solid earth or in surface water. It is captured by heat pumps.
+  - also written: Umgebungswärme, Umgebungsluft
+- **Wasserstoff** → `OEO_00000220`
+  - also written: H2
+- **anthropogene Umweltwärme** → `OEO_00140105` — Artificial ambient thermal energy is ambient thermal energy that has an anthropogenic origin.
+  - also written: Abwasserwärme, Abwasser, Abwasserwärmenutzung
+- **biogener Abfallbrennstoff** → `OEO_00010223` — A biogenic waste fuel is a waste fuel that has a biogenic origin.
+  - also written: Altholz, Altholzheizung, biogene Abfälle
+- **biogener Festbrennstoff** → `OEO_00000332`
+  - also written: biogene Festbrennstoffe, sonstige biogene Festbrennstoffe
+- **biogener Siedlungsabfall** → `OEO_00000356` — A biogenic municipal waste fuel is a municipal waste fuel that has a biogenic origin.
+  - also written: Biogut, Gartenabfälle, Grünschnitt
+- **industrielle Abwärme** → `OEO_00310004`
+- **landwirtschaftlicher Abfallbrennstoff** → `OEO_00020495` — An angricultural waste fuel is waste fuel produced by agriculture.
+  - also written: tierische Exkremente, Gülle, Mist
+- **natürliche Umweltwärme** → `OEO_00140104` — Natural ambient thermal energy is ambient thermal energy that has a renewable origin.
+  - also written: Oberflächengewässer, Seethermie, Flusswärme
+- **synthetische Gase** → `OEO_00010155`
+  - also written: grüne Gase, E-Gas, SNG
+
+</details>
+
+- `label`: `is about`
+- `outside_root`: `{'OEO_00000056': 'ambient heat', 'OEO_00000132': 'district heating', 'OEO_00000139': 'electrical energy', 'OEO_00000191': 'geothermal energy', 'OEO_00000388': 'solar thermal energy', 'OEO_00010114': 'waste heat', 'OEO_00140104': 'surface water heat', 'OEO_00140105': 'waste water heat', 'OEO_00310004': 'industrial waste heat'}`
+- `predicate`: `IAO_0000136`
+- `prefix`: `obo`
+- `role`: `edge`
+
+<details><summary>Why</summary>
+
+Object is an OEO class (punning). `is about` (obo:IAO_0000136), whose domain is information content entity and which our value classes are under. NOT oeo:OEO_00000523 covers energy carrier / oeo:OEO_00000505 covers sector: both are domained on oeo:OEO_00020011 study, an occurrent, while every quantity value is a continuant, and the pin asserts obo:BFO_0000002 disjointWith obo:BFO_0000003 -- so those two edges made the whole graph unsatisfiable. Nothing in the pinned release both ranges over carrier or sector and accepts a value as its subject; `is about` is what OEO itself writes on this class (OEO_00240019, the parent of OEO_00050016, carries two of them). The role of an object is read from its own class: energy carrier is under BFO_0000040 and sector under BFO_0000031, and those two are disjoint, so carrier and sector stay apart. `outside_root` names the nine classes the plans write in the carrier column that OEO does not place under energy carrier -- district heat, electricity, solar thermal, geothermal and the ambient heat sources. They used to lose this edge, because `covers energy carrier` ranges over energy carrier and asserting them would have contradicted the TBox; `is about` declares no range, so they keep it and only the count remains, as the argument for the axioms the ontology side is adding.
+
+</details>
+
+### `carrier_quote`
+
+The verbatim passage carrying 'carrier'. Present exactly when carrier_state is 'read'.
+
+### `carrier_raw`
+
+The document's own wording 'carrier' was read from. This is what a later re-mapping onto a changed vocabulary works on, so a choice without it is counted (raw_missing).
+
+### `carrier_raw_foreign`
+
+The wording does not name the option chosen for 'carrier' -- the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.
+
+### `carrier_seen`
+
+A wording the model noticed for 'carrier' while answering 'not stated'. Vocabulary review material, never evidence.
+
+### `carrier_source`
+
+Which source the passage for 'carrier' was found in. How far that may be from the row is the axis' own rule (own | local | any).
+
+### `carrier_state`
+
+How the coordinate 'carrier' ended. Always present: a missing key and a refused reading must not look alike.
+
+### `carrier_window`
+
+[stage, index] of the window 'carrier' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from.
+
+### `compute`
+
+The sandbox runs behind a computed value: {code, stdout, ok, error}.
+
+### `computed`
+
+The value came out of the sandbox, not off the page; the quote proves the inputs it was computed from.
+
+### `flags`
+
+Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping a word the spec does not list; period:* says whether a bare amount was shown to be a yearly one; review:* is what a second reading of this value under a narrower window came to, and only review:disagree is a reason.
+
+### `kind`
+
+### `parameter`
+
+Spec parameter: Energieverbrauch.
+
+The prompt's own wording:
+
+> Um WELCHE Kennzahl handelt es sich bei dieser Zahl? Entscheide danach, was die Quelle über sie sagt: die Einheit, die Spalten- oder Zeilenbeschriftung und die Tabellen- oder Abschnittsüberschrift. Eine Angabe in t CO2 ist eine Emission, eine Angabe in MWh oder GWh ein Energieverbrauch. Zitiere die Stelle, aus der das hervorgeht. Eine Angabe in kW, MW oder GW ist eine Leistung.
+
+### `parameter_quote`
+
+The verbatim passage carrying 'parameter'. Present exactly when parameter_state is 'read'.
+
+### `parameter_raw`
+
+The document's own wording 'parameter' was read from. This is what a later re-mapping onto a changed vocabulary works on, so a choice without it is counted (raw_missing).
+
+### `parameter_raw_foreign`
+
+The wording does not name the option chosen for 'parameter' -- the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.
+
+### `parameter_seen`
+
+A wording the model noticed for 'parameter' while answering 'not stated'. Vocabulary review material, never evidence.
+
+### `parameter_source`
+
+Which source the passage for 'parameter' was found in. How far that may be from the row is the axis' own rule (own | local | any).
+
+### `parameter_state`
+
+How the coordinate 'parameter' ended. Always present: a missing key and a refused reading must not look alike.
+
+### `parameter_window`
+
+[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from.
+
+### `provenance`
+
+### `quantity`
+
+Axis 'quantity' of Energieverbrauch. A closed list; an entry beginning 'out:' is a deliberate non-class answer and mints no node. null unless quantity_state is 'read' or 'derived'.
+
+The prompt's own wording:
+
+> Welche Größe ist diese Zahl? Das ist die wichtigste Entscheidung des Tupels, denn sie bestimmt, als welche Klasse der Wert im Graphen steht. Entscheide nach der Definition der Klasse, nicht nach der Ähnlichkeit der Wörter. Die Bezeichnung steht in der Zeile, im Spaltenkopf, in der Blocküberschrift oder im Titel der eigenen Tabelle. "final energy consumption value" ist definiert als die an Endverbraucher gelieferte und dort verbrauchte Energie. Darunter fällt BEIDES, was ein Plan Verbrauch nennt und was er Bedarf nennt: in einem Szenario ist nichts gemessen, jede Zahl ist gerechnet, und die Definition spricht nicht von Messung. Endenergieverbrauch, Endenergiebedarf, Wärmebedarf und ein zu deckender Wärmebedarf sind also diese Klasse. "primary energy consumption value" ist die Bilanz vor der Umwandlung. Nutzwärme, Heizwärme, Raumwärme und Nutzenergie sind dagegen NICHT Endenergie, sondern die Wärme hinter dem Erzeuger: "out:useful_energy", auch im Zielszenario. Ein Anteil in Prozent und ein Wert je Fläche oder Kopf sind eigene Einträge und keine Verbrauchsmenge.
+
+<details><summary>What it may answer (9)</summary>
+
+- **Anteil in Prozent** → `out:share` — Ein Anteil in Prozent, keine Menge.
+  - also written: Anteil am Gesamtverbrauch, EE-Anteil, Anteil erneuerbarer Energien
+- **Einsparung** → `out:saving` — Eine Differenz gegenüber einem Vergleichsjahr, keine Menge.
+  - also written: Reduktion gegenüber einem Vergleichsjahr
+- **Erzeugung oder Bereitstellung** → `out:generation` — Erzeugte oder bereitgestellte Energie, also die Seite vor dem Endverbrauch.
+  - also written: Wärmeerzeugung, Einspeisung, Wärmebereitstellung, Absatz
+- **Nutzenergie** → `out:useful_energy` — Die Wärme hinter dem Erzeuger, nach der Umwandlung: Nutzwärme, Heizwärme, Raumwärme. Nicht die an den Endverbraucher gelieferte Endenergie.
+  - also written: Nutzwärme, Heizwärme
+- **Potenzial** → `out:potential` — Ein erschließbares Maximum, keine im Bilanzjahr verbrauchte oder ausgestoßene Menge.
+  - also written: Ausbaupotenzial, technisches Potenzial, erschließbares Potenzial
+- **etwas anderes** → `out:other` — Etwas, das keiner der übrigen Einträge dieser Liste ist.
+- **final energy consumption value** → `OEO_00050016` — A final energy consumption value is an energy consumption value expressing the magnitude of the energy delivered to and consumed by end users.
+  - also written: Endenergieverbrauch, Endenergie, Endenergiebedarf, Wärmeverbrauch, Wärmebedarf, Fernwärmeverbrauch, Stromverbrauch, Erdgasverbrauch, zu deckender Wärmebedarf, Jahresendenergiebedarf, Endenergiebedarf für Wärme
+- **primary energy consumption value** → `OEO_00050018` — A primary energy consumption value is an energy consumption value expressing the magnitude of the total consumption of energy in a spatial region excluding the non-energetic use of fuels.
+  - also written: Primärenergieverbrauch, Primärenergie
+- **spezifischer Wert je Fläche, Kopf oder Einwohner** → `out:specific` — Ein Wert je Fläche, Kopf, Gebäude oder Kilowattstunde, keine Gesamtmenge.
+
+</details>
+
+- `role`: `type`
+
+<details><summary>Why</summary>
+
+The class of the value node itself (rdf:type). An out:* answer is a deliberate non-class and mints no node.
+
+</details>
+
+### `quantity_quote`
+
+The verbatim passage carrying 'quantity'. Present exactly when quantity_state is 'read'.
+
+### `quantity_raw`
+
+The document's own wording 'quantity' was read from. This is what a later re-mapping onto a changed vocabulary works on, so a choice without it is counted (raw_missing).
+
+### `quantity_raw_foreign`
+
+The wording does not name the option chosen for 'quantity' -- the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.
+
+### `quantity_seen`
+
+A wording the model noticed for 'quantity' while answering 'not stated'. Vocabulary review material, never evidence.
+
+### `quantity_source`
+
+Which source the passage for 'quantity' was found in. How far that may be from the row is the axis' own rule (own | local | any).
+
+### `quantity_state`
+
+How the coordinate 'quantity' ended. Always present: a missing key and a refused reading must not look alike.
+
+### `quantity_window`
+
+[stage, index] of the window 'quantity' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from.
+
+### `quote`
+
+The passage of the owner source that contains the value. Whitespace-collapsed containment; a retyped table row may be repaired, which sets the flag quote_repaired.
+
+### `scenario`
+
+Axis 'scenario' of Energieverbrauch. A closed list; an entry beginning 'out:' is a deliberate non-class answer and mints no node. null unless scenario_state is 'read' or 'derived'.
+
+The prompt's own wording:
+
+> Auf welchen Zustand bezieht sich der Wert? Der Bezug steht selten in der Zeile selbst, sondern im Titel der eigenen Tabelle, in der Abschnittsüberschrift oder in dem Satz, der die Tabelle ankündigt. Bestand heißt: erhoben oder bilanziert für ein vergangenes oder das laufende Jahr. Daran zu erkennen sind Bestandsanalyse, Ist-Zustand, Bilanzjahr, Ausgangslage, Energiebilanz, "bislang", "derzeit", "wird verbraucht", oder ein Jahr vor der Erstellung des Plans im Titel. Ein Satz wie "wie viel Wärme pro Jahr verbraucht wird und welche Energieträger dafür bislang eingesetzt werden" ist ein Bestand, auch wenn das Wort Bestandsanalyse nicht fällt. Trendszenario ist die Fortschreibung ohne zusätzliche Maßnahmen. Zielszenario ist der angestrebte Zustand, auch wenn der Plan ihm einen eigenen Namen gibt ("bei erhöhter Energieeinsparung", "Umsetzungsszenario 2", "Transformationspfad"); nennt die Quelle mehrere Zielszenarien nebeneinander, gehört der Name des konkreten in value_raw. Steht in der eigenen Quelle, in ihrem Abschnitt und in dem Satz davor nichts über den Zustand, dann ist das "out:unstated" und keine Schätzung.
+
+<details><summary>What it may answer (4)</summary>
+
+- **Bestand** → `status_quo` — Erhoben oder bilanziert für ein vergangenes oder das laufende Jahr.
+  - also written: Ist-Zustand, Bilanzjahr, Status quo, Bestandsanalyse, Basisjahr, Ist-Zustandsanalyse, Ist-Analyse, Erstellungsjahr
+- **Trendszenario** → `trend` — Die Fortschreibung ohne zusätzliche Maßnahmen.
+  - also written: Referenzszenario, Weiter-wie-bisher, Business as usual
+- **Variante oder Sensitivität neben dem Szenario** → `out:variant` — Eine Rechenvariante, die der Plan neben sein Szenario stellt, um eine Bandbreite zu zeigen.
+  - also written: Variante, Sensitivität, Bandbreite
+- **Zielszenario** → `target` — Der angestrebte Zustand eines künftigen Jahres, wie der Plan ihn erreichen will.
+  - also written: Zielbild, Zielwert, Zielpfad, Umsetzungsszenario, Transformationspfad
+
+</details>
+
+- `linked_by`: `{'label': 'has part', 'node': 'heatplan', 'predicate': 'BFO_0000051', 'prefix': 'obo'}`
+- `map`: `{'out:variant': {'note': 'not serialized'}, 'status_quo': {'class': 'MHPO_00020005'}, 'target': {'class': 'MHPO_00020007'}, 'trend': {'class': 'OEO_00020311', 'note': 'with existing measures scenario. Not OEO_00020314 reference scenario: that one is defined by a ROLE (`scenario and has role some reference role`) and carries no content, so it says a scenario was used as a comparison and not what it assumes. A Trendszenario is the continuation under the measures already decided, which is what WEM means.'}}`
+- `role`: `parent`
+
+<details><summary>Why</summary>
+
+Which container node holds the value: the plan has the container by `linked_by`, and the edge from the container down to the value is structural and named in kg.py. Only the target scenario is serialized today (G2).
+
+</details>
+
+### `scenario_quote`
+
+The verbatim passage carrying 'scenario'. Present exactly when scenario_state is 'read'.
+
+### `scenario_raw`
+
+The document's own wording 'scenario' was read from. This is what a later re-mapping onto a changed vocabulary works on, so a choice without it is counted (raw_missing).
+
+### `scenario_raw_foreign`
+
+The wording does not name the option chosen for 'scenario' -- the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.
+
+### `scenario_seen`
+
+A wording the model noticed for 'scenario' while answering 'not stated'. Vocabulary review material, never evidence.
+
+### `scenario_source`
+
+Which source the passage for 'scenario' was found in. How far that may be from the row is the axis' own rule (own | local | any).
+
+### `scenario_state`
+
+How the coordinate 'scenario' ended. Always present: a missing key and a refused reading must not look alike.
+
+### `scenario_window`
+
+[stage, index] of the window 'scenario' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from.
+
+### `sector`
+
+Axis 'sector' of Energieverbrauch. A closed list; an entry beginning 'out:' is a deliberate non-class answer and mints no node. null unless sector_state is 'read' or 'derived'.
+
+The prompt's own wording:
+
+> Welcher Verbrauchssektor? Die Bezeichnung steht in der Zeilenbeschriftung, im Spaltenkopf oder in der Blocküberschrift DERSELBEN Tabelle: "Wohnen" und "Wohngebäude" meinen die Klasse Private Haushalte, "GHD/Kommune", "Gewerbe" und "wirtschaftlich genutzte Gebäude" die Klasse GHD. Ein GEBIET ist kein Sektor: "Gesamtstadt", "Stadtgebiet", "Gemeinde" und "Plangebiet" sagen, WO die Zahl gilt, nicht für welchen Verbraucher, und sie sind auch keine Summe über die Sektoren. Eine Zeile, die ausdrücklich über alle Sektoren summiert ("Summe", "Gesamt", "insgesamt" als Zeilen- oder Spaltenkopf), ist "out:total". Hat die eigene Tabelle keine Sektorspalte und nennt ihr Titel keinen Sektor, dann ist das keine Klasse, sondern eine fehlende Angabe: antworte mit "out:unstated".
+
+<details><summary>What it may answer (6)</summary>
+
+- **GHD** → `OEO_00000405` — A commercial sector is a sector that covers non-industrial commercial activities.
+  - also written: Gewerbe, Handel, Dienstleistungen, Gewerbe/Handel/Dienstleistungen, öffentliche Gebäude, öffentliche Liegenschaften, kommunale Einrichtungen, GHD/Kommune, Gewerbe, wirtschaftlich genutzte Gebäude, kommerzieller Sektor
+- **Industrie** → `OEO_00000227` — An industry sector is a sector that covers industrial activities with other main purposes of energy transformation.
+  - also written: Industriesektor, verarbeitendes Gewerbe
+- **Landwirtschaft** → `OEO_00010035` — A agriculture, forestry and land use (AFOLU) sector is a sector that covers activities and natural processes from agriculture, forestry, land use and land use change.
+  - also written: Land- und Forstwirtschaft
+- **Private Haushalte** → `OEO_00000214` — A household sector is a sector that covers households.
+  - also written: Haushalte, Privathaushalte, Wohnen, Wohngebäude, Haushaltssektor
+- **Summe** → `out:total` — Eine Zeile, die ausdrücklich über alle Einträge summiert.
+  - also written: Gesamt, alle Sektoren, insgesamt
+- **Verkehr** → `OEO_00000422` — A transport sector is a sector that covers transport of people and/or goods.
+  - also written: Verkehrssektor
+
+</details>
+
+- `label`: `is about`
+- `predicate`: `IAO_0000136`
+- `prefix`: `obo`
+- `role`: `edge`
+
+<details><summary>Why</summary>
+
+Object is an OEO sector class. `is about` (obo:IAO_0000136), whose domain is information content entity and which our value classes are under. NOT oeo:OEO_00000523 covers energy carrier / oeo:OEO_00000505 covers sector: both are domained on oeo:OEO_00020011 study, an occurrent, while every quantity value is a continuant, and the pin asserts obo:BFO_0000002 disjointWith obo:BFO_0000003 -- so those two edges made the whole graph unsatisfiable. Nothing in the pinned release both ranges over carrier or sector and accepts a value as its subject; `is about` is what OEO itself writes on this class (OEO_00240019, the parent of OEO_00050016, carries two of them). The role of an object is read from its own class: energy carrier is under BFO_0000040 and sector under BFO_0000031, and those two are disjoint, so carrier and sector stay apart.
+
+</details>
+
+### `sector_quote`
+
+The verbatim passage carrying 'sector'. Present exactly when sector_state is 'read'.
+
+### `sector_raw`
+
+The document's own wording 'sector' was read from. This is what a later re-mapping onto a changed vocabulary works on, so a choice without it is counted (raw_missing).
+
+### `sector_raw_foreign`
+
+The wording does not name the option chosen for 'sector' -- the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.
+
+### `sector_seen`
+
+A wording the model noticed for 'sector' while answering 'not stated'. Vocabulary review material, never evidence.
+
+### `sector_source`
+
+Which source the passage for 'sector' was found in. How far that may be from the row is the axis' own rule (own | local | any).
+
+### `sector_state`
+
+How the coordinate 'sector' ended. Always present: a missing key and a refused reading must not look alike.
+
+### `sector_window`
+
+[stage, index] of the window 'sector' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from.
+
+### `spatial_scope`
+
+Axis 'spatial_scope' of Energieverbrauch. A closed list; an entry beginning 'out:' is a deliberate non-class answer and mints no node. null unless spatial_scope_state is 'read' or 'derived'.
+
+The prompt's own wording:
+
+> Auf welches Gebiet bezieht sich der Wert? Sieh ZUERST in der Zeile selbst nach: benennt die Zeilenbeschriftung ein Gebiet — einen Quartiersnamen, ein Eignungsgebiet, eine Straße —, dann ist DAS das Gebiet dieser Zeile und die Überschrift gilt für sie nicht. Eine Steckbrief- oder Quartierstabelle hat in jeder Zeile ein anderes Gebiet und in der Überschrift nur den Gemeindenamen; wer dann die Überschrift nimmt, legt vierzig Quartiere auf eine Koordinate. Erst wenn die Zeile kein Gebiet nennt, gilt die Überschrift oder die Caption. Bei einem Teilgebiet gehört sein NAME wörtlich in value_raw ("Fokusgebiet Eicken", "Quartier Nordstadt", "Wärmenetzgebiet 3"), ohne den Namen sind zwei Teilgebiete im Graphen nicht auseinanderzuhalten. Beim ganzen Gemeindegebiet reicht die Klasse.
+
+<details><summary>What it may answer (2)</summary>
+
+- **Gemeindegebiet** → `municipality` — Das ganze Gemeinde- oder Stadtgebiet des Plans.
+  - also written: Gesamtstadt, Stadtgebiet, gesamtes Plangebiet, Gemeinde insgesamt
+- **Teilgebiet** → `sub_area` — Ein benannter Teil davon: ein Quartier, ein Fokusgebiet, ein Wärmenetzgebiet.
+  - also written: Fokusgebiet, Quartier, Stadtteil, Baublock, Wärmenetzgebiet, Ortsteil
+
+</details>
+
+- `map`: `{'municipality': {'note': "the plan's own area, minted from the AGS"}, 'sub_area': {'class': 'MHPO_00020019', 'linked_by': {'label': 'part of', 'node': 'municipality', 'predicate': 'BFO_0000050', 'prefix': 'obo'}}}`
+- `role`: `parent`
+
+<details><summary>Why</summary>
+
+No relation from a value to its area exists in the schema yet, so a sub_area value is not serialized (TERM REQUEST 1).
+
+</details>
+
+### `spatial_scope_quote`
+
+The verbatim passage carrying 'spatial_scope'. Present exactly when spatial_scope_state is 'read'.
+
+### `spatial_scope_raw`
+
+The document's own wording 'spatial_scope' was read from. This is what a later re-mapping onto a changed vocabulary works on, so a choice without it is counted (raw_missing).
+
+### `spatial_scope_raw_foreign`
+
+The wording does not name the option chosen for 'spatial_scope' -- the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.
+
+### `spatial_scope_seen`
+
+A wording the model noticed for 'spatial_scope' while answering 'not stated'. Vocabulary review material, never evidence.
+
+### `spatial_scope_source`
+
+Which source the passage for 'spatial_scope' was found in. How far that may be from the row is the axis' own rule (own | local | any).
+
+### `spatial_scope_state`
+
+How the coordinate 'spatial_scope' ended. Always present: a missing key and a refused reading must not look alike.
+
+### `spatial_scope_window`
+
+[stage, index] of the window 'spatial_scope' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from.
+
+### `tier`
+
+text_located: the quote sits in the document's own refined text, so it can be checked against the PDF. visual_source: it sits in a table transcription, a caption or a figure description, which are model output and want human curation.
+
+### `unit`
+
+The unit, chosen from units_accepted (GWh, GWh/a, MWh, MWh/a, Mrd. kWh, TWh, TWh/a, kWh, kWh/a). A spelling the list does not hold is accepted with the flag unit_spelling.
+
+### `unit_raw`
+
+The unit exactly as the source writes it. This is evidence and is never looked up.
+
+### `value`
+
+The number as the document prints it, with the grouping removed and a decimal point.
+
+### `value_target`
+
+value x factor(unit), in the spec's unit_target OEO_00050008. This is the number the graph carries.
+
+### `year`
+
+Axis 'year' of Energieverbrauch. null unless year_state is 'read' or 'derived'.
+
+The prompt's own wording:
+
+> Für welches Kalenderjahr gilt diese Jahressumme? Vierstellig. Das Jahr steht fast nie in der Zeile der Zahl selbst. Sieh in dieser Reihenfolge nach: (1) die Kopfzelle der Spalte, in der die Zahl steht, (2) der Titel der eigenen Tabelle, (3) der Satz, der die Tabelle in ihrem Abschnitt ankündigt ("Für das Jahr 2040 ergeben sich die in den nachfolgenden Tabellen zusammengestellten Kennzahlen"), (4) die Überschrift des Abschnitts. Das Jahr im Titel einer ANDEREN Tabelle gilt nicht, auch wenn dieser Titel im selben Abschnitt steht. Nennt die Quelle einen Zeitraum statt eines Jahres ("Durchschnittswert der Jahre 2022-2024"), dann gehört das LETZTE Jahr in value und der Zeitraum wörtlich in value_raw.
+
+- `label`: `is about`
+- `object_class`: `OEO_00030033`
+- `predicate`: `IAO_0000136`
+- `prefix`: `obo`
+- `role`: `edge`
+
+<details><summary>Why</summary>
+
+The calendar year the aggregation is integrated over, as a node and no longer as a literal. A unit without a per-year marker carries the flag period:annual_in_quote or period:unstated. It was oeo:OEO_00020440 has scenario year value, which is wrong twice: its domain is oeo:OEO_00000365 scenario factsheet, so every value node was typed a factsheet and through it a document, and its declared range is xsd:dateTime while we wrote xsd:integer, which is an ill-typed literal. The pinned release has NO property at all whose domain a quantity value satisfies and whose range is a time, so the year becomes an object: `is about` a node of oeo:OEO_00030033 time step, "a one-dimensional temporal region that has a start time and an ending time". oeo:OEO_00020097 scenario year would be the narrower class and is not used, because it is defined as part of a scenario horizon and the inventory years are not. Cost, stated: the number 2030 is no longer a literal a reasoner can compare -- it is the node's IRI, its label, and part of the value's own identity. The term request is a property from quantity value to temporal region, and a way to write a year onto one.
+
+</details>
+
+### `year_quote`
+
+The verbatim passage carrying 'year'. Present exactly when year_state is 'read'.
+
+### `year_raw`
+
+The document's own wording 'year' was read from. This is what a later re-mapping onto a changed vocabulary works on, so a choice without it is counted (raw_missing).
+
+### `year_raw_foreign`
+
+The wording does not name the option chosen for 'year' -- the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.
+
+### `year_seen`
+
+A wording the model noticed for 'year' while answering 'not stated'. Vocabulary review material, never evidence.
+
+### `year_source`
+
+Which source the passage for 'year' was found in. How far that may be from the row is the axis' own rule (own | local | any).
+
+### `year_state`
+
+How the coordinate 'year' ended. Always present: a missing key and a refused reading must not look alike.
+
+### `year_window`
+
+[stage, index] of the window 'year' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from.
+
+A coordinate is `null` unless its `<axis>_state` says it was read or derived — that is what the `allOf` branches encode, one per coordinate.
+
+## `heat_load`
+
+How the row becomes a node:
+
+- `class_from`: `quantity`
+- `node`: `value`
+- `number`: `{'datatype': 'xsd:float', 'from': 'value_target', 'label': 'has number', 'predicate': 'OEO_00140178', 'prefix': 'oeo'}`
+- `unit`: `{'from': 'unit_target', 'label': 'has unit', 'predicate': 'OEO_00040010', 'prefix': 'oeo'}`
+
+### `aggregation`
+
+Axis 'aggregation' of Leistung. A closed list; an entry beginning 'out:' is a deliberate non-class answer and mints no node. null unless aggregation_state is 'read' or 'derived'.
+
+The prompt's own wording:
+
+> Wie ist der Wert über Zeit oder Raum zusammengefasst? Bei einer Leistung ist das eine echte Frage und keine Formsache. "maximum" bei einer Spitzenlast, einer Höchstlast oder einem Auslegungsfall. "integral" bei einer Summe über mehrere Anlagen oder über ein Gebiet, erkennbar an einer Zeile oder Spalte "Summe", "Gesamt" oder "insgesamt". "arithmetic mean" bei einem Durchschnitt ("Ø", "mittlere Leistung"). Die Leistung einer EINZELNEN Anlage ist keines davon: steht in der Quelle, in ihrem Abschnitt und in dem Satz davor nichts über die Zusammenfassung, dann ist das "out:unstated" und keine Schätzung.
+
+<details><summary>What it may answer (4)</summary>
+
+- **arithmetic mean** → `OEO_00140071` — average value calculated by arithmetic mean over a set of data values, e.g. within a time step or spatial region
+  - also written: Mittelwert, Durchschnitt
+- **integral** → `OEO_00140070` — sum or integral of values, e.g. within a time step or a spatial region
+  - also written: Summe, Gesamt, insgesamt
+- **maximum** → `OEO_00140073` — maximum value within a set of data values, e.g. in a time step or spatial region
+  - also written: Maximum, Spitzenwert, Spitzenlast
+- **minimum** → `OEO_00140072` — minimum value within a set of data values, e.g. in a time step or spatial region
+  - also written: Minimum, Tiefstwert
+
+</details>
+
+- `label`: `has aggregation type`
+- `predicate`: `OEO_00390023`
+- `prefix`: `oeo`
+- `role`: `edge`
+
+<details><summary>Why</summary>
+
+Object is a named individual of OEO_00140068 aggregation type. ASKED here and derived on the two amount parameters: a watt is not an amount integrated over a span, so the unit fixes nothing.
+
+</details>
+
+### `aggregation_quote`
+
+The verbatim passage carrying 'aggregation'. Present exactly when aggregation_state is 'read'.
+
+### `aggregation_raw`
+
+The document's own wording 'aggregation' was read from. This is what a later re-mapping onto a changed vocabulary works on, so a choice without it is counted (raw_missing).
+
+### `aggregation_raw_foreign`
+
+The wording does not name the option chosen for 'aggregation' -- the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.
+
+### `aggregation_seen`
+
+A wording the model noticed for 'aggregation' while answering 'not stated'. Vocabulary review material, never evidence.
+
+### `aggregation_source`
+
+Which source the passage for 'aggregation' was found in. How far that may be from the row is the axis' own rule (own | local | any).
+
+### `aggregation_state`
+
+How the coordinate 'aggregation' ended. Always present: a missing key and a refused reading must not look alike.
+
+### `aggregation_window`
+
+[stage, index] of the window 'aggregation' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from.
+
+### `carrier`
+
+Axis 'carrier' of Leistung. A closed list; an entry beginning 'out:' is a deliberate non-class answer and mints no node. null unless carrier_state is 'read' or 'derived'.
+
+The prompt's own wording:
+
+> Welcher Energieträger? Die Bezeichnung steht in der Zeilenbeschriftung, im Spaltenkopf oder in der Blocküberschrift, fast nie in der Schreibweise der Klassenliste: "Gas H" und "Erdgas (netzgebunden)" meinen die Klasse Erdgas, "Nahwärme" und "Wärmenetz" die Klasse Fernwärme. Eine Summenzeile ("Summe", "Gesamt", "alle Energieträger") ist "out:total", eine Restposition ("Sonstige", "Andere") ist "out:other". Passt fachlich weder eine Klasse noch einer dieser Einträge, etwa weil in der Spalte ein Gebäudetyp steht, dann lass die Zeile weg.
+
+<details><summary>What it may answer (29)</summary>
+
+- **Abfallbrennstoff** → `OEO_00000439` — A waste fuel is a fuel in which the material entity is waste.
+  - also written: Klärschlamm, EBS
+- **Abwärme** → `OEO_00010114`
+  - also written: unvermeidbare Abwärme
+- **Biogas** → `OEO_00000074`
+  - also written: aufbereitetes Biogas, Klärgas, Faulgas, Klärschlammgas
+- **Biomasse** → `OEO_00010214`
+  - also written: pflanzliche Biomasse, landwirtschaftliche Biomasse
+- **Biomethan** → `OEO_00010215`
+- **Braunkohle** → `OEO_00000251`
+- **Erdgas** → `OEO_00000292`
+  - also written: Gas
+- **Fernwärme** → `OEO_00000132`
+  - also written: Wärmenetze, Wärmenetz, Nahwärme
+- **Flüssiggas** → `OEO_00320011` — Liquefied petroleum gas (LPG) is gas mixture of hydrocarbon gases, mainly propane and butane.
+- **Geothermie** → `OEO_00000191`
+  - also written: Erdwärme, oberflächennahe Geothermie, Tiefengeothermie, Erdwärmesonde, Erdwärmekollektor, Oberflächengeothermie
+- **Heizöl** → `OEO_00000211`
+  - also written: Öl
+- **Holz** → `OEO_00000449`
+  - also written: Holzpellets, Pellets, Hackschnitzel, Brennholz, Holzenergie
+- **Kohle** → `OEO_00000088`
+- **Siedlungsabfälle** → `OEO_00000290` — A municipal waste fuel is waste fuel produced by households or non-industrial commercial activities.
+  - also written: Abfall, thermische Abfallverwertung
+- **Solarthermie** → `OEO_00000388`
+  - also written: solare Wärme
+- **Sonstige** → `out:other` — Etwas, das keiner der übrigen Einträge dieser Liste ist.
+  - also written: Andere, sonstige Energieträger, Sonstige Wärmequellen, Rest
+- **Steinkohle** → `OEO_00000204`
+- **Strom** → `OEO_00000139` — Electrical energy is a form of energy derived from the potential or kinetic energy of charged particles.
+  - also written: Elektrizität, Heizungsstrom, Wärmestrom, Direktstrom
+- **Summe** → `out:total` — Eine Zeile, die ausdrücklich über alle Einträge summiert.
+  - also written: Gesamt, Gesamtwert, Gesamtsumme, alle Energieträger, insgesamt
+- **Umweltwärme** → `OEO_00000056` — Ambient thermal energy is thermal energy that is stored in the ambient air, beneath the surface of solid earth or in surface water. It is captured by heat pumps.
+  - also written: Umgebungswärme, Umgebungsluft
+- **Wasserstoff** → `OEO_00000220`
+  - also written: H2
+- **anthropogene Umweltwärme** → `OEO_00140105` — Artificial ambient thermal energy is ambient thermal energy that has an anthropogenic origin.
+  - also written: Abwasserwärme, Abwasser, Abwasserwärmenutzung
+- **biogener Abfallbrennstoff** → `OEO_00010223` — A biogenic waste fuel is a waste fuel that has a biogenic origin.
+  - also written: Altholz, Altholzheizung, biogene Abfälle
+- **biogener Festbrennstoff** → `OEO_00000332`
+  - also written: biogene Festbrennstoffe, sonstige biogene Festbrennstoffe
+- **biogener Siedlungsabfall** → `OEO_00000356` — A biogenic municipal waste fuel is a municipal waste fuel that has a biogenic origin.
+  - also written: Biogut, Gartenabfälle, Grünschnitt
+- **industrielle Abwärme** → `OEO_00310004`
+- **landwirtschaftlicher Abfallbrennstoff** → `OEO_00020495` — An angricultural waste fuel is waste fuel produced by agriculture.
+  - also written: tierische Exkremente, Gülle, Mist
+- **natürliche Umweltwärme** → `OEO_00140104` — Natural ambient thermal energy is ambient thermal energy that has a renewable origin.
+  - also written: Oberflächengewässer, Seethermie, Flusswärme
+- **synthetische Gase** → `OEO_00010155`
+  - also written: grüne Gase, E-Gas, SNG
+
+</details>
+
+- `label`: `is about`
+- `outside_root`: `{'OEO_00000056': 'ambient heat', 'OEO_00000132': 'district heating', 'OEO_00000139': 'electrical energy', 'OEO_00000191': 'geothermal energy', 'OEO_00000388': 'solar thermal energy', 'OEO_00010114': 'waste heat', 'OEO_00140104': 'surface water heat', 'OEO_00140105': 'waste water heat', 'OEO_00310004': 'industrial waste heat'}`
+- `predicate`: `IAO_0000136`
+- `prefix`: `obo`
+- `role`: `edge`
+
+<details><summary>Why</summary>
+
+Object is an OEO class (punning). `is about` (obo:IAO_0000136), whose domain is information content entity and which our value classes are under. NOT oeo:OEO_00000523 covers energy carrier / oeo:OEO_00000505 covers sector: both are domained on oeo:OEO_00020011 study, an occurrent, while every quantity value is a continuant, and the pin asserts obo:BFO_0000002 disjointWith obo:BFO_0000003 -- so those two edges made the whole graph unsatisfiable. Nothing in the pinned release both ranges over carrier or sector and accepts a value as its subject; `is about` is what OEO itself writes on this class (OEO_00240019, the parent of OEO_00050016, carries two of them). The role of an object is read from its own class: energy carrier is under BFO_0000040 and sector under BFO_0000031, and those two are disjoint, so carrier and sector stay apart. `outside_root` names the nine classes the plans write in the carrier column that OEO does not place under energy carrier -- district heat, electricity, solar thermal, geothermal and the ambient heat sources. They used to lose this edge, because `covers energy carrier` ranges over energy carrier and asserting them would have contradicted the TBox; `is about` declares no range, so they keep it and only the count remains, as the argument for the axioms the ontology side is adding.
+
+</details>
+
+### `carrier_quote`
+
+The verbatim passage carrying 'carrier'. Present exactly when carrier_state is 'read'.
+
+### `carrier_raw`
+
+The document's own wording 'carrier' was read from. This is what a later re-mapping onto a changed vocabulary works on, so a choice without it is counted (raw_missing).
+
+### `carrier_raw_foreign`
+
+The wording does not name the option chosen for 'carrier' -- the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.
+
+### `carrier_seen`
+
+A wording the model noticed for 'carrier' while answering 'not stated'. Vocabulary review material, never evidence.
+
+### `carrier_source`
+
+Which source the passage for 'carrier' was found in. How far that may be from the row is the axis' own rule (own | local | any).
+
+### `carrier_state`
+
+How the coordinate 'carrier' ended. Always present: a missing key and a refused reading must not look alike.
+
+### `carrier_window`
+
+[stage, index] of the window 'carrier' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from.
+
+### `compute`
+
+The sandbox runs behind a computed value: {code, stdout, ok, error}.
+
+### `computed`
+
+The value came out of the sandbox, not off the page; the quote proves the inputs it was computed from.
+
+### `flags`
+
+Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping a word the spec does not list; period:* says whether a bare amount was shown to be a yearly one; review:* is what a second reading of this value under a narrower window came to, and only review:disagree is a reason.
+
+### `kind`
+
+### `parameter`
+
+Spec parameter: Leistung.
+
+The prompt's own wording:
+
+> Um WELCHE Kennzahl handelt es sich bei dieser Zahl? Entscheide danach, was die Quelle über sie sagt: die Einheit, die Spalten- oder Zeilenbeschriftung und die Tabellen- oder Abschnittsüberschrift. Eine Angabe in t CO2 ist eine Emission, eine Angabe in MWh oder GWh ein Energieverbrauch. Zitiere die Stelle, aus der das hervorgeht. Eine Angabe in kW, MW oder GW ist eine Leistung.
+
+### `parameter_quote`
+
+The verbatim passage carrying 'parameter'. Present exactly when parameter_state is 'read'.
+
+### `parameter_raw`
+
+The document's own wording 'parameter' was read from. This is what a later re-mapping onto a changed vocabulary works on, so a choice without it is counted (raw_missing).
+
+### `parameter_raw_foreign`
+
+The wording does not name the option chosen for 'parameter' -- the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.
+
+### `parameter_seen`
+
+A wording the model noticed for 'parameter' while answering 'not stated'. Vocabulary review material, never evidence.
+
+### `parameter_source`
+
+Which source the passage for 'parameter' was found in. How far that may be from the row is the axis' own rule (own | local | any).
+
+### `parameter_state`
+
+How the coordinate 'parameter' ended. Always present: a missing key and a refused reading must not look alike.
+
+### `parameter_window`
+
+[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from.
+
+### `provenance`
+
+### `quantity`
+
+Axis 'quantity' of Leistung. A closed list; an entry beginning 'out:' is a deliberate non-class answer and mints no node. null unless quantity_state is 'read' or 'derived'.
+
+The prompt's own wording:
+
+> Welche Größe ist diese Zahl? Das ist die wichtigste Entscheidung des Tupels, denn sie bestimmt, als welche Klasse der Wert im Graphen steht. "power value" ist definiert als quantity value mit einer Leistungseinheit: eine Heizlast, eine Anschlussleistung, eine Nennwärmeleistung, eine Netz- oder Erzeugerleistung. Die ABGEGEBENE ELEKTRISCHE Leistung derselben Anlage ist "out:electric" und nicht dieselbe Klasse: sie steht in einer eigenen Spalte, trägt denselben Energieträger und wäre im Graphen von der Wärmeleistung nicht zu unterscheiden. Gibt die Quelle die Leistung getrennt für Winter und Sommer an, dann ist das "out:seasonal" für BEIDE Werte.
+
+<details><summary>What it may answer (6)</summary>
+
+- **Leistungspotenzial** → `out:potential` — Ein erschließbares Maximum, keine im Bilanzjahr bereitgestellte oder nachgefragte Leistung.
+  - also written: Ausbaupotenzial, technisches Potenzial, erschließbares Potenzial
+- **elektrische Leistung** → `out:electric` — Die abgegebene ELEKTRISCHE Leistung einer Anlage, nicht ihre Wärmeleistung. Der Graph nimmt sie nicht auf: sie trägt denselben Energieträger wie die Wärmeleistung derselben Zeile und wäre von ihr nicht zu unterscheiden.
+  - also written: Elektrische Leistung, el. Leistung, Elektrische Nennleistung, kW elektrisch, Stromlastspitze, Modulleistung
+- **etwas anderes** → `out:other` — Etwas, das keiner der übrigen Einträge dieser Liste ist.
+- **getrennt für Winter und Sommer angegebene Leistung** → `out:seasonal` — Eine Leistung, die die Quelle getrennt für Winter und Sommer angibt. Der Graph hat keine Koordinate für die Jahreszeit, also nimmt er beide Werte nicht auf.
+  - also written: Ø Winter, Ø Sommer, Winterfall, Sommerfall
+- **power value** → `OEO_00010157` — A power value is a quantity value that has a power unit as unit.
+  - also written: Wärmeleistung, Heizlast, Anschlussleistung, Leistungsbedarf, Netzleistung, thermische Leistung, Thermische Nutzleistung, Nennwärmeleistung, installierte Leistung, Entzugsleistung, Nennleistung, Feuerungswärmeleistung
+- **spezifischer Wert je Fläche, Kopf oder Gebäude** → `out:specific` — Ein Wert je Fläche, Kopf, Gebäude oder Meter, keine Gesamtleistung.
+
+</details>
+
+- `role`: `type`
+
+<details><summary>Why</summary>
+
+The class of the value node itself (rdf:type). OEO_00010157 is defined by its unit -- "a quantity value that has a power unit as unit" -- so it follows from units_accepted and is not a second assertion. An out:* answer is a deliberate non-class and mints no node.
+
+</details>
+
+### `quantity_quote`
+
+The verbatim passage carrying 'quantity'. Present exactly when quantity_state is 'read'.
+
+### `quantity_raw`
+
+The document's own wording 'quantity' was read from. This is what a later re-mapping onto a changed vocabulary works on, so a choice without it is counted (raw_missing).
+
+### `quantity_raw_foreign`
+
+The wording does not name the option chosen for 'quantity' -- the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.
+
+### `quantity_seen`
+
+A wording the model noticed for 'quantity' while answering 'not stated'. Vocabulary review material, never evidence.
+
+### `quantity_source`
+
+Which source the passage for 'quantity' was found in. How far that may be from the row is the axis' own rule (own | local | any).
+
+### `quantity_state`
+
+How the coordinate 'quantity' ended. Always present: a missing key and a refused reading must not look alike.
+
+### `quantity_window`
+
+[stage, index] of the window 'quantity' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from.
+
+### `quote`
+
+The passage of the owner source that contains the value. Whitespace-collapsed containment; a retyped table row may be repaired, which sets the flag quote_repaired.
+
+### `scenario`
+
+Axis 'scenario' of Leistung. A closed list; an entry beginning 'out:' is a deliberate non-class answer and mints no node. null unless scenario_state is 'read' or 'derived'.
+
+The prompt's own wording:
+
+> Auf welchen Zustand bezieht sich der Wert? Der Bezug steht selten in der Zeile selbst, sondern im Titel der eigenen Tabelle, in der Abschnittsüberschrift oder in dem Satz, der die Tabelle ankündigt. Bestand heißt: erhoben oder bilanziert für ein vergangenes oder das laufende Jahr. Daran zu erkennen sind Bestandsanalyse, Ist-Zustand, Bilanzjahr, Ausgangslage, Energiebilanz, "bislang", "derzeit", "wird verbraucht", oder ein Jahr vor der Erstellung des Plans im Titel. Ein Satz wie "wie viel Wärme pro Jahr verbraucht wird und welche Energieträger dafür bislang eingesetzt werden" ist ein Bestand, auch wenn das Wort Bestandsanalyse nicht fällt. Trendszenario ist die Fortschreibung ohne zusätzliche Maßnahmen. Zielszenario ist der angestrebte Zustand, auch wenn der Plan ihm einen eigenen Namen gibt ("bei erhöhter Energieeinsparung", "Umsetzungsszenario 2", "Transformationspfad"); nennt die Quelle mehrere Zielszenarien nebeneinander, gehört der Name des konkreten in value_raw. Steht in der eigenen Quelle, in ihrem Abschnitt und in dem Satz davor nichts über den Zustand, dann ist das "out:unstated" und keine Schätzung.
+
+<details><summary>What it may answer (4)</summary>
+
+- **Bestand** → `status_quo` — Erhoben oder bilanziert für ein vergangenes oder das laufende Jahr.
+  - also written: Ist-Zustand, Bilanzjahr, Status quo, Bestandsanalyse, Basisjahr, Ist-Zustandsanalyse, Ist-Analyse, Erstellungsjahr
+- **Trendszenario** → `trend` — Die Fortschreibung ohne zusätzliche Maßnahmen.
+  - also written: Referenzszenario, Weiter-wie-bisher, Business as usual
+- **Variante oder Sensitivität neben dem Szenario** → `out:variant` — Eine Rechenvariante, die der Plan neben sein Szenario stellt, um eine Bandbreite zu zeigen.
+  - also written: Variante, Sensitivität, Bandbreite
+- **Zielszenario** → `target` — Der angestrebte Zustand eines künftigen Jahres, wie der Plan ihn erreichen will.
+  - also written: Zielbild, Zielwert, Zielpfad, Umsetzungsszenario, Transformationspfad
+
+</details>
+
+- `linked_by`: `{'label': 'has part', 'node': 'heatplan', 'predicate': 'BFO_0000051', 'prefix': 'obo'}`
+- `map`: `{'out:variant': {'note': 'not serialized'}, 'status_quo': {'class': 'MHPO_00020005'}, 'target': {'class': 'MHPO_00020007'}, 'trend': {'class': 'OEO_00020311', 'note': 'with existing measures scenario. Not OEO_00020314 reference scenario: that one is defined by a ROLE (`scenario and has role some reference role`) and carries no content, so it says a scenario was used as a comparison and not what it assumes. A Trendszenario is the continuation under the measures already decided, which is what WEM means.'}}`
+- `role`: `parent`
+
+<details><summary>Why</summary>
+
+Which container node holds the value: the plan has the container by `linked_by`, and the edge from the container down to the value is structural and named in kg.py. Only the target scenario is serialized today (G2).
+
+</details>
+
+### `scenario_quote`
+
+The verbatim passage carrying 'scenario'. Present exactly when scenario_state is 'read'.
+
+### `scenario_raw`
+
+The document's own wording 'scenario' was read from. This is what a later re-mapping onto a changed vocabulary works on, so a choice without it is counted (raw_missing).
+
+### `scenario_raw_foreign`
+
+The wording does not name the option chosen for 'scenario' -- the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.
+
+### `scenario_seen`
+
+A wording the model noticed for 'scenario' while answering 'not stated'. Vocabulary review material, never evidence.
+
+### `scenario_source`
+
+Which source the passage for 'scenario' was found in. How far that may be from the row is the axis' own rule (own | local | any).
+
+### `scenario_state`
+
+How the coordinate 'scenario' ended. Always present: a missing key and a refused reading must not look alike.
+
+### `scenario_window`
+
+[stage, index] of the window 'scenario' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from.
+
+### `sector`
+
+Axis 'sector' of Leistung. A closed list; an entry beginning 'out:' is a deliberate non-class answer and mints no node. null unless sector_state is 'read' or 'derived'.
+
+The prompt's own wording:
+
+> Welcher Verbrauchssektor? Die Bezeichnung steht in der Zeilenbeschriftung, im Spaltenkopf oder in der Blocküberschrift DERSELBEN Tabelle: "Wohnen" und "Wohngebäude" meinen die Klasse Private Haushalte, "GHD/Kommune", "Gewerbe" und "wirtschaftlich genutzte Gebäude" die Klasse GHD. Ein GEBIET ist kein Sektor: "Gesamtstadt", "Stadtgebiet", "Gemeinde" und "Plangebiet" sagen, WO die Zahl gilt, nicht für welchen Verbraucher, und sie sind auch keine Summe über die Sektoren. Eine Zeile, die ausdrücklich über alle Sektoren summiert ("Summe", "Gesamt", "insgesamt" als Zeilen- oder Spaltenkopf), ist "out:total". Hat die eigene Tabelle keine Sektorspalte und nennt ihr Titel keinen Sektor, dann ist das keine Klasse, sondern eine fehlende Angabe: antworte mit "out:unstated".
+
+<details><summary>What it may answer (6)</summary>
+
+- **GHD** → `OEO_00000405` — A commercial sector is a sector that covers non-industrial commercial activities.
+  - also written: Gewerbe, Handel, Dienstleistungen, Gewerbe/Handel/Dienstleistungen, öffentliche Gebäude, öffentliche Liegenschaften, kommunale Einrichtungen, GHD/Kommune, Gewerbe, wirtschaftlich genutzte Gebäude, kommerzieller Sektor
+- **Industrie** → `OEO_00000227` — An industry sector is a sector that covers industrial activities with other main purposes of energy transformation.
+  - also written: Industriesektor, verarbeitendes Gewerbe
+- **Landwirtschaft** → `OEO_00010035` — A agriculture, forestry and land use (AFOLU) sector is a sector that covers activities and natural processes from agriculture, forestry, land use and land use change.
+  - also written: Land- und Forstwirtschaft
+- **Private Haushalte** → `OEO_00000214` — A household sector is a sector that covers households.
+  - also written: Haushalte, Privathaushalte, Wohnen, Wohngebäude, Haushaltssektor
+- **Summe** → `out:total` — Eine Zeile, die ausdrücklich über alle Einträge summiert.
+  - also written: Gesamt, alle Sektoren, insgesamt
+- **Verkehr** → `OEO_00000422` — A transport sector is a sector that covers transport of people and/or goods.
+  - also written: Verkehrssektor
+
+</details>
+
+- `label`: `is about`
+- `predicate`: `IAO_0000136`
+- `prefix`: `obo`
+- `role`: `edge`
+
+<details><summary>Why</summary>
+
+Object is an OEO sector class. `is about` (obo:IAO_0000136), whose domain is information content entity and which our value classes are under. NOT oeo:OEO_00000523 covers energy carrier / oeo:OEO_00000505 covers sector: both are domained on oeo:OEO_00020011 study, an occurrent, while every quantity value is a continuant, and the pin asserts obo:BFO_0000002 disjointWith obo:BFO_0000003 -- so those two edges made the whole graph unsatisfiable. Nothing in the pinned release both ranges over carrier or sector and accepts a value as its subject; `is about` is what OEO itself writes on this class (OEO_00240019, the parent of OEO_00050016, carries two of them). The role of an object is read from its own class: energy carrier is under BFO_0000040 and sector under BFO_0000031, and those two are disjoint, so carrier and sector stay apart.
+
+</details>
+
+### `sector_quote`
+
+The verbatim passage carrying 'sector'. Present exactly when sector_state is 'read'.
+
+### `sector_raw`
+
+The document's own wording 'sector' was read from. This is what a later re-mapping onto a changed vocabulary works on, so a choice without it is counted (raw_missing).
+
+### `sector_raw_foreign`
+
+The wording does not name the option chosen for 'sector' -- the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.
+
+### `sector_seen`
+
+A wording the model noticed for 'sector' while answering 'not stated'. Vocabulary review material, never evidence.
+
+### `sector_source`
+
+Which source the passage for 'sector' was found in. How far that may be from the row is the axis' own rule (own | local | any).
+
+### `sector_state`
+
+How the coordinate 'sector' ended. Always present: a missing key and a refused reading must not look alike.
+
+### `sector_window`
+
+[stage, index] of the window 'sector' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from.
+
+### `spatial_scope`
+
+Axis 'spatial_scope' of Leistung. A closed list; an entry beginning 'out:' is a deliberate non-class answer and mints no node. null unless spatial_scope_state is 'read' or 'derived'.
+
+The prompt's own wording:
+
+> Auf welches Gebiet bezieht sich der Wert? Sieh ZUERST in der Zeile selbst nach: benennt die Zeilenbeschriftung ein Gebiet — einen Quartiersnamen, ein Eignungsgebiet, eine Straße —, dann ist DAS das Gebiet dieser Zeile und die Überschrift gilt für sie nicht. Eine Steckbrief- oder Quartierstabelle hat in jeder Zeile ein anderes Gebiet und in der Überschrift nur den Gemeindenamen; wer dann die Überschrift nimmt, legt vierzig Quartiere auf eine Koordinate. Erst wenn die Zeile kein Gebiet nennt, gilt die Überschrift oder die Caption. Bei einem Teilgebiet gehört sein NAME wörtlich in value_raw ("Fokusgebiet Eicken", "Quartier Nordstadt", "Wärmenetzgebiet 3"), ohne den Namen sind zwei Teilgebiete im Graphen nicht auseinanderzuhalten. Beim ganzen Gemeindegebiet reicht die Klasse.
+
+<details><summary>What it may answer (2)</summary>
+
+- **Gemeindegebiet** → `municipality` — Das ganze Gemeinde- oder Stadtgebiet des Plans.
+  - also written: Gesamtstadt, Stadtgebiet, gesamtes Plangebiet, Gemeinde insgesamt
+- **Teilgebiet** → `sub_area` — Ein benannter Teil davon: ein Quartier, ein Fokusgebiet, ein Wärmenetzgebiet.
+  - also written: Fokusgebiet, Quartier, Stadtteil, Baublock, Wärmenetzgebiet, Ortsteil
+
+</details>
+
+- `map`: `{'municipality': {'note': "the plan's own area, minted from the AGS"}, 'sub_area': {'class': 'MHPO_00020019', 'linked_by': {'label': 'part of', 'node': 'municipality', 'predicate': 'BFO_0000050', 'prefix': 'obo'}}}`
+- `role`: `parent`
+
+<details><summary>Why</summary>
+
+No relation from a value to its area exists in the schema yet, so a sub_area value is not serialized (TERM REQUEST 1).
+
+</details>
+
+### `spatial_scope_quote`
+
+The verbatim passage carrying 'spatial_scope'. Present exactly when spatial_scope_state is 'read'.
+
+### `spatial_scope_raw`
+
+The document's own wording 'spatial_scope' was read from. This is what a later re-mapping onto a changed vocabulary works on, so a choice without it is counted (raw_missing).
+
+### `spatial_scope_raw_foreign`
+
+The wording does not name the option chosen for 'spatial_scope' -- the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.
+
+### `spatial_scope_seen`
+
+A wording the model noticed for 'spatial_scope' while answering 'not stated'. Vocabulary review material, never evidence.
+
+### `spatial_scope_source`
+
+Which source the passage for 'spatial_scope' was found in. How far that may be from the row is the axis' own rule (own | local | any).
+
+### `spatial_scope_state`
+
+How the coordinate 'spatial_scope' ended. Always present: a missing key and a refused reading must not look alike.
+
+### `spatial_scope_window`
+
+[stage, index] of the window 'spatial_scope' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from.
+
+### `tier`
+
+text_located: the quote sits in the document's own refined text, so it can be checked against the PDF. visual_source: it sits in a table transcription, a caption or a figure description, which are model output and want human curation.
+
+### `unit`
+
+The unit, chosen from units_accepted (GW, MW, MWth, kW, kWth). A spelling the list does not hold is accepted with the flag unit_spelling.
+
+### `unit_raw`
+
+The unit exactly as the source writes it. This is evidence and is never looked up.
+
+### `value`
+
+The number as the document prints it, with the grouping removed and a decimal point.
+
+### `value_target`
+
+value x factor(unit), in the spec's unit_target OEO_00390001. This is the number the graph carries.
+
+### `year`
+
+Axis 'year' of Leistung. null unless year_state is 'read' or 'derived'.
+
+The prompt's own wording:
+
+> Für welches Kalenderjahr gilt diese Jahressumme? Vierstellig. Das Jahr steht fast nie in der Zeile der Zahl selbst. Sieh in dieser Reihenfolge nach: (1) die Kopfzelle der Spalte, in der die Zahl steht, (2) der Titel der eigenen Tabelle, (3) der Satz, der die Tabelle in ihrem Abschnitt ankündigt ("Für das Jahr 2040 ergeben sich die in den nachfolgenden Tabellen zusammengestellten Kennzahlen"), (4) die Überschrift des Abschnitts. Das Jahr im Titel einer ANDEREN Tabelle gilt nicht, auch wenn dieser Titel im selben Abschnitt steht. Nennt die Quelle einen Zeitraum statt eines Jahres ("Durchschnittswert der Jahre 2022-2024"), dann gehört das LETZTE Jahr in value und der Zeitraum wörtlich in value_raw.
+
+- `label`: `is about`
+- `object_class`: `OEO_00030033`
+- `predicate`: `IAO_0000136`
+- `prefix`: `obo`
+- `role`: `edge`
+
+<details><summary>Why</summary>
+
+The calendar year the power is stated for, as a node and no longer as a literal. A unit without a per-year marker carries the flag period:annual_in_quote or period:unstated. It was oeo:OEO_00020440 has scenario year value, which is wrong twice: its domain is oeo:OEO_00000365 scenario factsheet, so every value node was typed a factsheet and through it a document, and its declared range is xsd:dateTime while we wrote xsd:integer, which is an ill-typed literal. The pinned release has NO property at all whose domain a quantity value satisfies and whose range is a time, so the year becomes an object: `is about` a node of oeo:OEO_00030033 time step, "a one-dimensional temporal region that has a start time and an ending time". oeo:OEO_00020097 scenario year would be the narrower class and is not used, because it is defined as part of a scenario horizon and the inventory years are not. Cost, stated: the number 2030 is no longer a literal a reasoner can compare -- it is the node's IRI, its label, and part of the value's own identity. The term request is a property from quantity value to temporal region, and a way to write a year onto one.
+
+</details>
+
+### `year_quote`
+
+The verbatim passage carrying 'year'. Present exactly when year_state is 'read'.
+
+### `year_raw`
+
+The document's own wording 'year' was read from. This is what a later re-mapping onto a changed vocabulary works on, so a choice without it is counted (raw_missing).
+
+### `year_raw_foreign`
+
+The wording does not name the option chosen for 'year' -- the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.
+
+### `year_seen`
+
+A wording the model noticed for 'year' while answering 'not stated'. Vocabulary review material, never evidence.
+
+### `year_source`
+
+Which source the passage for 'year' was found in. How far that may be from the row is the axis' own rule (own | local | any).
+
+### `year_state`
+
+How the coordinate 'year' ended. Always present: a missing key and a refused reading must not look alike.
+
+### `year_window`
+
+[stage, index] of the window 'year' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from.
+
+A coordinate is `null` unless its `<axis>_state` says it was read or derived — that is what the `allOf` branches encode, one per coordinate.
+
+## `planning_organisation`
+
+How the row becomes a node:
+
+- `class`: `OEO_00030022`
+- `edge_from_plan`: `{'label': 'has organisation', 'predicate': 'OEO_00000510', 'prefix': 'oeo'}`
+- `label`: `rdfs:label, legal form stripped`
+- `node`: `organisation`
+
+### `compute`
+
+The sandbox runs behind a computed value: {code, stdout, ok, error}.
+
+### `computed`
+
+The value came out of the sandbox, not off the page; the quote proves the inputs it was computed from.
+
+### `flags`
+
+Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping a word the spec does not list; period:* says whether a bare amount was shown to be a yearly one; review:* is what a second reading of this value under a narrower window came to, and only review:disagree is a reason.
+
+### `kind`
+
+### `parameter`
+
+Spec parameter: Beauftragtes Planungsbüro.
+
+The prompt's own wording:
+
+> Um WELCHE Kennzahl handelt es sich bei dieser Zahl? Entscheide danach, was die Quelle über sie sagt: die Einheit, die Spalten- oder Zeilenbeschriftung und die Tabellen- oder Abschnittsüberschrift. Eine Angabe in t CO2 ist eine Emission, eine Angabe in MWh oder GWh ein Energieverbrauch. Zitiere die Stelle, aus der das hervorgeht. Eine Angabe in kW, MW oder GW ist eine Leistung.
+
+### `parameter_quote`
+
+The verbatim passage carrying 'parameter'. Present exactly when parameter_state is 'read'.
+
+### `parameter_raw`
+
+The document's own wording 'parameter' was read from. This is what a later re-mapping onto a changed vocabulary works on, so a choice without it is counted (raw_missing).
+
+### `parameter_raw_foreign`
+
+The wording does not name the option chosen for 'parameter' -- the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.
+
+### `parameter_seen`
+
+A wording the model noticed for 'parameter' while answering 'not stated'. Vocabulary review material, never evidence.
+
+### `parameter_source`
+
+Which source the passage for 'parameter' was found in. How far that may be from the row is the axis' own rule (own | local | any).
+
+### `parameter_state`
+
+How the coordinate 'parameter' ended. Always present: a missing key and a refused reading must not look alike.
+
+### `parameter_window`
+
+[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from.
+
+### `provenance`
+
+### `quote`
+
+The passage of the owner source that contains the value. Whitespace-collapsed containment; a retyped table row may be repaired, which sets the flag quote_repaired.
+
+### `tier`
+
+text_located: the quote sits in the document's own refined text, so it can be checked against the PDF. visual_source: it sits in a table transcription, a caption or a figure description, which are model output and want human curation.
+
+### `unit`
+
+Empty: a wording has no unit. The key is present so every row has the same shape.
+
+### `unit_raw`
+
+Empty, as unit.
+
+### `value`
+
+The wording as the document writes it.
+
+### `value_raw`
+
+The wording before any tidying (an organisation's legal form, a title's line break).
+
+### `value_uri`
+
+The entry of the parameter's own vocabulary the wording resolved to; null when the list did not hold it. Only a category parameter has a vocabulary, so this one never writes the key at all.
+
+[Back to the index](../README.md)

@@ -59,6 +59,8 @@ DB_PATH    = _path("INFERENCE_DB_PATH", lambda p: p.db_path, "data/KWP.db")
 INDEX_PATH = _path("INFERENCE_INDEX_PATH", lambda p: p.index_path, "data/faiss_index.bin")
 # Paths stored in Tables.path / Images.path are resolved against this root.
 IMAGE_ROOT = _path("INFERENCE_IMAGE_ROOT", lambda p: p.processed_dir, "data/pdf/processed")
+# The graph `--serialize` wrote. Missing -> the graph route is not offered.
+KG_TTL_PATH = _path("INFERENCE_KG_TTL_PATH", lambda p: p.root / "graph.ttl", "data/graph.ttl")
 
 # ---------------------------------------------------------------------------
 # Embedding backend

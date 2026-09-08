@@ -1,0 +1,95 @@
+# The chat over the corpus
+
+| | |
+|---|---|
+| **In** | The corpus DB (`KWP.db` / profile `db_path`, read-only), the global FAISS index (`faiss_index.bin`), and `IMAGE_ROOT`/`PDF_ROOT` for resolving table/figure PNGs and source PDFs. |
+| **Out** | Only its own SQLite caches -- `QUERY_CACHE_PATH` (query-to-vector) and `REQUEST_LOG_PATH` (request log + cached text-mode answers); chat history itself lives only in Streamlit session state. |
+| **Resumes on** | No stamps to resume from: an identical query, or a cached successful text-mode turn, is served straight from `QUERY_CACHE_PATH`/`REQUEST_LOG_PATH` without touching the model; force fresh work by changing the query text or deleting those two cache files. |
+
+`scripts/inference_app` is the interactive counterpart to the batch pipeline. Where the six pipeline stages turn PDFs into a searchable, versioned corpus, this stage turns that corpus into a chat: a person picks one document (or several, to compare), types an extraction task in plain language, and gets back an answer grounded in a citation that traces to a page and, where the geometry survived, to the exact highlighted passage on it. It is a thin layer. The turn itself -- search-phrase construction, retrieval, answering -- lives in `docpipe.inference.answer` (documented on the "Asking the corpus" page); `app.py`'s job is to attach a document/scope picker, a chat history, and Streamlit's widgets to that turn. Nothing here does batch work, and nothing here is meant to run unattended.
+
+The corpus is read-only from this app's point of view. `get_db()` opens `DB_PATH` (`data/KWP.db`, or the active profile's `db_path`) with `db.connect_readonly`, and `get_index()` loads `INDEX_PATH` (`data/faiss_index.bin`) once into RAM with `faiss_store.load_global_index` -- both, along with the catalog and the two caches below, cached as Streamlit resources so a script rerun (which Streamlit does on every widget interaction) does not reopen them. `Tables.path` and `Images.path` are resolved against `IMAGE_ROOT` (the profile's `processed_dir`) to find the cropped PNGs, and `PDF_ROOT` locates the source PDF for the deep-link machinery. The app never writes to that database. What it does write are two separate SQLite files, created on first use: `QUERY_CACHE_PATH` (`data/inference_app_query_cache.db`), a query-hash-to-vector cache, and `REQUEST_LOG_PATH` (`data/inference_app_request_log.db`), which logs every turn (plan id, query, mode, scopes, latency, hit and citation counts) and caches the finished answer of a successful text-mode turn. Neither is ever the corpus DB -- the module comments repeat that at the point each path is defined, because a stray write from a UI process is exactly the kind of thing that would corrupt it.
+
+The first decision a reader would get wrong: the embedding model is deliberately left out of the `@st.cache_resource` set that covers everything else. `get_embedder()` is imported lazily inside `embed_query()` instead, specifically so that a query-cache hit never imports torch at all. Whether the model stays resident between turns is the embedding backend's business, selected by `EMBEDDING_BACKEND` (`local`, `api`, or an importable `package.module:Attribut`) -- on a machine that also serves this Streamlit process, that backend's answer is to load the model quantized, embed, and free the memory again, and that logic lives with the deployment, not with this app.
+
+Second: selecting several documents does not become one joint retrieval over all of them. `run_comparison` asks the same question of each document separately -- its own retrieval, its own citations -- and only afterward makes one more LLM call that compares the finished answers, given the labels and the answer text and no source passages at all. The reason is retrieval-shaped: a single top-k search spanning every selected document would let the longest chapter fill every slot and leave the others looking silent. The same logic drops image upload in comparison mode (a crop anchors retrieval for one document's index, and running the same crop against five plans would anchor four of them to whatever incidentally looks similar in those other documents) and caps the count at `COMPARE_MAX_DOCUMENTS` (5) -- a latency budget, since each document costs a full retrieval-and-answer loop, not a modelling limit. Follow-up context (`turns_by_doc`, capped at the last 5 turns per document) is kept per document rather than globally, and a failed turn is remembered too: a "check again" follow-up is asked right after a failure, and without that failed turn in context a re-check has no referent to search past.
+
+Third: a citation's page link is not built from the quote the LLM produced, because that quote has been through refinement and is not byte-identical to the PDF's text layer, so a verbatim `#page=N&search=` term has to come from raw text instead. `_pdf_link_for` tries several things in order. `pdf_link.locate_quote` matches the quote against the section's raw, page-tagged `Segments` and returns a page plus a fallback search phrase. If the matched segment also carries stored `bbox` rects, `best_quote_rects` draws an exact highlight box instead of relying on text search. If PyMuPDF or rapidfuzz are not importable, or the best match scores under 55 (`min_score`), `best_search_phrase` and the rect lookup both return `None` and the link degrades one step further, down to a bare page link with no highlight, or to no link at all when `PDF_URL_PREFIX` is empty or the citation's document has no known filename.
+
+What a turn costs: one or more calls to an OpenAI-compatible `LLM_BASE_URL` (retried up to `LLM_MAX_RETRIES`, 4, on malformed JSON or a transport error, with an `LLM_TIMEOUT` of 180s), an embedding call for the query vector unless the cache already holds one, and up to `MAX_CHUNK_ATTEMPTS` (10) chunks read one at a time out of a `TOP_K` (50) candidate set before the app gives up and reports nothing found. Setting `LLM_STUB_MODE` returns canned answers instead of calling the endpoint, for exercising retrieval without spending on the LLM. The optional calculation feature (`CODE_EXEC_URL`) is off unless configured; when it is on, `sandbox_service.py` runs the model's Python in a fresh, ephemeral podman container per call -- `network_mode: none`, every capability dropped, a 512m memory limit, and one container at a time behind a threading lock, because the code being executed is LLM-written and possibly prompt-injected. That service refuses to start at all without `KWP_SANDBOX_TOKEN` set, and a container or backend failure inside it is caught and returned as a structured `{"ok": false, "error": ...}` rather than raised, so a sandbox outage degrades a turn to "no calculation" instead of breaking it. Its own execution clamp (`MAX_TIMEOUT`, 30s) is tighter than the app's HTTP-level `CODE_EXEC_TIMEOUT` (45s), so a run that is merely slow gets to hit its own limit before the network call would time it out first.
+
+This is not a batch stage with per-item stamps to resume from -- it is a running chat process, and its chat history lives only in Streamlit session state: reload the page or change the document selection and it is gone. What does carry across turns and restarts are the two SQLite caches. An identical query (same text, same image bytes, same mode) hits `QUERY_CACHE_PATH` and skips re-embedding, and a successful text-mode turn is cached whole in `REQUEST_LOG_PATH` keyed by plan and query, so repeating it skips retrieval and the LLM entirely. A failed turn is logged but never cached, so it is retried automatically next time it is asked. To force a turn to redo the real work, change the query text, or delete the two cache files directly -- both grow unbounded and neither is evicted automatically, so deleting them is also the only way to reclaim their disk space.
+
+A few other failures are guarded explicitly rather than left to crash the page. An empty `Documents` table, a filter combination that matches nothing, and a comparison request naming more documents than `COMPARE_MAX_DOCUMENTS` each produce their own message instead of an exception (the last one lists which documents were dropped). Submitting a turn with no search scope selected is refused before it reaches retrieval. Two smaller guards exist only because of how Streamlit runs this file: `mimetypes.add_type("text/javascript", ".mjs")` is set at import time because some Python installs serve the bundled pdf.js viewer's ES modules as `octet-stream`, which browsers refuse to execute, and the repo root is inserted into `sys.path` at import time because `streamlit run` executes `app.py` as a top-level script with no package context, so the absolute `docpipe.inference` imports right below it would otherwise fail.
+
+When a graph is configured (`INFERENCE_KG_TTL_PATH`, by default the profile's `graph.ttl`, the file `--serialize` writes), the sidebar gains an `Antwortweg` radio with three settings. `Automatik` asks the graph first through `run_kg_turn` and falls back to the document search when the graph says why it has no answer, with that sentence shown as a caption under the retrieved answer; `Wissensgraph` answers only from the graph or prints the reason and stops, because a graph that says nothing is a finding about the graph and a silent fallback would hide it; `Dokumentsuche` never enters the graph code. The image upload and the search scopes apply to the document search only -- a value node has neither a picture nor a scope -- and the radio's help text says so. A graph answer is rendered per value by `_render_kg`: the number with its unit, the year, the class and the aggregation, the part of the plan it hangs under, the trust badge (a C as a warning, since the profile's own word for it is a review request) and the evidence lines in an expander. It is kept in the chat history under `kg_values`, never `rows`, because the history loop dispatches a `rows` entry into the comparison render.
+
+## The modules
+
+Verbatim from the module docstrings, generated by `scripts/build_docs.py`. Edit the docstring, not this page.
+
+### `scripts/inference_app/__init__.py`
+
+inference_app – Streamlit RAG chat over the KWP knowledge base.
+
+Retrieval + question-answering front-end for the corpus produced by the batch
+pipeline (SQLite `KWP.db` + a global FAISS index).
+
+Author: Felix Vossel
+
+### `scripts/inference_app/app.py`
+
+app.py – Streamlit RAG chat over a docpipe corpus. The only module that imports
+Streamlit.
+
+What the corpus is about comes from the profile: its catalog supplies the
+labels, the filters and the detail shown for a selected document. With a
+graph configured (INFERENCE_KG_TTL_PATH, the file `--serialize` wrote) a
+question goes to the graph first and to the documents only when the graph
+says why it has no answer.
+
+Run:
+    DOCPIPE_PROFILE=kwp streamlit run scripts/inference_app/app.py \
+        --server.address 0.0.0.0 --server.port 8501
+
+Author: Felix Vossel
+
+### `scripts/inference_app/config.py`
+
+config.py – Central configuration for the inference_app module.
+
+Every value is overridable via an environment variable; the defaults are safe
+placeholders.
+
+Author: Felix Vossel
+
+### `scripts/inference_app/pdf_link.py`
+
+pdf_link.py – Build deep links into the source PDF for a citation.
+
+A section's chunk text is LLM-refined and differs from the raw PDF text, so a
+verbatim `#page=N&search=...` term must come from the RAW page text (the
+page-tagged `Segments`, or the PDF itself).
+
+Pure (no DB, no Streamlit); the DB reads live in db.py.
+
+### `scripts/inference_app/sandbox_service.py`
+
+sandbox_service.py – Localhost HTTP wrapper around llm-sandbox.
+
+Each request runs the code in a FRESH, ephemeral container with no network,
+resource limits, all capabilities dropped and an execution timeout, so untrusted,
+possibly prompt-injected LLM code cannot reach the host or the network. It binds
+loopback only and is guarded by a bearer token; do NOT expose it directly.
+
+    POST /run   Authorization: Bearer <KWP_SANDBOX_TOKEN>
+       body: {"code": "<python>", "context": {"var": <json-value>, ...}, "timeout": <int>}
+       ->   {"ok": bool, "stdout": str, "stderr": str, "exit_code": int|null, "error": str|null}
+    GET  /health -> {"ok": true}    (no auth; readiness probe)
+
+`context` entries are injected as pre-defined variables (JSON-decoded) before the
+submitted code. Configured entirely from the environment (see below).
+
+Author: Felix Vossel
+
+[Back to the index](../README.md)

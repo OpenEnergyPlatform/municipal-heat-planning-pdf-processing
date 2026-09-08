@@ -175,3 +175,23 @@ def test_a_class_that_is_a_carrier_only_by_equivalence_is_still_one(tmp_path):
     assert built["terms"]["OEO_00000292"]["alt_labels"] == ["Erdgas"]
     assert built["terms"]["OEO_00000292"]["definition"].startswith("Natural")
     assert built["pin"]["oeo_sha256"]
+
+def test_the_power_unit_is_a_unit_of_the_pin(snapshot):
+    """The one identifier A5 could not confirm from this repository, now
+    confirmed against the pinned closure itself: a term of the release, not
+    deprecated, a class, and under `unit` -- which is what `has unit`'s range
+    demands. Written on ancestors rather than on a set name so it needs no
+    new root in SETS."""
+    from docpipe import ontology
+    power = next(p for p in SPEC_RAW["parameters"] if p["uri"] == "heat_load")
+    unit = power["unit_target"]
+    term = snapshot["terms"].get(unit)
+    assert term is not None, f"{unit} is not in the pinned snapshot"
+    assert term["kind"] == "class" and not term["deprecated"]
+    assert term["label"] == "megawatt"
+    above = ontology.ancestors(unit, snapshot)
+    assert "OEO_00010489" in above, "not a unit"
+    assert "OEO_00010490" in above, "not a physical unit"
+    # And it is a unit and not a quantity: the two complaints check() gave
+    # before the snapshot carried it were exactly about that pair.
+    assert "OEO_00000350" not in above, "a quantity value, not a unit"

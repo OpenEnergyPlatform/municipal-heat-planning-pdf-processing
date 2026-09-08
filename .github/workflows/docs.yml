@@ -1,0 +1,67 @@
+# The documentation site, built on every push to develop and on every tag,
+# and kept per version: the pages land on the gh-pages branch under one
+# directory each (`develop/`, `v1.2/`), and a newer version never removes an
+# older one. `scripts/build_docs.py --versions` writes the index over them.
+#
+# The pages are checked in and `build_docs.py --check` refuses a stale one,
+# so this job renders Markdown that is already in the tree and needs neither
+# the GPU stack nor the corpus. Read the Docs builds the same tree from
+# .readthedocs.yaml where the project is connected; this is the build that
+# needs no account, only Pages pointed at the gh-pages branch.
+name: docs
+
+on:
+  push:
+    branches: [develop]
+    tags: ["v*"]
+  pull_request:
+    paths:
+      - "docs/**"
+      - "docpipe/**"
+      - "profiles/**"
+      - "scripts/build_docs.py"
+      - ".github/workflows/docs.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+# Two pushes in a row must not race on gh-pages: the second waits.
+concurrency:
+  group: docs-site
+  cancel-in-progress: false
+
+jobs:
+  docs:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: docs/requirements.txt
+      - run: python -m pip install -r docs/requirements.txt
+      - name: The checked-in pages are a fresh render
+        run: python scripts/build_docs.py --check
+      - name: Sphinx, warnings are errors
+        run: python -m sphinx -W --keep-going -b html docs _build/html
+      - name: Publish under the version's own directory
+        if: github.event_name != 'pull_request'
+        env:
+          VERSION: ${{ github.ref_name }}
+        run: |
+          set -eu
+          git config user.name github-actions
+          git config user.email github-actions@github.com
+          # The site branch, or an empty one on the very first run.
+          if ! git fetch origin gh-pages:gh-pages; then
+            git branch gh-pages "$(git commit-tree -m 'docs site' "$(git hash-object -t tree /dev/null)")"
+          fi
+          git worktree add site gh-pages
+          rm -rf "site/$VERSION"
+          cp -r _build/html "site/$VERSION"
+          python scripts/build_docs.py --versions site
+          git -C site add -A
+          git -C site commit -m "docs: $VERSION at ${GITHUB_SHA::7}" || echo "nothing changed"
+          git -C site push origin gh-pages

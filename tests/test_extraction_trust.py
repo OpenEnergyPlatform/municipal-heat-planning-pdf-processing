@@ -364,3 +364,78 @@ def test_own_evidence_reads_the_rule_off_the_spec():
                  "spatial_scope"):
         assert ("energy_consumption", name) not in got, name
     assert {axis for _uri, axis in got} == {"carrier", "sector"}
+
+
+def test_a_scenario_lifted_from_another_section_is_now_a_finding():
+    """The promise: setting the rule on the scenarios axes makes a coordinate
+    judgeable that no reader could judge before.
+
+    `reasons` skips every coordinate that is not in `own` (trust.py), so with
+    the empty set the scenarios profile had, a scenario name taken from a
+    different section of the paper graded exactly like one read off the row's
+    own caption. Three of the four axes are `own` now, and the fourth is
+    `local` and stays out on purpose: `local` is a statement about pages, and
+    a harvest row records an owner, not a page distance.
+    """
+    import json
+    from pathlib import Path
+
+    from docpipe.extraction.spec import load as load_spec, own_evidence
+    from docpipe.extraction.trust import trust
+
+    root = Path(__file__).resolve().parent.parent
+    spec = load_spec(json.loads(
+        (root / "profiles" / "scenarios" / "extraction_spec.json")
+        .read_text(encoding="utf-8")))
+    own = own_evidence(spec)
+    assert own, "an empty set is what this test exists to end"
+
+    def row(parameter, source):
+        return {"parameter": parameter, "tier": TIER_TEXT,
+                "provenance": {"owner_kind": "section", "owner_id": 11},
+                "scenario": "SSP2-4.5", "scenario_state": "read",
+                "scenario_source": source}
+
+    here = ["section", 11]
+    far = ["section", 99]
+    assert trust(row("scenario_type", here), own=own)["reasons"] == []
+    assert trust(row("scenario_type", far),
+                 own=own)["reasons"] == ["nonlocal:scenario"]
+    assert trust(row("scenario_type", far), own=own)["level"] == LEVEL_C
+    # The one axis that is `local`: a page distance is not reconstructible
+    # from a row, so it is judged at harvest and not here.
+    assert trust(row("scenario_region", far), own=own)["reasons"] == []
+    # And with the old empty set nothing at all was findable.
+    assert trust(row("scenario_type", far), own=frozenset())["reasons"] == []
+
+def test_parameter_states_names_every_parameter_of_the_spec():
+    """One line per parameter, whatever came of it, keyed on the uri the
+    tuples are keyed on. Keyed on the label instead, every count reads zero
+    and every parameter reads `unstated` on a run that answered."""
+    import json
+    from pathlib import Path
+
+    from docpipe.extraction.spec import load as load_spec
+    from docpipe.extraction.trust import parameter_states
+
+    root = Path(__file__).resolve().parent.parent
+    spec = load_spec(json.loads(
+        (root / "profiles" / "kwp" / "extraction_spec.json")
+        .read_text(encoding="utf-8")))
+
+    tuples = [{"parameter": "energy_consumption", "value": 1.0},
+              {"parameter": "energy_consumption", "value": 2.0}]
+    refusals = [{"parameter": "emission", "reason": "no_quote"},
+                # A refusal that names a parameter with a tuple does not
+                # take it back: the tuple survived verification.
+                {"parameter": "energy_consumption", "reason": "no_quote"}]
+    got = parameter_states(spec, tuples, refusals)
+
+    assert [g["parameter"] for g in got] == [p.uri for p in spec.parameters]
+    assert {g["parameter"]: g["state"] for g in got} == {
+        "energy_consumption": fields.READ,
+        "emission": fields.UNBACKED,
+        "planning_organisation": fields.SAID_UNSTATED,
+        "heat_load": fields.SAID_UNSTATED}
+    assert [(g["tuples"], g["refusals"]) for g in got] == [
+        (2, 1), (0, 1), (0, 0), (0, 0)]

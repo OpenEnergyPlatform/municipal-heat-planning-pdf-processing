@@ -201,7 +201,7 @@ def computed_in_output(raw: dict, parameter: Parameter) -> bool:
     return False
 
 
-def _value_in_quote(raw: dict, parameter: Parameter, quote: str) -> bool:
+def value_in_quote(raw: dict, parameter: Parameter, quote: str) -> bool:
     """Is the claimed value actually in the passage it cites?"""
     if parameter.is_numeric:
         return canonical_number(raw.get("value")) in numbers_in(quote)
@@ -409,7 +409,7 @@ def verify_tuple(raw: dict, parameter: Parameter, source_text: str, *,
         raw = dict(raw, quote=repaired)
         quote = repaired
         flags.append("quote_repaired")
-    if not _value_in_quote(raw, parameter, quote):
+    if not value_in_quote(raw, parameter, quote):
         if raw.get("computed") and computed_in_output(raw, parameter):
             # The document prints the inputs and the sandbox printed the
             # result. Both halves of the evidence are on the tuple.
@@ -418,12 +418,18 @@ def verify_tuple(raw: dict, parameter: Parameter, source_text: str, *,
             return Refusal(raw, f"value {raw.get('value')!r} does not occur "
                                 f"in the quote")
 
-    if parameter.is_numeric and not states_a_year(raw.get("unit_raw")
-                                                  or raw.get("unit") or ""):
+    if (parameter.is_numeric and parameter.integrated
+            and not states_a_year(raw.get("unit_raw")
+                                  or raw.get("unit") or "")):
         # The unit is a plain amount, so what makes it a yearly one is the
         # passage or nothing. An integral needs the period it runs over, and
         # a graph that writes a year beside a storage capacity has invented
         # that period rather than read it.
+        #
+        # Only for a parameter whose unit IS an amount over a span. A power
+        # has no period to state, so this would fire on every row of it and
+        # separate nothing -- and it is read off every flag distribution the
+        # reports are built from.
         flags.append("period:annual_in_quote" if states_a_year(quote)
                      else "period:unstated")
 

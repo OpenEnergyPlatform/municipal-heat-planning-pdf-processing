@@ -10,6 +10,7 @@ faiss-cpu==1.14.3
 openai==2.44.0
 qwen-vl-utils==0.0.14
 streamlit==1.58.0
+rdflib==7.6.0
 pillow
 numpy
 pymupdf

@@ -16,6 +16,7 @@ the whole-tuple path used.
 No GPU, no database.
 """
 import json
+from collections import Counter
 from pathlib import Path
 
 import pytest
@@ -1561,7 +1562,7 @@ def test_a_sweep_that_ran_out_of_budget_still_reads_the_rest_of_the_plan(
                       for n in range(runner.FIELD_MAX_WINDOWS * 4))
         return list(served)
 
-    def rest(document_id, exclude):
+    def rest(document_id, exclude, start=None):
         asked_rest.append(len(exclude))
         return [_far_source(7001), _far_source(7002)]
 
@@ -1574,12 +1575,254 @@ def test_a_sweep_that_ran_out_of_budget_still_reads_the_rest_of_the_plan(
     # By what the window BROUGHT, not by its smallest id: every window from
     # the second on also carries the re-entry, so the row's own passage 0 is
     # in all of them and `min` would say they were all the own window.
-    assert len([w for w in shown if any(x >= 9000 for x in w)])         == runner.FIELD_MAX_WINDOWS - 1, shown   # the own window took one
+    # Retrieval's allowance no longer depends on what the own window spent:
+    # it is FIELD_MAX_WINDOWS minus what own is allowed, not minus what own
+    # used. Before, the same document gave retrieval 21 windows or 23
+    # depending on whether the first one was retried.
+    assert len([w for w in shown if any(x >= 9000 for x in w)])         == runner.FIELD_MAX_WINDOWS - runner.FIELD_ATTEMPTS, shown
     # And the last stage got its own bounded allowance rather than the
     # leftovers of a budget retrieval had already spent to the last request.
     from_rest = [w for w in shown if 7001 in w or 7002 in w]
     assert from_rest, "no allowance, so the stage ran and asked nothing"
     assert len(from_rest) <= runner.REST_MAX_WINDOWS, len(from_rest)
+
+
+def _sweep_events(monkeypatch):
+    """Every trace event the sweep writes, as (name, fields)."""
+    from docpipe.extraction import trace
+    events = []
+    monkeypatch.setattr(trace, "event",
+                        lambda name, doc, **kw: events.append((name, kw)))
+    return events
+
+
+def _unbackable(slot, rows):
+    """An answer whose quote is in none of the shown passages, so the own
+    window is asked again and spends its whole allowance."""
+    return {"answers": {row.label: {"value": "Erdgas",
+                                    "quote": "steht in keiner Passage"}
+                        for row in rows}}
+
+
+@pytest.mark.parametrize("answer", [None, _unbackable],
+                         ids=["own answers once", "own retries"])
+def test_the_search_further_out_gets_the_same_allowance_whatever_own_spent(
+        monkeypatch, answer):
+    """Three stages, three allowances. The sweep counted every request against
+    one number, so the retries of the OWN window were paid for out of the
+    search further out: measured on this stub, retrieval got 23 windows when
+    the first answer stood and 21 when it was retried three times, for the
+    same document and the same question."""
+    spec = load_spec(json.loads(
+        (PROFILES / "kwp" / "extraction_spec.json").read_text(encoding="utf-8")))
+    rows_reply = {"tuples": [{"source": "Q1", "value": 42005, "unit": "MWh/a",
+                              "unit_raw": "MWh/a",
+                              "quote": "| Erdgas | 42.005 | MWh/a |"}],
+                  "status": "complete", "need_more": []}
+    served = []
+
+    def more(document_id, queries, exclude):
+        if served:
+            return []
+        served.extend(_far_source(9000 + n)
+                      for n in range(runner.FIELD_MAX_WINDOWS * 4))
+        return list(served)
+
+    def rest(document_id, exclude, start=None):
+        return [_far_source(7000 + n) for n in range(60)]
+
+    events = _sweep_events(monkeypatch)
+    harvest, _shown = _sweeping(monkeypatch, spec, rows_reply, more=more,
+                                rest=rest, answer=answer)
+    harvest(_document_batch())
+
+    stages = Counter(kw["stage"] for name, kw in events if name == "field")
+    assert stages["retrieval"] == (runner.FIELD_MAX_WINDOWS
+                                   - runner.FIELD_ATTEMPTS), stages
+    assert stages["rest"] == runner.REST_MAX_WINDOWS, stages
+
+
+def test_the_last_stage_keeps_its_allowance_when_it_is_larger_than_the_first(
+        monkeypatch):
+    """The rest stage used to take its allowance by writing into the shared
+    counter, max(0, FIELD_MAX_WINDOWS - REST_MAX_WINDOWS), which is the number
+    asked for only while it is the smaller of the two. Raise it above the
+    field budget, which is what a run that wants the whole plan read does, and
+    the expression is 0 and the stage silently gets all 24."""
+    spec = load_spec(json.loads(
+        (PROFILES / "kwp" / "extraction_spec.json").read_text(encoding="utf-8")))
+    rows_reply = {"tuples": [{"source": "Q1", "value": 42005, "unit": "MWh/a",
+                              "unit_raw": "MWh/a",
+                              "quote": "| Erdgas | 42.005 | MWh/a |"}],
+                  "status": "complete", "need_more": []}
+    monkeypatch.setattr(runner, "REST_MAX_WINDOWS",
+                        runner.FIELD_MAX_WINDOWS + 6)
+
+    def rest(document_id, exclude, start=None):
+        # FIELD_WINDOW 2 with FIELD_OVERLAP 1 makes about one window per
+        # passage, so this is more than the raised allowance can spend.
+        return [_far_source(7000 + n)
+                for n in range(runner.REST_MAX_WINDOWS * 3)]
+
+    events = _sweep_events(monkeypatch)
+    harvest, _shown = _sweeping(monkeypatch, spec, rows_reply, rest=rest)
+    harvest(_document_batch())
+
+    stages = Counter(kw["stage"] for name, kw in events if name == "field")
+    assert stages["rest"] == runner.REST_MAX_WINDOWS, stages
+
+
+def test_a_sweep_reports_every_request_it_made(monkeypatch):
+    """windows and asked on the sweep event are what a run is measured by: the
+    acceptance allows 1161 requests per document. Reported off a counter the
+    last stage overwrote, a sweep made 36 requests and reported 24."""
+    spec = load_spec(json.loads(
+        (PROFILES / "kwp" / "extraction_spec.json").read_text(encoding="utf-8")))
+    rows_reply = {"tuples": [{"source": "Q1", "value": 42005, "unit": "MWh/a",
+                              "unit_raw": "MWh/a",
+                              "quote": "| Erdgas | 42.005 | MWh/a |"}],
+                  "status": "complete", "need_more": []}
+    served = []
+
+    def more(document_id, queries, exclude):
+        if served:
+            return []
+        served.extend(_far_source(9000 + n)
+                      for n in range(runner.FIELD_MAX_WINDOWS * 4))
+        return list(served)
+
+    def rest(document_id, exclude, start=None):
+        return [_far_source(7000 + n) for n in range(60)]
+
+    events = _sweep_events(monkeypatch)
+    harvest, _shown = _sweeping(monkeypatch, spec, rows_reply, more=more,
+                                rest=rest)
+    harvest(_document_batch())
+
+    made = Counter(kw["slot"] for name, kw in events if name == "field")
+    sweeps = [kw for name, kw in events if name == "sweep"]
+    assert sweeps, "no sweep was reported at all"
+    for sweep in sweeps:
+        assert sweep["windows"] == made[sweep["slot"]], sweep["slot"]
+        assert sweep["asked"] == made[sweep["slot"]], sweep["slot"]
+
+
+def test_the_window_index_counts_the_whole_sweep(monkeypatch):
+    """The index on a field event is what a reader of the trace joins on. Reset
+    when the last stage began, windows 12 to 23 appeared twice per sweep and
+    the two rows they showed could not be told apart."""
+    spec = load_spec(json.loads(
+        (PROFILES / "kwp" / "extraction_spec.json").read_text(encoding="utf-8")))
+    rows_reply = {"tuples": [{"source": "Q1", "value": 42005, "unit": "MWh/a",
+                              "unit_raw": "MWh/a",
+                              "quote": "| Erdgas | 42.005 | MWh/a |"}],
+                  "status": "complete", "need_more": []}
+    served = []
+
+    def more(document_id, queries, exclude):
+        if served:
+            return []
+        served.extend(_far_source(9000 + n)
+                      for n in range(runner.FIELD_MAX_WINDOWS * 4))
+        return list(served)
+
+    def rest(document_id, exclude, start=None):
+        return [_far_source(7000 + n) for n in range(60)]
+
+    events = _sweep_events(monkeypatch)
+    harvest, _shown = _sweeping(monkeypatch, spec, rows_reply, more=more,
+                                rest=rest)
+    harvest(_document_batch())
+
+    per_slot = {}
+    for name, kw in events:
+        if name == "field":
+            per_slot.setdefault(kw["slot"], []).append((kw["window"],
+                                                        kw["stage"]))
+    assert per_slot
+    for slot, seen in per_slot.items():
+        windows = [w for w, _stage in seen]
+        assert windows == list(range(1, len(windows) + 1)), slot
+        last = [w for w, stage in seen if stage == "rest"]
+        earlier = [w for w, stage in seen if stage != "rest"]
+        assert last and min(last) > max(earlier), slot
+
+
+def test_the_rest_of_a_plan_is_read_from_the_row_outwards(monkeypatch):
+    """Where the last stage starts reading. It began at section 1, the title
+    page of a 249-section plan, for a row standing on page 180, and the
+    allowance ran out long before it came near the row."""
+    spec = load_spec(json.loads(
+        (PROFILES / "kwp" / "extraction_spec.json").read_text(encoding="utf-8")))
+    rows_reply = {"tuples": [{"source": "Q1", "value": 42005, "unit": "MWh/a",
+                              "unit_raw": "MWh/a",
+                              "quote": "| Erdgas | 42.005 | MWh/a |"}],
+                  "status": "complete", "need_more": []}
+    starts = []
+
+    def rest(document_id, exclude, start=None):
+        starts.append(start)
+        return [_far_source(7001)]
+
+    items = [WorkItem(7, None, Source("table", 1, "| Erdgas | 42.005 | MWh/a |",
+                                      {"document_id": 7, "page": 180,
+                                       "section_number": 180}))]
+    batch = group_items(items, max_sources=runner.BATCH_SOURCES)[0]
+    harvest, _shown = _sweeping(monkeypatch, spec, rows_reply, rest=rest)
+    harvest(batch)
+
+    assert starts and set(starts) == {180}, starts
+
+
+def test_own_section_number_is_the_earliest_of_the_rows_own_sections():
+    """One sweep asks for several rows at once, so the start has to be before
+    all of them: the nearest section to one row is the far end of another."""
+    def source(number):
+        provenance = {"document_id": 7}
+        if number is not None:
+            provenance["section_number"] = number
+        return Source("table", 1, "| Erdgas |", provenance)
+
+    assert runner.own_section_number(
+        [source(40), source(12), source(31)]) == 12
+    assert runner.own_section_number([source(40), source(None)]) == 40
+    assert runner.own_section_number([source(None)]) is None
+    assert runner.own_section_number([]) is None
+
+
+def test_reading_the_rest_starts_at_a_section_and_still_reads_them_all(
+        tmp_path):
+    """Rotated, never cut. What this stage promises is that a coordinate left
+    unstated means the whole document was read, and dropping the sections
+    before the row would make that a lie about the part a title page is in."""
+    import sqlite3
+    path = tmp_path / "plans.sqlite"
+    conn = sqlite3.connect(str(path))
+    conn.executescript(
+        "CREATE TABLE Documents (id INTEGER PRIMARY KEY, filename TEXT);"
+        "CREATE TABLE Sections ("
+        " id INTEGER PRIMARY KEY, document INTEGER, section_number INTEGER,"
+        " title TEXT, content TEXT, page_number INTEGER);"
+        "CREATE TABLE Tables ("
+        " id INTEGER PRIMARY KEY, section INTEGER, block_id TEXT,"
+        " caption TEXT, markdown TEXT, page_number INTEGER, path TEXT);"
+        "CREATE TABLE Images ("
+        " id INTEGER PRIMARY KEY, section INTEGER, block_id TEXT,"
+        " caption TEXT, description TEXT, page_number INTEGER, path TEXT);")
+    conn.execute("INSERT INTO Documents (id, filename) VALUES (7, 'plan.pdf')")
+    for n in range(1, 11):
+        conn.execute("INSERT INTO Sections (id, document, section_number, "
+                     "title, content, page_number) VALUES (?, 7, ?, ?, ?, ?)",
+                     (n, n, "Kapitel %d" % n, "Text von Kapitel %d." % n, n))
+    conn.commit()
+
+    conn.close()
+    rest_of_document = runner.make_rest_of_document(path)
+    assert [s.owner_id for s in rest_of_document(7, set(), 7)] == [
+        7, 8, 9, 10, 1, 2, 3, 4, 5, 6]
+    # And without one it reads the document as it stands, from the front.
+    assert [s.owner_id for s in rest_of_document(7, set(), None)] == list(
+        range(1, 11))
 
 
 def test_a_window_is_asked_again_only_where_asking_again_pays(monkeypatch):
@@ -1614,7 +1857,6 @@ def test_a_window_is_asked_again_only_where_asking_again_pays(monkeypatch):
                                answer=unbackable)
     harvest(_document_batch())
 
-    from collections import Counter
     per_window = Counter(tuple(sorted(w)) for w in shown)
     # The own window is the one that brought nothing from retrieval. Not
     # "contains 0": the re-entry puts the row's own passage in front of every

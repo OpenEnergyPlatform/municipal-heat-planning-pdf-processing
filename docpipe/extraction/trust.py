@@ -25,6 +25,11 @@ records. No model, no second opinion, no threshold anybody tuned.
 The reasons are a closed list, because a reason nobody can enumerate is a
 reason nobody can count. What makes a C is what a curator should look at.
 
+A value can be read a second time (`review.py`), and what that came to is
+recorded here as a mark. It never lifts a level: the second reading uses the
+same model over a narrower window, so an agreement says the reading is
+self-consistent and not that the passage it cites belongs to the row.
+
 Measured on Kassel's 559 tuples, which is why the levels are cut here and not
 somewhere else: 527 of 559 came out of a table or figure image, so image
 origin alone separates nothing and is not a warning. What did separate, on
@@ -53,17 +58,30 @@ from __future__ import annotations
 
 from typing import Optional
 
-from .fields import EXHAUSTED, READ, UNBACKED
+from .fields import EXHAUSTED, READ, SAID_UNSTATED, UNBACKED
 from .verify import TIER_TEXT
 
 LEVEL_A = "A"
 LEVEL_B = "B"
 LEVEL_C = "C"
 
+# What a second reading of one value came to. The same model over a window
+# that is a strict subset of the one the sweep already walked, so it is a
+# self-consistency check and not an independent reading, and only the middle
+# one is a reason: a disagreement is a fact about the value, an agreement and
+# an unbackable answer are facts about the review. The last is written so the
+# row is not asked a third time and so the rate is countable -- a review that
+# comes back unbacked on most rows is a broken prompt, and nothing else would
+# say so.
+REVIEW_AGREE = "review:agree"
+REVIEW_DISAGREE = "review:disagree"
+REVIEW_UNBACKED = "review:unbacked"
+
 # Flags that say something about how the value itself was arrived at. Each is
 # a reason on its own, and each is a different thing for a curator to check.
 FLAG_REASONS = {"quote_repaired": "repaired", "computed": "computed",
-                "not_located": "not_located"}
+                "not_located": "not_located",
+                REVIEW_DISAGREE: "review:disagree"}
 
 
 def _owners(row: dict) -> set:
@@ -139,6 +157,11 @@ def trust(row: dict, *, conflict: bool = False, transcribed: bool = False,
           corroborated: bool = False, own: Optional[frozenset] = None) -> dict:
     """{level, reasons, image_origin, corroborated} for one accepted tuple."""
     why = reasons(row, conflict=conflict, transcribed=transcribed, own=own)
+    # The review's own answer, read off the row rather than passed in: the
+    # serializers build a verdict from a stored tuple and have no second
+    # reading to hand. It never enters `hard`, so it never lifts a level --
+    # see the module docstring.
+    corroborated = corroborated or REVIEW_AGREE in (row.get("flags") or [])
     hard = [r for r in why if r != "page_transcribed"]
     image = row.get("tier") != TIER_TEXT
     if hard:
@@ -261,3 +284,49 @@ def document_summary(document_id, tuples, refusals,
             "refusals": len(refusals), "levels": levels,
             "reasons": {k: why[k] for k in sorted(why)},
             "image_origin": image}
+
+
+# What a whole PARAMETER came to in one document, as against what one
+# coordinate of one row came to. Four of the seven row states, because the
+# other three are statements about a coordinate that was asked and this is a
+# statement about a question that may never have been reached.
+PARAMETER_STATES = (READ, UNBACKED, EXHAUSTED, SAID_UNSTATED)
+
+
+def parameter_states(spec, tuples: list, refusals: list, *,
+                     harvested: int = 0,
+                     answered: Optional[int] = None) -> list:
+    """One state per parameter of the spec, in spec order.
+
+    Every state this pipeline writes is a state of a ROW: `apply_derived`,
+    `merge_field`, `apply_frame` and `mark_unanswered` all loop over rows. So a
+    parameter that produced no row leaves no byte anywhere, and "the document
+    does not name its planning office" and "we never got round to asking" are
+    the same empty file. Measured on Kassel: `planning_organisation` came back
+    with 0 tuples and no state at all.
+
+    `exhausted` is the one that is a fact about the RUN and not about the
+    document, and it is document-wide rather than per parameter: under the
+    document-level plan there is no per-parameter run signal to read -- the
+    report keys its rounds by the literal string "document". So a truncated
+    run marks every unanswered parameter exhausted together, which is the
+    honest reading of "we stopped before the end".
+    """
+    cut = bool(harvested) and (answered == 0 or any(
+        (r.get("claim") or {}).get("_harvest_failed") for r in refusals))
+    out = []
+    for parameter in getattr(spec, "parameters", ()):
+        uri = parameter.uri
+        mine = sum(1 for t in tuples if t.get("parameter") == uri)
+        refused = sum(1 for r in refusals if r.get("parameter") == uri)
+        if mine:
+            state = READ
+        elif refused:
+            state = UNBACKED
+        elif cut:
+            state = EXHAUSTED
+        else:
+            state = SAID_UNSTATED
+        out.append({"parameter": uri, "state": state,
+                    "tuples": mine, "refusals": refused})
+    return out
