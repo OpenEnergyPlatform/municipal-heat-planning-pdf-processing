@@ -160,6 +160,13 @@ FIELD_ATTEMPTS = int(os.environ.get("EXTRACT_FIELD_ATTEMPTS", "3"))
 # passages out of it, and the two sharing a budget is what left the stage
 # unreachable for every sweep that needed it.
 REST_MAX_WINDOWS = int(os.environ.get("EXTRACT_REST_MAX_WINDOWS", "12"))
+# How many already-read passages ride along at the front of a window. Where
+# one coordinate of a row was read, the next one is usually a few lines away
+# — and today that passage went into `seen` after the window that showed it
+# and was never shown again, so the sweep leaves the one place it knows
+# something is and never comes back. Three, because the window itself is two:
+# the re-entry may not become the window.
+FIELD_RE_ENTRY = int(os.environ.get("EXTRACT_FIELD_RE_ENTRY", "3"))
 
 _THINK_RE = re.compile(r"<think>.*?</think>", re.DOTALL)
 _FENCE_OPEN = re.compile(r"^```(?:json)?\s*")
@@ -1890,6 +1897,12 @@ def make_fieldwise_harvester(image_root: Optional[Path] = None,
         totals = {"filled": 0, "unquoted": 0, "unbacked": 0, "unstated": 0,
                   "raw_missing": 0, "raw_foreign": 0, "retried": 0}
         seen = {(i.source.owner_kind, i.source.owner_id) for i in batch.items}
+        # Every passage this sweep has already materialised, by key. `seen`
+        # answers what must not be FETCHED again; this answers what may be
+        # SHOWN again, which is the opposite question and needs the passage
+        # itself rather than its key.
+        held = {(i.source.owner_kind, i.source.owner_id): i.source
+                for i in batch.items}
         state = {"asked": 0, "answer": None, "stage": "own"}
 
         def still_open(pool: list) -> list:
@@ -1897,6 +1910,57 @@ def make_fieldwise_harvester(image_root: Optional[Path] = None,
             wanted = {row.label for slot in slots
                       for row in open_rows(pool, slot)}
             return [row for row in pool if row.label in wanted]
+
+        def re_entry(todo: list, already: set) -> list:
+            """The passages these rows were last read in, to ride along.
+
+            The sweep asks five coordinates of the same row and moves on after
+            each window. Where the sector was read, the aggregation is a
+            column further right — so the search starts again where it last
+            found something instead of striking that passage off for good.
+
+            Three places, in this order, and only the ones the window does not
+            already show:
+
+            - the passage a coordinate of this row was READ in. It is the one
+              of the three that `seen` makes unreachable forever, and it is
+              the one that has already proved it carries this row's answers.
+            - the section the row's own passage stands in. It is also the only
+              one of the three that is in no checked pool from the second
+              window on, so an answer quoting the caption of its own table
+              comes back unbacked — the `local` rule's own passage, dropped
+              for not being present.
+            - the row's own passage last, because `merge_field` checks against
+              `batch.sources` in every window anyway and the row carries its
+              own quote in the request, so it is the one that is not lost when
+              the budget cuts the list off.
+            """
+            found, sections, owns = [], [], []
+            picked = set()
+
+            def take(bucket, key):
+                source = held.get(key)
+                if source is None or key in picked or key in already:
+                    return
+                picked.add(key)
+                bucket.append(source)
+
+            for row in todo:
+                for slot in slots:
+                    where = row.claim.get(f"{slot.name}_source")
+                    if isinstance(where, (list, tuple)) and len(where) == 2:
+                        take(found, (where[0], where[1]))
+            for row in todo:
+                own = owner_of.get(row.label)
+                parent = (own.provenance or {}).get("parent_section") \
+                    if own is not None else None
+                if parent is not None:
+                    take(sections, ("section", parent))
+            for row in todo:
+                own = owner_of.get(row.label)
+                if own is not None:
+                    take(owns, (own.owner_kind, own.owner_id))
+            return (found + sections + owns)[:FIELD_RE_ENTRY]
 
         def run(windows) -> bool:
             """Ask over these windows. False when the budget ran out.
@@ -1909,10 +1973,16 @@ def make_fieldwise_harvester(image_root: Optional[Path] = None,
             counts against the window budget, so a stubborn coordinate cannot
             eat the document.
             """
-            for shown in windows:
+            for window in windows:
                 todo = still_open(rows)
                 if not todo:
                     return True
+                # The re-entry rides in FRONT of the window and is not part
+                # of it: the window generator is untouched, so the frontier
+                # still advances by exactly one window per request and a
+                # re-shown passage can never stand in for a fresh one.
+                shown = re_entry(todo, {(s.owner_kind, s.owner_id)
+                                        for s in window}) + list(window)
                 corrections = None
                 # Only where a retry pays. Measured on the M3 run: a retry of
                 # the OWN window fills 4.88 rows, a third of what a fresh own
@@ -2018,6 +2088,7 @@ def make_fieldwise_harvester(image_root: Optional[Path] = None,
         for parent in (parents(batch.sources) if parents else ()):
             own.append(parent)
             seen.add((parent.owner_kind, parent.owner_id))
+            held[(parent.owner_kind, parent.owner_id)] = parent
         combed = run([own])
         state["stage"] = "retrieval"
         for _ in range(FIELD_ROUNDS):
@@ -2038,6 +2109,7 @@ def make_fieldwise_harvester(image_root: Optional[Path] = None,
                 break
             for source in fresh:
                 seen.add((source.owner_kind, source.owner_id))
+                held[(source.owner_kind, source.owner_id)] = source
             combed = run(window_sources(fresh, FIELD_WINDOW, FIELD_OVERLAP))
 
         if still_open(rows) and rest_of_document is not None:
@@ -2060,6 +2132,8 @@ def make_fieldwise_harvester(image_root: Optional[Path] = None,
             # the 1161 the acceptance allows.
             state["asked"] = max(0, FIELD_MAX_WINDOWS - REST_MAX_WINDOWS)
             rest = rest_of_document(batch.document_id, set(seen)) or []
+            for source in rest:
+                held[(source.owner_kind, source.owner_id)] = source
             state["stage"] = "rest"
             combed = run(window_sources(rest, FIELD_WINDOW, FIELD_OVERLAP))
 

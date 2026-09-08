@@ -1571,7 +1571,10 @@ def test_a_sweep_that_ran_out_of_budget_still_reads_the_rest_of_the_plan(
 
     assert asked_rest, "the rest of the plan was never read"
     # It really was the exhausted case, not a sweep that had budget left.
-    assert len([w for w in shown if w and min(w) >= 9000])         == runner.FIELD_MAX_WINDOWS - 1, shown   # the own window took one
+    # By what the window BROUGHT, not by its smallest id: every window from
+    # the second on also carries the re-entry, so the row's own passage 0 is
+    # in all of them and `min` would say they were all the own window.
+    assert len([w for w in shown if any(x >= 9000 for x in w)])         == runner.FIELD_MAX_WINDOWS - 1, shown   # the own window took one
     # And the last stage got its own bounded allowance rather than the
     # leftovers of a budget retrieval had already spent to the last request.
     from_rest = [w for w in shown if 7001 in w or 7002 in w]
@@ -1613,8 +1616,190 @@ def test_a_window_is_asked_again_only_where_asking_again_pays(monkeypatch):
 
     from collections import Counter
     per_window = Counter(tuple(sorted(w)) for w in shown)
-    own = [n for window, n in per_window.items() if 0 in window]
+    # The own window is the one that brought nothing from retrieval. Not
+    # "contains 0": the re-entry puts the row's own passage in front of every
+    # later window too, which is the point of it.
+    own = [n for window, n in per_window.items()
+           if not any(x >= 9100 for x in window)]
     far = [n for window, n in per_window.items()
-           if window and min(window) >= 9100]
+           if any(x >= 9100 for x in window)]
     assert own and all(n == runner.FIELD_ATTEMPTS for n in own), per_window
     assert far and all(n == 1 for n in far), per_window
+
+
+def test_the_sweep_starts_again_where_it_last_read_instead_of_striking_it_off(
+        monkeypatch):
+    """The promise: where one coordinate was read, the next window starts there.
+
+    `sweep_field.re_entry` is what does it.
+
+    Every passage a window showed went into `seen` and was never shown again.
+    So the sweep read the sector out of a table and then looked for the
+    aggregation everywhere except that table -- and the `own` and `local`
+    evidence rules, which accept a quote from exactly that passage and its
+    section, had nothing left to accept it from.
+
+    Two things are pinned here, because the second is what keeps the first
+    honest: the passage a coordinate was read in rides along afterwards, AND
+    riding along is not progress. The window generator is untouched, so every
+    passage of the pool still gets its own turn, once, in order.
+    """
+    spec = load_spec(json.loads(
+        (PROFILES / "kwp" / "extraction_spec.json").read_text(encoding="utf-8")))
+    rows_reply = {"tuples": [{"source": "Q1", "value": 42005, "unit": "MWh/a",
+                              "unit_raw": "MWh/a",
+                              "quote": "| Erdgas | 42.005 | MWh/a |"}],
+                  "status": "complete", "need_more": []}
+    says = "Die Angaben beziehen sich auf das gesamte Stadtgebiet."
+    pool = [Source("section", 9001, says, {"document_id": 7, "page": 11})]
+    pool += [_far_source(9002 + n) for n in range(5)]
+
+    shown_at = []
+    monkeypatch.setattr(runner, "make_harvester",
+                        lambda *a, **kw: (lambda batch, prior=None: rows_reply))
+
+    served = []
+
+    def more(document_id, queries, exclude):
+        if served:
+            return []
+        served.extend(pool)
+        return list(pool)
+
+    def make_asker(image_root=None):
+        def ask(shown, rows, slots, corrections=None, document_id=None,
+                usage_out=None, owner_of=None):
+            shown_at.append([s.owner_id for s in shown])
+            slots = slots if isinstance(slots, (list, tuple)) else [slots]
+            answered = {}
+            # Answers once, in the window that shows 9001, and only the axis
+            # whose evidence rule accepts a passage from elsewhere. Everything
+            # else stays open, which is what keeps the sweep walking.
+            if any(s.owner_id == 9001 for s in shown):
+                for slot in slots:
+                    if slot.name == "spatial_scope":
+                        answered[slot.name] = {"answers": {
+                            row.label: {"value": "Gemeindegebiet",
+                                        "value_raw": "Stadtgebiet",
+                                        "quote": says} for row in rows}}
+            return {"fields": answered}
+        return ask
+
+    monkeypatch.setattr(runner, "make_field_asker", make_asker)
+    harvest = runner.make_fieldwise_harvester(spec=spec, more_sources=more)
+    out = harvest(_document_batch())
+
+    claim = out["tuples"][0]
+    assert claim["spatial_scope_source"] == ["section", 9001], claim
+    read_in = next(i for i, w in enumerate(shown_at) if 9001 in w)
+    later = shown_at[read_in + 1:]
+    assert later, shown_at
+    assert all(9001 in w for w in later), shown_at
+    # And the row's own passage with it. `merge_field` checks every window
+    # against `batch.sources`, so a quote from it was always backable -- the
+    # model just could not read it any more from the second window on.
+    assert all(0 in w for w in later), shown_at
+
+    # And it cost no window. Each passage of the pool is introduced once and
+    # in the pool's order, so the re-entry rode along rather than taking a
+    # fresh passage's turn -- if it were part of the window, a passage would
+    # be pushed out of the budget or repeated as if it were new.
+    met, order = set(), []
+    for window in shown_at:
+        for owner_id in window:
+            if owner_id not in met:
+                met.add(owner_id)
+                order.append(owner_id)
+    assert order == [0] + [s.owner_id for s in pool], order
+
+    # A window stays a window. The re-entry is capped and deduplicated
+    # against what is already shown, so no passage is shown to the model
+    # twice in one request and the request does not grow with the document.
+    for window in shown_at[1:]:
+        assert len(window) == len(set(window)), window
+        assert len(window) <= runner.FIELD_WINDOW + runner.FIELD_RE_ENTRY, window
+
+
+def test_the_re_entry_is_capped_and_the_passage_that_answered_goes_first(
+        monkeypatch):
+    """The promise: `sweep_field.re_entry` is bounded, and the bound is spent
+    on the passages that earned it.
+
+    Three places want to ride along -- where a coordinate was read, the
+    section the row stands in, and the row's own passage -- and a row that has
+    already answered four coordinates from four places would put the whole
+    document back into every request. So the list is cut, and it is cut from
+    the end: the passage that has already produced an answer for THIS row
+    goes first, the section it stands in next, and the row's own passage last,
+    because that one is checked against `batch.sources` in every window
+    anyway and is the only one of the three that is not lost by being cut.
+    """
+    spec = load_spec(json.loads(
+        (PROFILES / "kwp" / "extraction_spec.json").read_text(encoding="utf-8")))
+    rows_reply = {"tuples": [{"source": "Q1", "value": 42005, "unit": "MWh/a",
+                              "unit_raw": "MWh/a",
+                              "quote": "| Erdgas | 42.005 | MWh/a |"}],
+                  "status": "complete", "need_more": []}
+    where = "Die Angaben beziehen sich auf das gesamte Stadtgebiet."
+    which = "Tabelle 17 zeigt den Zielpfad der Waermeversorgung."
+    said = {"spatial_scope": (9001, "Gemeindegebiet", "Stadtgebiet", where),
+            "scenario": (9002, "Zielszenario", "Zielpfad", which)}
+    # 9001 is read from anywhere, 9002 only from a page next to the row's
+    # own: two axes with different evidence rules, both riding along after.
+    pool = [Source("section", 9001, where, {"document_id": 7, "page": 11}),
+            Source("section", 9002, which, {"document_id": 7, "page": 2})]
+    pool += [_far_source(9003 + n) for n in range(4)]
+    section = Source("section", 500, "Tabelle 17: Nutzwaermebedarf.",
+                     {"document_id": 7, "page": 1})
+    items = [WorkItem(7, None, Source("table", 0, "| Erdgas | 42.005 | MWh/a |",
+                                      {"document_id": 7, "page": 1,
+                                       "parent_section": 500}))]
+    batch = group_items(items, max_sources=runner.BATCH_SOURCES)[0]
+
+    shown_at = []
+    monkeypatch.setattr(runner, "make_harvester",
+                        lambda *a, **kw: (lambda b, prior=None: rows_reply))
+
+    served = []
+
+    def more(document_id, queries, exclude):
+        if served:
+            return []
+        served.extend(pool)
+        return list(pool)
+
+    def make_asker(image_root=None):
+        def ask(shown, rows, slots, corrections=None, document_id=None,
+                usage_out=None, owner_of=None):
+            here = {s.owner_id for s in shown}
+            shown_at.append([s.owner_id for s in shown])
+            slots = slots if isinstance(slots, (list, tuple)) else [slots]
+            answered = {}
+            for slot in slots:
+                spoken = said.get(slot.name)
+                if spoken and spoken[0] in here:
+                    answered[slot.name] = {"answers": {
+                        row.label: {"value": spoken[1], "value_raw": spoken[2],
+                                    "quote": spoken[3]} for row in rows}}
+            return {"fields": answered}
+        return ask
+
+    monkeypatch.setattr(runner, "make_field_asker", make_asker)
+    harvest = runner.make_fieldwise_harvester(
+        spec=spec, more_sources=more, parents=lambda sources: [section])
+    out = harvest(batch)
+
+    claim = out["tuples"][0]
+    assert claim["spatial_scope_source"] == ["section", 9001], claim
+    assert claim["scenario_source"] == ["section", 9002], claim
+    # From the window after the overlap has let go of them, all three ride
+    # along as re-entry: four want to, 9002, 9001, the section 500 and the
+    # row's own passage 0, and three may. 0 is the one that is cut.
+    read_in = next(i for i, w in enumerate(shown_at)
+                   if 9001 in w and 9002 in w)
+    after = shown_at[read_in + 2:]
+    assert after, shown_at
+    for window in after:
+        assert {9001, 9002, 500} <= set(window), window
+        assert 0 not in window, window
+        assert len(window) <= runner.FIELD_WINDOW + runner.FIELD_RE_ENTRY, window
