@@ -232,7 +232,7 @@ def test_the_kg_block_names_the_predicates_the_serializer_writes(tmp_path):
     spec = load_spec(PROFILES / "kwp" / "extraction_spec.json")
     written = set(re.findall(r"\b([a-z]+:[A-Za-z]+_\d+)\s", turtle))
     promised = kwp_promises(spec)
-    assert len(promised) == 9, sorted(promised)
+    assert len(promised) == 7, sorted(promised)
     missing = promised - written
     assert not missing, f"promised in the spec, absent from the Turtle: {missing}"
 

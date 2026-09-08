@@ -36,6 +36,7 @@ from pathlib import Path
 from typing import Optional
 
 OBO = "http://purl.obolibrary.org/obo/"
+XSD = "http://www.w3.org/2001/XMLSchema#"
 
 # An ontology identifier as every one of these ontologies writes it: a short
 # family, an underscore, digits. Matched at the end of a string so a bare id
@@ -48,6 +49,18 @@ def short(uri) -> str:
     """The identifier at the end of an IRI, or the string as it stands."""
     text = str(uri)
     return text.rsplit("/", 1)[-1].rsplit("#", 1)[-1]
+
+
+def named(node) -> str:
+    """`short`, except a datatype keeps the prefix that tells it apart.
+
+    A property's range is a class or a datatype and the two are checked
+    differently: `dateTime` alone would read like an ontology term.
+    """
+    text = str(node)
+    if text.startswith(XSD):
+        return "xsd:" + text[len(XSD):]
+    return short(text)
 
 
 def identifier(value) -> Optional[str]:
@@ -69,6 +82,27 @@ def read(paths: list):
     for path in paths:
         graph.parse(str(path))
     return graph
+
+
+def _class_names(graph, node) -> set:
+    """The named classes a domain or range axiom allows.
+
+    A union counts as its members: `has uuid` is domained on
+    `report or factsheet`, and reading only named nodes would drop the axiom
+    entirely and report nothing about a subject that is neither. Anything
+    else anonymous -- an intersection, a restriction -- is dropped, because
+    guessing at it would report triples that are fine.
+    """
+    from rdflib import OWL, URIRef
+    from rdflib.collection import Collection
+    if isinstance(node, URIRef):
+        return {named(node)}
+    out = set()
+    for collection in graph.objects(node, OWL.unionOf):
+        for member in Collection(graph, collection):
+            if isinstance(member, URIRef):
+                out.add(named(member))
+    return out
 
 
 def index(graph) -> dict:
@@ -118,6 +152,21 @@ def index(graph) -> dict:
                                   if isinstance(p, URIRef)),
                 "deprecated": bool(graph.value(subject, OWL.deprecated)),
             }
+            if kind.endswith("property"):
+                # What the ontology says a subject and an object of this
+                # predicate ARE. Without them a `kg` block can name a real
+                # property, pass every check here, and still emit a triple
+                # that types its own subject into a class it is disjoint
+                # from -- which is what three of kwp's edges did.
+                # Anonymous unions are dropped rather than guessed at, so an
+                # empty list means "nothing to hold this to", never "no
+                # subject qualifies".
+                for slot, predicate in (("domain", RDFS.domain),
+                                        ("range", RDFS.range)):
+                    names = set()
+                    for node in graph.objects(subject, predicate):
+                        names |= _class_names(graph, node)
+                    out[key][slot] = sorted(names)
     return out
 
 
@@ -205,7 +254,7 @@ def build(closure: Path, sets: dict, spec_raw: dict, *,
     `extra` are further files parsed into the same graph (MHPO, say); `base`
     is the IRI prefix whose ontology header carries the version to pin.
     """
-    from rdflib import OWL, RDF
+    from rdflib import OWL, RDF, URIRef
     paths = [closure] + list(extra or [])
     graph = read(paths)
     reachable = closures(graph, sets)
@@ -217,8 +266,22 @@ def build(closure: Path, sets: dict, spec_raw: dict, *,
     wanted = {uri for members in reachable.values() for uri in members}
     wanted |= set(spec_terms(spec_raw))
     full = index(graph)
-    wanted |= {parent for uri in wanted
-               for parent in (full.get(uri) or {}).get("parents", ())}
+    # Grown to a fixpoint over parents, domains and ranges rather than one
+    # generation up. `edge_problems` asks whether a subject class is UNDER a
+    # predicate's domain, and a chain that stops early answers "no" for a
+    # subject that is perfectly fine; the domain class itself is usually named
+    # nowhere in the spec, so without this it is not in the file at all.
+    frontier = set(wanted)
+    while frontier:
+        grown = set()
+        for uri in frontier:
+            term = full.get(uri) or {}
+            grown |= set(term.get("parents") or ())
+            for slot in ("domain", "range"):
+                grown |= {name for name in (term.get(slot) or ())
+                          if not name.startswith("xsd:")}
+        frontier = grown - wanted
+        wanted |= frontier
     terms = {uri: full[uri] for uri in sorted(wanted) if uri in full}
     version = None
     for ontology in graph.subjects(RDF.type, OWL.Ontology):
@@ -240,7 +303,16 @@ def build(closure: Path, sets: dict, spec_raw: dict, *,
     for path in (extra or []):
         pin[f"{Path(path).stem}_sha256"] = hashlib.sha256(
             Path(path).read_bytes()).hexdigest()
-    return {"pin": pin, "sets": reachable, "terms": terms}
+    # Which pairs of these classes cannot share an instance. A domain a
+    # subject is merely not under is a wrong triple; a domain the subject is
+    # DISJOINT from is an unsatisfiable graph, and the two deserve different
+    # words in a report.
+    disjoint = sorted({tuple(sorted((short(a), short(b))))
+                       for a, b in graph.subject_objects(OWL.disjointWith)
+                       if isinstance(a, URIRef) and isinstance(b, URIRef)
+                       and short(a) in terms and short(b) in terms})
+    return {"pin": pin, "sets": reachable, "terms": terms,
+            "disjoint": [list(pair) for pair in disjoint]}
 
 
 def serialize(snapshot: dict) -> str:
@@ -315,6 +387,219 @@ def kind_problems(spec_raw: dict, snapshot: dict) -> list:
         walk(parameter.get("kg"), f"{parameter.get('uri')}.kg")
         for axis, block in (parameter.get("axes") or {}).items():
             walk(block.get("kg"), f"{parameter.get('uri')}.{axis}.kg")
+    return problems
+
+
+def spec_edges(spec_raw: dict) -> list:
+    """Every triple shape the spec's `kg` blocks promise.
+
+    Derived, never listed: the parameter's `class_from` names the axis whose
+    options are the classes a value node can carry, so each of those is a
+    subject; `number` and `unit` are its own predicates, and an axis with
+    role `edge` is one predicate whose objects are that axis' options. A
+    parent axis contributes the edge from the node above down to the
+    container it mints. What is left over is the handful of edges behind no
+    parameter, and those are the profile's to declare.
+    """
+    out: list = []
+    # A node the profile mints is named once with its class and referred to
+    # by name afterwards, so the class of a subject is looked up and not
+    # repeated. Both profiles' grammars are here: one hangs predicates off a
+    # value node built from an axis, the other off named nodes.
+    node_class = {}
+    for parameter in spec_raw.get("parameters", []):
+        kg = parameter.get("kg") or {}
+        if kg.get("node") and identifier(kg.get("class")):
+            node_class[kg["node"]] = identifier(kg["class"])
+
+    def add(where, subject, block, object_=None, datatype=None):
+        predicate = (block or {}).get("predicate")
+        if predicate:
+            out.append({"where": where, "subject": subject,
+                        "predicate": predicate,
+                        "object": object_,
+                        "datatype": datatype or (block or {}).get("datatype")})
+
+    for parameter in spec_raw.get("parameters", []):
+        uri = parameter.get("uri")
+        kg = parameter.get("kg") or {}
+        axes = parameter.get("axes") or {}
+        source = kg.get("class_from")
+        if source:
+            subjects = [identifier(key) for key in
+                        ((axes.get(source) or {}).get("vocabulary") or {})]
+        else:
+            subjects = [identifier(kg.get("class"))]
+        subjects = [name for name in subjects if name] or [None]
+        for subject in subjects:
+            add(f"{uri}.kg.number", subject, kg.get("number"))
+            add(f"{uri}.kg.unit", subject, kg.get("unit"),
+                object_=parameter.get("unit_target"))
+            for axis, block in axes.items():
+                edge = block.get("kg") or {}
+                if edge.get("role") != "edge":
+                    continue
+                if edge.get("datatype"):
+                    add(f"{uri}.{axis}.kg", subject, edge)
+                    continue
+                # An option the spec has already declared edgeless writes
+                # no triple, so holding it to the predicate's range would
+                # report the very thing the declaration is there to say.
+                edgeless = set(edge.get("no_edge_for") or ())
+                # A minted object node: the axis says what class it carries,
+                # so the edge points at a class and not at the option.
+                if edge.get("object_class"):
+                    add(f"{uri}.{axis}.kg", subject, edge,
+                        object_=edge["object_class"])
+                    continue
+                options = [identifier(key) for key
+                           in (block.get("vocabulary") or {})
+                           if key not in edgeless]
+                for option in [o for o in options if o] or [None]:
+                    add(f"{uri}.{axis}.kg", subject, edge, object_=option)
+        # The edge from the plan down to a node this parameter mints, and the
+        # edge from a container down to itself: the subject is a node the
+        # profile names and not a class the spec carries, so only the object
+        # side is held here.
+        add(f"{uri}.kg.edge_from_plan", None, kg.get("edge_from_plan"),
+            object_=kg.get("class"))
+        for axis, block in axes.items():
+            edge = block.get("kg") or {}
+            if edge.get("role") != "parent":
+                continue
+            for key, entry in (edge.get("map") or {}).items():
+                if isinstance(entry, dict) and entry.get("linked_by"):
+                    add(f"{uri}.{axis}.kg.map.{key}", None,
+                        entry["linked_by"], object_=entry.get("class"))
+            if edge.get("linked_by"):
+                for key, entry in (edge.get("map") or {}).items():
+                    if isinstance(entry, dict) and entry.get("class"):
+                        add(f"{uri}.{axis}.kg.linked_by", None,
+                            edge["linked_by"], object_=entry["class"])
+        # The other grammar: a predicate written on a named node, and an edge
+        # from one named node to another.
+        if kg.get("property"):
+            add(f"{uri}.kg.property", node_class.get(kg.get("node")),
+                kg["property"])
+        if kg.get("edge_from"):
+            add(f"{uri}.kg.edge_from",
+                node_class.get((kg["edge_from"] or {}).get("node")),
+                kg["edge_from"], object_=kg.get("class"))
+    return out
+
+
+def ancestors(name: str, snapshot: dict) -> set:
+    """Every term above this one in the snapshot, transitively."""
+    terms = snapshot["terms"]
+    seen, stack = set(), [name]
+    while stack:
+        for parent in (terms.get(stack.pop()) or {}).get("parents") or ():
+            if parent not in seen:
+                seen.add(parent)
+                stack.append(parent)
+    return seen
+
+
+def _is_under(name: str, root: str, snapshot: dict) -> bool:
+    return name == root or root in ancestors(name, snapshot)
+
+
+def _unsatisfiable(one: str, other: str, snapshot: dict) -> bool:
+    """Can these two classes share an instance at all?"""
+    here = {one} | ancestors(one, snapshot)
+    there = {other} | ancestors(other, snapshot)
+    for pair in snapshot.get("disjoint") or ():
+        first, second = pair
+        if (first in here and second in there) or (
+                second in here and first in there):
+            return True
+    return False
+
+
+def edge_problems(edges, snapshot: dict) -> list:
+    """Emitted triples the pinned ontology contradicts.
+
+    `edges` is what a serializer writes, as {where, subject, predicate,
+    object, datatype} -- the subject's asserted class, the predicate, and
+    either the object's class or the literal's datatype. Every field but the
+    predicate may be absent, and an absent field is not checked.
+
+    Why this is worth its own check. `term_problems` asks whether a predicate
+    EXISTS and `kind_problems` asks whether it is a property; neither asks the
+    only question a reader of the graph cares about, which is whether the
+    triple is one the ontology allows. `rdfs:domain` is not a constraint a
+    reasoner refuses -- it TYPES the subject -- so a wrong domain does not
+    fail loudly anywhere, it silently asserts that our value nodes are
+    something they are not. Three kwp edges named a domain (`study`) that is
+    an occurrent while every value is a continuant, and the closure asserts
+    those two disjoint: the whole graph was unsatisfiable and every check we
+    had passed.
+
+    Silent about a family the snapshot does not cover, like every check here.
+    """
+    families = set(snapshot.get("pin", {}).get("families") or ())
+    terms = snapshot["terms"]
+
+    def covered(name):
+        return not families or name.split("_")[0] in families
+
+    problems: list = []
+
+    def report(text):
+        # One shape, one line. A domain complaint does not depend on the
+        # object, so an axis with forty options would otherwise print it
+        # forty times and bury everything else.
+        if text not in problems:
+            problems.append(text)
+
+    for edge in edges:
+        # An edge may say why it is written anyway. The reason travels with
+        # the declaration rather than in a list somewhere else, so it is read
+        # by whoever reads the edge, and a SECOND divergence cannot hide
+        # behind the first one: it is a new line here with no reason on it.
+        if edge.get("accepted"):
+            continue
+        where = edge.get("where") or "?"
+        name = identifier(edge.get("predicate"))
+        term = terms.get(name) if name else None
+        if term is None:
+            continue
+        label = term.get("label") or name
+        subject = identifier(edge.get("subject"))
+        domains = [d for d in (term.get("domain") or ()) if covered(d)]
+        if subject and covered(subject) and domains:
+            if not any(_is_under(subject, d, snapshot) for d in domains):
+                spelled = ", ".join(
+                    f"{d} ({(terms.get(d) or {}).get('label', d)})"
+                    for d in domains)
+                verdict = ("and the two are disjoint, so nothing can be both"
+                           if any(_unsatisfiable(subject, d, snapshot)
+                                  for d in domains)
+                           else "so the triple types it into one")
+                report(
+                    f"{where}: {name} ({label}) has domain {spelled} and the "
+                    f"subject is {subject} "
+                    f"({(terms.get(subject) or {}).get('label', subject)}), "
+                    f"{verdict}")
+        ranges = term.get("range") or ()
+        classes = [r for r in ranges if not r.startswith("xsd:")]
+        literals = [r for r in ranges if r.startswith("xsd:")]
+        obj = identifier(edge.get("object"))
+        if obj and covered(obj) and classes:
+            if not any(_is_under(obj, r, snapshot)
+                       for r in classes if covered(r)):
+                report(
+                    f"{where}: {name} ({label}) has range "
+                    f"{', '.join(classes)} and the object is {obj}")
+        datatype = edge.get("datatype")
+        if datatype and literals and datatype not in literals:
+            report(
+                f"{where}: {name} ({label}) has range {', '.join(literals)} "
+                f"and the literal is written {datatype}")
+        if datatype and classes and not literals:
+            report(
+                f"{where}: {name} ({label}) has range {', '.join(classes)}, "
+                f"a class, and a {datatype} literal is written")
     return problems
 
 

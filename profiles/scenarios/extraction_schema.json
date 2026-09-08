@@ -1718,10 +1718,10 @@
     "type": "object",
     "x-kg": {
      "node": "scenariofactsheet",
-     "note": "The object is an OEKG region individual that already exists over there and is only referenced. A wording the list did not hold mints nothing: writing our own gloss under oekg/region/ would put a 250th region beside the 249 real ones.",
+     "note": "The object is an OEKG region individual that already exists over there and is only referenced. A wording the list did not hold mints nothing: writing our own gloss under oekg/region/ would put a 250th region beside the 249 real ones. The predicate is oeo:OEO_00010378 has spatial region and not oeo:OEO_00020220 has study region, although the second says exactly what we mean: its domain is oeo:OEO_00000364 scenario and the subject here is the scenario FACTSHEET, which is not one. has spatial region is its direct parent, domained on information content entity, which the factsheet is.",
      "property": {
-      "label": "has study region",
-      "predicate": "OEO_00020220",
+      "label": "has spatial region",
+      "predicate": "OEO_00010378",
       "prefix": "oeo"
      }
     }

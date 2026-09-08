@@ -166,6 +166,30 @@ P_SCENARIO_ABSTRACT = _property("scenario_abstract")       # dc:abstract
 # because the OEKG mints them that way.
 P_UUID = "oeo:OEO_00390095"        # has uuid
 
+
+def _bare(name: str) -> str:
+    return str(name).split(":")[-1]
+
+
+def edges() -> list:
+    """The triple shapes this serializer writes that no `kg` block carries.
+
+    `ontology.edge_problems` holds the rest of the output to the pinned
+    ontology through the spec; without this the writer's own literals are the
+    part nobody checks, which is where three of kwp's defects lived.
+    """
+    return [
+        {"where": "kg.py uuid", "subject": _bare(cls),
+         "predicate": _bare(P_UUID), "datatype": "xsd:string",
+         # `has uuid` is domained on `report or factsheet`. The report and
+         # the factsheet are both; the BUNDLE is neither, and the OEKG mints
+         # a uuid on every node it holds. Written anyway, and named here: the
+         # fix is a wider domain and that is the ontology side's.
+         "accepted": ("the OEKG mints a uuid on every node and a scenario "
+                      "bundle is neither a report nor a factsheet")
+                     if cls == CLS_BUNDLE else None}
+        for cls in (CLS_BUNDLE, CLS_REPORT, CLS_SCENARIO)]
+
 # Mirjam: "alle IAM scenarios bekommen erst mal die Annotation". JH notes it is
 # not in the release nor in the shape's sh:in list yet, so a graph written
 # today will fail that constraint until it is.
