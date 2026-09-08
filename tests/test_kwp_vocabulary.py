@@ -59,12 +59,35 @@ def test_the_spec_passes_the_pinned_ontology(snapshot):
     assert vocabulary.check(SPEC_RAW, snapshot) == []
 
 
-def test_every_identifier_the_spec_names_is_a_term_of_the_snapshot(snapshot):
+def test_every_identifier_of_a_covered_family_is_a_term_of_the_snapshot(
+        snapshot):
+    """Of a COVERED family. The walk used to look in three named places and
+    missed the identifiers inside `kg` blocks; widened, it finds six MHPO
+    classes as well, and MHPO ships only as OWL functional syntax, which
+    rdflib does not read. Calling those "not in the pinned ontology" would be
+    a false error, so they are a named gap instead."""
+    from docpipe import ontology
     named = vocabulary.spec_terms(SPEC_RAW)
-    assert len(named) >= 40
+    assert len(named) >= 56, len(named)
+    families = set(snapshot["pin"]["families"])
     for uri in named:
+        if uri.split("_")[0] not in families:
+            continue
         assert uri in snapshot["terms"], uri
         assert snapshot["terms"][uri]["label"], uri
+    # And the gap is stated rather than passed over.
+    assert set(ontology.uncovered(SPEC_RAW, snapshot)) == {"MHPO"}
+
+
+def test_the_snapshot_carries_what_kind_of_thing_each_term_is(snapshot):
+    """A `kg` block names PREDICATES. An index over classes and individuals
+    alone reports every one of them as missing, which is why this profile's
+    kg identifiers were never checked and the other profile had no snapshot at
+    all."""
+    kinds = {t["kind"] for t in snapshot["terms"].values()}
+    assert "object_property" in kinds and "class" in kinds
+    assert snapshot["terms"]["OEO_00000510"]["kind"] == "object_property"
+    assert snapshot["terms"]["OEO_00030022"]["kind"] == "class"
 
 
 @pytest.mark.parametrize("what,damage", [
@@ -140,6 +163,7 @@ def test_a_class_that_is_a_carrier_only_by_equivalence_is_still_one(tmp_path):
     asserted parents puts thirteen carriers the schema already accepts
     outside their own root, and every one of them would then be reported as
     an undeclared non-carrier."""
+    pytest.importorskip("rdflib")   # absent on the cluster; the rest is not
     closure = tmp_path / "tiny.ttl"
     closure.write_text(TINY, encoding="utf-8")
     built = vocabulary.build(closure)

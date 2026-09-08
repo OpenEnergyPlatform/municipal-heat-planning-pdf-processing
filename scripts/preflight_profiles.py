@@ -265,6 +265,20 @@ def audit(profile: str) -> None:
                            snapshot)}
             check(profile, "Beschriftungen aus dem Korpus statt der Ontologie",
                   not foreign, f"{len(foreign)} Eintrag/Eintraege", fatal=False)
+            # Named rather than silent. A term of an ontology no file of this
+            # snapshot covers -- kwp names six MHPO classes and MHPO ships
+            # only as OWL functional syntax, which rdflib does not read -- is
+            # neither right nor wrong here. Reporting it as an error would
+            # teach everyone to ignore the real ones; reporting nothing would
+            # let the gap grow.
+            from docpipe import ontology as _ontology
+            open_families = _ontology.uncovered(
+                json.loads(spec_file.read_text(encoding="utf-8")), snapshot)
+            check(profile, "jede Id-Familie hat eine Datei, die sie kennt",
+                  not open_families,
+                  ", ".join(f"{k}_* ({len(v)}x)"
+                            for k, v in sorted(open_families.items())),
+                  fatal=False)
 
     # A coordinate the graph takes has to say what it becomes there. Not
     # every axis does -- some are read for the record and never serialized --

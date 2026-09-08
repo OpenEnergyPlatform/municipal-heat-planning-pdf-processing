@@ -1,0 +1,782 @@
+{
+ "pin": {
+  "families": [
+   "BFO",
+   "IAO",
+   "MENO",
+   "OBI",
+   "OEO",
+   "RO",
+   "STATO",
+   "UO"
+  ],
+  "oeo_file": "oeo-closure.owl",
+  "oeo_sha256": "df25aa5aec966be79096cb5dc1f09023fc66a99b984c485a24897adb76a99dd4",
+  "oeo_version_iri": "https://openenergyplatform.org/ontology/oeo/releases/2.13.0/oeo.owl",
+  "regions_count": 249,
+  "regions_file": "regions.json"
+ },
+ "regions": [
+  "https://openenergyplatform.org/ontology/oekg/region/Afghanistan",
+  "https://openenergyplatform.org/ontology/oekg/region/AlandIslands",
+  "https://openenergyplatform.org/ontology/oekg/region/Albania",
+  "https://openenergyplatform.org/ontology/oekg/region/Algeria",
+  "https://openenergyplatform.org/ontology/oekg/region/AmericanSamoa",
+  "https://openenergyplatform.org/ontology/oekg/region/Andorra",
+  "https://openenergyplatform.org/ontology/oekg/region/Angola",
+  "https://openenergyplatform.org/ontology/oekg/region/Anguilla",
+  "https://openenergyplatform.org/ontology/oekg/region/Antarctica",
+  "https://openenergyplatform.org/ontology/oekg/region/AntiguaAndBarbuda",
+  "https://openenergyplatform.org/ontology/oekg/region/Argentina",
+  "https://openenergyplatform.org/ontology/oekg/region/Armenia",
+  "https://openenergyplatform.org/ontology/oekg/region/Aruba",
+  "https://openenergyplatform.org/ontology/oekg/region/Australia",
+  "https://openenergyplatform.org/ontology/oekg/region/Austria",
+  "https://openenergyplatform.org/ontology/oekg/region/Azerbaijan",
+  "https://openenergyplatform.org/ontology/oekg/region/Bahamas",
+  "https://openenergyplatform.org/ontology/oekg/region/Bahrain",
+  "https://openenergyplatform.org/ontology/oekg/region/Bangladesh",
+  "https://openenergyplatform.org/ontology/oekg/region/Barbados",
+  "https://openenergyplatform.org/ontology/oekg/region/Belarus",
+  "https://openenergyplatform.org/ontology/oekg/region/Belgium",
+  "https://openenergyplatform.org/ontology/oekg/region/Belize",
+  "https://openenergyplatform.org/ontology/oekg/region/Benin",
+  "https://openenergyplatform.org/ontology/oekg/region/Bermuda",
+  "https://openenergyplatform.org/ontology/oekg/region/Bhutan",
+  "https://openenergyplatform.org/ontology/oekg/region/Bolivia",
+  "https://openenergyplatform.org/ontology/oekg/region/Bonaire",
+  "https://openenergyplatform.org/ontology/oekg/region/BosniaAndHerzegovina",
+  "https://openenergyplatform.org/ontology/oekg/region/Botswana",
+  "https://openenergyplatform.org/ontology/oekg/region/BouvetIsland",
+  "https://openenergyplatform.org/ontology/oekg/region/Brazil",
+  "https://openenergyplatform.org/ontology/oekg/region/BritishIndianOceanTerritory",
+  "https://openenergyplatform.org/ontology/oekg/region/BruneiDarussalam",
+  "https://openenergyplatform.org/ontology/oekg/region/Bulgaria",
+  "https://openenergyplatform.org/ontology/oekg/region/BurkinaFaso",
+  "https://openenergyplatform.org/ontology/oekg/region/Burundi",
+  "https://openenergyplatform.org/ontology/oekg/region/CaboVerde",
+  "https://openenergyplatform.org/ontology/oekg/region/Cambodia",
+  "https://openenergyplatform.org/ontology/oekg/region/Cameroon",
+  "https://openenergyplatform.org/ontology/oekg/region/Canada",
+  "https://openenergyplatform.org/ontology/oekg/region/CaymanIslands",
+  "https://openenergyplatform.org/ontology/oekg/region/CentralAfricanRepublic",
+  "https://openenergyplatform.org/ontology/oekg/region/Chad",
+  "https://openenergyplatform.org/ontology/oekg/region/Chile",
+  "https://openenergyplatform.org/ontology/oekg/region/China",
+  "https://openenergyplatform.org/ontology/oekg/region/ChristmasIsland",
+  "https://openenergyplatform.org/ontology/oekg/region/CocosKeelingIslands",
+  "https://openenergyplatform.org/ontology/oekg/region/Colombia",
+  "https://openenergyplatform.org/ontology/oekg/region/Comoros",
+  "https://openenergyplatform.org/ontology/oekg/region/Congo",
+  "https://openenergyplatform.org/ontology/oekg/region/CongoDemocraticRepublicOf",
+  "https://openenergyplatform.org/ontology/oekg/region/CookIslands",
+  "https://openenergyplatform.org/ontology/oekg/region/CostaRica",
+  "https://openenergyplatform.org/ontology/oekg/region/CoteDIvoire",
+  "https://openenergyplatform.org/ontology/oekg/region/Croatia",
+  "https://openenergyplatform.org/ontology/oekg/region/Cuba",
+  "https://openenergyplatform.org/ontology/oekg/region/Curacao",
+  "https://openenergyplatform.org/ontology/oekg/region/Cyprus",
+  "https://openenergyplatform.org/ontology/oekg/region/Czechia",
+  "https://openenergyplatform.org/ontology/oekg/region/Denmark",
+  "https://openenergyplatform.org/ontology/oekg/region/Djibouti",
+  "https://openenergyplatform.org/ontology/oekg/region/Dominica",
+  "https://openenergyplatform.org/ontology/oekg/region/DominicanRepublic",
+  "https://openenergyplatform.org/ontology/oekg/region/Ecuador",
+  "https://openenergyplatform.org/ontology/oekg/region/Egypt",
+  "https://openenergyplatform.org/ontology/oekg/region/ElSalvador",
+  "https://openenergyplatform.org/ontology/oekg/region/EquatorialGuinea",
+  "https://openenergyplatform.org/ontology/oekg/region/Eritrea",
+  "https://openenergyplatform.org/ontology/oekg/region/Estonia",
+  "https://openenergyplatform.org/ontology/oekg/region/Eswatini",
+  "https://openenergyplatform.org/ontology/oekg/region/Ethiopia",
+  "https://openenergyplatform.org/ontology/oekg/region/FalklandIslands",
+  "https://openenergyplatform.org/ontology/oekg/region/FaroeIslands",
+  "https://openenergyplatform.org/ontology/oekg/region/Fiji",
+  "https://openenergyplatform.org/ontology/oekg/region/Finland",
+  "https://openenergyplatform.org/ontology/oekg/region/France",
+  "https://openenergyplatform.org/ontology/oekg/region/FrenchGuiana",
+  "https://openenergyplatform.org/ontology/oekg/region/FrenchPolynesia",
+  "https://openenergyplatform.org/ontology/oekg/region/FrenchSouthernTerritories",
+  "https://openenergyplatform.org/ontology/oekg/region/Gabon",
+  "https://openenergyplatform.org/ontology/oekg/region/Gambia",
+  "https://openenergyplatform.org/ontology/oekg/region/Georgia",
+  "https://openenergyplatform.org/ontology/oekg/region/Germany",
+  "https://openenergyplatform.org/ontology/oekg/region/Ghana",
+  "https://openenergyplatform.org/ontology/oekg/region/Gibraltar",
+  "https://openenergyplatform.org/ontology/oekg/region/Greece",
+  "https://openenergyplatform.org/ontology/oekg/region/Greenland",
+  "https://openenergyplatform.org/ontology/oekg/region/Grenada",
+  "https://openenergyplatform.org/ontology/oekg/region/Guadeloupe",
+  "https://openenergyplatform.org/ontology/oekg/region/Guam",
+  "https://openenergyplatform.org/ontology/oekg/region/Guatemala",
+  "https://openenergyplatform.org/ontology/oekg/region/Guernsey",
+  "https://openenergyplatform.org/ontology/oekg/region/Guinea",
+  "https://openenergyplatform.org/ontology/oekg/region/Guinea-Bissau",
+  "https://openenergyplatform.org/ontology/oekg/region/Guyana",
+  "https://openenergyplatform.org/ontology/oekg/region/Haiti",
+  "https://openenergyplatform.org/ontology/oekg/region/HeardIslandAndMcDonaldIslands",
+  "https://openenergyplatform.org/ontology/oekg/region/HolySee",
+  "https://openenergyplatform.org/ontology/oekg/region/Honduras",
+  "https://openenergyplatform.org/ontology/oekg/region/HongKong",
+  "https://openenergyplatform.org/ontology/oekg/region/Hungary",
+  "https://openenergyplatform.org/ontology/oekg/region/Iceland",
+  "https://openenergyplatform.org/ontology/oekg/region/India",
+  "https://openenergyplatform.org/ontology/oekg/region/Indonesia",
+  "https://openenergyplatform.org/ontology/oekg/region/Iran",
+  "https://openenergyplatform.org/ontology/oekg/region/Iraq",
+  "https://openenergyplatform.org/ontology/oekg/region/Ireland",
+  "https://openenergyplatform.org/ontology/oekg/region/IsleOfMan",
+  "https://openenergyplatform.org/ontology/oekg/region/Israel",
+  "https://openenergyplatform.org/ontology/oekg/region/Italy",
+  "https://openenergyplatform.org/ontology/oekg/region/Jamaica",
+  "https://openenergyplatform.org/ontology/oekg/region/Japan",
+  "https://openenergyplatform.org/ontology/oekg/region/Jersey",
+  "https://openenergyplatform.org/ontology/oekg/region/Jordan",
+  "https://openenergyplatform.org/ontology/oekg/region/Kazakhstan",
+  "https://openenergyplatform.org/ontology/oekg/region/Kenya",
+  "https://openenergyplatform.org/ontology/oekg/region/Kiribati",
+  "https://openenergyplatform.org/ontology/oekg/region/KoreaDemocraticPeoplesRepublicOf",
+  "https://openenergyplatform.org/ontology/oekg/region/KoreaRepublicOf",
+  "https://openenergyplatform.org/ontology/oekg/region/Kuwait",
+  "https://openenergyplatform.org/ontology/oekg/region/Kyrgyzstan",
+  "https://openenergyplatform.org/ontology/oekg/region/LaoPeoplesDemocraticRepublic",
+  "https://openenergyplatform.org/ontology/oekg/region/Latvia",
+  "https://openenergyplatform.org/ontology/oekg/region/Lebanon",
+  "https://openenergyplatform.org/ontology/oekg/region/Lesotho",
+  "https://openenergyplatform.org/ontology/oekg/region/Liberia",
+  "https://openenergyplatform.org/ontology/oekg/region/Libya",
+  "https://openenergyplatform.org/ontology/oekg/region/Liechtenstein",
+  "https://openenergyplatform.org/ontology/oekg/region/Lithuania",
+  "https://openenergyplatform.org/ontology/oekg/region/Luxembourg",
+  "https://openenergyplatform.org/ontology/oekg/region/Macao",
+  "https://openenergyplatform.org/ontology/oekg/region/Macedonia",
+  "https://openenergyplatform.org/ontology/oekg/region/Madagascar",
+  "https://openenergyplatform.org/ontology/oekg/region/Malawi",
+  "https://openenergyplatform.org/ontology/oekg/region/Malaysia",
+  "https://openenergyplatform.org/ontology/oekg/region/Maldives",
+  "https://openenergyplatform.org/ontology/oekg/region/Mali",
+  "https://openenergyplatform.org/ontology/oekg/region/Malta",
+  "https://openenergyplatform.org/ontology/oekg/region/MarshallIslands",
+  "https://openenergyplatform.org/ontology/oekg/region/Martinique",
+  "https://openenergyplatform.org/ontology/oekg/region/Mauritania",
+  "https://openenergyplatform.org/ontology/oekg/region/Mauritius",
+  "https://openenergyplatform.org/ontology/oekg/region/Mayotte",
+  "https://openenergyplatform.org/ontology/oekg/region/Mexico",
+  "https://openenergyplatform.org/ontology/oekg/region/Micronesia",
+  "https://openenergyplatform.org/ontology/oekg/region/Moldova",
+  "https://openenergyplatform.org/ontology/oekg/region/Monaco",
+  "https://openenergyplatform.org/ontology/oekg/region/Mongolia",
+  "https://openenergyplatform.org/ontology/oekg/region/Montenegro",
+  "https://openenergyplatform.org/ontology/oekg/region/Montserrat",
+  "https://openenergyplatform.org/ontology/oekg/region/Morocco",
+  "https://openenergyplatform.org/ontology/oekg/region/Mozambique",
+  "https://openenergyplatform.org/ontology/oekg/region/Myanmar",
+  "https://openenergyplatform.org/ontology/oekg/region/Namibia",
+  "https://openenergyplatform.org/ontology/oekg/region/Nauru",
+  "https://openenergyplatform.org/ontology/oekg/region/Nepal",
+  "https://openenergyplatform.org/ontology/oekg/region/Netherlands",
+  "https://openenergyplatform.org/ontology/oekg/region/NewCaledonia",
+  "https://openenergyplatform.org/ontology/oekg/region/NewZealand",
+  "https://openenergyplatform.org/ontology/oekg/region/Nicaragua",
+  "https://openenergyplatform.org/ontology/oekg/region/Niger",
+  "https://openenergyplatform.org/ontology/oekg/region/Nigeria",
+  "https://openenergyplatform.org/ontology/oekg/region/Niue",
+  "https://openenergyplatform.org/ontology/oekg/region/NorfolkIsland",
+  "https://openenergyplatform.org/ontology/oekg/region/NorthernMarianaIslands",
+  "https://openenergyplatform.org/ontology/oekg/region/Norway",
+  "https://openenergyplatform.org/ontology/oekg/region/Oman",
+  "https://openenergyplatform.org/ontology/oekg/region/Pakistan",
+  "https://openenergyplatform.org/ontology/oekg/region/Palau",
+  "https://openenergyplatform.org/ontology/oekg/region/Palestine",
+  "https://openenergyplatform.org/ontology/oekg/region/Panama",
+  "https://openenergyplatform.org/ontology/oekg/region/PapuaNewGuinea",
+  "https://openenergyplatform.org/ontology/oekg/region/Paraguay",
+  "https://openenergyplatform.org/ontology/oekg/region/Peru",
+  "https://openenergyplatform.org/ontology/oekg/region/Philippines",
+  "https://openenergyplatform.org/ontology/oekg/region/Pitcairn",
+  "https://openenergyplatform.org/ontology/oekg/region/Poland",
+  "https://openenergyplatform.org/ontology/oekg/region/Portugal",
+  "https://openenergyplatform.org/ontology/oekg/region/PuertoRico",
+  "https://openenergyplatform.org/ontology/oekg/region/Qatar",
+  "https://openenergyplatform.org/ontology/oekg/region/Reunion",
+  "https://openenergyplatform.org/ontology/oekg/region/Romania",
+  "https://openenergyplatform.org/ontology/oekg/region/RussianFederation",
+  "https://openenergyplatform.org/ontology/oekg/region/Rwanda",
+  "https://openenergyplatform.org/ontology/oekg/region/SaintBarthelemy",
+  "https://openenergyplatform.org/ontology/oekg/region/SaintHelena",
+  "https://openenergyplatform.org/ontology/oekg/region/SaintKittsAndNevis",
+  "https://openenergyplatform.org/ontology/oekg/region/SaintLucia",
+  "https://openenergyplatform.org/ontology/oekg/region/SaintMartin",
+  "https://openenergyplatform.org/ontology/oekg/region/SaintPierreAndMiquelon",
+  "https://openenergyplatform.org/ontology/oekg/region/SaintVincentAndTheGrenadines",
+  "https://openenergyplatform.org/ontology/oekg/region/Samoa",
+  "https://openenergyplatform.org/ontology/oekg/region/SanMarino",
+  "https://openenergyplatform.org/ontology/oekg/region/SaoTomeAndPrincipe",
+  "https://openenergyplatform.org/ontology/oekg/region/SaudiArabia",
+  "https://openenergyplatform.org/ontology/oekg/region/Senegal",
+  "https://openenergyplatform.org/ontology/oekg/region/Serbia",
+  "https://openenergyplatform.org/ontology/oekg/region/Seychelles",
+  "https://openenergyplatform.org/ontology/oekg/region/SierraLeone",
+  "https://openenergyplatform.org/ontology/oekg/region/Singapore",
+  "https://openenergyplatform.org/ontology/oekg/region/SintMaarten",
+  "https://openenergyplatform.org/ontology/oekg/region/Slovakia",
+  "https://openenergyplatform.org/ontology/oekg/region/Slovenia",
+  "https://openenergyplatform.org/ontology/oekg/region/SolomonIslands",
+  "https://openenergyplatform.org/ontology/oekg/region/Somalia",
+  "https://openenergyplatform.org/ontology/oekg/region/SouthAfrica",
+  "https://openenergyplatform.org/ontology/oekg/region/SouthGeorgiaAndTheSouthSandwichIslands",
+  "https://openenergyplatform.org/ontology/oekg/region/SouthSudan",
+  "https://openenergyplatform.org/ontology/oekg/region/Spain",
+  "https://openenergyplatform.org/ontology/oekg/region/SriLanka",
+  "https://openenergyplatform.org/ontology/oekg/region/Sudan",
+  "https://openenergyplatform.org/ontology/oekg/region/Suriname",
+  "https://openenergyplatform.org/ontology/oekg/region/SvalbardAndJanMayen",
+  "https://openenergyplatform.org/ontology/oekg/region/Sweden",
+  "https://openenergyplatform.org/ontology/oekg/region/Switzerland",
+  "https://openenergyplatform.org/ontology/oekg/region/SyrianArabRepublic",
+  "https://openenergyplatform.org/ontology/oekg/region/Taiwan",
+  "https://openenergyplatform.org/ontology/oekg/region/Tajikistan",
+  "https://openenergyplatform.org/ontology/oekg/region/Tanzania",
+  "https://openenergyplatform.org/ontology/oekg/region/Thailand",
+  "https://openenergyplatform.org/ontology/oekg/region/Timor-Leste",
+  "https://openenergyplatform.org/ontology/oekg/region/Togo",
+  "https://openenergyplatform.org/ontology/oekg/region/Tokelau",
+  "https://openenergyplatform.org/ontology/oekg/region/Tonga",
+  "https://openenergyplatform.org/ontology/oekg/region/TrinidadAndTobago",
+  "https://openenergyplatform.org/ontology/oekg/region/Tunisia",
+  "https://openenergyplatform.org/ontology/oekg/region/Turkey",
+  "https://openenergyplatform.org/ontology/oekg/region/Turkmenistan",
+  "https://openenergyplatform.org/ontology/oekg/region/TurksAndCaicosIslands",
+  "https://openenergyplatform.org/ontology/oekg/region/Tuvalu",
+  "https://openenergyplatform.org/ontology/oekg/region/Uganda",
+  "https://openenergyplatform.org/ontology/oekg/region/Ukraine",
+  "https://openenergyplatform.org/ontology/oekg/region/UnitedArabEmirates",
+  "https://openenergyplatform.org/ontology/oekg/region/UnitedKingdomOfGreatBritainAndNorthernIreland",
+  "https://openenergyplatform.org/ontology/oekg/region/UnitedStatesMinorOutlyingIslands",
+  "https://openenergyplatform.org/ontology/oekg/region/UnitedStatesOfAmerica",
+  "https://openenergyplatform.org/ontology/oekg/region/Uruguay",
+  "https://openenergyplatform.org/ontology/oekg/region/Uzbekistan",
+  "https://openenergyplatform.org/ontology/oekg/region/Vanuatu",
+  "https://openenergyplatform.org/ontology/oekg/region/Venezuela",
+  "https://openenergyplatform.org/ontology/oekg/region/VietNam",
+  "https://openenergyplatform.org/ontology/oekg/region/VirginIslandsBritish",
+  "https://openenergyplatform.org/ontology/oekg/region/VirginIslandsUS",
+  "https://openenergyplatform.org/ontology/oekg/region/WallisAndFutuna",
+  "https://openenergyplatform.org/ontology/oekg/region/WesternSahara",
+  "https://openenergyplatform.org/ontology/oekg/region/Yemen",
+  "https://openenergyplatform.org/ontology/oekg/region/Zambia",
+  "https://openenergyplatform.org/ontology/oekg/region/Zimbabwe"
+ ],
+ "sets": {
+  "scenario": [
+   "OEO_00020247",
+   "OEO_00020248",
+   "OEO_00020309",
+   "OEO_00020310",
+   "OEO_00020311",
+   "OEO_00020312",
+   "OEO_00020314",
+   "OEO_00020317",
+   "OEO_00020321",
+   "OEO_00020345",
+   "OEO_00020411",
+   "OEO_00020412",
+   "OEO_00030007",
+   "OEO_00030008",
+   "OEO_00030009",
+   "OEO_00030010",
+   "OEO_00390105",
+   "OEO_00390106",
+   "OEO_00390107"
+  ]
+ },
+ "terms": {
+  "BFO_0000051": {
+   "alt_labels": [],
+   "definition": "a core relation that holds between a whole and its part",
+   "deprecated": false,
+   "kind": "object_property",
+   "label": "has part",
+   "parents": [
+    "topObjectProperty"
+   ]
+  },
+  "BFO_0000141": {
+   "alt_labels": [],
+   "definition": null,
+   "deprecated": false,
+   "kind": "class",
+   "label": "immaterial entity",
+   "parents": [
+    "BFO_0000004"
+   ]
+  },
+  "IAO_0000030": {
+   "alt_labels": [],
+   "definition": "A generically dependent continuant that is about some thing.",
+   "deprecated": false,
+   "kind": "class",
+   "label": "information content entity",
+   "parents": [
+    "BFO_0000031"
+   ]
+  },
+  "IAO_0000088": {
+   "alt_labels": [],
+   "definition": "A document assembled by an author for the purpose of providing information for the audience. A report is the output of a documenting process and has the objective to be consumed by a specific audience. Topic of the report is on something that has completed. A report is not a single figure. Examples of reports are journal article, patent application, grant progress report, case report (not patient record).",
+   "deprecated": false,
+   "kind": "class",
+   "label": "report",
+   "parents": [
+    "IAO_0000310"
+   ]
+  },
+  "IAO_0000136": {
+   "alt_labels": [],
+   "definition": "A (currently) primitive relation that relates an information artifact to an entity.",
+   "deprecated": false,
+   "kind": "object_property",
+   "label": "is about",
+   "parents": [
+    "topObjectProperty"
+   ]
+  },
+  "OEO_00000051": {
+   "alt_labels": [
+    "Agent",
+    "Agentin"
+   ],
+   "definition": "Agent is a role of a person or organisation that directs its activity towards achieving goals.",
+   "deprecated": false,
+   "kind": "class",
+   "label": "agent",
+   "parents": [
+    "BFO_0000023"
+   ]
+  },
+  "OEO_00000064": {
+   "alt_labels": [
+    "Autor",
+    "Autorin"
+   ],
+   "definition": "An author is an agent that creates or has created written work.",
+   "deprecated": false,
+   "kind": "class",
+   "label": "author",
+   "parents": [
+    "OEO_00000051"
+   ]
+  },
+  "OEO_00000162": {
+   "alt_labels": [],
+   "definition": "A factsheet is a document that collects information about a specific topic in a structured way.",
+   "deprecated": false,
+   "kind": "class",
+   "label": "factsheet",
+   "parents": [
+    "IAO_0000310"
+   ]
+  },
+  "OEO_00000364": {
+   "alt_labels": [
+    "Szenario"
+   ],
+   "definition": "A scenario is an information content entity that contains statements about a possible future development based on a coherent and internally consistent set of assumptions and their motivation.",
+   "deprecated": false,
+   "kind": "class",
+   "label": "scenario",
+   "parents": [
+    "IAO_0000030"
+   ]
+  },
+  "OEO_00000365": {
+   "alt_labels": [],
+   "definition": "A scenario factsheet is a factsheet that contains information about a scenario.",
+   "deprecated": false,
+   "kind": "class",
+   "label": "scenario factsheet",
+   "parents": [
+    "OEO_00000162"
+   ]
+  },
+  "OEO_00000506": {
+   "alt_labels": [],
+   "definition": "A relation that holds between an information content entity and its author.",
+   "deprecated": false,
+   "kind": "object_property",
+   "label": "has author",
+   "parents": [
+    "OEO_00140008",
+    "topObjectProperty"
+   ]
+  },
+  "OEO_00000509": {
+   "alt_labels": [],
+   "definition": "A relation that holds between an entity and its source of funding.",
+   "deprecated": false,
+   "kind": "object_property",
+   "label": "has funding source",
+   "parents": [
+    "topObjectProperty"
+   ]
+  },
+  "OEO_00000510": {
+   "alt_labels": [],
+   "definition": "A relation that holds between an information content entity and the organisation in which it was created.",
+   "deprecated": false,
+   "kind": "object_property",
+   "label": "has organisation",
+   "parents": [
+    "OEO_00140008",
+    "topObjectProperty"
+   ]
+  },
+  "OEO_00010378": {
+   "alt_labels": [],
+   "definition": "An is-about-relation between an information content entity and a spatial region that describes that the information content entity is about a spatial region.",
+   "deprecated": false,
+   "kind": "object_property",
+   "label": "has spatial region",
+   "parents": [
+    "IAO_0000136",
+    "topObjectProperty"
+   ]
+  },
+  "OEO_00020012": {
+   "alt_labels": [],
+   "definition": "A study report is a report that is the output from some study.",
+   "deprecated": false,
+   "kind": "class",
+   "label": "study report",
+   "parents": [
+    "IAO_0000088"
+   ]
+  },
+  "OEO_00020220": {
+   "alt_labels": [],
+   "definition": "An is-about-relation between a scenario and a study region to indicate the study region of a scenario.",
+   "deprecated": false,
+   "kind": "object_property",
+   "label": "has study region",
+   "parents": [
+    "IAO_0000136",
+    "OEO_00010378",
+    "topObjectProperty"
+   ]
+  },
+  "OEO_00020227": {
+   "alt_labels": [],
+   "definition": "A scenario bundle is an information content entity that connects information about a scenario study and the associated scenario projections on the OEP via the OEKG.",
+   "deprecated": false,
+   "kind": "class",
+   "label": "scenario bundle",
+   "parents": [
+    "IAO_0000030"
+   ]
+  },
+  "OEO_00020247": {
+   "alt_labels": [
+    "Zielszenario"
+   ],
+   "definition": "A target driven scenario is a scenario that contains certain target constraints/ statements that in a possible future shall be realized. The path how the targets will be met is not predefined in the scenario.",
+   "deprecated": false,
+   "kind": "class",
+   "label": "target driven scenario",
+   "parents": [
+    "OEO_00000364"
+   ]
+  },
+  "OEO_00020248": {
+   "alt_labels": [
+    "exploratives Szenario"
+   ],
+   "definition": "An explorative scenario is a scenario that contains certain constraints / statements regarding measures that are taken in the near future / today to explore where these measures will lead to in a later future. The later future is not predefined in the scenario.",
+   "deprecated": false,
+   "kind": "class",
+   "label": "explorative scenario",
+   "parents": [
+    "OEO_00000364"
+   ]
+  },
+  "OEO_00020309": {
+   "alt_labels": [],
+   "definition": "A policy scenario is a scenario in which certain policy instruments or transformative measures and their impacts are assessed.",
+   "deprecated": false,
+   "kind": "class",
+   "label": "policy scenario",
+   "parents": [
+    "OEO_00020248"
+   ]
+  },
+  "OEO_00020310": {
+   "alt_labels": [
+    "WOM scenario",
+    "baseline scenario"
+   ],
+   "definition": "A without measures scenario (WOM) is a policy scenario that excludes all policy instruments and transformative measures which are planned, adopted or implemented.",
+   "deprecated": false,
+   "kind": "class",
+   "label": "without measures scenario",
+   "parents": [
+    "OEO_00020309"
+   ]
+  },
+  "OEO_00020311": {
+   "alt_labels": [
+    "WEM scenario",
+    "baseline scenario"
+   ],
+   "definition": "A with existing measures scenario (WEM) is a policy scenario that includes policy instruments and transformative measures that have been adopted and implemented.",
+   "deprecated": false,
+   "kind": "class",
+   "label": "with existing measures scenario",
+   "parents": [
+    "OEO_00020309"
+   ]
+  },
+  "OEO_00020312": {
+   "alt_labels": [
+    "WAM scenario"
+   ],
+   "definition": "A with additional measures scenario (WAM) is a policy scenario that includes policy instruments and transformative measures which have been adopted and implemented to mitigate climate change or meet energy objectives, as well as policy instruments and transformative measures which are planned for that purpose.",
+   "deprecated": false,
+   "kind": "class",
+   "label": "with additional measures scenario",
+   "parents": [
+    "OEO_00020309"
+   ]
+  },
+  "OEO_00020314": {
+   "alt_labels": [],
+   "definition": "A reference scenario is a scenario that is used as a reference, e.g. in a scenario comparison. It has the reference role.",
+   "deprecated": false,
+   "kind": "class",
+   "label": "reference scenario",
+   "parents": [
+    "OEO_00000364"
+   ]
+  },
+  "OEO_00020317": {
+   "alt_labels": [],
+   "definition": "A greenhouse gas emission scenario is an emission scenario that describes a possible greenhouse gas emission trajectory.",
+   "deprecated": false,
+   "kind": "class",
+   "label": "greenhouse gas emission scenario",
+   "parents": [
+    "OEO_00030009"
+   ]
+  },
+  "OEO_00020321": {
+   "alt_labels": [],
+   "definition": "A CO2 emission scenario is an emission scenario that describes a possible CO2 emission trajectory.",
+   "deprecated": false,
+   "kind": "class",
+   "label": "CO2 emission scenario",
+   "parents": [
+    "OEO_00020317",
+    "OEO_00030009"
+   ]
+  },
+  "OEO_00020345": {
+   "alt_labels": [],
+   "definition": "A sufficiency scenario is a scenario that comprises sufficiency strategies.",
+   "deprecated": false,
+   "kind": "class",
+   "label": "sufficiency scenario",
+   "parents": [
+    "OEO_00000364"
+   ]
+  },
+  "OEO_00020411": {
+   "alt_labels": [
+    "robust investment decision",
+    "robust transformation pathway"
+   ],
+   "definition": "A robust system scenario is an explorative scenario that describes an energy system that is designed to evolve in a robust way.",
+   "deprecated": false,
+   "kind": "class",
+   "label": "robust system scenario",
+   "parents": [
+    "OEO_00020248",
+    "OEO_00030010"
+   ]
+  },
+  "OEO_00020412": {
+   "alt_labels": [],
+   "definition": null,
+   "deprecated": false,
+   "kind": "class",
+   "label": "statistically robust scenario",
+   "parents": [
+    "OEO_00000364"
+   ]
+  },
+  "OEO_00020440": {
+   "alt_labels": [],
+   "definition": "Has scenario year value is a relation between a scenario factsheet and a xsd:dateTime value.",
+   "deprecated": false,
+   "kind": "data_property",
+   "label": "has scenario year value",
+   "parents": [
+    "topDataProperty"
+   ]
+  },
+  "OEO_00030007": {
+   "alt_labels": [
+    "Klimaszenario"
+   ],
+   "definition": "A climate scenario is a scenario that describes a possible future state of a climate system.",
+   "deprecated": false,
+   "kind": "class",
+   "label": "climate scenario",
+   "parents": [
+    "OEO_00000364"
+   ]
+  },
+  "OEO_00030008": {
+   "alt_labels": [
+    "Wirtschaftsszenario"
+   ],
+   "definition": "An economic scenario is a scenario that describes a possible future state of economic systems.",
+   "deprecated": false,
+   "kind": "class",
+   "label": "economic scenario",
+   "parents": [
+    "OEO_00000364"
+   ]
+  },
+  "OEO_00030009": {
+   "alt_labels": [
+    "Emissionsszenario"
+   ],
+   "definition": "An emission scenario is a scenario that describes a possible emission trajectory.",
+   "deprecated": false,
+   "kind": "class",
+   "label": "emission scenario",
+   "parents": [
+    "OEO_00000364"
+   ]
+  },
+  "OEO_00030010": {
+   "alt_labels": [
+    "Energieszenario"
+   ],
+   "definition": "An energy scenario is a scenario that describes a possible future state of an energy system.",
+   "deprecated": false,
+   "kind": "class",
+   "label": "energy scenario",
+   "parents": [
+    "OEO_00000364"
+   ]
+  },
+  "OEO_00030022": {
+   "alt_labels": [
+    "Organisation"
+   ],
+   "definition": "An organisation is an immaterial entity that has the organisation role and there exists some sort of legal framework that recognises the entity and its continued existence.",
+   "deprecated": false,
+   "kind": "class",
+   "label": "organisation",
+   "parents": [
+    "BFO_0000141"
+   ]
+  },
+  "OEO_00090001": {
+   "alt_labels": [
+    "Förderer"
+   ],
+   "definition": "A funder is a sponsor that supports by giving money.",
+   "deprecated": false,
+   "kind": "class",
+   "label": "funder",
+   "parents": [
+    "OEO_00140009"
+   ]
+  },
+  "OEO_00140008": {
+   "alt_labels": [],
+   "definition": "A relation between an information content entity / model and a continuant, in which the continuant is somehow involved in the creation of the information content entity / model.",
+   "deprecated": false,
+   "kind": "object_property",
+   "label": "has contributor",
+   "parents": [
+    "topObjectProperty"
+   ]
+  },
+  "OEO_00140009": {
+   "alt_labels": [
+    "Förderer",
+    "Förderin",
+    "Sponsor",
+    "Sponsorin"
+   ],
+   "definition": "A sponsor is an agent that supports a person, organisation, or project by giving money, allowance of kind, services or other help.",
+   "deprecated": false,
+   "kind": "class",
+   "label": "sponsor",
+   "parents": [
+    "OEO_00000051"
+   ]
+  },
+  "OEO_00390073": {
+   "alt_labels": [],
+   "definition": "has scenario type is a relation between a scenario factsheet and a subclass of scenario.",
+   "deprecated": false,
+   "kind": "object_property",
+   "label": "has scenario type",
+   "parents": [
+    "topObjectProperty"
+   ]
+  },
+  "OEO_00390096": {
+   "alt_labels": [],
+   "definition": "has publication date is the relation between a report and the year it was published in.",
+   "deprecated": false,
+   "kind": "data_property",
+   "label": "has publication date",
+   "parents": [
+    "topDataProperty"
+   ]
+  },
+  "OEO_00390098": {
+   "alt_labels": [],
+   "definition": "has doi is the relation between a digital object and the literal representing its doi (digital object identifier).",
+   "deprecated": false,
+   "kind": "data_property",
+   "label": "has doi",
+   "parents": [
+    "topDataProperty"
+   ]
+  },
+  "OEO_00390105": {
+   "alt_labels": [],
+   "definition": "A delayed transition scenario is an explorative scenario whose intermediate transition indicators are not achieved.",
+   "deprecated": false,
+   "kind": "class",
+   "label": "delayed transition scenario",
+   "parents": [
+    "OEO_00020248"
+   ]
+  },
+  "OEO_00390106": {
+   "alt_labels": [],
+   "definition": "An technology scenario is a scenario that investigates future system states with the focus on a specific technology.",
+   "deprecated": false,
+   "kind": "class",
+   "label": "technology scenario",
+   "parents": [
+    "OEO_00000364"
+   ]
+  },
+  "OEO_00390107": {
+   "alt_labels": [],
+   "definition": "A sector focused scenario is a scenario that focuses on a specific sector.",
+   "deprecated": false,
+   "kind": "class",
+   "label": "sector focused scenario",
+   "parents": [
+    "OEO_00000364"
+   ]
+  }
+ }
+}
