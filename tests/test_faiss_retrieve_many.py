@@ -6,6 +6,10 @@ times a round, four rounds, per document. Whether that rewrite is safe is one
 question only: does it return the same thing? So this compares the two against
 a real (small) index rather than asserting the shape of the new one.
 """
+import conftest
+
+conftest.needs_real("faiss")
+
 import numpy as np
 import pytest
 

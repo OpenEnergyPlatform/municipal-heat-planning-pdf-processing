@@ -625,7 +625,7 @@
       "description": "How the coordinate 'aggregation' ended. Always present: a missing key and a refused reading must not look alike."
      },
      "aggregation_window": {
-      "description": "[stage, index] of the window 'aggregation' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts.",
+      "description": "[stage, index] of the window 'aggregation' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from.",
       "maxItems": 2,
       "minItems": 2,
       "prefixItems": [
@@ -633,7 +633,8 @@
         "enum": [
          "own",
          "retrieval",
-         "rest"
+         "rest",
+         "frame"
         ]
        },
        {
@@ -951,7 +952,7 @@
       "description": "How the coordinate 'carrier' ended. Always present: a missing key and a refused reading must not look alike."
      },
      "carrier_window": {
-      "description": "[stage, index] of the window 'carrier' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts.",
+      "description": "[stage, index] of the window 'carrier' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from.",
       "maxItems": 2,
       "minItems": 2,
       "prefixItems": [
@@ -959,7 +960,8 @@
         "enum": [
          "own",
          "retrieval",
-         "rest"
+         "rest",
+         "frame"
         ]
        },
        {
@@ -1036,7 +1038,7 @@
       "description": "How the coordinate 'parameter' ended. Always present: a missing key and a refused reading must not look alike."
      },
      "parameter_window": {
-      "description": "[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts.",
+      "description": "[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from.",
       "maxItems": 2,
       "minItems": 2,
       "prefixItems": [
@@ -1044,7 +1046,8 @@
         "enum": [
          "own",
          "retrieval",
-         "rest"
+         "rest",
+         "frame"
         ]
        },
        {
@@ -1197,7 +1200,7 @@
       "description": "How the coordinate 'quantity' ended. Always present: a missing key and a refused reading must not look alike."
      },
      "quantity_window": {
-      "description": "[stage, index] of the window 'quantity' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts.",
+      "description": "[stage, index] of the window 'quantity' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from.",
       "maxItems": 2,
       "minItems": 2,
       "prefixItems": [
@@ -1205,7 +1208,8 @@
         "enum": [
          "own",
          "retrieval",
-         "rest"
+         "rest",
+         "frame"
         ]
        },
        {
@@ -1344,7 +1348,7 @@
       "description": "How the coordinate 'scenario' ended. Always present: a missing key and a refused reading must not look alike."
      },
      "scenario_window": {
-      "description": "[stage, index] of the window 'scenario' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts.",
+      "description": "[stage, index] of the window 'scenario' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from.",
       "maxItems": 2,
       "minItems": 2,
       "prefixItems": [
@@ -1352,7 +1356,8 @@
         "enum": [
          "own",
          "retrieval",
-         "rest"
+         "rest",
+         "frame"
         ]
        },
        {
@@ -1484,7 +1489,7 @@
       "description": "How the coordinate 'sector' ended. Always present: a missing key and a refused reading must not look alike."
      },
      "sector_window": {
-      "description": "[stage, index] of the window 'sector' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts.",
+      "description": "[stage, index] of the window 'sector' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from.",
       "maxItems": 2,
       "minItems": 2,
       "prefixItems": [
@@ -1492,7 +1497,8 @@
         "enum": [
          "own",
          "retrieval",
-         "rest"
+         "rest",
+         "frame"
         ]
        },
        {
@@ -1596,7 +1602,7 @@
       "description": "How the coordinate 'spatial_scope' ended. Always present: a missing key and a refused reading must not look alike."
      },
      "spatial_scope_window": {
-      "description": "[stage, index] of the window 'spatial_scope' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts.",
+      "description": "[stage, index] of the window 'spatial_scope' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from.",
       "maxItems": 2,
       "minItems": 2,
       "prefixItems": [
@@ -1604,7 +1610,8 @@
         "enum": [
          "own",
          "retrieval",
-         "rest"
+         "rest",
+         "frame"
         ]
        },
        {
@@ -1692,7 +1699,7 @@
       "description": "How the coordinate 'year' ended. Always present: a missing key and a refused reading must not look alike."
      },
      "year_window": {
-      "description": "[stage, index] of the window 'year' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts.",
+      "description": "[stage, index] of the window 'year' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from.",
       "maxItems": 2,
       "minItems": 2,
       "prefixItems": [
@@ -1700,7 +1707,8 @@
         "enum": [
          "own",
          "retrieval",
-         "rest"
+         "rest",
+         "frame"
         ]
        },
        {
@@ -2090,7 +2098,7 @@
       "description": "How the coordinate 'aggregation' ended. Always present: a missing key and a refused reading must not look alike."
      },
      "aggregation_window": {
-      "description": "[stage, index] of the window 'aggregation' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts.",
+      "description": "[stage, index] of the window 'aggregation' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from.",
       "maxItems": 2,
       "minItems": 2,
       "prefixItems": [
@@ -2098,7 +2106,8 @@
         "enum": [
          "own",
          "retrieval",
-         "rest"
+         "rest",
+         "frame"
         ]
        },
        {
@@ -2416,7 +2425,7 @@
       "description": "How the coordinate 'carrier' ended. Always present: a missing key and a refused reading must not look alike."
      },
      "carrier_window": {
-      "description": "[stage, index] of the window 'carrier' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts.",
+      "description": "[stage, index] of the window 'carrier' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from.",
       "maxItems": 2,
       "minItems": 2,
       "prefixItems": [
@@ -2424,7 +2433,8 @@
         "enum": [
          "own",
          "retrieval",
-         "rest"
+         "rest",
+         "frame"
         ]
        },
        {
@@ -2501,7 +2511,7 @@
       "description": "How the coordinate 'parameter' ended. Always present: a missing key and a refused reading must not look alike."
      },
      "parameter_window": {
-      "description": "[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts.",
+      "description": "[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from.",
       "maxItems": 2,
       "minItems": 2,
       "prefixItems": [
@@ -2509,7 +2519,8 @@
         "enum": [
          "own",
          "retrieval",
-         "rest"
+         "rest",
+         "frame"
         ]
        },
        {
@@ -2663,7 +2674,7 @@
       "description": "How the coordinate 'quantity' ended. Always present: a missing key and a refused reading must not look alike."
      },
      "quantity_window": {
-      "description": "[stage, index] of the window 'quantity' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts.",
+      "description": "[stage, index] of the window 'quantity' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from.",
       "maxItems": 2,
       "minItems": 2,
       "prefixItems": [
@@ -2671,7 +2682,8 @@
         "enum": [
          "own",
          "retrieval",
-         "rest"
+         "rest",
+         "frame"
         ]
        },
        {
@@ -2810,7 +2822,7 @@
       "description": "How the coordinate 'scenario' ended. Always present: a missing key and a refused reading must not look alike."
      },
      "scenario_window": {
-      "description": "[stage, index] of the window 'scenario' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts.",
+      "description": "[stage, index] of the window 'scenario' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from.",
       "maxItems": 2,
       "minItems": 2,
       "prefixItems": [
@@ -2818,7 +2830,8 @@
         "enum": [
          "own",
          "retrieval",
-         "rest"
+         "rest",
+         "frame"
         ]
        },
        {
@@ -2950,7 +2963,7 @@
       "description": "How the coordinate 'sector' ended. Always present: a missing key and a refused reading must not look alike."
      },
      "sector_window": {
-      "description": "[stage, index] of the window 'sector' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts.",
+      "description": "[stage, index] of the window 'sector' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from.",
       "maxItems": 2,
       "minItems": 2,
       "prefixItems": [
@@ -2958,7 +2971,8 @@
         "enum": [
          "own",
          "retrieval",
-         "rest"
+         "rest",
+         "frame"
         ]
        },
        {
@@ -3062,7 +3076,7 @@
       "description": "How the coordinate 'spatial_scope' ended. Always present: a missing key and a refused reading must not look alike."
      },
      "spatial_scope_window": {
-      "description": "[stage, index] of the window 'spatial_scope' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts.",
+      "description": "[stage, index] of the window 'spatial_scope' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from.",
       "maxItems": 2,
       "minItems": 2,
       "prefixItems": [
@@ -3070,7 +3084,8 @@
         "enum": [
          "own",
          "retrieval",
-         "rest"
+         "rest",
+         "frame"
         ]
        },
        {
@@ -3158,7 +3173,7 @@
       "description": "How the coordinate 'year' ended. Always present: a missing key and a refused reading must not look alike."
      },
      "year_window": {
-      "description": "[stage, index] of the window 'year' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts.",
+      "description": "[stage, index] of the window 'year' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from.",
       "maxItems": 2,
       "minItems": 2,
       "prefixItems": [
@@ -3166,7 +3181,8 @@
         "enum": [
          "own",
          "retrieval",
-         "rest"
+         "rest",
+         "frame"
         ]
        },
        {
@@ -3292,7 +3308,7 @@
       "description": "How the coordinate 'parameter' ended. Always present: a missing key and a refused reading must not look alike."
      },
      "parameter_window": {
-      "description": "[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts.",
+      "description": "[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from.",
       "maxItems": 2,
       "minItems": 2,
       "prefixItems": [
@@ -3300,7 +3316,8 @@
         "enum": [
          "own",
          "retrieval",
-         "rest"
+         "rest",
+         "frame"
         ]
        },
        {
@@ -3406,7 +3423,7 @@
     "pattern": "^[0-9a-f]{64}$",
     "type": "string"
    },
-   "^extraction/(harvest|queries|anchors|rows|field)$": {
+   "^extraction/(harvest|queries|anchors|rows|field|phrase|frame)$": {
     "description": "sha256 of the prompt file",
     "pattern": "^[0-9a-f]{64}$",
     "type": "string"
@@ -3415,6 +3432,13 @@
     "description": "What this parameter asks, without its axes and without its own list: label, description, value type, accepted units and the example. A new option on ONE axis, or in the list the parameter answers from, must not make every value of the parameter stale -- those have keys of their own.",
     "pattern": "^[0-9a-f]{64}$",
     "type": "string"
+   },
+   "^question_text/[^/]+$": {
+    "description": "The sentence THIS document was searched with. Recorded and never compared: it is written per document, so the document itself is part of it and no two runs produce the same one. What decides whether the harvest is current is its recipe, and that is already here -- the generator prompt, the model, and the annotation inside parameter/.",
+    "items": {
+     "type": "string"
+    },
+    "type": "array"
    },
    "^slot/parameter$": {
     "description": "The one coordinate that belongs to no parameter: which quantity a number is. Its question and the parameters it offers, uri and label. Also the only key that moves when a parameter is dropped.",
@@ -3515,6 +3539,117 @@
      "owner",
      "chars",
      "image"
+    ],
+    "type": "object"
+   },
+   {
+    "additionalProperties": false,
+    "properties": {
+     "doc": {
+      "type": "integer"
+     },
+     "parameter": {
+      "type": "string"
+     },
+     "t": {
+      "const": "anchor"
+     },
+     "text": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "t",
+     "doc",
+     "parameter",
+     "text"
+    ],
+    "type": "object"
+   },
+   {
+    "additionalProperties": false,
+    "properties": {
+     "attempt": {
+      "type": "integer"
+     },
+     "completion_tokens": {
+      "type": [
+       "integer",
+       "null"
+      ]
+     },
+     "doc": {
+      "type": "integer"
+     },
+     "missed": {
+      "items": {
+       "type": "integer"
+      },
+      "type": "array"
+     },
+     "ms": {
+      "type": "integer"
+     },
+     "pairs": {
+      "type": "integer"
+     },
+     "prompt_tokens": {
+      "type": [
+       "integer",
+       "null"
+      ]
+     },
+     "scenarios": {
+      "items": {
+       "type": "string"
+      },
+      "type": "array"
+     },
+     "sources": {
+      "items": {
+       "description": "[owner_kind, owner_id]",
+       "maxItems": 2,
+       "minItems": 2,
+       "prefixItems": [
+        {
+         "enum": [
+          "section",
+          "table",
+          "figure"
+         ]
+        },
+        {
+         "type": "integer"
+        }
+       ],
+       "type": "array"
+      },
+      "type": "array"
+     },
+     "status": {
+      "enum": [
+       "complete",
+       "exhausted"
+      ]
+     },
+     "t": {
+      "const": "frame"
+     },
+     "years": {
+      "items": {
+       "type": "integer"
+      },
+      "type": "array"
+     }
+    },
+    "required": [
+     "t",
+     "doc",
+     "pairs",
+     "scenarios",
+     "years",
+     "missed",
+     "attempt"
     ],
     "type": "object"
    },
@@ -3678,7 +3813,8 @@
       "enum": [
        "own",
        "retrieval",
-       "rest"
+       "rest",
+       "frame"
       ]
      },
      "t": {

@@ -181,3 +181,5 @@ cython_debug/
 .cursorindexingignore
 /data
 .vscode
+# pytest moves its temp root here when /tmp has no room (tests/conftest.py)
+.pytest_tmp/

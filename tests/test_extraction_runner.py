@@ -1572,6 +1572,49 @@ def test_what_the_stamp_records_about_the_document_never_redoes_it(
         "sha", runner.anchors_key(), spec)) == []
 
 
+def test_the_sentence_a_document_was_asked_is_recorded_and_never_compared(
+        tmp_path, monkeypatch):
+    """The promise: a question built at runtime is written down and costs no
+    redo.
+
+    A sentence the model writes for THIS document exists nowhere else once the
+    run is over -- not in the spec, not in a prompt, not in the JSONL -- so
+    without it nobody can say which sentence found these passages. Comparing
+    it instead is worse than not writing it: the document contributes to the
+    wording, so every run would produce a different one and every document
+    would read stale forever.
+
+    Both directions. `NEVER_COMPARED` is matched by NAME and these keys carry a
+    parameter uri, so the exact-match lane skips nothing -- and the backward
+    sweep, which reports a key the run no longer asks, would report every one
+    of them.
+    """
+    monkeypatch.setattr(runner.prompts, "versions",
+                        lambda ids: {i: "v1" for i in ids})
+    spec = _spec()
+    current = runner._stamp_current("sha", runner.anchors_key(), spec)
+    stamp = tmp_path / "plan.stamp.json"
+    stamp.write_text(json.dumps({
+        **current,
+        **runner.recorded_questions(
+            {"OEO_00050016": ["Der Endenergieverbrauch betrug 2022 512 GWh."]}),
+    }), encoding="utf-8")
+
+    # Forward: this run writes another sentence, or none at all.
+    assert runner.stale(stamp, {
+        **current,
+        **runner.recorded_questions(
+            {"OEO_00050016": ["Der Waermebedarf lag 2022 bei 512 GWh/a."]}),
+    }) == []
+    # Backward: a run that records nothing must not report the stored ones.
+    assert runner.stale(stamp, current) == []
+    # And the lane really is a prefix and not a name.
+    assert any(k.startswith("question_text/") for k in
+               json.loads(stamp.read_text(encoding="utf-8")))
+    # It stays a stamp, not a free-for-all: a real key still decides.
+    assert runner.stale(stamp, {**current, "model": "another"}) == ["model"]
+
+
 def test_the_anchors_stamp_key_carries_only_what_no_other_key_does(monkeypatch):
     """It used to hash the questions too, and then ONE changed question made
     every document in the corpus stale -- which is the bill the per-question

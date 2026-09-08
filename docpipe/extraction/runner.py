@@ -36,11 +36,12 @@ from docpipe.profile import add_profile_argument, resolve_profile
 
 from . import fields
 from . import trace
-from .pipeline import (Source, WorkItem, batch_uri, build_sweeps,
-                       cell_index as pipeline_cell_index, fold_batch,
-                       follow_up, group_items, harvest_document, merge_field,
-                       mark_unanswered, open_rows, plan_document, route_claims,
-                       rows_from_reply, window_sources, write_report)
+from .pipeline import (Source, WorkItem, apply_frame, batch_uri,
+                       build_sweeps, cell_index as pipeline_cell_index,
+                       fold_batch, follow_up, group_items, harvest_document,
+                       merge_field, mark_unanswered, open_rows, plan_document,
+                       route_claims, rows_from_reply, window_sources,
+                       write_report)
 from .fields import EXHAUSTED
 from .queries import expand as expand_queries
 from .trust import document_summary
@@ -104,8 +105,15 @@ ANCHORS_PROMPT_ID = "extraction/anchors"
 # finds the values, one call per coordinate fills them in.
 ROWS_PROMPT_ID = "extraction/rows"
 FIELD_PROMPT_ID = "extraction/field"
+# The one sentence a document is searched with, written for THAT document.
+PHRASE_PROMPT_ID = "extraction/phrase"
+# Which scenarios and which years the document really carries. Asked once per
+# document, before any value: the pair is the frame every value hangs in, and
+# a frame the run discovers first is one the value request cannot get wrong.
+FRAME_PROMPT_ID = "extraction/frame"
 PROMPT_IDS = (HARVEST_PROMPT_ID, QUERIES_PROMPT_ID, ANCHORS_PROMPT_ID,
-              ROWS_PROMPT_ID, FIELD_PROMPT_ID)
+              ROWS_PROMPT_ID, FIELD_PROMPT_ID, PHRASE_PROMPT_ID,
+              FRAME_PROMPT_ID)
 
 # One request per field, or one request per tuple. The old way is kept
 # reachable because it is what every measured number so far was taken with,
@@ -126,6 +134,31 @@ PROSE_TOP = int(os.environ.get("EXTRACT_PROSE_TOP", "200"))
 # PROSE_TOP is then a ceiling against a pathological document, not the
 # selector: a plan has about 132 sections, so the pool cannot exceed that.
 POOL_TOP = int(os.environ.get("EXTRACT_POOL_TOP", "50"))
+# How many owners the document plan takes, tables figures and prose together,
+# in the order the ranking put them. This is the cut that replaces the
+# structural floor: whether something is a table decides nothing here, only
+# how well it answers the one sentence this document was asked. The floor
+# stays wired as the COUNTER -- how many tables and figures a bare ranking
+# leaves outside is the number that says whether it has to come back, and it
+# can only be taken while the floor is still there to ask.
+PLAN_TOP = int(os.environ.get("EXTRACT_PLAN_TOP", "50"))
+# How many rounds the frame search may ask for more passages before it says
+# what it has. Bounded, because it decides the whole harvest: every value is
+# asked for one of its pairs, so a frame that never finished would be a
+# document that never got read.
+FRAME_ROUNDS = int(os.environ.get("EXTRACT_FRAME_ROUNDS", "3"))
+# How many passages one frame request reads. More than a field window, fewer
+# than the plan: a scenario stands in a heading and a year in a column header,
+# and neither is found by looking at two passages at a time.
+FRAME_SOURCES = int(os.environ.get("EXTRACT_FRAME_SOURCES", "12"))
+# What counts as a calendar year for the deterministic cross-check. Not a
+# reading and never one: it only says how many year-shaped numbers stand in
+# the very passages the model was shown and did not name. A plan writes 2045
+# as a target and 2045 as a megawatt-hour, so this reports and decides
+# nothing.
+FRAME_YEAR_MIN = int(os.environ.get("EXTRACT_FRAME_YEAR_MIN", "1990"))
+FRAME_YEAR_MAX = int(os.environ.get("EXTRACT_FRAME_YEAR_MAX", "2100"))
+_YEAR_RE = re.compile(r"(?<![0-9])([0-9]{4})(?![0-9])")
 # Where the run's concurrency actually lives once the values are found. A
 # batch is one row request and then one sweep per axis, and the sweeps are
 # independent, so 128 batches of seven axes are nine hundred sweeps that can
@@ -629,6 +662,363 @@ def anchor_targets(spec: Spec) -> list:
                         f"{parameter.label} / {slot.name}",
                         parameter.description, slot.question))
     return [t for t in out if t[0] != PARAMETER_ANCHOR or t[3]]
+
+
+def document_anchor(spec: Spec, context: Optional[dict] = None,
+                    client=None, prompt=None) -> dict:
+    """{parameter uri: [one sentence]} — the probe THIS document is searched with.
+
+    The QA app turns a question into one short statement before it searches,
+    because a similarity search matches sentences and a question is the one
+    sentence that never stands in a document. This stage searched with 24
+    frozen 600-character passages instead, and a 600-character passage is not
+    an anchor: it is half a hit put back into the query.
+
+    Per document, not per corpus, and that is the whole point. The sentence is
+    written from the ontology annotation the spec inlines -- `label` and
+    `description` -- AND from what the document itself has already said: its
+    name, and the caption of what a first search in it returned. So the anchor
+    grows with the document instead of asking all 1,082 plans the same
+    sentence.
+
+    The price, stated: the corpus-wide query-embedding cache stops hitting.
+    A per-document sentence is a miss by construction, so the plan pays one
+    embed per parameter per document instead of one per corpus.
+
+    A parameter whose sentence could not be written is left out rather than
+    filled with the label. `plan_document` says out loud when it plans without
+    anchors, and a probe that is a bare label is the "silently worse
+    retrieval" this whole stage exists to end.
+    """
+    prompt = prompt if prompt is not None else prompts.load(PHRASE_PROMPT_ID)
+    client = client or _client()
+    context = {k: v for k, v in (context or {}).items()
+               if isinstance(v, str) and v.strip()}
+
+    def one(parameter):
+        body = {"label": parameter.label,
+                "description": parameter.description}
+        if context:
+            body["document"] = context
+        payload = json.dumps(body, ensure_ascii=False, indent=2)
+        for attempt in range(1, MAX_RETRIES + 1):
+            try:
+                reply = client.chat.completions.create(
+                    model=LLM_MODEL,
+                    temperature=float(prompt.meta.get("temperature", 0)),
+                    max_tokens=int(prompt.meta.get("max_tokens", 300)),
+                    messages=[{"role": "system", "content": prompt.text},
+                              {"role": "user", "content": payload}],
+                    extra_body={"chat_template_kwargs":
+                                {"enable_thinking": False}},
+                ).choices[0].message.content
+                phrase = ((_loads_object(reply) or {}).get("phrase") or "")
+                phrase = phrase.strip() if isinstance(phrase, str) else ""
+                if len(phrase) > 20:
+                    return parameter.uri, [phrase]
+            except Exception as exc:
+                log.warning("phrase %s attempt %d failed: %s",
+                            parameter.uri, attempt, exc)
+            if attempt < MAX_RETRIES:
+                time.sleep(min(2 * attempt, 6))
+        log.warning("phrase %s: no anchor written for this document",
+                    parameter.uri)
+        return parameter.uri, []
+
+    out: dict = {}
+    for uri, phrase in map(one, spec.parameters):
+        if phrase:
+            out[uri] = phrase
+    return out
+
+
+def years_in_sources(sources, low: int = 0, high: int = 0) -> set:
+    """Every year-shaped number in these passages. A count, not a reading.
+
+    The frame carries the whole harvest: every value is asked for one of its
+    pairs, so a year the frame missed loses all of that year's values at once
+    and loses them silently -- which is the one failure this design has that
+    the old one did not. So the same passages the model was shown are scanned
+    without a model, and what it did not name is reported.
+
+    Reported, never added. "2045 MWh/a" is a year-shaped number and is not a
+    year, and a cross-check that decided would put it in the frame and ask
+    every table for a year the plan does not have.
+    """
+    low = low or FRAME_YEAR_MIN
+    high = high or FRAME_YEAR_MAX
+    found = set()
+    for source in sources or ():
+        for part in (source.text or "", (source.provenance or {}).get("title") or ""):
+            for match in _YEAR_RE.finditer(part):
+                year = int(match.group(1))
+                if low <= year <= high:
+                    found.add(year)
+    return found
+
+
+def _frame_payload(sources: list, slots: list, known: Optional[list] = None,
+                   candidates: Optional[list] = None) -> dict:
+    """The request body of one frame request.
+
+    Sources first, then the answer space of every frame coordinate that has
+    one. A closed list is offered as a list -- the model chooses rather than
+    generates -- and an open one (the year is an int) is left open, because
+    there is no list of years to choose from.
+    """
+    listed = []
+    for index, source in enumerate(sources):
+        provenance = source.provenance or {}
+        entry = {"id": f"Q{index + 1}", "kind": source.owner_kind,
+                 "title": provenance.get("title"),
+                 "section": provenance.get("section_title"),
+                 "text": source.text}
+        for key in ("page", "block_id"):
+            if provenance.get(key):
+                entry[key] = provenance[key]
+        listed.append(entry)
+    payload: dict = {"sources": listed}
+    for slot in slots:
+        options = slot.answerable() if slot.kind == fields.CHOICE else None
+        if options:
+            payload.setdefault("scenarios", {}).update(
+                {k: v for k, v in options.items()
+                 if not str(k).startswith("out:")})
+    if known:
+        payload["known"] = [{s.name: pair.get(s.name) for s in slots}
+                            for pair in known]
+    if candidates:
+        # The second pass. These numbers really stand in the passages above
+        # and the first round did not name them, which is either a year it
+        # missed or a number that only looks like one. The model decides
+        # which, against the same evidence rule as everything else -- so a
+        # candidate that is a megawatt-hour simply comes back unquotable.
+        payload["candidates"] = list(candidates)
+    return payload
+
+
+def make_frame_asker(image_root: Optional[Path] = None) -> Callable:
+    """ask(sources, slots, document_id, known, usage_out) -> reply or None.
+
+    One request, and the answer is a list of pairs with two quotes each. Two,
+    because a column header carries the years and a section heading carries
+    the scenario: one passage can back both halves only when it prints both,
+    and every coordinate is checked against its OWN quote exactly as a field
+    answer is.
+    """
+    prompt = prompts.load(FRAME_PROMPT_ID)
+    client = _client()
+    temperature = float(prompt.meta.get("temperature", 0))
+    max_tokens = int(prompt.meta.get("max_tokens", 4096))
+
+    def ask(sources: list, slots: list, document_id: Optional[int] = None,
+            known: Optional[list] = None,
+            usage_out: Optional[dict] = None,
+            candidates: Optional[list] = None) -> Optional[dict]:
+        payload = json.dumps(_frame_payload(sources, slots, known, candidates),
+                             ensure_ascii=False, indent=2)
+        # The crops ride along, as they do for every other request: a year
+        # in a column header and a scenario in a figure caption are often
+        # clearer in the picture than in the transcription of it.
+        content: object = payload
+        parts = [{"type": "text", "text": payload}]
+        for index, source in enumerate(sources):
+            path = source.image_path
+            if not (path and ATTACH_IMAGES):
+                continue
+            part = _image_part(str(image_root / path) if image_root else path)
+            if part is not None:
+                parts.append({"type": "text", "text": f"Bild zu Q{index + 1}:"})
+                parts.append(part)
+        if len(parts) > 1:
+            content = parts
+        for attempt in range(1, MAX_RETRIES + 1):
+            started = time.time()
+            try:
+                completion = client.chat.completions.create(
+                    model=LLM_MODEL, temperature=temperature,
+                    max_tokens=max_tokens,
+                    messages=[{"role": "system", "content": prompt.text},
+                              {"role": "user", "content": content}],
+                    extra_body={"chat_template_kwargs":
+                                {"enable_thinking": False}},
+                )
+                _observe_usage(getattr(completion, "usage", None))
+                if usage_out is not None:
+                    usage = getattr(completion, "usage", None)
+                    usage_out["prompt_tokens"] = getattr(
+                        usage, "prompt_tokens", None)
+                    usage_out["completion_tokens"] = getattr(
+                        usage, "completion_tokens", None)
+                    usage_out["ms"] = int((time.time() - started) * 1000)
+                    usage_out["attempt"] = attempt
+                parsed = _loads_object(
+                    completion.choices[0].message.content or "")
+                if isinstance(parsed, dict):
+                    return parsed
+            except Exception as exc:
+                log.warning("frame %s attempt %d failed: %s",
+                            document_id, attempt, exc)
+                trace.event("error", document_id, where="frame",
+                            kind="exception", attempt=attempt,
+                            detail=str(exc)[:200])
+            if attempt < MAX_RETRIES:
+                time.sleep(min(2 * attempt, 6))
+        return None
+
+    return ask
+
+
+def frame_pairs(reply: Optional[dict], slots: list, sources: list) -> list:
+    """The pairs of a reply that carry their own evidence, in order.
+
+    Every coordinate is held to what a field answer is held to: its quote sits
+    verbatim in one of the passages that were SHOWN, and the quote contains
+    the answer. What is NOT applied is the distance rule. A frame reading is
+    document-level by construction -- it is read once, from a caption or a
+    heading, and every row of the document inherits it -- so "is this passage
+    near this row" is not a question about it. The distance rule exists
+    because a per-row reading that cites a foreign table is a wrong reading,
+    and that is a different claim.
+    """
+    from .pipeline import answer_in_quote
+    from .verify import quote_in
+
+    where = {f"Q{i + 1}": s for i, s in enumerate(sources)}
+    out: list = []
+    seen: set = set()
+    for entry in (reply or {}).get("pairs") or ():
+        if not isinstance(entry, dict):
+            continue
+        pair: dict = {}
+        for slot in slots:
+            given = entry.get(slot.name)
+            if isinstance(given, str):
+                given = given.strip()
+            if given is None or given == "":
+                break
+            quote = entry.get(f"{slot.name}_quote")
+            if not isinstance(quote, str) or not quote.strip():
+                break
+            named = entry.get(f"{slot.name}_source")
+            found = where.get(str(named))
+            if found is None or not quote_in(found.text or "", quote):
+                found = next((s for s in sources
+                              if quote_in(s.text or "", quote)), None)
+            if found is None:
+                break
+            wording = entry.get(f"{slot.name}_raw")
+            wording = wording.strip() if isinstance(wording, str) else None
+            if not answer_in_quote(slot, given, wording, quote):
+                break
+            if slot.kind == fields.NUMBER:
+                try:
+                    given = int(str(given).strip())
+                except (TypeError, ValueError):
+                    break
+            pair[slot.name] = given
+            pair[f"{slot.name}_raw"] = wording
+            pair[f"{slot.name}_quote"] = quote.strip()
+            pair[f"{slot.name}_source"] = [found.owner_kind, found.owner_id]
+        else:
+            key = tuple(pair.get(slot.name) for slot in slots)
+            if key not in seen:
+                seen.add(key)
+                out.append(pair)
+    return out
+
+
+def find_frame(sources: list, slots: list, document_id: int, ask: Callable,
+               more_sources: Optional[Callable] = None,
+               probes: Optional[list] = None) -> tuple:
+    """(pairs, status, missed) — which scenarios and years this document has.
+
+    Asked once per document, before any value. Every value question is then
+    one of these pairs, which is what takes the coordinate out of the model's
+    hands: it is not asked which year a number belongs to, it is asked what
+    the number for THIS year is.
+
+    `missed` is the deterministic cross-check: the year-shaped numbers in the
+    very passages the model was shown that it did not name. It is a finding
+    for the second pass, never an addition to the frame.
+    """
+    if not slots:
+        return [], "complete", []
+    shown = list(sources[:FRAME_SOURCES])
+    seen = {(s.owner_kind, s.owner_id) for s in shown}
+    pairs: list = []
+    status = "exhausted"
+    for round_index in range(max(1, FRAME_ROUNDS)):
+        usage: dict = {}
+        reply = ask(shown, slots, document_id, pairs, usage)
+        found = frame_pairs(reply, slots, shown)
+        known = {tuple(p.get(s.name) for s in slots) for p in pairs}
+        pairs += [p for p in found
+                  if tuple(p.get(s.name) for s in slots) not in known]
+        said = str((reply or {}).get("status") or "").strip()
+        trace.event("frame", document_id, pairs=len(pairs),
+                    scenarios=sorted({str(p.get(slots[0].name))
+                                      for p in pairs}),
+                    years=sorted({p[s.name] for p in pairs for s in slots
+                                  if isinstance(p.get(s.name), int)}),
+                    missed=[], sources=[[s.owner_kind, s.owner_id]
+                                        for s in shown],
+                    status="complete" if said == "complete" else "exhausted",
+                    attempt=round_index + 1,
+                    prompt_tokens=usage.get("prompt_tokens"),
+                    completion_tokens=usage.get("completion_tokens"),
+                    ms=usage.get("ms", 0))
+        if said == "complete" and pairs:
+            status = "complete"
+            break
+        if more_sources is None or round_index + 1 >= max(1, FRAME_ROUNDS):
+            break
+        wanted = [q for q in (reply or {}).get("need_more") or []
+                  if isinstance(q, str) and len(q) > 20] or list(probes or ())
+        if not wanted:
+            break
+        fresh = more_sources(document_id, wanted, set(seen)) or []
+        if not fresh:
+            break
+        for source in fresh:
+            seen.add((source.owner_kind, source.owner_id))
+        shown = list(fresh[:FRAME_SOURCES])
+    number = [s for s in slots if s.kind == fields.NUMBER]
+
+    def _not_named() -> list:
+        if not number:
+            return []
+        named = {p[s.name] for p in pairs for s in number
+                 if isinstance(p.get(s.name), int)}
+        return sorted(years_in_sources(sources) - named)
+
+    missed = _not_named()
+    if missed:
+        # The second pass, and it is the whole reason the deterministic scan
+        # exists. A pair the frame does not have is not one value lost, it is
+        # every value of that pair lost, and lost silently -- so what the scan
+        # found and the model did not name is put back in front of it once,
+        # by name, over everything the plan holds.
+        usage = {}
+        reply = ask(list(sources[:FRAME_SOURCES]), slots, document_id, pairs,
+                    usage, missed)
+        found = frame_pairs(reply, slots, list(sources[:FRAME_SOURCES]))
+        known = {tuple(p.get(s.name) for s in slots) for p in pairs}
+        added = [p for p in found
+                 if tuple(p.get(s.name) for s in slots) not in known]
+        pairs += added
+        if added:
+            status = "complete" if status == "complete" else status
+        missed = _not_named()
+    trace.event("frame", document_id, pairs=len(pairs),
+                scenarios=sorted({str(p.get(slots[0].name)) for p in pairs}),
+                years=sorted({p[s.name] for p in pairs for s in number
+                              if isinstance(p.get(s.name), int)}),
+                missed=missed,
+                sources=[[s.owner_kind, s.owner_id] for s in sources],
+                status=status, attempt=0, prompt_tokens=None,
+                completion_tokens=None, ms=0)
+    return pairs, status, missed
 
 
 def frozen_anchors(profile, spec: Spec) -> tuple:
@@ -1361,6 +1751,14 @@ def _batch_payload(batch, prior: list, spec=None) -> dict:
                         "section": source.provenance.get("section_title"),
                         "text": source.text})
     payload: dict = {"sources": sources}
+    if batch.frame:
+        # The pair this request is for. It was read once for the document and
+        # it is not a question here: the request asks what the value IS for
+        # this scenario and this year, which is the whole point of finding the
+        # frame first.
+        payload = {"frame": {k: v for k, v in batch.frame.items()
+                             if not k.endswith(("_raw", "_quote", "_source"))},
+                   **payload}
     if batch.parameter is not None:
         payload = {"parameter": _parameter_payload(batch.parameter), **payload}
     elif spec is not None:
@@ -1843,7 +2241,8 @@ def make_fieldwise_harvester(image_root: Optional[Path] = None,
                              rest_of_document: Optional[Callable] = None,
                              spec=None, anchors: Optional[dict] = None,
                              slice_gate: Optional[dict] = None,
-                             parents: Optional[Callable] = None
+                             parents: Optional[Callable] = None,
+                             frame_axes: Optional[list] = None
                              ) -> Callable:
     """A harvest(batch, prior) that asks per field and answers like the old one.
 
@@ -2156,6 +2555,18 @@ def make_fieldwise_harvester(image_root: Optional[Path] = None,
     def harvest(batch, prior: Optional[list] = None) -> dict:
         reply = find_rows(batch, prior)
         rows, orphans = rows_from_reply(batch, reply)
+        if rows and batch.frame and frame_axes:
+            # Before anything is asked. The sweep only offers a coordinate
+            # that is still open, so projecting here is what makes the year
+            # sweeper fall away rather than run and find nothing: measured on
+            # M3, the year axis produced 1,849 refusals against 0 readings,
+            # because every later window excluded the row's own source and
+            # only that one could carry the year.
+            written = apply_frame(rows, batch.frame, batch.frame_index,
+                                  frame_axes)
+            if written:
+                log.debug("   frame %s: %d coordinate(s) on %d row(s)",
+                          batch.document_id, written, len(rows))
         if not rows:
             # Either nothing is in these passages or the value request died.
             # Both are already stated in the reply the row request returned,
@@ -2604,6 +3015,43 @@ COARSE = ("spec",)
 # finer in the stamp there is nothing else to go on.
 QUESTION_KEYS = ("parameter/", "value/", "axis/", "slot/")
 
+# Recorded per document and never compared: the sentence THIS document was
+# actually asked. A question built at runtime has no stable wording -- the
+# document contributes to it -- so comparing it would report every document
+# stale on every run, forever. What is compared instead is its recipe, and
+# that is already in the stamp: the generator prompt is a `PROMPT_IDS` entry,
+# the model is `model`, and the annotation it reads is inside
+# `parameter_fingerprint`. So the wording is kept for a reader to place a
+# harvest by, and the recipe decides whether the harvest is current.
+#
+# A PREFIX, not a name. `NEVER_COMPARED` is matched exactly and these keys
+# carry a parameter uri, so putting the prefix there would skip nothing:
+# measured, `stale` returned ["question_text/energy_consumption"] before and
+# after such an edit.
+RECORDED_PREFIXES = ("question_text/",)
+
+
+def recorded_questions(questions: Optional[dict]) -> dict:
+    """{key: [sentence]} -> the stamp keys that record what was really asked.
+
+    A question the model writes for THIS document exists nowhere else once the
+    run is over: it is not in the spec, not in a prompt and not in the JSONL.
+    Without it a harvest cannot be placed at all -- "which sentence found these
+    passages" has no answer, and `--force-stale` loses its meaning, because
+    nothing says what would be redone differently.
+
+    So it is written down and never compared. See `RECORDED_PREFIXES`.
+    """
+    out: dict = {}
+    for key, texts in (questions or {}).items():
+        if isinstance(texts, str):
+            texts = [texts]
+        wording = [t.strip() for t in texts or ()
+                   if isinstance(t, str) and t.strip()]
+        if wording:
+            out[f"question_text/{key}"] = wording
+    return out
+
 
 def stale(stamp_path: Path, current: dict) -> list:
     """Which stamped versions differ from now; everything when unstamped.
@@ -2634,10 +3082,18 @@ def stale(stamp_path: Path, current: dict) -> list:
         return sorted(current)
     detailed = any(k.startswith(QUESTION_KEYS) for k in current)
     skip = set(NEVER_COMPARED) | (set(COARSE) if detailed else set())
+
+    def compared(key: str) -> bool:
+        return key not in skip and not key.startswith(RECORDED_PREFIXES)
+
     changed = {k for k in current
-               if k not in skip and stored.get(k) != current[k]}
+               if compared(k) and stored.get(k) != current[k]}
     if detailed:
-        changed |= {k for k in stored if k not in current and k not in skip}
+        # Both directions, or the backward sweep re-creates exactly the noise
+        # the recorded lane exists to avoid: a per-document key is in no
+        # `current` built from the spec alone, so every one of them would come
+        # back as "the run no longer asks this".
+        changed |= {k for k in stored if k not in current and compared(k)}
     return sorted(changed)
 
 
@@ -2699,7 +3155,8 @@ UNREACHABLE_LIMIT = 0.5
 
 def finish_document(report, name: str, out_dir: Path, spec_sha: str,
                     anchors_sha: str = "", answered: Optional[int] = None,
-                    spec: Optional[Spec] = None) -> None:
+                    spec: Optional[Spec] = None,
+                    questions: Optional[dict] = None) -> None:
     """Write one document's JSONL and stamp it with what produced it.
 
     The stamp is what a resume trusts, so it is withheld when the harvest did
@@ -2737,7 +3194,9 @@ def finish_document(report, name: str, out_dir: Path, spec_sha: str,
                   "not stamped, so a resume harvests it again", name, sources)
         return
     (out_dir / f"{name}.stamp.json").write_text(
-        json.dumps(_stamp_current(spec_sha, anchors_sha, spec), indent=2),
+        json.dumps({**_stamp_current(spec_sha, anchors_sha, spec),
+                    **recorded_questions(questions)},
+                   ensure_ascii=False, indent=2),
         encoding="utf-8")
 
 
@@ -3081,6 +3540,23 @@ def main(argv: Optional[list] = None) -> int:
     # Optional: (connection, document_id) -> {axis name: {uri: [labels]}} for
     # the axes the spec declares dynamic.
     document_axes = profile.component("extraction", "document_axes")
+    # Optional: (connection, document_id) -> {"name": ...}. What the document
+    # itself contributes to its own search anchor. The municipality is in the
+    # profile's catalog join and in no core query, so the core asks for it
+    # rather than growing a second idea of what a document is.
+    document_context = profile.component("extraction", "document_context")
+    # Which coordinates belong to the DOCUMENT rather than to the row. The
+    # profile names them; the core never names a coordinate. Empty means the
+    # old shape: every coordinate is asked per row.
+    frame_axes = fields.frame_slots(spec, profile.component("extraction",
+                                                            "FRAME") or ())
+    if frame_axes:
+        log.info("extraction: the frame is %s — found once per document, then "
+                 "one value request per pair",
+                 " x ".join(slot.name for slot in frame_axes))
+    # Which sentence each document was really asked. Written into that
+    # document's stamp and compared by nothing -- see RECORDED_PREFIXES.
+    asked: dict = {}
 
     required = context_budget(prompts.load(HARVEST_PROMPT_ID), spec)
     if args.print_context_budget:
@@ -3174,8 +3650,10 @@ def main(argv: Optional[list] = None) -> int:
                                         make_rest_of_document(args.db),
                                         spec=spec, anchors=anchors,
                                         slice_gate=slice_gate,
-                                        parents=make_parents(args.db))
+                                        parents=make_parents(args.db),
+                                        frame_axes=frame_axes)
                if FIELDWISE else make_harvester(args.image_root, spec=spec))
+    ask_frame = make_frame_asker(args.image_root) if frame_axes else None
 
     def plan(document_id: int, filename: str) -> tuple:
         # Both connections per thread, cache included. Sharing one across the
@@ -3201,11 +3679,30 @@ def main(argv: Optional[list] = None) -> int:
                     log.info("extract: %s: choice lists %s", Path(filename).stem,
                              ", ".join(f"{k}={len(v)}"
                                        for k, v in sorted(lists.items())))
+            retrieve = make_retrieve(conn, index, id_to_pos, cache_conn,
+                                     fetch, limit=PLAN_TOP)
+            # The anchor is written for THIS document, so the document has to
+            # say something first. One cheap probe out of the spec's own
+            # templates, and what comes back carries its caption -- the words
+            # this plan uses for the thing, which is what the anchor is for.
+            context = dict(document_context(conn, document_id)
+                           if document_context is not None else {})
+            seed = [q for parameter in doc_spec.parameters
+                    for q in list(expand_queries(templates, parameter))[:1]]
+            first = retrieve(seed, document_id, set()) if seed else []
+            if first:
+                context.setdefault(
+                    "caption", (first[0].provenance or {}).get("title") or "")
+            probes = document_anchor(doc_spec, context)
+            for uri, texts in sorted(probes.items()):
+                for text in texts:
+                    trace.event("anchor", document_id, parameter=uri,
+                                text=text)
+            asked[Path(filename).stem] = dict(probes)
             items, report = plan_document(
-                document_id, doc_spec, templates, extra_probes=anchors,
-                retrieve=make_retrieve(conn, index, id_to_pos, cache_conn,
-                                       fetch, per_probe_top=POOL_TOP),
-                structure=make_structure(conn, fetch), prose_top=PROSE_TOP)
+                document_id, doc_spec, templates, extra_probes=probes,
+                retrieve=retrieve,
+                structure=make_structure(conn, fetch), top=PLAN_TOP)
             for item in items:
                 trace.event("plan", document_id, rank=item.rank,
                             origin=item.origin, kind=item.source.owner_kind,
@@ -3266,7 +3763,8 @@ def main(argv: Optional[list] = None) -> int:
                         reason=refusal.get("reason"),
                         owner=refusal.get("owner"))
         finish_document(report, name, args.out, spec_sha, anchors_sha,
-                        answered=replies, spec=spec)
+                        answered=replies, spec=spec,
+                        questions=asked.pop(name, None))
         trace.flush(report.document_id)
 
     started = time.time()
@@ -3293,16 +3791,59 @@ def main(argv: Optional[list] = None) -> int:
                     failures += 1
                     log.exception("extraction: planning %s failed",
                                   futures[future])
+        # ---- Frame: which scenarios and which years, once per document --
+        # Before any value. Every value request below asks for ONE of these
+        # pairs, so the coordinate is never something the model has to decide
+        # while it is reading a number.
+        frames: dict = {}
+        if ask_frame is not None and plans:
+            with ThreadPoolExecutor(max_workers=LLM_PARALLEL) as pool:
+                futures = {pool.submit(find_frame,
+                                       [item.source for item in items],
+                                       frame_axes, report.document_id,
+                                       ask_frame, more_sources): name
+                           for name, items, report in plans}
+                for future in as_completed(futures):
+                    name = futures[future]
+                    try:
+                        pairs, status, missed = future.result()
+                    except Exception:
+                        failures += 1
+                        log.exception("extraction: frame %s failed", name)
+                        continue
+                    frames[name] = pairs
+                    if missed:
+                        # A year the deterministic scan found in the very
+                        # passages the model was shown and it did not name.
+                        # Reported, never added: "2045 MWh/a" is year-shaped
+                        # and is not a year.
+                        log.info("extract: %s: frame %d pair(s), %s, %d "
+                                 "year-shaped number(s) not named: %s",
+                                 name, len(pairs), status, len(missed),
+                                 ", ".join(str(y) for y in missed[:8]))
+                    else:
+                        log.info("extract: %s: frame %d pair(s), %s",
+                                 name, len(pairs), status)
+
         # Every batch of every document goes into one pool. A batch belongs
         # to exactly one document, so the replies come back where they can be
         # folded; nothing about the scheduling depends on that.
         batches: list = []
         owner_of: dict = {}
         for name, items, report in plans:
-            for batch in group_items(items, max_sources=BATCH_SOURCES,
-                                     max_chars=BATCH_CHARS):
-                batches.append(batch)
-                owner_of[id(batch)] = name
+            # One pass per pair over the same passages. A table with four year
+            # columns is four requests, each asking for one column. The price
+            # is deliberate: it costs the model the room in which today's
+            # errors are made, and a failure costs one question instead of
+            # damaging a whole harvest.
+            found = frames.get(name) or [None]
+            for index, pair in enumerate(found):
+                for batch in group_items(items, max_sources=BATCH_SOURCES,
+                                         max_chars=BATCH_CHARS):
+                    batch.frame = pair
+                    batch.frame_index = index
+                    batches.append(batch)
+                    owner_of[id(batch)] = name
         sources = sum(len(b.items) for b in batches)
         log.info("extraction: group %d/%d planned — %d batch(es) over %d "
                  "source(s) in %d document(s)", offset // group_size + 1,

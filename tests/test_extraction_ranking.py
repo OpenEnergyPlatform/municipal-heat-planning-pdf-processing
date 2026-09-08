@@ -298,3 +298,80 @@ def test_the_pool_reads_what_each_question_asked_for():
     everything = faiss_store.fuse_prepared(None, prepared, by_rank, by_rank_pos,
                                            0, content_fetcher=_content)
     assert len(everything) == len(owners)
+
+
+# ---------------------------------------------------------------------------
+# The plan is a top-N over everything, and the floor is the counter
+# ---------------------------------------------------------------------------
+
+def _mixed(sections=9, tables=5):
+    """A ranking that interleaves prose and visuals, best first."""
+    out = []
+    for i in range(max(sections, tables)):
+        if i < sections:
+            out.append(Source("section", 100 + i, f"Abschnitt {i}", {}))
+        if i < tables:
+            out.append(Source("table", 200 + i, f"Tabelle {i}", {}))
+    return out
+
+
+def test_the_top_cut_is_one_list_in_rank_order_with_no_kind_hoisted():
+    """The structural floor is gone and with it the rule that a table is read
+    whatever its rank. What decides now is how well a passage answers the one
+    sentence this document was searched with -- and the plan comes back in
+    that order, which the old two-list build did not: it put every visual
+    ahead of every prose owner regardless of rank."""
+    ranked = _mixed()
+    items, report = plan_document(
+        7, SPEC, ["{label}"],
+        extra_probes={p.uri: ["Ein Satz wie er im Plan stünde."]
+                      for p in SPEC.parameters},
+        retrieve=lambda probes, doc, exclude: list(ranked),
+        structure=lambda doc: [s for s in ranked if s.owner_kind == "table"],
+        top=6)
+
+    got = [(it.source.owner_kind, it.source.owner_id) for it in items]
+    assert got == [(s.owner_kind, s.owner_id) for s in ranked[:6]], got
+    assert [it.rank for it in items] == [0, 1, 2, 3, 4, 5]
+    assert {it.origin for it in items} == {"retrieval"}, \
+        "one list, so naming a second origin would claim something untrue"
+    assert report.planned["top"] == 6
+
+
+def test_what_the_bare_ranking_leaves_outside_is_counted_not_read():
+    """`structure` stays wired as the COUNTER. How many tables and figures a
+    top-N misses is the number that says whether the floor has to come back,
+    and it can only be taken while the floor is still there to ask -- once it
+    is deleted, leftover is identically zero and says nothing."""
+    ranked = _mixed(sections=9, tables=5)
+    known = [s for s in ranked if s.owner_kind == "table"]
+    items, report = plan_document(
+        7, SPEC, ["{label}"],
+        extra_probes={p.uri: ["Ein Satz wie er im Plan stünde."]
+                      for p in SPEC.parameters},
+        retrieve=lambda probes, doc, exclude: list(ranked),
+        structure=lambda doc: list(known), top=4)
+
+    taken = {(it.source.owner_kind, it.source.owner_id) for it in items}
+    assert report.fallback["document"]["candidates"] == 5
+    assert report.fallback["document"]["leftover"] == sum(
+        1 for s in known if (s.owner_kind, s.owner_id) not in taken)
+    assert report.fallback["document"]["leftover"] == 3
+    # And they really are outside: this is the price the design takes on.
+    assert len(items) == 4
+
+
+def test_without_a_top_the_plan_is_exactly_what_it_was():
+    """The cut is opt-in. A profile that does not ask for it keeps the two
+    sets and the structural floor, and nothing about this function moves."""
+    ranked = _mixed(sections=9, tables=5)
+    items, report = plan_document(
+        7, SPEC, ["{label}"],
+        extra_probes={p.uri: ["Ein Satz wie er im Plan stünde."]
+                      for p in SPEC.parameters},
+        retrieve=lambda probes, doc, exclude: list(ranked),
+        structure=lambda doc: [s for s in ranked if s.owner_kind == "table"],
+        prose_top=2)
+    kinds = [it.source.owner_kind for it in items]
+    assert kinds.count("table") == 5 and kinds.count("section") == 2
+    assert "top" not in report.planned and report.planned["prose_top"] == 2

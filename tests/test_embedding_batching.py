@@ -1,4 +1,8 @@
 """Length-sorted batches, and preparation that overlaps with the GPUs."""
+import conftest
+
+conftest.needs_real("torch")
+
 import numpy as np
 import pytest
 
