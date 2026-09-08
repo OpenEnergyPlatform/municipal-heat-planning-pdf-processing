@@ -101,6 +101,12 @@ class Batch:
     items: list = field(default_factory=list)     # [WorkItem], label = index + 1
     # True for a batch the model asked for, which the plan never counted.
     followed_up: bool = False
+    # Which of the document's (scenario, year) pairs this request asks for,
+    # and its index. The same passages are read once per pair: a table with
+    # four year columns is four requests, each one asking for one column,
+    # which is what takes the coordinate out of the model's hands.
+    frame: Optional[dict] = None
+    frame_index: int = 0
 
     @property
     def sources(self) -> list:
@@ -140,6 +146,7 @@ def plan_document(
     retrieve: Callable,                 # (probes, document_id, exclude) -> [Source]
     structure: Optional[Callable] = None,   # (document_id) -> [Source]
     prose_top: int = PROSE_TOP,
+    top: Optional[int] = None,
 ) -> tuple:
     """(work items, report skeleton) — the retrieval half, no model involved.
 
@@ -169,6 +176,14 @@ def plan_document(
     already returned excluded, which walks down the ranking until the document
     is exhausted — 277 planned sources against 234 owners, three times over.
     That is a full scan wearing a vector store as a hat.
+
+    `top` replaces both rules with one. The plan is then the fused top `top`
+    in rank order, tables figures and prose together, and the structural floor
+    is not a source of items any more. It is still CALLED, and what it knows
+    and the ranking missed is reported as `leftover` — the number that says
+    whether the floor has to come back, which can only be taken while the
+    floor is still there to ask. Without `top` nothing about this function
+    changes.
     """
     report = DocumentReport(document_id=document_id)
     probes: list = []
@@ -189,6 +204,31 @@ def plan_document(
 
     ranked = retrieve(probes, document_id, set()) or []
     rank_of = {(s.owner_kind, s.owner_id): i for i, s in enumerate(ranked)}
+
+    if top is not None:
+        taken = ranked[:max(0, top)]
+        kept = {(s.owner_kind, s.owner_id) for s in taken}
+        known = [s for s in (structure(document_id) if structure else ())
+                 if s.owner_kind in VISUAL_KINDS]
+        # One origin, because there is one list. It used to name which of two
+        # lists a source landed in, and with the floor gone every source is a
+        # retrieval hit — saying "structure" about a table would be a claim
+        # about where it came from that is no longer true.
+        items = [WorkItem(document_id, None, source,
+                          rank=rank_of.get((source.owner_kind, source.owner_id)),
+                          origin="retrieval")
+                 for source in taken]
+        report.sweep_rounds["document"] = 1
+        report.fallback["document"] = {
+            "candidates": len(known),
+            "leftover": sum(1 for s in known
+                            if (s.owner_kind, s.owner_id) not in kept)}
+        report.owners_harvested = len(items)
+        report.planned = {
+            "visual": sum(1 for s in taken if s.owner_kind in VISUAL_KINDS),
+            "prose": sum(1 for s in taken if s.owner_kind not in VISUAL_KINDS),
+            "ranked": len(ranked), "probes": len(probes), "top": len(taken)}
+        return items, report
 
     visual = [s for s in (structure(document_id) if structure else ())
               if s.owner_kind in VISUAL_KINDS]
@@ -684,6 +724,52 @@ def merge_field(rows: list, sources: list, slot, reply: Optional[dict],
     return {"filled": filled, "unquoted": unquoted, "unbacked": unbacked,
             "unstated": unstated, "raw_missing": raw_missing,
             "raw_foreign": raw_foreign, "failed": failed}
+
+
+def apply_frame(rows: list, pair: Optional[dict], index: int,
+                slots: list) -> int:
+    """Write the document's frame onto these rows. Returns coordinates written.
+
+    The pair was read ONCE, for the document, from a caption or a heading, and
+    every row this request produced is a row of that pair -- the request asked
+    for it by name. So the coordinate is not asked again per row: it is
+    projected, with the quote and the source it was read from, and the window
+    says `frame` so a reader can tell a coordinate that was read for the
+    document from one that was read for the row.
+
+    `read`, not `derived`. `derived` means the SPEC decides a coordinate
+    without anybody reading anything; this is a model reading with a passage
+    behind it, and calling it derived would put it in the one state the
+    evidence rules do not apply to.
+
+    A coordinate already read is left alone. The frame is what the request
+    asked for, but if the row itself carried a better answer the row wins --
+    the same rule `merge_field` has, and for the same reason.
+    """
+    if not pair or not slots:
+        return 0
+    written = 0
+    for row in rows:
+        for slot in slots:
+            if slot.name not in pair:
+                continue
+            if row.claim.get(f"{slot.name}_state") == READ:
+                continue
+            row.claim[slot.name] = pair[slot.name]
+            row.claim[f"{slot.name}_state"] = READ
+            wording = pair.get(f"{slot.name}_raw")
+            if wording:
+                row.claim[f"{slot.name}_raw"] = wording
+                if (slot.kind == CHOICE
+                        and not wording_names_option(slot, pair[slot.name],
+                                                     wording)):
+                    row.claim[f"{slot.name}_raw_foreign"] = True
+            row.claim[f"{slot.name}_quote"] = pair[f"{slot.name}_quote"]
+            row.claim[f"{slot.name}_source"] = list(
+                pair[f"{slot.name}_source"])
+            row.claim[f"{slot.name}_window"] = ["frame", index]
+            written += 1
+    return written
 
 
 def open_rows(rows: list, slot) -> list:

@@ -1,4 +1,14 @@
 """The KWW source: PDF overrides, ags coercion, metadata, and the quality gate."""
+# `str | None` in a signature is evaluated at import time before 3.10, and
+# this file is collected by whatever python the developer has. The run itself
+# is 3.11, which is exactly why nobody noticed: the file could not be
+# collected at all on 3.9 and took the whole suite down with it.
+from __future__ import annotations
+
+import conftest
+
+conftest.needs_real("fitz")
+
 import sqlite3
 from pathlib import Path
 from urllib.parse import urlparse

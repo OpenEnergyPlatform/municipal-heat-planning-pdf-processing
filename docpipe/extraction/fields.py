@@ -175,6 +175,35 @@ def asked_slots(parameter: Parameter) -> list:
     return [slot for slot in axis_slots(parameter) if not slot.derive]
 
 
+def frame_slots(spec, names) -> list:
+    """The coordinates the profile says span the document's frame, in its order.
+
+    A frame coordinate belongs to the DOCUMENT and not to the row. A plan has
+    three scenario containers and a handful of reference years, and they stand
+    in headings, captions and column headers -- while the carrier and the
+    sector stand in the table row itself and are different in every cell. The
+    first kind can be found once and then asked about; the second cannot.
+
+    WHICH ones those are is the profile's business. The core never names a
+    coordinate, so this takes a list of names and resolves it against the
+    spec, exactly like `SLICE` does for the gate.
+
+    Read off the first parameter that has all of them, because a frame is one
+    per document: a spec whose parameters disagreed about it would have two
+    frames and no way to say which one a value hangs in. A name no parameter
+    has yields nothing at all rather than a shorter frame -- half a frame is
+    a pair set that is silently missing a coordinate.
+    """
+    wanted = [name for name in (names or ())]
+    if not wanted:
+        return []
+    for parameter in spec.parameters:
+        by_name = {slot.name: slot for slot in axis_slots(parameter)}
+        if all(name in by_name for name in wanted):
+            return [by_name[name] for name in wanted]
+    return []
+
+
 def derive_parameter(spec, claim: dict):
     """Which parameter this row belongs to, from its unit alone, or None.
 

@@ -1,4 +1,8 @@
 """Tests for semantic pre-masking of figures embedded in table crops (Stage 2)."""
+import conftest
+
+conftest.needs_real("torch")
+
 import pytest
 
 from docpipe.preprocessing import stage2_layout as s2

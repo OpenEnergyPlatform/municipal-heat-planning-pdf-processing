@@ -1,7 +1,6 @@
 """Tests for the vLLM vision layer: JSON parsing, base64 images, the chat call."""
 import base64
 
-import openai  # real SDK or the conftest stub
 
 from docpipe.visuals import vision as V
 
@@ -49,18 +48,21 @@ def test_call_vision_sends_base64_image_and_json_format(make_client, seq_respond
     assert rec[0]["response_format"] == {"type": "json_object"}
 
 
-def test_call_vision_timeout_escalates_repetition_penalty(make_client, seq_responder, tmp_path):
+def test_call_vision_timeout_escalates_repetition_penalty(
+        make_client, seq_responder, openai_error, tmp_path):
     p = tmp_path / "t.png"
     p.write_bytes(b"x")
     rec = []
     client = make_client(
-        seq_responder([openai.APITimeoutError("t"), '{"a": 1}']), recorder=rec)
+        seq_responder([openai_error("t", timeout=True), '{"a": 1}']),
+        recorder=rec)
     assert V.call_vision(client, "sys", "user", p) == {"a": 1}
     assert rec[1]["extra_body"]["repetition_penalty"] == 1.1
 
 
-def test_call_vision_exhausts_to_none(make_client, seq_responder, tmp_path):
+def test_call_vision_exhausts_to_none(make_client, seq_responder,
+                                      openai_error, tmp_path):
     p = tmp_path / "t.png"
     p.write_bytes(b"x")
-    client = make_client(seq_responder([openai.APIError("boom")]))
+    client = make_client(seq_responder([openai_error("boom")]))
     assert V.call_vision(client, "sys", "user", p) is None

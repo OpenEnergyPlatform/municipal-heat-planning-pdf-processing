@@ -31,3 +31,48 @@ ANCHORS_PATH = Path(__file__).with_name("extraction_anchors.json")
 # None means "any class the graph takes", which is every entry that does not
 # start with out:. A tuple names the answers that keep the row.
 SLICE = {"quantity": None}
+
+
+def document_context(conn, document_id: int) -> dict:
+    """What this plan says about itself, for the sentence it is searched with.
+
+    The municipality, because a plan writes its own name into headings,
+    captions and table titles, and a search anchor that carries it ranks this
+    plan's own sections above the boilerplate every plan shares. It lives in
+    the catalog join and in no query the core makes, so the core asks the
+    profile for it rather than growing a second idea of what a document is.
+
+    Missing metadata is not an error here. The anchor is written from the
+    ontology annotation either way and this only makes it sharper.
+    """
+    try:
+        row = conn.execute("""
+            SELECT m.name
+            FROM Documents d
+            LEFT JOIN DocumentMeta dm  ON dm.document = d.id
+            LEFT JOIN Municipalities m ON dm.municipality_ags = m.ags
+            WHERE d.id = ?
+        """, (document_id,)).fetchone()
+    except Exception:
+        return {}
+    # By position. Whether a connection carries a row factory is the caller's
+    # business, and a hook that only works on one of the two shapes is a hook
+    # that works until somebody passes a plain connection.
+    name = row[0] if row else None
+    return {"name": name} if name else {}
+
+
+# Which coordinates belong to the DOCUMENT and not to the row. A plan has
+# three scenario containers and a handful of reference years, and they stand
+# in headings, captions and column headers -- the carrier and the sector stand
+# in the table row itself and are different in every cell. So these two are
+# found ONCE, before any value, and every value request afterwards asks for
+# one of the pairs that were really found.
+#
+# Not a cross product. A plan with a target scenario for 2030/2035/2040/2045
+# and an inventory for 2022 has five pairs, not twenty.
+#
+# Measured on M3, this is what it replaces: the year axis produced 1,849
+# refusals against 0 readings, because every window after the first excluded
+# the row's own source and only that one could carry the year.
+FRAME = ("scenario", "year")

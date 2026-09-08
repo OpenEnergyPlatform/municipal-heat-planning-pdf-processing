@@ -1,4 +1,8 @@
 """Tests for font-based heading promotion and caption intervener detection."""
+import conftest
+
+conftest.needs_real("torch")
+
 from docpipe.preprocessing import stage2_layout as s2
 from docpipe.preprocessing.models import Block, PageData
 

@@ -220,12 +220,16 @@ def _slot_properties(name: str, slot, doc: str) -> dict:
                            f"axis' own rule (own | local | any)."},
         f"{name}_window": {
             "type": "array",
-            "prefixItems": [{"enum": ["own", "retrieval", "rest"]},
+            "prefixItems": [{"enum": ["own", "retrieval", "rest", "frame"]},
                             {"type": "integer"}],
             "minItems": 2, "maxItems": 2,
             "description": f"[stage, index] of the window '{name}' was read "
                            f"in. A coordinate read in window 1 and one read "
-                           f"in window 22 cost different amounts."},
+                           f"in window 22 cost different amounts. `frame` is "
+                           f"the one that is not a window: the coordinate was "
+                           f"read ONCE for the document and applied to this "
+                           f"row, and the index is which of the document's "
+                           f"pairs it came from."},
         f"{name}_seen": {
             "type": "string",
             "description": f"A wording the model noticed for '{name}' while "
@@ -550,8 +554,18 @@ def stamp_schema() -> dict:
                                "transcribed document is a reading of a reading."},
         },
         "patternProperties": {
-            "^extraction/(harvest|queries|anchors|rows|field)$":
+            "^extraction/(harvest|queries|anchors|rows|field|phrase|frame)$":
                 {**sha, "description": "sha256 of the prompt file"},
+            "^question_text/[^/]+$": {
+                "type": "array", "items": {"type": "string"},
+                "description": "The sentence THIS document was searched "
+                               "with. Recorded and never compared: it is "
+                               "written per document, so the document itself "
+                               "is part of it and no two runs produce the "
+                               "same one. What decides whether the harvest is "
+                               "current is its recipe, and that is already "
+                               "here -- the generator prompt, the model, and "
+                               "the annotation inside parameter/."},
             "^parameter/[^/]+$": {
                 **sha,
                 "description": "What this parameter asks, without its axes "
@@ -601,6 +615,25 @@ def trace_schema() -> dict:
                  "kind": {"enum": ["section", "table", "figure"]},
                  "owner": {"type": "integer"}, "chars": {"type": "integer"},
                  "image": {"type": "boolean"}},
+        # The sentence this document was searched with. It is written per
+        # document and exists nowhere else once the run is over, so a harvest
+        # that is not recorded here cannot be placed at all.
+        "anchor": {"parameter": {"type": "string"},
+                   "text": {"type": "string"}},
+        # Which scenarios and which years this document really carries, and
+        # what a deterministic scan of the same passages found that the model
+        # did not name. A finding, not a question: it is discovered once and
+        # then every value is asked for one of its pairs.
+        "frame": {"pairs": {"type": "integer"},
+                  "scenarios": {"type": "array", "items": {"type": "string"}},
+                  "years": {"type": "array", "items": {"type": "integer"}},
+                  "missed": {"type": "array", "items": {"type": "integer"}},
+                  "sources": {"type": "array", "items": owner},
+                  "status": {"enum": ["complete", "exhausted"]},
+                  "attempt": {"type": "integer"},
+                  "prompt_tokens": {"type": ["integer", "null"]},
+                  "completion_tokens": {"type": ["integer", "null"]},
+                  "ms": {"type": "integer"}},
         "rows": {"prompt": {"type": "string"}, "attempt": {"type": "integer"},
                  "rows": {"type": "integer"},
                  "status": {"type": ["string", "null"]},
@@ -611,7 +644,8 @@ def trace_schema() -> dict:
                  "ms": {"type": "integer"}},
         "field": {"slot": {"type": "string"}, "anchor": {"type": "string"},
                   "window": {"type": "integer"},
-                  "stage": {"enum": ["own", "retrieval", "rest"]},
+                  "stage": {"enum": ["own", "retrieval", "rest",
+                                     "frame"]},
                   "attempt": {"type": "integer"},
                   "parameter": {"type": ["string", "null"]},
                   "open": {"type": "integer"}, "reply": {"type": "boolean"},
