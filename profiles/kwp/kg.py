@@ -44,19 +44,22 @@ PREFIXES = """\
 @prefix oeo:   <https://openenergyplatform.org/ontology/oeo/> .
 """
 
-# `covers energy carrier` (OEO_00000523) has range `energy carrier`
-# (OEO_00020039). Nine classes the plans name in their carrier column are NOT
-# under it -- district heating is a grid-bound heat transfer, electrical
-# energy sits under energy and commodity, solar thermal energy under thermal
-# energy, and the ambient heat sources under thermal energy too. Asserting
-# them as carriers would contradict the TBox, so the edge is left out and the
-# value kept, and the count is the argument for the carrier axioms the
-# ontology side is adding.
+# Nine classes the plans name in their carrier column are NOT under
+# `energy carrier` (OEO_00020039) in OEO -- district heating is a grid-bound
+# heat transfer, electrical energy sits under energy and commodity, solar
+# thermal energy under thermal energy, and the ambient heat sources under
+# thermal energy too. They used to lose their carrier edge, because
+# `covers energy carrier` ranges over energy carrier and asserting them would
+# have contradicted the TBox. That predicate is gone: its DOMAIN was
+# `OEO_00020011` study, an occurrent, and every value node is a continuant,
+# which made the whole graph unsatisfiable. The edge is `is about`
+# (IAO_0000136) now, it declares no range, and the nine keep it.
 #
-# WHICH nine is the spec's to declare (`kg.no_edge_for` on the carrier axis)
-# and the pinned closure's to confirm: profiles/kwp/vocabulary.py refuses a
-# carrier that is neither under the root nor declared, so a tenth cannot be
-# added here by forgetting to mention it.
+# WHICH nine is still the spec's to declare (`kg.outside_root` on the carrier
+# axis) and the pinned closure's to confirm: profiles/kwp/vocabulary.py
+# refuses a carrier that is neither under the root nor declared, so a tenth
+# cannot be added here by forgetting to mention it. The count stays in the
+# log as the argument for the carrier axioms the ontology side is adding.
 LEGAL = r"(gmbh\s*&\s*co\.?\s*kg|gmbh|mbh|ag|kg|ohg|e\.?\s*v\.?|gbr|se|ug)"
 
 _SPEC = json.loads(
@@ -204,9 +207,11 @@ def _linked_by(axis: str) -> str:
 
 P_NUMBER = _value_predicate("number")           # oeo: has number
 P_UNIT = _value_predicate("unit")               # oeo: has unit
-P_CARRIER = _predicate("carrier")               # oeo: covers energy carrier
-P_SECTOR = _predicate("sector")                 # oeo: covers sector
-P_YEAR = _predicate("year")                     # oeo: has scenario year value
+# All three are `obo:IAO_0000136 is about`: see the note at the top. The year
+# points at a node, the other two at a class.
+P_CARRIER = _predicate("carrier")
+P_SECTOR = _predicate("sector")
+P_YEAR = _predicate("year")
 P_AGGREGATION = _predicate("aggregation")       # oeo: has aggregation type
 
 # Which coordinate a reader of the graph may hold to the row's own source.
@@ -237,24 +242,33 @@ _PART_MINT = {
 PARTS = {key: (qualified(_parent_class("scenario", key)), segment, label)
          for key, (segment, label) in _PART_MINT.items()}
 
-def _no_edge_for() -> dict:
+def _outside_root() -> dict:
     """The carrier classes OEO does not place under `energy carrier`.
 
     Declared in the spec's kg block and read from there, not listed twice.
     The plans write these in the carrier column constantly -- district heat,
-    electricity, solar thermal, the ambient heat sources -- and the value
-    keeps its node and loses only that one edge. Offering them at all is the
-    point: without the classes the model mapped 36 of them onto solar thermal
-    energy, which is a wrong triple rather than a missing one.
+    electricity, solar thermal, the ambient heat sources -- and offering them
+    at all is the point: without the classes the model mapped 36 of them onto
+    solar thermal energy, which is a wrong triple rather than a missing one.
     """
     out: dict = {}
     for par in _SPEC["parameters"]:
         block = ((par.get("axes") or {}).get("carrier") or {}).get("kg") or {}
-        out.update(block.get("no_edge_for") or {})
+        out.update(block.get("outside_root") or {})
     return out
 
 
-NOT_AN_ENERGY_CARRIER = _no_edge_for()
+def _object_class(axis: str) -> str:
+    """The class of the node an axis' edge points at, when it mints one."""
+    for par in _SPEC["parameters"]:
+        block = ((par.get("axes") or {}).get(axis) or {}).get("kg") or {}
+        if block.get("object_class"):
+            return qualified(block["object_class"])
+    raise KeyError(f"axis {axis!r} names no class for the node it points at")
+
+
+CARRIER_OUTSIDE_ROOT = _outside_root()
+CLS_YEAR = _object_class("year")
 
 ORGANISATION = "planning_organisation"
 CLS_ORGANISATION = _class(ORGANISATION)                    # oeo: organisation
@@ -271,6 +285,46 @@ CLS_HEATPLAN = "mhpo:MHPO_00020003"
 CLS_MUNICIPALITY = "mhpo:MHPO_00020017"
 P_PUBLICATION_DATE = "oeo:OEO_00390096"
 P_HAS_QUANTITY_VALUE = "oeo:OEO_00140002"
+
+
+def _bare(name: str) -> str:
+    """The identifier out of a qualified one, for the table below."""
+    return str(name).split(":")[-1]
+
+
+# Every triple shape this serializer writes that no `kg` block carries, so
+# that `ontology.edge_problems` can hold ALL of them to the pinned ontology
+# and not most of them. Built from the constants above rather than typed out
+# again, and held against the rendered Turtle by a test, so it can drift from
+# neither. The check this feeds is not academic: three edges named a domain
+# (`study`, an occurrent) that every value node is disjoint from, so the
+# graph asserted something no reasoner can satisfy, and every check we had
+# passed it.
+EDGES = tuple(
+    [{"where": "kg.py plan", "subject": _bare(CLS_HEATPLAN),
+      "predicate": _bare(P_PUBLICATION_DATE), "datatype": "xsd:date"},
+     {"where": "kg.py plan", "subject": _bare(CLS_HEATPLAN),
+      "predicate": _bare(P_ORGANISATION), "object": _bare(CLS_ORGANISATION)},
+     {"where": "kg.py area", "subject": _bare(CLS_PLAN_AREA),
+      "predicate": _bare(P_PART_OF), "object": _bare(CLS_MUNICIPALITY)}]
+    + [{"where": "kg.py plan", "subject": _bare(CLS_HEATPLAN),
+        "predicate": _bare(P_HAS_PART), "object": _bare(cls)}
+       for cls, _segment, _label in PARTS.values()]
+    + [{"where": "kg.py part", "subject": _bare(cls),
+        "predicate": _bare(P_HAS_QUANTITY_VALUE), "object": quantity}
+       for cls, _segment, _label in PARTS.values()
+       for quantity in sorted(UNIT_TARGET)]
+)
+
+
+def year_iri(year) -> str:
+    """The node a value points at for its year.
+
+    One node per calendar year for the whole graph, keyed by the year itself
+    rather than minted from a uuid: two plans naming 2030 mean the same 2030,
+    and a year is the one coordinate with no document in it.
+    """
+    return f"{BASE}year/{int(year)}"
 
 
 def ns(collection: str) -> uuid.UUID:
@@ -598,6 +652,7 @@ def make_serializer(db_path: Path):
         # value in it would be an empty claim, and a has-part edge to it
         # a wrong one: the plan does not stop having an inventory because
         # we could not read one, but the graph must not say we read it.
+        years: set = set()
         by_part: dict = {}
         for iri, row in values.items():
             by_part.setdefault(row["scenario"], {})[iri] = row
@@ -641,22 +696,24 @@ def make_serializer(db_path: Path):
                      f"    {P_UNIT} oeo:{UNIT_TARGET[row['quantity']]} ;"]
             carrier = row.get("carrier")
             if carrier and is_class(carrier):
-                if carrier in NOT_AN_ENERGY_CARRIER:
-                    # The value stands, the edge does not. Dropping the whole
-                    # row over this cost 51 of 244 value nodes in the pilot,
-                    # every one of them a properly evidenced consumption or
-                    # emission with its year, unit, sector and aggregation.
-                    # What is missing is one relation the TBox does not allow
-                    # yet, and a value without its carrier is a smaller loss
-                    # than no value at all.
-                    skip(f"carrier_not_in_oeo:{NOT_AN_ENERGY_CARRIER[carrier]}")
-                else:
-                    lines.append(f"    {P_CARRIER} oeo:{carrier} ;")
+                if carrier in CARRIER_OUTSIDE_ROOT:
+                    # Counted, not dropped. `is about` declares no range, so
+                    # the nine OEO does not call carriers keep this edge; the
+                    # count is what argues for the axioms that would let them
+                    # be called carriers.
+                    skip(f"carrier_outside_root:"
+                         f"{CARRIER_OUTSIDE_ROOT[carrier]}")
+                lines.append(f"    {P_CARRIER} oeo:{carrier} ;")
             if row.get("sector") and is_class(row["sector"]):
                 lines.append(f"    {P_SECTOR} oeo:{row['sector']} ;")
-            lines.append(f"    {P_YEAR} \"{row['year']}\"^^xsd:integer ;")
+            years.add(int(row["year"]))
+            lines.append(f"    {P_YEAR} <{year_iri(row['year'])}> ;")
             lines.append(f"    {P_AGGREGATION} oeo:{row['aggregation']} .")
             parts.append("\n".join(lines) + "\n")
+        for year in sorted(years):
+            parts.append(f"<{year_iri(year)}>\n"
+                         f"    a {CLS_YEAR} ;\n"
+                         f"    rdfs:label \"{year}\" .\n")
         for iri, label in office_iris.items():
             parts.append(f"<{iri}>\n"
                          f"    a {CLS_ORGANISATION} ;\n"

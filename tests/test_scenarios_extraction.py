@@ -306,6 +306,29 @@ def test_every_predicate_the_spec_promises_is_one_the_serializer_writes(
     assert written - (_promised() | STRUCTURAL) == set()
 
 
+def test_the_writers_own_edges_are_declared_for_the_pin_to_judge(
+        monkeypatch):
+    """`has uuid` sits behind no parameter, so no `kg` block carries it and
+    the ontology was never asked about it. It is the same blind spot three of
+    the kwp defects lived in. The table names every class it is written on,
+    and this holds the table to the render: a fourth node type would have to
+    be declared before it could be written."""
+    import profiles.scenarios.kg as kg
+    monkeypatch.setattr(kg, "EVIDENCE", False)
+    ttl = _ttl(_scenario_rows())
+    declared = {e["subject"] for e in kg.edges()
+                if e["predicate"] == kg._bare(kg.P_UUID)}
+    written = set()
+    for statement in ttl.split(" ." + chr(10)):
+        if kg.P_UUID not in statement:
+            continue
+        for line in statement.splitlines():
+            if line.strip().startswith("a oeo:"):
+                written.add(line.strip().split("oeo:")[1].rstrip(" ;"))
+    assert written, "the fixture writes uuids"
+    assert written <= declared, written - declared
+
+
 def test_a_closed_shape_run_still_says_where_every_value_was_read(monkeypatch):
     """Switching the evidence off used to mean the graph forgot the passage,
     which gives up the reason the metadata is read from the PDF at all."""
@@ -844,8 +867,13 @@ def test_a_region_is_referenced_by_its_existing_oekg_iri():
          "provenance": {}},
     ]
     ttl = _ttl(rows)
-    assert ("oeo:OEO_00020220 <https://openenergyplatform.org/ontology/oekg/"
+    # `has spatial region`, not `has study region` (OEO_00020220): that one
+    # is domained on OEO_00000364 scenario and this subject is the scenario
+    # FACTSHEET, which is not one. OEO_00010378 is its direct parent and is
+    # domained on information content entity, which the factsheet is.
+    assert ("oeo:OEO_00010378 <https://openenergyplatform.org/ontology/oekg/"
             "region/Germany>") in ttl
+    assert "OEO_00020220" not in ttl
     # and referenced is ALL it is: the individual is the OEKG's, it already
     # carries its type and its label over there, and writing ours on top would
     # put a second label on a node this harvest did not create.

@@ -1,4 +1,5 @@
 """The kwp extraction profile: spec, prompts, and the MHPKG serializer."""
+import json
 import logging
 import re
 import sqlite3
@@ -224,7 +225,7 @@ def test_every_plan_part_the_ontology_names_is_serialized(tmp_path):
     for segment, cls, label in (
             ("targetscenario", "mhpo:MHPO_00020007", "Zielszenario"),
             ("inventory", "mhpo:MHPO_00020005", "Bestandsanalyse"),
-            ("referencescenario", "oeo:OEO_00020314", "Trendszenario")):
+            ("referencescenario", "oeo:OEO_00020311", "Trendszenario")):
         iri = f"{kg.BASE}{segment}/AGS_06611000_2024-03-15"
         assert f"<{iri}>" in ttl, segment
         assert f"a {cls} ;" in ttl, cls
@@ -263,12 +264,14 @@ def test_a_row_whose_scenario_stayed_unread_is_counted_not_guessed(tmp_path,
     assert "scenario:out:variant': 1" in line
 
 
-def test_a_carrier_oeo_does_not_call_a_carrier_loses_its_edge_not_its_value(tmp_path):
-    """`covers energy carrier` has range `energy carrier`, and district heating
-    is a heat transfer, not one. So the edge is left out — but the value is a
-    properly evidenced consumption with its year, unit, sector and
-    aggregation, and dropping the whole row over one relation the TBox does
-    not allow yet cost 51 of 244 value nodes in the pilot."""
+def test_a_carrier_oeo_does_not_call_a_carrier_keeps_its_edge_and_is_counted(
+        tmp_path):
+    """District heating is a heat transfer and OEO does not put it under
+    `energy carrier`. Under `covers energy carrier`, whose range IS energy
+    carrier, saying so contradicted the TBox and the edge was dropped: 51 of
+    244 value nodes in the pilot lost their carrier. `is about` declares no
+    range, so the edge stands for all nine and nothing false is asserted.
+    What remains is the count, which is the argument for the axioms."""
     serializer = kg.make_serializer(_database(tmp_path))
     ttl = serializer("waermeplan_kassel_20240315", [
         _row(carrier="OEO_00000132"),          # Fernwärme
@@ -276,9 +279,11 @@ def test_a_carrier_oeo_does_not_call_a_carrier_loses_its_edge_not_its_value(tmp_
         _row(),                                # Erdgas, a carrier OEO allows
     ])
     assert ttl.count("a oeo:OEO_00050016") == 3, "every value stands"
-    assert ttl.count("oeo:OEO_00000523") == 1, "only Erdgas may claim a carrier"
-    assert "oeo:OEO_00000523 oeo:OEO_00000132" not in ttl
-    assert "oeo:OEO_00000523 oeo:OEO_00000139" not in ttl
+    assert ttl.count("obo:IAO_0000136 oeo:OEO_00000132") == 1
+    assert ttl.count("obo:IAO_0000136 oeo:OEO_00000139") == 1
+    assert ttl.count("obo:IAO_0000136 oeo:OEO_00000292") == 1
+    # And the predicate that could not carry them is gone from the output.
+    assert "OEO_00000523" not in ttl and "OEO_00000505" not in ttl
 
 
 def test_a_value_conflict_on_one_coordinate_drops_every_claimant(tmp_path):
@@ -376,6 +381,21 @@ def test_the_date_converter_takes_both_and_refuses_neither_silently():
 # Its own value IRI is left out of the comparison: that node is hand-typed
 # upstream (a878a3a1-…), and mint_slice.py's coordinate string yields
 # 78153046-… instead, which the minting test above pins.
+#
+# THREE DELIBERATE DIVERGENCES from the published file, all of them the same
+# defect: the example writes predicates whose rdfs:domain its own subject is
+# not. `covers energy carrier` (OEO_00000523) and `covers sector`
+# (OEO_00000505) are domained on OEO_00020011 study, which is under
+# BFO_0000003 occurrent, while every quantity value is under BFO_0000002
+# continuant and the pin asserts those two disjoint -- so the published
+# example is unsatisfiable. `has scenario year value` (OEO_00020440) is
+# domained on OEO_00000365 scenario factsheet and declares range
+# xsd:dateTime, and the example writes it on a value node with an
+# xsd:integer. All three become obo:IAO_0000136 `is about`, whose domain
+# (information content entity) the value classes do satisfy, and the year
+# becomes a node because the pin has no property at all from a quantity
+# value to a time. The schema repo has to follow (G1/G5); until it does,
+# this file and that one differ in these five lines and nowhere else.
 KASSEL_VALID = """
 heatplan/AGS_06611000_2024-03-15 | a | mhpo:MHPO_00020003
 heatplan/AGS_06611000_2024-03-15 | rdfs:label | "Kommunale Wärmeplanung Kassel 2024"
@@ -387,9 +407,11 @@ targetscenario/AGS_06611000_2024-03-15 | rdfs:label | "Zielszenario Kassel 2024"
 VALUE | a | oeo:OEO_00050016
 VALUE | oeo:OEO_00140178 | "241.0"^^xsd:float
 VALUE | oeo:OEO_00040010 | oeo:OEO_00050008
-VALUE | oeo:OEO_00000523 | oeo:OEO_00000292
-VALUE | oeo:OEO_00000505 | oeo:OEO_00000214
-VALUE | oeo:OEO_00020440 | "2030"^^xsd:integer
+VALUE | obo:IAO_0000136 | oeo:OEO_00000292
+VALUE | obo:IAO_0000136 | oeo:OEO_00000214
+VALUE | obo:IAO_0000136 | year/2030
+year/2030 | a | oeo:OEO_00030033
+year/2030 | rdfs:label | "2030"
 VALUE | oeo:OEO_00390023 | oeo:OEO_00140070
 organisation/2d4f4ae8-ea0f-575c-9a76-8dcf377042af | a | oeo:OEO_00030022
 organisation/2d4f4ae8-ea0f-575c-9a76-8dcf377042af | rdfs:label | "Kassel Wärme Ingenieurbüro"
@@ -532,7 +554,7 @@ def test_two_sub_areas_are_two_values_not_one(tmp_path):
     assert '"64000.0"^^xsd:float' in ttl and '"9100.0"^^xsd:float' in ttl
     # Typed out, not interpolated: a test that builds its pattern from the
     # constant it checks agrees with a wrong constant just as happily.
-    assert ttl.count("a mhpo:MHPO_00020018") == 2
+    assert ttl.count("a mhpo:MHPO_00020019") == 2
     assert "Quartier Nordstadt" in ttl and "Quartier Süd" in ttl
     assert f"obo:BFO_0000050 <{kg.BASE}municipality/AGS_06611000>" in ttl
 
@@ -580,6 +602,28 @@ def test_the_unit_is_chosen_from_the_list_and_the_wording_is_evidence():
     assert out.tuple["spatial_scope"] == "municipality"
 
 
+def test_one_year_is_one_node_for_the_whole_graph(tmp_path):
+    """The year is an object now, because the pinned release has no property
+    at all whose domain a quantity value satisfies and whose range is a time.
+    Its node is keyed by the year and not minted from a uuid: two plans naming
+    2030 mean the same 2030, and a year is the one coordinate with no document
+    in it. So the node appears once however many values point at it, and two
+    documents do not mint two."""
+    serializer = kg.make_serializer(_database(tmp_path))
+    ttl = serializer("waermeplan_kassel_20240315", [
+        _row(year=2030, value_target=1.0),
+        _row(year=2030, carrier="OEO_00000074", value_target=2.0),
+        _row(year=2045, value_target=3.0),
+    ])
+    assert kg.year_iri(2030) == kg.year_iri("2030") == f"{kg.BASE}year/2030"
+    assert ttl.count(f"<{kg.year_iri(2030)}>") == 3, "twice pointed at, once written"
+    assert ttl.count(f"<{kg.year_iri(2045)}>") == 2
+    assert ttl.count(f"a {kg.CLS_YEAR} ;") == 2, "one node per year, not per value"
+    assert '"2030"' in ttl and '"2045"' in ttl
+    # And the literal the old predicate wrote is gone from the output.
+    assert "OEO_00020440" not in ttl
+
+
 def test_a_deliberate_non_class_never_becomes_an_oeo_iri(tmp_path):
     """The axes hold entries that say what a row IS when no class fits — a
     sum, a residual, a sector the source calls unknown. Written as
@@ -594,7 +638,12 @@ def test_a_deliberate_non_class_never_becomes_an_oeo_iri(tmp_path):
     assert ttl.count("a oeo:OEO_00050016") == 3, "the values themselves stand"
     for bad in ("oeo:out:total", "oeo:unknown", "oeo:out:other"):
         assert bad not in ttl, f"{bad} is not a class"
-    assert "OEO_00000505" not in ttl, "no sector edge for a non-class"
+    # Counted, not named: `OEO_00000505` was the sector predicate and it is
+    # gone from the module, so asserting its absence stopped looking at
+    # anything. Five edges: each row writes its year, rows one and two their
+    # default carrier, row three neither (its carrier is `out:other` and the
+    # fixture's default sector is None). The three non-classes write nothing.
+    assert ttl.count(kg.P_SECTOR) == 5
 
 
 # The axes kg.py turns into edges. scenario and spatial_scope are read as
@@ -1000,7 +1049,7 @@ def test_a_class_id_says_its_own_namespace():
     pinned vocabulary and would silently become oeo:UO_0000111, an IRI that
     does not exist."""
     assert kg.qualified("OEO_00030022") == "oeo:OEO_00030022"
-    assert kg.qualified("MHPO_00020018") == "mhpo:MHPO_00020018"
+    assert kg.qualified("MHPO_00020019") == "mhpo:MHPO_00020019"
     assert kg.qualified("BFO_0000050") == "obo:BFO_0000050"
     for bad in ("UO_0000111", "OEO_00030022 organisation", "organisation"):
         with pytest.raises(KeyError):
@@ -1027,9 +1076,78 @@ def test_nothing_the_module_keeps_a_literal_is_unaccounted_for(tmp_path):
     be added quietly, which is how the four in this list got there."""
     from tests.test_extraction_schema import kwp_promises
     allowed = kwp_promises(SPEC) | STRUCTURAL
-    assert len(allowed) == 13, sorted(allowed)
+    assert len(allowed) == 11, sorted(allowed)
     used = _predicates_in(full_turtle(tmp_path))
     assert used <= allowed, used - allowed
+
+
+def _emitted_shapes(ttl):
+    """(subject class, predicate, object class or datatype) out of a render.
+
+    `_triples` shortens every value IRI to one word, which is right for a
+    triple set and wrong here: the three quantity classes would collapse into
+    one subject and the check would hold two thirds of the output to nothing.
+    """
+    body = re.sub(r"(?m)^\s*(#.*|@prefix.*)$", "", ttl)
+    out = set()
+    for statement in body.split(" .\n"):
+        statement = statement.strip().rstrip(".").strip()
+        if not statement:
+            continue
+        _subject, _, rest = statement.partition("\n")
+        clauses = [c.strip() for c in rest.split(";") if c.strip()]
+        kind = None
+        for clause in clauses:
+            predicate, _, objects = clause.partition(" ")
+            if predicate.strip() == "a":
+                kind = objects.strip()
+        for clause in clauses:
+            predicate, _, objects = clause.partition(" ")
+            predicate = predicate.strip()
+            if predicate in ("a", "rdfs:label"):
+                continue
+            for obj in objects.split(","):
+                obj = obj.strip()
+                if "^^" in obj:
+                    target = obj.split("^^")[-1]
+                elif re.fullmatch(r"[a-z]+:[A-Za-z]+_[0-9]+", obj):
+                    target = obj
+                else:
+                    target = None
+                out.add((kind, predicate, target))
+    return out
+
+
+def _bare(term):
+    return None if term is None else str(term).split(":")[-1]
+
+
+def test_every_edge_the_writer_emits_is_one_the_ontology_was_asked_about(
+        tmp_path):
+    """The declared edge table against the render, shape by shape.
+
+    `vocabulary.edges` is what the pinned ontology gets asked about, and a
+    table that says less than the writer writes is a check with a hole in it.
+    Three edges whose domain nothing here satisfies sat behind exactly such a
+    hole for as long as no table existed, so the table is held to the output:
+    an edge the writer emits and the table does not name fails here, and so
+    does a literal written with a datatype the table does not declare.
+    """
+    from profiles.kwp import vocabulary
+    spec_raw = json.loads(SPEC_PATH.read_text(encoding="utf-8"))
+    declared = vocabulary.edges(spec_raw)
+    pairs = {(e.get("subject"), _bare(e["predicate"])) for e in declared}
+    loose = {name for subject, name in pairs if subject is None}
+    types = {(_bare(e["predicate"]), e.get("datatype")) for e in declared
+             if e.get("datatype")}
+    unnamed = set()
+    for kind, predicate, target in _emitted_shapes(full_turtle(tmp_path)):
+        name = _bare(predicate)
+        if (_bare(kind), name) not in pairs and name not in loose:
+            unnamed.add((kind, predicate))
+        if target and target.startswith("xsd:"):
+            assert (name, target) in types, (predicate, target)
+    assert not unnamed, unnamed
 
 
 def test_the_two_value_parameters_ask_the_graph_for_the_same_thing():

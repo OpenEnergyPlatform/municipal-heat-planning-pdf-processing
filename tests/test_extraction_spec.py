@@ -500,7 +500,7 @@ def _kg_spec(kg=None, axis_kg=None):
     ("parameter", {"class": "OEO_00030022 organisation"}),
     ("parameter", {"class": "organisation"}),
     ("axis", {"role": "parent",
-              "map": {"sub_area": {"class": "MHPO_00020018 heat plan area, "
+              "map": {"sub_area": {"class": "MHPO_00020019 heat plan subarea, "
                                             "BFO_0000050 part of the area"}}}),
 ])
 def test_a_class_is_an_identifier_and_nothing_else(where, block):

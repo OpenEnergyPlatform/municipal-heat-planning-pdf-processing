@@ -1,4 +1,14 @@
 {
+ "disjoint": [
+  [
+   "BFO_0000004",
+   "BFO_0000020"
+  ],
+  [
+   "BFO_0000004",
+   "BFO_0000031"
+  ]
+ ],
  "pin": {
   "families": [
    "BFO",
@@ -291,15 +301,97 @@
   ]
  },
  "terms": {
+  "BFO_0000001": {
+   "alt_labels": [],
+   "definition": null,
+   "deprecated": false,
+   "kind": "class",
+   "label": "entity",
+   "parents": [
+    "Thing"
+   ]
+  },
+  "BFO_0000002": {
+   "alt_labels": [],
+   "definition": "An entity that exists in full at any time in which it exists at all, persists through time while maintaining its identity and has no temporal parts.",
+   "deprecated": false,
+   "kind": "class",
+   "label": "continuant",
+   "parents": [
+    "BFO_0000001"
+   ]
+  },
+  "BFO_0000004": {
+   "alt_labels": [],
+   "definition": "A continuant that is a bearer of quality and realizable entity entities, in which other entities inhere and which itself cannot inhere in anything.",
+   "deprecated": false,
+   "kind": "class",
+   "label": "independent continuant",
+   "parents": [
+    "BFO_0000002"
+   ]
+  },
+  "BFO_0000006": {
+   "alt_labels": [],
+   "definition": null,
+   "deprecated": false,
+   "kind": "class",
+   "label": "spatial region",
+   "parents": [
+    "BFO_0000141"
+   ]
+  },
+  "BFO_0000017": {
+   "alt_labels": [],
+   "definition": null,
+   "deprecated": false,
+   "kind": "class",
+   "label": "realizable entity",
+   "parents": [
+    "BFO_0000020"
+   ]
+  },
+  "BFO_0000020": {
+   "alt_labels": [],
+   "definition": "b is a specifically dependent continuant = Def. b is a continuant & there is some independent continuant c which is not a spatial region and which is such that b s-depends_on c at every time t during the course of b’s existence. (axiom label in BFO2 Reference: [050-003])",
+   "deprecated": false,
+   "kind": "class",
+   "label": "specifically dependent continuant",
+   "parents": [
+    "BFO_0000002"
+   ]
+  },
+  "BFO_0000023": {
+   "alt_labels": [],
+   "definition": null,
+   "deprecated": false,
+   "kind": "class",
+   "label": "role",
+   "parents": [
+    "BFO_0000017"
+   ]
+  },
+  "BFO_0000031": {
+   "alt_labels": [],
+   "definition": "b is a generically dependent continuant = Def. b is a continuant that g-depends_on one or more other entities. (axiom label in BFO2 Reference: [074-001])",
+   "deprecated": false,
+   "kind": "class",
+   "label": "generically dependent continuant",
+   "parents": [
+    "BFO_0000002"
+   ]
+  },
   "BFO_0000051": {
    "alt_labels": [],
    "definition": "a core relation that holds between a whole and its part",
    "deprecated": false,
+   "domain": [],
    "kind": "object_property",
    "label": "has part",
    "parents": [
     "topObjectProperty"
-   ]
+   ],
+   "range": []
   },
   "BFO_0000141": {
    "alt_labels": [],
@@ -335,10 +427,24 @@
    "alt_labels": [],
    "definition": "A (currently) primitive relation that relates an information artifact to an entity.",
    "deprecated": false,
+   "domain": [
+    "IAO_0000030"
+   ],
    "kind": "object_property",
    "label": "is about",
    "parents": [
     "topObjectProperty"
+   ],
+   "range": []
+  },
+  "IAO_0000310": {
+   "alt_labels": [],
+   "definition": "A collection of information content entities intended to be understood together as a whole",
+   "deprecated": false,
+   "kind": "class",
+   "label": "document",
+   "parents": [
+    "IAO_0000030"
    ]
   },
   "OEO_00000051": {
@@ -403,43 +509,65 @@
    "alt_labels": [],
    "definition": "A relation that holds between an information content entity and its author.",
    "deprecated": false,
+   "domain": [
+    "IAO_0000030"
+   ],
    "kind": "object_property",
    "label": "has author",
    "parents": [
     "OEO_00140008",
     "topObjectProperty"
+   ],
+   "range": [
+    "BFO_0000002"
    ]
   },
   "OEO_00000509": {
    "alt_labels": [],
    "definition": "A relation that holds between an entity and its source of funding.",
    "deprecated": false,
+   "domain": [],
    "kind": "object_property",
    "label": "has funding source",
    "parents": [
     "topObjectProperty"
+   ],
+   "range": [
+    "BFO_0000002"
    ]
   },
   "OEO_00000510": {
    "alt_labels": [],
    "definition": "A relation that holds between an information content entity and the organisation in which it was created.",
    "deprecated": false,
+   "domain": [
+    "IAO_0000030"
+   ],
    "kind": "object_property",
    "label": "has organisation",
    "parents": [
     "OEO_00140008",
     "topObjectProperty"
+   ],
+   "range": [
+    "BFO_0000002"
    ]
   },
   "OEO_00010378": {
    "alt_labels": [],
    "definition": "An is-about-relation between an information content entity and a spatial region that describes that the information content entity is about a spatial region.",
    "deprecated": false,
+   "domain": [
+    "IAO_0000030"
+   ],
    "kind": "object_property",
    "label": "has spatial region",
    "parents": [
     "IAO_0000136",
     "topObjectProperty"
+   ],
+   "range": [
+    "BFO_0000006"
    ]
   },
   "OEO_00020012": {
@@ -450,18 +578,6 @@
    "label": "study report",
    "parents": [
     "IAO_0000088"
-   ]
-  },
-  "OEO_00020220": {
-   "alt_labels": [],
-   "definition": "An is-about-relation between a scenario and a study region to indicate the study region of a scenario.",
-   "deprecated": false,
-   "kind": "object_property",
-   "label": "has study region",
-   "parents": [
-    "IAO_0000136",
-    "OEO_00010378",
-    "topObjectProperty"
    ]
   },
   "OEO_00020227": {
@@ -587,6 +703,18 @@
     "OEO_00000364"
    ]
   },
+  "OEO_00020352": {
+   "alt_labels": [
+    "Modell"
+   ],
+   "definition": "A model is a continuant to represent a system and its behaviours in a simplified or idealised way.",
+   "deprecated": false,
+   "kind": "class",
+   "label": "model",
+   "parents": [
+    "BFO_0000002"
+   ]
+  },
   "OEO_00020411": {
    "alt_labels": [
     "robust investment decision",
@@ -615,10 +743,16 @@
    "alt_labels": [],
    "definition": "Has scenario year value is a relation between a scenario factsheet and a xsd:dateTime value.",
    "deprecated": false,
+   "domain": [
+    "OEO_00000365"
+   ],
    "kind": "data_property",
    "label": "has scenario year value",
    "parents": [
     "topDataProperty"
+   ],
+   "range": [
+    "xsd:dateTime"
    ]
   },
   "OEO_00030007": {
@@ -697,10 +831,18 @@
    "alt_labels": [],
    "definition": "A relation between an information content entity / model and a continuant, in which the continuant is somehow involved in the creation of the information content entity / model.",
    "deprecated": false,
+   "domain": [
+    "BFO_0000002",
+    "IAO_0000030",
+    "OEO_00020352"
+   ],
    "kind": "object_property",
    "label": "has contributor",
    "parents": [
     "topObjectProperty"
+   ],
+   "range": [
+    "BFO_0000002"
    ]
   },
   "OEO_00140009": {
@@ -722,30 +864,48 @@
    "alt_labels": [],
    "definition": "has scenario type is a relation between a scenario factsheet and a subclass of scenario.",
    "deprecated": false,
+   "domain": [
+    "OEO_00000365"
+   ],
    "kind": "object_property",
    "label": "has scenario type",
    "parents": [
     "topObjectProperty"
+   ],
+   "range": [
+    "OEO_00000364"
    ]
   },
   "OEO_00390096": {
    "alt_labels": [],
    "definition": "has publication date is the relation between a report and the year it was published in.",
    "deprecated": false,
+   "domain": [
+    "IAO_0000088"
+   ],
    "kind": "data_property",
    "label": "has publication date",
    "parents": [
     "topDataProperty"
+   ],
+   "range": [
+    "xsd:dateTime"
    ]
   },
   "OEO_00390098": {
    "alt_labels": [],
    "definition": "has doi is the relation between a digital object and the literal representing its doi (digital object identifier).",
    "deprecated": false,
+   "domain": [
+    "IAO_0000088"
+   ],
    "kind": "data_property",
    "label": "has doi",
    "parents": [
     "topDataProperty"
+   ],
+   "range": [
+    "Literal"
    ]
   },
   "OEO_00390105": {

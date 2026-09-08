@@ -93,10 +93,17 @@ def region_problems(snapshot: dict, regions=None) -> list:
     return problems
 
 
+def edges(spec_raw: dict) -> list:
+    """Every triple shape this profile emits, the spec's and the writer's."""
+    from profiles.scenarios import kg     # here: kg reads the spec at import
+    return list(ontology.spec_edges(spec_raw)) + list(kg.edges())
+
+
 def check(spec_raw: dict, snapshot: dict) -> list:
     """Every complaint the pinned ontology has about this spec."""
     return (ontology.term_problems(spec_raw, snapshot)
             + ontology.kind_problems(spec_raw, snapshot)
+            + ontology.edge_problems(edges(spec_raw), snapshot)
             + ontology.set_problems(spec_raw, snapshot, AXIS_SETS)
             + region_problems(snapshot))
 

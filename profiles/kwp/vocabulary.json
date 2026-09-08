@@ -1,4 +1,46 @@
 {
+ "disjoint": [
+  [
+   "BFO_0000002",
+   "BFO_0000003"
+  ],
+  [
+   "BFO_0000004",
+   "BFO_0000020"
+  ],
+  [
+   "BFO_0000004",
+   "BFO_0000031"
+  ],
+  [
+   "BFO_0000008",
+   "BFO_0000015"
+  ],
+  [
+   "BFO_0000040",
+   "BFO_0000141"
+  ],
+  [
+   "OEO_00000014",
+   "OEO_00000072"
+  ],
+  [
+   "OEO_00000204",
+   "OEO_00000251"
+  ],
+  [
+   "OEO_00010241",
+   "OEO_00010242"
+  ],
+  [
+   "OEO_00010295",
+   "OEO_00020085"
+  ],
+  [
+   "OEO_00010336",
+   "OEO_00010337"
+  ]
+ ],
  "pin": {
   "families": [
    "BFO",
@@ -296,6 +338,116 @@
   ]
  },
  "terms": {
+  "BFO_0000001": {
+   "alt_labels": [],
+   "definition": null,
+   "deprecated": false,
+   "kind": "class",
+   "label": "entity",
+   "parents": [
+    "Thing"
+   ]
+  },
+  "BFO_0000002": {
+   "alt_labels": [],
+   "definition": "An entity that exists in full at any time in which it exists at all, persists through time while maintaining its identity and has no temporal parts.",
+   "deprecated": false,
+   "kind": "class",
+   "label": "continuant",
+   "parents": [
+    "BFO_0000001"
+   ]
+  },
+  "BFO_0000003": {
+   "alt_labels": [],
+   "definition": null,
+   "deprecated": false,
+   "kind": "class",
+   "label": "occurrent",
+   "parents": [
+    "BFO_0000001"
+   ]
+  },
+  "BFO_0000004": {
+   "alt_labels": [],
+   "definition": "A continuant that is a bearer of quality and realizable entity entities, in which other entities inhere and which itself cannot inhere in anything.",
+   "deprecated": false,
+   "kind": "class",
+   "label": "independent continuant",
+   "parents": [
+    "BFO_0000002"
+   ]
+  },
+  "BFO_0000008": {
+   "alt_labels": [],
+   "definition": null,
+   "deprecated": false,
+   "kind": "class",
+   "label": "temporal region",
+   "parents": [
+    "BFO_0000003"
+   ]
+  },
+  "BFO_0000015": {
+   "alt_labels": [],
+   "definition": "p is a process = Def. p is an occurrent that has temporal proper parts and for some time t, p s-depends_on some material entity at t. (axiom label in BFO2 Reference: [083-003])",
+   "deprecated": false,
+   "kind": "class",
+   "label": "process",
+   "parents": [
+    "BFO_0000003"
+   ]
+  },
+  "BFO_0000019": {
+   "alt_labels": [],
+   "definition": null,
+   "deprecated": false,
+   "kind": "class",
+   "label": "quality",
+   "parents": [
+    "BFO_0000020"
+   ]
+  },
+  "BFO_0000020": {
+   "alt_labels": [],
+   "definition": "b is a specifically dependent continuant = Def. b is a continuant & there is some independent continuant c which is not a spatial region and which is such that b s-depends_on c at every time t during the course of b’s existence. (axiom label in BFO2 Reference: [050-003])",
+   "deprecated": false,
+   "kind": "class",
+   "label": "specifically dependent continuant",
+   "parents": [
+    "BFO_0000002"
+   ]
+  },
+  "BFO_0000027": {
+   "alt_labels": [],
+   "definition": null,
+   "deprecated": false,
+   "kind": "class",
+   "label": "object aggregate",
+   "parents": [
+    "BFO_0000040"
+   ]
+  },
+  "BFO_0000031": {
+   "alt_labels": [],
+   "definition": "b is a generically dependent continuant = Def. b is a continuant that g-depends_on one or more other entities. (axiom label in BFO2 Reference: [074-001])",
+   "deprecated": false,
+   "kind": "class",
+   "label": "generically dependent continuant",
+   "parents": [
+    "BFO_0000002"
+   ]
+  },
+  "BFO_0000038": {
+   "alt_labels": [],
+   "definition": null,
+   "deprecated": false,
+   "kind": "class",
+   "label": "one-dimensional temporal region",
+   "parents": [
+    "BFO_0000008"
+   ]
+  },
   "BFO_0000040": {
    "alt_labels": [],
    "definition": "An independent continuant that is spatially extended whose identity is independent of that of other entities and can be maintained through time.",
@@ -310,21 +462,25 @@
    "alt_labels": [],
    "definition": "a core relation that holds between a part and its whole",
    "deprecated": false,
+   "domain": [],
    "kind": "object_property",
    "label": "part of",
    "parents": [
     "topObjectProperty"
-   ]
+   ],
+   "range": []
   },
   "BFO_0000051": {
    "alt_labels": [],
    "definition": "a core relation that holds between a whole and its part",
    "deprecated": false,
+   "domain": [],
    "kind": "object_property",
    "label": "has part",
    "parents": [
     "topObjectProperty"
-   ]
+   ],
+   "range": []
   },
   "BFO_0000141": {
    "alt_labels": [],
@@ -335,6 +491,30 @@
    "parents": [
     "BFO_0000004"
    ]
+  },
+  "IAO_0000030": {
+   "alt_labels": [],
+   "definition": "A generically dependent continuant that is about some thing.",
+   "deprecated": false,
+   "kind": "class",
+   "label": "information content entity",
+   "parents": [
+    "BFO_0000031"
+   ]
+  },
+  "IAO_0000136": {
+   "alt_labels": [],
+   "definition": "A (currently) primitive relation that relates an information artifact to an entity.",
+   "deprecated": false,
+   "domain": [
+    "IAO_0000030"
+   ],
+   "kind": "object_property",
+   "label": "is about",
+   "parents": [
+    "topObjectProperty"
+   ],
+   "range": []
   },
   "OEO_00000014": {
    "alt_labels": [
@@ -1179,6 +1359,18 @@
     "OEO_00000128"
    ]
   },
+  "OEO_00000419": {
+   "alt_labels": [
+    "Umwandlung"
+   ],
+   "definition": "A transformation is a process that transforms one or more inputs into at least one output.",
+   "deprecated": false,
+   "kind": "class",
+   "label": "transformation",
+   "parents": [
+    "BFO_0000015"
+   ]
+  },
   "OEO_00000422": {
    "alt_labels": [
     "Verkehrssektor"
@@ -1244,47 +1436,21 @@
     "OEO_00010214"
    ]
   },
-  "OEO_00000505": {
-   "alt_labels": [],
-   "definition": "A relation that holds between a study and the sector it covers.",
-   "deprecated": false,
-   "kind": "object_property",
-   "label": "covers sector",
-   "parents": [
-    "OEO_00000522",
-    "topObjectProperty"
-   ]
-  },
   "OEO_00000510": {
    "alt_labels": [],
    "definition": "A relation that holds between an information content entity and the organisation in which it was created.",
    "deprecated": false,
+   "domain": [
+    "IAO_0000030"
+   ],
    "kind": "object_property",
    "label": "has organisation",
    "parents": [
     "OEO_00140008",
     "topObjectProperty"
-   ]
-  },
-  "OEO_00000522": {
-   "alt_labels": [],
-   "definition": "A relation that holds between a study and the thing it covers.",
-   "deprecated": false,
-   "kind": "object_property",
-   "label": "covers",
-   "parents": [
-    "topObjectProperty"
-   ]
-  },
-  "OEO_00000523": {
-   "alt_labels": [],
-   "definition": "A relation that holds between a study and the energy carrier it covers.",
-   "deprecated": false,
-   "kind": "object_property",
-   "label": "covers energy carrier",
-   "parents": [
-    "OEO_00000522",
-    "topObjectProperty"
+   ],
+   "range": [
+    "BFO_0000002"
    ]
   },
   "OEO_00010000": {
@@ -2258,6 +2424,41 @@
     "OEO_00140159"
    ]
   },
+  "OEO_00010489": {
+   "alt_labels": [
+    "Einheit",
+    "Maßeinheit"
+   ],
+   "definition": "A unit of measurement is a generically dependent continuant that represents a standardised quantity value of a quantifiable entity",
+   "deprecated": false,
+   "kind": "class",
+   "label": "unit",
+   "parents": [
+    "BFO_0000031"
+   ]
+  },
+  "OEO_00010490": {
+   "alt_labels": [],
+   "definition": "A physical unit is a unit that represents a standardised quantity value of a physical quantifiable entity.",
+   "deprecated": false,
+   "kind": "class",
+   "label": "physical unit",
+   "parents": [
+    "OEO_00010489"
+   ]
+  },
+  "OEO_00010501": {
+   "alt_labels": [
+    "Produkt"
+   ],
+   "definition": "A product is a continuant that is either a good or a service product.",
+   "deprecated": false,
+   "kind": "class",
+   "label": "product",
+   "parents": [
+    "BFO_0000002"
+   ]
+  },
   "OEO_00020001": {
    "alt_labels": [
     "Ethanol"
@@ -2269,6 +2470,18 @@
    "parents": [
     "OEO_00000331",
     "OEO_00010145"
+   ]
+  },
+  "OEO_00020003": {
+   "alt_labels": [
+    "Energieumwandlung"
+   ],
+   "definition": "Energy transformation is a transformation in which one or more certain types of energy as input result in certain types of energy as output.",
+   "deprecated": false,
+   "kind": "class",
+   "label": "energy transformation",
+   "parents": [
+    "OEO_00000419"
    ]
   },
   "OEO_00020039": {
@@ -2366,6 +2579,18 @@
    "label": "renewable energy",
    "parents": [
     "OEO_00000150"
+   ]
+  },
+  "OEO_00020103": {
+   "alt_labels": [
+    "Energieübertragung"
+   ],
+   "definition": "Energy transfer is an energy transformation in form of a spatial transmission, that does not change the types of energies, apart from losses, e.g. waste heat.",
+   "deprecated": false,
+   "kind": "class",
+   "label": "energy transfer",
+   "parents": [
+    "OEO_00020003"
    ]
   },
   "OEO_00020113": {
@@ -2584,6 +2809,18 @@
     "OEO_00020204"
    ]
   },
+  "OEO_00020248": {
+   "alt_labels": [
+    "exploratives Szenario"
+   ],
+   "definition": "An explorative scenario is a scenario that contains certain constraints / statements regarding measures that are taken in the near future / today to explore where these measures will lead to in a later future. The later future is not predefined in the scenario.",
+   "deprecated": false,
+   "kind": "class",
+   "label": "explorative scenario",
+   "parents": [
+    "OEO_00000364"
+   ]
+  },
   "OEO_00020255": {
    "alt_labels": [
     "RE share value"
@@ -2608,14 +2845,39 @@
     "OEO_00140127"
    ]
   },
-  "OEO_00020314": {
+  "OEO_00020309": {
    "alt_labels": [],
-   "definition": "A reference scenario is a scenario that is used as a reference, e.g. in a scenario comparison. It has the reference role.",
+   "definition": "A policy scenario is a scenario in which certain policy instruments or transformative measures and their impacts are assessed.",
    "deprecated": false,
    "kind": "class",
-   "label": "reference scenario",
+   "label": "policy scenario",
    "parents": [
-    "OEO_00000364"
+    "OEO_00020248"
+   ]
+  },
+  "OEO_00020311": {
+   "alt_labels": [
+    "WEM scenario",
+    "baseline scenario"
+   ],
+   "definition": "A with existing measures scenario (WEM) is a policy scenario that includes policy instruments and transformative measures that have been adopted and implemented.",
+   "deprecated": false,
+   "kind": "class",
+   "label": "with existing measures scenario",
+   "parents": [
+    "OEO_00020309"
+   ]
+  },
+  "OEO_00020352": {
+   "alt_labels": [
+    "Modell"
+   ],
+   "definition": "A model is a continuant to represent a system and its behaviours in a simplified or idealised way.",
+   "deprecated": false,
+   "kind": "class",
+   "label": "model",
+   "parents": [
+    "BFO_0000002"
    ]
   },
   "OEO_00020423": {
@@ -2626,16 +2888,6 @@
    "label": "relational quantity value",
    "parents": [
     "OEO_00000350"
-   ]
-  },
-  "OEO_00020440": {
-   "alt_labels": [],
-   "definition": "Has scenario year value is a relation between a scenario factsheet and a xsd:dateTime value.",
-   "deprecated": false,
-   "kind": "data_property",
-   "label": "has scenario year value",
-   "parents": [
-    "topDataProperty"
    ]
   },
   "OEO_00020494": {
@@ -2683,6 +2935,18 @@
     "BFO_0000141"
    ]
   },
+  "OEO_00030033": {
+   "alt_labels": [
+    "Zeitschritt"
+   ],
+   "definition": "A time step is a one-dimensional temporal region that has a start time and an ending time and thus a finite duration.",
+   "deprecated": false,
+   "kind": "class",
+   "label": "time step",
+   "parents": [
+    "BFO_0000038"
+   ]
+  },
   "OEO_00030035": {
    "alt_labels": [
     "Zeitspanne"
@@ -2723,10 +2987,16 @@
    "alt_labels": [],
    "definition": "A property that links a quantity value to a unit in which the quantity value has been expressed.",
    "deprecated": false,
+   "domain": [
+    "OEO_00000350"
+   ],
    "kind": "object_property",
    "label": "has unit",
    "parents": [
     "topObjectProperty"
+   ],
+   "range": [
+    "OEO_00010489"
    ]
   },
   "OEO_00050002": {
@@ -2946,10 +3216,18 @@
    "alt_labels": [],
    "definition": "A relation between an information content entity / model and a continuant, in which the continuant is somehow involved in the creation of the information content entity / model.",
    "deprecated": false,
+   "domain": [
+    "BFO_0000002",
+    "IAO_0000030",
+    "OEO_00020352"
+   ],
    "kind": "object_property",
    "label": "has contributor",
    "parents": [
     "topObjectProperty"
+   ],
+   "range": [
+    "BFO_0000002"
    ]
   },
   "OEO_00140012": {
@@ -3256,6 +3534,18 @@
     "OEO_00000331"
    ]
   },
+  "OEO_00140101": {
+   "alt_labels": [
+    "Wärmeübertragung"
+   ],
+   "definition": "Heat transfer is an energy transfer of thermal energy.",
+   "deprecated": false,
+   "kind": "class",
+   "label": "heat transfer",
+   "parents": [
+    "OEO_00020103"
+   ]
+  },
   "OEO_00140104": {
    "alt_labels": [],
    "definition": "Natural ambient thermal energy is ambient thermal energy that has a renewable origin.",
@@ -3369,11 +3659,15 @@
    "alt_labels": [],
    "definition": "Has number is a data property that links a quantity value to a number that defines the quantity value.",
    "deprecated": false,
+   "domain": [
+    "OEO_00000350"
+   ],
    "kind": "data_property",
    "label": "has number",
    "parents": [
     "topDataProperty"
-   ]
+   ],
+   "range": []
   },
   "OEO_00160007": {
    "alt_labels": [],
@@ -3828,11 +4122,13 @@
    "alt_labels": [],
    "definition": "A relation between a data item or data set and an aggregation type that indicates the method of data aggregation applied to the data set.",
    "deprecated": false,
+   "domain": [],
    "kind": "object_property",
    "label": "has aggregation type",
    "parents": [
     "topObjectProperty"
-   ]
+   ],
+   "range": []
   },
   "OEO_00400054": {
    "alt_labels": [

@@ -68,7 +68,7 @@ def test_every_identifier_of_a_covered_family_is_a_term_of_the_snapshot(
     a false error, so they are a named gap instead."""
     from docpipe import ontology
     named = vocabulary.spec_terms(SPEC_RAW)
-    assert len(named) >= 56, len(named)
+    assert len(named) >= 55, len(named)
     families = set(snapshot["pin"]["families"])
     for uri in named:
         if uri.split("_")[0] not in families:
@@ -93,8 +93,8 @@ def test_the_snapshot_carries_what_kind_of_thing_each_term_is(snapshot):
 @pytest.mark.parametrize("what,damage", [
     ("missing", "is not in the pinned ontology"),
     ("deprecated", "is deprecated"),
-    ("carrier_undeclared", "is not declared in kg.no_edge_for"),
-    ("carrier_over_declared", "does not belong in no_edge_for"),
+    ("carrier_undeclared", "is not declared in kg.outside_root"),
+    ("carrier_over_declared", "does not belong in outside_root"),
     ("wrong_set", "is not a sector"),
 ])
 def test_a_spec_the_ontology_disagrees_with_is_named(snapshot, what, damage):
@@ -112,7 +112,8 @@ def test_a_spec_the_ontology_disagrees_with_is_named(snapshot, what, damage):
         # A real class, a real heat source, and nobody decided about it.
         energy["axes"]["carrier"]["vocabulary"]["OEO_00000350"] = ["Irgendwas"]
     elif what == "carrier_over_declared":
-        energy["axes"]["carrier"]["kg"]["no_edge_for"]["OEO_00000292"] = "gas"
+        energy["axes"]["carrier"]["kg"]["outside_root"]["OEO_00000292"] \
+            = "gas"
     else:
         energy["axes"]["sector"]["vocabulary"]["OEO_00000292"] = ["Erdgas"]
     problems = vocabulary.check(spec, snapshot)

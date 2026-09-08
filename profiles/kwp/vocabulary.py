@@ -77,14 +77,14 @@ def carrier_problems(spec_raw: dict, snapshot: dict) -> list:
     the declared ones. Undeclared is the drift this exists to catch: a carrier
     that is not one and nobody decided.
 
-    Stays in the profile because `no_edge_for` is this profile's answer to a
+    Stays in the profile because `outside_root` is this profile's answer to a
     question the other one does not have.
     """
     terms, sets = snapshot["terms"], snapshot["sets"]
     problems: list = []
     for parameter in spec_raw.get("parameters", []):
         carrier = (parameter.get("axes") or {}).get("carrier") or {}
-        declared = set((carrier.get("kg") or {}).get("no_edge_for") or {})
+        declared = set((carrier.get("kg") or {}).get("outside_root") or {})
         allowed = set(sets.get("energy_carrier") or ())
         for uri in (carrier.get("vocabulary") or {}):
             name = ontology.identifier(uri)
@@ -92,20 +92,32 @@ def carrier_problems(spec_raw: dict, snapshot: dict) -> list:
                 if uri in declared:
                     problems.append(
                         f"{parameter.get('uri')}.carrier: {uri} IS an energy "
-                        f"carrier and does not belong in no_edge_for")
+                        f"carrier and does not belong in outside_root")
                 continue
             if uri not in declared:
                 label = (terms.get(name) or {}).get("label", "?")
                 problems.append(
                     f"{parameter.get('uri')}.carrier: {uri} ({label}) is not "
-                    f"an energy carrier and is not declared in kg.no_edge_for")
+                    f"an energy carrier and is not declared in kg.outside_root")
     return problems
+
+
+def edges(spec_raw: dict) -> list:
+    """Every triple shape this profile emits, the spec's and the writer's.
+
+    The `kg` blocks carry most of them and `kg.py` declares the handful that
+    sit behind no parameter, so the two together are the whole output and the
+    pin can be asked about all of it.
+    """
+    from profiles.kwp import kg          # here: kg reads the spec at import
+    return list(ontology.spec_edges(spec_raw)) + list(kg.EDGES)
 
 
 def check(spec_raw: dict, snapshot: dict) -> list:
     """Every complaint the pinned ontology has about this spec."""
     return (ontology.term_problems(spec_raw, snapshot)
             + ontology.kind_problems(spec_raw, snapshot)
+            + ontology.edge_problems(edges(spec_raw), snapshot)
             + carrier_problems(spec_raw, snapshot)
             + ontology.set_problems(spec_raw, snapshot, AXIS_SETS))
 

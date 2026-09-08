@@ -227,7 +227,10 @@
             "OEO_00000074": {
               "label": "Biogas",
               "spellings": [
-                "aufbereitetes Biogas"
+                "aufbereitetes Biogas",
+                "Klärgas",
+                "Faulgas",
+                "Klärschlammgas"
               ]
             },
             "OEO_00000388": {
@@ -286,29 +289,37 @@
               "definition": "A municipal waste fuel is waste fuel produced by households or non-industrial commercial activities."
             },
             "OEO_00000356": {
-              "label": "Biogut",
+              "label": "biogener Siedlungsabfall",
               "spellings": [
+                "Biogut",
                 "Gartenabfälle",
                 "Grünschnitt"
               ],
               "definition": "A biogenic municipal waste fuel is a municipal waste fuel that has a biogenic origin."
             },
             "OEO_00000439": {
-              "label": "Klärschlamm",
-              "spellings": [],
+              "label": "Abfallbrennstoff",
+              "spellings": [
+                "Klärschlamm",
+                "EBS"
+              ],
               "definition": "A waste fuel is a fuel in which the material entity is waste."
             },
             "OEO_00020495": {
-              "label": "tierische Exkremente",
+              "label": "landwirtschaftlicher Abfallbrennstoff",
               "spellings": [
-                "Schlachtreste"
+                "tierische Exkremente",
+                "Gülle",
+                "Mist"
               ],
               "definition": "An angricultural waste fuel is waste fuel produced by agriculture."
             },
             "OEO_00010155": {
-              "label": "grüne Gase",
+              "label": "synthetische Gase",
               "spellings": [
-                "synthetische Gase"
+                "grüne Gase",
+                "E-Gas",
+                "SNG"
               ]
             },
             "OEO_00000191": {
@@ -341,15 +352,18 @@
               "definition": "Ambient thermal energy is thermal energy that is stored in the ambient air, beneath the surface of solid earth or in surface water. It is captured by heat pumps."
             },
             "OEO_00140105": {
-              "label": "Abwasserwärme",
+              "label": "anthropogene Umweltwärme",
               "spellings": [
-                "Abwasser"
+                "Abwasserwärme",
+                "Abwasser",
+                "Abwasserwärmenutzung"
               ],
               "definition": "Artificial ambient thermal energy is ambient thermal energy that has an anthropogenic origin."
             },
             "OEO_00140104": {
-              "label": "Oberflächengewässer",
+              "label": "natürliche Umweltwärme",
               "spellings": [
+                "Oberflächengewässer",
                 "Seethermie",
                 "Flusswärme"
               ],
@@ -375,16 +389,26 @@
                 "Rest"
               ],
               "definition": "Etwas, das keiner der übrigen Einträge dieser Liste ist."
+            },
+            "OEO_00010223": {
+              "label": "biogener Abfallbrennstoff",
+              "spellings": [
+                "Altholz",
+                "Altholzheizung",
+                "biogene Abfälle"
+              ],
+              "definition": "A biogenic waste fuel is a waste fuel that has a biogenic origin."
             }
           },
           "question": "Welcher Energieträger? Die Bezeichnung steht in der Zeilenbeschriftung, im Spaltenkopf oder in der Blocküberschrift, fast nie in der Schreibweise der Klassenliste: \"Gas H\" und \"Erdgas (netzgebunden)\" meinen die Klasse Erdgas, \"Nahwärme\" und \"Wärmenetz\" die Klasse Fernwärme. Eine Summenzeile (\"Summe\", \"Gesamt\", \"alle Energieträger\") ist \"out:total\", eine Restposition (\"Sonstige\", \"Andere\") ist \"out:other\". Passt fachlich weder eine Klasse noch einer dieser Einträge, etwa weil in der Spalte ein Gebäudetyp steht, dann lass die Zeile weg.",
           "evidence": "own",
           "kg": {
             "role": "edge",
-            "predicate": "OEO_00000523",
-            "label": "covers energy carrier",
-            "note": "Object is an OEO class (punning). Nine of the offered classes are not under energy carrier in OEO -- district heat, electricity, solar thermal, geothermal and the ambient heat sources -- and for those the value keeps its node and loses only the edge. Naming them at all is the point: without the classes the model mapped 36 of them onto solar thermal energy, a wrong triple rather than a missing one.",
-            "no_edge_for": {
+            "predicate": "IAO_0000136",
+            "label": "is about",
+            "note": "Object is an OEO class (punning). `is about` (obo:IAO_0000136), whose domain is information content entity and which our value classes are under. NOT oeo:OEO_00000523 covers energy carrier / oeo:OEO_00000505 covers sector: both are domained on oeo:OEO_00020011 study, an occurrent, while every quantity value is a continuant, and the pin asserts obo:BFO_0000002 disjointWith obo:BFO_0000003 -- so those two edges made the whole graph unsatisfiable. Nothing in the pinned release both ranges over carrier or sector and accepts a value as its subject; `is about` is what OEO itself writes on this class (OEO_00240019, the parent of OEO_00050016, carries two of them). The role of an object is read from its own class: energy carrier is under BFO_0000040 and sector under BFO_0000031, and those two are disjoint, so carrier and sector stay apart. `outside_root` names the nine classes the plans write in the carrier column that OEO does not place under energy carrier -- district heat, electricity, solar thermal, geothermal and the ambient heat sources. They used to lose this edge, because `covers energy carrier` ranges over energy carrier and asserting them would have contradicted the TBox; `is about` declares no range, so they keep it and only the count remains, as the argument for the axioms the ontology side is adding.",
+            "prefix": "obo",
+            "outside_root": {
               "OEO_00000132": "district heating",
               "OEO_00000139": "electrical energy",
               "OEO_00000388": "solar thermal energy",
@@ -394,8 +418,7 @@
               "OEO_00000056": "ambient heat",
               "OEO_00140105": "waste water heat",
               "OEO_00140104": "surface water heat"
-            },
-            "prefix": "oeo"
+            }
           }
         },
         "sector": {
@@ -462,10 +485,10 @@
           "evidence": "own",
           "kg": {
             "role": "edge",
-            "predicate": "OEO_00000505",
-            "label": "covers sector",
-            "note": "Object is an OEO sector class.",
-            "prefix": "oeo"
+            "predicate": "IAO_0000136",
+            "label": "is about",
+            "note": "Object is an OEO sector class. `is about` (obo:IAO_0000136), whose domain is information content entity and which our value classes are under. NOT oeo:OEO_00000523 covers energy carrier / oeo:OEO_00000505 covers sector: both are domained on oeo:OEO_00020011 study, an occurrent, while every quantity value is a continuant, and the pin asserts obo:BFO_0000002 disjointWith obo:BFO_0000003 -- so those two edges made the whole graph unsatisfiable. Nothing in the pinned release both ranges over carrier or sector and accepts a value as its subject; `is about` is what OEO itself writes on this class (OEO_00240019, the parent of OEO_00050016, carries two of them). The role of an object is read from its own class: energy carrier is under BFO_0000040 and sector under BFO_0000031, and those two are disjoint, so carrier and sector stay apart.",
+            "prefix": "obo"
           }
         },
         "year": {
@@ -474,11 +497,11 @@
           "evidence": "local",
           "kg": {
             "role": "edge",
-            "predicate": "OEO_00020440",
-            "label": "has scenario year value",
-            "datatype": "xsd:integer",
-            "note": "The calendar year the aggregation is integrated over, not a label. A unit without a per-year marker carries the flag period:annual_in_quote or period:unstated.",
-            "prefix": "oeo"
+            "predicate": "IAO_0000136",
+            "label": "is about",
+            "note": "The calendar year the aggregation is integrated over, as a node and no longer as a literal. A unit without a per-year marker carries the flag period:annual_in_quote or period:unstated. It was oeo:OEO_00020440 has scenario year value, which is wrong twice: its domain is oeo:OEO_00000365 scenario factsheet, so every value node was typed a factsheet and through it a document, and its declared range is xsd:dateTime while we wrote xsd:integer, which is an ill-typed literal. The pinned release has NO property at all whose domain a quantity value satisfies and whose range is a time, so the year becomes an object: `is about` a node of oeo:OEO_00030033 time step, \"a one-dimensional temporal region that has a start time and an ending time\". oeo:OEO_00020097 scenario year would be the narrower class and is not used, because it is defined as part of a scenario horizon and the inventory years are not. Cost, stated: the number 2030 is no longer a literal a reasoner can compare -- it is the node's IRI, its label, and part of the value's own identity. The term request is a property from quantity value to temporal region, and a way to write a year onto one.",
+            "prefix": "obo",
+            "object_class": "OEO_00030033"
           }
         },
         "scenario": {
@@ -540,7 +563,8 @@
                 "class": "MHPO_00020005"
               },
               "trend": {
-                "class": "OEO_00020314"
+                "class": "OEO_00020311",
+                "note": "with existing measures scenario. Not OEO_00020314 reference scenario: that one is defined by a ROLE (`scenario and has role some reference role`) and carries no content, so it says a scenario was used as a comparison and not what it assumes. A Trendszenario is the continuation under the measures already decided, which is what WEM means."
               },
               "out:variant": {
                 "note": "not serialized"
@@ -589,7 +613,7 @@
                 "note": "the plan's own area, minted from the AGS"
               },
               "sub_area": {
-                "class": "MHPO_00020018",
+                "class": "MHPO_00020019",
                 "linked_by": {
                   "node": "municipality",
                   "prefix": "obo",
@@ -950,7 +974,10 @@
             "OEO_00000074": {
               "label": "Biogas",
               "spellings": [
-                "aufbereitetes Biogas"
+                "aufbereitetes Biogas",
+                "Klärgas",
+                "Faulgas",
+                "Klärschlammgas"
               ]
             },
             "OEO_00000388": {
@@ -1009,29 +1036,37 @@
               "definition": "A municipal waste fuel is waste fuel produced by households or non-industrial commercial activities."
             },
             "OEO_00000356": {
-              "label": "Biogut",
+              "label": "biogener Siedlungsabfall",
               "spellings": [
+                "Biogut",
                 "Gartenabfälle",
                 "Grünschnitt"
               ],
               "definition": "A biogenic municipal waste fuel is a municipal waste fuel that has a biogenic origin."
             },
             "OEO_00000439": {
-              "label": "Klärschlamm",
-              "spellings": [],
+              "label": "Abfallbrennstoff",
+              "spellings": [
+                "Klärschlamm",
+                "EBS"
+              ],
               "definition": "A waste fuel is a fuel in which the material entity is waste."
             },
             "OEO_00020495": {
-              "label": "tierische Exkremente",
+              "label": "landwirtschaftlicher Abfallbrennstoff",
               "spellings": [
-                "Schlachtreste"
+                "tierische Exkremente",
+                "Gülle",
+                "Mist"
               ],
               "definition": "An angricultural waste fuel is waste fuel produced by agriculture."
             },
             "OEO_00010155": {
-              "label": "grüne Gase",
+              "label": "synthetische Gase",
               "spellings": [
-                "synthetische Gase"
+                "grüne Gase",
+                "E-Gas",
+                "SNG"
               ]
             },
             "OEO_00000191": {
@@ -1064,15 +1099,18 @@
               "definition": "Ambient thermal energy is thermal energy that is stored in the ambient air, beneath the surface of solid earth or in surface water. It is captured by heat pumps."
             },
             "OEO_00140105": {
-              "label": "Abwasserwärme",
+              "label": "anthropogene Umweltwärme",
               "spellings": [
-                "Abwasser"
+                "Abwasserwärme",
+                "Abwasser",
+                "Abwasserwärmenutzung"
               ],
               "definition": "Artificial ambient thermal energy is ambient thermal energy that has an anthropogenic origin."
             },
             "OEO_00140104": {
-              "label": "Oberflächengewässer",
+              "label": "natürliche Umweltwärme",
               "spellings": [
+                "Oberflächengewässer",
                 "Seethermie",
                 "Flusswärme"
               ],
@@ -1098,16 +1136,26 @@
                 "Rest"
               ],
               "definition": "Etwas, das keiner der übrigen Einträge dieser Liste ist."
+            },
+            "OEO_00010223": {
+              "label": "biogener Abfallbrennstoff",
+              "spellings": [
+                "Altholz",
+                "Altholzheizung",
+                "biogene Abfälle"
+              ],
+              "definition": "A biogenic waste fuel is a waste fuel that has a biogenic origin."
             }
           },
           "question": "Welcher Energieträger? Die Bezeichnung steht in der Zeilenbeschriftung, im Spaltenkopf oder in der Blocküberschrift, fast nie in der Schreibweise der Klassenliste: \"Gas H\" und \"Erdgas (netzgebunden)\" meinen die Klasse Erdgas, \"Nahwärme\" und \"Wärmenetz\" die Klasse Fernwärme. Eine Summenzeile (\"Summe\", \"Gesamt\", \"alle Energieträger\") ist \"out:total\", eine Restposition (\"Sonstige\", \"Andere\") ist \"out:other\". Passt fachlich weder eine Klasse noch einer dieser Einträge, etwa weil in der Spalte ein Gebäudetyp steht, dann lass die Zeile weg.",
           "evidence": "own",
           "kg": {
             "role": "edge",
-            "predicate": "OEO_00000523",
-            "label": "covers energy carrier",
-            "note": "Object is an OEO class (punning). Nine of the offered classes are not under energy carrier in OEO -- district heat, electricity, solar thermal, geothermal and the ambient heat sources -- and for those the value keeps its node and loses only the edge. Naming them at all is the point: without the classes the model mapped 36 of them onto solar thermal energy, a wrong triple rather than a missing one.",
-            "no_edge_for": {
+            "predicate": "IAO_0000136",
+            "label": "is about",
+            "note": "Object is an OEO class (punning). `is about` (obo:IAO_0000136), whose domain is information content entity and which our value classes are under. NOT oeo:OEO_00000523 covers energy carrier / oeo:OEO_00000505 covers sector: both are domained on oeo:OEO_00020011 study, an occurrent, while every quantity value is a continuant, and the pin asserts obo:BFO_0000002 disjointWith obo:BFO_0000003 -- so those two edges made the whole graph unsatisfiable. Nothing in the pinned release both ranges over carrier or sector and accepts a value as its subject; `is about` is what OEO itself writes on this class (OEO_00240019, the parent of OEO_00050016, carries two of them). The role of an object is read from its own class: energy carrier is under BFO_0000040 and sector under BFO_0000031, and those two are disjoint, so carrier and sector stay apart. `outside_root` names the nine classes the plans write in the carrier column that OEO does not place under energy carrier -- district heat, electricity, solar thermal, geothermal and the ambient heat sources. They used to lose this edge, because `covers energy carrier` ranges over energy carrier and asserting them would have contradicted the TBox; `is about` declares no range, so they keep it and only the count remains, as the argument for the axioms the ontology side is adding.",
+            "prefix": "obo",
+            "outside_root": {
               "OEO_00000132": "district heating",
               "OEO_00000139": "electrical energy",
               "OEO_00000388": "solar thermal energy",
@@ -1117,8 +1165,7 @@
               "OEO_00000056": "ambient heat",
               "OEO_00140105": "waste water heat",
               "OEO_00140104": "surface water heat"
-            },
-            "prefix": "oeo"
+            }
           }
         },
         "sector": {
@@ -1185,10 +1232,10 @@
           "evidence": "own",
           "kg": {
             "role": "edge",
-            "predicate": "OEO_00000505",
-            "label": "covers sector",
-            "note": "Object is an OEO sector class.",
-            "prefix": "oeo"
+            "predicate": "IAO_0000136",
+            "label": "is about",
+            "note": "Object is an OEO sector class. `is about` (obo:IAO_0000136), whose domain is information content entity and which our value classes are under. NOT oeo:OEO_00000523 covers energy carrier / oeo:OEO_00000505 covers sector: both are domained on oeo:OEO_00020011 study, an occurrent, while every quantity value is a continuant, and the pin asserts obo:BFO_0000002 disjointWith obo:BFO_0000003 -- so those two edges made the whole graph unsatisfiable. Nothing in the pinned release both ranges over carrier or sector and accepts a value as its subject; `is about` is what OEO itself writes on this class (OEO_00240019, the parent of OEO_00050016, carries two of them). The role of an object is read from its own class: energy carrier is under BFO_0000040 and sector under BFO_0000031, and those two are disjoint, so carrier and sector stay apart.",
+            "prefix": "obo"
           }
         },
         "year": {
@@ -1197,11 +1244,11 @@
           "evidence": "local",
           "kg": {
             "role": "edge",
-            "predicate": "OEO_00020440",
-            "label": "has scenario year value",
-            "datatype": "xsd:integer",
-            "note": "The calendar year the aggregation is integrated over, not a label. A unit without a per-year marker carries the flag period:annual_in_quote or period:unstated.",
-            "prefix": "oeo"
+            "predicate": "IAO_0000136",
+            "label": "is about",
+            "note": "The calendar year the aggregation is integrated over, as a node and no longer as a literal. A unit without a per-year marker carries the flag period:annual_in_quote or period:unstated. It was oeo:OEO_00020440 has scenario year value, which is wrong twice: its domain is oeo:OEO_00000365 scenario factsheet, so every value node was typed a factsheet and through it a document, and its declared range is xsd:dateTime while we wrote xsd:integer, which is an ill-typed literal. The pinned release has NO property at all whose domain a quantity value satisfies and whose range is a time, so the year becomes an object: `is about` a node of oeo:OEO_00030033 time step, \"a one-dimensional temporal region that has a start time and an ending time\". oeo:OEO_00020097 scenario year would be the narrower class and is not used, because it is defined as part of a scenario horizon and the inventory years are not. Cost, stated: the number 2030 is no longer a literal a reasoner can compare -- it is the node's IRI, its label, and part of the value's own identity. The term request is a property from quantity value to temporal region, and a way to write a year onto one.",
+            "prefix": "obo",
+            "object_class": "OEO_00030033"
           }
         },
         "scenario": {
@@ -1263,7 +1310,8 @@
                 "class": "MHPO_00020005"
               },
               "trend": {
-                "class": "OEO_00020314"
+                "class": "OEO_00020311",
+                "note": "with existing measures scenario. Not OEO_00020314 reference scenario: that one is defined by a ROLE (`scenario and has role some reference role`) and carries no content, so it says a scenario was used as a comparison and not what it assumes. A Trendszenario is the continuation under the measures already decided, which is what WEM means."
               },
               "out:variant": {
                 "note": "not serialized"
@@ -1312,7 +1360,7 @@
                 "note": "the plan's own area, minted from the AGS"
               },
               "sub_area": {
-                "class": "MHPO_00020018",
+                "class": "MHPO_00020019",
                 "linked_by": {
                   "node": "municipality",
                   "prefix": "obo",

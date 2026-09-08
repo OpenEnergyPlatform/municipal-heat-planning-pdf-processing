@@ -1404,7 +1404,11 @@ def test_the_request_tells_each_row_which_source_is_its_own():
     ("Erdgas", "Erdgas (H-Gas)", True),         # among other words
     ("Erdgas", "Flüssiggas", False),            # "gas" inside a compound
     ("Erdgas", "Heizöl", False),                # another class' spelling
-    ("Biogas", "Klärgas", False),               # Kassel: 29 such readings
+    # False until the carrier list held "Klärgas" as a spelling of biogas.
+    # The pin decides it: biogas is defined as "produced by anaerobic
+    # digestion", and natural gas carries a comment excluding exactly these
+    # gases from itself. The 29 Kassel readings were right all along.
+    ("Biogas", "Klärgas", True),
     ("Holz", "Holzige Festbrennstoffe", False),  # Kassel: 17
     ("biogener Festbrennstoff", "sonstige biogene Festbrennstoffe", True),
     # The label is in there as a whole word, and it is still not a wording:
@@ -1415,8 +1419,10 @@ def test_the_request_tells_each_row_which_source_is_its_own():
 def test_a_wording_either_names_the_class_it_was_mapped_to_or_it_does_not(
         given, wording, names):
     """field.md rule 2 says the wording is what the mapping is checked
-    against. Until now nothing checked it, so a reply could answer "Biogas"
-    with the wording "Klärgas" and the quote would verify."""
+    against. Until now nothing checked it, so a reply could answer "Holz"
+    with the wording "Holzige Festbrennstoffe" and the quote would verify.
+    A wording that IS a listed spelling names its option: which words those
+    are is the spec's to say, and the pinned ontology's to justify."""
     from docpipe.extraction.pipeline import wording_names_option
     spec = load_spec(json.loads(
         (PROFILES / "kwp" / "extraction_spec.json").read_text(encoding="utf-8")))
