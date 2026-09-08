@@ -2,8 +2,10 @@
 database.py – Insert sections/tables/images from merged data, and write FAISS
 embedding IDs back. Documents themselves are populated by fileprocessing.
 
-The DB (schema: data/KWP.db.sql) is the source of truth for what has been
-embedded and for FAISS id allocation.
+The DB is the source of truth for what has been embedded and for FAISS id
+allocation. Its schema lives in the file itself (`sqlite3 KWP.db .schema`):
+the checked-in copy is gone, because nothing read it and a second copy of a
+schema with no check against the first one only tells you what was true once.
 
 Author: Felix Vossel
 """
