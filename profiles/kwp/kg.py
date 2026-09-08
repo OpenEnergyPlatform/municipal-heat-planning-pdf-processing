@@ -43,6 +43,22 @@ PREFIXES = """\
 @prefix mhpo:  <https://purl.org/mhpo/ontology/> .
 @prefix oeo:   <https://openenergyplatform.org/ontology/oeo/> .
 """
+# The same header as a dict, so a qualified name can be expanded to the IRI
+# the graph holds it under. Parsed out of PREFIXES rather than typed twice.
+PREFIX_IRI = dict(re.findall(r"@prefix\s+(\w+):\s+<([^>]+)>", PREFIXES))
+
+
+def expand(name: str) -> str:
+    """`mhpo:MHPO_00020007` -> the full IRI, from the header this graph writes.
+
+    Two of the three plan parts are mhpo: and one is oeo:, so a query that
+    assumed one namespace would bind IRIs no graph holds and return nothing,
+    silently. An unbound prefix raises rather than defaults.
+    """
+    prefix, _, local = str(name).partition(":")
+    if not local or prefix not in PREFIX_IRI:
+        raise KeyError(f"{name!r} is bound to no prefix of PREFIXES")
+    return PREFIX_IRI[prefix] + local
 
 # Nine classes the plans name in their carrier column are NOT under
 # `energy carrier` (OEO_00020039) in OEO -- district heating is a grid-bound
@@ -219,7 +235,8 @@ P_AGGREGATION = _predicate("aggregation")       # oeo: has aggregation type
 # harvest row records: `local` is a statement about pages and `any` is no
 # restriction. Judging all seven by the strictest rule marked every legal
 # reading as a doubt, which is a warning that fires on the whole corpus.
-OWN_EVIDENCE = own_evidence(load_spec(_SPEC))
+SPEC = load_spec(_SPEC)
+OWN_EVIDENCE = own_evidence(SPEC)
 
 # Which part of a heat plan a value hangs under, by the scenario it belongs
 # to. The law names three of them and MHPO asserts the has-part edges for
@@ -411,6 +428,27 @@ def _document_identity(db_path: Path, name: str):
     return ags.zfill(8), published, (meta[1] if meta else None), transcribed
 
 
+def plan_iri(ags: str, published: str) -> str:
+    """Tier 2: the plan's register key and its full publication date."""
+    return f"{BASE}heatplan/AGS_{ags}_{published}"
+
+
+def heatplan_iri(db_path: Path, name: str) -> Optional[str]:
+    """The plan node the serializer mints for this document, or None.
+
+    One minting site for the graph and for whoever asks it. The app was one
+    f-string away from building its own, and `_iso_date` is exactly where a
+    second copy diverges: ingest stores YYYYMMDD, the policy wants
+    YYYY-MM-DD, and that mismatch once produced an empty graph with every
+    test green.
+    """
+    identity = _document_identity(db_path, name)
+    if identity is None:
+        return None
+    ags, published, _municipality, _transcribed = identity
+    return plan_iri(ags, published)
+
+
 def _value_iri(heatplan: str, row: dict) -> str:
     # mint_slice.py's coordinate list plus the sector and the sub-area (see
     # module docstring); absent coordinates are empty segments so the arity
@@ -572,9 +610,12 @@ def make_serializer(db_path: Path):
                 # No aggregation, no node. It used to become a year's sum by
                 # default, which is a claim about the value that nothing in
                 # the document made: a peak load written down as an annual
-                # total is wrong in a way no reader can see. Every accepted
-                # unit of both parameters now derives `integral` in the
-                # harvest, so this is the row the derivation could not reach.
+                # total is wrong in a way no reader can see. The two amount
+                # parameters derive `integral` from the unit, so a miss there
+                # is the row the derivation could not reach. `heat_load` asks
+                # instead -- a watt is not integrated over a span -- so this
+                # counter is dominated by power rows whose source never
+                # worded the aggregation.
                 skip("aggregation_missing")
             elif row["aggregation"] not in AGGREGATIONS:
                 skip(f"aggregation:{row['aggregation']}")
@@ -597,7 +638,7 @@ def make_serializer(db_path: Path):
                       "%d tuple(s) refused (stale duplicate harvest?)",
                       name, ags, published, owner, len(kept))
             return None
-        heatplan = f"{BASE}heatplan/AGS_{ags}_{published}"
+        heatplan = plan_iri(ags, published)
         part_iri = {key: f"{BASE}{segment}/AGS_{ags}_{published}"
                     for key, (_cls, segment, _label) in PARTS.items()}
         municipality_iri = f"{BASE}municipality/AGS_{ags}"
@@ -737,3 +778,103 @@ def make_serializer(db_path: Path):
         return "\n".join(parts)
 
     return serializer
+
+
+# --- Asking the graph -------------------------------------------------------
+#
+# The coordinates a question can fix, in the order the spec asks them. Two
+# real axes are deliberately absent. `spatial_scope` enters a value's identity,
+# but the graph has no edge from a value to its area (TERM REQUEST 1 in the
+# schema), so there is nothing to filter on: a sub-area value and the
+# municipality's come back in one list. `aggregation` is returned rather than
+# constrained, so a peak load and an annual total sit in one list with the
+# label telling them apart.
+COORDINATE_AXES = ("scenario", "quantity", "carrier", "sector", "year")
+
+# The query, over the same constants the serializer writes with, so the two
+# cannot drift. Carrier, sector and year all ride `is about`; the year is told
+# apart by the class of the node it points at, and without that exclusion the
+# year node comes back as a carrier. Measured: it does.
+VALUE_QUERY = "\n".join(
+    [f"PREFIX {prefix}: <{iri}>" for prefix, iri in PREFIX_IRI.items()]
+    + [f"""
+SELECT ?value ?quantity ?number ?unit ?year ?aggregation ?part ?partLabel
+       (GROUP_CONCAT(DISTINCT STR(?about); separator=" ") AS ?abouts)
+WHERE {{
+  ?plan  {P_HAS_PART} ?part .
+  ?part  a ?partClass ;
+         rdfs:label ?partLabel ;
+         {P_HAS_QUANTITY_VALUE} ?value .
+  ?value a ?quantity ;
+         {P_NUMBER} ?number ;
+         {P_UNIT} ?unit ;
+         {P_AGGREGATION} ?aggregation ;
+         {P_YEAR} ?yearNode .
+  ?yearNode a {CLS_YEAR} ;
+            rdfs:label ?year .
+  OPTIONAL {{ ?value {P_CARRIER} ?about .
+             FILTER NOT EXISTS {{ ?about a {CLS_YEAR} }} }}
+  FILTER (?plan = ?PLAN)
+##CONSTRAINTS##
+}}
+GROUP BY ?value ?quantity ?number ?unit ?year ?aggregation ?part ?partLabel
+ORDER BY ?year ?number"""])
+
+
+def value_bindings(coordinates: dict) -> tuple:
+    """(constraint lines for ##CONSTRAINTS##, {variable: (kind, value)}).
+
+    An unbound axis adds no line, which is why the constraints are text and
+    not initBindings alone. The kinds are plain strings ("iri", "literal") so
+    this module stays rdflib-free; the core wraps them. Gates: a quantity the
+    graph does not hold and any `out:` entry are dropped here, because
+    `oeo:out:potential` is an IRI that does not exist.
+    """
+    lines, bindings = [], {}
+    scenario = coordinates.get("scenario")
+    if scenario in PARTS:
+        lines.append("  FILTER (?partClass = ?PART)")
+        bindings["PART"] = ("iri", expand(PARTS[scenario][0]))
+    quantity = coordinates.get("quantity")
+    if quantity in UNIT_TARGET:
+        lines.append("  FILTER (?quantity = ?QUANTITY)")
+        bindings["QUANTITY"] = ("iri", OEO + quantity)
+    year = coordinates.get("year")
+    if isinstance(year, int):
+        # Untyped: the year node's label is written as a plain string.
+        lines.append("  FILTER (?year = ?YEAR)")
+        bindings["YEAR"] = ("literal", str(year))
+    for axis, variable in (("carrier", "CARRIER"), ("sector", "SECTOR")):
+        uri = coordinates.get(axis)
+        if uri and is_class(uri):
+            lines.append(f"  ?value {P_CARRIER} ?{variable} .")
+            bindings[variable] = ("iri", OEO + uri)
+    return "\n".join(lines), bindings
+
+
+def _first_spelling(entry) -> Optional[str]:
+    if isinstance(entry, dict):
+        return entry.get("label") or next(iter(entry.get("spellings") or []), None)
+    if isinstance(entry, (list, tuple)) and entry:
+        return entry[0]
+    return None
+
+
+def label_of(identifier: str) -> str:
+    """What a reader calls a class: the spec's first spelling for it, else
+    the pinned vocabulary's label, else the identifier itself.
+
+    Takes the full IRI the query returns, a qualified name or a bare id, so
+    the display never carries a second table of German words.
+    """
+    text = str(identifier or "")
+    bare = text[len(OEO):] if text.startswith(OEO) else _bare(text)
+    for par in _SPEC["parameters"]:
+        for axis in (par.get("axes") or {}).values():
+            spelling = _first_spelling((axis.get("vocabulary") or {}).get(bare))
+            if spelling:
+                return spelling
+    from profiles.kwp import vocabulary
+    term = vocabulary.load()["terms"].get(bare) or {}
+    return term.get("label") or bare
+

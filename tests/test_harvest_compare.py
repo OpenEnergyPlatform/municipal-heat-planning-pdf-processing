@@ -33,7 +33,8 @@ def test_a_trace_is_not_a_document(tmp_path):
     files = sorted(p for p in tmp_path.glob("*.jsonl")
                    if not p.name.endswith(".trace.jsonl"))
     assert [p.stem for p in files] == ["plan_a"]
-    tuples, refusals, summary = hc.read_harvest(tmp_path / "plan_a.jsonl")
+    tuples, refusals, summary, _states = hc.read_harvest(
+        tmp_path / "plan_a.jsonl")
     assert len(tuples) == 1 and len(refusals) == 1 and summary is None
 
 
@@ -92,17 +93,45 @@ def test_the_summary_line_is_neither_a_tuple_nor_a_refusal(tmp_path):
         {"kind": "summary", "document_id": 7, "tuples": 1, "refusals": 1,
          "levels": {"A": 0, "B": 1, "C": 0}, "reasons": {}, "image_origin": 1},
     ])
-    tuples, refusals, summary = hc.read_harvest(tmp_path / "plan_a.jsonl")
+    tuples, refusals, summary, _states = hc.read_harvest(
+        tmp_path / "plan_a.jsonl")
     assert len(tuples) == 1
     assert len(refusals) == 1, "the summary is not one of them"
     assert summary["levels"] == {"A": 0, "B": 1, "C": 0}
+
+
+def test_a_parameter_state_is_neither_a_tuple_nor_a_refusal(tmp_path):
+    """There is one per parameter of the spec, so an `else` that swept them
+    into the refusals would report fourteen model errors per ar6 document
+    that nobody made, and the refusal share is one of the numbers the repair
+    is judged on."""
+    _write(tmp_path / "plan_b.jsonl", [
+        {"kind": "tuple", "value": 1},
+        {"kind": "refusal", "reason": "x"},
+        {"kind": "parameter_state", "document_id": 7,
+         "parameter": "planning_organisation", "state": "unstated",
+         "tuples": 0, "refusals": 0},
+        {"kind": "parameter_state", "document_id": 7,
+         "parameter": "emission", "state": "exhausted",
+         "tuples": 0, "refusals": 0},
+        {"kind": "summary", "document_id": 7, "tuples": 1, "refusals": 1,
+         "levels": {"A": 0, "B": 1, "C": 0}, "reasons": {}, "image_origin": 1},
+    ])
+    tuples, refusals, summary, states = hc.read_harvest(
+        tmp_path / "plan_b.jsonl")
+    assert len(tuples) == 1
+    assert len(refusals) == 1, "the two parameter states are not refusals"
+    assert summary["tuples"] == 1
+    assert [s["parameter"] for s in states] == ["planning_organisation",
+                                                "emission"]
 
 
 def test_a_harvest_without_a_summary_still_reads(tmp_path):
     """Every file written before the summary existed, and the report has to
     read those too: this script is how an old run is compared to a new one."""
     _write(tmp_path / "old.jsonl", [{"kind": "tuple", "value": 1}])
-    tuples, refusals, summary = hc.read_harvest(tmp_path / "old.jsonl")
+    tuples, refusals, summary, _states = hc.read_harvest(
+        tmp_path / "old.jsonl")
     assert tuples and not refusals and summary is None
 
 

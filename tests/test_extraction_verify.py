@@ -467,3 +467,38 @@ def test_a_bare_amount_says_whether_its_quote_makes_it_a_yearly_one():
     # A unit that says it itself needs no flag at all.
     stated = verify_tuple(_claim(), _parameter(), SOURCE)
     assert not [f for f in stated.flags if f.startswith("period:")]
+
+def test_a_power_carries_no_period_flag():
+    """The period flag says the plan failed to state what span an amount is
+    integrated over. A power is not integrated over anything, so on a power
+    parameter the flag would fire on every row and separate nothing -- and it
+    is read off every flag distribution the reports are built from. Off by
+    the spec's own word, and only there: the two amount parameters keep it,
+    because for them it is the only record that a bare GWh carried no
+    period."""
+    def parameter(**extra):
+        return load({"parameters": [{
+            "uri": "heat_load",
+            "label": "Leistung",
+            "description": "Eine im Plan angegebene Leistung, also Energie "
+                           "je Zeit, in kW, MW oder GW.",
+            "unit_target": "OEO_00390001",
+            "units_accepted": {"kW": 0.001, "MW": 1.0},
+            "axes": {"year": {"type": "int"}},
+            "example": {"source": "| BHKW | 347 | kW | im Jahr 2020 |",
+                        "tuples": [{"value": 347, "unit_raw": "kW"}]},
+            **extra,
+        }]}).by_uri["heat_load"]
+
+    source = "| BHKW, Karl-Gehrmann-Str. 42 | 347 | kW |"
+    claim = _claim(value=347, unit="kW", unit_raw="kW",
+                   quote="| BHKW, Karl-Gehrmann-Str. 42 | 347 | kW |")
+    power = verify_tuple(dict(claim), parameter(integrated=False), source)
+    assert isinstance(power, Verified), getattr(power, "reason", power)
+    assert not [f for f in power.flags if f.startswith("period:")], power.flags
+
+    # The same parameter with the key left out is an amount by default, and
+    # the flag comes back: the default must not silence it for the amounts.
+    amount = verify_tuple(dict(claim), parameter(), source)
+    assert isinstance(amount, Verified), getattr(amount, "reason", amount)
+    assert "period:unstated" in amount.flags

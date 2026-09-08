@@ -28,6 +28,11 @@ filename-and-date labels and no filters.
    Otherwise: "not found in the selected scope".
 8. With several documents selected, steps 4-7 run once per document, each with its own
    retrieval and its own citations, and one final call compares the finished answers.
+0. Before any of that, when a graph is configured (`INFERENCE_KG_TTL_PATH`): the question is
+   turned into coordinates, one closed question per axis over the extraction spec's own lists,
+   and the graph `--serialize` wrote is asked for the matching values. A hit is shown with the
+   trust line the serializer wrote above the node; a miss names its reason and steps 4-7 run.
+   The `Antwortweg` radio forces either path.
    That call is given the labels and the answers only, never a source passage: it is the
    one output on the screen that no citation backs.
 
@@ -90,6 +95,7 @@ numpy/pandas/pymupdf are available; there is no network inside the sandbox. The 
 | `INFERENCE_DB_PATH` | `<profile>.db_path` | SQLite corpus DB (opened read-only). |
 | `INFERENCE_INDEX_PATH` | `<profile>.index_path` | Global FAISS index. |
 | `INFERENCE_IMAGE_ROOT` | `<profile>.processed_dir` | Root for resolving table/figure PNGs. |
+| `INFERENCE_KG_TTL_PATH` | `<profile>.root/graph.ttl` | The Turtle `--serialize` wrote. Missing → the graph route is not offered. |
 | `EMBEDDING_MODEL` | `Qwen/Qwen3-VL-Embedding-8B` | HF id of the embedding model. |
 | `EMBEDDING_BACKEND` | `local` | Where a query vector comes from: `local`, `api`, or `package.module:Attribut` — see below. |
 | `LLM_BASE_URL` | `http://localhost:8000/v1` | OpenAI-compatible `/chat/completions` base URL. |

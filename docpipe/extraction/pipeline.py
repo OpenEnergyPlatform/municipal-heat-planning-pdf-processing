@@ -419,7 +419,7 @@ def _invented_wording(claim: dict) -> bool:
     value = claim.get("value")
     if not isinstance(value, str) or canonical_number(value) is not None:
         return False
-    # value_raw first, exactly as _value_in_quote does it. A choice carries
+    # value_raw first, exactly as value_in_quote does it. A choice carries
     # the class in `value` and the document's own wording in `value_raw`, and
     # holding the class name against the passage would refuse every correctly
     # evidenced choice in the corpus.
@@ -469,7 +469,7 @@ def answer_in_quote(slot, given, wording: Optional[str], quote: str) -> bool:
     Bestehende Wärmenetze und Heiz(kraft)werke" offered as evidence for 1990.
 
     A number is compared as a number, a wording as text — the same split
-    _value_in_quote makes for the value itself, because these are the same
+    value_in_quote makes for the value itself, because these are the same
     question asked one level down.
     """
     if slot.kind == NUMBER:
@@ -1119,8 +1119,9 @@ def fold_fieldwise(batch: Batch, rows: list, orphans: list,
 
 
 def write_report(report: DocumentReport, out_path: Path,
-                 own: Optional[frozenset] = None) -> None:
-    """Tuples, refusals and one summary line as a JSONL, written atomically.
+                 own: Optional[frozenset] = None,
+                 states: Optional[list] = None) -> None:
+    """Tuples, refusals, parameter states and one summary, written atomically.
 
     Refusals are rows too (kind=refusal): the file is the audit trail, and an
     audit that only shows the survivors cannot answer why a value is missing.
@@ -1132,6 +1133,11 @@ def write_report(report: DocumentReport, out_path: Path,
     `own` (spec.own_evidence); without it the summary holds every coordinate
     to the row's own source, which over-reports on a harvest written under
     the rule.
+
+    `states` is one line per PARAMETER (kind=parameter_state). Every other
+    state in this file belongs to a row, so a parameter that produced no row
+    left nothing behind at all, and "the document does not carry it" read
+    exactly like "we never got round to asking".
     """
     out_path.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.NamedTemporaryFile(
@@ -1143,6 +1149,11 @@ def write_report(report: DocumentReport, out_path: Path,
         for refusal in report.refusals:
             handle.write(json.dumps({"kind": "refusal", **refusal},
                                     ensure_ascii=False) + "\n")
+        for record in states or ():
+            handle.write(json.dumps(
+                {"kind": "parameter_state",
+                 "document_id": report.document_id, **record},
+                ensure_ascii=False) + "\n")
         handle.write(json.dumps(
             {"kind": "summary",
              **document_summary(report.document_id, report.tuples,

@@ -1,6 +1,6 @@
 {
   "_comment": [
-    "Zwei Messgroessen und eine Beteiligte. Welche OEO-Klasse ein Wert ist,",
+    "Drei Messgroessen und eine Beteiligte. Welche OEO-Klasse ein Wert ist,",
     "waehlt das Modell auf der Achse `quantity` aus der Liste, mit der",
     "Definition aus oeo-closure.owl vor sich. Vorher stand hier je Klasse ein",
     "eigener Parameter und danach eine Stichworttabelle, die deutsche",
@@ -10,12 +10,12 @@
     "beantworten: 95 der 218 an dieser Stelle verworfenen Werte waren",
     "Endenergie unter Primaerenergie abgelegt.",
     "",
-    "Die Einheit trennt die beiden Parameter, nicht das Modell: MWh gegen t.",
+    "Die Einheitenfamilie trennt die Zahlparameter: Wh gegen t gegen W.",
     "Innerhalb der Einheitenfamilie waehlt das Modell die Klasse.",
     "`quantity` ist NICHT required: was in keine Klasse passt, behaelt seinen",
     "Wortlaut in quantity_raw und wird gezaehlt, statt verworfen zu werden."
   ],
-  "parameter_question": "Um WELCHE Kennzahl handelt es sich bei dieser Zahl? Entscheide danach, was die Quelle über sie sagt: die Einheit, die Spalten- oder Zeilenbeschriftung und die Tabellen- oder Abschnittsüberschrift. Eine Angabe in t CO2 ist eine Emission, eine Angabe in MWh oder GWh ein Energieverbrauch. Zitiere die Stelle, aus der das hervorgeht.",
+  "parameter_question": "Um WELCHE Kennzahl handelt es sich bei dieser Zahl? Entscheide danach, was die Quelle über sie sagt: die Einheit, die Spalten- oder Zeilenbeschriftung und die Tabellen- oder Abschnittsüberschrift. Eine Angabe in t CO2 ist eine Emission, eine Angabe in MWh oder GWh ein Energieverbrauch. Zitiere die Stelle, aus der das hervorgeht. Eine Angabe in kW, MW oder GW ist eine Leistung.",
   "parameters": [
     {
       "uri": "energy_consumption",
@@ -1449,6 +1449,700 @@
           "prefix": "oeo"
         },
         "label": "rdfs:label, legal form stripped"
+      }
+    },
+    {
+      "uri": "heat_load",
+      "label": "Leistung",
+      "description": "Eine im Wärmeplan angegebene Leistung, also Energie je Zeit: eine Heizlast, eine Anschlussleistung, eine Netz- oder Erzeugerleistung, die Nennwärmeleistung eines Kessels oder BHKW. Welche Größe es ist, wählst du in \"quantity\" aus der Liste. Die Ontologie definiert die Klasse über ihre Einheit: power value ist \"a quantity value that has a power unit as unit\", also jede Angabe in kW, MW oder GW. Die Einheit trennt diesen Parameter von den anderen: kW gegen kWh. Eine Angabe in kWh, MWh oder GWh ist KEINE Leistung, sondern eine Energiemenge, auch wenn die Zeile das Wort Leistung enthält. Eine ANZAHL (Gebäude, Anlagen, Anschlüsse) ist keine Leistung, hat keine Einheit dieser Liste und bekommt kein Tupel, auch wenn sie in derselben Zeile steht. Die übrigen Einträge der Liste beginnen mit \"out:\": das sind Größen, die der Graph NICHT aufnimmt. Wähle den passenden davon, wenn die Zahl eine davon ist. Das ist ein richtiges Ergebnis, kein Fehler.",
+      "value_type": "float",
+      "unit_target": "OEO_00390001",
+      "integrated": false,
+      "units_accepted": {
+        "kW": 0.001,
+        "kWth": 0.001,
+        "MW": 1.0,
+        "MWth": 1.0,
+        "GW": 1000.0
+      },
+      "axes": {
+        "quantity": {
+          "vocabulary": {
+            "OEO_00010157": {
+              "label": "power value",
+              "spellings": [
+                "Wärmeleistung",
+                "Heizlast",
+                "Anschlussleistung",
+                "Leistungsbedarf",
+                "Netzleistung",
+                "thermische Leistung",
+                "Thermische Nutzleistung",
+                "Nennwärmeleistung",
+                "installierte Leistung",
+                "Entzugsleistung",
+                "Nennleistung",
+                "Feuerungswärmeleistung"
+              ],
+              "definition": "A power value is a quantity value that has a power unit as unit."
+            },
+            "out:electric": {
+              "label": "elektrische Leistung",
+              "spellings": [
+                "Elektrische Leistung",
+                "el. Leistung",
+                "Elektrische Nennleistung",
+                "kW elektrisch",
+                "Stromlastspitze",
+                "Modulleistung"
+              ],
+              "definition": "Die abgegebene ELEKTRISCHE Leistung einer Anlage, nicht ihre Wärmeleistung. Der Graph nimmt sie nicht auf: sie trägt denselben Energieträger wie die Wärmeleistung derselben Zeile und wäre von ihr nicht zu unterscheiden."
+            },
+            "out:seasonal": {
+              "label": "getrennt für Winter und Sommer angegebene Leistung",
+              "spellings": [
+                "Ø Winter",
+                "Ø Sommer",
+                "Winterfall",
+                "Sommerfall"
+              ],
+              "definition": "Eine Leistung, die die Quelle getrennt für Winter und Sommer angibt. Der Graph hat keine Koordinate für die Jahreszeit, also nimmt er beide Werte nicht auf."
+            },
+            "out:potential": {
+              "label": "Leistungspotenzial",
+              "spellings": [
+                "Ausbaupotenzial",
+                "technisches Potenzial",
+                "erschließbares Potenzial"
+              ],
+              "definition": "Ein erschließbares Maximum, keine im Bilanzjahr bereitgestellte oder nachgefragte Leistung."
+            },
+            "out:specific": {
+              "label": "spezifischer Wert je Fläche, Kopf oder Gebäude",
+              "spellings": [],
+              "definition": "Ein Wert je Fläche, Kopf, Gebäude oder Meter, keine Gesamtleistung."
+            },
+            "out:other": {
+              "label": "etwas anderes",
+              "spellings": [],
+              "definition": "Etwas, das keiner der übrigen Einträge dieser Liste ist."
+            }
+          },
+          "required": false,
+          "evidence": "local",
+          "question": "Welche Größe ist diese Zahl? Das ist die wichtigste Entscheidung des Tupels, denn sie bestimmt, als welche Klasse der Wert im Graphen steht. \"power value\" ist definiert als quantity value mit einer Leistungseinheit: eine Heizlast, eine Anschlussleistung, eine Nennwärmeleistung, eine Netz- oder Erzeugerleistung. Die ABGEGEBENE ELEKTRISCHE Leistung derselben Anlage ist \"out:electric\" und nicht dieselbe Klasse: sie steht in einer eigenen Spalte, trägt denselben Energieträger und wäre im Graphen von der Wärmeleistung nicht zu unterscheiden. Gibt die Quelle die Leistung getrennt für Winter und Sommer an, dann ist das \"out:seasonal\" für BEIDE Werte.",
+          "kg": {
+            "role": "type",
+            "note": "The class of the value node itself (rdf:type). OEO_00010157 is defined by its unit -- \"a quantity value that has a power unit as unit\" -- so it follows from units_accepted and is not a second assertion. An out:* answer is a deliberate non-class and mints no node."
+          }
+        },
+        "aggregation": {
+          "vocabulary": {
+            "OEO_00140070": {
+              "label": "integral",
+              "spellings": [
+                "Summe",
+                "Gesamt",
+                "insgesamt"
+              ],
+              "definition": "sum or integral of values, e.g. within a time step or a spatial region"
+            },
+            "OEO_00140071": {
+              "label": "arithmetic mean",
+              "spellings": [
+                "Mittelwert",
+                "Durchschnitt"
+              ],
+              "definition": "average value calculated by arithmetic mean over a set of data values, e.g. within a time step or spatial region"
+            },
+            "OEO_00140073": {
+              "label": "maximum",
+              "spellings": [
+                "Maximum",
+                "Spitzenwert",
+                "Spitzenlast"
+              ],
+              "definition": "maximum value within a set of data values, e.g. in a time step or spatial region"
+            },
+            "OEO_00140072": {
+              "label": "minimum",
+              "spellings": [
+                "Minimum",
+                "Tiefstwert"
+              ],
+              "definition": "minimum value within a set of data values, e.g. in a time step or spatial region"
+            }
+          },
+          "required": false,
+          "evidence": "local",
+          "question": "Wie ist der Wert über Zeit oder Raum zusammengefasst? Bei einer Leistung ist das eine echte Frage und keine Formsache. \"maximum\" bei einer Spitzenlast, einer Höchstlast oder einem Auslegungsfall. \"integral\" bei einer Summe über mehrere Anlagen oder über ein Gebiet, erkennbar an einer Zeile oder Spalte \"Summe\", \"Gesamt\" oder \"insgesamt\". \"arithmetic mean\" bei einem Durchschnitt (\"Ø\", \"mittlere Leistung\"). Die Leistung einer EINZELNEN Anlage ist keines davon: steht in der Quelle, in ihrem Abschnitt und in dem Satz davor nichts über die Zusammenfassung, dann ist das \"out:unstated\" und keine Schätzung.",
+          "kg": {
+            "role": "edge",
+            "predicate": "OEO_00390023",
+            "label": "has aggregation type",
+            "prefix": "oeo",
+            "note": "Object is a named individual of OEO_00140068 aggregation type. ASKED here and derived on the two amount parameters: a watt is not an amount integrated over a span, so the unit fixes nothing."
+          }
+        },
+        "carrier": {
+          "vocabulary": {
+            "OEO_00000292": {
+              "label": "Erdgas",
+              "spellings": [
+                "Gas"
+              ]
+            },
+            "OEO_00000211": {
+              "label": "Heizöl",
+              "spellings": [
+                "Öl"
+              ]
+            },
+            "OEO_00000132": {
+              "label": "Fernwärme",
+              "spellings": [
+                "Wärmenetze",
+                "Wärmenetz",
+                "Nahwärme"
+              ]
+            },
+            "OEO_00000139": {
+              "label": "Strom",
+              "spellings": [
+                "Elektrizität",
+                "Heizungsstrom",
+                "Wärmestrom",
+                "Direktstrom"
+              ],
+              "definition": "Electrical energy is a form of energy derived from the potential or kinetic energy of charged particles."
+            },
+            "OEO_00000449": {
+              "label": "Holz",
+              "spellings": [
+                "Holzpellets",
+                "Pellets",
+                "Hackschnitzel",
+                "Brennholz",
+                "Holzenergie"
+              ]
+            },
+            "OEO_00000074": {
+              "label": "Biogas",
+              "spellings": [
+                "aufbereitetes Biogas",
+                "Klärgas",
+                "Faulgas",
+                "Klärschlammgas"
+              ]
+            },
+            "OEO_00000388": {
+              "label": "Solarthermie",
+              "spellings": [
+                "solare Wärme"
+              ]
+            },
+            "OEO_00000251": {
+              "label": "Braunkohle",
+              "spellings": []
+            },
+            "OEO_00320011": {
+              "label": "Flüssiggas",
+              "spellings": [],
+              "definition": "Liquefied petroleum gas (LPG) is gas mixture of hydrocarbon gases, mainly propane and butane."
+            },
+            "OEO_00000220": {
+              "label": "Wasserstoff",
+              "spellings": [
+                "H2"
+              ]
+            },
+            "OEO_00000204": {
+              "label": "Steinkohle",
+              "spellings": []
+            },
+            "OEO_00010215": {
+              "label": "Biomethan",
+              "spellings": []
+            },
+            "OEO_00000332": {
+              "label": "biogener Festbrennstoff",
+              "spellings": [
+                "biogene Festbrennstoffe",
+                "sonstige biogene Festbrennstoffe"
+              ]
+            },
+            "OEO_00010214": {
+              "label": "Biomasse",
+              "spellings": [
+                "pflanzliche Biomasse",
+                "landwirtschaftliche Biomasse"
+              ]
+            },
+            "OEO_00000088": {
+              "label": "Kohle",
+              "spellings": []
+            },
+            "OEO_00000290": {
+              "label": "Siedlungsabfälle",
+              "spellings": [
+                "Abfall",
+                "thermische Abfallverwertung"
+              ],
+              "definition": "A municipal waste fuel is waste fuel produced by households or non-industrial commercial activities."
+            },
+            "OEO_00000356": {
+              "label": "biogener Siedlungsabfall",
+              "spellings": [
+                "Biogut",
+                "Gartenabfälle",
+                "Grünschnitt"
+              ],
+              "definition": "A biogenic municipal waste fuel is a municipal waste fuel that has a biogenic origin."
+            },
+            "OEO_00000439": {
+              "label": "Abfallbrennstoff",
+              "spellings": [
+                "Klärschlamm",
+                "EBS"
+              ],
+              "definition": "A waste fuel is a fuel in which the material entity is waste."
+            },
+            "OEO_00020495": {
+              "label": "landwirtschaftlicher Abfallbrennstoff",
+              "spellings": [
+                "tierische Exkremente",
+                "Gülle",
+                "Mist"
+              ],
+              "definition": "An angricultural waste fuel is waste fuel produced by agriculture."
+            },
+            "OEO_00010155": {
+              "label": "synthetische Gase",
+              "spellings": [
+                "grüne Gase",
+                "E-Gas",
+                "SNG"
+              ]
+            },
+            "OEO_00000191": {
+              "label": "Geothermie",
+              "spellings": [
+                "Erdwärme",
+                "oberflächennahe Geothermie",
+                "Tiefengeothermie",
+                "Erdwärmesonde",
+                "Erdwärmekollektor",
+                "Oberflächengeothermie"
+              ]
+            },
+            "OEO_00010114": {
+              "label": "Abwärme",
+              "spellings": [
+                "unvermeidbare Abwärme"
+              ]
+            },
+            "OEO_00310004": {
+              "label": "industrielle Abwärme",
+              "spellings": []
+            },
+            "OEO_00000056": {
+              "label": "Umweltwärme",
+              "spellings": [
+                "Umgebungswärme",
+                "Umgebungsluft"
+              ],
+              "definition": "Ambient thermal energy is thermal energy that is stored in the ambient air, beneath the surface of solid earth or in surface water. It is captured by heat pumps."
+            },
+            "OEO_00140105": {
+              "label": "anthropogene Umweltwärme",
+              "spellings": [
+                "Abwasserwärme",
+                "Abwasser",
+                "Abwasserwärmenutzung"
+              ],
+              "definition": "Artificial ambient thermal energy is ambient thermal energy that has an anthropogenic origin."
+            },
+            "OEO_00140104": {
+              "label": "natürliche Umweltwärme",
+              "spellings": [
+                "Oberflächengewässer",
+                "Seethermie",
+                "Flusswärme"
+              ],
+              "definition": "Natural ambient thermal energy is ambient thermal energy that has a renewable origin."
+            },
+            "out:total": {
+              "label": "Summe",
+              "spellings": [
+                "Gesamt",
+                "Gesamtwert",
+                "Gesamtsumme",
+                "alle Energieträger",
+                "insgesamt"
+              ],
+              "definition": "Eine Zeile, die ausdrücklich über alle Einträge summiert."
+            },
+            "out:other": {
+              "label": "Sonstige",
+              "spellings": [
+                "Andere",
+                "sonstige Energieträger",
+                "Sonstige Wärmequellen",
+                "Rest"
+              ],
+              "definition": "Etwas, das keiner der übrigen Einträge dieser Liste ist."
+            },
+            "OEO_00010223": {
+              "label": "biogener Abfallbrennstoff",
+              "spellings": [
+                "Altholz",
+                "Altholzheizung",
+                "biogene Abfälle"
+              ],
+              "definition": "A biogenic waste fuel is a waste fuel that has a biogenic origin."
+            }
+          },
+          "question": "Welcher Energieträger? Die Bezeichnung steht in der Zeilenbeschriftung, im Spaltenkopf oder in der Blocküberschrift, fast nie in der Schreibweise der Klassenliste: \"Gas H\" und \"Erdgas (netzgebunden)\" meinen die Klasse Erdgas, \"Nahwärme\" und \"Wärmenetz\" die Klasse Fernwärme. Eine Summenzeile (\"Summe\", \"Gesamt\", \"alle Energieträger\") ist \"out:total\", eine Restposition (\"Sonstige\", \"Andere\") ist \"out:other\". Passt fachlich weder eine Klasse noch einer dieser Einträge, etwa weil in der Spalte ein Gebäudetyp steht, dann lass die Zeile weg.",
+          "evidence": "own",
+          "kg": {
+            "role": "edge",
+            "predicate": "IAO_0000136",
+            "label": "is about",
+            "note": "Object is an OEO class (punning). `is about` (obo:IAO_0000136), whose domain is information content entity and which our value classes are under. NOT oeo:OEO_00000523 covers energy carrier / oeo:OEO_00000505 covers sector: both are domained on oeo:OEO_00020011 study, an occurrent, while every quantity value is a continuant, and the pin asserts obo:BFO_0000002 disjointWith obo:BFO_0000003 -- so those two edges made the whole graph unsatisfiable. Nothing in the pinned release both ranges over carrier or sector and accepts a value as its subject; `is about` is what OEO itself writes on this class (OEO_00240019, the parent of OEO_00050016, carries two of them). The role of an object is read from its own class: energy carrier is under BFO_0000040 and sector under BFO_0000031, and those two are disjoint, so carrier and sector stay apart. `outside_root` names the nine classes the plans write in the carrier column that OEO does not place under energy carrier -- district heat, electricity, solar thermal, geothermal and the ambient heat sources. They used to lose this edge, because `covers energy carrier` ranges over energy carrier and asserting them would have contradicted the TBox; `is about` declares no range, so they keep it and only the count remains, as the argument for the axioms the ontology side is adding.",
+            "prefix": "obo",
+            "outside_root": {
+              "OEO_00000132": "district heating",
+              "OEO_00000139": "electrical energy",
+              "OEO_00000388": "solar thermal energy",
+              "OEO_00000191": "geothermal energy",
+              "OEO_00010114": "waste heat",
+              "OEO_00310004": "industrial waste heat",
+              "OEO_00000056": "ambient heat",
+              "OEO_00140105": "waste water heat",
+              "OEO_00140104": "surface water heat"
+            }
+          }
+        },
+        "sector": {
+          "vocabulary": {
+            "OEO_00000214": {
+              "label": "Private Haushalte",
+              "spellings": [
+                "Haushalte",
+                "Privathaushalte",
+                "Wohnen",
+                "Wohngebäude",
+                "Haushaltssektor"
+              ],
+              "definition": "A household sector is a sector that covers households."
+            },
+            "OEO_00000405": {
+              "label": "GHD",
+              "spellings": [
+                "Gewerbe, Handel, Dienstleistungen",
+                "Gewerbe/Handel/Dienstleistungen",
+                "öffentliche Gebäude",
+                "öffentliche Liegenschaften",
+                "kommunale Einrichtungen",
+                "GHD/Kommune",
+                "Gewerbe",
+                "wirtschaftlich genutzte Gebäude",
+                "kommerzieller Sektor"
+              ],
+              "definition": "A commercial sector is a sector that covers non-industrial commercial activities."
+            },
+            "OEO_00000227": {
+              "label": "Industrie",
+              "spellings": [
+                "Industriesektor",
+                "verarbeitendes Gewerbe"
+              ],
+              "definition": "An industry sector is a sector that covers industrial activities with other main purposes of energy transformation."
+            },
+            "OEO_00000422": {
+              "label": "Verkehr",
+              "spellings": [
+                "Verkehrssektor"
+              ],
+              "definition": "A transport sector is a sector that covers transport of people and/or goods."
+            },
+            "OEO_00010035": {
+              "label": "Landwirtschaft",
+              "spellings": [
+                "Land- und Forstwirtschaft"
+              ],
+              "definition": "A agriculture, forestry and land use (AFOLU) sector is a sector that covers activities and natural processes from agriculture, forestry, land use and land use change."
+            },
+            "out:total": {
+              "label": "Summe",
+              "spellings": [
+                "Gesamt",
+                "alle Sektoren",
+                "insgesamt"
+              ],
+              "definition": "Eine Zeile, die ausdrücklich über alle Einträge summiert."
+            }
+          },
+          "question": "Welcher Verbrauchssektor? Die Bezeichnung steht in der Zeilenbeschriftung, im Spaltenkopf oder in der Blocküberschrift DERSELBEN Tabelle: \"Wohnen\" und \"Wohngebäude\" meinen die Klasse Private Haushalte, \"GHD/Kommune\", \"Gewerbe\" und \"wirtschaftlich genutzte Gebäude\" die Klasse GHD. Ein GEBIET ist kein Sektor: \"Gesamtstadt\", \"Stadtgebiet\", \"Gemeinde\" und \"Plangebiet\" sagen, WO die Zahl gilt, nicht für welchen Verbraucher, und sie sind auch keine Summe über die Sektoren. Eine Zeile, die ausdrücklich über alle Sektoren summiert (\"Summe\", \"Gesamt\", \"insgesamt\" als Zeilen- oder Spaltenkopf), ist \"out:total\". Hat die eigene Tabelle keine Sektorspalte und nennt ihr Titel keinen Sektor, dann ist das keine Klasse, sondern eine fehlende Angabe: antworte mit \"out:unstated\".",
+          "evidence": "own",
+          "kg": {
+            "role": "edge",
+            "predicate": "IAO_0000136",
+            "label": "is about",
+            "note": "Object is an OEO sector class. `is about` (obo:IAO_0000136), whose domain is information content entity and which our value classes are under. NOT oeo:OEO_00000523 covers energy carrier / oeo:OEO_00000505 covers sector: both are domained on oeo:OEO_00020011 study, an occurrent, while every quantity value is a continuant, and the pin asserts obo:BFO_0000002 disjointWith obo:BFO_0000003 -- so those two edges made the whole graph unsatisfiable. Nothing in the pinned release both ranges over carrier or sector and accepts a value as its subject; `is about` is what OEO itself writes on this class (OEO_00240019, the parent of OEO_00050016, carries two of them). The role of an object is read from its own class: energy carrier is under BFO_0000040 and sector under BFO_0000031, and those two are disjoint, so carrier and sector stay apart.",
+            "prefix": "obo"
+          }
+        },
+        "year": {
+          "type": "int",
+          "question": "Für welches Kalenderjahr gilt diese Jahressumme? Vierstellig. Das Jahr steht fast nie in der Zeile der Zahl selbst. Sieh in dieser Reihenfolge nach: (1) die Kopfzelle der Spalte, in der die Zahl steht, (2) der Titel der eigenen Tabelle, (3) der Satz, der die Tabelle in ihrem Abschnitt ankündigt (\"Für das Jahr 2040 ergeben sich die in den nachfolgenden Tabellen zusammengestellten Kennzahlen\"), (4) die Überschrift des Abschnitts. Das Jahr im Titel einer ANDEREN Tabelle gilt nicht, auch wenn dieser Titel im selben Abschnitt steht. Nennt die Quelle einen Zeitraum statt eines Jahres (\"Durchschnittswert der Jahre 2022-2024\"), dann gehört das LETZTE Jahr in value und der Zeitraum wörtlich in value_raw.",
+          "evidence": "local",
+          "kg": {
+            "role": "edge",
+            "predicate": "IAO_0000136",
+            "label": "is about",
+            "note": "The calendar year the power is stated for, as a node and no longer as a literal. A unit without a per-year marker carries the flag period:annual_in_quote or period:unstated. It was oeo:OEO_00020440 has scenario year value, which is wrong twice: its domain is oeo:OEO_00000365 scenario factsheet, so every value node was typed a factsheet and through it a document, and its declared range is xsd:dateTime while we wrote xsd:integer, which is an ill-typed literal. The pinned release has NO property at all whose domain a quantity value satisfies and whose range is a time, so the year becomes an object: `is about` a node of oeo:OEO_00030033 time step, \"a one-dimensional temporal region that has a start time and an ending time\". oeo:OEO_00020097 scenario year would be the narrower class and is not used, because it is defined as part of a scenario horizon and the inventory years are not. Cost, stated: the number 2030 is no longer a literal a reasoner can compare -- it is the node's IRI, its label, and part of the value's own identity. The term request is a property from quantity value to temporal region, and a way to write a year onto one.",
+            "prefix": "obo",
+            "object_class": "OEO_00030033"
+          }
+        },
+        "scenario": {
+          "vocabulary": {
+            "target": {
+              "label": "Zielszenario",
+              "spellings": [
+                "Zielbild",
+                "Zielwert",
+                "Zielpfad",
+                "Umsetzungsszenario",
+                "Transformationspfad"
+              ],
+              "definition": "Der angestrebte Zustand eines künftigen Jahres, wie der Plan ihn erreichen will."
+            },
+            "trend": {
+              "label": "Trendszenario",
+              "spellings": [
+                "Referenzszenario",
+                "Weiter-wie-bisher",
+                "Business as usual"
+              ],
+              "definition": "Die Fortschreibung ohne zusätzliche Maßnahmen."
+            },
+            "status_quo": {
+              "label": "Bestand",
+              "spellings": [
+                "Ist-Zustand",
+                "Bilanzjahr",
+                "Status quo",
+                "Bestandsanalyse",
+                "Basisjahr",
+                "Ist-Zustandsanalyse",
+                "Ist-Analyse",
+                "Erstellungsjahr"
+              ],
+              "definition": "Erhoben oder bilanziert für ein vergangenes oder das laufende Jahr."
+            },
+            "out:variant": {
+              "label": "Variante oder Sensitivität neben dem Szenario",
+              "spellings": [
+                "Variante",
+                "Sensitivität",
+                "Bandbreite"
+              ],
+              "definition": "Eine Rechenvariante, die der Plan neben sein Szenario stellt, um eine Bandbreite zu zeigen."
+            }
+          },
+          "required": false,
+          "question": "Auf welchen Zustand bezieht sich der Wert? Der Bezug steht selten in der Zeile selbst, sondern im Titel der eigenen Tabelle, in der Abschnittsüberschrift oder in dem Satz, der die Tabelle ankündigt. Bestand heißt: erhoben oder bilanziert für ein vergangenes oder das laufende Jahr. Daran zu erkennen sind Bestandsanalyse, Ist-Zustand, Bilanzjahr, Ausgangslage, Energiebilanz, \"bislang\", \"derzeit\", \"wird verbraucht\", oder ein Jahr vor der Erstellung des Plans im Titel. Ein Satz wie \"wie viel Wärme pro Jahr verbraucht wird und welche Energieträger dafür bislang eingesetzt werden\" ist ein Bestand, auch wenn das Wort Bestandsanalyse nicht fällt. Trendszenario ist die Fortschreibung ohne zusätzliche Maßnahmen. Zielszenario ist der angestrebte Zustand, auch wenn der Plan ihm einen eigenen Namen gibt (\"bei erhöhter Energieeinsparung\", \"Umsetzungsszenario 2\", \"Transformationspfad\"); nennt die Quelle mehrere Zielszenarien nebeneinander, gehört der Name des konkreten in value_raw. Steht in der eigenen Quelle, in ihrem Abschnitt und in dem Satz davor nichts über den Zustand, dann ist das \"out:unstated\" und keine Schätzung.",
+          "evidence": "local",
+          "kg": {
+            "role": "parent",
+            "map": {
+              "target": {
+                "class": "MHPO_00020007"
+              },
+              "status_quo": {
+                "class": "MHPO_00020005"
+              },
+              "trend": {
+                "class": "OEO_00020311",
+                "note": "with existing measures scenario. Not OEO_00020314 reference scenario: that one is defined by a ROLE (`scenario and has role some reference role`) and carries no content, so it says a scenario was used as a comparison and not what it assumes. A Trendszenario is the continuation under the measures already decided, which is what WEM means."
+              },
+              "out:variant": {
+                "note": "not serialized"
+              }
+            },
+            "note": "Which container node holds the value: the plan has the container by `linked_by`, and the edge from the container down to the value is structural and named in kg.py. Only the target scenario is serialized today (G2).",
+            "linked_by": {
+              "node": "heatplan",
+              "prefix": "obo",
+              "predicate": "BFO_0000051",
+              "label": "has part"
+            }
+          }
+        },
+        "spatial_scope": {
+          "vocabulary": {
+            "municipality": {
+              "label": "Gemeindegebiet",
+              "spellings": [
+                "Gesamtstadt",
+                "Stadtgebiet",
+                "gesamtes Plangebiet",
+                "Gemeinde insgesamt"
+              ],
+              "definition": "Das ganze Gemeinde- oder Stadtgebiet des Plans."
+            },
+            "sub_area": {
+              "label": "Teilgebiet",
+              "spellings": [
+                "Fokusgebiet",
+                "Quartier",
+                "Stadtteil",
+                "Baublock",
+                "Wärmenetzgebiet",
+                "Ortsteil"
+              ],
+              "definition": "Ein benannter Teil davon: ein Quartier, ein Fokusgebiet, ein Wärmenetzgebiet."
+            }
+          },
+          "required": false,
+          "question": "Auf welches Gebiet bezieht sich der Wert? Sieh ZUERST in der Zeile selbst nach: benennt die Zeilenbeschriftung ein Gebiet — einen Quartiersnamen, ein Eignungsgebiet, eine Straße —, dann ist DAS das Gebiet dieser Zeile und die Überschrift gilt für sie nicht. Eine Steckbrief- oder Quartierstabelle hat in jeder Zeile ein anderes Gebiet und in der Überschrift nur den Gemeindenamen; wer dann die Überschrift nimmt, legt vierzig Quartiere auf eine Koordinate. Erst wenn die Zeile kein Gebiet nennt, gilt die Überschrift oder die Caption. Bei einem Teilgebiet gehört sein NAME wörtlich in value_raw (\"Fokusgebiet Eicken\", \"Quartier Nordstadt\", \"Wärmenetzgebiet 3\"), ohne den Namen sind zwei Teilgebiete im Graphen nicht auseinanderzuhalten. Beim ganzen Gemeindegebiet reicht die Klasse.",
+          "kg": {
+            "role": "parent",
+            "map": {
+              "municipality": {
+                "note": "the plan's own area, minted from the AGS"
+              },
+              "sub_area": {
+                "class": "MHPO_00020019",
+                "linked_by": {
+                  "node": "municipality",
+                  "prefix": "obo",
+                  "predicate": "BFO_0000050",
+                  "label": "part of"
+                }
+              }
+            },
+            "note": "No relation from a value to its area exists in the schema yet, so a sub_area value is not serialized (TERM REQUEST 1)."
+          }
+        }
+      },
+      "example": {
+        "source": "Tabelle 2-5: Übersicht Wärmeerzeuger in Wärmenetzen in Rathenow\n| Standort | Thermische Nutzleistung [kW] | Elektrische Leistung [kW] |\n| --- | --- | --- |\n| BHKW, Karl-Gehrmann-Str. 42 | 347 | 240 |\n| BHKW, Karl-Gehrmann-Str. 43 | 1.600 | 1.060 |\n| BHKW, Karl-Gehrmann-Str. 44 | 1.600 | 1.060 |\n| Heizhaus, Parkstr. 3 | 80 | 50 |\n| Hans-Joachim-von-Zieten-Str. | 30 | 20 |\n| Goethestr. 36 | 30 | 20 |\n| Summe | 3.714 | 2.450 |\n| Spitzenlastkessel BHKW, Karl-Gehrmann-Str. 42 | 25,8 MW | |",
+        "defaults": {
+          "aggregation": null,
+          "carrier": null,
+          "quantity": "power value",
+          "quantity_raw": "Thermische Nutzleistung",
+          "scenario": "nicht erkennbar",
+          "sector": null,
+          "spatial_scope": "Gemeindegebiet",
+          "spatial_scope_raw": null,
+          "unit": "kW",
+          "unit_raw": "kW",
+          "year": null
+        },
+        "tuples": [
+          {
+            "value": 347,
+            "quote": "| BHKW, Karl-Gehrmann-Str. 42 | 347 | 240 |"
+          },
+          {
+            "value": 240,
+            "quantity": "elektrische Leistung",
+            "quantity_raw": "Elektrische Leistung",
+            "quote": "| BHKW, Karl-Gehrmann-Str. 42 | 347 | 240 |"
+          },
+          {
+            "value": 1600,
+            "quote": "| BHKW, Karl-Gehrmann-Str. 43 | 1.600 | 1.060 |"
+          },
+          {
+            "value": 1060,
+            "quantity": "elektrische Leistung",
+            "quantity_raw": "Elektrische Leistung",
+            "quote": "| BHKW, Karl-Gehrmann-Str. 43 | 1.600 | 1.060 |"
+          },
+          {
+            "value": 1600,
+            "quote": "| BHKW, Karl-Gehrmann-Str. 44 | 1.600 | 1.060 |"
+          },
+          {
+            "value": 1060,
+            "quantity": "elektrische Leistung",
+            "quantity_raw": "Elektrische Leistung",
+            "quote": "| BHKW, Karl-Gehrmann-Str. 44 | 1.600 | 1.060 |"
+          },
+          {
+            "value": 80,
+            "quote": "| Heizhaus, Parkstr. 3 | 80 | 50 |"
+          },
+          {
+            "value": 50,
+            "quantity": "elektrische Leistung",
+            "quantity_raw": "Elektrische Leistung",
+            "quote": "| Heizhaus, Parkstr. 3 | 80 | 50 |"
+          },
+          {
+            "value": 30,
+            "quote": "| Hans-Joachim-von-Zieten-Str. | 30 | 20 |"
+          },
+          {
+            "value": 20,
+            "quantity": "elektrische Leistung",
+            "quantity_raw": "Elektrische Leistung",
+            "quote": "| Hans-Joachim-von-Zieten-Str. | 30 | 20 |"
+          },
+          {
+            "value": 30,
+            "quote": "| Goethestr. 36 | 30 | 20 |"
+          },
+          {
+            "value": 20,
+            "quantity": "elektrische Leistung",
+            "quantity_raw": "Elektrische Leistung",
+            "quote": "| Goethestr. 36 | 30 | 20 |"
+          },
+          {
+            "value": 3714,
+            "aggregation": "Summe",
+            "aggregation_raw": "Summe",
+            "quote": "| Summe | 3.714 | 2.450 |"
+          },
+          {
+            "value": 2450,
+            "aggregation": "Summe",
+            "aggregation_raw": "Summe",
+            "quantity": "elektrische Leistung",
+            "quantity_raw": "Elektrische Leistung",
+            "quote": "| Summe | 3.714 | 2.450 |"
+          },
+          {
+            "value": 25.8,
+            "unit": "MW",
+            "unit_raw": "MW",
+            "quantity_raw": "Spitzenlastkessel",
+            "quote": "| Spitzenlastkessel BHKW, Karl-Gehrmann-Str. 42 | 25,8 MW | |"
+          }
+        ]
+      },
+      "kg": {
+        "node": "value",
+        "class_from": "quantity",
+        "number": {
+          "predicate": "OEO_00140178",
+          "label": "has number",
+          "datatype": "xsd:float",
+          "from": "value_target",
+          "prefix": "oeo"
+        },
+        "unit": {
+          "predicate": "OEO_00040010",
+          "label": "has unit",
+          "from": "unit_target",
+          "prefix": "oeo"
+        }
       }
     }
   ]

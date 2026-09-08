@@ -182,6 +182,13 @@ class Parameter:
     example: dict                          # {"source": str, "tuples": [...]}
     unit_target: Optional[str] = None      # numeric parameters only
     units_accepted: dict = field(default_factory=dict)  # unit -> factor
+    # Whether this parameter's unit is an amount over a span or a rate. A
+    # consumption in MWh/a is integrated over a year and a plan that states
+    # one without saying over what has left something out; a power in MW is
+    # not, and has no period to leave out. The verifier flags the first and
+    # must not flag the second, or the flag fires on every row of one
+    # parameter and means nothing.
+    integrated: bool = True
     vocabulary: Optional[dict] = None      # category parameters: uri -> labels
     definitions: dict = field(default_factory=dict)
     # A category whose closed list is real but per document, filled in by the
@@ -412,7 +419,14 @@ def _validate_parameter(path: str, raw) -> Parameter:
                       f"spelling to the verifier but carry {factor} and "
                       f"{collisions[key][1]}")
             collisions[key] = (unit, factor)
+        if not isinstance(raw.get("integrated", True), bool):
+            _fail(f"{path}.integrated",
+                  "true when the unit is an amount over a span, false when "
+                  "it is a rate")
     else:
+        if "integrated" in raw:
+            _fail(f"{path}.integrated",
+                  f"a {value_type} parameter carries no integration period")
         if unit_target is not None or raw.get("units_accepted") is not None:
             _fail(f"{path}.unit_target",
                   f"a {value_type} parameter carries no unit")
@@ -459,6 +473,7 @@ def _validate_parameter(path: str, raw) -> Parameter:
     return Parameter(uri=raw["uri"], label=raw["label"],
                      description=raw["description"], value_type=value_type,
                      unit_target=unit_target, units_accepted=units,
+                     integrated=bool(raw.get("integrated", True)),
                      vocabulary=vocabulary, definitions=value_definitions,
                      vocabulary_dynamic=vocabulary_dynamic,
                      axes=axes, example=example, kg=raw.get("kg"))

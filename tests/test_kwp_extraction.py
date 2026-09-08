@@ -23,16 +23,20 @@ NUMERIC = [p for p in SPEC.parameters if p.is_numeric]
 
 
 def test_the_class_is_the_models_choice_not_a_table_of_german_spellings():
-    """Two parameters, split by unit family, and inside each the model picks
-    the OEO class from the list with the ontology's definitions in front of it.
-    Mirjam's three classes are in there, plus the one a BISKO balance actually
-    reports: OEO_00340066 is CO2 alone, while the plans overwhelmingly print
-    Treibhausgase in CO2 equivalents, which OEO has as OEO_00140083."""
+    """Three numeric parameters, split by unit family, and inside each the
+    model picks the OEO class from the list with the ontology's definitions in
+    front of it. Mirjam's three classes are in there, plus the one a BISKO
+    balance actually reports: OEO_00340066 is CO2 alone, while the plans
+    overwhelmingly print Treibhausgase in CO2 equivalents, which OEO has as
+    OEO_00140083 -- and OEO_00010157, whose own definition IS the unit family
+    that separates it from the other two."""
     assert [p.uri for p in SPEC.parameters] == [
-        "energy_consumption", "emission", "planning_organisation"]
+        "energy_consumption", "emission", "planning_organisation",
+        "heat_load"]
     classes = {uri for p in NUMERIC for uri in p.axes["quantity"].vocabulary}
     assert {c for c in classes if not c.startswith("out:")} == {
-        "OEO_00050016", "OEO_00050018", "OEO_00340066", "OEO_00140083"}
+        "OEO_00050016", "OEO_00050018", "OEO_00340066", "OEO_00140083",
+        "OEO_00010157"}
     # The list also names what the graph does NOT take, as choices rather than
     # prose. Without them the model picks the nearest class anyway: the first
     # run put Kassel's "CO2-Abscheidung" in as a CO2 emission and Bremen's
@@ -132,17 +136,17 @@ def test_the_harvest_prompt_states_the_contract():
 # --- IRI minting against the published reference ---------------------------
 
 def test_value_minting_matches_the_schema_repo_reference():
-    """mint_slice.py's exact coordinate string must yield its exact UUID —
-    proves the whole uuid5 chain, namespace derivation included. Their
-    kassel_valid.ttl carries a878a3a1-… instead, which mint_slice.py cannot
-    produce from any plausible coordinate variant: a stale hand-typed UUID
-    on the schema side, reported, not reproduced."""
-    heatplan = f"{kg.BASE}heatplan/AGS_06611000_2024-03-15"
-    coordinates = "|".join([heatplan, f"{kg.OEO}OEO_00050016",
-                            f"{kg.OEO}OEO_00000292", "2030",
-                            f"{kg.OEO}OEO_00140070"])
+    """mint_slice.py's exact coordinate string must yield its exact UUID --
+    proves the whole uuid5 chain, namespace derivation included. Since the
+    schema repo's second cut the tuple is this serializer's, part first and
+    the sector inside it, so the value IRI in their kassel_valid.ttl is the
+    one a harvest of Kassel's plan writes."""
+    part = f"{kg.BASE}targetscenario/AGS_06611000_2024-03-15"
+    coordinates = "|".join([part, f"{kg.OEO}OEO_00050016",
+                            f"{kg.OEO}OEO_00000292", f"{kg.OEO}OEO_00000214",
+                            "2030", f"{kg.OEO}OEO_00140070", ""])
     assert kg.mint("value", coordinates).endswith(
-        "78153046-c4c2-5cae-a61c-56c70e57e5a5")
+        "40a889fd-f888-560e-b688-38c97d225e57")
 
 
 def test_normalise_and_organisation_minting_match_the_reference():
@@ -377,48 +381,70 @@ def test_the_date_converter_takes_both_and_refuses_neither_silently():
 # --- the acceptance test: is the output kassel_valid.ttl? -------------------
 
 # https://github.com/OpenEnergyPlatform/oekg/blob/production/mhpkg/schema/
-#   examples/kassel_valid.ttl — the shape one heat plan has to come out as.
-# Its own value IRI is left out of the comparison: that node is hand-typed
-# upstream (a878a3a1-…), and mint_slice.py's coordinate string yields
-# 78153046-… instead, which the minting test above pins.
+#   examples/kassel_valid.ttl -- the shape one heat plan has to come out as,
+#   at the schema repo's second cut: the plan, three of its parts, four
+#   values, two year nodes, the office and the municipality area.
 #
-# THREE DELIBERATE DIVERGENCES from the published file, all of them the same
-# defect: the example writes predicates whose rdfs:domain its own subject is
-# not. `covers energy carrier` (OEO_00000523) and `covers sector`
-# (OEO_00000505) are domained on OEO_00020011 study, which is under
-# BFO_0000003 occurrent, while every quantity value is under BFO_0000002
-# continuant and the pin asserts those two disjoint -- so the published
-# example is unsatisfiable. `has scenario year value` (OEO_00020440) is
-# domained on OEO_00000365 scenario factsheet and declares range
-# xsd:dateTime, and the example writes it on a value node with an
-# xsd:integer. All three become obo:IAO_0000136 `is about`, whose domain
-# (information content entity) the value classes do satisfy, and the year
-# becomes a node because the pin has no property at all from a quantity
-# value to a time. The schema repo has to follow (G1/G5); until it does,
-# this file and that one differ in these five lines and nowhere else.
+# Compared exactly, value IRIs included. Their mint_slice.py and this
+# serializer mint from one tuple -- part, quantity, carrier, sector, year,
+# aggregation, sub-area -- over one namespace derivation, so a harvest of
+# Kassel's plan writes their example byte for byte where it matters. The
+# first cut differed in five lines (three borrowed predicates whose domains
+# typed every value as a study, and a hand-typed value UUID); the second
+# cut closed both.
 KASSEL_VALID = """
 heatplan/AGS_06611000_2024-03-15 | a | mhpo:MHPO_00020003
 heatplan/AGS_06611000_2024-03-15 | rdfs:label | "Kommunale Wärmeplanung Kassel 2024"
 heatplan/AGS_06611000_2024-03-15 | oeo:OEO_00390096 | "2024-03-15"^^xsd:date
 heatplan/AGS_06611000_2024-03-15 | oeo:OEO_00000510 | organisation/2d4f4ae8-ea0f-575c-9a76-8dcf377042af
+heatplan/AGS_06611000_2024-03-15 | obo:BFO_0000051 | inventory/AGS_06611000_2024-03-15
+heatplan/AGS_06611000_2024-03-15 | obo:BFO_0000051 | referencescenario/AGS_06611000_2024-03-15
 heatplan/AGS_06611000_2024-03-15 | obo:BFO_0000051 | targetscenario/AGS_06611000_2024-03-15
+inventory/AGS_06611000_2024-03-15 | a | mhpo:MHPO_00020005
+inventory/AGS_06611000_2024-03-15 | rdfs:label | "Bestandsanalyse Kassel 2024"
+inventory/AGS_06611000_2024-03-15 | oeo:OEO_00140002 | value/c6f64f4a-ec7f-533b-aa8e-4cf8961b1889
+referencescenario/AGS_06611000_2024-03-15 | a | oeo:OEO_00020311
+referencescenario/AGS_06611000_2024-03-15 | rdfs:label | "Trendszenario Kassel 2024"
+referencescenario/AGS_06611000_2024-03-15 | oeo:OEO_00140002 | value/882f3a6e-5856-5a42-b26f-fd82cf37bbcb
 targetscenario/AGS_06611000_2024-03-15 | a | mhpo:MHPO_00020007
 targetscenario/AGS_06611000_2024-03-15 | rdfs:label | "Zielszenario Kassel 2024"
-VALUE | a | oeo:OEO_00050016
-VALUE | oeo:OEO_00140178 | "241.0"^^xsd:float
-VALUE | oeo:OEO_00040010 | oeo:OEO_00050008
-VALUE | obo:IAO_0000136 | oeo:OEO_00000292
-VALUE | obo:IAO_0000136 | oeo:OEO_00000214
-VALUE | obo:IAO_0000136 | year/2030
+targetscenario/AGS_06611000_2024-03-15 | oeo:OEO_00140002 | value/40a889fd-f888-560e-b688-38c97d225e57
+targetscenario/AGS_06611000_2024-03-15 | oeo:OEO_00140002 | value/f87d7542-aa9e-5037-8206-e54f90ee957c
+value/c6f64f4a-ec7f-533b-aa8e-4cf8961b1889 | a | oeo:OEO_00050016
+value/c6f64f4a-ec7f-533b-aa8e-4cf8961b1889 | oeo:OEO_00140178 | "300.0"^^xsd:float
+value/c6f64f4a-ec7f-533b-aa8e-4cf8961b1889 | oeo:OEO_00040010 | oeo:OEO_00050008
+value/c6f64f4a-ec7f-533b-aa8e-4cf8961b1889 | obo:IAO_0000136 | oeo:OEO_00000292
+value/c6f64f4a-ec7f-533b-aa8e-4cf8961b1889 | obo:IAO_0000136 | oeo:OEO_00000214
+value/c6f64f4a-ec7f-533b-aa8e-4cf8961b1889 | obo:IAO_0000136 | year/2022
+value/c6f64f4a-ec7f-533b-aa8e-4cf8961b1889 | oeo:OEO_00390023 | oeo:OEO_00140070
+value/882f3a6e-5856-5a42-b26f-fd82cf37bbcb | a | oeo:OEO_00050016
+value/882f3a6e-5856-5a42-b26f-fd82cf37bbcb | oeo:OEO_00140178 | "260.0"^^xsd:float
+value/882f3a6e-5856-5a42-b26f-fd82cf37bbcb | oeo:OEO_00040010 | oeo:OEO_00050008
+value/882f3a6e-5856-5a42-b26f-fd82cf37bbcb | obo:IAO_0000136 | oeo:OEO_00000292
+value/882f3a6e-5856-5a42-b26f-fd82cf37bbcb | obo:IAO_0000136 | oeo:OEO_00000214
+value/882f3a6e-5856-5a42-b26f-fd82cf37bbcb | obo:IAO_0000136 | year/2030
+value/882f3a6e-5856-5a42-b26f-fd82cf37bbcb | oeo:OEO_00390023 | oeo:OEO_00140070
+value/40a889fd-f888-560e-b688-38c97d225e57 | a | oeo:OEO_00050016
+value/40a889fd-f888-560e-b688-38c97d225e57 | oeo:OEO_00140178 | "241.0"^^xsd:float
+value/40a889fd-f888-560e-b688-38c97d225e57 | oeo:OEO_00040010 | oeo:OEO_00050008
+value/40a889fd-f888-560e-b688-38c97d225e57 | obo:IAO_0000136 | oeo:OEO_00000292
+value/40a889fd-f888-560e-b688-38c97d225e57 | obo:IAO_0000136 | oeo:OEO_00000214
+value/40a889fd-f888-560e-b688-38c97d225e57 | obo:IAO_0000136 | year/2030
+value/40a889fd-f888-560e-b688-38c97d225e57 | oeo:OEO_00390023 | oeo:OEO_00140070
+value/f87d7542-aa9e-5037-8206-e54f90ee957c | a | oeo:OEO_00140083
+value/f87d7542-aa9e-5037-8206-e54f90ee957c | oeo:OEO_00140178 | "12500.0"^^xsd:float
+value/f87d7542-aa9e-5037-8206-e54f90ee957c | oeo:OEO_00040010 | oeo:OEO_00010137
+value/f87d7542-aa9e-5037-8206-e54f90ee957c | obo:IAO_0000136 | year/2030
+value/f87d7542-aa9e-5037-8206-e54f90ee957c | oeo:OEO_00390023 | oeo:OEO_00140070
+year/2022 | a | oeo:OEO_00030033
+year/2022 | rdfs:label | "2022"
 year/2030 | a | oeo:OEO_00030033
 year/2030 | rdfs:label | "2030"
-VALUE | oeo:OEO_00390023 | oeo:OEO_00140070
 organisation/2d4f4ae8-ea0f-575c-9a76-8dcf377042af | a | oeo:OEO_00030022
 organisation/2d4f4ae8-ea0f-575c-9a76-8dcf377042af | rdfs:label | "Kassel Wärme Ingenieurbüro"
 municipality/AGS_06611000 | a | mhpo:MHPO_00020017
 municipality/AGS_06611000 | rdfs:label | "Gemeindegebiet Kassel"
 """
-
 
 def _triples(ttl: str) -> set:
     """Turtle to a set of `subject | predicate | object`, IRIs shortened.
@@ -447,25 +473,37 @@ def _triples(ttl: str) -> set:
 
 def _short(term: str) -> str:
     term = term.strip().strip("<>")
-    if term.startswith(kg.BASE):
-        rest = term[len(kg.BASE):]
-        return "VALUE" if rest.startswith("value/") else rest
-    return term
+    return term[len(kg.BASE):] if term.startswith(kg.BASE) else term
 
 
-# The plan behind the published example: one energy value and the office
-# that wrote it. Module level, so the schema test can serialize the same
-# plan instead of keeping a second copy of it.
+def _kassel_energy(scenario: str, year: int, magnitude: float) -> dict:
+    return {"kind": "tuple", "parameter": "energy_consumption",
+            "value": magnitude, "value_target": magnitude, "unit_raw": "MWh",
+            "quantity": "OEO_00050016", "quantity_raw": "Endenergieverbrauch",
+            "carrier": "OEO_00000292", "sector": "OEO_00000214", "year": year,
+            # The example carries `has aggregation type integral` and the
+            # serializer no longer invents it: a value whose aggregation
+            # nothing decided is counted, not written down as a year's sum.
+            "aggregation": "OEO_00140070", "aggregation_state": "derived",
+            "aggregation_raw": "MWh",
+            "scenario": scenario, "spatial_scope": "municipality",
+            "provenance": {"document_id": 857}}
+
+
+# The plan behind the published example: the stock take, the trend, the
+# target with its emissions, and the office that wrote it. Module level, so
+# the schema test can serialize the same plan instead of keeping a second
+# copy of it.
 KASSEL_ROWS = [
-    {"kind": "tuple", "parameter": "energy_consumption",
-     "value": 241.0, "value_target": 241.0, "unit_raw": "MWh",
-     "quantity": "OEO_00050016", "quantity_raw": "Endenergieverbrauch",
-     "carrier": "OEO_00000292", "sector": "OEO_00000214", "year": 2030,
-     # The example carries `has aggregation type integral` and the
-     # serializer no longer invents it: a value whose aggregation nothing
-     # decided is counted, not written down as a year's sum.
+    _kassel_energy("status_quo", 2022, 300.0),
+    _kassel_energy("trend", 2030, 260.0),
+    _kassel_energy("target", 2030, 241.0),
+    {"kind": "tuple", "parameter": "emission",
+     "value": 12500.0, "value_target": 12500.0, "unit_raw": "t CO2-Äq",
+     "quantity": "OEO_00140083", "quantity_raw": "THG-Emissionen",
+     "carrier": None, "sector": None, "year": 2030,
      "aggregation": "OEO_00140070", "aggregation_state": "derived",
-     "aggregation_raw": "MWh",
+     "aggregation_raw": "t CO2-Äq",
      "scenario": "target", "spatial_scope": "municipality",
      "provenance": {"document_id": 857}},
     {"kind": "tuple", "parameter": "planning_organisation",
@@ -497,19 +535,12 @@ def full_turtle(tmp_path):
 
 def test_one_heat_plan_comes_out_as_the_published_example(tmp_path):
     """The whole point of the pilot, as one assertion: feed the serializer what
-    Kassel's plan says and the output is the schema repo's kassel_valid.ttl —
-    every node, every predicate, both directions."""
-    ttl = one_plan_turtle(tmp_path)
-    ours = _triples(ttl)
-    # The value node's IRI is ours to mint, so its identity is compared as
-    # VALUE; that the scenario points at it is asserted separately.
-    ours = {t for t in ours
-            if not t.startswith("targetscenario/AGS_06611000_2024-03-15 | "
-                                "oeo:OEO_00140002")}
+    Kassel's plan says and the output is the schema repo's kassel_valid.ttl --
+    every node, every predicate, every IRI, both directions."""
+    ours = _triples(one_plan_turtle(tmp_path))
     theirs = {line.strip() for line in KASSEL_VALID.strip().splitlines()}
     assert ours == theirs, (
         f"\nfehlt : {sorted(theirs - ours)}\nzuviel: {sorted(ours - theirs)}")
-    assert re.search(rf"oeo:OEO_00140002 <{kg.BASE}value/{UUID5}>", ttl)
 
 
 # --- what the model chooses, and what the graph does with it ---------------
@@ -1180,3 +1211,146 @@ def test_the_constants_are_reads_and_not_literals():
                  lambda: kg._parent("carrier")):
         with pytest.raises(KeyError):
             call()
+
+# --- the power parameter ----------------------------------------------------
+
+def test_a_power_is_its_own_parameter_split_by_unit_family():
+    """kW against kWh, and nothing else decides it. A row's parameter is
+    derived from its unit, so one Wh spelling in the power list or one W
+    spelling in the consumption list makes both parameters claim the row and
+    the harvest refuses it instead."""
+    from docpipe.extraction import fields
+    for unit in ("kW", "MW", "GW", "kWth", "kW_th", "kW th"):
+        got = fields.derive_parameter(SPEC, {"unit": unit})
+        assert got is not None and got.uri == "heat_load", unit
+    for unit in ("MWh", "GWh", "kWh/a"):
+        got = fields.derive_parameter(SPEC, {"unit": unit})
+        assert got is not None and got.uri == "energy_consumption", unit
+    # Every unit each parameter accepts derives that parameter and no other:
+    # one spelling in two lists and the row is nobody's.
+    for parameter in NUMERIC:
+        for unit in parameter.units_accepted:
+            got = fields.derive_parameter(SPEC, {"unit": unit})
+            assert got is not None and got.uri == parameter.uri, (
+                parameter.uri, unit)
+    # A peak-power or electric spelling belongs to no parameter: refused with
+    # its unit as the reason rather than harvested and routed out afterwards.
+    for unit in ("kWp", "kWel", "MWp"):
+        assert fields.derive_parameter(SPEC, {"unit": unit}) is None, unit
+        assert fields.parameter_undecidable(SPEC, {"unit": unit}), unit
+
+
+def test_the_power_class_is_the_one_the_unit_implies():
+    """OEO defines `power value` by its unit -- "a quantity value that has a
+    power unit as unit" -- so the class follows from units_accepted and is not
+    a second assertion. `power rating` and `power capacity` are both real and
+    both wrong here: their own parentage already says maximum, which would ask
+    the aggregation axis the same question twice."""
+    from profiles.kwp import vocabulary
+    power = SPEC.by_uri["heat_load"]
+    listed = {uri for uri in power.axes["quantity"].vocabulary
+              if not uri.startswith("out:")}
+    assert listed == {"OEO_00010157"}
+    pinned = vocabulary.load()["terms"]["OEO_00010157"]
+    assert pinned["label"] == "power value"
+    assert power.axes["quantity"].definitions["OEO_00010157"] == \
+        pinned["definition"]
+
+
+def test_the_aggregation_of_a_power_is_asked_and_not_derived():
+    """A watt is not an amount integrated over a span, so the unit fixes
+    nothing. Derived the way the two amount parameters derive it, every
+    Spitzenlast in the corpus would be written into the graph as an annual
+    sum -- a claim about the value that nothing in the document made."""
+    from docpipe.extraction import fields
+    power = SPEC.by_uri["heat_load"]
+    assert power.axes["aggregation"].derive is None
+    for other in ("energy_consumption", "emission"):
+        assert SPEC.by_uri[other].axes["aggregation"].derive is not None
+    assert "aggregation" in [s.name for s in fields.asked_slots(power)]
+
+
+def test_instantaneous_is_not_offered_for_a_power():
+    """`OEO_00140069 instantaneous` looks like the obvious answer for a power
+    and is not one: its own definition demands a value referenced by a time
+    stamp, and the pinned release has no property whose domain a quantity
+    value satisfies and whose range is a time. The spec already records that
+    fact on the year axis."""
+    power = SPEC.by_uri["heat_load"]
+    assert "OEO_00140069" not in power.axes["aggregation"].vocabulary
+    for other in ("energy_consumption", "emission"):
+        assert "OEO_00140069" in SPEC.by_uri[other].axes[
+            "aggregation"].vocabulary, other
+
+
+def test_the_aggregation_of_a_power_may_be_read_from_the_page():
+    """`own` is the strictest of the three rules and it is enforced at write
+    time: an answer read from a column header or a caption belonging to
+    another source comes back unbacked. The question this axis asks names
+    exactly those places, so `own` would refuse what it asked for."""
+    from docpipe.extraction.spec import own_evidence
+    power = SPEC.by_uri["heat_load"]
+    assert power.axes["aggregation"].evidence == "local"
+    assert ("heat_load", "aggregation") not in own_evidence(SPEC)
+
+
+def test_the_two_powers_of_one_row_do_not_collide_on_one_node(tmp_path,
+                                                              caplog):
+    """A BHKW's thermal and electric rating sit in one row under one carrier,
+    one sector, one year and one aggregation. As two `power value`s they mint
+    the same IRI and both are dropped as a conflict, so the electric one is a
+    named non-class instead: counted, not silently lost."""
+    # The answer exists, and the wording of an electric column reaches it
+    # and not the real class: that is the whole separation.
+    quantity = SPEC.by_uri["heat_load"].axes["quantity"]
+    assert "out:electric" in quantity.vocabulary
+    assert quantity.label_to_uri()["elektrische leistung"] == "out:electric"
+    serializer = kg.make_serializer(_database(tmp_path))
+    power = {"parameter": "heat_load", "value": 347, "value_target": 0.347,
+             "unit_raw": "kW", "quantity": "OEO_00010157",
+             "quantity_raw": "Thermische Nutzleistung",
+             "aggregation": "OEO_00140073", "aggregation_state": "read"}
+    with caplog.at_level(logging.INFO, logger="profiles.kwp.kg"):
+        ttl = serializer("waermeplan_kassel_20240315", [
+            _row(**power),
+            _row(**dict(power, value=240, value_target=0.240,
+                        quantity="out:electric",
+                        quantity_raw="Elektrische Leistung"))])
+    line = " ".join(r.getMessage() for r in caplog.records)
+    assert "not_a_class:out:electric" in line
+    assert ttl.count("a oeo:OEO_00010157") == 1
+
+    # And with both answered `power value`, which is what dropping the entry
+    # would force: one IRI, two magnitudes, and the graph takes neither.
+    caplog.clear()
+    with caplog.at_level(logging.INFO, logger="profiles.kwp.kg"):
+        ttl = serializer("waermeplan_kassel_20240315", [
+            _row(**power),
+            _row(**dict(power, value=240, value_target=0.240))])
+    # Nothing serializable at all: the serializer returns None rather than
+    # an empty graph, which is what the caller skips the document on.
+    assert ttl is None
+    assert "'conflict': 2" in " ".join(r.getMessage()
+                                       for r in caplog.records)
+
+
+def test_a_seasonal_power_leaves_the_graph_named(tmp_path, caplog):
+    """23 of 17,587 tables state a power separately for winter and summer.
+    The graph has no coordinate for a season, so both halves mint one IRI and
+    are dropped -- as `conflict`, which says nothing, unless the answer says
+    what they are."""
+    quantity = SPEC.by_uri["heat_load"].axes["quantity"]
+    assert "out:seasonal" in quantity.vocabulary
+    assert quantity.label_to_uri()["ø winter"] == "out:seasonal"
+    serializer = kg.make_serializer(_database(tmp_path))
+    power = {"parameter": "heat_load", "value": 0.7, "value_target": 0.7,
+             "unit_raw": "MW", "quantity": "out:seasonal",
+             "quantity_raw": "Ø Winter",
+             "aggregation": "OEO_00140071", "aggregation_state": "read"}
+    with caplog.at_level(logging.INFO, logger="profiles.kwp.kg"):
+        ttl = serializer("waermeplan_kassel_20240315",
+                         [_row(**power), _row()])
+    line = " ".join(r.getMessage() for r in caplog.records)
+    assert "not_a_class:out:seasonal" in line
+    assert "conflict" not in line
+    assert ttl.count("oeo:OEO_00050016") >= 1, "the other row still lands"

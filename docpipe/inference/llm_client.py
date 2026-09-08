@@ -199,6 +199,32 @@ def _chat_json(messages: list, temperature: float) -> dict:
     raise RuntimeError(f"LLM call failed after {LLM_MAX_RETRIES} attempts")
 
 
+def choose(prompt, task: str, question: str, options: dict) -> Optional[str]:
+    """One closed question: the answer is a key of `options`, or None.
+
+    The KG route's field request. `prompt` is the profile's, loaded by
+    kg_route; the payload keys are the wire protocol and its prose is not.
+    An answer outside the list is None and never the nearest key: the caller
+    reads None as "no constraint", and a guessed key would filter the graph
+    on something nobody asked. An empty list is a number slot, and any
+    non-empty answer passes through for the caller to parse.
+    """
+    if LLM_STUB_MODE:
+        return None
+    payload = {"task": task, "question": question, "options": options}
+    parsed = _chat_json(
+        [{"role": "system", "content": prompt.text},
+         {"role": "user", "content": json.dumps(payload, ensure_ascii=False)}],
+        temperature=float(prompt.meta.get("temperature", 0)))
+    answer = parsed.get("answer")
+    if answer is None:
+        return None
+    answer = str(answer).strip()
+    if not answer or (options and answer not in options):
+        return None
+    return answer
+
+
 def grounded_quote(quote, chunk_item: dict) -> Optional[str]:
     """Return the cleaned quote iff it is a grounded verbatim span of `chunk_item`."""
     q = _clean_quote(quote)

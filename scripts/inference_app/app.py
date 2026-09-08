@@ -3,7 +3,10 @@ app.py – Streamlit RAG chat over a docpipe corpus. The only module that import
 Streamlit.
 
 What the corpus is about comes from the profile: its catalog supplies the
-labels, the filters and the detail shown for a selected document.
+labels, the filters and the detail shown for a selected document. With a
+graph configured (INFERENCE_KG_TTL_PATH, the file `--serialize` wrote) a
+question goes to the graph first and to the documents only when the graph
+says why it has no answer.
 
 Run:
     DOCPIPE_PROFILE=kwp streamlit run scripts/inference_app/app.py \\
@@ -37,8 +40,8 @@ if _REPO_ROOT not in sys.path:
 import streamlit as st
 
 from docpipe.inference import (
-    answer, catalog, chunker, compare, faiss_store, llm_client, query_cache,
-    request_log,
+    answer, catalog, chunker, compare, faiss_store, kg_route, llm_client,
+    query_cache, request_log,
 )
 from docpipe.inference import config as core_config
 from docpipe.inference import db
@@ -78,6 +81,18 @@ def get_request_log():
 def get_catalog():
     """The profile's catalog, or the generic one if no profile is configured."""
     return catalog.load_catalog(config.PROFILE)
+
+
+@st.cache_resource
+def get_graph():
+    """The graph `--serialize` wrote, and the trust lines above its nodes."""
+    return kg_route.load_graph(config.KG_TTL_PATH)
+
+
+@st.cache_resource
+def get_kg_hooks():
+    """What the profile contributes to the graph route; None without a graph."""
+    return kg_route.hooks(config.PROFILE)
 
 
 # ---------------------------------------------------------------------------
@@ -164,6 +179,21 @@ def run_comparison(task: str, documents: list, scopes: list[str],
 
 
 
+def run_kg_turn(task: str, document_id: int) -> dict:
+    """One question to the graph; `answer_from_graph` decides everything."""
+    graph, comments = get_graph()
+    return kg_route.answer_from_graph(
+        task, get_kg_hooks(), graph, comments, db_path=config.DB_PATH,
+        document=db.document_filename(get_db(), document_id),
+        ask=_ask_coordinate)
+
+
+def _ask_coordinate(task: str, slot):
+    """One closed question to the model, over the spec's own list."""
+    return llm_client.choose(get_kg_hooks().prompt, task, slot.question,
+                             slot.answerable() if slot.is_closed else {})
+
+
 def _spinner(label: str):
     """A labelled spinner with Streamlit's built-in live elapsed timer."""
     return st.spinner(f"{label} …", show_time=True)
@@ -233,6 +263,20 @@ def main() -> None:
         )
         out_fmt = st.radio("Antwortformat", ["Fließtext", "JSON"], horizontal=True)
         as_json = out_fmt == "JSON"
+        # The graph first, the documents second. A value node has neither a
+        # picture nor a search scope, so the two inputs above apply to the
+        # document search only, and the help text says so.
+        kg_hooks = get_kg_hooks()
+        kg_available = kg_hooks is not None and config.KG_TTL_PATH.is_file()
+        route_mode = st.radio(
+            "Antwortweg", ["Automatik", "Wissensgraph", "Dokumentsuche"],
+            horizontal=True, disabled=not kg_available,
+            help="Automatik fragt zuerst den Wissensgraphen und fällt auf die "
+                 "Dokumentsuche zurück; Wissensgraph antwortet nur aus dem "
+                 "Graphen oder gar nicht. Bild und Suchbereich gelten nur für "
+                 "die Dokumentsuche.")
+        if not kg_available:
+            route_mode = "Dokumentsuche"
         if config.LLM_STUB_MODE:
             st.info("LLM_STUB_MODE aktiv – Antworten sind Platzhalter.")
 
@@ -252,6 +296,9 @@ def main() -> None:
     # ---- Render history ----
     for msg in history:
         with st.chat_message(msg["role"]):
+            if msg.get("kg_values") is not None:
+                _render_kg(msg["kg_values"])
+                continue
             if msg.get("rows") is not None:
                 _render_comparison(msg)
                 continue
@@ -263,6 +310,8 @@ def main() -> None:
                 st.caption(f"🔎 Suchanker (Embedding-Phrase): {msg['phrase']}")
             if msg.get("recheck_note"):
                 st.caption(msg["recheck_note"])
+            if msg.get("route_note"):
+                st.caption(msg["route_note"])
             _render_compute(msg.get("compute"))
             for cit in msg.get("citations", []):
                 _render_citation(cit)
@@ -309,6 +358,31 @@ def main() -> None:
             _remember(by_doc, row["document_id"], task, row)
         return
 
+    # The graph route, when offered: it answers, or it says why not and the
+    # document search runs with that sentence as a caption. Each branch
+    # returns, because everything below reads `result`.
+    route_note = None
+    if route_mode != "Dokumentsuche":
+        with _spinner("Wissensgraph"):
+            outcome = run_kg_turn(task, doc_id)
+        if outcome["route"] == "kg":
+            with st.chat_message("assistant"):
+                _render_kg(outcome["values"])
+            history.append({"role": "assistant", "content": "",
+                            "kg_values": outcome["values"], "route": "kg"})
+            return
+        note = kg_hooks.notes[outcome["reason"]]
+        if route_mode == "Wissensgraph":
+            # Forced: a graph that says nothing is a finding about the
+            # graph, and a silent fallback would hide it.
+            with st.chat_message("assistant"):
+                st.markdown(note)
+            history.append({"role": "assistant", "content": note,
+                            "route": "kg_empty"})
+            return
+        route_note = ("📚 Dokumentsuche, der Wissensgraph hat nicht "
+                      "geantwortet: " + note)
+
     result = run_turn(task, image_bytes, image_only, doc_id, scopes, as_json=as_json,
                       history=by_doc.get(doc_id, []))
 
@@ -332,10 +406,13 @@ def main() -> None:
                 st.caption(f"🔎 Suchanker (Embedding-Phrase): {result['phrase']}")
             if recheck_note:
                 st.caption(recheck_note)
+            if route_note:
+                st.caption(route_note)
             _render_compute(result.get("compute"))
             history.append({"role": "assistant", "content": reply, "citations": [],
                             "phrase": result.get("phrase"), "as_json": False,
                             "recheck_note": recheck_note,
+                            "route_note": route_note,
                             "compute": result.get("compute", [])})
         else:
             _render_answer(result["answer"], result["as_json"])
@@ -343,6 +420,8 @@ def main() -> None:
                 st.caption(f"🔎 Suchanker (Embedding-Phrase): {result['phrase']}")
             if recheck_note:
                 st.caption(recheck_note)
+            if route_note:
+                st.caption(route_note)
             _render_compute(result.get("compute"))
             # Rendered directly (not inside an expander) so each citation can carry
             # its own "Kontext anzeigen" expander without illegal nesting.
@@ -352,6 +431,7 @@ def main() -> None:
                 "role": "assistant", "content": result["answer"],
                 "citations": result["citations"], "phrase": result.get("phrase"),
                 "as_json": result["as_json"], "recheck_note": recheck_note,
+                "route_note": route_note,
                 "compute": result.get("compute", []),
             })
 
@@ -416,6 +496,32 @@ def _render_comparison(outcome: dict) -> None:
         _render_compute(row.get("compute"))
         for cit in row.get("citations", []):
             _render_citation(cit)
+
+
+def _render_kg(values: list) -> None:
+    """The graph's values, each under the trust line the serializer wrote.
+
+    The badge is the LAST comment line above the node and the evidence the
+    rest, which is the order evidence_comment writes them in. A C is a
+    warning because the profile's own word for it is a review request.
+    """
+    hooks = get_kg_hooks()
+    for value in values:
+        st.markdown(f"**{value['number']} {hooks.label(value['unit'])}** · "
+                    f"{value['year']} · {hooks.label(value['quantity'])} · "
+                    f"{hooks.label(value['aggregation'])}")
+        about = [hooks.label(iri) for iri in (value.get("abouts") or "").split()]
+        st.caption("🏷 " + " · ".join([value["partLabel"]] + about))
+        level = kg_route.trust_level(value["trust"], hooks.prose)
+        if level == kg_route.LEVEL_C:
+            st.warning(value["trust"])
+        elif level == kg_route.LEVEL_B:
+            st.caption(value["trust"])
+        else:
+            st.markdown(value["trust"])
+        if value.get("evidence"):
+            with st.expander("Beleg anzeigen"):
+                st.markdown("\n".join(f"- {line}" for line in value["evidence"]))
 
 
 def _render_compute(compute: list | None) -> None:

@@ -1250,8 +1250,14 @@ def test_the_kwp_profile_freezes_anchors_its_own_spec_asks_for():
     spec = load_spec(Path(profile.component("extraction", "SPEC_PATH")))
     frozen, sha = runner.frozen_anchors(profile, spec)
     assert len(sha) == 16
-    assert set(frozen) == {p.uri for p in spec.parameters}, (
-        "every parameter is planned for, and only parameters are frozen")
+    assert set(frozen) <= {p.uri for p in spec.parameters}, (
+        "only parameters are frozen; a key that is no question of this spec "
+        "would be dropped by every reader without a word")
+    # The three the 2026-08 run measured. A parameter added since has no
+    # measured section to freeze -- the file's own `origin` says the passages
+    # come from sections that really produced a value -- and the model writes
+    # that parameter's anchor per document instead (runner.document_anchor).
+    assert {"energy_consumption", "emission", "planning_organisation"}         <= set(frozen), "a measured anchor set was dropped"
     assert all(len(text) > 100 for texts in frozen.values() for text in texts), (
         "these are passages, not the one-line queries this replaced")
     # The key a run reads its own anchors.json back under has to move with the
@@ -1683,6 +1689,102 @@ def test_the_written_summary_is_judged_by_the_specs_own_rule(tmp_path,
     other = json.loads((tmp_path / "plan_y.jsonl")
                        .read_text(encoding="utf-8").strip().splitlines()[-1])
     assert other["reasons"] == {"nonlocal:carrier": 1}
+
+
+def test_a_parameter_nobody_answered_still_ends_with_a_state(tmp_path,
+                                                             monkeypatch):
+    """A parameter that produced no row left no byte in the harvest at all.
+    Measured on Kassel: `planning_organisation` came back with 0 tuples and
+    nothing anywhere saying whether the plan is silent about its office or
+    the run never asked. The two read the same, and they are not the same."""
+    from docpipe.extraction.pipeline import DocumentReport
+
+    monkeypatch.setattr(runner.prompts, "versions",
+                        lambda ids: {i: "v1" for i in ids})
+    spec = load({"parameters": [
+        {"uri": "OEO_00050016",
+         "label": "Endenergieverbrauch",
+         "description": "Endenergieverbrauch je Jahr, so wie ihn der Plan "
+                        "selbst bilanziert.",
+         "unit_target": "OEO_00050008",
+         "units_accepted": {"MWh/a": 1.0},
+         "axes": {"year": {"type": "int"}},
+         "example": {"source": "| 42.005 | MWh/a | im Jahr 2020 |",
+                     "tuples": [{"value": 42005, "unit_raw": "MWh/a"}]}},
+        {"uri": "planning_organisation",
+         "label": "Beauftragtes Planungsbuero",
+         "description": "Das Buero, das den Plan im Auftrag erstellt hat.",
+         "value_type": "text",
+         "example": {"source": "Auftragnehmer: Ein Buero GmbH, "
+                              "Bearbeitung: M. Wagner.",
+                     "tuples": [{"value": "Ein Buero",
+                                 "quote": "Auftragnehmer: Ein Buero "
+                                          "GmbH, Bearbeitung: M. Wagner."}]}},
+    ]})
+    report = DocumentReport(document_id=7)
+    report.tuples = [{"parameter": "OEO_00050016", "value": 42005,
+                      "tier": "text_located", "year": 2020,
+                      "year_state": "read", "year_source": ["table", 1],
+                      "provenance": {"document_id": 7, "owner_kind": "table",
+                                     "owner_id": 1, "parent_section": 5}}]
+
+    runner.finish_document(report, "plan_x", tmp_path, "sha", spec=spec,
+                           answered=1)
+    lines = [json.loads(line) for line in (tmp_path / "plan_x.jsonl")
+             .read_text(encoding="utf-8").strip().splitlines()]
+    states = [line for line in lines if line["kind"] == "parameter_state"]
+
+    assert [s["parameter"] for s in states] == [p.uri for p in spec.parameters]
+    assert {s["parameter"]: s["state"] for s in states} == {
+        "OEO_00050016": "read", "planning_organisation": "unstated"}
+    assert states[0]["tuples"] == 1 and states[1]["tuples"] == 0
+    assert all(s["document_id"] == 7 for s in states)
+    # The summary is computed from everything above it and stays last.
+    assert lines[-1]["kind"] == "summary"
+
+
+def test_a_plan_that_was_not_read_to_the_end_is_not_a_plan_that_says_nothing(
+        tmp_path, monkeypatch):
+    """`unstated` is a finding about the document, `exhausted` one about the
+    run, and only the second is a reason to run the document again. A harvest
+    that cut out halfway through must not report the rest of the plan as
+    silent."""
+    from docpipe.extraction.pipeline import DocumentReport
+
+    monkeypatch.setattr(runner.prompts, "versions",
+                        lambda ids: {i: "v1" for i in ids})
+    spec = load({"parameters": [{
+        "uri": "planning_organisation",
+        "label": "Beauftragtes Planungsbuero",
+        "description": "Das Buero, das den Plan im Auftrag erstellt hat.",
+        "value_type": "text",
+        "example": {"source": "Auftragnehmer: Ein Buero GmbH, "
+                              "Bearbeitung: M. Wagner.",
+                    "tuples": [{"value": "Ein Buero",
+                                "quote": "Auftragnehmer: Ein Buero "
+                                          "GmbH, Bearbeitung: M. Wagner."}]},
+    }]})
+    report = DocumentReport(document_id=7)
+    report.owners_harvested = 3
+    report.refusals = [{"parameter": "OEO_00050016", "reason": "unreadable",
+                        "claim": {"_harvest_failed": True,
+                                  "_why": "unreachable"}}]
+
+    runner.finish_document(report, "plan_x", tmp_path, "sha", spec=spec,
+                           answered=0)
+    states = [json.loads(line) for line in (tmp_path / "plan_x.jsonl")
+              .read_text(encoding="utf-8").strip().splitlines()
+              if json.loads(line)["kind"] == "parameter_state"]
+    assert [s["state"] for s in states] == ["exhausted"]
+
+    # The same report, read to the end: then the silence is the plan's.
+    report.refusals = []
+    runner.finish_document(report, "plan_y", tmp_path, "sha", spec=spec,
+                           answered=4)
+    states = [json.loads(line) for line in (tmp_path / "plan_y.jsonl")
+              .read_text(encoding="utf-8").strip().splitlines()
+              if json.loads(line)["kind"] == "parameter_state"]
+    assert [s["state"] for s in states] == ["unstated"]
 
 
 def _anchor_client(monkeypatch, calls):

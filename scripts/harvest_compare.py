@@ -55,15 +55,24 @@ STATE_ORDER = (fields.READ, fields.DERIVED, fields.SAID_UNSTATED,
                fields.UNBACKED, fields.EXHAUSTED, fields.UNANSWERED,
                fields.OUT_OF_SLICE)
 
+# The four a parameter_state line can carry, worst last, so the eye finds the
+# read ones first.
+PARAMETER_STATE_ORDER = (fields.READ, fields.UNBACKED, fields.SAID_UNSTATED,
+                         fields.EXHAUSTED)
+
 
 def read_harvest(path: Path) -> tuple:
-    """(tuples, refusals, summary) of one document's JSONL.
+    """(tuples, refusals, summary, parameter_lines) of one document's JSONL.
 
     The summary is the file's own last line and is neither: counting it as a
     refusal would add one to every document's refusal count, and the ratio
-    that is read off it is the one this whole report exists for.
+    that is read off it is the one this whole report exists for. The same
+    holds for the parameter_state lines, and there is one per parameter of
+    the spec, so an `else` that swept them into the refusals would report
+    fourteen model errors per ar6 document that nobody made.
     """
     tuples, refusals, summary = [], [], None
+    parameter_lines: list = []
     for line in path.read_text(encoding="utf-8").splitlines():
         if not line.strip():
             continue
@@ -76,9 +85,11 @@ def read_harvest(path: Path) -> tuple:
             tuples.append(row)
         elif kind == "summary":
             summary = row
+        elif kind == "parameter_state":
+            parameter_lines.append(row)
         else:
             refusals.append(row)
-    return tuples, refusals, summary
+    return tuples, refusals, summary, parameter_lines
 
 
 def serialize_counts(serializer, name: str, tuples: list, records: list) -> dict:
@@ -186,7 +197,7 @@ def truth_report(files: list, truth: dict) -> list:
               if not k.startswith("_") and isinstance(v, dict)}
     lines, checked = [], collections.Counter()
     for path in files:
-        tuples, _refusals, _summary = read_harvest(path)
+        tuples, _refusals, _summary, _states = read_harvest(path)
         for coordinate, got in agreement(tuples, wanted).items():
             seen = got["hit"] + got["miss"]
             checked[coordinate] += seen
@@ -248,10 +259,14 @@ def main(argv=None) -> int:
     reasons: collections.Counter = collections.Counter()
     summaries: list = []
     states: dict = collections.defaultdict(collections.Counter)
+    # Keyed by parameter, not by coordinate: `states` above counts the seven
+    # per-coordinate states of the rows that exist, and a parameter that
+    # produced no row appears in neither.
+    parameters: dict = collections.defaultdict(collections.Counter)
     per_document: list = []
     for path in files:
         name = path.stem
-        tuples, refusals, summary = read_harvest(path)
+        tuples, refusals, summary, parameter_lines = read_harvest(path)
         if summary:
             summaries.append((name, summary))
             for level, count in (summary.get("levels") or {}).items():
@@ -264,6 +279,8 @@ def main(argv=None) -> int:
             for key in row:
                 if key.endswith("_state"):
                     states[key[:-6]][row[key]] += 1
+        for row in parameter_lines:
+            parameters[row.get("parameter")][row.get("state")] += 1
         totals["documents"] += 1
         totals["tuples"] += len(tuples)
         totals["refusals"] += len(refusals)
@@ -303,6 +320,15 @@ def main(argv=None) -> int:
         print("  %-16s %6d  %s" % (
             axis, total, ", ".join(f"{s}={n} ({100.0 * n / total:.0f}%)"
                                    for s, n in ordered)))
+
+    if parameters:
+        print("\nZustaende je Parameter (ein Dokument, eine Zeile)")
+        for parameter in sorted(parameters):
+            counts = parameters[parameter]
+            print("  %-24s %s" % (
+                parameter, ", ".join(
+                    f"{s}={counts[s]}" for s in PARAMETER_STATE_ORDER
+                    if counts.get(s))))
 
     if truth:
         print("\nGegen die bekannte Wahrheit")

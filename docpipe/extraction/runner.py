@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import argparse
 import functools
+import hashlib
 import json
 import logging
 import os
@@ -44,7 +45,7 @@ from .pipeline import (Source, WorkItem, apply_frame, batch_uri,
                        write_report)
 from .fields import EXHAUSTED
 from .queries import expand as expand_queries
-from .trust import document_summary
+from .trust import document_summary, parameter_states
 from .spec import Spec, fingerprints, load as load_spec, own_evidence
 
 log = logging.getLogger(__name__)
@@ -114,6 +115,14 @@ FRAME_PROMPT_ID = "extraction/frame"
 PROMPT_IDS = (HARVEST_PROMPT_ID, QUERIES_PROMPT_ID, ANCHORS_PROMPT_ID,
               ROWS_PROMPT_ID, FIELD_PROMPT_ID, PHRASE_PROMPT_ID,
               FRAME_PROMPT_ID)
+# The second reading of one value, under a window narrowed to the two passages
+# the row may legally quote from. Deliberately NOT in PROMPT_IDS: those are
+# folded into every document's stamp and compared by `stale`, and a key absent
+# from a stored stamp counts as changed -- so adding it here would report all
+# 1.082 stamped documents stale the day this prompt is first written, and the
+# next harvest would redo them. What the review writes into a stamp goes under
+# the recorded lane instead, see RECORDED_PREFIXES.
+REVIEW_PROMPT_ID = "extraction/review"
 
 # One request per field, or one request per tuple. The old way is kept
 # reachable because it is what every measured number so far was taken with,
@@ -461,8 +470,113 @@ def make_parents(db_path: Path) -> Callable:
     return parents
 
 
+def make_owner_sources(db_path: Path) -> Callable:
+    """(owners) -> {(kind, id): Source} for passages a harvest already named.
+
+    The harvest stores the address of a passage and not its text, so a pass
+    that reads one coordinate again has to fetch it back. Through the same
+    two functions the harvest used -- the cached fetcher and `_source_of` --
+    so the heading is prefixed the same way and a quote that was checkable
+    during the harvest stays checkable.
+
+    Its own connection per thread, read-only, and memoised across calls: one
+    section is the parent of several rows and would otherwise be read once
+    per row.
+    """
+    local = threading.local()
+
+    def _connections():
+        if getattr(local, "conn", None) is None:
+            local.conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
+            local.conn.row_factory = sqlite3.Row
+            local.fetch = make_content_fetcher()
+        return local.conn, local.fetch
+
+    def owner_sources(owners) -> dict:
+        conn, fetch = _connections()
+        out: dict = {}
+        for kind, owner in owners or ():
+            if not kind or owner is None or (kind, owner) in out:
+                continue
+            try:
+                content = fetch(conn, kind, int(owner))
+            except Exception as exc:          # pragma: no cover - defensive
+                log.warning("   %s %s unreadable: %s", kind, owner, exc)
+                continue
+            if content is None:
+                continue
+            out[(kind, owner)] = _source_of(
+                {"score": None, **content, "owner_kind": kind,
+                 "owner_id": int(owner)})
+        return out
+
+    return owner_sources
+
+
+def make_review_sources(db_path: Path) -> Callable:
+    """(row) -> the passages one stored tuple may legally quote from.
+
+    Exactly two, in this order: the row's own source, and the section that
+    source stands in. That pair is what the evidence rule accepts for an axis
+    held to its own source, and it is a strict SUBSET of the window the sweep
+    already walked -- which is what makes the second reading a check on the
+    first and not an independent one.
+
+    The parent goes through `make_parents` rather than being fetched from
+    `parent_section` directly, so a section too long for the window arrives
+    cut around this row's own placeholder instead of from its first character.
+
+    Its own connection per thread, like `make_parents`: read-only, and SQLite
+    handles are not shared.
+    """
+    local = threading.local()
+    parents = make_parents(db_path)
+
+    def _connections():
+        if getattr(local, "conn", None) is None:
+            local.conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
+            local.conn.row_factory = sqlite3.Row
+            local.fetch = make_content_fetcher()
+        return local.conn, local.fetch
+
+    def sources_for(row: dict) -> list:
+        conn, fetch = _connections()
+        provenance = row.get("provenance") or {}
+        kind, owner = provenance.get("owner_kind"), provenance.get("owner_id")
+        if not kind or owner is None:
+            return []
+        try:
+            content = fetch(conn, kind, int(owner))
+        except Exception as exc:              # pragma: no cover - defensive
+            log.warning("   review: %s %s unreadable: %s", kind, owner, exc)
+            return []
+        if content is None:
+            return []
+        own = _source_of({"score": None, **content, "owner_kind": kind,
+                          "owner_id": int(owner)})
+        # A row whose own source IS a section has one passage, not two:
+        # `make_parents` skips a parent that is already shown.
+        return [own] + list(parents([own]))
+
+    return sources_for
+
+
+def own_section_number(sources) -> Optional[int]:
+    """The earliest section any of these passages stands in, or None.
+
+    The rest stage reads in the document's own order, and that order starts at
+    section 1 -- the title page of a 249-section plan, for a row that stands on
+    page 180. Earliest and not nearest, because one sweep asks for several rows
+    at once and only a start before all of them is close to every one.
+    """
+    numbers = [n for n in ((s.provenance or {}).get("section_number")
+                           for s in sources or ())
+               if isinstance(n, int)]
+    return min(numbers) if numbers else None
+
+
 def make_rest_of_document(db_path: Path) -> Callable:
-    """(document_id, exclude) -> every remaining section, in document order.
+    """(document_id, exclude, start) -> every remaining section, in document order.
 
     The floor under the field sweep, and the reason "not stated" can mean it.
     Retrieval answers "which passages look like this question", and for a
@@ -474,6 +588,13 @@ def make_rest_of_document(db_path: Path) -> Callable:
     starts reading: the document's own sections, in their own order, until the
     coordinate is found or the document is finished. Finite by construction,
     which is what lets a sweep end in an answer rather than in a budget.
+
+    Where it starts reading is `start`, the section the open rows stand in. The
+    order is ROTATED there and never cut: what this floor promises is that "not
+    stated" means the whole document was read, and dropping the sections before
+    the row would make that a lie about the part a title page stands in. A
+    coordinate is far more often a few sections from its own row than on page
+    one, and the budget runs out long before the wrap comes round.
     """
     local = threading.local()
 
@@ -484,16 +605,22 @@ def make_rest_of_document(db_path: Path) -> Callable:
             local.fetch = make_content_fetcher()
         return local.conn, local.fetch
 
-    def rest_of_document(document_id: int, exclude: set) -> list:
+    def rest_of_document(document_id: int, exclude: set,
+                         start: Optional[int] = None) -> list:
         conn, fetch = connections()
         try:
-            ids = [int(r[0]) for r in conn.execute(
-                "SELECT id FROM Sections WHERE document = ? "
+            order = [(int(r[0]), r[1]) for r in conn.execute(
+                "SELECT id, section_number FROM Sections WHERE document = ? "
                 "ORDER BY COALESCE(section_number, id)", (document_id,))]
         except Exception as exc:
             log.warning("   sections of document %s unreadable: %s",
                         document_id, exc)
             return []
+        if start is not None:
+            at = next((i for i, (_id, number) in enumerate(order)
+                       if number is not None and number >= start), 0)
+            order = order[at:] + order[:at]
+        ids = [section_id for section_id, _number in order]
         out: list = []
         for section_id in ids:
             if ("section", section_id) in exclude:
@@ -2236,27 +2363,147 @@ def make_field_asker(image_root: Optional[Path] = None) -> Callable:
     return ask
 
 
-def make_fieldwise_harvester(image_root: Optional[Path] = None,
-                             more_sources: Optional[Callable] = None,
-                             rest_of_document: Optional[Callable] = None,
-                             spec=None, anchors: Optional[dict] = None,
-                             slice_gate: Optional[dict] = None,
-                             parents: Optional[Callable] = None,
-                             frame_axes: Optional[list] = None
-                             ) -> Callable:
-    """A harvest(batch, prior) that asks per field and answers like the old one.
+def _review_payload(row: dict, shown: list, parameter, slots) -> dict:
+    """The request body of one review request: one row, its two passages.
 
-    Same signature as make_harvester's, so the scheduler above it does not
-    change: the batch is still the unit in flight, and the sweep over the
-    fields happens inside one batch's turn.
+    Its own body and not `_field_payload`'s: that one exists to amortise many
+    rows over one caption and carries the ids, groups and corrections that go
+    with it. Reusing it would bind this prompt to the whole field contract,
+    and the review asks a different question of one row.
     """
-    from concurrent.futures import ThreadPoolExecutor, as_completed
+    sources = []
+    for index, source in enumerate(shown):
+        entry = {"id": f"Q{index + 1}", "kind": source.owner_kind,
+                 "title": source.provenance.get("title"),
+                 "section": source.provenance.get("section_title"),
+                 "text": source.text}
+        for key in ("page", "block_id"):
+            if source.provenance.get(key):
+                entry[key] = source.provenance[key]
+        # A machine token, not prose: which passage is the section the other
+        # one stands in. The wording of that belongs in each profile's own
+        # prompt, in the language that profile's corpus is written in.
+        if source.provenance.get("via") == "parent":
+            entry["via"] = "parent"
+        sources.append(entry)
+    where = {(s.owner_kind, s.owner_id): f"Q{i + 1}"
+             for i, s in enumerate(shown)}
+    provenance = row.get("provenance") or {}
+    listed = {"value": row.get("value"), "quote": row.get("quote")}
+    here = where.get((provenance.get("owner_kind"),
+                      provenance.get("owner_id")))
+    if here:
+        listed["source"] = here
+    there = where.get(("section", provenance.get("parent_section")))
+    if there:
+        listed["section"] = there
+    unit = row.get("unit_raw") or row.get("unit")
+    if unit:
+        listed["unit"] = unit
+    # Which cell of the quoted table row the number sits in. Three numbers
+    # under three year columns share one quote, and the column is what tells
+    # them apart.
+    cell = pipeline_cell_index(listed.get("quote"), listed.get("value"))
+    if cell is not None:
+        listed["column"], listed["columns"] = cell
+    asked = []
+    for slot in slots:
+        field = {"name": slot.name, "question": slot.question}
+        if slot.options:
+            field["options"] = slot.answerable()
+        asked.append(field)
+    return {"sources": sources, "row": listed, "fields": asked}
 
-    find_rows = make_harvester(image_root, prompt_id=ROWS_PROMPT_ID, spec=spec)
-    ask = make_field_asker(image_root)
+
+def make_review_asker(image_root: Optional[Path] = None) -> Callable:
+    """ask(row, shown, parameter, slots) -> reply, or None.
+
+    One stored value, read again over the two passages it may quote from. The
+    same model and a narrower window, so what it can find is a reading that
+    contradicts itself -- not a reading that is wrong about the picture in the
+    same way twice.
+    """
+    prompt = prompts.load(REVIEW_PROMPT_ID)
+    client = _client()
+    temperature = float(prompt.meta.get("temperature", 0.0))
+    max_tokens = int(prompt.meta.get("max_tokens", 1024))
+
+    def ask(row: dict, shown: list, parameter, slots) -> Optional[dict]:
+        payload = json.dumps(_review_payload(row, shown, parameter, slots),
+                             ensure_ascii=False, indent=2)
+        # The crops ride along exactly as they do for a field request: a
+        # transcription is a model's reading of a picture, and a review of a
+        # transcription alone would be a review of that first reading.
+        content: object = payload
+        parts = [{"type": "text", "text": payload}]
+        for index, source in enumerate(shown):
+            path = source.image_path
+            if not (path and ATTACH_IMAGES):
+                continue
+            part = _image_part(str(image_root / path) if image_root else path)
+            if part is not None:
+                parts.append({"type": "text", "text": f"Bild zu Q{index + 1}:"})
+                parts.append(part)
+        if len(parts) > 1:
+            content = parts
+        conversation: list = [{"role": "user", "content": content}]
+        for attempt in range(1, MAX_RETRIES + 1):
+            try:
+                response = client.chat.completions.create(
+                    model=LLM_MODEL, temperature=temperature,
+                    max_tokens=max_tokens,
+                    messages=[{"role": "system", "content": prompt.text},
+                              *conversation],
+                    extra_body={"chat_template_kwargs": {"enable_thinking": False}},
+                )
+                reply = response.choices[0]
+                _observe_usage(getattr(response, "usage", None))
+                answer = _loads_object(reply.message.content)
+                if answer is None and reply.finish_reason == "stop":
+                    answer = _loads_object(reply.message.content, close=True)
+                if answer is None:
+                    answer = _loads_object(
+                        getattr(reply.message, "reasoning_content", None))
+                if isinstance(answer, dict):
+                    return answer
+                log.warning("   review attempt %d: unreadable reply%s",
+                            attempt, _unparsable(reply))
+                conversation.append({"role": "assistant",
+                                     "content": reply.message.content or ""})
+                conversation.append({"role": "user", "content": (
+                    "Deine Antwort war kein lesbares JSON-Objekt. Gib NUR das "
+                    "Objekt aus, in EINER Zeile, ohne Text davor oder danach "
+                    "und ohne ein zweites Objekt.")})
+            except Exception as exc:
+                log.warning("   review attempt %d failed: %s", attempt, exc)
+                status = getattr(exc, "status_code", None)
+                if isinstance(status, int) and 400 <= status < 500 and status != 429:
+                    break
+            if attempt < MAX_RETRIES:
+                time.sleep(min(2 * attempt, 6))
+        return None
+
+    return ask
+
+
+def make_sweeper(ask: Callable, *,
+                 more_sources: Optional[Callable] = None,
+                 rest_of_document: Optional[Callable] = None,
+                 parents: Optional[Callable] = None,
+                 anchors: Optional[dict] = None) -> Callable:
+    """sweep_field(batch, rows, slots, anchor_id) -> what the sweep came to.
+
+    Lifted out of the harvester so a pass that re-reads ONE coordinate of an
+    already harvested document walks the same three stages, in the same
+    order, under the same allowances. A second copy of this would be a second
+    set of numbers, and every measurement the sweep has ever produced is
+    about this one.
+
+    Its five dependencies are exactly what it closed over inside the
+    harvester: the asker, and the three ways of finding more passages plus
+    the anchor sets that seed them.
+    """
     anchors = anchors or {}
-    pool = ThreadPoolExecutor(max_workers=FIELD_PARALLEL,
-                              thread_name_prefix="field")
 
     def sweep_field(batch, rows: list, slots, anchor_id: str = "") -> dict:
         """Short windows over the document until these coordinates are read.
@@ -2302,7 +2549,28 @@ def make_fieldwise_harvester(image_root: Optional[Path] = None,
         # itself rather than its key.
         held = {(i.source.owner_kind, i.source.owner_id): i.source
                 for i in batch.items}
-        state = {"asked": 0, "answer": None, "stage": "own"}
+        # One allowance per stage, not one for the sweep. Own, retrieval
+        # and rest are three different searches, and a stage that ran out must
+        # not be the reason the next one never ran. Two ways it was:
+        #
+        #   * own's retries were charged to retrieval. Measured on a stubbed
+        #     sweep: retrieval got 21 windows when own retried three times and
+        #     23 when it answered once, for the same document.
+        #   * rest took its allowance by ASSIGNING the shared counter,
+        #     `max(0, FIELD_MAX_WINDOWS - REST_MAX_WINDOWS)`, which is
+        #     REST_MAX_WINDOWS only while that number is the smaller one. Set
+        #     the rest allowance above the field one and it becomes 0, and the
+        #     stage silently gets the whole budget.
+        #
+        # The sum is what it was, FIELD_MAX_WINDOWS + REST_MAX_WINDOWS. `own`
+        # can never bind -- one window, and the attempt loop already stops at
+        # FIELD_ATTEMPTS -- and is written here so the three numbers add up in
+        # one place instead of two.
+        budget = {"own": FIELD_ATTEMPTS,
+                  "retrieval": max(0, FIELD_MAX_WINDOWS - FIELD_ATTEMPTS),
+                  "rest": REST_MAX_WINDOWS}
+        spent = {stage: 0 for stage in budget}
+        state = {"answer": None, "stage": "own"}
 
         def still_open(pool: list) -> list:
             """Rows with at least one of these fields still unread."""
@@ -2391,9 +2659,9 @@ def make_fieldwise_harvester(image_root: Optional[Path] = None,
                 # exactly the same failures as the attempt before them.
                 attempts = FIELD_ATTEMPTS if state["stage"] == "own" else 1
                 for attempt in range(attempts):
-                    if state["asked"] >= FIELD_MAX_WINDOWS:
+                    if spent[state["stage"]] >= budget[state["stage"]]:
                         return False
-                    state["asked"] += 1
+                    spent[state["stage"]] += 1
                     started = time.time()
                     usage: dict = {}
                     state["answer"] = ask(shown, todo, slots, corrections,
@@ -2426,7 +2694,7 @@ def make_fieldwise_harvester(image_root: Optional[Path] = None,
                         got = merge_field(rows, list(shown) + batch.sources,
                                           slot, answered.get(slot.name),
                                           window=(state["stage"],
-                                                  state["asked"]),
+                                                  sum(spent.values())),
                                           owner_of=owner_of)
                         for key in ("filled", "unquoted", "unbacked",
                                     "unstated", "raw_missing",
@@ -2449,7 +2717,8 @@ def make_fieldwise_harvester(image_root: Optional[Path] = None,
                     # through this distribution, and none of them could be set
                     # from a log line that only counted the failures.
                     trace.event("field", batch.document_id, slot=name,
-                                anchor=anchor_id, window=state["asked"],
+                                anchor=anchor_id,
+                                window=sum(spent.values()),
                                 stage=state["stage"], attempt=attempt,
                                 parameter=(batch.parameter.uri
                                            if batch.parameter else None),
@@ -2468,7 +2737,8 @@ def make_fieldwise_harvester(image_root: Optional[Path] = None,
                     for bad in counts["failed"]:
                         trace.event("drop", batch.document_id, slot=name,
                                     field=bad.get("field"),
-                                    window=state["asked"], attempt=attempt,
+                                    window=sum(spent.values()),
+                                    attempt=attempt,
                                     row=bad.get("row"),
                                     why=bad.get("why") or "unbacked")
                     corrections = counts["failed"]
@@ -2511,7 +2781,8 @@ def make_fieldwise_harvester(image_root: Optional[Path] = None,
                 held[(source.owner_kind, source.owner_id)] = source
             combed = run(window_sources(fresh, FIELD_WINDOW, FIELD_OVERLAP))
 
-        if still_open(rows) and rest_of_document is not None:
+        open_now = still_open(rows)
+        if open_now and rest_of_document is not None:
             # Retrieval has nothing left to offer and the coordinate is still
             # open. Read the rest of the plan rather than call it unstated on
             # the strength of what a ranking happened to surface.
@@ -2525,12 +2796,14 @@ def make_fieldwise_harvester(image_root: Optional[Path] = None,
             # "the plan does not say it" was unreachable, and the harvest
             # shows it: 789 exhausted and 0 unstated.
             #
-            # Its own allowance, not a reset: it is a different search, and
-            # bounded, because 33 sweeps of that run hit the cap and an
-            # unbounded second pass would put the requests per document over
-            # the 1161 the acceptance allows.
-            state["asked"] = max(0, FIELD_MAX_WINDOWS - REST_MAX_WINDOWS)
-            rest = rest_of_document(batch.document_id, set(seen)) or []
+            # Its own allowance, and now its own counter rather than a
+            # number written into the shared one. Bounded, because 33 sweeps of
+            # that run hit the cap and an unbounded second pass would put the
+            # requests per document over the 1161 the acceptance allows.
+            rest = rest_of_document(
+                batch.document_id, set(seen),
+                own_section_number([owner_of[row.label] for row in open_now
+                                    if row.label in owner_of])) or []
             for source in rest:
                 held[(source.owner_kind, source.owner_id)] = source
             state["stage"] = "rest"
@@ -2545,12 +2818,41 @@ def make_fieldwise_harvester(image_root: Optional[Path] = None,
                     # recorded as one.
                     row.claim[f"{slot.name}_state"] = EXHAUSTED
                     stranded += 1
-        totals["asked"] = state["asked"]
+        totals["asked"] = sum(spent.values())
         totals["exhausted"] = stranded
         trace.event("sweep", batch.document_id, slot=name,
-                    anchor=anchor_id, windows=state["asked"],
+                    anchor=anchor_id, windows=sum(spent.values()),
                     rows=len(rows), combed=combed, **totals)
         return totals
+
+    return sweep_field
+
+
+def make_fieldwise_harvester(image_root: Optional[Path] = None,
+                             more_sources: Optional[Callable] = None,
+                             rest_of_document: Optional[Callable] = None,
+                             spec=None, anchors: Optional[dict] = None,
+                             slice_gate: Optional[dict] = None,
+                             parents: Optional[Callable] = None,
+                             frame_axes: Optional[list] = None
+                             ) -> Callable:
+    """A harvest(batch, prior) that asks per field and answers like the old one.
+
+    Same signature as make_harvester's, so the scheduler above it does not
+    change: the batch is still the unit in flight, and the sweep over the
+    fields happens inside one batch's turn.
+    """
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    find_rows = make_harvester(image_root, prompt_id=ROWS_PROMPT_ID, spec=spec)
+    ask = make_field_asker(image_root)
+    anchors = anchors or {}
+    pool = ThreadPoolExecutor(max_workers=FIELD_PARALLEL,
+                              thread_name_prefix="field")
+
+    sweep_field = make_sweeper(ask, more_sources=more_sources,
+                               rest_of_document=rest_of_document,
+                               parents=parents, anchors=anchors)
 
     def harvest(batch, prior: Optional[list] = None) -> dict:
         reply = find_rows(batch, prior)
@@ -3028,7 +3330,13 @@ QUESTION_KEYS = ("parameter/", "value/", "axis/", "slot/")
 # carry a parameter uri, so putting the prefix there would skip nothing:
 # measured, `stale` returned ["question_text/energy_consumption"] before and
 # after such an edit.
-RECORDED_PREFIXES = ("question_text/",)
+#
+# `review/` is the second one: what read a document a second time is a fact
+# about that document and never a reason to harvest it again. The review
+# leaves values, coordinates and states byte-identical -- only `flags` grows
+# -- so comparing its prompt would throw a whole reviewed corpus away the day
+# the review prompt is edited.
+RECORDED_PREFIXES = ("question_text/", "review/")
 
 
 def recorded_questions(questions: Optional[dict]) -> dict:
@@ -3095,6 +3403,25 @@ def stale(stamp_path: Path, current: dict) -> list:
         # back as "the run no longer asks this".
         changed |= {k for k in stored if k not in current and compared(k)}
     return sorted(changed)
+
+
+def documents_to_harvest(documents, out_dir: Path, spec_sha: str, *,
+                         force: bool = False, force_stale: bool = False,
+                         anchors_sha: str = "", spec: Optional[Spec] = None,
+                         top_up: bool = False) -> list:
+    """Which of these documents this run has work for.
+
+    A top-up is the exception and it is not a small one: this filter drops
+    exactly the documents whose stamp moved, which is the entire population a
+    top-up exists to re-read. Filtered, the flag is a no-op that logs
+    "nothing to harvest" unless --force-stale is also given.
+    """
+    if top_up:
+        return list(documents)
+    return [(did, fn) for did, fn in documents
+            if not already_done(Path(fn).stem, out_dir, spec_sha,
+                                force=force, force_stale=force_stale,
+                                anchors_sha=anchors_sha, spec=spec)]
 
 
 def run_document(document_id: int, name: str, out_dir: Path, spec: Spec,
@@ -3178,9 +3505,18 @@ def finish_document(report, name: str, out_dir: Path, spec_sha: str,
     if failed:
         log.warning("extraction: %s: %d source(s) never answered", name, len(failed))
     own = own_evidence(spec) if spec is not None else None
+    # One line per parameter, whatever it came to. Every other state in the
+    # file belongs to a row, so a parameter that produced no row produced no
+    # record at all: on Kassel, planning_organisation came back with 0 tuples
+    # and nothing anywhere saying whether the plan is silent or the run never
+    # asked.
+    states = (parameter_states(spec, report.tuples, report.refusals,
+                               harvested=report.owners_harvested,
+                               answered=answered)
+              if spec is not None else None)
     if spec is not None:
-        check_against_schema(report, name, spec)
-    write_report(report, out_dir / f"{name}.jsonl", own)
+        check_against_schema(report, name, spec, states)
+    write_report(report, out_dir / f"{name}.jsonl", own, states)
     unreachable = sum(1 for r in failed
                       if r.get("claim", {}).get("_why") == "unreachable")
     sources = max(report.owners_harvested, len(failed))
@@ -3234,6 +3570,7 @@ def _harvest_validators(spec):
                     {**base, **defs[branch]})
                 for branch_key, branch in
                 [(("refusal", None), "refusal"),
+                 (("parameter_state", None), "parameter_state"),
                  (("summary", None), "summary")]
                 + [(("tuple", p.uri), f"tuple_{p.uri}")
                    for p in spec.parameters]}
@@ -3243,7 +3580,8 @@ def _harvest_validators(spec):
     return cache[key] or None
 
 
-def check_against_schema(report, name: str, spec) -> int:
+def check_against_schema(report, name: str, spec,
+                         states: Optional[list] = None) -> int:
     """Count the rows this document would write that the schema refuses.
 
     Counted and traced, never blocking. The harvest is the durable artifact
@@ -3262,6 +3600,9 @@ def check_against_schema(report, name: str, spec) -> int:
     summary = document_summary(report.document_id, report.tuples,
                                report.refusals, own=own_evidence(spec))
     for kind, rows in (("tuple", report.tuples), ("refusal", report.refusals),
+                       ("parameter_state",
+                        [{"document_id": report.document_id, **r}
+                         for r in states or []]),
                        ("summary", [summary])):
         for row in rows:
             key = (kind, row.get("parameter") if kind == "tuple" else None)
@@ -3444,6 +3785,26 @@ def main(argv: Optional[list] = None) -> int:
                              "and clear the stamps so the next run redoes them")
     parser.add_argument("--keep-stamps", action="store_true",
                         help="--recheck only: leave the resume stamps in place")
+    parser.add_argument("--top-up", action="store_true",
+                        help="re-read only the coordinates the resume stamps "
+                             "say moved, over the harvest in --out, instead "
+                             "of harvesting those documents again. Needs the "
+                             "model and the index; a document whose stamp "
+                             "moved in anything but a coordinate is skipped "
+                             "whole")
+    parser.add_argument("--top-up-key", action="append", metavar="KEY",
+                        help="--top-up only: sweep this stamp key and no "
+                             "other, e.g. axis/energy_consumption/sector. "
+                             "Repeatable")
+    parser.add_argument("--review", action="store_true",
+                        help="read every value nobody can stand behind a "
+                             "second time, over its own passage and the "
+                             "section that passage stands in, and record "
+                             "what the second reading came to. One request "
+                             "per C value: `python scripts/curation_list.py "
+                             "OUT --level C` prints that count for free")
+    parser.add_argument("--review-limit", type=int, default=0, metavar="N",
+                        help="--review only: stop after N values (0 = all)")
     parser.add_argument("--remap", action="store_true",
                         help="map every coordinate's recorded wording onto "
                              "the vocabulary as the spec reads today, over "
@@ -3518,7 +3879,31 @@ def main(argv: Optional[list] = None) -> int:
                      f"with SPEC_PATH)")
     spec_path = Path(raw_spec_path)
     spec = load_spec(spec_path)
-    import hashlib
+    if args.review:
+        # The two guards `main` applies below, applied here as well: this
+        # branch returns before either of them is reached, and a review that
+        # reads every table without its picture is a review of a
+        # transcription.
+        if ATTACH_IMAGES and not Path(args.image_root).is_dir():
+            parser.error(f"image root {args.image_root} is not a directory — "
+                         f"every table and figure crop would be missing. Pass "
+                         f"--image-root, or EXTRACT_ATTACH_IMAGES=0 to review "
+                         f"from the transcriptions alone")
+        review_prompt = prompts.load(REVIEW_PROMPT_ID)
+        assert_serving(LLM_BASE_URL, LLM_API_KEY, LLM_MODEL,
+                       context_budget(review_prompt, spec),
+                       what="extraction review", flag="--max-model-len")
+        from .review import run as review_run
+        stats = review_run(args.out, spec,
+                           ask=make_review_asker(args.image_root),
+                           sources_for=make_review_sources(args.db),
+                           limit=args.review_limit,
+                           prompt_sha=review_prompt.sha256, model=LLM_MODEL)
+        log.info("review: %d value(s) read again — %d agreed, %d disagreed, "
+                 "%d could not be backed, over %d document(s)",
+                 stats["reviewed"], stats["agree"], stats["disagree"],
+                 stats["unbacked"], stats["documents"])
+        return 0
     spec_sha = hashlib.sha256(spec_path.read_bytes()).hexdigest()
     # Read here rather than beside make_anchors, because the resume stamps are
     # checked before the anchors are ever built and a stamp that does not know
@@ -3612,11 +3997,10 @@ def main(argv: Optional[list] = None) -> int:
                   len(missing), ", ".join(str(m) for m in missing))
         return 1
 
-    documents = [(did, fn) for did, fn in documents
-                 if not already_done(Path(fn).stem, args.out, spec_sha,
-                                     force=args.force,
-                                     force_stale=args.force_stale,
-                                     anchors_sha=anchors_sha, spec=spec)]
+    documents = documents_to_harvest(
+        documents, args.out, spec_sha, force=args.force,
+        force_stale=args.force_stale, anchors_sha=anchors_sha, spec=spec,
+        top_up=args.top_up)
     if not documents:
         log.info("extraction: nothing to harvest")
         return 0
@@ -3642,6 +4026,60 @@ def main(argv: Optional[list] = None) -> int:
     prime_probe_cache(primer, spec, templates, anchors)
     primer.close()
     more_sources = make_more_sources(args.db, index, id_to_pos, cache_path)
+
+    if args.top_up:
+        from . import topup
+        # Its own directory: trace._handle opens "w", so writing into the
+        # harvest's own trace/ would truncate the file that says what the
+        # harvest cost. scripts/harvest_compare.py reads trace/ alone, so a
+        # top-up's requests are not counted into the harvest's cost.
+        trace.open_trace(args.out / "trace-topup",
+                         {did: Path(fn).stem for did, fn in documents}.get)
+        frame_names = [slot.name for slot in frame_axes]
+        listing = sqlite3.connect(f"file:{args.db}?mode=ro", uri=True)
+        listing.row_factory = sqlite3.Row
+
+        def document_spec(document_id):
+            """This document's own spec, or None when its list cannot be
+            closed: swept against an empty list a dynamic axis degrades to a
+            wording, which is a demotion nothing would report."""
+            if document_axes is None:
+                return spec
+            try:
+                filled = document_axes(listing, document_id)
+            except Exception as exc:          # pragma: no cover - defensive
+                log.warning("   document %s: dynamic axes unreadable: %s",
+                            document_id, exc)
+                return None
+            return fill_dynamic_axes(spec, filled) if filled else None
+
+        try:
+            log.info("top-up: this may rewrite %s for every question whose "
+                     "wording moved — the anchors key hashes the prompt and "
+                     "the model, not the questions",
+                     args.out / "anchors.json")
+            stats = topup.run(
+                args.out, spec,
+                _stamp_current(spec_sha, anchors_sha, spec),
+                {"sweep": make_sweeper(
+                    make_field_asker(args.image_root),
+                    more_sources=more_sources,
+                    rest_of_document=make_rest_of_document(args.db),
+                    parents=make_parents(args.db), anchors=anchors),
+                 "owner_sources": make_owner_sources(args.db),
+                 "document_spec": document_spec,
+                 "frame_names": frame_names,
+                 "dynamic_ok": document_axes is not None,
+                 "slice_gate": slice_gate,
+                 "locate": locate},
+                only=args.top_up_key)
+        finally:
+            listing.close()
+        log.info("top-up: %d row(s) re-read over %d document(s), %d stamp(s) "
+                 "carried forward, %d blocked",
+                 stats["rows"], stats["documents"],
+                 stats["stamps carried forward"], stats["blocked"])
+        return 0
 
     # After more_sources, because the field sweep uses it: a coordinate that
     # is not in the value's own passage is looked for further out in the same

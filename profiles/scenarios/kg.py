@@ -479,11 +479,18 @@ TRUST_PROSE = check_prose({
 }, "profiles/scenarios/kg.py TRUST_PROSE")
 TRUST_JOIN = ", "
 
-# Empty for this profile, and passed rather than left at None on purpose:
-# every axis of this spec reads evidence "any", so no coordinate may be held
-# to the row's own source. None means "judge every axis by the strictest
-# rule", which would report every legal reading of a scientific paper as a
-# doubt.
+# Read off the spec, never listed here. Three of the four scenario axes are
+# `own` -- type, abstract and year -- because all three are predications about
+# a NAMED scenario and a name borrowed from another section is inference, not
+# a reading. `scenario_region` is `local` instead: coverage is stated once in
+# the methods section while the scenario list is a heading further on, so the
+# two are page-neighbours rather than one passage, and holding it to `own`
+# would refuse the honest reading.
+#
+# Passed rather than left at None: None means "judge every axis by the
+# strictest rule", which would report every legal reading of a paper as a
+# doubt. It was `frozenset()` until the rules were set, and an empty set means
+# `trust.reasons` suppresses every nonlocal finding there is.
 OWN_EVIDENCE = own_evidence(load_spec(_SPEC))
 
 # This corpus has no transcribed pages to declare: ar6.db Documents carries

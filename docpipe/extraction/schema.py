@@ -38,7 +38,8 @@ from pathlib import Path
 
 from . import fields
 from .spec import load as load_spec
-from .trust import FLAG_REASONS, LEVEL_A, LEVEL_B, LEVEL_C
+from .trust import (FLAG_REASONS, LEVEL_A, LEVEL_B, LEVEL_C,
+                    PARAMETER_STATES)
 from .verify import MIN_QUOTE_CHARS, TIER_TEXT, TIER_VISUAL
 
 SCHEMA_NAME = "extraction_schema.json"
@@ -59,7 +60,7 @@ TRUST_LEVEL_DOC = {
 # Anchored, so "nonlocal" alone or a reason nobody named cannot slip in.
 TRUST_REASONS = tuple(
     [f"^{r}$" for r in sorted(FLAG_REASONS.values())]
-    + ["^conflict$", "^page_transcribed$", "^review:disagree$",
+    + ["^conflict$", "^page_transcribed$",
        r"^(nonlocal|exhausted|unbacked):[a-z_]+$"])
 
 # What a coordinate's state can be, and what each one is a finding ABOUT. The
@@ -85,12 +86,32 @@ STATE_DOC = {
 }
 STATES = list(STATE_DOC)
 
+# The same four words about a whole question rather than about one coordinate
+# of one row, and they say something else. Written out rather than reused,
+# because "the passages shown do not state it" is about a window and "the
+# document does not state it" is about a document.
+PARAMETER_STATE_DOC = {
+    fields.READ: "at least one value of this parameter was read and accepted",
+    fields.UNBACKED: ("no value survived, and at least one was refused. A "
+                      "finding about the model or about the passages, not "
+                      "about the document"),
+    fields.EXHAUSTED: ("no value, and the run did not finish this document. "
+                       "Document-wide: there is no per-parameter run signal, "
+                       "so a truncated run marks every unanswered parameter "
+                       "exhausted together"),
+    fields.SAID_UNSTATED: ("no value and nothing refused: the document was "
+                           "read and does not carry this parameter. The one "
+                           "of the four that is a finding about the document "
+                           "rather than about the run"),
+}
+
 # Non-fatal findings of the verifier, as patterns rather than a list: the
 # wording half of each is the document's and cannot be enumerated.
 FLAG_PATTERN = (
     r"^(mapped:[a-z_]+:[\s\S]*->[\s\S]*|unmapped:[a-z_]+:[\s\S]*"
     r"|unit_not_chosen:[\s\S]*|unit_spelling:[\s\S]*"
     r"|period:(annual_in_quote|unstated)"
+    r"|review:(agree|disagree|unbacked)"
     r"|quote_repaired|computed|not_located)$")
 
 # The eleven families a refusal reason belongs to. Every one is raised in
@@ -277,7 +298,10 @@ def _tuple_schema(spec, parameter) -> dict:
                                  "mapped:<axis>:<wording>-><uri> is the model "
                                  "mapping a word the spec does not list; "
                                  "period:* says whether a bare amount was "
-                                 "shown to be a yearly one."},
+                                 "shown to be a yearly one; review:* is what "
+                                 "a second reading of this value under a "
+                                 "narrower window came to, and only "
+                                 "review:disagree is a reason."},
         "provenance": {"$ref": "#/$defs/provenance"},
         "computed": {"type": "boolean",
                      "description": "The value came out of the sandbox, not "
@@ -369,12 +393,15 @@ def harvest_schema(spec) -> dict:
         "$id": f"{BASE_ID}/harvest-line",
         "title": "docpipe extraction harvest line (one JSON object per line)",
         "description": "An accepted tuple (kind=tuple), a refused claim "
-                       "(kind=refusal), or the document's own summary "
-                       "(kind=summary, the last line of the file). Generated "
-                       "from the profile's extraction_spec.json by "
+                       "(kind=refusal), what a whole parameter came to "
+                       "(kind=parameter_state, one per parameter of the "
+                       "spec), or the document's own summary (kind=summary, "
+                       "the last line of the file). Generated from the "
+                       "profile's extraction_spec.json by "
                        "docpipe/extraction/schema.py.",
         "oneOf": [{"$ref": f"#/$defs/tuple_{p.uri}"} for p in spec.parameters]
                  + [{"$ref": "#/$defs/refusal"},
+                    {"$ref": "#/$defs/parameter_state"},
                     {"$ref": "#/$defs/summary"}],
         "$defs": {
             "state": {"enum": STATES, "x-doc": STATE_DOC},
@@ -496,6 +523,31 @@ def harvest_schema(spec) -> dict:
                              "levels", "reasons", "image_origin"],
                 "additionalProperties": False,
             },
+            "parameter_state": {
+                "type": "object",
+                "description": "What one parameter of the spec came to in "
+                               "this document. Every other state in this file "
+                               "belongs to a row, so a parameter that "
+                               "produced no row left no byte at all and "
+                               "\"the document does not carry it\" and "
+                               "\"it was never asked\" were the same empty "
+                               "file.",
+                "properties": {
+                    "kind": {"const": "parameter_state"},
+                    "document_id": {"type": "integer"},
+                    "parameter": {
+                        "type": "string",
+                        "description": "The spec's uri for the parameter, the "
+                                       "same key a tuple carries."},
+                    "state": {"enum": list(PARAMETER_STATES),
+                              "x-doc": PARAMETER_STATE_DOC},
+                    "tuples": {"type": "integer"},
+                    "refusals": {"type": "integer"},
+                },
+                "required": ["kind", "document_id", "parameter", "state",
+                             "tuples", "refusals"],
+                "additionalProperties": False,
+            },
             **{f"tuple_{p.uri}": _tuple_schema(spec, p)
                for p in spec.parameters},
         },
@@ -588,6 +640,14 @@ def stamp_schema() -> dict:
                                "question and the parameters it offers, uri "
                                "and label. Also the only key that moves when "
                                "a parameter is dropped."},
+            "^review/(prompt|model)$": {
+                "type": "string",
+                "description": "What read this document a second time. "
+                               "Recorded and never compared: the review does "
+                               "not decide whether the harvest is current, "
+                               "and comparing it would report every reviewed "
+                               "document stale the day the review prompt "
+                               "changes."},
             "^axis/[^/]+/[^/]+$": {
                 **sha,
                 "description": "What this coordinate asks and what it may "
@@ -688,7 +748,8 @@ def trace_schema() -> dict:
         # is the durable artifact and an unrecognised row is still evidence,
         # but the schema is what everyone downstream reads instead of the
         # file, so a row it does not describe must not pass unnoticed.
-        "invalid": {"kind": {"enum": ["tuple", "refusal"]},
+        "invalid": {"kind": {"enum": ["tuple", "refusal",
+                                      "parameter_state"]},
                     "where": {"type": "string"},
                     "why": {"type": "string"},
                     "detail": {"type": "string"}},

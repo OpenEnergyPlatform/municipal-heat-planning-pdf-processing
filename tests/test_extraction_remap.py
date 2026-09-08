@@ -156,6 +156,30 @@ def test_the_summary_is_recomputed_from_the_coordinates_that_moved(tmp_path):
     assert rows[-1]["reasons"] == {}, "recomputed, not carried"
 
 
+def test_a_remap_carries_a_parameter_state_through_untouched(tmp_path):
+    """The pass maps wordings onto a grown list and rebuilds the summary from
+    the result. A parameter_state line has no wording to map and is a fact
+    about the run that made the file, so it comes through byte for byte -- and
+    counted as a refusal on the way it would inflate the rebuilt count, which
+    is read as a model-error rate."""
+    new = _spec(NEW_LIST)
+    state = {"kind": "parameter_state", "document_id": 857,
+             "parameter": "planning_organisation", "state": "unstated",
+             "tuples": 0, "refusals": 0}
+    path = _harvest(tmp_path, [
+        _tuple(carrier=None, carrier_raw="Klaergas"),
+        state,
+        {"kind": "summary", "document_id": 857, "tuples": 1, "refusals": 0,
+         "levels": {"A": 0, "B": 0, "C": 1}, "reasons": {"conflict": 1},
+         "image_origin": 0}], stamp=_stamp(_spec(OLD_LIST)))
+
+    remap.remap_file(path, new, _stamp(new))
+    rows = _rows(path)
+    assert [r["kind"] for r in rows] == ["tuple", "parameter_state", "summary"]
+    assert rows[1] == state, "kept byte for byte, and before the summary"
+    assert rows[-1]["refusals"] == 0
+
+
 # ---------------------------------------------------------------------------
 # The stamp
 # ---------------------------------------------------------------------------

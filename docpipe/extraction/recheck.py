@@ -94,7 +94,11 @@ def recheck_file(path: Path, spec: Spec) -> Counter:
             stats["summaries rewritten"] += 1
             continue
         if row.get("kind") != "tuple":
-            refusals.append(row)
+            # Kept verbatim, and only a refusal counted as one: the rebuilt
+            # summary's refusal count is read as a model-error rate, and a
+            # parameter_state line is a fact about the run.
+            if row.get("kind") == "refusal":
+                refusals.append(row)
             lines.append(line)
             continue
         parameter = spec.by_uri.get(row.get("parameter"))

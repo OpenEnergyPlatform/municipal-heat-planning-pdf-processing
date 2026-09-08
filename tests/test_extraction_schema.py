@@ -191,6 +191,12 @@ def test_the_stamp_the_runner_writes_validates():
     # And it is the resume's whole basis, so a missing key is not tolerated.
     assert not VALIDATOR(build(spec)["stamp"]).is_valid(
         {k: v for k, v in stamp.items() if k != "spec"})
+    # What a second reading wrote into it is described and optional. The
+    # branch is additionalProperties: False, so an undescribed key would make
+    # every reviewed document's stamp invalid; required, it would make every
+    # unreviewed one invalid.
+    assert VALIDATOR(build(spec)["stamp"]).is_valid(
+        {**stamp, "review/prompt": "a" * 64, "review/model": "ein-modell"})
 
 
 def kwp_promises(spec) -> set:
@@ -279,6 +285,48 @@ def test_the_invalid_event_is_itself_in_the_trace_schema():
                                    "where": "", "why": "", "detail": ""})
 
 
+def test_the_parameter_state_line_matches_its_own_branch_of_the_schema(
+        monkeypatch, tmp_path):
+    """The line is written so a reader can tell "the plan does not carry it"
+    from "nobody asked", and a reader who cannot parse it learns neither. Its
+    four states are its own: the seven a row carries include `derived`, which
+    is a statement about one coordinate and says nothing about a question."""
+    from docpipe.extraction.pipeline import DocumentReport, write_report
+    from docpipe.extraction.trust import parameter_states
+    spec = load_spec(PROFILES / "kwp" / "extraction_spec.json")
+    good, *_rest = _tuples(monkeypatch, spec)
+    report = DocumentReport(document_id=7)
+    report.tuples = [dict(good)]
+    states = parameter_states(spec, report.tuples, [])
+
+    out = tmp_path / "plan.jsonl"
+    write_report(report, out, None, states)
+    rows = [json.loads(line) for line
+            in out.read_text(encoding="utf-8").strip().splitlines()]
+    written = [r for r in rows if r["kind"] == "parameter_state"]
+    assert len(written) == len(spec.parameters)
+    assert rows[-1]["kind"] == "summary", "the summary stays last"
+
+    validator = VALIDATOR({**build(spec)["harvest"]})
+    for row in rows:
+        assert validator.is_valid(row), row
+    # A row state that is not a parameter state, and a key nobody described.
+    assert not validator.is_valid({**written[0], "state": "derived"})
+    assert not validator.is_valid({**written[0], "asked": 3})
+
+
+def test_the_invalid_event_names_every_kind_the_check_can_write():
+    """check_against_schema now walks four kinds and writes the kind into the
+    trace. A kind the trace schema does not name turns a refused line into a
+    second refused line, in the file that exists to report the first."""
+    spec = load_spec(PROFILES / "kwp" / "extraction_spec.json")
+    validator = VALIDATOR(build(spec)["trace"])
+    for kind in ("tuple", "refusal", "parameter_state"):
+        assert validator.is_valid(
+            {"t": "invalid", "doc": 7, "kind": kind, "where": "state",
+             "why": "enum", "detail": "'derived' is not one of ..."}), kind
+
+
 def test_two_profiles_in_one_process_are_checked_against_their_own_schema():
     """The validators are compiled once and cached, and a cache with no key
     is a cache for whichever profile ran first: every row of the second one
@@ -289,7 +337,8 @@ def test_two_profiles_in_one_process_are_checked_against_their_own_schema():
     for first, second in ((kwp, other), (other, kwp)):
         _harvest_validators(first)
         got = _harvest_validators(second)
-        assert set(got) == {("refusal", None), ("summary", None)} | {
+        assert set(got) == {("refusal", None), ("summary", None),
+                            ("parameter_state", None)} | {
             ("tuple", p.uri) for p in second.parameters}
 
 

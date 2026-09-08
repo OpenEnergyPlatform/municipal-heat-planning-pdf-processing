@@ -541,3 +541,32 @@ def test_a_predicate_names_a_prefix_the_header_binds():
         spec_mod.kg_name({"predicate": "OEO_00000506"}, header)
     with pytest.raises(KeyError):
         spec_mod.kg_name({"prefix": "dc", "predicate": "abstract"}, header)
+
+def test_integrated_belongs_to_a_numeric_parameter_only():
+    """`integrated` says whether a unit is an amount over a span or a rate.
+    A category has no unit, so on one it is a flag nothing reads; and a
+    string where a bool belongs is truthy, so "nein" would pass as yes."""
+    good = _minimal()
+    assert load(good).by_uri["OEO_00050016"].integrated is True
+
+    good["parameters"][0]["integrated"] = False
+    assert load(good).by_uri["OEO_00050016"].integrated is False
+
+    bad = _minimal()
+    bad["parameters"][0]["integrated"] = "nein"
+    with pytest.raises(SpecError, match=r"integrated"):
+        load(bad)
+
+    text = _minimal()
+    text["parameters"][0].update({
+        "value_type": "text", "unit_target": None, "units_accepted": None,
+        "integrated": False,
+        "example": {"source": "Auftragnehmer: Ein Buero GmbH, Bearbeitung: "
+                              "M. Wagner.",
+                    "tuples": [{"value": "Ein Buero",
+                                "quote": "Auftragnehmer: Ein Buero GmbH"}]},
+    })
+    for key in ("unit_target", "units_accepted"):
+        text["parameters"][0].pop(key)
+    with pytest.raises(SpecError, match=r"integrated"):
+        load(text)
