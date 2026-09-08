@@ -15,6 +15,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from scripts import harvest_compare as hc
 
+NEWLINE = chr(10)
+
 
 def _write(path: Path, rows: list) -> None:
     path.write_text("\n".join(json.dumps(r, ensure_ascii=False) for r in rows)
@@ -102,3 +104,62 @@ def test_a_harvest_without_a_summary_still_reads(tmp_path):
     _write(tmp_path / "old.jsonl", [{"kind": "tuple", "value": 1}])
     tuples, refusals, summary = hc.read_harvest(tmp_path / "old.jsonl")
     assert tuples and not refusals and summary is None
+
+
+def test_the_truth_file_is_read_the_way_it_is_written(tmp_path):
+    """The measurement this feeds -- the acceptance criterion of M3, the year
+    repair -- printed "keine Ernte" on every run since 1f609f8 and nobody saw
+    it, because the caller read the truth file's top level as DOCUMENT names
+    while it is coordinate names. `agreement` was tested and the glue calling
+    it was not, so the shape mismatch lived between them.
+
+    So this drives the caller against the REAL file, scripts/kassel_truth.json,
+    rather than a fixture shaped the way the code happens to want it.
+    """
+    truth = json.loads((Path(hc.__file__).resolve().parent / "kassel_truth.json")
+                       .read_text(encoding="utf-8"))
+    assert set(truth) == {"_comment", "years", "scenarios"}, \
+        "the shape this test is about"
+
+    # Every coordinate on every row, as a harvested tuple carries them: three
+    # owners (87457/58/59) are named by BOTH coordinates of the truth file, so
+    # a fixture that answers only one of them measures a miss that is its own.
+    _write(tmp_path / "waermeplan_kassel_20260326.jsonl", [
+        # right on both: the truth file says 2040 and target for this table
+        {"kind": "tuple", "provenance": {"owner_id": 87457},
+         "year": 2040, "scenario": "target"},
+        # wrong year, and its scenario is not claimed by the truth file
+        {"kind": "tuple", "provenance": {"owner_id": 87517},
+         "year": 2040, "scenario": "target"},
+        # wrong scenario: the truth file says status_quo for this one
+        {"kind": "tuple", "provenance": {"owner_id": 87438},
+         "year": 2040, "scenario": "target"},
+        {"kind": "tuple", "provenance": {"owner_id": 99999},
+         "year": 1234, "scenario": "target"},
+    ])
+    files = sorted(tmp_path.glob("*.jsonl"))
+    lines = hc.truth_report(files, truth)
+    body = NEWLINE.join(lines)
+
+    assert "keine Ernte" not in body
+    # 87457 wants 2040 and got it, 87517 wants 2030 and got 2040.
+    assert "years      richtig 1 von 2 (50%)" in body
+    assert "falsch: 87517: 2040 (1x)" in body
+    assert "scenarios  richtig 1 von 2 (50%)" in body
+    assert "falsch: 87438: target (1x)" in body
+    # `_comment` is prose, not a coordinate, and must not become a line.
+    assert "_comment" not in body
+    # And the owner nobody claimed is untested, not right.
+    assert "99999" not in body
+
+
+def test_a_truth_file_that_matches_nothing_says_so(tmp_path):
+    """The state the old code was permanently in. It read as an empty section,
+    which is indistinguishable from a passing measurement -- so it is a named
+    line now."""
+    _write(tmp_path / "plan_a.jsonl",
+           [{"kind": "tuple", "provenance": {"owner_id": 1}, "year": 2040}])
+    lines = hc.truth_report(sorted(tmp_path.glob("*.jsonl")),
+                            {"years": {"87457": 2040}})
+    assert lines == ["  years: kein Tupel von einem Eigner, den die "
+                     "Wahrheitsdatei nennt"]

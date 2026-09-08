@@ -12,11 +12,21 @@ It never loads a model and never touches the index. The one thing it needs
 besides the harvest is the document database, because value IRIs are minted
 from a plan's AGS and publication date.
 
-A truth file is optional and is how a claim about a single plan gets checked:
-{"waermeplan_kassel_20260326": {"years": {"87457": 2040, ...},
-                                "scenarios": {"87438": "status_quo"}}}
-maps an owner id to the coordinate the plan really states, and the report says
-how often the harvest agrees. Keys are strings because JSON has no int keys.
+A truth file is optional and is how a claim about a plan gets checked:
+{"_comment": "read off the plan by hand",
+ "years":     {"87457": 2040, ...},
+ "scenarios": {"87438": "status_quo", ...}}
+Coordinate at the top, then owner id to the value the plan really states, and
+the report says how often the harvest agrees. Keys are strings because JSON
+has no int keys, and a key starting with an underscore is prose, not a
+coordinate.
+
+No document level: an owner id is a Tables row of the database and unique
+across the corpus, so a claim about one plan matches nothing in another and
+the file is checked against every harvest in the directory. This paragraph
+used to show a document name around it, the caller believed the docstring
+over the file, and the measurement it feeds printed "keine Ernte" on every
+run from 1f609f8 until it was noticed on the M3 acceptance run.
 
     python scripts/harvest_compare.py data/extraction/corpus data/KWP.db
     python scripts/harvest_compare.py <dir> <db> --truth kassel_truth.json
@@ -158,6 +168,45 @@ def agreement(tuples: list, truth: dict) -> dict:
     return out
 
 
+def truth_report(files: list, truth: dict) -> list:
+    """The lines comparing a harvest against what the plan really states.
+
+    Over EVERY harvest file, because a truth entry is keyed by owner id and
+    those are Tables rows of the database, unique across the corpus: a claim
+    about one plan matches nothing in another. The caller used to read the
+    truth file's top level as DOCUMENT names -- it is coordinate names -- and
+    looked for `years.jsonl` and `scenarios.jsonl`. So it printed "keine
+    Ernte" on every run since 1f609f8 and the acceptance measurement it feeds
+    has never once been made.
+
+    Its own function rather than a block inside `main`, because that is what
+    let it go unseen: `agreement` had a test and the glue calling it had none.
+    """
+    wanted = {k: v for k, v in (truth or {}).items()
+              if not k.startswith("_") and isinstance(v, dict)}
+    lines, checked = [], collections.Counter()
+    for path in files:
+        tuples, _refusals, _summary = read_harvest(path)
+        for coordinate, got in agreement(tuples, wanted).items():
+            seen = got["hit"] + got["miss"]
+            checked[coordinate] += seen
+            if not seen:
+                continue
+            lines.append("  %s %-10s richtig %d von %d (%.0f%%)" % (
+                path.stem, coordinate, got["hit"], seen,
+                100.0 * got["hit"] / seen))
+            for owner, count in got["worst"]:
+                lines.append("      falsch: %s (%dx)" % (owner, count))
+    for coordinate in sorted(wanted):
+        if not checked[coordinate]:
+            # Named rather than silent. A truth file matching no owner of any
+            # harvest here is exactly the state the old code was permanently
+            # in, and it read as an empty section rather than as a failure.
+            lines.append("  %s: kein Tupel von einem Eigner, den die "
+                         "Wahrheitsdatei nennt" % coordinate)
+    return lines
+
+
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("directory", type=Path)
@@ -257,19 +306,8 @@ def main(argv=None) -> int:
 
     if truth:
         print("\nGegen die bekannte Wahrheit")
-        for name, wanted in truth.items():
-            path = args.directory / f"{name}.jsonl"
-            if not path.is_file():
-                print(f"  {name}: keine Ernte")
-                continue
-            tuples, _refusals, _summary = read_harvest(path)
-            for coordinate, got in agreement(tuples, wanted).items():
-                total = got["hit"] + got["miss"] or 1
-                print("  %s %-10s richtig %d von %d (%.0f%%)" % (
-                    name, coordinate, got["hit"], got["hit"] + got["miss"],
-                    100.0 * got["hit"] / total))
-                for entry, count in got["worst"]:
-                    print(f"      {entry}: {count}")
+        for line in truth_report(files, truth):
+            print(line)
 
     if summaries:
         total = sum(levels.values()) or 1
