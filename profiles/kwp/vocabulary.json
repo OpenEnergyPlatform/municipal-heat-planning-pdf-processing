@@ -1,5 +1,15 @@
 {
  "pin": {
+  "families": [
+   "BFO",
+   "IAO",
+   "MENO",
+   "OBI",
+   "OEO",
+   "RO",
+   "STATO",
+   "UO"
+  ],
   "oeo_file": "oeo-closure.owl",
   "oeo_sha256": "df25aa5aec966be79096cb5dc1f09023fc66a99b984c485a24897adb76a99dd4",
   "oeo_version_iri": "https://openenergyplatform.org/ontology/oeo/releases/2.13.0/oeo.owl"
@@ -290,7 +300,38 @@
    "alt_labels": [],
    "definition": "An independent continuant that is spatially extended whose identity is independent of that of other entities and can be maintained through time.",
    "deprecated": false,
+   "kind": "class",
    "label": "material entity",
+   "parents": [
+    "BFO_0000004"
+   ]
+  },
+  "BFO_0000050": {
+   "alt_labels": [],
+   "definition": "a core relation that holds between a part and its whole",
+   "deprecated": false,
+   "kind": "object_property",
+   "label": "part of",
+   "parents": [
+    "topObjectProperty"
+   ]
+  },
+  "BFO_0000051": {
+   "alt_labels": [],
+   "definition": "a core relation that holds between a whole and its part",
+   "deprecated": false,
+   "kind": "object_property",
+   "label": "has part",
+   "parents": [
+    "topObjectProperty"
+   ]
+  },
+  "BFO_0000141": {
+   "alt_labels": [],
+   "definition": null,
+   "deprecated": false,
+   "kind": "class",
+   "label": "immaterial entity",
    "parents": [
     "BFO_0000004"
    ]
@@ -301,6 +342,7 @@
    ],
    "definition": "A fossil combustion fuel is a combustion fuel with the origin fossil.",
    "deprecated": false,
+   "kind": "class",
    "label": "fossil combustion fuel",
    "parents": [
     "OEO_00000099"
@@ -312,6 +354,7 @@
    ],
    "definition": "A greenhouse gas is a portion of matter that has the disposition to contribute to the greenhouse effect.",
    "deprecated": false,
+   "kind": "class",
    "label": "greenhouse gas",
    "parents": [
     "OEO_00000331",
@@ -324,6 +367,7 @@
    ],
    "definition": "Methane is a hydrocarbon with the chemical formula CH4. It has a gaseous normal state of matter. It occurs naturally in the atmosphere as a trace gas and can work as a greenhouse gas. As it can be oxidised it can be used as a fuel.",
    "deprecated": false,
+   "kind": "class",
    "label": "methane",
    "parents": [
     "OEO_00000020",
@@ -338,6 +382,7 @@
    ],
    "definition": "A renewable fuel is a fuel that has a renewable origin and an renewable energy carrier disposition",
    "deprecated": false,
+   "kind": "class",
    "label": "renewable fuel",
    "parents": [
     "OEO_00000099",
@@ -351,6 +396,7 @@
    ],
    "definition": "Uranium is a portion of matter that has the atomic number 92. It is a silver-grey metal.",
    "deprecated": false,
+   "kind": "class",
    "label": "uranium",
    "parents": [
     "OEO_00000302",
@@ -363,6 +409,7 @@
    ],
    "definition": "Air is a gas mixture that forms the Earth's atmosphere.",
    "deprecated": false,
+   "kind": "class",
    "label": "air",
    "parents": [
     "OEO_00010236",
@@ -375,6 +422,7 @@
    ],
    "definition": "Ambient thermal energy is thermal energy that is stored in the ambient air, beneath the surface of solid earth or in surface water. It is captured by heat pumps.",
    "deprecated": false,
+   "kind": "class",
    "label": "ambient thermal energy",
    "parents": [
     "OEO_00000207"
@@ -386,6 +434,7 @@
    ],
    "definition": "Anthracite is a hard coal with a high caloric value due to its high carbon content (about 90 % fixed carbon).",
    "deprecated": false,
+   "kind": "class",
    "label": "anthracite",
    "parents": [
     "OEO_00000204"
@@ -397,6 +446,7 @@
    ],
    "definition": "Associated gas is a natural gas that is a byproduct from crude oil exploitation.",
    "deprecated": false,
+   "kind": "class",
    "label": "associated gas",
    "parents": [
     "OEO_00000292"
@@ -408,6 +458,7 @@
    ],
    "definition": "Aviation gasoline is gasoline used as motor spirit and prepared especially for aviation piston engines, with an octane number suited to the engine, a freezing point of -60 °C and a distillation range usually within the limits of 30 °C and 180 °C.",
    "deprecated": false,
+   "kind": "class",
    "label": "aviation gasoline",
    "parents": [
     "OEO_00000183"
@@ -419,6 +470,7 @@
    ],
    "definition": "Biodiesel is a portion of matter that has a liquid state of matter and has a diesel fuel role. It is produced from plants or animals and thus has a biogenic origin.",
    "deprecated": false,
+   "kind": "class",
    "label": "biodiesel",
    "parents": [
     "OEO_00000258",
@@ -432,6 +484,7 @@
    ],
    "definition": "A biofuel is a combustion fuel that has a biogenic origin.",
    "deprecated": false,
+   "kind": "class",
    "label": "biofuel",
    "parents": [
     "OEO_00000099",
@@ -444,6 +497,7 @@
    ],
    "definition": "Biogas is a gas mixture produced by anaerobic digestion. It consists mainly of methane and carbon dioxide and can be used as fuel.",
    "deprecated": false,
+   "kind": "class",
    "label": "biogas",
    "parents": [
     "OEO_00010153",
@@ -454,6 +508,7 @@
    "alt_labels": [],
    "definition": "Biogasoline is a portion of matter that has a liquid state of matter and has a gasoline fuel role. It consists of bioethanol, biomethanol and products of these two substances. It is made from vegetable or animal material and thus has a biogenic origin.",
    "deprecated": false,
+   "kind": "class",
    "label": "biogasoline",
    "parents": [
     "OEO_00000258",
@@ -468,6 +523,7 @@
    ],
    "definition": "Blast furnace gas is manufactured coal based gas produced during the combustion of coke in blast furnaces in the iron and steel industry. It is recovered and used as a fuel partly within the plant and partly in other steel industry processes or in power stations equipped to burn it. The quantity of fuel should be reported on a gross calorific value basis.",
    "deprecated": false,
+   "kind": "class",
    "label": "blast furnace gas",
    "parents": [
     "OEO_00000263"
@@ -479,6 +535,7 @@
    ],
    "definition": "Charcoal is a portion of matter produced from wood via pyrolysis. It has a solid state of matter and can be used as fuel.",
    "deprecated": false,
+   "kind": "class",
    "label": "charcoal",
    "parents": [
     "OEO_00000331",
@@ -492,6 +549,7 @@
    ],
    "definition": "Coal is a portion of matter consisting of combustible black or brownish-black sedimentary rock, formed as rock strata called coal seams.",
    "deprecated": false,
+   "kind": "class",
    "label": "coal",
    "parents": [
     "OEO_00000331",
@@ -505,6 +563,7 @@
    ],
    "definition": "Coke oven gas is manufactured coal based gas obtained as a by-product of the manufacture of coke oven coke for the production of iron and steel.",
    "deprecated": false,
+   "kind": "class",
    "label": "coke oven gas",
    "parents": [
     "OEO_00000263"
@@ -516,6 +575,7 @@
    ],
    "definition": "Coking coal is hard coal that is bituminous with a quality that allows the production of a coke suitable to support a blast furnace charge. Its gross calorific value is greater than 23 865 kJ/kg (5 700 kcal/kg) on an ash-free but moist basis.",
    "deprecated": false,
+   "kind": "class",
    "label": "coking coal",
    "parents": [
     "OEO_00000204"
@@ -527,6 +587,7 @@
    ],
    "definition": "Colliery gas is natural gas found in coal mines (British English: colliery). The main component is methane. Synonyms are firedamp, mine gas. It is used as a fossil fuel.",
    "deprecated": false,
+   "kind": "class",
    "label": "colliery gas",
    "parents": [
     "OEO_00000292"
@@ -536,6 +597,7 @@
    "alt_labels": [],
    "definition": "A combustion fuel is a fuel that realises its fuel role in processes that release energy in the form of heat or work by chemical reaction with other substances.",
    "deprecated": false,
+   "kind": "class",
    "label": "combustion fuel",
    "parents": [
     "OEO_00000173"
@@ -547,6 +609,7 @@
    ],
    "definition": "Compressed air is air that has been compressed to store energy. To discharge energy, the air is expanded.",
    "deprecated": false,
+   "kind": "class",
    "label": "compressed air",
    "parents": [
     "OEO_00000054",
@@ -559,6 +622,7 @@
    ],
    "definition": "Crude oil is a portion of mater of fossil origin comprising a mixture of hydrocarbons and associated impurities, such as sulphur. It exists in the liquid phase under normal surface temperature and pressure and its physical characteristics (density, viscosity, etc.) are highly variable. This category includes field or lease condensate recovered from associated and non-associated gas where it is commingled with the commercial crude oil stream.",
    "deprecated": false,
+   "kind": "class",
    "label": "crude oil",
    "parents": [
     "OEO_00000331",
@@ -573,6 +637,7 @@
    ],
    "definition": "An energy demand sector is a sector that covers energy consumers.",
    "deprecated": false,
+   "kind": "class",
    "label": "energy demand sector",
    "parents": [
     "OEO_00000367"
@@ -584,6 +649,7 @@
    ],
    "definition": "Diesel fuel is gas diesel oil used on-road for diesel compression ignition (cars, trucks, etc.), usually of low sulphur content.",
    "deprecated": false,
+   "kind": "class",
    "label": "fossil diesel fuel",
    "parents": [
     "OEO_00000181",
@@ -596,6 +662,7 @@
    ],
    "definition": "District heating is a grid-bound heating transfer to residential or commercial buildings.",
    "deprecated": false,
+   "kind": "class",
    "label": "district heating",
    "parents": [
     "OEO_00020073"
@@ -608,6 +675,7 @@
    ],
    "definition": "Electrical energy is a form of energy derived from the potential or kinetic energy of charged particles.",
    "deprecated": false,
+   "kind": "class",
    "label": "electrical energy",
    "parents": [
     "OEO_00000150",
@@ -620,6 +688,7 @@
    ],
    "definition": "An electricity sector is a transformation sector that covers electricity generation and transport of electrical energy to consumers of electrical energy.",
    "deprecated": false,
+   "kind": "class",
    "label": "electricity sector",
    "parents": [
     "OEO_00000158"
@@ -631,6 +700,7 @@
    ],
    "definition": "Energy is a quality of material entities which manifests as a capacity to perform work (such as causing motion or the interaction of molecules)",
    "deprecated": false,
+   "kind": "class",
    "label": "energy",
    "parents": [
     "BFO_0000019"
@@ -643,6 +713,7 @@
    ],
    "definition": "An energy transformation sector is a sector that covers energy production, energy transformation from primary to secondary energy and transport of energy to the demand sector.",
    "deprecated": false,
+   "kind": "class",
    "label": "energy transformation sector",
    "parents": [
     "OEO_00000367"
@@ -654,6 +725,7 @@
    ],
    "definition": "A fuel is a portion of matter that has the disposition to be an energy carrier and that has a fuel role.",
    "deprecated": false,
+   "kind": "class",
    "label": "fuel",
    "parents": [
     "OEO_00000331",
@@ -667,6 +739,7 @@
    ],
    "definition": "Gas/diesel oil is a portion of matter that is primarily a medium distillate distilling between 180 °C and 380 °C. Includes blending components. Several grades are available depending on uses.",
    "deprecated": false,
+   "kind": "class",
    "label": "gas diesel oil",
    "parents": [
     "OEO_00000331",
@@ -680,6 +753,7 @@
    ],
    "definition": "Gasoline (American English) or petrol (British English) is a portion of matter in the form of a transparent petroleum-derived liquid that is used primarily as a fuel in spark-ignited internal combustion engines. It consists mostly of organic compounds obtained by the fractional distillation of petroleum, enhanced with a variety of additives.",
    "deprecated": false,
+   "kind": "class",
    "label": "gasoline",
    "parents": [
     "OEO_00000331",
@@ -694,6 +768,7 @@
    ],
    "definition": "Gasworks gas is manufactured coal based gas that covers all types of gases produced in public utility or private plants, whose main purpose is manufacture, transport and distribution of gas. It includes gas produced by carbonisation (including gas produced by coke ovens and transferred to gasworks gas), by total gasification with or without enrichment with oil products (LPG, residual fuel oil, etc.), and by reforming and simple mixing of gases and/or air, reported under the rows ‘from other sources’. Under the transformation sector identify amounts of gasworks gas transferred to blended natural gas which will be distributed and consumed through the natural gas grid.\n\nThe production of other coal gases (i.e. coke oven gas, blast furnace gas and oxygen steel furnace gas) should be reported in the columns concerning such gases, and not as production of gasworks gas. The coal gases transferred to gasworks plants should then be reported (in their own column) in the transformation sector in the gasworks plants row. The total amount of gasworks gas resulting from transfers of other coal gases should appear in the production line for gasworks gas.",
    "deprecated": false,
+   "kind": "class",
    "label": "gasworks gas",
    "parents": [
     "OEO_00000263"
@@ -706,6 +781,7 @@
    ],
    "definition": "Geothermal energy is thermal energy that is released from within the earth's crust.",
    "deprecated": false,
+   "kind": "class",
    "label": "geothermal energy",
    "parents": [
     "OEO_00000207",
@@ -718,6 +794,7 @@
    ],
    "definition": "Hard coal is coal with a gross calorific value greater than 23 865 kJ/kg (5 700 kcal/kg) on an ashfree but moist basis and with a mean random reflectance of vitrinite of at least 0,6.",
    "deprecated": false,
+   "kind": "class",
    "label": "hard coal",
    "parents": [
     "OEO_00000088"
@@ -730,6 +807,7 @@
    ],
    "definition": "Thermal energy is the energy that a material entity contains in the undirected motion of its constituent parts (e.g. molecules and atoms).",
    "deprecated": false,
+   "kind": "class",
    "label": "thermal energy",
    "parents": [
     "OEO_00000150"
@@ -741,6 +819,7 @@
    ],
    "definition": "Heating oil is gas diesel oil for industrial and commercial uses, marine diesel and diesel used in rail traffic, other gas oil, including heavy gas oils which distil between 380 °C and 540 °C and which are used as petrochemical feedstocks.",
    "deprecated": false,
+   "kind": "class",
    "label": "heating oil",
    "parents": [
     "OEO_00000181"
@@ -752,6 +831,7 @@
    ],
    "definition": "A heating and cooling sector is a sector that covers heating and cooling activities.",
    "deprecated": false,
+   "kind": "class",
    "label": "heating and cooling sector",
    "parents": [
     "OEO_00000128"
@@ -763,6 +843,7 @@
    ],
    "definition": "A household sector is a sector that covers households.",
    "deprecated": false,
+   "kind": "class",
    "label": "household sector",
    "parents": [
     "OEO_00000128"
@@ -774,6 +855,7 @@
    ],
    "definition": "Hydrogen is a portion of matter with the chemical formula H2. It has a gaseous normal state of matter. As it can be oxidised it can be used as a fuel.",
    "deprecated": false,
+   "kind": "class",
    "label": "hydrogen",
    "parents": [
     "OEO_00000331",
@@ -784,6 +866,7 @@
    "alt_labels": [],
    "definition": "An industrial waste fuel is waste fuel produced by industry.",
    "deprecated": false,
+   "kind": "class",
    "label": "industrial waste fuel",
    "parents": [
     "OEO_00000439"
@@ -795,6 +878,7 @@
    ],
    "definition": "An industry sector is a sector that covers industrial activities with other main purposes of energy transformation.",
    "deprecated": false,
+   "kind": "class",
    "label": "industry sector",
    "parents": [
     "OEO_00000367"
@@ -806,6 +890,7 @@
    ],
    "definition": "Jet fuel is kerosene used for aviation turbine power units. It has the same distillation characteristics between 150 °C and 300 °C (generally not above 250 °C) and flash point as kerosene. In addition, it has particular specifications (such as freezing point) which are established by the International Air Transport Association (IATA).",
    "deprecated": false,
+   "kind": "class",
    "label": "jet fuel",
    "parents": [
     "OEO_00000246"
@@ -817,6 +902,7 @@
    ],
    "definition": "Kerosene, also known as paraffin, lamp oil, and coal oil (an obsolete term), is a portion of matter consisting of combustible hydrocarbon liquid which is derived from petroleum. It is widely used as a fuel in industry as well as households. It is sometimes spelled kerosine in scientific and industrial usage.\n[...]\n\nKerosene is widely used to power jet engines of aircraft (jet fuel) and some rocket engines and is also commonly used as a cooking and lighting fuel and for fire toys such as poi. In parts of Asia, kerosene is sometimes used as fuel for small outboard motors or even motorcycles.",
    "deprecated": false,
+   "kind": "class",
    "label": "kerosene",
    "parents": [
     "OEO_00000331",
@@ -830,6 +916,7 @@
    ],
    "definition": "Lignite is coal that is non-agglomerating with a gross calorific value less than 17 435 kJ/kg (4 165 kcal/kg) and greater than 31 % volatile matter on a dry mineral matter free basis.",
    "deprecated": false,
+   "kind": "class",
    "label": "lignite",
    "parents": [
     "OEO_00000088"
@@ -841,6 +928,7 @@
    ],
    "definition": "Liquid air is air that has a liquid state of matter.",
    "deprecated": false,
+   "kind": "class",
    "label": "liquid air",
    "parents": [
     "OEO_00000054"
@@ -852,6 +940,7 @@
    ],
    "definition": "A liquid biofuel is a biofuel that has liquid as its normal state of matter.",
    "deprecated": false,
+   "kind": "class",
    "label": "liquid biofuel",
    "parents": [
     "OEO_00000072",
@@ -862,6 +951,7 @@
    "alt_labels": [],
    "definition": "A manufactured coal based gas is a gas mixture that is manufactured from coal. It is used as fossil fuel.",
    "deprecated": false,
+   "kind": "class",
    "label": "manufactured coal based gas",
    "parents": [
     "OEO_00010148",
@@ -875,6 +965,7 @@
    ],
    "definition": "Motor gasoline is gasoline consisting of a mixture of light hydrocarbons distilling between 35 °C and 215 °C. It is used as a fuel for land based spark ignition engines. Motor gasoline may include additives, oxygenates and octane enhancers, including lead compounds such as TEL and TML.\n\nIncludes motor gasoline blending components (excluding additives/oxygenates), e.g. alkylates, isomerate, reformate, cracked gasoline destined for use as finished motor gasoline.",
    "deprecated": false,
+   "kind": "class",
    "label": "motor gasoline",
    "parents": [
     "OEO_00000183"
@@ -884,6 +975,7 @@
    "alt_labels": [],
    "definition": "A municipal waste fuel is waste fuel produced by households or non-industrial commercial activities.",
    "deprecated": false,
+   "kind": "class",
    "label": "municipal waste fuel",
    "parents": [
     "OEO_00000439"
@@ -896,6 +988,7 @@
    ],
    "definition": "Natural gas is a gas mixture occurring in underground deposits, whether liquefied or gaseous, and consisting mainly of methane.",
    "deprecated": false,
+   "kind": "class",
    "label": "natural gas",
    "parents": [
     "OEO_00010148",
@@ -909,6 +1002,7 @@
    ],
    "definition": "Non associated gas is natural gas originating from fields producing hydrocarbons only in gaseous form.",
    "deprecated": false,
+   "kind": "class",
    "label": "non associated gas",
    "parents": [
     "OEO_00000292"
@@ -920,6 +1014,7 @@
    ],
    "definition": "A fossil municipal waste fuel is an municipal waste fuel that has a fossil origin.",
    "deprecated": false,
+   "kind": "class",
    "label": "fossil municipal waste fuel",
    "parents": [
     "OEO_00000290",
@@ -932,6 +1027,7 @@
    ],
    "definition": "A nuclear fuel is a fuel that realises its fuel role in processes that release energy in the form of heat or work by undergoing nuclear fission.",
    "deprecated": false,
+   "kind": "class",
    "label": "nuclear fuel",
    "parents": [
     "OEO_00000173",
@@ -945,6 +1041,7 @@
    ],
    "definition": "Peat is a or portion of matter that is a soft, porous or compressed, sedimentary deposit of plant origin with high water content (up to 90 % in the raw state) and can be used as combustion fuel. As the natural formation of peat takes at least centuries, peat is usually considered having a fossil origin.",
    "deprecated": false,
+   "kind": "class",
    "label": "peat",
    "parents": [
     "OEO_00000331",
@@ -956,6 +1053,7 @@
    "alt_labels": [],
    "definition": "A portion of matter is an aggregate of material entities that have a state of matter.",
    "deprecated": false,
+   "kind": "class",
    "label": "portion of matter",
    "parents": [
     "BFO_0000027"
@@ -967,6 +1065,7 @@
    ],
    "definition": "Solid biomass is a portion of matter consisting of organic, non-fossil material of biological origin which may be used as fuel for heat production or electricity generation.",
    "deprecated": false,
+   "kind": "class",
    "label": "solid biofuel",
    "parents": [
     "OEO_00000072",
@@ -977,6 +1076,7 @@
    "alt_labels": [],
    "definition": "Pumped water is liquid water which was pumped into an upper reservoir and thus contains potential energy.",
    "deprecated": false,
+   "kind": "class",
    "label": "pumped water",
    "parents": [
     "OEO_00110000",
@@ -987,6 +1087,7 @@
    "alt_labels": [],
    "definition": "A quantity value is an information content entity defined by a numeral together with a unit of measurement to quantify an entity.",
    "deprecated": false,
+   "kind": "class",
    "label": "quantity value",
    "parents": [
     "IAO_0000030"
@@ -998,10 +1099,23 @@
    ],
    "definition": "A biogenic municipal waste fuel is a municipal waste fuel that has a biogenic origin.",
    "deprecated": false,
+   "kind": "class",
    "label": "biogenic municipal waste fuel",
    "parents": [
     "OEO_00000290",
     "OEO_00010223"
+   ]
+  },
+  "OEO_00000364": {
+   "alt_labels": [
+    "Szenario"
+   ],
+   "definition": "A scenario is an information content entity that contains statements about a possible future development based on a coherent and internally consistent set of assumptions and their motivation.",
+   "deprecated": false,
+   "kind": "class",
+   "label": "scenario",
+   "parents": [
+    "IAO_0000030"
    ]
   },
   "OEO_00000367": {
@@ -1010,6 +1124,7 @@
    ],
    "definition": "A sector is generically dependent continuant that is a subdivision of a system.",
    "deprecated": false,
+   "kind": "class",
    "label": "sector",
    "parents": [
     "BFO_0000031"
@@ -1022,6 +1137,7 @@
    ],
    "definition": "Solar thermal energy is thermal energy that is the physical output of a solar thermal energy transformation.",
    "deprecated": false,
+   "kind": "class",
    "label": "solar thermal energy",
    "parents": [
     "OEO_00000207",
@@ -1034,6 +1150,7 @@
    ],
    "definition": "A solid fossil fuel is a fossil fuel that has a solid state of matter under normal conditions.",
    "deprecated": false,
+   "kind": "class",
    "label": "solid fossil fuel",
    "parents": [
     "OEO_00000014",
@@ -1044,6 +1161,7 @@
    "alt_labels": [],
    "definition": "Sub bituminous coal is coal that is non-agglomerating with a gross calorific value between 17 435 kJ/kg (4 165 kcal/kg) and 23 865 kJ/kg (5 700 kcal/kg) containing more than 31 % volatile matter on a dry mineral matter free basis.",
    "deprecated": false,
+   "kind": "class",
    "label": "sub bituminous coal",
    "parents": [
     "OEO_00000088"
@@ -1055,6 +1173,7 @@
    ],
    "definition": "A commercial sector is a sector that covers non-industrial commercial activities.",
    "deprecated": false,
+   "kind": "class",
    "label": "commercial sector",
    "parents": [
     "OEO_00000128"
@@ -1066,6 +1185,7 @@
    ],
    "definition": "A transport sector is a sector that covers transport of people and/or goods.",
    "deprecated": false,
+   "kind": "class",
    "label": "transport sector",
    "parents": [
     "OEO_00000128"
@@ -1077,6 +1197,7 @@
    ],
    "definition": "A volatile organic compound (VOC) is a portion of matter consisting of organic compounds that is capable of producing photochemical oxidants by reactions with nitrogen oxides in the presence of sunlight. Hence it can act as an air pollutant.",
    "deprecated": false,
+   "kind": "class",
    "label": "volatile organic compound",
    "parents": [
     "OEO_00000331",
@@ -1089,6 +1210,7 @@
    ],
    "definition": "A waste fuel is a fuel in which the material entity is waste.",
    "deprecated": false,
+   "kind": "class",
    "label": "waste fuel",
    "parents": [
     "OEO_00000099",
@@ -1101,6 +1223,7 @@
    ],
    "definition": "Water is a portion of matter with the chemical formula H2O. It has a liquid normal state of matter.",
    "deprecated": false,
+   "kind": "class",
    "label": "water",
    "parents": [
     "OEO_00000331",
@@ -1114,10 +1237,54 @@
    ],
    "definition": "Wood is a biomass from trees. It has a solid state of matter an can be used as fuel.",
    "deprecated": false,
+   "kind": "class",
    "label": "wood",
    "parents": [
     "OEO_00000332",
     "OEO_00010214"
+   ]
+  },
+  "OEO_00000505": {
+   "alt_labels": [],
+   "definition": "A relation that holds between a study and the sector it covers.",
+   "deprecated": false,
+   "kind": "object_property",
+   "label": "covers sector",
+   "parents": [
+    "OEO_00000522",
+    "topObjectProperty"
+   ]
+  },
+  "OEO_00000510": {
+   "alt_labels": [],
+   "definition": "A relation that holds between an information content entity and the organisation in which it was created.",
+   "deprecated": false,
+   "kind": "object_property",
+   "label": "has organisation",
+   "parents": [
+    "OEO_00140008",
+    "topObjectProperty"
+   ]
+  },
+  "OEO_00000522": {
+   "alt_labels": [],
+   "definition": "A relation that holds between a study and the thing it covers.",
+   "deprecated": false,
+   "kind": "object_property",
+   "label": "covers",
+   "parents": [
+    "topObjectProperty"
+   ]
+  },
+  "OEO_00000523": {
+   "alt_labels": [],
+   "definition": "A relation that holds between a study and the energy carrier it covers.",
+   "deprecated": false,
+   "kind": "object_property",
+   "label": "covers energy carrier",
+   "parents": [
+    "OEO_00000522",
+    "topObjectProperty"
    ]
   },
   "OEO_00010000": {
@@ -1126,6 +1293,7 @@
    ],
    "definition": "Ammonia is a portion of matter with the chemical formula NH3. It has a gaseous normal state of matter and can act as an air pollutant. As it can be oxidised it can be used as a fuel.",
    "deprecated": false,
+   "kind": "class",
    "label": "ammonia",
    "parents": [
     "OEO_00000331",
@@ -1139,6 +1307,7 @@
    ],
    "definition": "An air pollutant is a portion of matter that participates in some air pollution.",
    "deprecated": false,
+   "kind": "class",
    "label": "air pollutant",
    "parents": [
     "OEO_00000331"
@@ -1150,6 +1319,7 @@
    ],
    "definition": "Fossil hydrogen is hydrogen with fossil origin.",
    "deprecated": false,
+   "kind": "class",
    "label": "fossil hydrogen",
    "parents": [
     "OEO_00000220",
@@ -1162,6 +1332,7 @@
    ],
    "definition": "Synthetic hydrogen is hydrogen with synthetic origin.",
    "deprecated": false,
+   "kind": "class",
    "label": "synthetic hydrogen",
    "parents": [
     "OEO_00000220",
@@ -1174,6 +1345,7 @@
    ],
    "definition": "A synthetic fuel is a fuel produced from one or more portion(s) of matter using electric energy.",
    "deprecated": false,
+   "kind": "class",
    "label": "synthetic fuel",
    "parents": [
     "OEO_00000099",
@@ -1187,6 +1359,7 @@
    ],
    "definition": "Synthetic methane is methane that has a synthetic origin.",
    "deprecated": false,
+   "kind": "class",
    "label": "synthetic methane",
    "parents": [
     "OEO_00000025",
@@ -1201,6 +1374,7 @@
    ],
    "definition": "PtL fuel is a liquid synthetic fuel produced in a power-to-liquid system from water and carbon dioxide using electrical energy.",
    "deprecated": false,
+   "kind": "class",
    "label": "PtL fuel",
    "parents": [
     "OEO_00010156"
@@ -1212,6 +1386,7 @@
    ],
    "definition": "A building sector is a sector that covers buildings.",
    "deprecated": false,
+   "kind": "class",
    "label": "building sector",
    "parents": [
     "OEO_00000128"
@@ -1223,6 +1398,7 @@
    ],
    "definition": "A agriculture, forestry and land use (AFOLU) sector is a sector that covers activities and natural processes from agriculture, forestry, land use and land use change.",
    "deprecated": false,
+   "kind": "class",
    "label": "agriculture, forestry and land use sector",
    "parents": [
     "OEO_00000367"
@@ -1235,6 +1411,7 @@
    ],
    "definition": "A waste and wastewater sector is a sector that covers activities related the collection and treatment of waste and wastewater.",
    "deprecated": false,
+   "kind": "class",
    "label": "waste and wastewater sector",
    "parents": [
     "OEO_00000367"
@@ -1246,6 +1423,7 @@
    ],
    "definition": "An areal power density is a quantity value that indicates a certain power per area.",
    "deprecated": false,
+   "kind": "class",
    "label": "areal power density",
    "parents": [
     "OEO_00000350"
@@ -1257,6 +1435,7 @@
    ],
    "definition": "An areal energy density is a quantity value that states a certain energy amount per area.",
    "deprecated": false,
+   "kind": "class",
    "label": "areal energy density",
    "parents": [
     "OEO_00000350"
@@ -1268,6 +1447,7 @@
    ],
    "definition": "An areal solar power density is an areal power density that indicates the arriving solar power per area. A synonym for areal solar power density is irradiance.",
    "deprecated": false,
+   "kind": "class",
    "label": "areal solar power density",
    "parents": [
     "OEO_00010074"
@@ -1279,6 +1459,7 @@
    ],
    "definition": "An areal solar energy density is an areal energy density that gives the arriving solar energy per area. A synonym for areal solar energy density is irradiation.",
    "deprecated": false,
+   "kind": "class",
    "label": "areal solar energy density",
    "parents": [
     "OEO_00010075"
@@ -1290,6 +1471,7 @@
    ],
    "definition": "Global warming potential (GWP) is a quantity value that measures the the time-integrated radiative forcing due to a pulse emission of a given component, relative to a pulse emission of an equal mass of carbon dioxide (CO2).",
    "deprecated": false,
+   "kind": "class",
    "label": "global warming potential",
    "parents": [
     "OEO_00000350"
@@ -1301,6 +1483,7 @@
    ],
    "definition": "An emission value is a quantity value that quantifies an emission rate and has a mass unit.",
    "deprecated": false,
+   "kind": "class",
    "label": "emission value",
    "parents": [
     "OEO_00000350"
@@ -1312,6 +1495,7 @@
    ],
    "definition": "A river is a water body that moves through permanent or seasonal flow process from elevated land towards lower elevations through a definite channel and empties either into a sea, lake, or another river or ends on land as bed seepage and evapotranspiration exceed water supply.",
    "deprecated": false,
+   "kind": "class",
    "label": "river",
    "parents": [
     "OEO_00010104"
@@ -1323,6 +1507,7 @@
    ],
    "definition": "A water body is an accumulation of liquid water of varying size on the surface of the Earth.",
    "deprecated": false,
+   "kind": "class",
    "label": "water body",
    "parents": [
     "OEO_00110000"
@@ -1334,6 +1519,7 @@
    ],
    "definition": "The ocean is a water body that consists of salt water and is covering approximately 71% of Earth's surface.",
    "deprecated": false,
+   "kind": "class",
    "label": "ocean",
    "parents": [
     "OEO_00010104"
@@ -1345,6 +1531,7 @@
    ],
    "definition": "Waste thermal energy is thermal energy that is the physical output of an energy transformation process and that is released into the environment unused.",
    "deprecated": false,
+   "kind": "class",
    "label": "waste thermal energy",
    "parents": [
     "OEO_00000207"
@@ -1357,6 +1544,7 @@
    ],
    "definition": "A good is a continuant that has the good role.",
    "deprecated": false,
+   "kind": "class",
    "label": "good",
    "parents": [
     "BFO_0000002",
@@ -1369,6 +1557,7 @@
    ],
    "definition": "Metric ton (t) is a a mass unit which is equal to thousand of a kilogram or 10^3 kg.",
    "deprecated": false,
+   "kind": "class",
    "label": "metric ton",
    "parents": [
     "UO_0000002"
@@ -1378,6 +1567,7 @@
    "alt_labels": [],
    "definition": "A solid combustion fuel is a combustion fuel that has a solid state of matter under normal conditions.",
    "deprecated": false,
+   "kind": "class",
    "label": "solid combustion fuel",
    "parents": [
     "OEO_00000099"
@@ -1389,6 +1579,7 @@
    ],
    "definition": "A liquid combustion fuel is a combustion fuel that has a liquid state of matter under normal conditions.",
    "deprecated": false,
+   "kind": "class",
    "label": "liquid combustion fuel",
    "parents": [
     "OEO_00000099",
@@ -1401,6 +1592,7 @@
    ],
    "definition": "A gaseous combustion fuel is a combustion fuel that has a gaseous state of matter under normal conditions.",
    "deprecated": false,
+   "kind": "class",
    "label": "gaseous combustion fuel",
    "parents": [
     "OEO_00000099",
@@ -1413,6 +1605,7 @@
    ],
    "definition": "A liquid fossil fuel is a fossil combustion fuel that has a liquid state of matter under normal conditions.",
    "deprecated": false,
+   "kind": "class",
    "label": "liquid fossil fuel",
    "parents": [
     "OEO_00000014",
@@ -1425,6 +1618,7 @@
    ],
    "definition": "A gaseous fossil fuel is a fossil combustion fuel that has a gaseous state of matter under normal conditions.",
    "deprecated": false,
+   "kind": "class",
    "label": "gaseous fossil fuel",
    "parents": [
     "OEO_00000014",
@@ -1435,6 +1629,7 @@
    "alt_labels": [],
    "definition": "A solid renewable fuel is a renewable fuel that has a solid state of matter under normal conditions.",
    "deprecated": false,
+   "kind": "class",
    "label": "solid renewable fuel",
    "parents": [
     "OEO_00000033",
@@ -1447,6 +1642,7 @@
    ],
    "definition": "A liquid renewable fuel is a renewable fuel that has a liquid state of matter under normal conditions.",
    "deprecated": false,
+   "kind": "class",
    "label": "liquid renewable fuel",
    "parents": [
     "OEO_00000033",
@@ -1459,6 +1655,7 @@
    ],
    "definition": "A gaseous renewable fuel is a renewable fuel that has a gaseous state of matter under normal conditions.",
    "deprecated": false,
+   "kind": "class",
    "label": "gaseous renewable fuel",
    "parents": [
     "OEO_00000033",
@@ -1471,6 +1668,7 @@
    ],
    "definition": null,
    "deprecated": false,
+   "kind": "class",
    "label": "gaseous biofuel",
    "parents": [
     "OEO_00000072",
@@ -1481,6 +1679,7 @@
    "alt_labels": [],
    "definition": null,
    "deprecated": false,
+   "kind": "class",
    "label": "solid synthetic fuel",
    "parents": [
     "OEO_00010017",
@@ -1493,6 +1692,7 @@
    ],
    "definition": null,
    "deprecated": false,
+   "kind": "class",
    "label": "gaseous synthetic fuel",
    "parents": [
     "OEO_00010017",
@@ -1505,6 +1705,7 @@
    ],
    "definition": "A liquid synthetic fuel is a synthetic fuel that has a liquid state of matter under normal conditions.",
    "deprecated": false,
+   "kind": "class",
    "label": "liquid synthetic fuel",
    "parents": [
     "OEO_00010017",
@@ -1515,6 +1716,7 @@
    "alt_labels": [],
    "definition": "A power value is a quantity value that has a power unit as unit.",
    "deprecated": false,
+   "kind": "class",
    "label": "power value",
    "parents": [
     "OEO_00000350"
@@ -1526,6 +1728,7 @@
    ],
    "definition": "Biomass is a portion of matter from plants or animals and has thus has a biogenic origin.",
    "deprecated": false,
+   "kind": "class",
    "label": "biomass",
    "parents": [
     "OEO_00000331",
@@ -1538,6 +1741,7 @@
    ],
    "definition": "Biomethane is a gas mixture produced from biogas by removing carbon dioxide. It consists mainly of methane and can be used as fuel.",
    "deprecated": false,
+   "kind": "class",
    "label": "biomethane",
    "parents": [
     "OEO_00010153",
@@ -1550,6 +1754,7 @@
    ],
    "definition": "Synthetic ammonia is ammonia that has a synthetic origin.",
    "deprecated": false,
+   "kind": "class",
    "label": "synthetic ammonia",
    "parents": [
     "OEO_00010000",
@@ -1562,6 +1767,7 @@
    ],
    "definition": "A biogenic waste fuel is a waste fuel that has a biogenic origin.",
    "deprecated": false,
+   "kind": "class",
    "label": "biogenic waste fuel",
    "parents": [
     "OEO_00000072",
@@ -1572,6 +1778,7 @@
    "alt_labels": [],
    "definition": "A fossil waste fuel is a waste fuel that has a fossil origin.",
    "deprecated": false,
+   "kind": "class",
    "label": "fossil waste fuel",
    "parents": [
     "OEO_00000014",
@@ -1584,6 +1791,7 @@
    ],
    "definition": "A biogenic industrial waste fuel is an industrial waste fuel that has a biogenic origin.",
    "deprecated": false,
+   "kind": "class",
    "label": "biogenic industrial waste fuel",
    "parents": [
     "OEO_00000226",
@@ -1594,6 +1802,7 @@
    "alt_labels": [],
    "definition": "A fossil industrial waste fuel is an industrial waste fuel that has a fossil origin.",
    "deprecated": false,
+   "kind": "class",
    "label": "fossil industrial waste fuel",
    "parents": [
     "OEO_00000226",
@@ -1606,6 +1815,7 @@
    ],
    "definition": "A forecast error is a quantity value that quantifies the difference between a measured and a forecasted value.",
    "deprecated": false,
+   "kind": "class",
    "label": "forecast error",
    "parents": [
     "OEO_00000350"
@@ -1617,6 +1827,7 @@
    ],
    "definition": "A gas mixture is a portion of matter that is a composition of different kinds of portions of matter and that has a gaseous normal state of matter.",
    "deprecated": false,
+   "kind": "class",
    "label": "gas mixture",
    "parents": [
     "OEO_00000331",
@@ -1629,6 +1840,7 @@
    ],
    "definition": "Liquefied natural gas (LNG) is natural gas that has a liquid state of matter.",
    "deprecated": false,
+   "kind": "class",
    "label": "liquefied natural gas",
    "parents": [
     "OEO_00000292"
@@ -1638,6 +1850,7 @@
    "alt_labels": [],
    "definition": "A gasoline fuel is a combustion fuel that has a gasoline fuel role.",
    "deprecated": false,
+   "kind": "class",
    "label": "gasoline fuel",
    "parents": [
     "OEO_00000099"
@@ -1649,6 +1862,7 @@
    ],
    "definition": "A diesel fuel is a combustion fuel that has a diesel fuel role.",
    "deprecated": false,
+   "kind": "class",
    "label": "diesel fuel",
    "parents": [
     "OEO_00000099"
@@ -1660,6 +1874,7 @@
    ],
    "definition": "A maximum value is a quantity value that represents the upper limit of an artificial object or process to contain or transform another entity.",
    "deprecated": false,
+   "kind": "class",
    "label": "maximum value",
    "parents": [
     "OEO_00000350"
@@ -1669,6 +1884,7 @@
    "alt_labels": [],
    "definition": "A power capacity is a power rating of a generator or power generating unit to generate power.",
    "deprecated": false,
+   "kind": "class",
    "label": "power capacity",
    "parents": [
     "OEO_00230001"
@@ -1680,6 +1896,7 @@
    ],
    "definition": "An emission price is a monetary price of emitting a certain emission value.",
    "deprecated": false,
+   "kind": "class",
    "label": "emission price",
    "parents": [
     "OEO_00040003"
@@ -1691,6 +1908,7 @@
    ],
    "definition": "A CO2 price is an emission price of emitting a certain CO2 emission value.",
    "deprecated": false,
+   "kind": "class",
    "label": "CO2 price",
    "parents": [
     "OEO_00010268"
@@ -1702,6 +1920,7 @@
    ],
    "definition": "A carbon tax value is a CO2 price that is set by a carbon tax.",
    "deprecated": false,
+   "kind": "class",
    "label": "carbon tax value",
    "parents": [
     "OEO_00010269"
@@ -1713,6 +1932,7 @@
    ],
    "definition": "A CO2 emission certificate price is an emission price of an CO2 emission certificate that allows the emission of certain CO2 emission value.",
    "deprecated": false,
+   "kind": "class",
    "label": "CO2 emission certificate price",
    "parents": [
     "OEO_00020154"
@@ -1724,6 +1944,7 @@
    ],
    "definition": "A conventional energy is an energy that has a conventional origin.",
    "deprecated": false,
+   "kind": "class",
    "label": "conventional energy",
    "parents": [
     "OEO_00000150"
@@ -1735,6 +1956,7 @@
    ],
    "definition": "A mineral oil product is a fossil combustion fuel produced in a mineral oil refining process.",
    "deprecated": false,
+   "kind": "class",
    "label": "mineral oil product",
    "parents": [
     "OEO_00000014",
@@ -1748,6 +1970,7 @@
    ],
    "definition": "A mineral oil is a fossil combustion fuel that is either crude oil or a mineral oil product.",
    "deprecated": false,
+   "kind": "class",
    "label": "mineral oil",
    "parents": [
     "OEO_00000014"
@@ -1757,6 +1980,7 @@
    "alt_labels": [],
    "definition": "A mineral oil refining sector is an energy transformation sector that covers mineral oil refining.",
    "deprecated": false,
+   "kind": "class",
    "label": "mineral oil refining sector",
    "parents": [
     "OEO_00000158"
@@ -1766,6 +1990,7 @@
    "alt_labels": [],
    "definition": "An international transport sector is a transport sector of international transport processes.",
    "deprecated": false,
+   "kind": "class",
    "label": "international transport sector",
    "parents": [
     "OEO_00000422"
@@ -1777,6 +2002,7 @@
    ],
    "definition": "Refinery gas is a gas mixture that is produced as a by-product of a mineral oil refining process. It mainly consists of hydrogen, methane, ethane and olefins and can be used as a fuel.",
    "deprecated": false,
+   "kind": "class",
    "label": "refinery gas",
    "parents": [
     "OEO_00010148",
@@ -1790,6 +2016,7 @@
    ],
    "definition": "Petroleum coke is a portion of matter with a solid state of matter that is produced in a mineral oil refining process. It consists mainly of carbon and can be uses as a fuel.",
    "deprecated": false,
+   "kind": "class",
    "label": "petroleum coke",
    "parents": [
     "OEO_00000331",
@@ -1801,6 +2028,7 @@
    "alt_labels": [],
    "definition": "A sustainable biofuel is a biofuel that does conform to sustainability criteria.",
    "deprecated": false,
+   "kind": "class",
    "label": "sustainable biofuel",
    "parents": [
     "OEO_00000033",
@@ -1811,6 +2039,7 @@
    "alt_labels": [],
    "definition": "A non-sustainable biofuel is a biofuel that does not conform to sustainability criteria.",
    "deprecated": false,
+   "kind": "class",
    "label": "non-sustainable biofuel",
    "parents": [
     "OEO_00000072"
@@ -1822,6 +2051,7 @@
    ],
    "definition": "A source category is a sector that is defined by a common reporting format.",
    "deprecated": false,
+   "kind": "class",
    "label": "source category",
    "parents": [
     "OEO_00000367"
@@ -1833,6 +2063,7 @@
    ],
    "definition": "Electrolytic hydrogen is hydrogen that is a physical output of a water electrolysis process.",
    "deprecated": false,
+   "kind": "class",
    "label": "electrolytic hydrogen",
    "parents": [
     "OEO_00000220",
@@ -1846,6 +2077,7 @@
    ],
    "definition": "Renewable electrolytic hydrogen is electrolytic hydrogen that is produced with renewable electrical energy.",
    "deprecated": false,
+   "kind": "class",
    "label": "renewable electrolytic hydrogen",
    "parents": [
     "OEO_00010016",
@@ -1856,6 +2088,7 @@
    "alt_labels": [],
    "definition": "Steam reforming hydrogen is hydrogen that is a physical output of a steam reforming process.",
    "deprecated": false,
+   "kind": "class",
    "label": "steam reforming hydrogen",
    "parents": [
     "OEO_00000220",
@@ -1868,6 +2101,7 @@
    ],
    "definition": "Fossil steam reforming hydrogen is hydrogen that is produced from a fossil combustion fuel in a steam reforming process which is not followed by a carbon capture and storage process.",
    "deprecated": false,
+   "kind": "class",
    "label": "fossil steam reforming hydrogen",
    "parents": [
     "OEO_00000220",
@@ -1881,6 +2115,7 @@
    ],
    "definition": "Abated steam reforming hydrogen is hydrogen that is output of a steam reforming process which is followed by a carbon capture and storage process.",
    "deprecated": false,
+   "kind": "class",
    "label": "abated steam reforming hydrogen",
    "parents": [
     "OEO_00000220",
@@ -1892,6 +2127,7 @@
    "alt_labels": [],
    "definition": "A non-scattered radiant flux density is an areal solar power density that measures the direct solar radiation within the extent of the solar disk only (half-angle 0.266 deg).",
    "deprecated": false,
+   "kind": "class",
    "label": "non-scattered radiant flux density",
    "parents": [
     "OEO_00010076"
@@ -1901,6 +2137,7 @@
    "alt_labels": [],
    "definition": "Brent crude is a crude oil that is extracted in the North Sea and traded at ICE London.",
    "deprecated": false,
+   "kind": "class",
    "label": "Brent crude",
    "parents": [
     "OEO_00000115"
@@ -1912,6 +2149,7 @@
    ],
    "definition": "Western Texas Intermediate (WTI) is a crude oil that is extracted on US territory and traded at NYMEX New York.",
    "deprecated": false,
+   "kind": "class",
    "label": "Western Texas Intermediate",
    "parents": [
     "OEO_00000115"
@@ -1923,6 +2161,7 @@
    ],
    "definition": "Nuclear electrolytic hydrogen is electrolytic hydrogen that is produced with nuclear electrical energy.",
    "deprecated": false,
+   "kind": "class",
    "label": "nuclear electrolytic hydrogen",
    "parents": [
     "OEO_00010016",
@@ -1935,6 +2174,7 @@
    ],
    "definition": "Solar electrolytic hydrogen is electrolytic hydrogen that is produced with solar electrical energy.",
    "deprecated": false,
+   "kind": "class",
    "label": "solar electrolytic hydrogen",
    "parents": [
     "OEO_00010016",
@@ -1945,6 +2185,7 @@
    "alt_labels": [],
    "definition": "A blended liquid fuel is a liquid combustion fuel that contains a liquid fossil fuel and a liquid renewable fuel or a liquid biofuel.",
    "deprecated": false,
+   "kind": "class",
    "label": "blended liquid fuel",
    "parents": [
     "OEO_00010145"
@@ -1954,6 +2195,7 @@
    "alt_labels": [],
    "definition": "Bioethanol is ethanol with a biogenic origin.",
    "deprecated": false,
+   "kind": "class",
    "label": "bioethanol",
    "parents": [
     "OEO_00000258",
@@ -1964,6 +2206,7 @@
    "alt_labels": [],
    "definition": "E10 is a gasoline fuel that consists of (fossil) gasoline and up to 10 % ethanol and that is liquid.",
    "deprecated": false,
+   "kind": "class",
    "label": "E10",
    "parents": [
     "OEO_00010241",
@@ -1974,6 +2217,7 @@
    "alt_labels": [],
    "definition": "B7 is a diesel fuel that consists of fossil diesel fuel and up to 7 % biodiesel and that is liquid.",
    "deprecated": false,
+   "kind": "class",
    "label": "B7",
    "parents": [
     "OEO_00010242",
@@ -1984,6 +2228,7 @@
    "alt_labels": [],
    "definition": "A fuel blending quota value is a fraction value that quantifies a fuel blending quota.",
    "deprecated": false,
+   "kind": "class",
    "label": "fuel quota blending value",
    "parents": [
     "OEO_00140127"
@@ -1993,6 +2238,7 @@
    "alt_labels": [],
    "definition": "A subsector is a sector that is a part of an other sector.",
    "deprecated": false,
+   "kind": "class",
    "label": "subsector",
    "parents": [
     "OEO_00000367"
@@ -2005,6 +2251,7 @@
    ],
    "definition": "Methanol is a hydrocarbon with the chemical formula CH3OH. It has a liquid normal state of matter. As it can be oxidised it can be used as a fuel.",
    "deprecated": false,
+   "kind": "class",
    "label": "methanol",
    "parents": [
     "OEO_00010145",
@@ -2017,6 +2264,7 @@
    ],
    "definition": "Ethanol is a portion of matter with the chemical formula C2H6O. It has a liquid normal state of matter and can be used as a combustion fuel.",
    "deprecated": false,
+   "kind": "class",
    "label": "ethanol",
    "parents": [
     "OEO_00000331",
@@ -2029,6 +2277,7 @@
    ],
    "definition": "An energy carrier is a material entity that has an energy carrier disposition.",
    "deprecated": false,
+   "kind": "class",
    "label": "energy carrier",
    "parents": [
     "BFO_0000040"
@@ -2040,6 +2289,7 @@
    ],
    "definition": "A renewable energy carrier is an energy carrier that has a renewable energy carrier disposition.",
    "deprecated": false,
+   "kind": "class",
    "label": "renewable energy carrier",
    "parents": [
     "OEO_00020039"
@@ -2051,6 +2301,7 @@
    ],
    "definition": "A rock is a portion of matter that is a naturally occurring solid aggregate of minerals or mineraloid matter that is part of the earth's crust.",
    "deprecated": false,
+   "kind": "class",
    "label": "rock",
    "parents": [
     "OEO_00000331",
@@ -2063,6 +2314,7 @@
    ],
    "definition": "A commodity is a good that bears the commodity role.",
    "deprecated": false,
+   "kind": "class",
    "label": "commodity",
    "parents": [
     "OEO_00010116"
@@ -2074,6 +2326,7 @@
    ],
    "definition": "Grid-bound heating is a heat transfer over a distance via a heating grid, using steam or (hot) water.",
    "deprecated": false,
+   "kind": "class",
    "label": "grid-bound heating",
    "parents": [
     "OEO_00140101"
@@ -2085,6 +2338,7 @@
    ],
    "definition": "A markup is a quantity value that indicates a virtual amount added to an assumed or historical price to predict a price in a different context.",
    "deprecated": false,
+   "kind": "class",
    "label": "markup",
    "parents": [
     "OEO_00000350"
@@ -2096,6 +2350,7 @@
    ],
    "definition": "A markdown is a quantity value that indicates a virtual amount deducted from an assumed or historical price to predict a price in a different context.",
    "deprecated": false,
+   "kind": "class",
    "label": "markdown",
    "parents": [
     "OEO_00000350"
@@ -2107,6 +2362,7 @@
    ],
    "definition": "A renewable energy is an energy that has renewable origin.",
    "deprecated": false,
+   "kind": "class",
    "label": "renewable energy",
    "parents": [
     "OEO_00000150"
@@ -2118,6 +2374,7 @@
    ],
    "definition": "Inflation rate is an economic value reprensenting the ratio between the monetary price for a good at two different points in time that equalises differences in monetary price levels between these two points in time.",
    "deprecated": false,
+   "kind": "class",
    "label": "inflation rate",
    "parents": [
     "OEO_00140127"
@@ -2129,6 +2386,7 @@
    ],
    "definition": "The exchange rate is an economic value representing the ratio at which one currency can be exchanged for another.",
    "deprecated": false,
+   "kind": "class",
    "label": "exchange rate",
    "parents": [
     "OEO_00140127"
@@ -2140,6 +2398,7 @@
    ],
    "definition": "Purchasing power parity is an economic value representing the ratio between currencies that equalises differences in monetary price levels between countries for the same set of goods.",
    "deprecated": false,
+   "kind": "class",
    "label": "purchasing power parity",
    "parents": [
     "OEO_00140127"
@@ -2151,6 +2410,7 @@
    ],
    "definition": "Electricity price is the monetary price per energy unit of electricity.",
    "deprecated": false,
+   "kind": "class",
    "label": "electricity price",
    "parents": [
     "OEO_00040003"
@@ -2162,6 +2422,7 @@
    ],
    "definition": "A due is a quantity value that represents a payment that an agent makes to belong to an organisation.",
    "deprecated": false,
+   "kind": "class",
    "label": "due",
    "parents": [
     "OEO_00000350"
@@ -2171,6 +2432,7 @@
    "alt_labels": [],
    "definition": "A remuneration is a quantity value that describes a financial compensation provided in exchange for services performed.",
    "deprecated": false,
+   "kind": "class",
    "label": "remuneration",
    "parents": [
     "OEO_00000350"
@@ -2182,6 +2444,7 @@
    ],
    "definition": "A fee is a quantity value that represents an amount of money paid for a  particular piece of work or for a particular right or service.",
    "deprecated": false,
+   "kind": "class",
    "label": "fee",
    "parents": [
     "OEO_00000350"
@@ -2191,6 +2454,7 @@
    "alt_labels": [],
    "definition": "Market revenue is a quantity value that represents the income from a trade at a market exchange.",
    "deprecated": false,
+   "kind": "class",
    "label": "market revenue",
    "parents": [
     "OEO_00000350"
@@ -2203,6 +2467,7 @@
    ],
    "definition": "A specific space requirement is a quantity value that indicates a certain space requirement per nameplate capacity.",
    "deprecated": false,
+   "kind": "class",
    "label": "specific space requirement",
    "parents": [
     "OEO_00000350"
@@ -2214,6 +2479,7 @@
    ],
    "definition": "An area value is a quantity value indicating the size of a two-dimensional spatial region.",
    "deprecated": false,
+   "kind": "class",
    "label": "area value",
    "parents": [
     "OEO_00000350"
@@ -2225,6 +2491,7 @@
    ],
    "definition": "Emission certificate price is a monetary price of an emission certificate that allows the emission of a certain emission value.",
    "deprecated": false,
+   "kind": "class",
    "label": "emission certificate price",
    "parents": [
     "OEO_00010268"
@@ -2236,6 +2503,7 @@
    ],
    "definition": "A life time is a time span of an artificial object that measures the time during which the artificial object exists.",
    "deprecated": false,
+   "kind": "class",
    "label": "life time",
    "parents": [
     "OEO_00030035"
@@ -2247,6 +2515,7 @@
    ],
    "definition": "A construction time is a time span that measures the time that is needed to construct an artificial object.",
    "deprecated": false,
+   "kind": "class",
    "label": "construction time",
    "parents": [
     "OEO_00030035"
@@ -2258,6 +2527,7 @@
    ],
    "definition": "A decommissioning time is a time span that measures the time that is needed to decommission an artificial object.",
    "deprecated": false,
+   "kind": "class",
    "label": "decommissioning time",
    "parents": [
     "OEO_00030035"
@@ -2267,6 +2537,7 @@
    "alt_labels": [],
    "definition": "An operational life time is the lifetime of an artificial object. It is measured from the end of construction time to the start of decommissioning time.",
    "deprecated": false,
+   "kind": "class",
    "label": "operational life time",
    "parents": [
     "OEO_00020175"
@@ -2276,6 +2547,7 @@
    "alt_labels": [],
    "definition": "A fissile material entity is a material entity that has the disposition to carry nuclear (binding) energy.",
    "deprecated": false,
+   "kind": "class",
    "label": "fissile material entity",
    "parents": [
     "BFO_0000040",
@@ -2286,6 +2558,7 @@
    "alt_labels": [],
    "definition": "An electrical energy amount value is an energy amount value that measures a quantity of electrical energy.",
    "deprecated": false,
+   "kind": "class",
    "label": "electrical energy amount value",
    "parents": [
     "OEO_00050019"
@@ -2295,6 +2568,7 @@
    "alt_labels": [],
    "definition": "An electricity import value is an electrical energy amount value that measures the import of electrical energy.",
    "deprecated": false,
+   "kind": "class",
    "label": "electricity import value",
    "parents": [
     "OEO_00020204"
@@ -2304,6 +2578,7 @@
    "alt_labels": [],
    "definition": "An electricity export value is an electrical energy amount value that measures the export of electrical energy.",
    "deprecated": false,
+   "kind": "class",
    "label": "electricity export value",
    "parents": [
     "OEO_00020204"
@@ -2315,6 +2590,7 @@
    ],
    "definition": "A renewable energy share value is a fraction value that quantifies a share of renewable energy (RE-share)",
    "deprecated": false,
+   "kind": "class",
    "label": "renewable energy share value",
    "parents": [
     "OEO_00140127"
@@ -2326,24 +2602,47 @@
    ],
    "definition": "An electrical energy share value is a fraction value that quantifies the share of electrical energy (degree of electrification).",
    "deprecated": false,
+   "kind": "class",
    "label": "electrical energy share value",
    "parents": [
     "OEO_00140127"
+   ]
+  },
+  "OEO_00020314": {
+   "alt_labels": [],
+   "definition": "A reference scenario is a scenario that is used as a reference, e.g. in a scenario comparison. It has the reference role.",
+   "deprecated": false,
+   "kind": "class",
+   "label": "reference scenario",
+   "parents": [
+    "OEO_00000364"
    ]
   },
   "OEO_00020423": {
    "alt_labels": [],
    "definition": "A relational quantity value is a quantity value that quantifies two or more quantities in relation to each other.",
    "deprecated": false,
+   "kind": "class",
    "label": "relational quantity value",
    "parents": [
     "OEO_00000350"
+   ]
+  },
+  "OEO_00020440": {
+   "alt_labels": [],
+   "definition": "Has scenario year value is a relation between a scenario factsheet and a xsd:dateTime value.",
+   "deprecated": false,
+   "kind": "data_property",
+   "label": "has scenario year value",
+   "parents": [
+    "topDataProperty"
    ]
   },
   "OEO_00020494": {
    "alt_labels": [],
    "definition": "Ethene, or colloquially Ethylene, is a hydrocarbon with the chemical formula H2C=CH2. It is gaseous in its normal state and can be used as a combustion fuel.",
    "deprecated": false,
+   "kind": "class",
    "label": "ethene",
    "parents": [
     "OEO_00010146",
@@ -2354,6 +2653,7 @@
    "alt_labels": [],
    "definition": "An angricultural waste fuel is waste fuel produced by agriculture.",
    "deprecated": false,
+   "kind": "class",
    "label": "agricultural waste fuel",
    "parents": [
     "OEO_00000439"
@@ -2365,9 +2665,22 @@
    ],
    "definition": "Coal refuse is a fossil waste fuel that is the material left over from coal mining. It can partially be reused as fuel.",
    "deprecated": false,
+   "kind": "class",
    "label": "coal refuse",
    "parents": [
     "OEO_00010224"
+   ]
+  },
+  "OEO_00030022": {
+   "alt_labels": [
+    "Organisation"
+   ],
+   "definition": "An organisation is an immaterial entity that has the organisation role and there exists some sort of legal framework that recognises the entity and its continued existence.",
+   "deprecated": false,
+   "kind": "class",
+   "label": "organisation",
+   "parents": [
+    "BFO_0000141"
    ]
   },
   "OEO_00030035": {
@@ -2376,6 +2689,7 @@
    ],
    "definition": "A time span is a quantity value indicating the duration of a one-dimensional temporal region, measured in a time unit.",
    "deprecated": false,
+   "kind": "class",
    "label": "time span",
    "parents": [
     "OEO_00000350"
@@ -2387,6 +2701,7 @@
    ],
    "definition": "A monetary value is a quantity value that states the amount of money specified in monetary units.",
    "deprecated": false,
+   "kind": "class",
    "label": "monetary value",
    "parents": [
     "OEO_00000350"
@@ -2398,9 +2713,20 @@
    ],
    "definition": "Marginal cost is the quantity value that corresponds to the change in the total cost that arises when the quantity produced is incremented by one unit; that is, it is the cost of producing one more unit of a good.",
    "deprecated": false,
+   "kind": "class",
    "label": "marginal cost",
    "parents": [
     "OEO_00000350"
+   ]
+  },
+  "OEO_00040010": {
+   "alt_labels": [],
+   "definition": "A property that links a quantity value to a unit in which the quantity value has been expressed.",
+   "deprecated": false,
+   "kind": "object_property",
+   "label": "has unit",
+   "parents": [
+    "topObjectProperty"
    ]
   },
   "OEO_00050002": {
@@ -2409,6 +2735,7 @@
    ],
    "definition": "An energy unit which is equal to 1,000 joules.",
    "deprecated": false,
+   "kind": "class",
    "label": "kilojoule",
    "parents": [
     "UO_0000111"
@@ -2420,6 +2747,7 @@
    ],
    "definition": "An energy unit which is equal to 1,000,000 joules.",
    "deprecated": false,
+   "kind": "class",
    "label": "megajoule",
    "parents": [
     "UO_0000111"
@@ -2431,6 +2759,7 @@
    ],
    "definition": "An energy unit which is equal to 10^9 joules.",
    "deprecated": false,
+   "kind": "class",
    "label": "gigajoule",
    "parents": [
     "UO_0000111"
@@ -2442,6 +2771,7 @@
    ],
    "definition": "An energy unit which is equal to 10^12 joules.",
    "deprecated": false,
+   "kind": "class",
    "label": "terajoule",
    "parents": [
     "UO_0000111"
@@ -2453,6 +2783,7 @@
    ],
    "definition": "An energy unit which is equal to 10^15 joules.",
    "deprecated": false,
+   "kind": "class",
    "label": "petajoule",
    "parents": [
     "UO_0000111"
@@ -2464,6 +2795,7 @@
    ],
    "definition": "An energy unit which is equal to 10^18 joules.",
    "deprecated": false,
+   "kind": "class",
    "label": "exajoule",
    "parents": [
     "UO_0000111"
@@ -2475,6 +2807,7 @@
    ],
    "definition": "A megawatt-hour is a watt-hour based unit which is equal to 10^6 watt-hours.",
    "deprecated": false,
+   "kind": "class",
    "label": "megawatt-hour",
    "parents": [
     "UO_1000223"
@@ -2486,6 +2819,7 @@
    ],
    "definition": "A terawatt-hour is a watt-hour based unit which is equal to 10^12 watt-hours.",
    "deprecated": false,
+   "kind": "class",
    "label": "terawatt-hour",
    "parents": [
     "UO_1000223"
@@ -2497,6 +2831,7 @@
    ],
    "definition": "A petawatt-hour is a watt-hour based unit which is equal to 10^15 watt-hours.",
    "deprecated": false,
+   "kind": "class",
    "label": "petawatt-hour",
    "parents": [
     "UO_1000223"
@@ -2508,6 +2843,7 @@
    ],
    "definition": "A gigawatt-hour is a watt-hour based unit which is equal to 10^9 watt-hours.",
    "deprecated": false,
+   "kind": "class",
    "label": "gigawatt-hour",
    "parents": [
     "UO_1000223"
@@ -2519,6 +2855,7 @@
    ],
    "definition": "A final energy consumption value is an energy consumption value expressing the magnitude of the energy delivered to and consumed by end users.",
    "deprecated": false,
+   "kind": "class",
    "label": "final energy consumption value",
    "parents": [
     "OEO_00240019"
@@ -2530,6 +2867,7 @@
    ],
    "definition": "A gross inland energy consumption value is an energy consumption value expressing the magnitude of the total consumption of energy in a spatial region (e.g. a country).",
    "deprecated": false,
+   "kind": "class",
    "label": "gross inland energy consumption value",
    "parents": [
     "OEO_00240019"
@@ -2541,6 +2879,7 @@
    ],
    "definition": "A primary energy consumption value is an energy consumption value expressing the magnitude of the total consumption of energy in a spatial region excluding the non-energetic use of fuels.",
    "deprecated": false,
+   "kind": "class",
    "label": "primary energy consumption value",
    "parents": [
     "OEO_00240019"
@@ -2552,6 +2891,7 @@
    ],
    "definition": "An energy value is a quantity value that has an energy unit as unit.",
    "deprecated": false,
+   "kind": "class",
    "label": "energy value",
    "parents": [
     "OEO_00000350"
@@ -2561,6 +2901,7 @@
    "alt_labels": [],
    "definition": "A volumetric flow rate value is a quantity value that has a volumetric flow rate unit as unit.",
    "deprecated": false,
+   "kind": "class",
    "label": "volumetric flow rate value",
    "parents": [
     "OEO_00000350"
@@ -2572,6 +2913,7 @@
    ],
    "definition": "Liquid water is water that has a liquid state of matter.",
    "deprecated": false,
+   "kind": "class",
    "label": "liquid water",
    "parents": [
     "OEO_00000441"
@@ -2583,6 +2925,7 @@
    ],
    "definition": "Steam is water that has a gaseous state of matter.",
    "deprecated": false,
+   "kind": "class",
    "label": "steam",
    "parents": [
     "OEO_00000441",
@@ -2593,9 +2936,20 @@
    "alt_labels": [],
    "definition": "Length value is a quantity value that has a length unit as unit.",
    "deprecated": false,
+   "kind": "class",
    "label": "length value",
    "parents": [
     "OEO_00000350"
+   ]
+  },
+  "OEO_00140008": {
+   "alt_labels": [],
+   "definition": "A relation between an information content entity / model and a continuant, in which the continuant is somehow involved in the creation of the information content entity / model.",
+   "deprecated": false,
+   "kind": "object_property",
+   "label": "has contributor",
+   "parents": [
+    "topObjectProperty"
    ]
   },
   "OEO_00140012": {
@@ -2604,6 +2958,7 @@
    ],
    "definition": "OBSOLETE: An economic value is a quantity value that is economically relevant.",
    "deprecated": true,
+   "kind": "class",
    "label": "obsolete economic value",
    "parents": [
     "OEO_00000350"
@@ -2616,6 +2971,7 @@
    ],
    "definition": "A gross domestic product is a quantity value that represents the broadest measure of aggregate economic activity, measuring the total unduplicated market value of all final goods and services produced within a statistical area in a period.",
    "deprecated": false,
+   "kind": "class",
    "label": "gross domestic product",
    "parents": [
     "OEO_00000350"
@@ -2627,6 +2983,7 @@
    ],
    "definition": "Gross value added is a quantity value that is the value of goods and services produced in a sector of an economy, measuring that sector's contribution to gross domestic product (GDP). It is calculated as the monetary value of products and services produced, less the value of intermediate consumption.",
    "deprecated": false,
+   "kind": "class",
    "label": "gross value added",
    "parents": [
     "OEO_00000350"
@@ -2638,6 +2995,7 @@
    ],
    "definition": "An efficiency value is a quantity value stating the ratio between a process's inputs and the outputs that are used.",
    "deprecated": false,
+   "kind": "class",
    "label": "efficiency value",
    "parents": [
     "OEO_00000350"
@@ -2649,6 +3007,7 @@
    ],
    "definition": "A coefficient of performance value is a quantity value stating the ratio between the work input and the total output of an energy conversion process.",
    "deprecated": false,
+   "kind": "class",
    "label": "coefficient of performance value",
    "parents": [
     "OEO_00000350"
@@ -2658,6 +3017,7 @@
    "alt_labels": [],
    "definition": "A flow potential is a potential of an input or output of a process, per time unit.",
    "deprecated": false,
+   "kind": "class",
    "label": "flow potential",
    "parents": [
     "OEO_00290000"
@@ -2667,6 +3027,7 @@
    "alt_labels": [],
    "definition": "A theoretical flow potential is a type of flow potential that identifies the physical upper limit of an input or output of a process in a spatial region of reference per unit time.",
    "deprecated": false,
+   "kind": "class",
    "label": "theoretical flow potential",
    "parents": [
     "OEO_00140056"
@@ -2676,6 +3037,7 @@
    "alt_labels": [],
    "definition": "A technological flow potential is a type of a flow potential derived from a theoretical flow potential, taking account of the annual efficiency of the respective conversion technology and the additional restrictions regarding the area that is realistically available for energy generation.",
    "deprecated": false,
+   "kind": "class",
    "label": "technological flow potential",
    "parents": [
     "OEO_00140056"
@@ -2685,6 +3047,7 @@
    "alt_labels": [],
    "definition": "An economic flow potential is a type of flow potential that identifies the proportion of the technological potential that can be utilised economically (based on economic boundary conditions).",
    "deprecated": false,
+   "kind": "class",
    "label": "economic flow potential",
    "parents": [
     "OEO_00140056"
@@ -2694,6 +3057,7 @@
    "alt_labels": [],
    "definition": "A developable flow potential is a type of flow potential that describes the fraction of the economic potential that can be developed under realistic conditions (regulations, environmental and social restrictions).",
    "deprecated": false,
+   "kind": "class",
    "label": "developable flow potential",
    "parents": [
     "OEO_00140056"
@@ -2703,6 +3067,7 @@
    "alt_labels": [],
    "definition": "A sustainable flow potential is a type of flow potential that takes into account all aspects of sustainability, which usually requires careful consideration and evaluation of different ecological and socio-economic aspects. The differentiation of the sustainable potential is blurred, since ecological aspects may already have been considered for the technological or economic potential, depending on the author.",
    "deprecated": false,
+   "kind": "class",
    "label": "sustainable flow potential",
    "parents": [
     "OEO_00140056"
@@ -2712,6 +3077,7 @@
    "alt_labels": [],
    "definition": "A stock potential is a potential of the stock of a source or sink.",
    "deprecated": false,
+   "kind": "class",
    "label": "stock potential",
    "parents": [
     "OEO_00290000"
@@ -2721,6 +3087,7 @@
    "alt_labels": [],
    "definition": "A theoretical stock potential is a type of stock potential that identifies the physical upper limit of a stock of a source or sink in a spatial region of reference.",
    "deprecated": false,
+   "kind": "class",
    "label": "theoretical stock potential",
    "parents": [
     "OEO_00140062"
@@ -2730,6 +3097,7 @@
    "alt_labels": [],
    "definition": "A technological stock potential is a type of a stock potential derived from a theoretical stock potential, taking account of the annual efficiency of the respective conversion technology and the additional restrictions regarding the area that is realistically available for energy generation.",
    "deprecated": false,
+   "kind": "class",
    "label": "technological stock potential",
    "parents": [
     "OEO_00140062"
@@ -2739,6 +3107,7 @@
    "alt_labels": [],
    "definition": "An economic stock potential is a type of stock potential that identifies the proportion of the technological potential that can be utilised economically (based on economic boundary conditions).",
    "deprecated": false,
+   "kind": "class",
    "label": "economic stock potential",
    "parents": [
     "OEO_00140062"
@@ -2748,6 +3117,7 @@
    "alt_labels": [],
    "definition": "A developable stock potential is a type of stock potential that describes the fraction of the economic potential that can be developed under realistic conditions (regulations, environmental and social restrictions).",
    "deprecated": false,
+   "kind": "class",
    "label": "developable stock potential",
    "parents": [
     "OEO_00140062"
@@ -2757,6 +3127,7 @@
    "alt_labels": [],
    "definition": "A sustainable stock potential is a type of stock potential that takes into account all aspects of sustainability, which usually requires careful consideration and evaluation of different ecological and socio-economic aspects. The differentiation of the sustainable potential is blurred, since ecological aspects may already have been considered for the technological or economic potential, depending on the author.",
    "deprecated": false,
+   "kind": "class",
    "label": "sustainable stock potential",
    "parents": [
     "OEO_00140062"
@@ -2768,6 +3139,7 @@
    ],
    "definition": "value measured at or modelled for exactly one 0-dim temporal region, referenced by a time stamp, e.g. to represent a time step in a time series",
    "deprecated": false,
+   "kind": "individual",
    "label": "instantaneous",
    "parents": []
   },
@@ -2777,6 +3149,7 @@
    ],
    "definition": "sum or integral of values, e.g. within a time step or a spatial region",
    "deprecated": false,
+   "kind": "individual",
    "label": "integral",
    "parents": []
   },
@@ -2786,6 +3159,7 @@
    ],
    "definition": "average value calculated by arithmetic mean over a set of data values, e.g. within a time step or spatial region",
    "deprecated": false,
+   "kind": "individual",
    "label": "arithmetic mean",
    "parents": []
   },
@@ -2793,6 +3167,7 @@
    "alt_labels": [],
    "definition": "minimum value within a set of data values, e.g. in a time step or spatial region",
    "deprecated": false,
+   "kind": "individual",
    "label": "minimum",
    "parents": []
   },
@@ -2802,6 +3177,7 @@
    ],
    "definition": "maximum value within a set of data values, e.g. in a time step or spatial region",
    "deprecated": false,
+   "kind": "individual",
    "label": "maximum",
    "parents": []
   },
@@ -2811,6 +3187,7 @@
    ],
    "definition": "A primary energy carrier is an energy carrier that has the disposition primary energy carrier disposition.",
    "deprecated": false,
+   "kind": "class",
    "label": "primary energy carrier",
    "parents": [
     "OEO_00020039"
@@ -2822,6 +3199,7 @@
    ],
    "definition": "A secondary energy carrier is an energy carrier that has the secondary energy carrier disposition.",
    "deprecated": false,
+   "kind": "class",
    "label": "secondary energy carrier",
    "parents": [
     "OEO_00020039"
@@ -2833,6 +3211,7 @@
    ],
    "definition": "A final energy carrier is an energy carrier that has the disposition final energy carrier disposition.",
    "deprecated": false,
+   "kind": "class",
    "label": "final energy carrier",
    "parents": [
     "OEO_00020039"
@@ -2845,6 +3224,7 @@
    ],
    "definition": "A carbon dioxide equivalent quantity is a greenhouse gas emission value that quantifies the combined effect of all emitted greenhouse gases by giving an equivalent amount of CO2 which would have the same effect on the climate.",
    "deprecated": false,
+   "kind": "class",
    "label": "carbon dioxide equivalent quantity value",
    "parents": [
     "OEO_00010079"
@@ -2856,6 +3236,7 @@
    ],
    "definition": "Plutonium is a portion of matter with the chemical formula Pu. It has a solid normal state of matter.",
    "deprecated": false,
+   "kind": "class",
    "label": "plutonium",
    "parents": [
     "OEO_00000302",
@@ -2868,6 +3249,7 @@
    ],
    "definition": "Thorium is a portion of matter with the chemical formula Th. It has a solid normal state of matter.",
    "deprecated": false,
+   "kind": "class",
    "label": "thorium",
    "parents": [
     "OEO_00000302",
@@ -2878,6 +3260,7 @@
    "alt_labels": [],
    "definition": "Natural ambient thermal energy is ambient thermal energy that has a renewable origin.",
    "deprecated": false,
+   "kind": "class",
    "label": "natural ambient thermal energy",
    "parents": [
     "OEO_00000056",
@@ -2888,6 +3271,7 @@
    "alt_labels": [],
    "definition": "Artificial ambient thermal energy is ambient thermal energy that has an anthropogenic origin.",
    "deprecated": false,
+   "kind": "class",
    "label": "artificial ambient thermal energy",
    "parents": [
     "OEO_00000056",
@@ -2900,6 +3284,7 @@
    ],
    "definition": "A fluid is a material entity which is a liquid, gas or plasma.",
    "deprecated": false,
+   "kind": "class",
    "label": "fluid",
    "parents": [
     "BFO_0000040",
@@ -2912,6 +3297,7 @@
    ],
    "definition": "A delivery interval is the duration between repeated deliveries of services or commodities.",
    "deprecated": false,
+   "kind": "class",
    "label": "delivery interval",
    "parents": [
     "OEO_00030035"
@@ -2923,6 +3309,7 @@
    ],
    "definition": "A fraction value is a relational quantity value that has a fraction as it's unit.",
    "deprecated": false,
+   "kind": "class",
    "label": "fraction value",
    "parents": [
     "OEO_00020423"
@@ -2932,6 +3319,7 @@
    "alt_labels": [],
    "definition": "Block size is the declared net capacity of a power generating unit.",
    "deprecated": false,
+   "kind": "class",
    "label": "block size",
    "parents": [
     "OEO_00230002"
@@ -2943,6 +3331,7 @@
    ],
    "definition": "Full load hours are a quantity value that describes the utilization of a technical device. The value of the full load hours is obtained by dividing the annual amount of energy generated by the declared net capacity of the plant.",
    "deprecated": false,
+   "kind": "class",
    "label": "full load hours",
    "parents": [
     "OEO_00000350"
@@ -2954,6 +3343,7 @@
    ],
    "definition": "Hydrocarbon is a portion of matter which is member of class of organic chemical compounds composed only of the elements carbon (C) and hydrogen (H).",
    "deprecated": false,
+   "kind": "class",
    "label": "hydrocarbon",
    "parents": [
     "OEO_00000099",
@@ -2967,6 +3357,7 @@
    ],
    "definition": "Syngas is a gas mixture consisting primarily of hydrogen, carbon monoxide, and very often carbon dioxide, that can be used as fuel.",
    "deprecated": false,
+   "kind": "class",
    "label": "syngas",
    "parents": [
     "OEO_00010146",
@@ -2974,10 +3365,21 @@
     "OEO_00140079"
    ]
   },
+  "OEO_00140178": {
+   "alt_labels": [],
+   "definition": "Has number is a data property that links a quantity value to a number that defines the quantity value.",
+   "deprecated": false,
+   "kind": "data_property",
+   "label": "has number",
+   "parents": [
+    "topDataProperty"
+   ]
+  },
   "OEO_00160007": {
    "alt_labels": [],
    "definition": "A market share value is a fraction value that quantifies a market share.",
    "deprecated": false,
+   "kind": "class",
    "label": "market share value",
    "parents": [
     "OEO_00140127"
@@ -2989,6 +3391,7 @@
    ],
    "definition": "An energy storage capacity is the quantity value stating the maximum energy an energy storage object can store.",
    "deprecated": false,
+   "kind": "class",
    "label": "energy storage capacity",
    "parents": [
     "OEO_00010256"
@@ -3000,6 +3403,7 @@
    ],
    "definition": "A power rating is a maximum value stating the maximum power an energy converting component can convert.",
    "deprecated": false,
+   "kind": "class",
    "label": "power rating",
    "parents": [
     "OEO_00010157",
@@ -3012,6 +3416,7 @@
    ],
    "definition": "Declared net capacity is a power capacity stating the maximum power a power generating unit or a power plant can deliver to the electrical grid. It equals the sum of the rated powers of all plant generators minus all power used internally within the plant.",
    "deprecated": false,
+   "kind": "class",
    "label": "declared net capacity",
    "parents": [
     "OEO_00010257"
@@ -3021,6 +3426,7 @@
    "alt_labels": [],
    "definition": "Nameplate capacity is the power capacity stating the maximum power an artificial object, e.g. a power generating unit or a power plant, can generate, and the sum of the power ratings of all energy converting component of that power plant.",
    "deprecated": false,
+   "kind": "class",
    "label": "nameplate capacity",
    "parents": [
     "OEO_00010257"
@@ -3032,6 +3438,7 @@
    ],
    "definition": "A photon is a material entity that is a light particle.",
    "deprecated": false,
+   "kind": "class",
    "label": "photon",
    "parents": [
     "BFO_0000040",
@@ -3045,6 +3452,7 @@
    ],
    "definition": "A net capacity factor is a utilisation value that is calculated by dividing the net electricity generation over a given time step by the declared net capacity times the length of this time step.",
    "deprecated": false,
+   "kind": "class",
    "label": "net capacity factor",
    "parents": [
     "OEO_00320072"
@@ -3056,6 +3464,7 @@
    ],
    "definition": "A gross national electricity consumption value is an energy consumption value measuring the consumption of electrical energy in a spatial region (e.g. a country), including gross electricity generation plus electricity imports, minus electricity exports. It is part of the gross inland energy consumption.",
    "deprecated": false,
+   "kind": "class",
    "label": "gross national electricity consumption value",
    "parents": [
     "OEO_00240019"
@@ -3067,6 +3476,7 @@
    ],
    "definition": "An energy consumption value is an energy amount value that measures the energy consumption over a time span.",
    "deprecated": false,
+   "kind": "class",
    "label": "energy consumption value",
    "parents": [
     "OEO_00050019"
@@ -3078,6 +3488,7 @@
    ],
    "definition": "A discount rate is an economic value with the unit percent that refers to the interest rate used in discounted cash flow (DCF) analysis to determine the present value of future cash flows.",
    "deprecated": false,
+   "kind": "class",
    "label": "discount rate",
    "parents": [
     "OEO_00140127"
@@ -3089,6 +3500,7 @@
    ],
    "definition": "An import price is the monetary price for the import of a material entity.",
    "deprecated": false,
+   "kind": "class",
    "label": "import price",
    "parents": [
     "OEO_00040003"
@@ -3100,6 +3512,7 @@
    ],
    "definition": "An export price is the monetary price for the export of a material entity.",
    "deprecated": false,
+   "kind": "class",
    "label": "export price",
    "parents": [
     "OEO_00040003"
@@ -3111,6 +3524,7 @@
    ],
    "definition": "A potential is a maximum value that describes some upper limit in a spatial region of reference.",
    "deprecated": false,
+   "kind": "class",
    "label": "potential",
    "parents": [
     "OEO_00010256"
@@ -3122,6 +3536,7 @@
    ],
    "definition": "A slope is a quantity value with a plane angle unit that measures the angle between the plane of a surface and the horizontal plane.",
    "deprecated": false,
+   "kind": "class",
    "label": "slope",
    "parents": [
     "OEO_00000350"
@@ -3131,6 +3546,7 @@
    "alt_labels": [],
    "definition": "A surface azimuth angle is a quantity value with a plane angle unit that measures the deviation of the projection on a horizontal plane of the normal to the plane from the local meridian, with zero due south, east negative, and west positive.",
    "deprecated": false,
+   "kind": "class",
    "label": "surface azimuth angle",
    "parents": [
     "OEO_00000350"
@@ -3142,6 +3558,7 @@
    ],
    "definition": "Industrial waste thermal energy is waste thermal energy that is energy output of some industrial process.",
    "deprecated": false,
+   "kind": "class",
    "label": "industrial waste thermal energy",
    "parents": [
     "OEO_00010114"
@@ -3151,6 +3568,7 @@
    "alt_labels": [],
    "definition": "A transport performance value is a quantity value that indicates the performance of a transport process in terms of its mileage and amount of transported people and/or goods.",
    "deprecated": false,
+   "kind": "class",
    "label": "transport performance value",
    "parents": [
     "OEO_00000350"
@@ -3160,6 +3578,7 @@
    "alt_labels": [],
    "definition": "Liquefied petroleum gas (LPG) is gas mixture of hydrocarbon gases, mainly propane and butane.",
    "deprecated": false,
+   "kind": "class",
    "label": "liquefied petroleum gas",
    "parents": [
     "OEO_00010146",
@@ -3172,6 +3591,7 @@
    ],
    "definition": "Compressed natural gas (CNG) is natural gas that has been compressed.",
    "deprecated": false,
+   "kind": "class",
    "label": "compressed natural gas",
    "parents": [
     "OEO_00000292",
@@ -3184,6 +3604,7 @@
    ],
    "definition": "Compressed biomethane is biomethane that has been compressed.",
    "deprecated": false,
+   "kind": "class",
    "label": "compressed biomethane",
    "parents": [
     "OEO_00010215",
@@ -3194,6 +3615,7 @@
    "alt_labels": [],
    "definition": "Compressed synthetic methane is synthetic methane that has been compressed.",
    "deprecated": false,
+   "kind": "class",
    "label": "compressed synthetic methane",
    "parents": [
     "OEO_00010018",
@@ -3204,6 +3626,7 @@
    "alt_labels": [],
    "definition": "A compressed gas fuel is a combustion fuel that has a compressed gas fuel role.",
    "deprecated": false,
+   "kind": "class",
    "label": "compressed gas fuel",
    "parents": [
     "OEO_00000099"
@@ -3215,6 +3638,7 @@
    ],
    "definition": "A volume is a quantity value indicating the size of a three-dimensional spatial region.",
    "deprecated": false,
+   "kind": "class",
    "label": "volume",
    "parents": [
     "OEO_00000350"
@@ -3227,6 +3651,7 @@
    ],
    "definition": "A ton of oil equivalent is an energy unit which is equal to the amount of energy released by burning one metric ton of crude oil with a certain net calorific value. That is defined as 41.868 gigajoules or 11.63 megawatt-hours.",
    "deprecated": false,
+   "kind": "class",
    "label": "ton of oil equivalent",
    "parents": [
     "UO_0000111"
@@ -3239,6 +3664,7 @@
    ],
    "definition": "A kilo ton of oil equivalent is an energy unit which is equal to 1,000 tons of oil equivalent.",
    "deprecated": false,
+   "kind": "class",
    "label": "kilo ton of oil equivalent",
    "parents": [
     "UO_0000111"
@@ -3251,6 +3677,7 @@
    ],
    "definition": "A million ton of oil equivalent is an energy unit which is equal to 1,000,000 tons of oil equivalent.",
    "deprecated": false,
+   "kind": "class",
    "label": "million ton of oil equivalent",
    "parents": [
     "UO_0000111"
@@ -3263,6 +3690,7 @@
    ],
    "definition": "A ton of coal equivalent is an energy unit which is equal to the amount of energy released by burning one metric ton of coal with a certain net calorific value. That is defined as 0.7 tons of oil equivalent (toe) and thus equals 29.3076 gigajoules or 8.141 megawatt-hours.",
    "deprecated": false,
+   "kind": "class",
    "label": "ton of coal equivalent",
    "parents": [
     "UO_0000111"
@@ -3275,6 +3703,7 @@
    ],
    "definition": "A kilo ton of coal equivalent is an energy unit which is equal to 1,000 tons of coal equivalent.",
    "deprecated": false,
+   "kind": "class",
    "label": "kilo ton of coal equivalent",
    "parents": [
     "UO_0000111"
@@ -3287,6 +3716,7 @@
    ],
    "definition": "A million ton of coal equivalent is an energy unit which is equal to 1,000,000 tons of coal equivalent.",
    "deprecated": false,
+   "kind": "class",
    "label": "million ton of coal equivalent",
    "parents": [
     "UO_0000111"
@@ -3296,6 +3726,7 @@
    "alt_labels": [],
    "definition": "A utilisation value is a fraction value that describes the instantaneous share of a maximum value that is utilised.",
    "deprecated": false,
+   "kind": "class",
    "label": "utilisation value",
    "parents": [
     "OEO_00140127"
@@ -3307,6 +3738,7 @@
    ],
    "definition": "An amortisation time is the time span in which the investment costs are refinanced from the annual profits and depreciation of the investment.",
    "deprecated": false,
+   "kind": "class",
    "label": "amortisation time",
    "parents": [
     "OEO_00030035"
@@ -3316,6 +3748,7 @@
    "alt_labels": [],
    "definition": "An economic life time is the operational life time during which an artificial object is profitable to the owner.",
    "deprecated": false,
+   "kind": "class",
    "label": "economic life time",
    "parents": [
     "OEO_00020178"
@@ -3325,6 +3758,7 @@
    "alt_labels": [],
    "definition": "An energy storage content is an energy amount value that measures the quantity of energy stored in an energy storage object.",
    "deprecated": false,
+   "kind": "class",
    "label": "energy storage content",
    "parents": [
     "OEO_00050019"
@@ -3334,6 +3768,7 @@
    "alt_labels": [],
    "definition": "An energy storage level is a utilisation value that measures the utilisation/usage/exploitation of energy storage capacity.",
    "deprecated": false,
+   "kind": "class",
    "label": "energy storage level",
    "parents": [
     "OEO_00320072"
@@ -3343,6 +3778,7 @@
    "alt_labels": [],
    "definition": "An emission factor value is a fraction value that quantifies an emission factor as quotient of the emissions or removals of a gas per unit activity.",
    "deprecated": false,
+   "kind": "class",
    "label": "emission factor value",
    "parents": [
     "OEO_00140127"
@@ -3352,6 +3788,7 @@
    "alt_labels": [],
    "definition": "A greenhouse gas emission value is an emission value that quantifies a greenhouse gas emission rate and has a mass unit.",
    "deprecated": false,
+   "kind": "class",
    "label": "greenhouse gas emission value",
    "parents": [
     "OEO_00010079"
@@ -3361,6 +3798,7 @@
    "alt_labels": [],
    "definition": "A CO2 emission value is a greenhouse gas emission value that quantifies a CO2 emission rate and has a mass unit.",
    "deprecated": false,
+   "kind": "class",
    "label": "CO2 emission value",
    "parents": [
     "OEO_00340065"
@@ -3370,6 +3808,7 @@
    "alt_labels": [],
    "definition": "A population count is a quantity value to measure the size of a population.",
    "deprecated": false,
+   "kind": "class",
    "label": "population count",
    "parents": [
     "OEO_00000350"
@@ -3379,9 +3818,20 @@
    "alt_labels": [],
    "definition": "Annual GDP growth is an economic value that quantifies the difference between GDP in one year compared to the previous year.",
    "deprecated": false,
+   "kind": "class",
    "label": "annual GDP growth",
    "parents": [
     "OEO_00140127"
+   ]
+  },
+  "OEO_00390023": {
+   "alt_labels": [],
+   "definition": "A relation between a data item or data set and an aggregation type that indicates the method of data aggregation applied to the data set.",
+   "deprecated": false,
+   "kind": "object_property",
+   "label": "has aggregation type",
+   "parents": [
+    "topObjectProperty"
    ]
   },
   "OEO_00400054": {
@@ -3390,6 +3840,7 @@
    ],
    "definition": "Wind power density (WPD) is a quantity value of the power wind has in a specific area.",
    "deprecated": false,
+   "kind": "class",
    "label": "wind power density",
    "parents": [
     "OEO_00000350"
@@ -3399,6 +3850,7 @@
    "alt_labels": [],
    "definition": "An electricity grid voltage level is a quantity value reflecting the normative voltage value that an electricity grid is operating on.",
    "deprecated": false,
+   "kind": "class",
    "label": "electricity grid voltage level",
    "parents": [
     "OEO_00000350"
@@ -3408,6 +3860,7 @@
    "alt_labels": [],
    "definition": "\"A unit which is a standard measure of the amount of matter/energy of a physical object.\" [Wikipedia:Wikipedia]",
    "deprecated": false,
+   "kind": "class",
    "label": "mass unit",
    "parents": [
     "OEO_00010490"
@@ -3417,6 +3870,7 @@
    "alt_labels": [],
    "definition": "\"A mass unit which is equal to the mass of the International Prototype Kilogram kept by the BIPM at Svres, France.\" [BIPM:BIPM, NIST:NIST]",
    "deprecated": false,
+   "kind": "class",
    "label": "kilogram",
    "parents": [
     "UO_0000045",
@@ -3427,6 +3881,7 @@
    "alt_labels": [],
    "definition": "\"A mass unit which is equal to one thousandth of a kilogram or 10^[-3] kg.\" [NIST:NIST]",
    "deprecated": false,
+   "kind": "class",
    "label": "gram",
    "parents": [
     "UO_1000021"
@@ -3436,6 +3891,7 @@
    "alt_labels": [],
    "definition": "\"A unit which is one of a particular measure to which all measures of that type can be related.\" [NIST:NIST]",
    "deprecated": false,
+   "kind": "class",
    "label": "base unit",
    "parents": [
     "OEO_00010490"
@@ -3445,6 +3901,7 @@
    "alt_labels": [],
    "definition": "\"A unit which is a standard measure of the work done by a certain force (gravitational, electric, magnetic, force of inertia, etc).\" [NIST:NIST]",
    "deprecated": false,
+   "kind": "class",
    "label": "energy unit",
    "parents": [
     "OEO_00010490"
@@ -3454,6 +3911,7 @@
    "alt_labels": [],
    "definition": "\"An energy unit which is equal to the energy required when a force of 1 newton moves an object 1 meter in the direction of the force.\" [NIST:NIST]",
    "deprecated": false,
+   "kind": "class",
    "label": "joule",
    "parents": [
     "UO_1000112"
@@ -3463,6 +3921,7 @@
    "alt_labels": [],
    "definition": "\"An energy unit which is equal to the amount of electrical energy equivalent to a one-watt load drawing power for one hour.\" [Wikipedia:Wikipedia]",
    "deprecated": false,
+   "kind": "class",
    "label": "watt-hour",
    "parents": [
     "UO_1000223"
@@ -3474,6 +3933,7 @@
    ],
    "definition": "\"An energy unit which is equal to 1,000 watt-hours.\" [Wikipedia:Wikipedia]",
    "deprecated": false,
+   "kind": "class",
    "label": "kilowatt-hour",
    "parents": [
     "UO_1000223"
@@ -3483,6 +3943,7 @@
    "alt_labels": [],
    "definition": null,
    "deprecated": false,
+   "kind": "class",
    "label": "gram based unit",
    "parents": [
     "UO_0000002"
@@ -3492,6 +3953,7 @@
    "alt_labels": [],
    "definition": null,
    "deprecated": false,
+   "kind": "class",
    "label": "joule based unit",
    "parents": [
     "UO_0000111"
@@ -3501,6 +3963,7 @@
    "alt_labels": [],
    "definition": null,
    "deprecated": false,
+   "kind": "class",
    "label": "watt-hour based unit",
    "parents": [
     "UO_0000111"
