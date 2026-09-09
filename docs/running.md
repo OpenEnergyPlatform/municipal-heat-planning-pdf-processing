@@ -308,7 +308,7 @@ python scripts/build_docs.py --check
 
 renders every generated page fresh and fails, writing nothing, if a
 checked-in page has drifted from its source (`scripts/build_docs.py`
-lines 956 to 961).
+lines 1425 to 1430).
 
 ## Documentation build
 
@@ -322,7 +322,7 @@ the checked-in extraction schemas, and named constants
 python scripts/build_docs.py --out docs
 ```
 
-(`scripts/build_docs.py` lines 954 to 957).
+(`scripts/build_docs.py` lines 1423 to 1426).
 
 Sphinx then builds the HTML site, warnings promoted to errors:
 `.github/workflows/docs.yml` runs `-W --keep-going -b html docs

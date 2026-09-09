@@ -23,6 +23,8 @@ on:
       - "docs/**"
       - "docpipe/**"
       - "profiles/**"
+      - "scripts/inference_app/**"
+      - "scripts/fileprocessing/**"
       - "scripts/build_docs.py"
       - ".readthedocs.yaml"
       - ".github/workflows/docs.yml"

@@ -52,13 +52,13 @@ corpus](stages/inference.md) and [the chat over the corpus](stages/app.md).
 [How the parts fit together](pipeline.md) is one of three hand-written
 pages under `docs/` that the generator leaves untouched, together with
 [running the pipeline](running.md) and [glossary](glossary.md)
-(`scripts/build_docs.py:61`). It states what a single stage's own chapter
+(`scripts/build_docs.py:63`). It states what a single stage's own chapter
 cannot: the whole chain from a PDF to a graph, what one stage must supply
 to the next, and the points where two stages read the same input and can
 run at the same time.
 
 Twelve chapters sit under `stages/`, one per pipeline stage or per part
-every stage depends on (`scripts/build_docs.py:294`). [Getting the
+every stage depends on (`scripts/build_docs.py:296`). [Getting the
 documents in](stages/fileprocessing.md) through [the knowledge
 graph](stages/graph.md) are the eight numbered stages of the table above;
 [the embedders](stages/embedding.md), [asking the
@@ -86,13 +86,21 @@ behind](contract/trust.md) name the vocabulary both contracts share.
 pipeline](running.md) covers how to invoke each stage from the command
 line, with the flags and environment variables each one reads.
 
+The [API reference](api/index.md) has one page per module of `docpipe/`,
+`profiles/`, `scripts/inference_app/` and `scripts/fileprocessing/`: every
+public function, class and method with its signature as written and its
+docstring. The chapters say what a module is for; the reference says what
+it defines.
+
 ## How these pages are produced and checked
 
 Every page under `docs/` except the three hand-written pages named above
 is rendered from the code it describes, by `scripts/build_docs.py`. A
 stage chapter's module reference section is a package's own module
 docstrings, read with Python's `ast` module and kept verbatim inside a
-collapsed block at the end of the chapter, never retyped. A contract page
+collapsed block at the end of the chapter, never retyped. A page of the
+API reference is the same module read the same way, down to its public
+functions and classes, their signatures and their docstrings. A contract page
 is read off a profile's published `extraction_schema.json`, never off its
 `extraction_spec.json`, whose examples are real tables from real plans and
 are never quoted here.
@@ -102,7 +110,9 @@ together. It fails the moment a checked-in page and a fresh render
 disagree (`test_the_checked_in_docs_are_the_generated_ones`), the moment a
 page quotes a corpus passage
 (`test_no_generated_page_quotes_a_corpus_passage`), or the moment a page
-uses a dash as punctuation (`test_no_page_uses_a_dash_as_punctuation`).
+uses a dash as punctuation (`test_no_page_uses_a_dash_as_punctuation`; the
+module pages of the API reference carry the code's docstrings verbatim and
+are left out there).
 `.github/workflows/docs.yml` runs that check on every pull request that
 touches a documented source and on every `v*` tag, and, on a push to
 `develop`, regenerates the pages instead and commits them when changed.

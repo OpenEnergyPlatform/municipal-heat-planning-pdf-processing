@@ -4,7 +4,8 @@
 A hand-written page is a second copy of something, and the copy is the one
 that goes stale: it says what a module did when somebody last looked. Every
 page under `docs/` except one is therefore rendered from what it documents --
-module docstrings, the checked-in extraction schemas, the artifact constants --
+module docstrings, the checked-in extraction schemas, the artifact constants,
+the signatures and docstrings of every public name for the API reference --
 and `--check` fails the test suite the moment the checked-in page and a fresh
 render disagree.
 
@@ -44,6 +45,7 @@ import json
 import re
 import pathlib
 import sys
+import textwrap
 import tokenize
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
@@ -371,7 +373,7 @@ GROUPS = (
     ("Profiles", ("profiles.md", "profiles/*")),
     ("Contracts", ("contract/states.md", "contract/trust.md",
                    "contract/*")),
-    ("Reference", ("artifacts.md", "glossary.md")),
+    ("Reference", ("artifacts.md", "glossary.md", "api/index.md")),
 )
 ORDER = tuple(page for _caption, pages in GROUPS for page in pages
               if not page.endswith("/*"))
@@ -386,6 +388,10 @@ def toctree_groups(pages) -> list:
     """
     have = set(pages) | set(HANDWRITTEN)
     have -= {"README.md", "index.md"}
+    # The module pages of the API reference are named by its own index and
+    # nowhere else: a hundred of them in the site's contents would bury the
+    # twenty pages that say what the parts are for.
+    have = {page for page in have if not is_api_module(page)}
     named = {page for _caption, members in GROUPS for page in members}
     out, placed = [], set()
     for caption, members in GROUPS:
@@ -453,12 +459,12 @@ def resolve(sources) -> dict:
     # Every generated page, the front page included, opens with prose that
     # no source carries: what the thing is for. Without it a page is a table
     # or a list of docstrings, and it is refused rather than published.
-    for page in list(out) + ["index.md"]:
+    for page in list(out) + ["index.md", API_INDEX]:
         if not (ROOT / INTRO_DIR / page).is_file():
             raise SourceMoved(page, f"{INTRO_DIR}/{page}",
                               "the page has no introduction")
     for page in ORDER:
-        if page not in out and page not in HANDWRITTEN:
+        if page not in out and page not in HANDWRITTEN and page != API_INDEX:
             raise SourceMoved(page, "scripts/build_docs.py",
                               "is in ORDER and in no manifest entry")
     return out
@@ -799,6 +805,446 @@ def render_profiles_page(doc: str, profiles, intro: str = "") -> str:
     return NEWLINE.join(out)
 
 
+# ---------------------------------------------------------------------------
+# The API reference
+# ---------------------------------------------------------------------------
+# What the reference covers: the packages the chapters describe. One page per
+# module under `docs/api/`, named after its dotted path; a package's
+# `__init__` is the package's own page. Read with `ast` like everything else
+# here, so a signature and a docstring reach the site without the module
+# being imported, and therefore without OpenCV, PyMuPDF or torch.
+API_ROOTS = ("docpipe", "profiles", "scripts/inference_app",
+             "scripts/fileprocessing")
+API_DIR = "api"
+API_INDEX = f"{API_DIR}/index.md"
+API_TITLE = "API reference"
+API_LEDE = ("Every public function, class and method of the modules under "
+            "`docpipe/`, `profiles/` and the two script packages, with its "
+            "signature as written and its docstring.")
+
+
+def _api_modules() -> tuple:
+    """Every module under API_ROOTS, by relative path.
+
+    Enumerates and does not read, like `_profile_names`: the text goes
+    through the door.
+    """
+    out = []
+    for root in API_ROOTS:
+        for path in sorted((ROOT / root).rglob("*.py")):
+            if "__pycache__" not in path.parts:
+                out.append(path.relative_to(ROOT).as_posix())
+    return tuple(out)
+
+
+def dotted(rel: str) -> str:
+    """`docpipe/extraction/pipeline.py` is `docpipe.extraction.pipeline`,
+    and a package's `__init__.py` is the package."""
+    parts = rel[:-3].split("/")
+    if parts[-1] == "__init__":
+        parts.pop()
+    return ".".join(parts)
+
+
+def api_page(rel: str) -> str:
+    return f"{API_DIR}/{dotted(rel)}.md"
+
+
+def is_api_module(page: str) -> bool:
+    """A module's page, as opposed to the reference's own index."""
+    return page.startswith(f"{API_DIR}/") and page != API_INDEX
+
+
+def _package_of(rel: str, name: str) -> str:
+    """The package a module's page is listed under; a package under itself."""
+    return name if rel.endswith("/__init__.py") else name.rpartition(".")[0]
+
+
+def _header_end(node, by_line: dict) -> tuple:
+    """(row, column) of the colon that closes a `def` or `class` header.
+
+    The first `:` at bracket depth zero from the header's first line on,
+    found with the tokenizer: what follows the header is not always the
+    first statement, since a comment line is no statement and `ast` does not
+    see it, and a colon inside a default (`lambda x: x`) or an annotation
+    sits inside brackets.
+    """
+    depth = 0
+    for row in range(node.lineno, (node.end_lineno or node.lineno) + 1):
+        for token in by_line.get(row, ()):
+            if token.type != tokenize.OP:
+                continue
+            if token.string in ("(", "[", "{"):
+                depth += 1
+            elif token.string in (")", "]", "}"):
+                depth -= 1
+            elif token.string == ":" and depth == 0:
+                return token.start
+    return node.lineno, 0
+
+
+def _signature(node, lines: list, by_line: dict) -> str:
+    """The `def` or `class` header as written, decorators included, up to
+    the colon that opens the body.
+
+    From the source lines and not from `ast.unparse`, which spells a default
+    `int=0` on Python 3.9 and `int = 0` on 3.11: a page has to render the
+    same on a laptop and in the workflow, or `--check` fails on one of them.
+    """
+    start = (node.decorator_list[0].lineno if node.decorator_list
+             else node.lineno) - 1
+    row, column = _header_end(node, by_line)
+    head = lines[start:row - 1] + [lines[row - 1][:column]]
+    return textwrap.dedent(NEWLINE.join(line.rstrip() for line in head)).strip()
+
+
+def _note_of(node, comments: dict, lines: list) -> str:
+    """The comment that belongs to a class field: at the end of its own
+    line, or the block of comment-only lines directly above it. In a
+    dataclass that comment is the field's only documentation.
+
+    A line above counts only when it is a comment and nothing else: the
+    comment at the end of the previous field's line is that field's. A
+    comment inside a field that spans lines is not the field's note either.
+    """
+    if node.lineno == (node.end_lineno or node.lineno) and node.lineno in comments:
+        return comments[node.lineno]
+    above, line = [], node.lineno - 1
+    while line in comments and lines[line - 1].lstrip().startswith("#"):
+        above.insert(0, comments[line])
+        line -= 1
+    return " ".join(above)
+
+
+def _function(node, lines: list, by_line: dict) -> dict:
+    return {"name": node.name, "signature": _signature(node, lines, by_line),
+            "doc": ast.get_docstring(node) or ""}
+
+
+def _class(node, comments: dict, text: str, lines: list, by_line: dict) -> dict:
+    """A class: its fields with their comments, its constructor and its
+    public methods, in the order the class states them."""
+    fields, methods = [], []
+    for item in node.body:
+        if (isinstance(item, ast.AnnAssign)
+                and isinstance(item.target, ast.Name)
+                and not item.target.id.startswith("_")):
+            # The statement as written, its comment left to `_note_of`.
+            fields.append((ast.get_source_segment(text, item) or "",
+                           _note_of(item, comments, lines)))
+        elif isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            if item.name == "__init__" or not item.name.startswith("_"):
+                methods.append(_function(item, lines, by_line))
+    return {"name": node.name, "signature": _signature(node, lines, by_line),
+            "doc": ast.get_docstring(node) or "", "fields": fields,
+            "methods": methods}
+
+
+def _exports(tree, name: str, package: bool) -> tuple:
+    """(whether `__all__` is stated, [(name, origin)]).
+
+    The origin is the module a name is imported from when that is one of the
+    package's own: relative to the package for an `__init__`, relative to
+    the module's own package otherwise. `__all__` counts when it is assigned
+    as a list or tuple, annotated or not, and `+=` extends it.
+    """
+    base = name.split(".") if package else name.split(".")[:-1]
+    names, origin, stated = [], {}, False
+    for node in tree.body:
+        if isinstance(node, ast.ImportFrom) and node.level:
+            parts = base[:len(base) - (node.level - 1)]
+            for alias in node.names:
+                target = parts + ([node.module] if node.module
+                                  else [alias.name])
+                origin[alias.asname or alias.name] = ".".join(target)
+            continue
+        target, value = None, None
+        if isinstance(node, ast.Assign) and len(node.targets) == 1:
+            target, value = node.targets[0], node.value
+        elif isinstance(node, (ast.AnnAssign, ast.AugAssign)):
+            target, value = node.target, node.value
+        if not (isinstance(target, ast.Name) and target.id == "__all__"):
+            continue
+        try:
+            literal = ast.literal_eval(value) if value is not None else None
+        except ValueError:
+            continue
+        if not isinstance(literal, (list, tuple)):
+            continue
+        stated = True
+        found = [n for n in literal if isinstance(n, str)]
+        names = names + found if isinstance(node, ast.AugAssign) else found
+    return stated, [(n, origin.get(n, "")) for n in names]
+
+
+def parse_api(text: str, rel: str) -> dict:
+    """What one module publishes, from its text.
+
+    Its docstring, every public function and class with their docstrings,
+    and what its `__all__` exports. Public is what `__all__` names when
+    there is one, and otherwise every name without a leading underscore.
+    """
+    # One line ending, whatever the caller read the text with: `ast` counts
+    # a bare carriage return as a line and `split` below does not.
+    text = text.replace(chr(13) + NEWLINE, NEWLINE).replace(chr(13), NEWLINE)
+    try:
+        tree = ast.parse(text)
+    except SyntaxError as exc:
+        raise SourceMoved(api_page(rel), rel, f"does not parse: {exc}")
+    by_line: dict = {}
+    for token in tokenize.generate_tokens(io.StringIO(text).readline):
+        by_line.setdefault(token.start[0], []).append(token)
+    comments = {token.start[0]: token.string.lstrip("#").lstrip(":").strip()
+                for tokens in by_line.values() for token in tokens
+                if token.type == tokenize.COMMENT}
+    name = dotted(rel)
+    stated, exports = _exports(tree, name, rel.endswith("/__init__.py"))
+    listed = {n for n, _origin in exports} if stated else None
+
+    def public(identifier: str) -> bool:
+        return (identifier in listed if listed is not None
+                else not identifier.startswith("_"))
+
+    # Split on the newline and nothing else: `str.splitlines` also breaks a
+    # line at a form feed, which `ast` and the tokenizer do not, and every
+    # line number after it would point one line off.
+    lines = text.split(NEWLINE)
+    functions = [_function(node, lines, by_line) for node in tree.body
+                 if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+                 and public(node.name)]
+    classes = [_class(node, comments, text, lines, by_line)
+               for node in tree.body
+               if isinstance(node, ast.ClassDef) and public(node.name)]
+    defined = {f["name"] for f in functions} | {c["name"] for c in classes}
+    return {"rel": rel, "name": name, "doc": ast.get_docstring(tree) or "",
+            "functions": functions, "classes": classes,
+            "exports": [(n, o) for n, o in exports if n not in defined]}
+
+
+def module_api(rel: str) -> dict:
+    return parse_api(read_source(rel), rel)
+
+
+def _publishes(module: dict) -> bool:
+    """An empty `__init__.py` has no docstring and no name, and no page."""
+    return bool(module["doc"] or module["functions"] or module["classes"]
+                or module["exports"])
+
+
+# A `<` that opens what Markdown takes for an HTML tag, and the underscores
+# at the edge of a word, which Markdown takes for emphasis: `__init__` is
+# "init" in bold with the underscores gone. An underscore inside a word,
+# `plan_document`, is none of Markdown's business and is left alone.
+_TAG = re.compile(r"<(?=[A-Za-z/!?])")
+_EDGE = re.compile(r"(?<![\w\\])_+(?=\w)|(?<=\w)_+(?!\w)")
+_ITEM = re.compile(r"^\s*(?:[-*+]|\d+[.)])\s+")
+
+
+def _spans(line: str) -> list:
+    """[(piece, is_code)]: a line cut at its code spans.
+
+    A code span opens with a run of backticks and closes with a run of the
+    SAME length, so ``<x>`` is one span and `a``b` is not two. A run that
+    nothing closes is literal text.
+    """
+    out, i, n = [], 0, len(line)
+    while i < n:
+        if line[i] != "`":
+            j = line.find("`", i)
+            j = n if j < 0 else j
+            out.append((line[i:j], False))
+            i = j
+            continue
+        j = i
+        while j < n and line[j] == "`":
+            j += 1
+        run, k = j - i, j
+        while True:
+            k = line.find("`" * run, k)
+            if k < 0:
+                break
+            end = k + run
+            if end < n and line[end] == "`":
+                while end < n and line[end] == "`":
+                    end += 1
+                k = end
+                continue
+            break
+        if k < 0:
+            out.append((line[i:j], False))
+            i = j
+        else:
+            out.append((line[i:k + run], True))
+            i = k + run
+    return out
+
+
+def _escape(text: str) -> str:
+    """One line of prose with its tags and edge underscores escaped, its
+    code spans untouched."""
+    out = []
+    for piece, code in _spans(text):
+        if not code:
+            piece = _TAG.sub(chr(92) + "<", piece)
+            piece = _EDGE.sub(lambda m: "".join(chr(92) + c
+                                                 for c in m.group(0)), piece)
+        out.append(piece)
+    return "".join(out)
+
+
+def markdown_safe(doc: str) -> str:
+    """A docstring as the Markdown it is written in.
+
+    Escaped, and only outside code spans, fenced blocks and indented code:
+    a `<` that opens what Markdown takes for a tag, so `<name>.jsonl` reads
+    as written instead of as ".jsonl" with the tag swallowed; the underscores
+    at a word's edge, so `__init__` does not come out as "init" in bold; and
+    a `#` opening a line, which would be a heading of the page rather than a
+    line of the docstring. Inside a list item, four spaces are the item's
+    continuation and not code, so there the code rule needs four more.
+    """
+    out, fenced, block, previous_blank = [], False, 0, True
+    item_indent = None
+    # Split on the newline only: `splitlines` would also break the line at a
+    # form feed, which the docstring does not.
+    for line in doc.split(NEWLINE):
+        stripped = line.strip()
+        blank, indent = not stripped, len(line) - len(line.lstrip(" "))
+        if line.startswith("```"):
+            fenced = not fenced
+            out.append(line)
+            previous_blank = False
+            continue
+        if fenced:
+            out.append(line)
+            continue
+        if block and not blank and indent < block:
+            block = 0
+        needed = 4 if item_indent is None else item_indent + 4
+        if (not block and not blank and previous_blank and indent >= needed
+                and not _ITEM.match(line)):
+            block = needed
+        if block:
+            out.append(line)
+        else:
+            text = _escape(line)
+            if text.lstrip().startswith("#"):
+                text = text.replace("#", chr(92) + "#", 1)
+            out.append(text)
+            if not blank:
+                item = _ITEM.match(line)
+                if item:
+                    item_indent = len(item.group(0))
+                elif indent == 0:
+                    item_indent = None
+        previous_blank = blank
+    return NEWLINE.join(out)
+
+
+def _code(text: str) -> list:
+    return ["```python", text, "```", ""]
+
+
+def render_api_page(module: dict, known=None) -> str:
+    """One module: its docstring, then every public class and function with
+    its signature as written and its docstring, verbatim."""
+    known = set(known or ())
+    out = [f"# {_escape(module['name'])}", "",
+           f"`{module['rel']}`, read with `ast` by `scripts/build_docs.py`. "
+           "The docstrings are the code's own: edit them there, not here.",
+           ""]
+    out += [markdown_safe(module["doc"]) if module["doc"]
+            else "The module has no docstring.", ""]
+    if module["exports"]:
+        out += ["## Exports", "", "What `__all__` names, and where each "
+                "name is defined:", ""]
+        for name, origin in module["exports"]:
+            where = (f" from [{_escape(origin)}]({origin}.md)"
+                     if origin in known
+                     else f" from `{origin}`" if origin else "")
+            out.append(f"- `{name}`{where}")
+        out.append("")
+    if module["classes"]:
+        out += ["## Classes", ""]
+        for cls in module["classes"]:
+            out += [f"### {_escape(cls['name'])}", ""] + _code(cls["signature"])
+            if cls["doc"]:
+                out += [markdown_safe(cls["doc"]), ""]
+            if cls["fields"]:
+                out += ["Fields:", ""]
+                for text, note in cls["fields"]:
+                    out.append(f"- `{text}`"
+                               + (f": {_escape(note)}" if note else ""))
+                out.append("")
+            for method in cls["methods"]:
+                out += [f"#### {_escape(cls['name'] + '.' + method['name'])}",
+                        ""]
+                out += _code(method["signature"])
+                if method["doc"]:
+                    out += [markdown_safe(method["doc"]), ""]
+    if module["functions"]:
+        out += ["## Functions", ""]
+        for function in module["functions"]:
+            out += [f"### {_escape(function['name'])}", ""]
+            out += _code(function["signature"])
+            if function["doc"]:
+                out += [markdown_safe(function["doc"]), ""]
+    out += [f"[Back to the index]({_up(api_page(module['rel']))}README.md)",
+            ""]
+    return NEWLINE.join(out)
+
+
+def _counted(module: dict) -> str:
+    parts = []
+    for count, word in ((len(module["classes"]), "class"),
+                        (len(module["functions"]), "function")):
+        if count:
+            parts.append(f"{count} {word}"
+                         + ("" if count == 1 else "es" if word == "class"
+                            else "s"))
+    return ", ".join(parts)
+
+
+def render_api_index(modules: dict, intro: str = "") -> str:
+    """The reference's own index: one list per package with each module's
+    first sentence, then the toctrees that put the pages in the sidebar.
+
+    The toctrees are hidden because the lists above them already name every
+    page, with a sentence each, and Sphinx would otherwise print the same
+    names a second time without one.
+    """
+    out = [f"# {API_TITLE}", ""]
+    if intro:
+        out += [intro, ""]
+    roots = ", ".join(f"`{root}/`" for root in API_ROOTS)
+    out += [f"{len(modules)} modules under {roots}, one page each, "
+            "generated by `scripts/build_docs.py`.", ""]
+    groups: dict = {}
+    for rel, module in modules.items():
+        groups.setdefault(_package_of(rel, module["name"]), []).append(module)
+    ordered = {package: sorted(groups[package],
+                               key=lambda m: (m["name"] != package, m["name"]))
+               for package in sorted(groups)}
+    for package, members in ordered.items():
+        out += [f"## {_escape(package)}", ""]
+        for module in members:
+            lede = _escape(_lede(module["doc"])) if module["doc"] else ""
+            counted = _counted(module)
+            line = f"- [{_escape(module['name'])}]({module['name']}.md)"
+            if lede:
+                line += f": {lede}"
+            if counted:
+                line += f" ({counted})"
+            out.append(line)
+        out.append("")
+    for package, members in ordered.items():
+        out += ["```{toctree}", ":maxdepth: 1", ":hidden:", ""]
+        out += [module["name"] for module in members]
+        out += ["```", ""]
+    out += ["[Back to the index](../README.md)", ""]
+    return NEWLINE.join(out)
+
+
 def render_toctree(pages, intro: str = "") -> str:
     """`index.md`: the site's front page, its introduction and its contents.
 
@@ -878,13 +1324,29 @@ def build() -> dict:
     ledes = {page: (_lede(resolved[page][0][1])
                     if isinstance(resolved[page][0][1], str) else "")
              for page in pages}
-    pages["README.md"] = render_index(
-        {page: titles[page] for page in pages}, ledes)
+    # The reference: one page per module that has anything to publish, and
+    # an index of its own. The module pages are listed there and nowhere
+    # else; the front pages name the index.
+    modules = {}
+    for rel in _api_modules():
+        module = module_api(rel)
+        if _publishes(module):
+            modules[rel] = module
+    known = {module["name"] for module in modules.values()}
+    for rel, module in modules.items():
+        pages[api_page(rel)] = render_api_page(module, known)
+        titles[api_page(rel)] = module["name"]
+    pages[API_INDEX] = render_api_index(modules, intro_of(API_INDEX))
+    titles[API_INDEX] = API_TITLE
+    ledes[API_INDEX] = API_LEDE
+    listed = {page: titles[page] for page in pages if not is_api_module(page)}
+    pages["README.md"] = render_index(listed, ledes)
     # Two front pages on purpose: `README.md` is what a reader of the
     # repository opens, `index.md` is what Sphinx builds the site from, and
     # only the second may carry a toctree.
     pages["index.md"] = render_toctree(
-        {page: titles[page] for page in pages if page != "README.md"},
+        {page: title for page, title in listed.items()
+         if page != "README.md"},
         intro_of("index.md"))
     return pages
 
@@ -906,6 +1368,16 @@ def write(out_dir, pages: dict) -> list:
         with io.open(path, "w", encoding="utf-8", newline=NEWLINE) as handle:
             handle.write(pages[rel])
         written.append(path)
+    # A module that was renamed or removed has no page in this render, and
+    # the page the last render wrote would stay: Sphinx builds it outside
+    # every toctree, which is a warning, which is a failed site. The
+    # reference is the one part of the site whose pages come and go with the
+    # tree, so only its directory is swept.
+    api_dir = out_dir / API_DIR
+    if API_INDEX in pages and api_dir.is_dir():
+        for path in sorted(api_dir.glob("*.md")):
+            if path.relative_to(out_dir).as_posix() not in pages:
+                path.unlink()
     return written
 
 
@@ -938,7 +1410,9 @@ def check() -> int:
         if rel.startswith("_intros/"):
             continue                      # a source, not a page
         if rel not in pages and rel not in HANDWRITTEN:
-            print(f"{rel}: no manifest entry renders this page any more")
+            print(f"{rel}: " + ("its module is gone" if is_api_module(rel)
+                                else "no manifest entry renders this page "
+                                     "any more"))
             bad += 1
     if bad:
         print(f"{bad} page(s) differ. Re-run "
