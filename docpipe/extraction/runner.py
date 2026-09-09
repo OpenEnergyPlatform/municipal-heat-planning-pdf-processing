@@ -68,8 +68,8 @@ from .pipeline import (Source, WorkItem, apply_frame, batch_uri,
                        build_sweeps, cell_index as pipeline_cell_index,
                        fold_batch, follow_up, group_items, harvest_document,
                        merge_field, mark_unanswered, open_rows, plan_document,
-                       route_claims, rows_from_reply, sweep_key,
-                       window_sources,
+                       names_pair, route_claims, rows_from_reply,
+                       sweep_key, window_sources,
                        write_report)
 from .fields import EXHAUSTED
 from .queries import expand as expand_queries
@@ -842,7 +842,8 @@ def anchor_targets(spec: Spec) -> list:
 
 
 def document_anchor(spec: Spec, context: Optional[dict] = None,
-                    client=None, prompt=None) -> dict:
+                    client=None, prompt=None,
+                    frame: Optional[dict] = None) -> dict:
     """{parameter uri: [one sentence]} — the probe THIS document is searched with.
 
     The QA app turns a question into one short statement before it searches,
@@ -877,6 +878,14 @@ def document_anchor(spec: Spec, context: Optional[dict] = None,
                 "description": parameter.description}
         if context:
             body["document"] = context
+        if frame:
+            # The pair this sentence searches for, in the document's own
+            # wording where the frame read one. "Nutzwaermebedarf 2040 im
+            # Zielszenario" finds the table for 2040; the parameter alone
+            # finds the first table of the chapter, whatever its year.
+            body["frame"] = {k: frame.get(f"{k}_raw") or v
+                             for k, v in frame.items()
+                             if not k.endswith(("_raw", "_quote", "_source"))}
         payload = json.dumps(body, ensure_ascii=False, indent=2)
         for attempt in range(1, MAX_RETRIES + 1):
             try:
@@ -1989,6 +1998,8 @@ def _batch_payload(batch, prior: list, spec=None) -> dict:
         payload = {"frame": {k: v for k, v in batch.frame.items()
                              if not k.endswith(("_raw", "_quote", "_source"))},
                    **payload}
+    if getattr(batch, "anchors", ()):
+        payload = {"anchors": list(batch.anchors), **payload}
     if batch.parameter is not None:
         payload = {"parameter": _parameter_payload(batch.parameter), **payload}
     elif spec is not None:
@@ -4213,7 +4224,12 @@ def main(argv: Optional[list] = None) -> int:
                if FIELDWISE else make_harvester(args.image_root, spec=spec))
     ask_frame = make_frame_asker(args.image_root) if frame_axes else None
 
-    def plan(document_id: int, filename: str) -> tuple:
+    # The sentences each pair was searched with, by (document, pair index),
+    # so the request that reads the pair's passages can say what it asks.
+    anchor_texts: dict = {}
+
+    def plan(document_id: int, filename: str, frame: Optional[dict] = None,
+             frame_index: int = 0) -> tuple:
         # Both connections per thread, cache included. Sharing one across the
         # pool would rest on SQLite being built serialized, and the priming
         # above already means every read here is a hit.
@@ -4251,12 +4267,23 @@ def main(argv: Optional[list] = None) -> int:
             if first:
                 context.setdefault(
                     "caption", (first[0].provenance or {}).get("title") or "")
-            probes = document_anchor(doc_spec, context)
+            probes = document_anchor(doc_spec, context, frame=frame)
+            name = Path(filename).stem
             for uri, texts in sorted(probes.items()):
                 for text in texts:
                     trace.event("anchor", document_id, parameter=uri,
-                                text=text)
-            asked[Path(filename).stem] = dict(probes)
+                                text=text,
+                                frame=frame_index if frame else None)
+            if frame is None:
+                asked[name] = dict(probes)
+            else:
+                # Recorded next to the document's own sentences, under the
+                # pair they were written for.
+                asked.setdefault(name, {}).update(
+                    {f"{uri}#{frame_index}": list(texts)
+                     for uri, texts in probes.items()})
+                anchor_texts[(name, frame_index)] = [
+                    text for texts in probes.values() for text in texts]
             items, report = plan_document(
                 document_id, doc_spec, templates, extra_probes=probes,
                 retrieve=retrieve,
@@ -4266,8 +4293,9 @@ def main(argv: Optional[list] = None) -> int:
                             origin=item.origin, kind=item.source.owner_kind,
                             owner=item.source.owner_id,
                             chars=len(item.source.text or ""),
-                            image=bool(item.source.image_path))
-            return Path(filename).stem, split_long_sources(items), report
+                            image=bool(item.source.image_path),
+                            frame=frame_index if frame else None)
+            return name, split_long_sources(items), report
         finally:
             conn.close()
             cache_conn.close()
@@ -4383,26 +4411,64 @@ def main(argv: Optional[list] = None) -> int:
                         log.info("extract: %s: frame %d pair(s), %s",
                                  name, len(pairs), status)
 
+        # ---- Plan again, once per pair: the pair is a search, not a label
+        # "Nutzwaermebedarf 2040 im Zielszenario" is a sentence the plan can
+        # print and the value request for 2040 is asked over what THAT
+        # sentence finds. Reusing one document plan for every pair made the
+        # pair a field in the request and left the search untouched, which is
+        # how a plan with four target years ran with two.
+        pair_items: dict = {}
+        jobs = [(name, index, pair) for name, _items, _report in plans
+                for index, pair in enumerate(frames.get(name) or ())]
+        if jobs:
+            where = {Path(fn).stem: (did, fn) for did, fn in group}
+            with ThreadPoolExecutor(max_workers=PLAN_PARALLEL) as pool:
+                futures = {pool.submit(plan, *where[name], pair, index):
+                           (name, index) for name, index, pair in jobs}
+                for future in as_completed(futures):
+                    name, index = futures[future]
+                    try:
+                        _name, items, _report = future.result()
+                    except Exception:
+                        failures += 1
+                        log.exception("extraction: planning %s for pair %d "
+                                      "failed", name, index)
+                        continue
+                    pair_items[(name, index)] = items
+
         # Every batch of every document goes into one pool. A batch belongs
         # to exactly one document, so the replies come back where they can be
         # folded; nothing about the scheduling depends on that.
         batches: list = []
         owner_of: dict = {}
         for name, items, report in plans:
-            # One pass per pair over the same passages. A table with four year
-            # columns is four requests, each asking for one column. The price
-            # is deliberate: it costs the model the room in which today's
-            # errors are made, and a failure costs one question instead of
-            # damaging a whole harvest.
-            found = frames.get(name) or [None]
+            found = list(frames.get(name) or ())
             for index, pair in enumerate(found):
-                for batch in group_items(items, max_sources=BATCH_SOURCES,
+                planned = pair_items.get((name, index))
+                if planned is None:
+                    continue
+                for batch in group_items(planned, max_sources=BATCH_SOURCES,
                                          max_chars=BATCH_CHARS):
                     batch.frame = pair
                     batch.frame_index = index
-                    batch.frame_all = tuple(p for p in found if p)
+                    batch.frame_all = tuple(found)
+                    batch.anchors = tuple(anchor_texts.get((name, index), ()))
                     batches.append(batch)
                     owner_of[id(batch)] = name
+            # The rest: what prints none of the pairs. A value the frame
+            # search has no pair for is harvested here without one, and its
+            # year is read per row or ends `unstated`, so a year the search
+            # missed is a countable gap and not a silent loss.
+            rest = [item for item in items
+                    if not any(names_pair(item.source, pair, frame_axes)
+                               for pair in found)]
+            if found:
+                log.info("extract: %s: %d pair(s), %d passage(s) print none "
+                         "of them", name, len(found), len(rest))
+            for batch in group_items(rest, max_sources=BATCH_SOURCES,
+                                     max_chars=BATCH_CHARS):
+                batches.append(batch)
+                owner_of[id(batch)] = name
         sources = sum(len(b.items) for b in batches)
         log.info("extraction: group %d/%d planned — %d batch(es) over %d "
                  "source(s) in %d document(s)", offset // group_size + 1,

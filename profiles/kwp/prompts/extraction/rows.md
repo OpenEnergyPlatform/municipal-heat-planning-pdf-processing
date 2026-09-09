@@ -11,6 +11,7 @@ Du bekommst ein JSON-Objekt mit diesen Feldern:
 - "quantities": die gesuchten Felder, jedes mit Label, Beschreibung und, bei einem Zahlenfeld, den akzeptierten Einheiten ("units_accepted"). Ein Wert gehört hierher, wenn er zu MINDESTENS EINEM davon passt. Welches es ist, entscheidest du hier nicht. Ein Feld OHNE "units_accepted" ist ein Textfeld: sein Wert ist eine Bezeichnung aus dem Dokument, keine Zahl.
 - "sources": MEHRERE Quellen aus DEMSELBEN Wärmeplan, jede mit einer Kennung ("id": "Q1", "Q2", …) — Tabellen (Markdown-Transkription), Textabschnitte oder Diagrammbeschreibungen.
 - "frame" (optional): Szenario und Jahr DIESER Anfrage. Keine Frage an dich, sondern die Grenze. Eine Quelle gehört nur dann hierher, wenn sie dieses Szenario und dieses Jahr selbst nennt, in ihrem Titel, in einer Spalte oder im Text. Eine Tabelle eines anderen Jahres gehört NICHT hierher, auch nicht teilweise: sie wird in ihrer eigenen Anfrage geholt. Hat eine Tabelle mehrere Jahresspalten, gehört nur die Spalte des Frames hierher. Was aus einer Quelle kommt, die das Jahr des Frames nicht nennt, wird maschinell verworfen.
+- "anchors" (optional): die Sätze, mit denen diese Quellen gesucht wurden. Sie sagen in den Wörtern des Plans, wonach diese Anfrage fragt.
 - "prior" (optional): Zahlen, die aus diesem Plan schon geholt sind. Gib dieselbe Zahl aus derselben Passage NICHT noch einmal aus.
 
 Gib ausschließlich ein JSON-Objekt in dieser Form zurück, in EINER Zeile, OHNE Einrückung:

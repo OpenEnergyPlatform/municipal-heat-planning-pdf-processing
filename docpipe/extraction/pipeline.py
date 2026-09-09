@@ -120,6 +120,10 @@ class Batch:
     # them can be recognised as one: a table with a column per year names
     # three pairs and belongs to none of them alone.
     frame_all: tuple = ()
+    # The sentences this request's passages were searched with. They say, in
+    # the plan's own words, what the request asks for, so the pair reaches
+    # the model as a question and not only as a field.
+    anchors: tuple = ()
 
     @property
     def sources(self) -> list:
