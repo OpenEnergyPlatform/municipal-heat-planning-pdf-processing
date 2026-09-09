@@ -420,6 +420,35 @@ def cell_index(quote: str, value) -> Optional[tuple]:
     return (hits[0], len(cells)) if len(hits) == 1 else None
 
 
+def column_answer(quote: str, cell: Optional[tuple]) -> Optional[str]:
+    """What the cited passage prints in THIS row's own column, or None.
+
+    A table's header is one line with one cell per column, and the line the
+    value was quoted from has the same number of cells. So the answer that
+    belongs to a value is the header's cell at the value's own position, and
+    an answer naming a different cell is naming another column. That is what
+    `answer_in_quote` cannot see: the header prints 2030 and 2045 in the same
+    line, so either of them verifies against it for either row.
+
+    None when nothing lines up: no cell, no line of the same width, or a
+    header cell that prints no answer at all (a sector column, a label). A
+    check that cannot be evaluated refuses nothing.
+    """
+    if not cell:
+        return None
+    index, count = cell
+    for line in (quote or "").splitlines():
+        if line.count("|") < 2:
+            continue
+        cells = [c.strip() for c in line.strip().strip("|").split("|")]
+        if len(cells) != count or not 1 <= index <= count:
+            continue
+        printed = cells[index - 1]
+        if numbers_in(printed):
+            return printed
+    return None
+
+
 def _invented_wording(claim: dict) -> bool:
     """A non-numeric value that its own quote does not contain.
 
@@ -800,6 +829,24 @@ def merge_field(rows: list, sources: list, slot, reply: Optional[dict],
                 f"Dein \"quote\" ist zu kurz, um eine Stelle zu benennen "
                 f"(mindestens {MIN_QUOTE_CHARS} Zeichen). Zitier den ganzen "
                 f"Satz oder die ganze Zeile, in der die Antwort steht.")})
+            unbacked += 1
+            continue
+        printed = (column_answer(quote, cell_index(row.claim.get("quote"),
+                                                   row.claim.get("value")))
+                   if slot.kind == NUMBER else None)
+        if (printed is not None
+                and quote.strip() != str(row.claim.get("quote") or "").strip()
+                and canonical_number(given) not in numbers_in(printed)):
+            # The answer is a number this passage prints, and it prints it
+            # over a different column than the one the value sits in. Open,
+            # not written: the next window is asked again, and this is the
+            # question it has to answer.
+            row.claim[f"{slot.name}_state"] = UNBACKED
+            failed.append({"row": row.label, "why": "wrong column",
+                           "given": given, "reason": (
+                f"Der Wert dieser Zeile steht in der Spalte, ueber der "
+                f"{printed!r} steht, nicht {given!r}. Antworte mit dem, was "
+                f"ueber der Spalte DIESES Wertes steht.")})
             unbacked += 1
             continue
         wording = answer.get("value_raw")
