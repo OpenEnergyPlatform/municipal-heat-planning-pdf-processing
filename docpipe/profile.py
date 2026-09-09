@@ -1,5 +1,5 @@
 """
-profile.py – A profile is everything a project contributes to the generic
+profile.py: A profile is everything a project contributes to the generic
 pipeline: where its documents come from, what extra tables it needs, which
 prompts it overrides and which filters its app offers.
 

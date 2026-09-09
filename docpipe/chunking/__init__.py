@@ -1,8 +1,10 @@
 """
-chunking – Merge the preprocessing and visuals outputs, embed them, index them.
+__init__.py: Merges the preprocessing and visuals outputs, embeds
+them, and indexes them.
 
-Usage:
-  python -m docpipe.chunking /data/processed/ /path/to/KWP.db /path/to/faiss.index
+Runs as a command line module:
+  python -m docpipe.chunking /data/processed/ /path/to/KWP.db
+      /path/to/faiss.index
 """
 from .pipeline import run
 

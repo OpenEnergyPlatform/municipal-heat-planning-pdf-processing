@@ -1,38 +1,36 @@
 """
-remap.py – A moved vocabulary, applied to a harvest that is already written.
+remap.py: Re-resolves a moved or grown vocabulary against a harvest already on
+disk.
 
-The resume stamp used to be one sha over the whole spec file, so a single new
-spelling made all 1.082 documents stale at once: about 93 GPU hours to re-read
-a corpus over a word. The ontology this spec is written against keeps moving,
-and that bill would come again and again.
+The resume stamp used to hold one hash over the whole spec file, so a single
+new spelling of a term made all 1,082 documents stale at once, about 93 GPU
+hours to re-read a corpus over one word. The ontology a spec is written against
+keeps moving, so that cost would recur.
 
-But nothing was actually re-read in those hours. The harvest keeps both halves
-of every coordinate — the class in `<axis>`, the document's own wording in
-`<axis>_raw` — precisely so that mapping the one onto the other stays a pure
-function of the files. A new alias, a renamed label, an option that moved to
-another class: all of those are answered by running that function again, and
-it needs no model, no GPU and no index.
+None of those hours actually re-read anything. The harvest keeps both halves of
+every coordinate, the class in `<axis>` and the document's own wording in
+`<axis>_raw`, so that mapping one onto the other is a pure function of the
+files on disk. A new alias, a renamed label, or an option moved to another
+class is answered by running that function again, with no model, no GPU, and no
+index.
 
-What it cannot do is fill anything. Four things stop it, and each is counted
-rather than papered over:
+Four cases stop the pass from settling a coordinate, and each is counted rather
+than silently dropped. No wording: the model never sent `<axis>_raw`, so there
+is nothing to map from and only the stored URI survives; the coordinate stays
+open for a targeted top-up. Not listed: the wording is in neither the old list
+nor the new one, so the model's own reading stands rather than being
+overwritten with an empty cell. A refusal: a claim refused on this axis may map
+once the list has grown, but only a re-harvest can turn it into a tuple. No
+parameter: a row names a parameter the spec no longer has, so the pass leaves
+it untouched and does not vouch for the document.
 
-  no wording   the model never sent `<axis>_raw`, so there is nothing to map
-               from and the URI is all that survives. Those coordinates stay
-               open for a targeted top-up.
-  not listed   the wording is in no list, old or new. The reading that stands
-               is the model's own judgement call, and overwriting it with an
-               empty cell would destroy a finding rather than correct one.
-  a refusal    a claim this axis was refused for may map now that the list has
-               grown. Only a re-harvest can turn it back into a tuple.
-  no parameter a row naming a parameter the spec does not have. Nothing here
-               may touch it, and nothing here may vouch for the document.
-
-The stamp is carried forward for exactly what this pass could account for. An
-answer space it fully re-mapped in a document — `axis/<uri>/<name>`, or
-`value/<uri>` for a category parameter's own list — is written forward; every
-other key keeps what the stamp said. So a document whose carrier list moved
-and whose carrier wordings all resolved comes out current, while one with a
-wording nobody listed stays stale in that one key and in nothing else.
+The stamp is carried forward only for what the pass could account for. An
+answer space fully re-mapped in a document, `axis/<uri>/<name>` or
+`value/<uri>` for a category parameter's own list, is written forward; every
+other key keeps what the stamp already said. A document whose carrier list
+moved and whose carrier wordings all resolved therefore comes out current,
+while one with a wording nobody listed stays stale in that one key and nothing
+else.
 
 Author: Felix Vossel
 """

@@ -1,5 +1,5 @@
 """
-pipeline.py – CLI for registering a profile's documents.
+pipeline.py: CLI for registering a profile's documents.
 
 The work lives in docpipe.ingest (generic) and profiles/<name>/source.py
 (project-specific); this module is only the entry point.

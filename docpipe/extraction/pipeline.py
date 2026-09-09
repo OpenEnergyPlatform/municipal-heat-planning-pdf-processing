@@ -1,20 +1,29 @@
 """
-pipeline.py – The harvest loop: sweep, dedup, verify, write.
+pipeline.py: The harvest loop that turns a document's retrieved passages into
+verified value tuples.
 
-Per document and parameter, the spec-generated queries probe retrieval in
-rounds; every round excludes what earlier rounds saw, and the loop stops when
-a full pass over the queries surfaces nothing new (bounded, because a stop
-heuristic without a bound is an outage). Each surfaced owner — a section, a
-table, a figure — is harvested exactly ONCE per parameter, however many
-queries found it: that single rule is the whole dedup story for
-query-overlap. Every claimed tuple then passes verify_tuple; refusals are
-kept alongside the accepted, because a harvest that cannot say what it threw
-away reads as complete when it is not.
+`plan_document` builds one retrieval plan per document rather than per
+parameter: every table and every figure, taken whole because being a table or a
+figure predicts a value better than any similarity ranking does, plus the best
+ranked prose sections. `group_items` folds the plan into batches read in one
+request each. A batch stays inside one document and one parameter, or the whole
+document when the plan is not split by parameter, so it never mixes what a
+different parameter's choice list would need. Every claimed tuple, whichever
+request produced it, passes `verify_tuple`; refusals are kept alongside the
+accepted tuples, because a harvest that cannot say what it threw away reads as
+complete when it is not.
 
-The three expensive dependencies — retrieval, the harvesting LLM call, and
-locating a quote on its PDF page — are injected callables. The loop's
-correctness is a pure-code property and is tested without a GPU; the wiring
-to the live inference stack lives with the CLI, not here.
+`Sweep` and `build_sweeps` carry the tuples a document's batches have already
+verified forward as a hint to later batches, and grant a bounded follow-up
+budget when a reply says more passages are needed (`follow_up`). `fold_claims`,
+`fold_batch` and `fold_fieldwise` verify a reply's claims into a
+`DocumentReport`; `write_report` writes that report's tuples, refusals,
+per-parameter states and one summary line to one JSONL file, atomically.
+
+The three expensive dependencies, retrieval, the harvesting LLM call, and
+locating a quote on its PDF page, are injected callables. The module's own
+correctness is a pure-code property and is tested without a GPU; the wiring to
+the live inference stack lives in `runner.py`.
 
 Author: Felix Vossel
 """

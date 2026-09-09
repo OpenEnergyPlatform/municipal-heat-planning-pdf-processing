@@ -1,28 +1,28 @@
 """
-verify.py – No claim enters the output on the model's word.
+verify.py: Checks a claimed tuple against the spec and the source text before
+it is written to the harvest.
 
-The extraction reply states something and cites the passage it read it in.
+An extraction reply states a value and cites the passage that supports it.
 Before anything is written, the claim is checked against what the model does
-not control: the spec's closed vocabularies, and the source text the quote
-must literally sit in. What survives carries an evidence tier saying how the
-claim is backed:
+not control: the spec's closed vocabularies, and the source text the quote has
+to sit in verbatim.
 
-  TIER_TEXT   The quote sits in the document's refined section text, and the
-              passage was located in the source PDF, so the value can be
-              shown highlighted on its page. The strongest evidence there is.
-  TIER_VISUAL The quote sits in a table transcription, a caption, or a figure
-              description, or the model read it off the image itself. The
-              evidence is the page and that image. It cannot be confirmed
-              automatically: the transcription is a model output too, so
-              checking a claim against it would be model against model. A
-              human confirms it by looking at the picture.
-  (refusal)   The claim is backed by neither. It is recorded with a reason
-              and never reaches the output.
+A claim that passes carries an evidence tier stating how well it is backed.
+`TIER_TEXT` applies when the quote sits in the document's refined section text
+and the passage was located in the source PDF; the value can then be shown
+highlighted on its page, the strongest evidence available. `TIER_VISUAL`
+applies when the quote sits in a table transcription, a caption, or a figure
+description, or the model read it off the image itself; the evidence is then
+the page and that image. A `TIER_VISUAL` claim cannot be confirmed
+automatically, because the transcription is itself a model output, so checking
+the claim against it would compare one model output to another; confirmation is
+left to a person who looks at the picture. A claim backed by neither tier is
+refused: it is recorded with a reason and never reaches the output.
 
 Values are not only numbers. An ontology asks for categories and for plain
-statements just as often, and those are evidenced the same way — by the
-passage they stand in. What differs is only how a value is compared to its
-quote: digits for a number, text for everything else.
+statements as often as for numbers, and each is evidenced the same way, by the
+passage it stands in. Only the comparison between a value and its quote
+differs: digits for a number, text for anything else.
 
 Author: Felix Vossel
 """

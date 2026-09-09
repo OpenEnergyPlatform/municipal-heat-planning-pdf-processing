@@ -1,18 +1,21 @@
 """
-columns.py – Reading order on a page that has more than one text column.
+columns.py: Determines reading order on a page with more than one
+text column.
 
-Sorting blocks top-to-bottom, then left-to-right is right for a single column
-and wrong for two: it reads across the gutter and interleaves the columns line
-by line, which scrambles the text beyond repair downstream.
+Sorting blocks top-to-bottom, then left-to-right is correct for a
+single column and wrong for two: it reads across the gutter and
+interleaves the columns line by line, which scrambles the text
+beyond repair downstream.
 
-So the gutters are found first — the vertical strips text stays out of — and the
-page is then read column by column. Blocks that DO cross a gutter (a full-width
-heading, a wide table) are spanning blocks: they end the columns above them and
-start new ones below, which is exactly how such a page reads.
+Gutters, the vertical strips that text stays out of, are found
+first; the page is then read column by column. A block that crosses
+a gutter (a full-width heading, a wide table) is a spanning block: it
+ends the columns above it and starts new ones below it, matching how
+such a page is read.
 
-The number of columns is not assumed. Two is the common case in a report, but
-slide-style pages run to three or four, and one wrong split there is as bad as
-no split at all.
+The number of columns is not assumed. Two is the common case in a
+report, but slide-style pages run to three or four columns, and a
+wrong split is as bad as no split at all.
 
 Author: Felix Vossel
 """

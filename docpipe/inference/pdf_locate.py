@@ -1,16 +1,18 @@
 """
-pdf_locate.py – Where a quote sits on the page of the source PDF.
+pdf_locate.py: Locates where a quote sits on the page of the source
+PDF.
 
-One implementation, two callers: the app highlights the passage it shows, the
-extraction stage records the same rectangles as the provenance of a value.
-Duplicating it would have meant two answers to "where does this come from",
-which is the one question the whole evidence chain exists to answer.
+One implementation serves two callers: the app highlights the
+passage it shows, and the extraction stage records the same
+rectangles as the provenance of a value. A second implementation
+would give two answers to where a value comes from, the one question
+the whole evidence chain exists to answer.
 
-The match is fuzzy on purpose. The corpus text has been through extraction
-and refinement, so it is never byte-identical to what PyMuPDF reads off the
-page: ligatures, hyphenation, running heads and column order all differ.
-Alignment finds the passage anyway; the score floor keeps it from pointing at
-something else.
+The match is fuzzy on purpose. The corpus text has passed through
+extraction and refinement, so it is never byte-identical to what
+PyMuPDF reads off the page: ligatures, hyphenation, running heads and
+column order all differ. Alignment finds the passage anyway; the
+score floor keeps it from pointing at something else.
 
 Author: Felix Vossel
 """

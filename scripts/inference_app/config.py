@@ -1,8 +1,11 @@
 """
-config.py – Central configuration for the inference_app module.
+config.py: Central configuration for the inference_app module.
 
-Every value is overridable via an environment variable; the defaults are safe
-placeholders.
+Every value is overridable through an environment variable; the defaults
+are safe placeholders. The corpus paths (the database, the FAISS index,
+the image root, the knowledge-graph file) default to the active profile's
+own paths, or to the historical `data/` layout when no profile is set; an
+explicit environment variable overrides both.
 
 Author: Felix Vossel
 """

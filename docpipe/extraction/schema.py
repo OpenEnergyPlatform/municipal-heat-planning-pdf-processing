@@ -1,27 +1,30 @@
 """
-schema.py – A JSON Schema for the harvest, the stamp and the trace.
+schema.py: Builds a JSON Schema for the harvest, the stamp and the trace.
 
-The harvest is the durable artifact. The graph is a function of it, and every
-later question — what does this key mean, which OEO predicate does it become,
-may it be null, what is the closed list — was answered until now by reading
-`runner.py`. That is not an answer anyone outside this repository can use, and
-it is not one this repository can check.
+The harvest is the durable artifact, and the graph is a function of
+it. Until this module existed, every later question about a key (what
+it means, which OEO predicate it becomes, whether it may be null,
+what the closed list is) was answered by reading `runner.py`. That is
+not an answer anyone outside this repository can use, and it is not
+one this repository can check.
 
-So the schema is GENERATED from the spec, not written beside it. The parameters,
-their axes, the closed lists, the questions and the `kg` blocks all come from
-`profiles/<name>/extraction_spec.json`, which means a spec change that is not
-reflected in the schema is a failing test rather than a stale document. Three
-schemas come out:
+So the schema is generated from the spec, not written beside it. The
+parameters, their axes, the closed lists, the questions and the `kg`
+blocks all come from `profiles/<name>/extraction_spec.json`, so a
+spec change that is not reflected in the schema is a failing test
+rather than a stale document. Three schemas come out:
 
-  harvest  one line of <name>.jsonl: an accepted tuple or a refused claim
+  harvest  one line of <name>.jsonl: an accepted tuple or a refused
+           claim
   stamp    <name>.stamp.json, what produced that harvest
   trace    one line of <name>.trace.jsonl, one event of the run
 
-Every property carries a `description`, and every coordinate additionally
-carries `x-question` (the German question the model was asked), `x-options`
-(the closed list with the corpus spellings) and `x-kg` (what it becomes in the
-graph). `x-kg` is the spec's own `kg` block, the same one the serializer reads,
-so what a reader is told and what is written cannot drift apart.
+Every property carries a `description`, and every coordinate
+additionally carries `x-question` (the German question the model was
+asked), `x-options` (the closed list with the corpus spellings) and
+`x-kg` (what it becomes in the graph). `x-kg` is the spec's own `kg`
+block, the same one the serializer reads, so what a reader is told
+and what is written cannot drift apart.
 
     python -m docpipe.extraction.schema kwp            # print
     python -m docpipe.extraction.schema kwp --write    # write into the profile
@@ -166,13 +169,13 @@ def _slot_value(slot, doc: str) -> dict:
 
 
 def _value_uri(parameter) -> dict:
-    """What a wording resolved to, and — for a closed list — the list itself.
+    """What a wording resolved to, and, for a closed list, the list itself.
 
     An axis has published its options since the schema existed. A category
     PARAMETER answers from a list in exactly the same way and published none:
     the key said "the entry of the parameter's own vocabulary" and the schema
     never showed what that vocabulary is. Unseen until now because kwp has no
-    category parameter at all -- the gap only exists where the profile does.
+    category parameter at all: the gap only exists where the profile does.
 
     Three cases and they read differently on purpose. A text parameter has no
     list at all and never writes the key; a dynamic list exists but is the
@@ -180,19 +183,19 @@ def _value_uri(parameter) -> dict:
     a closed list is published, meanings and all.
     """
     doc = ("The entry of the parameter's own vocabulary the wording resolved "
-           "to; null when the list did not hold it. ")
+           "to. Null when the list does not hold it. ")
     if parameter.value_type != "category":
         return {"type": ["string", "null"],
                 "description": doc + "Only a category parameter has a "
-                                     "vocabulary, so this one never writes "
+                                     "vocabulary. This one never writes "
                                      "the key at all."}
     if parameter.vocabulary_dynamic:
         return {"type": ["string", "null"],
-                "description": doc + "The list is per document: the profile "
+                "description": doc + "The list is per document. The profile "
                                      "supplies it before the harvest, so it "
                                      "is not in this schema."}
     slot = fields.value_slot(parameter)
-    out = _slot_value(slot, doc + "The list is closed; an entry beginning "
+    out = _slot_value(slot, doc + "The list is closed. An entry beginning "
                                   "'out:' is a deliberate non-class answer "
                                   "and mints no node.")
     # `_slot_value` puts the slot's question on the value it types. Here it
@@ -207,7 +210,7 @@ def _slot_properties(name: str, slot, doc: str) -> dict:
     """Every key one coordinate writes.
 
     Seven, not one. The value is what the graph takes; the rest is what makes
-    the value re-checkable without the run that produced it — which state it
+    the value re-checkable without the run that produced it: which state it
     ended in, the document's own wording, the passage, the source that passage
     came from and the window it was found in.
     """
@@ -227,7 +230,7 @@ def _slot_properties(name: str, slot, doc: str) -> dict:
         f"{name}_raw_foreign": {
             "type": "boolean",
             "description": f"The wording does not name the option chosen for "
-                           f"'{name}' -- the model mapped a word the spec "
+                           f"'{name}': the model mapped a word the spec "
                            f"does not list onto this class. Kept and counted, "
                            f"not refused: some of those mappings are right."},
         f"{name}_quote": {
@@ -422,7 +425,7 @@ def harvest_schema(spec) -> dict:
                     "title": {
                         "type": ["string", "null"],
                         "description": "The section title, or a table's or "
-                                       "figure's caption -- resolved to the "
+                                       "figure's caption, resolved to the "
                                        "sentence before its placeholder "
                                        "where the stored caption is a "
                                        "footnote."},
@@ -489,7 +492,7 @@ def harvest_schema(spec) -> dict:
                                "document's own values are distributed. A "
                                "contested identity is decided by the "
                                "serializer and a second reading is a later "
-                               "pass, so neither is counted here -- the "
+                               "pass, so neither is counted here. The "
                                "levels are a floor, and the graph side "
                                "recomputes them.",
                 "properties": {
@@ -516,8 +519,9 @@ def harvest_schema(spec) -> dict:
                         "additionalProperties": {"type": "integer"}},
                     "image_origin": {
                         "type": "integer",
-                        "description": "Values read out of a table or figure "
-                                       "image rather than the document's text."},
+                        "description": "Values read out of a table or "
+                                       "figure image rather than the "
+                                       "document's text."},
                 },
                 "required": ["kind", "document_id", "tuples", "refusals",
                              "levels", "reasons", "image_origin"],
@@ -555,23 +559,24 @@ def harvest_schema(spec) -> dict:
 
 
 def stamp_schema() -> dict:
-    """<name>.stamp.json — what produced the harvest beside it."""
+    """<name>.stamp.json: what produced the harvest beside it."""
     sha = {"type": "string", "pattern": "^[0-9a-f]{64}$"}
     return {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "$id": f"{BASE_ID}/stamp",
         "title": "docpipe extraction resume stamp",
-        "description": "A key that differs from the current run makes the "
-                       "document stale and it is harvested again -- every "
-                       "key but `spec`, which is recorded so a reader can "
-                       "say which file a harvest came from and is not "
+        "description": "Every key but `spec` makes the document stale, and "
+                       "it is harvested again, when it differs from the "
+                       "current run. `spec` is recorded so a reader can "
+                       "say which file a harvest came from, and is not "
                        "compared. Withheld when the harvest did not happen. "
-                       "The parameter/, value/, axis/ and slot/ keys say "
-                       "WHICH question changed, so a moving ontology costs "
-                       "the coordinates it touched rather than a full "
-                       "re-read of the corpus; a stamp written before they "
-                       "existed carries none of them, and for it `spec` "
-                       "decides again, so it is stale in all of them.",
+                       "The parameter/, value/, axis/ and slot/ keys record "
+                       "which question changed, so a moving ontology costs "
+                       "only the coordinates it touched rather than a full "
+                       "re-read of the corpus. A stamp written before those "
+                       "keys existed carries none of them, so for it "
+                       "`spec` decides again, and it is stale in all of "
+                       "them.",
         "type": "object",
         "properties": {
             "spec": {**sha,
@@ -603,7 +608,8 @@ def stamp_schema() -> dict:
                 "type": ["integer", "null"],
                 "description": "How many pages of this document a model read "
                                "rather than the PDF. A harvest from a "
-                               "transcribed document is a reading of a reading."},
+                               "transcribed document is a reading of a "
+                               "reading."},
         },
         "patternProperties": {
             "^extraction/(harvest|queries|anchors|rows|field|phrase|frame)$":
@@ -616,7 +622,7 @@ def stamp_schema() -> dict:
                                "is part of it and no two runs produce the "
                                "same one. What decides whether the harvest is "
                                "current is its recipe, and that is already "
-                               "here -- the generator prompt, the model, and "
+                               "here: the generator prompt, the model, and "
                                "the annotation inside parameter/."},
             "^parameter/[^/]+$": {
                 **sha,
@@ -625,7 +631,7 @@ def stamp_schema() -> dict:
                                "value type, accepted units and the example. A "
                                "new option on ONE axis, or in the list the "
                                "parameter answers from, must not make every "
-                               "value of the parameter stale -- those have "
+                               "value of the parameter stale. Those have "
                                "keys of their own."},
             "^value/[^/]+$": {
                 **sha,
@@ -663,7 +669,7 @@ def stamp_schema() -> dict:
 
 
 def trace_schema() -> dict:
-    """One line of <name>.trace.jsonl — one event, never an aggregate."""
+    """One line of <name>.trace.jsonl: one event, never an aggregate."""
     owner = _owner()
     counts = {k: {"type": "integer"} for k in
               ("filled", "unquoted", "unbacked", "unstated", "raw_missing",

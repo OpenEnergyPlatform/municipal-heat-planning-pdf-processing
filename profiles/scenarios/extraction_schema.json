@@ -106,7 +106,7 @@
       ]
      },
      "title": {
-      "description": "The section title, or a table's or figure's caption -- resolved to the sentence before its placeholder where the stored caption is a footnote.",
+      "description": "The section title, or a table's or figure's caption, resolved to the sentence before its placeholder where the stored caption is a footnote.",
       "type": [
        "string",
        "null"
@@ -247,7 +247,7 @@
    },
    "summary": {
     "additionalProperties": false,
-    "description": "The last line of the file: how this document's own values are distributed. A contested identity is decided by the serializer and a second reading is a later pass, so neither is counted here -- the levels are a floor, and the graph side recomputes them.",
+    "description": "The last line of the file: how this document's own values are distributed. A contested identity is decided by the serializer and a second reading is a later pass, so neither is counted here. The levels are a floor, and the graph side recomputes them.",
     "properties": {
      "document_id": {
       "type": "integer"
@@ -376,7 +376,7 @@
       "type": "string"
      },
      "parameter_raw_foreign": {
-      "description": "The wording does not name the option chosen for 'parameter' -- the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.",
+      "description": "The wording does not name the option chosen for 'parameter': the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.",
       "type": "boolean"
      },
      "parameter_seen": {
@@ -459,7 +459,7 @@
       "type": "string"
      },
      "value_uri": {
-      "description": "The entry of the parameter's own vocabulary the wording resolved to; null when the list did not hold it. Only a category parameter has a vocabulary, so this one never writes the key at all.",
+      "description": "The entry of the parameter's own vocabulary the wording resolved to. Null when the list does not hold it. Only a category parameter has a vocabulary. This one never writes the key at all.",
       "type": [
        "string",
        "null"
@@ -526,7 +526,7 @@
       "type": "string"
      },
      "parameter_raw_foreign": {
-      "description": "The wording does not name the option chosen for 'parameter' -- the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.",
+      "description": "The wording does not name the option chosen for 'parameter': the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.",
       "type": "boolean"
      },
      "parameter_seen": {
@@ -609,7 +609,7 @@
       "type": "string"
      },
      "value_uri": {
-      "description": "The entry of the parameter's own vocabulary the wording resolved to; null when the list did not hold it. Only a category parameter has a vocabulary, so this one never writes the key at all.",
+      "description": "The entry of the parameter's own vocabulary the wording resolved to. Null when the list does not hold it. Only a category parameter has a vocabulary. This one never writes the key at all.",
       "type": [
        "string",
        "null"
@@ -684,7 +684,7 @@
       "type": "string"
      },
      "parameter_raw_foreign": {
-      "description": "The wording does not name the option chosen for 'parameter' -- the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.",
+      "description": "The wording does not name the option chosen for 'parameter': the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.",
       "type": "boolean"
      },
      "parameter_seen": {
@@ -767,7 +767,7 @@
       "type": "string"
      },
      "value_uri": {
-      "description": "The entry of the parameter's own vocabulary the wording resolved to; null when the list did not hold it. Only a category parameter has a vocabulary, so this one never writes the key at all.",
+      "description": "The entry of the parameter's own vocabulary the wording resolved to. Null when the list does not hold it. Only a category parameter has a vocabulary. This one never writes the key at all.",
       "type": [
        "string",
        "null"
@@ -836,7 +836,7 @@
       "type": "string"
      },
      "parameter_raw_foreign": {
-      "description": "The wording does not name the option chosen for 'parameter' -- the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.",
+      "description": "The wording does not name the option chosen for 'parameter': the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.",
       "type": "boolean"
      },
      "parameter_seen": {
@@ -919,7 +919,7 @@
       "type": "string"
      },
      "value_uri": {
-      "description": "The entry of the parameter's own vocabulary the wording resolved to; null when the list did not hold it. Only a category parameter has a vocabulary, so this one never writes the key at all.",
+      "description": "The entry of the parameter's own vocabulary the wording resolved to. Null when the list does not hold it. Only a category parameter has a vocabulary. This one never writes the key at all.",
       "type": [
        "string",
        "null"
@@ -986,7 +986,7 @@
       "type": "string"
      },
      "parameter_raw_foreign": {
-      "description": "The wording does not name the option chosen for 'parameter' -- the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.",
+      "description": "The wording does not name the option chosen for 'parameter': the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.",
       "type": "boolean"
      },
      "parameter_seen": {
@@ -1069,7 +1069,7 @@
       "type": "string"
      },
      "value_uri": {
-      "description": "The entry of the parameter's own vocabulary the wording resolved to; null when the list did not hold it. Only a category parameter has a vocabulary, so this one never writes the key at all.",
+      "description": "The entry of the parameter's own vocabulary the wording resolved to. Null when the list does not hold it. Only a category parameter has a vocabulary. This one never writes the key at all.",
       "type": [
        "string",
        "null"
@@ -1172,7 +1172,7 @@
       "type": "string"
      },
      "parameter_raw_foreign": {
-      "description": "The wording does not name the option chosen for 'parameter' -- the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.",
+      "description": "The wording does not name the option chosen for 'parameter': the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.",
       "type": "boolean"
      },
      "parameter_seen": {
@@ -1258,7 +1258,7 @@
       "type": "string"
      },
      "scenario_raw_foreign": {
-      "description": "The wording does not name the option chosen for 'scenario' -- the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.",
+      "description": "The wording does not name the option chosen for 'scenario': the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.",
       "type": "boolean"
      },
      "scenario_seen": {
@@ -1333,7 +1333,7 @@
       "type": "string"
      },
      "value_uri": {
-      "description": "The entry of the parameter's own vocabulary the wording resolved to; null when the list did not hold it. Only a category parameter has a vocabulary, so this one never writes the key at all.",
+      "description": "The entry of the parameter's own vocabulary the wording resolved to. Null when the list does not hold it. Only a category parameter has a vocabulary. This one never writes the key at all.",
       "type": [
        "string",
        "null"
@@ -1401,7 +1401,7 @@
       "type": "string"
      },
      "parameter_raw_foreign": {
-      "description": "The wording does not name the option chosen for 'parameter' -- the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.",
+      "description": "The wording does not name the option chosen for 'parameter': the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.",
       "type": "boolean"
      },
      "parameter_seen": {
@@ -1484,7 +1484,7 @@
       "type": "string"
      },
      "value_uri": {
-      "description": "The entry of the parameter's own vocabulary the wording resolved to; null when the list did not hold it. The list is per document: the profile supplies it before the harvest, so it is not in this schema.",
+      "description": "The entry of the parameter's own vocabulary the wording resolved to. Null when the list does not hold it. The list is per document. The profile supplies it before the harvest, so it is not in this schema.",
       "type": [
        "string",
        "null"
@@ -1591,7 +1591,7 @@
       "type": "string"
      },
      "parameter_raw_foreign": {
-      "description": "The wording does not name the option chosen for 'parameter' -- the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.",
+      "description": "The wording does not name the option chosen for 'parameter': the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.",
       "type": "boolean"
      },
      "parameter_seen": {
@@ -1677,7 +1677,7 @@
       "type": "string"
      },
      "scenario_raw_foreign": {
-      "description": "The wording does not name the option chosen for 'scenario' -- the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.",
+      "description": "The wording does not name the option chosen for 'scenario': the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.",
       "type": "boolean"
      },
      "scenario_seen": {
@@ -1752,7 +1752,7 @@
       "type": "string"
      },
      "value_uri": {
-      "description": "The entry of the parameter's own vocabulary the wording resolved to; null when the list did not hold it. The list is per document: the profile supplies it before the harvest, so it is not in this schema.",
+      "description": "The entry of the parameter's own vocabulary the wording resolved to. Null when the list does not hold it. The list is per document. The profile supplies it before the harvest, so it is not in this schema.",
       "type": [
        "string",
        "null"
@@ -1856,7 +1856,7 @@
       "type": "string"
      },
      "parameter_raw_foreign": {
-      "description": "The wording does not name the option chosen for 'parameter' -- the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.",
+      "description": "The wording does not name the option chosen for 'parameter': the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.",
       "type": "boolean"
      },
      "parameter_seen": {
@@ -1942,7 +1942,7 @@
       "type": "string"
      },
      "scenario_raw_foreign": {
-      "description": "The wording does not name the option chosen for 'scenario' -- the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.",
+      "description": "The wording does not name the option chosen for 'scenario': the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.",
       "type": "boolean"
      },
      "scenario_seen": {
@@ -2017,7 +2017,7 @@
       "type": "string"
      },
      "value_uri": {
-      "description": "The entry of the parameter's own vocabulary the wording resolved to; null when the list did not hold it. The list is closed; an entry beginning 'out:' is a deliberate non-class answer and mints no node.",
+      "description": "The entry of the parameter's own vocabulary the wording resolved to. Null when the list does not hold it. The list is closed. An entry beginning 'out:' is a deliberate non-class answer and mints no node.",
       "enum": [
        "https://openenergyplatform.org/ontology/oeo/OEO_00020309",
        "https://openenergyplatform.org/ontology/oeo/OEO_00020310",
@@ -2271,7 +2271,7 @@
       "type": "string"
      },
      "parameter_raw_foreign": {
-      "description": "The wording does not name the option chosen for 'parameter' -- the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.",
+      "description": "The wording does not name the option chosen for 'parameter': the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.",
       "type": "boolean"
      },
      "parameter_seen": {
@@ -2357,7 +2357,7 @@
       "type": "string"
      },
      "scenario_raw_foreign": {
-      "description": "The wording does not name the option chosen for 'scenario' -- the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.",
+      "description": "The wording does not name the option chosen for 'scenario': the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.",
       "type": "boolean"
      },
      "scenario_seen": {
@@ -2432,7 +2432,7 @@
       "type": "string"
      },
      "value_uri": {
-      "description": "The entry of the parameter's own vocabulary the wording resolved to; null when the list did not hold it. Only a category parameter has a vocabulary, so this one never writes the key at all.",
+      "description": "The entry of the parameter's own vocabulary the wording resolved to. Null when the list does not hold it. Only a category parameter has a vocabulary. This one never writes the key at all.",
       "type": [
        "string",
        "null"
@@ -2503,7 +2503,7 @@
       "type": "string"
      },
      "parameter_raw_foreign": {
-      "description": "The wording does not name the option chosen for 'parameter' -- the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.",
+      "description": "The wording does not name the option chosen for 'parameter': the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.",
       "type": "boolean"
      },
      "parameter_seen": {
@@ -2586,7 +2586,7 @@
       "type": "string"
      },
      "value_uri": {
-      "description": "The entry of the parameter's own vocabulary the wording resolved to; null when the list did not hold it. Only a category parameter has a vocabulary, so this one never writes the key at all.",
+      "description": "The entry of the parameter's own vocabulary the wording resolved to. Null when the list does not hold it. Only a category parameter has a vocabulary. This one never writes the key at all.",
       "type": [
        "string",
        "null"
@@ -2652,7 +2652,7 @@
       "type": "string"
      },
      "parameter_raw_foreign": {
-      "description": "The wording does not name the option chosen for 'parameter' -- the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.",
+      "description": "The wording does not name the option chosen for 'parameter': the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.",
       "type": "boolean"
      },
      "parameter_seen": {
@@ -2735,7 +2735,7 @@
       "type": "string"
      },
      "value_uri": {
-      "description": "The entry of the parameter's own vocabulary the wording resolved to; null when the list did not hold it. Only a category parameter has a vocabulary, so this one never writes the key at all.",
+      "description": "The entry of the parameter's own vocabulary the wording resolved to. Null when the list does not hold it. Only a category parameter has a vocabulary. This one never writes the key at all.",
       "type": [
        "string",
        "null"
@@ -2809,7 +2809,7 @@
       "type": "string"
      },
      "parameter_raw_foreign": {
-      "description": "The wording does not name the option chosen for 'parameter' -- the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.",
+      "description": "The wording does not name the option chosen for 'parameter': the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.",
       "type": "boolean"
      },
      "parameter_seen": {
@@ -2892,7 +2892,7 @@
       "type": "string"
      },
      "value_uri": {
-      "description": "The entry of the parameter's own vocabulary the wording resolved to; null when the list did not hold it. Only a category parameter has a vocabulary, so this one never writes the key at all.",
+      "description": "The entry of the parameter's own vocabulary the wording resolved to. Null when the list does not hold it. Only a category parameter has a vocabulary. This one never writes the key at all.",
       "type": [
        "string",
        "null"
@@ -2966,7 +2966,7 @@
       "type": "string"
      },
      "parameter_raw_foreign": {
-      "description": "The wording does not name the option chosen for 'parameter' -- the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.",
+      "description": "The wording does not name the option chosen for 'parameter': the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.",
       "type": "boolean"
      },
      "parameter_seen": {
@@ -3049,7 +3049,7 @@
       "type": "string"
      },
      "value_uri": {
-      "description": "The entry of the parameter's own vocabulary the wording resolved to; null when the list did not hold it. Only a category parameter has a vocabulary, so this one never writes the key at all.",
+      "description": "The entry of the parameter's own vocabulary the wording resolved to. Null when the list does not hold it. Only a category parameter has a vocabulary. This one never writes the key at all.",
       "type": [
        "string",
        "null"
@@ -3140,7 +3140,7 @@
   "$id": "https://openenergyplatform.org/schema/mhpkg/extraction/stamp",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
-  "description": "A key that differs from the current run makes the document stale and it is harvested again -- every key but `spec`, which is recorded so a reader can say which file a harvest came from and is not compared. Withheld when the harvest did not happen. The parameter/, value/, axis/ and slot/ keys say WHICH question changed, so a moving ontology costs the coordinates it touched rather than a full re-read of the corpus; a stamp written before they existed carries none of them, and for it `spec` decides again, so it is stale in all of them.",
+  "description": "Every key but `spec` makes the document stale, and it is harvested again, when it differs from the current run. `spec` is recorded so a reader can say which file a harvest came from, and is not compared. Withheld when the harvest did not happen. The parameter/, value/, axis/ and slot/ keys record which question changed, so a moving ontology costs only the coordinates it touched rather than a full re-read of the corpus. A stamp written before those keys existed carries none of them, so for it `spec` decides again, and it is stale in all of them.",
   "patternProperties": {
    "^axis/[^/]+/[^/]+$": {
     "description": "What this coordinate asks and what it may answer: the question, the evidence rule, and the offered list with its spellings and its definitions. Everything the model sees for this axis, and nothing else.",
@@ -3153,12 +3153,12 @@
     "type": "string"
    },
    "^parameter/[^/]+$": {
-    "description": "What this parameter asks, without its axes and without its own list: label, description, value type, accepted units and the example. A new option on ONE axis, or in the list the parameter answers from, must not make every value of the parameter stale -- those have keys of their own.",
+    "description": "What this parameter asks, without its axes and without its own list: label, description, value type, accepted units and the example. A new option on ONE axis, or in the list the parameter answers from, must not make every value of the parameter stale. Those have keys of their own.",
     "pattern": "^[0-9a-f]{64}$",
     "type": "string"
    },
    "^question_text/[^/]+$": {
-    "description": "The sentence THIS document was searched with. Recorded and never compared: it is written per document, so the document itself is part of it and no two runs produce the same one. What decides whether the harvest is current is its recipe, and that is already here -- the generator prompt, the model, and the annotation inside parameter/.",
+    "description": "The sentence THIS document was searched with. Recorded and never compared: it is written per document, so the document itself is part of it and no two runs produce the same one. What decides whether the harvest is current is its recipe, and that is already here: the generator prompt, the model, and the annotation inside parameter/.",
     "items": {
      "type": "string"
     },

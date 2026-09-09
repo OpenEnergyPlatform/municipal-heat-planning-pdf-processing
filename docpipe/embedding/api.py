@@ -1,9 +1,13 @@
 """
-api.py – Embeddings from an OpenAI-compatible /v1/embeddings endpoint.
+api.py: Embeds items by calling an OpenAI-compatible /v1/embeddings
+endpoint.
 
-For deployments without a GPU, or where the embedding model is served
-centrally. Text only: the OpenAI embeddings schema has no place for an image,
-so an item carrying one is refused rather than silently embedded as text.
+ApiEmbedder is for deployments without a GPU, or for a deployment
+where the embedding model is served centrally. It batches items into
+groups of batch_size before calling the endpoint. The OpenAI
+embeddings schema has no place for an image, so embed() is text
+only: an item carrying an image is refused with a ValueError rather
+than silently embedded as text.
 
 Author: Felix Vossel
 """

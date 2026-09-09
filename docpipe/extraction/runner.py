@@ -1,17 +1,44 @@
 """
-runner.py – Wiring the harvest loop to the live stack.
+runner.py: Wires the pure harvest loop of `pipeline.py` to the live stack.
 
-pipeline.py owns the loop and is pure; this module supplies its three
-callables from the real world — FAISS retrieval with owner exclusion, the
-harvesting LLM call, and locating a quote on its page in the source PDF —
-plus resume stamps and the CLI. Heavy imports (faiss, torch-backed embedders, fitz)
-happen inside functions: importing this module must stay cheap, or every
-test that touches the package pays for a GPU stack it never uses.
+This module supplies the loop's expensive dependencies from the real world:
+FAISS retrieval with owner exclusion, the harvesting LLM call, and locating a
+quote on its page in the source PDF, plus resume stamps and the CLI. Heavy
+imports (faiss, torch-backed embedders, fitz) happen inside functions, so
+importing this module stays cheap and a test that only touches the package pays
+for no GPU stack it does not use.
 
-Probes are embedded directly, without the QA path's HyDE anchor call: the
-spec-generated queries are already precise, skipping the anchor saves one
-LLM call per probe, and a stable probe string means the query-embedding
-cache hits across all documents.
+`make_retrieve` fuses every probe handed to it into one FAISS search per
+document and ranks each owner by the best score any probe gave it; measured
+over 65 documents and 15,082 values, the fused ranking put the source a value
+was really read from at median rank 26, against 77 for the old per-probe
+concatenation. `make_candidates` is a deterministic floor under that ranking,
+matched by LIKE over the corpus's own vocabulary tokens. A probe is either one
+of the spec's query templates (`queries.expand`), stable across the whole
+corpus so `prime_probe_cache`'s embeddings hit for every document, or a
+HyDE-style anchor sentence a model writes for one question: `make_anchors`
+writes one set per parameter or axis, cached under `anchors.json` and reusable
+across documents, or frozen by the profile (`frozen_anchors`) over the model's
+own guess; `document_anchor` writes a further sentence per parameter for the
+one document being planned, which is a cache miss by construction.
+
+`make_harvester` and `make_fieldwise_harvester` build the request to the model,
+parse its reply, and rescue the tuples already written when a reply is cut off
+at the token ceiling (`rescue_reply`). `make_sweeper` drives the field-wise
+sweep: a coordinate the value's own passage does not answer is asked for again
+over short overlapping windows of the rest of the document (`window_sources`),
+bounded per axis. `find_frame` and `make_frame_asker` read a document's frame,
+its scenario and year pairs, once before any value, so a value request states
+the pair rather than deciding it. `harvest_batches` runs every batch of a whole
+run in flight at once, not as ordered per-document chains.
+
+`make_locate` finds where a quote sits on its page in the source PDF, through
+the same alignment the app highlights with. Resume stamps (`_stamp_current`,
+`stale`) record a fingerprint per question a spec asks (`spec.fingerprints`),
+so an ontology edit restales only the documents asked through the coordinate it
+touched, not the whole corpus. `main` is the CLI: a normal harvest, and the
+`--recheck`, `--remap`, `--serialize`, `--review` and `--top-up` maintenance
+passes over a harvest already written.
 
 Author: Felix Vossel
 """

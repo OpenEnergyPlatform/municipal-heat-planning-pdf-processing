@@ -1,8 +1,10 @@
 """
-pipeline.py – Orchestration of the chunkingandembedding module: merge → db → embed.
+pipeline.py: Orchestrates the chunkingandembedding stage: merge, then
+the database step, then embedding.
 
-CLI:
-  python -m docpipe.chunking /data/processed/ /path/to/KWP.db /path/to/faiss.index
+Runs as a command line module:
+  python -m docpipe.chunking /data/processed/ /path/to/KWP.db
+      /path/to/faiss.index
 
 Author: Felix Vossel
 """

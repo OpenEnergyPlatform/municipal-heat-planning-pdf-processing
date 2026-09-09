@@ -1,11 +1,12 @@
 """
-pdf_link.py – Build deep links into the source PDF for a citation.
+pdf_link.py: Builds deep links into the source PDF for one citation.
 
-A section's chunk text is LLM-refined and differs from the raw PDF text, so a
-verbatim `#page=N&search=...` term must come from the RAW page text (the
-page-tagged `Segments`, or the PDF itself).
+A section's chunk text is refined by the LLM and differs from the raw PDF
+text, so a verbatim `#page=N&search=...` term has to come from the raw
+page text: the page-tagged `Segments`, or the PDF file itself.
 
-Pure (no DB, no Streamlit); the DB reads live in db.py.
+The module is pure: no database access, no Streamlit import. Database
+reads live in `db.py`.
 """
 from __future__ import annotations
 

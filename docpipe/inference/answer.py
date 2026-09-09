@@ -1,10 +1,12 @@
 """
-answer.py – One retrieval-and-answer turn, with no user interface attached.
+answer.py: Runs one retrieval and answer turn, with no user interface
+attached.
 
-The chat app and the batch runner ask the same question of the same corpus;
-only what they do with the progress and the result differs. So everything the
-turn needs from the outside — the open corpus, how to embed a query, where an
-image lives, and an optional progress reporter — is passed in.
+The chat app and the batch runner ask the same question of the same
+corpus. Only what they do with the progress and the result differs,
+so everything the turn needs from outside is passed in: the open
+corpus, how to embed a query, where an image lives, and an optional
+progress reporter.
 
 Author: Felix Vossel
 """

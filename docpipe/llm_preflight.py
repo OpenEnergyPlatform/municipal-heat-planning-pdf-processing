@@ -1,15 +1,16 @@
 """
-llm_preflight.py – Ask the server what it can do, before the first document.
+llm_preflight.py: Asks the server what it can do, before the first
+document.
 
-A stage knows what one request costs it (`config.max_request_tokens()`); the
-server knows how much context it was started with. Nothing compared the two,
-so a `--max-model-len` that was too small surfaced as a slow trickle of
-truncated replies hours into a run — 42 windows silently kept their raw text —
-instead of as one error in second one.
+A stage knows what one request costs it (`config.max_request_tokens()`);
+the server knows how much context it was started with. Nothing compared
+the two, so a `--max-model-len` set too small surfaced as a slow trickle
+of truncated replies hours into a run, with 42 windows silently keeping
+their raw text, instead of as a single error within the first second.
 
-Two questions, both answered by GET {base_url}/models:
-  * does this server serve the model we are about to name?
-  * is its context at least as large as our worst-case request?
+Two questions, both answered by `GET {base_url}/models`:
+  * does the server serve the model the stage is about to request?
+  * is its context at least as large as the worst-case request?
 """
 from __future__ import annotations
 

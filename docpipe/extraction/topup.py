@@ -1,31 +1,33 @@
 """
-topup.py – Re-read the one coordinate the stamp says moved, not the document.
+topup.py: Re-reads the one coordinate a stamp names as moved, instead of the
+whole document.
 
-A question is reworded, an option list grows a class the model can now choose,
-an evidence rule tightens. The stamp knows exactly which key moved and the
-resume then does the only thing it can: it reports the document stale and the
-next run harvests it from the first passage. For one axis of one parameter
-that is a corpus run to answer a question nothing else asked.
+A question is reworded, an option list gains a class the model can now choose,
+or an evidence rule tightens. The stamp knows exactly which key moved, and a
+resume then does the only thing it can: it reports the document stale, and the
+next run harvests it again from the first passage. For one axis of one
+parameter, that is a full corpus run spent answering a question nothing else
+asked.
 
-What this does instead: take the coordinate off the rows that carry it, walk
-the SAME sweep the harvest walks -- `runner.make_sweeper`, so there is one
-sweep and one set of numbers -- and write the answer back. Then carry that one
-stamp key forward and leave every other key exactly as it was, so a run that
-comes later still sees what it has to redo.
+This module instead takes the coordinate off the rows that carry it, walks the
+same sweep the harvest walks (`runner.make_sweeper`, so there is one sweep and
+one set of numbers), and writes the answer back. It then carries that one stamp
+key forward and leaves every other key exactly as it was, so a later run still
+sees what it has to redo.
 
-What it refuses to do is more important than what it does. A key that decided
-which rows exist, which passages were planned, or which model read them is not
-a coordinate: the rows are then not this run's product at all and the document
-is skipped whole rather than half-repaired. The frame is refused for the same
-reason one level up -- it decides how many passes a document gets.
+What the module refuses to touch matters more than what it does. A key that
+decided which rows exist, which passages were planned, or which model read them
+does not name a coordinate: the rows are then not this run's product at all,
+and the document is skipped whole rather than half repaired. The frame is
+refused for the same reason one level up, because it decides how many passes a
+document gets.
 
-And the old reading is put back whenever the re-sweep cannot better it. No
-coordinate of the two profiles is required, so an emptied one would pass
-verification in silence and the reading would be gone with nothing saying so.
-
-Not model-free and not index-free, unlike `--recheck` and `--remap`: it needs
-the database, the index, the embedder and a served model. What it saves is the
-plan, the row requests and the frame.
+The old reading is restored whenever the re-sweep fails to improve on it. No
+coordinate is required in either profile, so an emptied one would otherwise
+pass verification in silence, with the reading gone and nothing recording the
+loss. Unlike `--recheck` and `--remap`, the pass is neither model-free nor
+index-free: it needs the database, the index, the embedder, and a served model,
+and what it saves is the plan, the row requests, and the frame.
 
 Author: Felix Vossel
 """

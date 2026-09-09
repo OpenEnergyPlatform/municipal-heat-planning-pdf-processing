@@ -1,17 +1,19 @@
 """
-captions.py – What a caption looks like, and where a table's title really sits.
+captions.py: Defines what a caption looks like, and finds where a table's
+title really sits.
 
 Stage 2 links a caption block to a table by distance, and in a plan whose
-tables carry a rounding footnote it links the footnote. The sentence that
-names the table then stands unlinked in the section text, a few words before
-the table's own placeholder. Measured over Kassel: 15 of 89 tables were
-captioned "Hinweis: Wegen der Rundung von Zahlenwerten ...".
+tables carry a rounding footnote it links the footnote instead. The
+sentence that names the table then stands unlinked in the section text, a
+few words before the table's own placeholder. Measured over Kassel, 15 of
+89 tables were captioned with the rounding footnote's own sentence rather
+than their real title.
 
-Both ends of the pipeline need the same rule about that -- Stage 3, which is
-assembling the section text when the placeholder is written, and the read
-side, which has only the finished database. A second copy of the rule is how
-the section text and the stored title start disagreeing, which is the defect
-this module exists to fix. So it lives above both.
+Both ends of the pipeline need the same rule about that: Stage 3, which
+assembles the section text when the placeholder is written, and the read
+side, which has only the finished database. A second copy of the rule is
+how the section text and the stored title start disagreeing, the defect
+this module exists to fix. So the rule lives above both.
 
 Author: Felix Vossel
 """

@@ -1,22 +1,24 @@
 """
-recheck.py – The evidence rule, applied to a harvest that was written without it.
+recheck.py: Reapplies the evidence rule to a harvest written before the rule
+existed.
 
-A coordinate is only as good as the passage cited for it, and for one corpus
-run that passage was checked against the wrong thing: merge_field held it to
-sitting verbatim in the source and never to containing the answer. 27.6% of
-the years that came out of that run cite a passage with no year in it, one of
-them the caption "Tabelle 1: Bestehende Wärmenetze und Heiz(kraft)werke"
-offered as evidence for 1990.
+A coordinate is only as good as the passage cited for it. For one corpus run,
+that passage was checked against the wrong thing: `merge_field` held it to
+sitting verbatim in the source, never to containing the answer. In that run,
+27.6% of the years cite a passage that contains no year at all; one of them is
+a table caption listing existing heat networks and heating plants, offered as
+evidence for the year 1990.
 
-Both halves are in the harvest files already — the wording in <axis>_raw, the
-passage in <axis>_quote — so the rule can be applied to what is written
-without asking a model anything. That is the whole point of keeping the
-evidence next to the claim: a rule that tightens can be enforced backwards.
+Both halves of a coordinate are already in the harvest file, the wording in
+`<axis>_raw` and the passage in `<axis>_quote`, so the rule can be applied to
+what is written without asking a model anything. Keeping the evidence next to
+the claim is what makes this possible: a rule that tightens later can still be
+enforced on an earlier harvest.
 
-What this cannot do is fill anything. A coordinate dropped here is a
-coordinate the next run has to read properly, and it is marked so the
-difference between "the plan does not say" and "the last run did not check"
-stays visible instead of collapsing into an empty cell.
+The pass cannot fill a coordinate it drops. A dropped coordinate is one the
+next run has to read again, and it is marked so that the difference between the
+plan not stating a value and the last run not having checked it stays visible
+instead of collapsing into an empty cell.
 
 Author: Felix Vossel
 """

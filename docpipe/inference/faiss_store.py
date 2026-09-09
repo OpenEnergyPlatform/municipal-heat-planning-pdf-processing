@@ -1,9 +1,11 @@
 """
-faiss_store.py – Global index loading + ephemeral sub-index retrieval.
+faiss_store.py: Loads the global index and runs scoped retrieval
+against an ephemeral sub-index.
 
-The corpus is one global FAISS IndexIDMap(IndexFlatIP). A search is scoped to a
-document + a set of embedding types by reconstructing just the candidate vectors
-into a small in-memory IndexFlatIP and searching that.
+The corpus is one global FAISS `IndexIDMap(IndexFlatIP)`. A search is
+scoped to a document and a set of embedding types by reconstructing
+only the candidate vectors into a small in-memory `IndexFlatIP` and
+searching that.
 
 Author: Felix Vossel
 """

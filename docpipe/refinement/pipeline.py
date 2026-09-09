@@ -1,8 +1,15 @@
 """
-pipeline.py – Orchestration of the text-refinement module.
+pipeline.py: Orchestrates the textrefinement stage.
 
-Refines one document directory, or every document subdirectory under a
-processed root (--batch). See ``_build_parser`` for the CLI.
+Refines one document directory, or every document subdirectory under
+a processed root with `--batch`, sending each document's Stage 3
+sections through the LLM refinement pass in refine.py.
+`_build_parser` lists the CLI flags.
+
+Before refining, `assert_serving` (docpipe.llm_preflight) checks that
+the configured LLM server accepts a request of the worst-case size
+this stage can send, so an undersized server is caught before the
+first document rather than mid-run.
 
 Author: Felix Vossel
 """

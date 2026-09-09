@@ -1,36 +1,39 @@
 """
-edits.py – Apply a model's edit list to a section, and refuse the ones that
-do not hold up.
+corrections.py: Applies a model's edit list to a section and refuses
+the edits that do not hold up.
 
-The refinement stage used to have the model hand back the whole section. It is
-mostly retyping: over 60 ar6 documents, 28% of sections came back byte-identical
-and the median similarity was 99%, while only 166 of 4887 sections were real
-conversions. The expensive half of an LLM call is the part it writes, so the
-stage paid its worst resource to copy text.
+Refinement used to have the model return the whole section, which is
+mostly retyping: measured over 60 ar6 documents, 28% of sections came
+back byte-identical, the median similarity was 99%, and only 166 of
+4887 sections were real conversions, so the stage spent the expensive
+part of the call, the tokens it writes, on copying its own input.
 
-Asking for the changes instead is cheap — and unsafe unless every one of them
-is checked against the original first. A find/replace the model half-remembered
-would otherwise rewrite a sentence nobody asked it to touch, or match in two
-places and change the wrong one. Nothing here is applied on trust:
+Asking for the changes instead is cheap, and unsafe unless every one
+of them is checked against the original first: a find or replace the
+model half-remembered would otherwise rewrite a sentence nobody asked
+it to touch, or match in two places and change the wrong one. Nothing
+here is applied on trust. The text to find must be present, exactly
+once, in the section as the model received it, the only text it can
+honestly be quoting. Where two corrections cover the same passage,
+the longer one wins and the other is reported as overlapping. An
+edit may not add, drop or alter a [pN_tblM] or [pN_imgM] placeholder.
+The edits together may not remove more than MAX_SHRINK of the
+section.
 
-  * the text to find must be present, exactly once, in the section AS THE MODEL
-    RECEIVED IT — the only text it can honestly be quoting;
-  * where two corrections cover the same passage, the longer one wins and the
-    other is reported as overlapping;
-  * an edit may not add, drop or alter a [pN_tblM] / [pN_imgM] placeholder;
-  * the edits together may not remove more than MAX_SHRINK of the section.
+The first two rules used to be one: each find was looked up in the
+text left by its predecessors. That punished the model for following
+the instruction to quote whole sentences, since two fixes to one
+sentence then overlap by construction, and the second was reported as
+quoting text absent from the document when the text had in fact been
+edited away moments earlier by the first. Of 4828 corrections checked
+this way on one book, 1144 were refused for that reason.
 
-The first two rules used to be one: each find was looked up in the text left by
-its predecessors. That quietly punished the prompt for working. The model is
-told to quote whole sentences so that a quote is unique, which makes two fixes
-to one sentence overlap by construction — and the second then failed to find an
-anchor its predecessor had just rewritten, and was reported as text that was
-never in the document. It was; it had been edited away moments earlier. Of 4828
-corrections on one book, 1144 were refused that way.
+A rejected edit is dropped and reported, never guessed at. If the
+caller finds anything in the returned report, keeping the original
+section is the safe choice, since the model's picture of it evidently
+did not match.
 
-A rejected edit is dropped and reported, never guessed at. If the caller sees
-anything in `rejected`, the honest move is to keep the original section — the
-model's picture of it evidently did not match.
+Author: Felix Vossel
 """
 from __future__ import annotations
 

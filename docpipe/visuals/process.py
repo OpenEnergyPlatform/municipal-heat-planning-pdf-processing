@@ -1,5 +1,12 @@
 """
-process.py – Core processing logic for table and figure enrichment.
+process.py: Core processing logic for table and figure enrichment.
+
+Sends one table or figure image to the vision model, together with
+its section context, and returns a copy of the item carrying the
+model's markdown or description. A table's transcription passes a
+quality gate and gets one retry with a stronger prompt on failure; a
+call that never returns valid JSON falls back to a plain text
+request before the item is marked failed.
 
 Author: Felix Vossel
 """

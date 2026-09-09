@@ -1,9 +1,10 @@
 """
-code_exec.py – Client for the sandboxed code-execution service: POSTs LLM-written
-Python to `sandbox_service.py` at `CODE_EXEC_URL`.
+code_exec.py: Client for the sandboxed code execution service.
 
-Never raises, so a sandbox outage degrades to "no calculation" rather than
-breaking a query. The feature is OFF unless `CODE_EXEC_URL` is set (is_enabled()).
+The module posts LLM-written Python to `sandbox_service.py` at the
+address `CODE_EXEC_URL` names. It never raises: a sandbox outage
+degrades to no calculation rather than breaking a query. The feature
+stays off unless `CODE_EXEC_URL` is set, which `is_enabled()` reports.
 """
 from __future__ import annotations
 

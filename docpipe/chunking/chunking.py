@@ -1,5 +1,13 @@
 """
-chunking.py – Build embedding inputs from merged section data.
+chunking.py: Builds embedding inputs from merged section data.
+
+For each section, produces a text input and, when the section has a
+title, a title input; for each table and figure, a text input and,
+when its image file exists on disk, a vision-language input. Table
+and figure placeholders inside a section's text are replaced by the
+referenced item's caption before the section is embedded. A section
+longer than the configured word budget is truncated, and the cut is
+logged rather than left silent.
 
 Author: Felix Vossel
 """

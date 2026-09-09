@@ -1,12 +1,12 @@
 """
-app.py – Streamlit RAG chat over a docpipe corpus. The only module that imports
-Streamlit.
+app.py: Streamlit RAG chat over a docpipe corpus, the only module in this
+package that imports Streamlit.
 
 What the corpus is about comes from the profile: its catalog supplies the
 labels, the filters and the detail shown for a selected document. With a
-graph configured (INFERENCE_KG_TTL_PATH, the file `--serialize` wrote) a
-question goes to the graph first and to the documents only when the graph
-says why it has no answer.
+graph configured (`INFERENCE_KG_TTL_PATH`, the file `--serialize` wrote) a
+question goes to the graph first, and to the documents only when the graph
+states why it has no answer.
 
 Run:
     DOCPIPE_PROFILE=kwp streamlit run scripts/inference_app/app.py \\

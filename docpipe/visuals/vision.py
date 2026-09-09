@@ -1,8 +1,10 @@
 """
-vision.py – Vision-model interaction layer (OpenAI-compatible API).
+vision.py: Vision model interaction layer over an OpenAI compatible
+API.
 
-Client creation, model availability checks, and the chat-completions call with
-a base64 image + JSON response parsing.
+Creates the client, checks model availability, and makes the chat
+completions call that sends a base64 encoded image and parses the
+JSON response.
 
 Author: Felix Vossel
 """

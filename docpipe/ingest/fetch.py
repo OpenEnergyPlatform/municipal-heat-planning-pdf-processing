@@ -1,5 +1,12 @@
 """
-fetch.py – Getting a source PDF onto disk and counting its pages.
+fetch.py: Downloads a source PDF to disk and counts its pages.
+
+download_pdf sends a browser User-Agent, because municipal sites answer a
+default requests client with 403, and writes the response through a temporary
+file before the atomic rename, so a killed job leaves no partial PDF for a
+later run to reuse. get_num_pages and download_pdf both check the file for a
+%PDF header before handing it to PyMuPDF, which can segfault on a truncated or
+non-PDF file rather than raise.
 
 Author: Felix Vossel
 """
