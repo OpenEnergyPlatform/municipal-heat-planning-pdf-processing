@@ -510,7 +510,11 @@ def _render_kg(values: list) -> None:
         st.markdown(f"**{value['number']} {hooks.label(value['unit'])}** · "
                     f"{value['year']} · {hooks.label(value['quantity'])} · "
                     f"{hooks.label(value['aggregation'])}")
-        about = [hooks.label(iri) for iri in (value.get("abouts") or "").split()]
+        # Carrier and sector come back under one predicate; the spec's own
+        # lists say which is which, so the caption names the axis.
+        about = [f"{axis or '?'}: " + ", ".join(hooks.label(iri) for iri in iris)
+                 for axis, iris in kg_route.by_axis(
+                     hooks.spec, hooks.axes, (value.get("abouts") or "").split())]
         st.caption("🏷 " + " · ".join([value["partLabel"]] + about))
         level = kg_route.trust_level(value["trust"], hooks.prose)
         if level == kg_route.LEVEL_C:

@@ -892,12 +892,22 @@ def test_the_year_question_names_where_to_look_and_in_which_order():
                      "(4) die Überschrift"):
             assert step in question, step
         assert "ANDEREN Tabelle gilt nicht" in question
-        # A period is a convention, and one the graph has to be told about.
-        assert "LETZTE Jahr in value" in question
-        assert "Zeitraum wörtlich in value_raw" in question
         assert question.startswith("Für welches Kalenderjahr"), (
             "the aggregation is an integral over that year, so the question "
             "asks for the year it is integrated over")
+        if parameter.uri == "heat_load":
+            # A watt is not a sum over a year, so the period rule of the two
+            # amounts does not apply; what does is the year a plant was
+            # counted in, which is not the year it was built.
+            assert "gilt diese Leistung?" in question
+            assert "Jahressumme" not in question
+            assert "Bestandsaufnahme, nicht ihr Baujahr" in question
+            continue
+        # A period is a convention, and one the graph has to be told about.
+        assert "gilt diese Jahressumme?" in question
+        assert "LETZTE Jahr in value" in question
+        assert "Zeitraum wörtlich in value_raw" in question
+    assert "heat_load" in {p.uri for p in NUMERIC}, "the branch above ran"
 
 
 def test_the_scenario_question_can_recognise_a_stock_take():

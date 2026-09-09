@@ -125,7 +125,17 @@ def load_graph(ttl_path) -> tuple:
 
 
 def load_graph_from_text(text: str) -> tuple:
-    """The same, from a string. rdflib is imported here and nowhere above."""
+    """The same, from a string. rdflib is imported here and nowhere above.
+
+    The serializer writes the prefix header once per run, so a file made of
+    several runs carries several headers, which is legal Turtle -- and a
+    fragment cut from a run's second document onward carries none and
+    would not parse. That case is named here rather than left to rdflib's
+    parser error on a prefixed name.
+    """
+    if not re.search(r"^\s*@prefix\s", text, re.M):
+        raise ValueError("no @prefix line: this is a fragment of a run, not "
+                         "the file --serialize wrote")
     from rdflib import Graph
     graph = Graph()
     graph.parse(data=text, format="turtle")
@@ -188,6 +198,35 @@ def to_coordinates(task: str, spec, axes, ask) -> dict:
         uri = parameter.axes[slot.name].label_to_uri().get(fold_label(answer))
         if uri is not None:
             out[slot.name] = uri
+    return out
+
+
+def by_axis(spec, axes, iris) -> list:
+    """[(axis name, [iri, ...])] in the profile's axis order, each IRI under
+    the axis whose own list holds it, and the rest under "".
+
+    Membership in the spec's lists and no third copy: the serializer writes a
+    carrier and a sector under the same predicate, so the query hands them
+    back mixed and only the lists can tell them apart. An IRI is matched to
+    a list entry by its bare id, the way the serializer minted it from one.
+    """
+    lists: dict = {}
+    for parameter in spec.parameters:
+        for name, axis in (parameter.axes or {}).items():
+            if name in axes and axis.vocabulary:
+                lists.setdefault(name, set()).update(axis.vocabulary)
+    out, placed = [], set()
+    for name in axes:
+        keys = lists.get(name) or ()
+        mine = [iri for iri in iris if iri not in placed
+                and any(iri == key or iri.endswith("/" + key)
+                        or iri.endswith("#" + key) for key in keys)]
+        if mine:
+            out.append((name, mine))
+            placed.update(mine)
+    rest = [iri for iri in iris if iri not in placed]
+    if rest:
+        out.append(("", rest))
     return out
 
 

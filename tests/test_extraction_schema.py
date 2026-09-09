@@ -191,12 +191,20 @@ def test_the_stamp_the_runner_writes_validates():
     # And it is the resume's whole basis, so a missing key is not tolerated.
     assert not VALIDATOR(build(spec)["stamp"]).is_valid(
         {k: v for k, v in stamp.items() if k != "spec"})
-    # What a second reading wrote into it is described and optional. The
-    # branch is additionalProperties: False, so an undescribed key would make
-    # every reviewed document's stamp invalid; required, it would make every
-    # unreviewed one invalid.
-    assert VALIDATOR(build(spec)["stamp"]).is_valid(
+
+
+def test_the_stamp_a_review_writes_validates():
+    """What a second reading wrote into the stamp is described and optional.
+    The branch is additionalProperties: False, so an undescribed key would
+    make every reviewed document's stamp invalid -- the stamp `already_done`
+    reads -- and a required one would make every unreviewed stamp invalid."""
+    stamp = runner._stamp_current("a" * 64, "b" * 16)
+    spec = load_spec(PROFILES / "kwp" / "extraction_spec.json")
+    validator = VALIDATOR(build(spec)["stamp"])
+    assert validator.is_valid(
         {**stamp, "review/prompt": "a" * 64, "review/model": "ein-modell"})
+    assert not validator.is_valid({**stamp, "review/nonsense": "x"})
+    assert not validator.is_valid({**stamp, "review/prompt": 5})
 
 
 def kwp_promises(spec) -> set:

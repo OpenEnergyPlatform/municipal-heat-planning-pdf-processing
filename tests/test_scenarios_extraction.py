@@ -1445,8 +1445,14 @@ def test_every_axis_of_this_spec_says_where_its_answer_may_be_read(spec):
     # `local` stays out of it on purpose: it is a statement about pages, and a
     # harvest row records an owner and not a page distance.
     assert ("scenario_region", "scenario") not in kg.OWN_EVIDENCE
-    # And nothing claims a transcribed page: ar6.db Documents has no
-    # page_text_transcribed column to read one from.
+
+
+def test_this_corpus_declares_no_transcribed_page():
+    """Its own test so the assertion is not lost with the one it used to ride
+    on: nothing claims a transcribed page, because ar6.db Documents has no
+    page_text_transcribed column to read one from. Set True, it would cap
+    every level at B."""
+    from profiles.scenarios import kg
     assert kg.PAGE_TRANSCRIBED is False
 
 

@@ -63,6 +63,15 @@ KEEP_ASKED = KEEP_READ + (fields.SAID_UNSTATED,)
 # fold_claims, and rebuilt by them.
 NOT_A_CLAIM = ("kind", "tier", "provenance", "flags")
 
+# The one prompt sha a sweep can answer for: the field prompt is the only
+# prompt `sweep_field` uses, so a document whose stamp says it moved can be
+# re-read coordinate by coordinate. But it means every asked coordinate of
+# every row, and that is a corpus-sized decision nobody should make by
+# accident -- so it is swept only when `--top-up-key` names it. The same
+# string as runner.FIELD_PROMPT_ID, pinned by a test rather than imported:
+# the runner imports this module.
+FIELD_PROMPT = "extraction/field"
+
 
 def actionable(changed, spec: Spec, frame_names=(), *, dynamic_ok: bool = True,
                only=None) -> tuple:
@@ -77,6 +86,9 @@ def actionable(changed, spec: Spec, frame_names=(), *, dynamic_ok: bool = True,
     keys, blocked = [], []
     wanted = set(only or ())
     for key in sorted(changed or ()):
+        if key == FIELD_PROMPT:
+            (keys if key in wanted else blocked).append(key)
+            continue
         # `slot_of` is the whole gate and it is narrow on purpose: it answers
         # only for `axis/<uri>/<name>` naming a coordinate this spec still
         # asks. `value/<uri>` is the list a row maker answers from and no
@@ -325,6 +337,10 @@ def top_up_file(path: Path, spec: Spec, current: dict, deps: dict, *,
 
     settled = set(keys)
     for key in keys:
+        if key == FIELD_PROMPT:
+            if not _sweep_every_asked(tuples, doc_spec, deps, stats):
+                settled.discard(key)
+            continue
         parameter, slot = slot_of(doc_spec, key)
         mine = [r for r in tuples if r.get("parameter") == parameter.uri]
         if not mine:
@@ -363,6 +379,28 @@ def top_up_file(path: Path, spec: Spec, current: dict, deps: dict, *,
     if stamp_forward(stamp_path, current, settled):
         stats["stamps carried forward"] += 1
     return stats
+
+
+def _sweep_every_asked(tuples: list, doc_spec: Spec, deps: dict,
+                       stats: Counter) -> bool:
+    """The field prompt moved: every asked, unframed coordinate of every row
+    is re-read. True when every one of them settled.
+
+    A derived coordinate is left alone -- no request ever asked it, so no
+    prompt read it -- and so is the frame, for the reason `actionable` gives.
+    """
+    settled = True
+    frame = set(deps.get("frame_names") or ())
+    for parameter in doc_spec.parameters:
+        mine = [r for r in tuples if r.get("parameter") == parameter.uri]
+        if not mine:
+            continue
+        for slot in fields.asked_slots(parameter):
+            if slot.name in frame:
+                continue
+            if not _sweep_one(mine, parameter, slot, doc_spec, deps, stats):
+                settled = False
+    return settled
 
 
 def _sweep_one(rows: list, parameter, slot, doc_spec: Spec, deps: dict,

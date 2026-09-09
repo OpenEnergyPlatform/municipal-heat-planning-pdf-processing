@@ -14,6 +14,8 @@ exists, and why it reports and never decides.
 import json
 from pathlib import Path
 
+import pytest
+
 from docpipe.extraction import fields, runner
 from docpipe.extraction.pipeline import Batch, Source, WorkItem, apply_frame
 from docpipe.extraction.spec import load as load_spec
@@ -445,3 +447,28 @@ def test_a_document_with_no_municipality_still_gets_an_anchor(kwp_db):
     db, con = kwp_db
     assert profile.document_context(con, 1) == {}
     assert profile.document_context(con, 4711) == {}
+
+
+# ---------------------------------------------------------------------------
+# A frame coordinate is never held to the row's own source
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("name", sorted(
+    p.parent.name for p in PROFILES.glob("*/extraction_spec.json")))
+def test_no_frame_axis_is_held_to_the_rows_own_source(name):
+    """`apply_frame` writes a frame coordinate READ without consulting
+    `evidence_is_local` -- the frame is found once per document, on purpose.
+    An axis that is both in the frame and held to the row's own source would
+    therefore produce `nonlocal:<axis>` on nearly every tuple, and nothing
+    would say why. Refused here, the day a profile declares it."""
+    from docpipe.extraction.spec import own_evidence
+    from docpipe.profile import load_profile
+    spec = load_spec(json.loads(
+        (PROFILES / name / "extraction_spec.json").read_text(encoding="utf-8")))
+    frame = load_profile(name).component("extraction", "FRAME") or ()
+    held = {axis for _uri, axis in own_evidence(spec)}
+    assert not held & set(frame), sorted(held & set(frame))
+    # Not vacuous: the kwp frame is real, and both profiles hold something.
+    if name == "kwp":
+        assert frame == ("scenario", "year")
+    assert held, name

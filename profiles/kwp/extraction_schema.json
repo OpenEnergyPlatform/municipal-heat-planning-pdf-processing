@@ -4620,7 +4620,7 @@
        "prefix": "obo",
        "role": "edge"
       },
-      "x-question": "Für welches Kalenderjahr gilt diese Jahressumme? Vierstellig. Das Jahr steht fast nie in der Zeile der Zahl selbst. Sieh in dieser Reihenfolge nach: (1) die Kopfzelle der Spalte, in der die Zahl steht, (2) der Titel der eigenen Tabelle, (3) der Satz, der die Tabelle in ihrem Abschnitt ankündigt (\"Für das Jahr 2040 ergeben sich die in den nachfolgenden Tabellen zusammengestellten Kennzahlen\"), (4) die Überschrift des Abschnitts. Das Jahr im Titel einer ANDEREN Tabelle gilt nicht, auch wenn dieser Titel im selben Abschnitt steht. Nennt die Quelle einen Zeitraum statt eines Jahres (\"Durchschnittswert der Jahre 2022-2024\"), dann gehört das LETZTE Jahr in value und der Zeitraum wörtlich in value_raw."
+      "x-question": "Für welches Kalenderjahr gilt diese Leistung? Vierstellig. Das Jahr steht fast nie in der Zeile der Zahl selbst. Sieh in dieser Reihenfolge nach: (1) die Kopfzelle der Spalte, in der die Zahl steht, (2) der Titel der eigenen Tabelle, (3) der Satz, der die Tabelle in ihrem Abschnitt ankündigt (\"Für das Jahr 2040 ergeben sich die in den nachfolgenden Tabellen zusammengestellten Kennzahlen\"), (4) die Überschrift des Abschnitts. Das Jahr im Titel einer ANDEREN Tabelle gilt nicht, auch wenn dieser Titel im selben Abschnitt steht. Eine Bestandsanlage trägt das Jahr der Bestandsaufnahme, nicht ihr Baujahr."
      },
      "year_quote": {
       "description": "The verbatim passage carrying 'year'. Present exactly when year_state is 'read'.",
