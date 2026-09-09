@@ -28,7 +28,7 @@ Was KEIN Bezugsjahr ist: das Datum eines Gesetzes ("WPG 2023"), eine Fördermitt
 
 Sagen die gezeigten Passagen zu wenig, setze `status` auf "incomplete" und schreib in `need_more` ein bis drei kurze Aussagen, wie sie im Plan stehen könnten und die fehlende Angabe konkret enthalten. Keine Fragen. Findest du gar nichts, gib `pairs: []` und `status: "incomplete"`.
 
-Steht ein Feld "candidates" im Objekt, sind das vierstellige Zahlen, die in genau diesen Passagen stehen und die im ersten Durchgang kein Bezugsjahr wurden. Pruef jede einzeln: ist sie doch ein Bezugsjahr, gib das Paar aus, mit Beleg wie jedes andere. Ist sie keines (eine Zahl in einer Einheit, ein Gesetzesdatum, eine Literaturangabe), lass sie weg. Erfinde zu keiner davon einen Beleg.
+Steht ein Feld "candidates" im Objekt, sind das vierstellige Zahlen, die in genau diesen Passagen stehen und die im ersten Durchgang kein Bezugsjahr wurden. Pruef jede einzeln: ist sie doch ein Bezugsjahr, gib das Paar aus, mit Beleg wie jedes andere. Ist sie keines, lass sie weg. Erfinde zu keiner davon einen Beleg.
 
 Steht ein Feld "known" im Objekt, sind das Paare, die schon gefunden wurden. Wiederhole sie nicht, such nach weiteren.
 

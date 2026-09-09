@@ -68,7 +68,8 @@ from .pipeline import (Source, WorkItem, apply_frame, batch_uri,
                        build_sweeps, cell_index as pipeline_cell_index,
                        fold_batch, follow_up, group_items, harvest_document,
                        merge_field, mark_unanswered, open_rows, plan_document,
-                       route_claims, rows_from_reply, window_sources,
+                       route_claims, rows_from_reply, sweep_key,
+                       window_sources,
                        write_report)
 from .fields import EXHAUSTED
 from .queries import expand as expand_queries
@@ -187,11 +188,20 @@ FRAME_ROUNDS = int(os.environ.get("EXTRACT_FRAME_ROUNDS", "3"))
 # than the plan: a scenario stands in a heading and a year in a column header,
 # and neither is found by looking at two passages at a time.
 FRAME_SOURCES = int(os.environ.get("EXTRACT_FRAME_SOURCES", "12"))
+# And how many characters of passage. The same budget one value request gets,
+# because the frame reads the whole plan in as many requests as that takes:
+# the window of the run this was measured on was 32,047 tokens and the plan is
+# fifty passages, so a frame that read them in one request would not fit and a
+# frame that read the first twelve would miss the rest.
+FRAME_CHARS = int(os.environ.get("EXTRACT_FRAME_CHARS", str(BATCH_CHARS)))
 # What counts as a calendar year for the deterministic cross-check. Not a
 # reading and never one: it only says how many year-shaped numbers stand in
 # the very passages the model was shown and did not name. A plan writes 2045
 # as a target and 2045 as a megawatt-hour, so this reports and decides
 # nothing.
+# What both anchor prompts ask a sentence to be, so that `usable_anchor` and
+# the prompts cannot drift apart.
+ANCHOR_WORDS = (12, 35)
 FRAME_YEAR_MIN = int(os.environ.get("EXTRACT_FRAME_YEAR_MIN", "1990"))
 FRAME_YEAR_MAX = int(os.environ.get("EXTRACT_FRAME_YEAR_MAX", "2100"))
 _YEAR_RE = re.compile(r"(?<![0-9])([0-9]{4})(?![0-9])")
@@ -881,7 +891,7 @@ def document_anchor(spec: Spec, context: Optional[dict] = None,
                 ).choices[0].message.content
                 phrase = ((_loads_object(reply) or {}).get("phrase") or "")
                 phrase = phrase.strip() if isinstance(phrase, str) else ""
-                if len(phrase) > 20:
+                if usable_anchor(phrase):
                     return parameter.uri, [phrase]
             except Exception as exc:
                 log.warning("phrase %s attempt %d failed: %s",
@@ -1095,62 +1105,85 @@ def frame_pairs(reply: Optional[dict], slots: list, sources: list) -> list:
     return out
 
 
+
+def frame_windows(sources: list, max_sources: int = 0,
+                  max_chars: int = 0) -> list:
+    """The plan's passages in windows one frame request can hold.
+
+    All of them, not a prefix. A pair may only be quoted from a passage that
+    was shown (`frame_pairs`), so a year printed past the cut cannot enter the
+    frame at all, and a pair the frame does not have loses every value of that
+    pair. Measured on Kassel: a frame over the first 12 of 50 passages found
+    2 pairs, 2040 and 2024, and 174 of the 234 table tuples the hand reading
+    covers were then stamped with a year printed on another table.
+    """
+    max_sources = max_sources or FRAME_SOURCES
+    max_chars = max_chars or FRAME_CHARS
+    windows: list = []
+    current: list = []
+    chars = 0
+    for source in sources or ():
+        size = len(source.text or "")
+        if current and (len(current) >= max_sources
+                        or chars + size > max_chars):
+            windows.append(current)
+            current, chars = [], 0
+        current.append(source)
+        chars += size
+    if current:
+        windows.append(current)
+    return windows
+
+
 def find_frame(sources: list, slots: list, document_id: int, ask: Callable,
                more_sources: Optional[Callable] = None,
                probes: Optional[list] = None) -> tuple:
-    """(pairs, status, missed) — which scenarios and years this document has.
+    """(pairs, status, missed) - which scenarios and years this document has.
 
-    Asked once per document, before any value. Every value question is then
-    one of these pairs, which is what takes the coordinate out of the model's
-    hands: it is not asked which year a number belongs to, it is asked what
-    the number for THIS year is.
+    Asked once per document and over every window of the plan, before any
+    value. Every value question is then one of these pairs, which is what
+    takes the coordinate out of the model's hands: it is not asked which year
+    a number belongs to, it is asked what the number for THIS year is.
 
     `missed` is the deterministic cross-check: the year-shaped numbers in the
-    very passages the model was shown that it did not name. It is a finding
-    for the second pass, never an addition to the frame.
+    passages that no pair names. It is a finding for the second pass, never an
+    addition to the frame, and the second pass shows the window that CARRIES
+    the missed year instead of the first window again.
     """
     if not slots:
         return [], "complete", []
-    shown = list(sources[:FRAME_SOURCES])
-    seen = {(s.owner_kind, s.owner_id) for s in shown}
+    number = [s for s in slots if s.kind == fields.NUMBER]
+    windows = frame_windows(sources)
     pairs: list = []
-    status = "exhausted"
-    for round_index in range(max(1, FRAME_ROUNDS)):
-        usage: dict = {}
-        reply = ask(shown, slots, document_id, pairs, usage)
-        found = frame_pairs(reply, slots, shown)
+    finished = True
+
+    def take(found) -> None:
         known = {tuple(p.get(s.name) for s in slots) for p in pairs}
-        pairs += [p for p in found
-                  if tuple(p.get(s.name) for s in slots) not in known]
+        pairs.extend(p for p in found
+                     if tuple(p.get(s.name) for s in slots) not in known)
+
+    def one(shown: list, attempt: int, recheck: Optional[list] = None) -> str:
+        usage: dict = {}
+        reply = ask(shown, slots, document_id, pairs, usage, recheck)
+        take(frame_pairs(reply, slots, shown))
         said = str((reply or {}).get("status") or "").strip()
         trace.event("frame", document_id, pairs=len(pairs),
                     scenarios=sorted({str(p.get(slots[0].name))
                                       for p in pairs}),
-                    years=sorted({p[s.name] for p in pairs for s in slots
+                    years=sorted({p[s.name] for p in pairs for s in number
                                   if isinstance(p.get(s.name), int)}),
-                    missed=[], sources=[[s.owner_kind, s.owner_id]
-                                        for s in shown],
+                    missed=list(recheck or []),
+                    sources=[[s.owner_kind, s.owner_id] for s in shown],
                     status="complete" if said == "complete" else "exhausted",
-                    attempt=round_index + 1,
+                    attempt=attempt,
                     prompt_tokens=usage.get("prompt_tokens"),
                     completion_tokens=usage.get("completion_tokens"),
                     ms=usage.get("ms", 0))
-        if said == "complete" and pairs:
-            status = "complete"
-            break
-        if more_sources is None or round_index + 1 >= max(1, FRAME_ROUNDS):
-            break
-        wanted = [q for q in (reply or {}).get("need_more") or []
-                  if isinstance(q, str) and len(q) > 20] or list(probes or ())
-        if not wanted:
-            break
-        fresh = more_sources(document_id, wanted, set(seen)) or []
-        if not fresh:
-            break
-        for source in fresh:
-            seen.add((source.owner_kind, source.owner_id))
-        shown = list(fresh[:FRAME_SOURCES])
-    number = [s for s in slots if s.kind == fields.NUMBER]
+        return said
+
+    for index, shown in enumerate(windows):
+        if one(shown, index + 1) != "complete":
+            finished = False
 
     def _not_named() -> list:
         if not number:
@@ -1160,23 +1193,34 @@ def find_frame(sources: list, slots: list, document_id: int, ask: Callable,
         return sorted(years_in_sources(sources) - named)
 
     missed = _not_named()
-    if missed:
+    for index, shown in enumerate(windows):
+        if not missed:
+            break
+        here = sorted(years_in_sources(shown) & set(missed))
+        if not here:
+            continue
         # The second pass, and it is the whole reason the deterministic scan
-        # exists. A pair the frame does not have is not one value lost, it is
-        # every value of that pair lost, and lost silently -- so what the scan
-        # found and the model did not name is put back in front of it once,
-        # by name, over everything the plan holds.
-        usage = {}
-        reply = ask(list(sources[:FRAME_SOURCES]), slots, document_id, pairs,
-                    usage, missed)
-        found = frame_pairs(reply, slots, list(sources[:FRAME_SOURCES]))
-        known = {tuple(p.get(s.name) for s in slots) for p in pairs}
-        added = [p for p in found
-                 if tuple(p.get(s.name) for s in slots) not in known]
-        pairs += added
-        if added:
-            status = "complete" if status == "complete" else status
+        # exists. What the scan found and the model did not name is put back
+        # in front of it once, by name, together with the passages it stands
+        # in.
+        one(shown, index + 1, here)
         missed = _not_named()
+
+    # Nothing in the whole plan carries a pair. Only then is it worth looking
+    # past the plan, and the passages that come back are read like any other
+    # window.
+    for round_index in range(1, max(1, FRAME_ROUNDS)):
+        if pairs or more_sources is None or not probes:
+            break
+        seen = {(s.owner_kind, s.owner_id) for s in sources or ()}
+        fresh = more_sources(document_id, list(probes), seen) or []
+        if not fresh:
+            break
+        for shown in frame_windows(fresh):
+            one(shown, round_index, None)
+        missed = _not_named()
+
+    status = "complete" if finished and pairs else "exhausted"
     trace.event("frame", document_id, pairs=len(pairs),
                 scenarios=sorted({str(p.get(slots[0].name)) for p in pairs}),
                 years=sorted({p[s.name] for p in pairs for s in number
@@ -1186,7 +1230,6 @@ def find_frame(sources: list, slots: list, document_id: int, ask: Callable,
                 status=status, attempt=0, prompt_tokens=None,
                 completion_tokens=None, ms=0)
     return pairs, status, missed
-
 
 def frozen_anchors(profile, spec: Spec) -> tuple:
     """(anchors, sha) the profile froze, or ({}, "") if it freezes none.
@@ -1362,6 +1405,26 @@ def make_anchors(spec: Spec, client=None, *, store: Optional[Path] = None,
         for anchor in anchors:
             log.info("   anchor %s: %s", uri, anchor)
     return out
+
+
+def usable_anchor(text: str) -> bool:
+    """Is this sentence usable as a search anchor?
+
+    What phrase.md and anchors.md both ask for and nothing checked: 12 to 35
+    words, and never a negation. An anchor is embedded and held against the
+    passages of the plan, so "Es liegen keine Angaben zum Ingenieurbuero vor"
+    retrieves the passages that say nothing, which is the opposite of what
+    the anchor is for. The floor used to be twenty characters.
+    """
+    words = (text or "").split()
+    if not ANCHOR_WORDS[0] <= len(words) <= ANCHOR_WORDS[1]:
+        return False
+    low = " ".join(words).casefold()
+    if any(phrase in low for phrase in ("nicht enthalten", "liegen nicht vor",
+                                        "nicht vor", "nicht angegeben")):
+        return False
+    return not {w.strip(".,;:").casefold() for w in words} & {"keine", "kein",
+                                                              "keinen"}
 
 
 def probe_texts(spec: Spec, templates: list, anchors: Optional[dict] = None) -> list:
@@ -2890,7 +2953,7 @@ def make_fieldwise_harvester(image_root: Optional[Path] = None,
 
     def harvest(batch, prior: Optional[list] = None) -> dict:
         reply = find_rows(batch, prior)
-        rows, orphans = rows_from_reply(batch, reply)
+        rows, orphans = rows_from_reply(batch, reply, frame_axes)
         if rows and batch.frame and frame_axes:
             # Before anything is asked. The sweep only offers a coordinate
             # that is still open, so projecting here is what makes the year
@@ -2899,7 +2962,7 @@ def make_fieldwise_harvester(image_root: Optional[Path] = None,
             # because every later window excluded the row's own source and
             # only that one could carry the year.
             written = apply_frame(rows, batch.frame, batch.frame_index,
-                                  frame_axes)
+                                  frame_axes, batch.sources, batch.frame_all)
             if written:
                 log.debug("   frame %s: %d coordinate(s) on %d row(s)",
                           batch.document_id, written, len(rows))
@@ -3123,7 +3186,7 @@ def harvest_batches(batches: list, harvest: Callable, *,
     submitted = len(batches)
 
     def one(batch):
-        sweep = sweeps[(batch.document_id, batch_uri(batch))]
+        sweep = sweeps[sweep_key(batch)]
         reply = harvest(batch, sweep.snapshot())
         reply = reply if isinstance(reply, dict) else {}
         if verify is not None:
@@ -4337,6 +4400,7 @@ def main(argv: Optional[list] = None) -> int:
                                          max_chars=BATCH_CHARS):
                     batch.frame = pair
                     batch.frame_index = index
+                    batch.frame_all = tuple(p for p in found if p)
                     batches.append(batch)
                     owner_of[id(batch)] = name
         sources = sum(len(b.items) for b in batches)

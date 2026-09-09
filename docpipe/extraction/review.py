@@ -43,7 +43,7 @@ from .remap import stamp_path_of
 from .spec import Spec, fold_label, own_evidence
 from .trust import (LEVEL_C, REVIEW_AGREE, REVIEW_DISAGREE, REVIEW_UNBACKED,
                     document_summary, trust)
-from .verify import quote_in, value_in_quote
+from .verify import MIN_QUOTE_CHARS, quote_in, value_in_quote
 
 log = logging.getLogger(__name__)
 
@@ -119,8 +119,11 @@ def backed(target, answer, wording: Optional[str], quote: str,
     answer. Written here against the same two functions the harvest uses, so
     the review's idea of evidence and the harvest's cannot drift apart.
     """
-    if not quote or not any(quote_in(source.text or "", quote)
-                            for source in shown):
+    if not quote or len(quote.strip()) < MIN_QUOTE_CHARS:
+        # The same floor the harvest has (`merge_field`), and for the same
+        # reason: a three-character quote names no place in a document.
+        return False
+    if not any(quote_in(source.text or "", quote) for source in shown):
         return False
     if isinstance(target, fields.Slot):
         return answer_in_quote(target, answer, wording, quote)

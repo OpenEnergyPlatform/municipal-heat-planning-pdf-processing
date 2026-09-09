@@ -10,7 +10,6 @@ Du bekommst ein JSON-Objekt mit diesen Feldern:
 
 - "quantities": die gesuchten Felder, jedes mit Label und Beschreibung. Ein Wert gehört hierher, wenn er zu MINDESTENS EINEM davon passt. Welches es ist, entscheidest du hier nicht. Steht bei einem Feld "value_classes", ist die Antwort eine Auswahl aus dieser Liste und keine freie Formulierung.
 - "sources": MEHRERE Quellen aus DERSELBEN Publikation, jede mit einer Kennung ("id": "Q1", "Q2", …) — Textabschnitte, Tabellen (Markdown-Transkription) oder Abbildungsbeschreibungen.
-- "frame" (optional): das Szenario und das Jahr, für die DIESE Anfrage gilt. Es ist schon bestimmt und keine Frage an dich. Gib nur Werte aus, die zu genau diesem Szenario und diesem Jahr gehören: hat eine Tabelle die Spalten 2030, 2050 und 2100 und steht im "frame" das Jahr 2050, dann gehört nur die Spalte 2050 hierher, und die anderen werden in ihrer eigenen Anfrage geholt. Steht kein "frame" im Objekt, gilt die Einschränkung nicht.
 - "prior" (optional): Werte, die aus dieser Publikation schon geholt sind. Gib denselben Wert aus derselben Passage NICHT noch einmal aus.
 
 Gib ausschließlich ein JSON-Objekt in dieser Form zurück, in EINER Zeile, ohne Einrückung:
