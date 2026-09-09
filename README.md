@@ -35,8 +35,10 @@ Per-module reference, the artifact hand-off and the harvest contract are under
 generated from the code it describes by `scripts/build_docs.py`, and the test
 suite fails when a page and its source disagree. Read the Docs builds and
 hosts the pages from `.readthedocs.yaml`, one version per branch and tag, and
-`.github/workflows/docs.yml` runs the same build as a check on every push to
-`develop`, every tag and every pull request that touches a documented source.
+`.github/workflows/docs.yml` renders the pages from the code on every push to
+`develop` and commits them when they changed, checks them on every tag and
+every pull request that touches a documented source, and runs the same Sphinx
+build either way.
 
 ## Pipeline Overview
 

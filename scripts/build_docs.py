@@ -791,23 +791,32 @@ def write(out_dir, pages: dict) -> list:
     return written
 
 
+def _pages_on_disk() -> tuple:
+    """The markdown files under docs/, by relative path.
+
+    Enumerates and does not read, like `_profile_names`: a stored page is
+    read through the door, so `check` holds no second one.
+    """
+    return tuple(sorted(path.relative_to(PAGES_DIR).as_posix()
+                        for path in PAGES_DIR.rglob("*.md")))
+
+
 def check() -> int:
     """Compare the checked-in pages with a fresh render. 0 when they agree."""
     pages = build()
+    on_disk = _pages_on_disk()
     bad = 0
     for rel in sorted(pages):
         if rel in HANDWRITTEN:
             continue
-        path = PAGES_DIR / rel
-        stored = (path.read_text(encoding="utf-8") if path.is_file() else "")
+        stored = read_source(f"docs/{rel}") if rel in on_disk else ""
         if stored == pages[rel]:
             continue
         bad += 1
         sys.stdout.writelines(difflib.unified_diff(
             stored.splitlines(True), pages[rel].splitlines(True),
             fromfile=f"docs/{rel}", tofile=f"{rel} (fresh)"))
-    for path in sorted(PAGES_DIR.rglob("*.md")):
-        rel = path.relative_to(PAGES_DIR).as_posix()
+    for rel in on_disk:
         if rel.startswith("_intros/"):
             continue                      # a source, not a page
         if rel not in pages and rel not in HANDWRITTEN:

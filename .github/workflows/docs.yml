@@ -1,12 +1,17 @@
-# The documentation build as a check, on every push to develop, every tag
-# and every pull request that touches a documented source: the checked-in
-# pages must be a fresh render, and Sphinx must build them without a warning,
-# because that is exactly how Read the Docs builds them (.readthedocs.yaml,
-# fail_on_warning). A page that would break the site fails here first, on
-# the commit that broke it.
+# The documentation build on every push to develop, every tag and every pull
+# request that touches a documented source. Two jobs in one:
 #
-# Hosting and versions are Read the Docs': it builds on its own webhook and
-# keeps one version per branch and tag. Nothing is published from here.
+# * On a push to develop the pages are rendered from the code and, when they
+#   changed, committed back by the workflow itself, so a docstring edit is
+#   never followed by a stale page. Nothing else is written, and a push made
+#   with the workflow's own token starts no second run.
+# * On a pull request and on a tag the checked-in pages have to BE the fresh
+#   render (--check): a stale page fails on the commit that caused it.
+#
+# Either way Sphinx then builds the site the way Read the Docs builds it
+# (.readthedocs.yaml, fail_on_warning). Hosting and versions are Read the
+# Docs': it builds on its own webhook, one version per branch and tag, and
+# picks the regenerated pages up from the commit this workflow pushes.
 name: docs
 
 on:
@@ -24,7 +29,12 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
+
+# One run at a time per ref: two quick pushes would otherwise race to commit.
+concurrency:
+  group: docs-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
   docs:
@@ -37,7 +47,22 @@ jobs:
           cache: pip
           cache-dependency-path: docs/requirements.txt
       - run: python -m pip install -r docs/requirements.txt
-      - name: The checked-in pages are a fresh render
+      - name: The checked-in pages are a fresh render (pull requests and tags)
+        if: github.ref != 'refs/heads/develop'
         run: python scripts/build_docs.py --check
+      - name: Render the pages from the code
+        run: python scripts/build_docs.py --out docs
       - name: Sphinx, warnings are errors
         run: python -m sphinx -W --keep-going -b html docs _build/html
+      - name: Commit the regenerated pages (develop only)
+        if: github.ref == 'refs/heads/develop' && github.event_name != 'pull_request'
+        run: |
+          git add docs
+          if git diff --cached --quiet; then
+            echo "pages are current"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "docs: regenerate the pages from ${GITHUB_SHA::7}"
+          git push origin HEAD:develop

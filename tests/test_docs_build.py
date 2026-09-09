@@ -186,7 +186,7 @@ def test_the_generator_reads_through_one_door():
     anywhere makes the guard decorative."""
     text = (ROOT / "scripts" / "build_docs.py").read_text(encoding="utf-8")
     tree = ast.parse(text)
-    allowed = {"read_source", "_profile_names", "write", "check"}
+    allowed = {"read_source", "_profile_names", "_pages_on_disk", "write"}
     inside = {}
     for node in ast.walk(tree):
         if isinstance(node, ast.FunctionDef):
@@ -204,16 +204,29 @@ def test_the_generator_reads_through_one_door():
             continue
         where = inside.get(id(node))
         assert where in allowed, f"{name}() in {where}"
-    # And the enumerator only enumerates.
-    enumerator = next(n for n in ast.walk(tree)
-                      if isinstance(n, ast.FunctionDef)
-                      and n.name == "_profile_names")
-    for node in ast.walk(enumerator):
-        if isinstance(node, ast.Call):
-            func = node.func
-            name = (func.attr if isinstance(func, ast.Attribute)
-                    else func.id if isinstance(func, ast.Name) else "")
-            assert name not in {"read_text", "read_bytes", "open", "load"}
+    # And the enumerators only enumerate.
+    for enumerating in ("_profile_names", "_pages_on_disk"):
+        enumerator = next(n for n in ast.walk(tree)
+                          if isinstance(n, ast.FunctionDef)
+                          and n.name == enumerating)
+        for node in ast.walk(enumerator):
+            if isinstance(node, ast.Call):
+                func = node.func
+                name = (func.attr if isinstance(func, ast.Attribute)
+                        else func.id if isinstance(func, ast.Name) else "")
+                assert name not in {"read_text", "read_bytes", "open",
+                                    "load"}, enumerating
+    # And the writer only writes.
+    writer = next(n for n in ast.walk(tree)
+                  if isinstance(n, ast.FunctionDef) and n.name == "write")
+    opens = [node for node in ast.walk(writer)
+             if isinstance(node, ast.Call)
+             and getattr(node.func, "attr", getattr(node.func, "id", ""))
+             == "open"]
+    assert opens
+    for node in opens:
+        assert any(isinstance(arg, ast.Constant) and arg.value == "w"
+                   for arg in node.args), "write opens for writing only"
 
 
 def test_the_contract_page_is_built_from_the_schema_not_the_spec():
@@ -485,6 +498,19 @@ def test_every_stage_page_says_what_the_stage_is_for():
         assert len(intro) > 200, f"{page}: {len(intro)} characters"
     assert intro_of("stages/gibt_es_nicht.md") == ""
 
+def test_the_profiles_page_says_what_a_profile_is_for():
+    """The one page besides the stages that carries an introduction: what a
+    profile is FOR is prose no module can state, so it lives in a file of
+    its own and the page must carry it whole."""
+    from build_docs import intro_of
+    intro = intro_of("profiles.md")
+    assert len(intro) > 200, len(intro)
+    assert intro in build()["profiles.md"]
+    # The renderer takes it as an argument and adds none of its own.
+    assert intro not in render_profiles_page("x", ["kwp"])
+    assert intro in render_profiles_page("x", ["kwp"], intro)
+
+
 def test_every_command_the_overview_prints_can_be_run():
     """The one hand-written page is the one nobody regenerates, so a flag
     renamed in a parser leaves it wrong with nothing to notice. Every module
@@ -509,17 +535,29 @@ def test_every_command_the_overview_prints_can_be_run():
     assert named <= flags, sorted(named - flags)
 
 
-def test_the_docs_workflow_checks_and_renders_the_pages_and_publishes_nothing():
-    """The workflow is the Read the Docs build as a gate: a stale page or a
-    Sphinx warning fails on the commit that caused it. Hosting and versions
-    are Read the Docs', so the workflow writes nowhere and needs no write
-    permission."""
+def test_the_docs_workflow_regenerates_on_develop_and_checks_everywhere_else():
+    """On a push to develop the workflow renders the pages from the code and
+    commits them back, so a docstring edit is never followed by a stale page.
+    On a pull request and on a tag the checked-in pages have to be the fresh
+    render, checked BEFORE anything is rendered or the check is vacuous.
+    Sphinx runs either way with warnings as errors, and nothing is published
+    from here: hosting and versions are Read the Docs'."""
     text = (ROOT / ".github" / "workflows" / "docs.yml").read_text(encoding="utf-8")
     assert "branches: [develop]" in text and 'tags: ["v*"]' in text
     assert "python scripts/build_docs.py --check" in text
+    assert "python scripts/build_docs.py --out docs" in text
+    assert text.index("build_docs.py --check") < text.index("build_docs.py --out docs")
     assert "python -m sphinx -W" in text
-    assert "contents: read" in text and "contents: write" not in text
-    for forbidden in ("gh-pages", "git push", "--versions"):
+    assert "contents: write" in text
+    # The check is for every ref but develop; the commit is for develop only,
+    # to develop only, and never on a pull request.
+    assert "if: github.ref != 'refs/heads/develop'" in text
+    assert ("if: github.ref == 'refs/heads/develop' "
+            "&& github.event_name != 'pull_request'") in text
+    assert "git push origin HEAD:develop" in text
+    assert text.count("git push") == 1
+    assert "concurrency:" in text and "cancel-in-progress: false" in text
+    for forbidden in ("gh-pages", "pages-deploy", "--versions"):
         assert forbidden not in text, forbidden
 
 
