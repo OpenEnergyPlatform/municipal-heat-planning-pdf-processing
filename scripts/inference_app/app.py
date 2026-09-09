@@ -263,20 +263,6 @@ def main() -> None:
         )
         out_fmt = st.radio("Antwortformat", ["Fließtext", "JSON"], horizontal=True)
         as_json = out_fmt == "JSON"
-        # The graph first, the documents second. A value node has neither a
-        # picture nor a search scope, so the two inputs above apply to the
-        # document search only, and the help text says so.
-        kg_hooks = get_kg_hooks()
-        kg_available = kg_hooks is not None and config.KG_TTL_PATH.is_file()
-        route_mode = st.radio(
-            "Antwortweg", ["Automatik", "Wissensgraph", "Dokumentsuche"],
-            horizontal=True, disabled=not kg_available,
-            help="Automatik fragt zuerst den Wissensgraphen und fällt auf die "
-                 "Dokumentsuche zurück; Wissensgraph antwortet nur aus dem "
-                 "Graphen oder gar nicht. Bild und Suchbereich gelten nur für "
-                 "die Dokumentsuche.")
-        if not kg_available:
-            route_mode = "Dokumentsuche"
         if config.LLM_STUB_MODE:
             st.info("LLM_STUB_MODE aktiv – Antworten sind Platzhalter.")
 
@@ -358,30 +344,10 @@ def main() -> None:
             _remember(by_doc, row["document_id"], task, row)
         return
 
-    # The graph route, when offered: it answers, or it says why not and the
-    # document search runs with that sentence as a caption. Each branch
-    # returns, because everything below reads `result`.
+    # The graph route is not offered: there is no corpus graph yet, and a
+    # selector for a source that does not exist is a promise the app cannot
+    # keep. `kg_route` stays in the core for the day the graph is there.
     route_note = None
-    if route_mode != "Dokumentsuche":
-        with _spinner("Wissensgraph"):
-            outcome = run_kg_turn(task, doc_id)
-        if outcome["route"] == "kg":
-            with st.chat_message("assistant"):
-                _render_kg(outcome["values"])
-            history.append({"role": "assistant", "content": "",
-                            "kg_values": outcome["values"], "route": "kg"})
-            return
-        note = kg_hooks.notes[outcome["reason"]]
-        if route_mode == "Wissensgraph":
-            # Forced: a graph that says nothing is a finding about the
-            # graph, and a silent fallback would hide it.
-            with st.chat_message("assistant"):
-                st.markdown(note)
-            history.append({"role": "assistant", "content": note,
-                            "route": "kg_empty"})
-            return
-        route_note = ("📚 Dokumentsuche, der Wissensgraph hat nicht "
-                      "geantwortet: " + note)
 
     result = run_turn(task, image_bytes, image_only, doc_id, scopes, as_json=as_json,
                       history=by_doc.get(doc_id, []))
