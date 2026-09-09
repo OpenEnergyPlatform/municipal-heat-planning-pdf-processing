@@ -751,3 +751,19 @@ def test_one_answer_still_holds_for_rows_of_the_same_column():
                                    "quote": _HEADER}]})
     assert got["filled"] == 2
     assert [row.claim["year"] for row in rows] == [2030, 2030]
+
+def test_a_year_is_the_one_printed_over_this_rows_own_column():
+    """The last hole. The header prints 2030 and 2045 in the same line, so
+    `answer_in_quote` verifies either of them for either row. The value sits
+    in exactly one cell, and the answer has to be what stands over that one."""
+    from docpipe.extraction.pipeline import merge_field
+    slot = _year_slot()
+    source = _source(1, _HEADER + chr(10) + _LINE)
+    rows = [_Row("R1", {"quote": _LINE, "value": 42005}),
+            _Row("R2", {"quote": _LINE, "value": 17000})]
+    got = merge_field(rows, [source], slot, {"answers": {
+        "R1": {"value": 2030, "quote": _HEADER},
+        "R2": {"value": 2030, "quote": _HEADER}}})
+    assert rows[0].claim["year"] == 2030, "column 2 really is 2030"
+    assert "year" not in rows[1].claim, "column 3 says 2045"
+    assert got["filled"] == 1 and got["unbacked"] == 1
