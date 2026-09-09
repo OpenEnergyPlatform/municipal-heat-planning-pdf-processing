@@ -1,11 +1,10 @@
 """
-pipeline.py – Orchestration of the PDF preprocessing pipeline (Stages 1-3).
+pipeline.py: Orchestrates the PDF preprocessing pipeline, Stages 1 to 3.
 
-  1. PyMuPDF        → Text blocks (rawdict)
-  2. PP-DocLayoutV3 → Table / image crops + layout labels + caption resolution
-  3. Section assembly → sections.json
-
-LLM-based section refinement lives in ``docpipe.refinement``.
+Stage 1 reads text blocks with PyMuPDF, as rawdict. Stage 2 runs PP-DocLayoutV3
+to detect table and image crops, layout labels, and caption resolution. Stage 3
+assembles sections and writes sections.json. LLM-based section refinement lives
+in docpipe.refinement, not in this module.
 
 Author: Felix Vossel
 """

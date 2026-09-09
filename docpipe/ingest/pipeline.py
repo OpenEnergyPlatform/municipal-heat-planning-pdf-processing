@@ -1,9 +1,13 @@
 """
-pipeline.py – Register a profile's documents in its database.
+pipeline.py: Registers a profile's documents in its database.
 
-The core does the same four things for every corpus: get the file, refuse it if
-it has no usable text layer, write the Documents row, and link versions. What
-the documents are and where they come from is the profile's Source.
+The core repeats four steps for every corpus: it fetches the file,
+checks its text layer, writes the Documents row, and links versions.
+A file whose text is unreadable or garbled is refused and left out
+of the corpus. A file with no text layer at all is registered
+anyway and listed for preprocessing to read with the vision model,
+because the pages exist to be read. What the documents are and
+where they come from is defined by the profile's Source.
 
 Author: Felix Vossel
 """

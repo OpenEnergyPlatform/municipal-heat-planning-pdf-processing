@@ -1,8 +1,10 @@
 """
-pipeline.py – Orchestration of the imageprocessing module.
+pipeline.py: Orchestrates the imageprocessing stage.
 
-Enriches one PDF's output directory, or all PDF subdirectories under a root
-(--batch), via a vision LLM. See ``_build_parser`` for the CLI.
+Enriches one PDF's output directory, or every PDF subdirectory under
+a root directory with `--batch`, by sending each table and figure
+image to a vision language model. `_build_parser` lists the CLI
+flags.
 
 Author: Felix Vossel
 """

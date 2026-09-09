@@ -1,16 +1,29 @@
 """
-split.py – Cutting a section that is too long to be one retrieval chunk.
+split.py: Cuts a section too long to be one retrieval chunk into
+several, each a self-contained citation unit.
 
-A section is one chunk and one vector. Past a certain length that vector stops
-meaning anything in particular, and past the embedding model's token limit the
-tail is not indexed at all. Such a section has to become several.
+A section is one chunk and one vector. Past a certain length that
+vector stops meaning anything in particular, and past the embedding
+model's token limit the tail is not indexed at all, so an oversized
+section has to become several.
 
-The model is never asked to reproduce the text — only to say WHERE it would cut
-and what to call the parts. The cut itself happens mechanically at segment
-boundaries, which is what makes this safe: nothing is rephrased, dropped or
-invented, and each part keeps exactly the pages, tables and figures that belong
-to its own text. It also keeps the call small, since a section long enough to
-need splitting is by definition too long to echo.
+The model is asked only where it would cut and what to call the
+parts, never to reproduce the text. The cut itself happens
+mechanically at segment boundaries, which is what makes it safe:
+nothing is rephrased, dropped or invented, and each part keeps
+exactly the pages, tables and figures that belong to its own text.
+Asking only for an outline also keeps the call small, since a section
+long enough to need splitting is by definition too long to echo.
+When no cut is asked for, or the reply is unusable, a mechanical
+fallback cuts at even word-count intervals instead, dropping a cut
+that would leave a sliver under about 100 words.
+
+A part still over the configured word limit after this pass is cut
+again against a lower target; a single segment carrying the whole
+overflow is first divided into smaller ones so that a boundary exists
+to cut at. A section whose segments no longer reproduce its own
+content, because refinement rewrote it, is left oversized rather than
+cut at a guessed position.
 
 Author: Felix Vossel
 """

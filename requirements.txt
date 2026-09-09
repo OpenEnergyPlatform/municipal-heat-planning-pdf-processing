@@ -207,7 +207,7 @@ wrapt==2.1.1
 xlsxwriter==3.2.9
 yarg==0.1.9
 
-# Tests. xdist because the suite is 1300 tests and a compute node has 8 cores:
+# Tests. xdist because the suite is about 1500 tests and a compute node has 8 cores:
 # python -m pytest tests/ -n 8 --dist loadfile
 pytest>=8
 pytest-xdist>=3

@@ -1,13 +1,21 @@
 """
-spec.py – The contract between a profile's ontology knowledge and the core.
+spec.py: The contract between a profile's ontology knowledge and the core.
 
 The core never reads OWL or TTL. A profile distils its ontology into this
 declarative form: which parameters to extract, along which axes, with which
-closed vocabularies — and one real example per parameter. Everything the
+closed vocabularies, and one real example per parameter. Everything the
 extraction stage does downstream (prompt building, verification, refusal of
 out-of-vocabulary answers) leans on this file being right, so loading is
-strict: a spec that is wrong fails loudly here, naming the field, not three
-hours into a batch.
+strict. `load` fails loudly here, naming the field, rather than three hours
+into a batch.
+
+The module also computes a fingerprint per question a spec asks: one sha256 per
+parameter, per category answer space and per axis (`fingerprints`), plus one
+for the coordinate that names which parameter a value belongs to
+(`parameter_slot_fingerprint`). `runner.stale` compares a document's stamp
+against these keys rather than against the whole file's hash, so an edit that
+touches no question a document was asked through, such as a graph block or a
+comment, costs nothing on the next run.
 
 Author: Felix Vossel
 """

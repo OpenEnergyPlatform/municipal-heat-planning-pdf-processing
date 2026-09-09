@@ -1,8 +1,32 @@
 """
-refine.py – LLM-based section refinement (Stage 4).
+refine.py: Runs Stage 4, the LLM-based refinement of Stage 3
+sections.
 
-Cleans extraction artefacts and titles, drops directory pages, converts
-bibliographies to BibTeX, and merges/splits sections via an LLM.
+The LLM is asked, per window of sections, to clean extraction
+artefacts and titles, drop directory sections, convert bibliographies
+to BibTeX, and merge or split sections; each returned action is
+applied by refine_sections. A section longer than the split threshold
+is cut before windowing (see split.py), since a window has to echo
+every section it carries, and an oversized section could never be
+echoed.
+
+Windows are dispatched in parallel, up to LLM_NUM_PARALLEL requests
+at once, then assembled in the original order, since merging and
+splitting are positional. A request is retried up to MAX_RETRIES
+times, except on a 4xx response, which is not retried because the
+server has refused the request itself. A window that never returns a
+usable reply keeps its original, unrefined text, and is recorded in
+the refinement report written next to the output.
+
+Page provenance travels with the rewritten text: an unchanged window
+reattaches its segments one to one, and a window that split, merged
+or dropped sections is redistributed by which output section's
+tokens a segment's text is found in, or by which output claims a
+table's or figure's block id. A "remove" action is refused when the
+section still carries a table or figure, since those are Stage 2
+artefacts with their own transcriptions and not the model's to
+discard; a section made of nothing but reference markers can
+otherwise look empty to a reader of the text alone.
 
 Author: Felix Vossel
 """

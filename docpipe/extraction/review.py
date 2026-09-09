@@ -1,27 +1,30 @@
 """
-review.py – A second, narrower reading of the values nobody can stand behind.
+review.py: Reads again, under a narrower window, the values at the lowest trust
+level.
 
-What it is, said first because the record it writes is read as more than it
-is: the same model, over the same document, shown a window that is a strict
-SUBSET of the one the sweep already walked -- the row's own passage and the
-section that passage stands in. So this is a self-consistency check under a
-narrowed window, not an independent second reading.
+The record this pass writes is read as more than it is, so what it is comes
+first: the same model, over the same document, shown a window that is a strict
+subset of the one the sweep already walked, the row's own passage and the
+section that passage stands in. It is a self-consistency check under a narrowed
+window, not an independent second reading.
 
-That is enough to catch the failure the lowest trust level names, a value read
-off a passage belonging to another row, because the narrowed window holds no
-such passage. It cannot catch a misreading of the same picture in the same
-way twice. A real second opinion needs a different model or a different window
--- the page image instead of the transcription -- and neither is what this is.
+That narrowing is enough to catch the failure the lowest trust level names, a
+value read off a passage belonging to another row, because the narrowed window
+holds no such passage. It cannot catch the same picture misread the same way
+twice. An independent second opinion would need a different model or a
+different window, the page image rather than the transcription, and this pass
+is neither.
 
-Consequence, on purpose: an agreement never lifts a level. It is recorded as a
-mark and nothing else. A disagreement IS a reason, because two readings of the
-same passage that do not match is a fact about the value.
+An agreement between the two readings never raises the trust level; it is
+recorded as a mark and nothing else. A disagreement is treated as a reason,
+because two readings of the same passage that do not match is a fact about the
+value.
 
-What it writes: one flag per reviewed row, on `flags`, and one line per
-reviewed row in `review.csv` beside the harvest. Not a new record kind and not
-a new key on the tuple: the tuple branch of the published schema is closed,
-and the second reading's own content is a curation artifact rather than
-evidence.
+What the pass writes is one flag per reviewed row, appended to `flags`, and one
+line per reviewed row in `review.csv` beside the harvest. It adds neither a new
+record kind nor a new key on a tuple: the tuple branch of the published schema
+stays closed, and the second reading's own content is a curation artifact
+rather than evidence.
 
 Author: Felix Vossel
 """

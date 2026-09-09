@@ -1,10 +1,12 @@
 """
-fileprocessing – CLI entry point for registering a profile's source PDFs.
+__init__.py: CLI entry point for registering a profile's source PDFs.
 
-The generic half lives in docpipe.ingest, the KWW half in profiles/kwp/source.py.
+The generic half lives in docpipe.ingest, the project-specific half in
+profiles/<name>/source.py.
 
-Usage:
-  python -m scripts.fileprocessing --profile kwp --excel kww.xlsx --db data/kwp/kwp.db --data-dir data/kwp/pdf
+Runs as a command line module:
+  python -m scripts.fileprocessing --profile kwp --source kww.xlsx
+      --db data/kwp/kwp.db --data-dir data/kwp/pdf
 """
 from .pipeline import main
 

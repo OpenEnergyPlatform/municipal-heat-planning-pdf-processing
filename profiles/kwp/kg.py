@@ -1,16 +1,17 @@
 """
-kg.py – Harvested tuples to MHPKG Turtle (the target-scenario slice).
+kg.py: Serializes harvested tuples into MHPKG Turtle.
 
 The IRI policy is rebuilt from the schema repo's mint_slice.py and must stay
 a pure function of the data: two runs over the same plan mint byte-identical
 IRIs (tested against their published reference UUIDs). One deliberate
 deviation: the value coordinates include the sector, because our tables carry
 several sectors per carrier/year and the published coordinate list would
-collide them into one node — flagged to the schema side.
+collide them into one node, which was flagged to the schema side.
 
-Serialized is what the target-scenario schema can hold today: scenario ==
-"target", municipality scope, an accepted indicator label, a year. Everything
-else stays in the JSONL harvest and is counted here, not lost.
+Serialized is what the graph can hold: a value whose scenario names one of
+the three plan parts of PARTS, whose scope is the municipality, whose
+indicator label is accepted and whose year is read. Everything else stays in
+the JSONL harvest and is counted here, not lost.
 """
 from __future__ import annotations
 

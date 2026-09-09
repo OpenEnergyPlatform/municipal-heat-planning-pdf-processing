@@ -1,11 +1,13 @@
 """
-catalog.py – How a corpus presents itself for selection.
+catalog.py: Presents a corpus for selection.
 
-Retrieval only ever needs a document id. Everything around that id — what a
-document is called in the picker, which filters make sense over the corpus,
-what to show about the selected one — is project knowledge. The core supplies
-a plain default over the Documents table; a profile replaces it with its own
-(profiles/<name>/catalog.py: CATALOG) and fills the facets it declared.
+Retrieval only ever needs a document id. Everything around that id,
+what a document is called in the picker, which filters make sense
+over the corpus, what to show about the selected one, is project
+knowledge. The core supplies a plain default over the `Documents`
+table; a profile replaces it with its own
+(`profiles/<name>/catalog.py: CATALOG`) and fills the facets it
+declared.
 
 Author: Felix Vossel
 """

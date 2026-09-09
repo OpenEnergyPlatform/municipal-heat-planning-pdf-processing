@@ -1,28 +1,34 @@
 """
-ontology.py – The ontology a spec is written against, read once and pinned.
+ontology.py: Reads the ontology a spec is written against once and
+pins it in a snapshot.
 
-Every closed list a profile offers names terms of an ontology, and a spec that
-cannot be checked against one drifts into describing a graph nobody has. This
-reads an ontology file and writes a snapshot: per term its label, its foreign
-alternative labels, its definition, its parents, whether it is deprecated, and
-WHAT KIND of thing it is — a class, an individual or a property. Plus the sets
-a list may draw from, and the pin (version IRI and the file's own sha256), so
-"which ontology is this spec written against" has an answer.
+Every closed list a profile offers names terms of an ontology, and a
+spec that is never checked against one can come to describe a graph
+that does not exist. This module reads an ontology file and writes a
+snapshot: per term its label, its foreign alternative labels, its
+definition, its parents, whether it is deprecated, and which kind of
+thing it is (a class, an individual or a property). It also writes
+the sets a list may draw from, and a pin (the version IRI and the
+file's own sha256), so the question of which ontology a spec is
+written against has an answer.
 
-Profile-free by design. What a profile keeps is its own: which roots its sets
-draw from, where its closure lives, and the rules that are about its own axes.
-The builder, the index, the identifier walk and the two generic complaints
-("the ontology does not have this" and "the ontology deprecated this") are the
-same question in every profile and live here.
+The module is profile free by design. What a profile keeps is its
+own: which roots its sets draw from, where its closure lives, and the
+rules that concern its own axes. The builder, the index, the
+identifier walk, and the two checks every profile shares (a term the
+ontology does not have, a term the ontology has deprecated) are the
+same question in every profile, so they live here.
 
-The kind matters more than it looks. A `kg` block names PREDICATES, and a
-predicate is an owl:ObjectProperty; an index over classes and individuals
-alone reports every one of them as missing. That is why the scenarios profile
-had no snapshot: its seventeen identifiers are mostly predicates.
+The kind recorded for each term matters beyond bookkeeping. A `kg`
+block names predicates, and a predicate is an owl:ObjectProperty; an
+index built over classes and individuals alone would report every
+predicate as missing. That is why the scenarios profile had no
+snapshot before this module existed: its seventeen identifiers are
+mostly predicates.
 
-rdflib is imported inside the functions that need it. The check runs against
-the checked-in snapshot and needs no ontology file and no rdflib, which is
-what lets it run on the cluster.
+rdflib is imported inside the functions that need it. The checks run
+against the checked-in snapshot and need neither an ontology file nor
+rdflib, which is what lets them run on the cluster.
 
 Author: Felix Vossel
 """

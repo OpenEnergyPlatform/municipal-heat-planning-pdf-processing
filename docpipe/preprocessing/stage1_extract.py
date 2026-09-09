@@ -1,8 +1,8 @@
 """
-stage1_extract.py – Text extraction with PyMuPDF (rawdict).
+stage1_extract.py: Extracts text with PyMuPDF, as rawdict.
 
 Text blocks are extracted per page and returned as PageData. Paragraphs are
-deliberately NOT merged: Stage 2 suppression needs block boundaries precise
+deliberately not merged: Stage 2 suppression needs block boundaries precise
 enough to match model-predicted boxes. Bboxes are [x0, y0, x1, y1] in points,
 origin top-left, stored without coordinate flipping.
 

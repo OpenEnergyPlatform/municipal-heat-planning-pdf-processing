@@ -1,18 +1,18 @@
 """
-prompts.py – Prompts belong to the profile, as Markdown per stage:
+prompts.py: Loads a profile's prompts, one Markdown file per stage, from
+`profiles/<profile>/prompts/<stage>/<name>.md`.
 
-    profiles/<profile>/prompts/<stage>/<name>.md
-
-There is no core default. A prompt names the corpus it is written for and the
-language it answers in, and the core knows neither — a fallback here could only
-be some other project's prompt, which is worse than a missing file.
+There is no core default. A prompt names the corpus it is written for and
+the language it answers in, and the core knows neither: a fallback here
+could only be some other project's prompt, which is worse than a missing
+file.
 
 Optional YAML front matter carries the model parameters that belong to the
 prompt (temperature, max_tokens), so the two never drift apart.
 
-Every prompt has a sha256 over its file. Stages record those hashes with their
-output; when a hash no longer matches, the result was produced by a different
-prompt and is stale (see `stale()`).
+Every prompt has a sha256 over its file. Stages record those hashes with
+their output; when a hash no longer matches, the result was produced by a
+different prompt and is stale (see `stale()`).
 
 Author: Felix Vossel
 """

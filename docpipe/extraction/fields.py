@@ -1,19 +1,22 @@
 """
-fields.py – The deterministic skeleton of a tuple.
+fields.py: Computes the deterministic skeleton of a tuple from the spec.
 
-A tuple's shape is not something a model decides. The spec already says which
-coordinates a parameter has, which of them are a choice from a closed list and
-which are a number or a wording, and that shape is identical for every value
-in the corpus. So it is computed here, from the spec, and the model is never
-asked for it. It is asked, one field at a time, to fill it.
+A tuple's shape is not something a model decides. The spec already
+states which coordinates a parameter has, which of them are a choice
+from a closed list, and which are a number or a wording, and that
+shape is identical for every value in the corpus. So the shape is
+computed here, from the spec, and the model is never asked for it. It
+is asked, one field at a time, to fill the shape in.
 
-Asking per field is the point. One request for a whole tuple lets a model
-quietly drop a coordinate it is unsure of, and dropping is free: the field is
-nullable, nothing refuses, nothing counts it. Measured on the 204-document
-corpus run, the year was missing on 63.5% of all values, and on 13% of those
-it stood in the very quote the model had itself cited. A request that asks for
-one field and shows the choices has no such exit — it names the entry and the
-passage it read it in, or it says the passage does not say.
+Asking per field is the point. One request for a whole tuple lets a
+model quietly drop a coordinate it is unsure of, and dropping is
+free: the field stays nullable, nothing refuses it, nothing counts
+it. Measured on the 204 document corpus run, the year was missing on
+63.5 percent of all values, and on 13 percent of those it stood in
+the very quote the model had itself cited. A request that asks for
+one field and shows the choices has no such exit: it names the entry
+and the passage it was read in, or it states that the passage does
+not say.
 
 Author: Felix Vossel
 """
@@ -44,33 +47,37 @@ TEXT = "text"
 UNSTATED = "out:unstated"
 
 # What is known about one coordinate of one row, always one of these.
-READ = "read"              # answered and the passage carries it
-SAID_UNSTATED = "unstated"  # answered: the passages do not say
-UNANSWERED = "unanswered"   # the request came back without this row at all
-# Still open when the sweep ran out of budget with the document unread to the
-# end. Deliberately not "unstated": one is a finding about the plan, the other
-# is a finding about the run, and collapsing them is the mistake this module
-# was written to stop making.
+READ = "read"                # answered, and the passage carries it
+SAID_UNSTATED = "unstated"   # answered: the passages do not say it
+UNANSWERED = "unanswered"    # the request came back without this row
+# Still open when the sweep ran out of budget with the document
+# unread to the end. Deliberately not "unstated": one is a finding
+# about the document, the other is a finding about the run, and
+# collapsing them is the mistake this module was written to stop
+# making.
 EXHAUSTED = "exhausted"
-# Answered, and the answer could not be backed: the passage cited is not in
-# anything the model was shown, or it is and does not carry the answer. Its own
-# outcome, because "said nothing" and "said something it could not back" are a
-# different finding about the model and collapsing them is the mistake this
-# module exists to stop making. It stays OPEN — a later window can still read
-# the coordinate properly — and only survives to the end if none does.
+# Answered, and the answer could not be backed: the passage cited is
+# not in anything the model was shown, or it is and does not carry
+# the answer. Its own outcome, because "said nothing" and "said
+# something it could not back" are different findings about the
+# model, and collapsing them is the mistake this module exists to
+# stop making. It stays open (a later window can still read the
+# coordinate properly) and only survives to the end if none does.
 UNBACKED = "unbacked"
-# Filled without asking, because the spec already decides it: the parameter a
-# unit belongs to, the aggregation every accepted unit of a parameter implies.
-# Its own state, because "the spec knew this" and "the model read this" are a
-# different finding about the corpus, and a coordinate that carries evidence
-# it was never given evidence for is the one thing this module exists to
-# prevent. What is derived still carries the wording it was derived FROM.
+# Filled without asking, because the spec already decides it: the
+# parameter a unit belongs to, the aggregation every accepted unit of
+# a parameter implies. Its own state, because "the spec knew this"
+# and "the model read this" are different findings about the corpus,
+# and a coordinate that carries evidence it was never given evidence
+# for is the one thing this module exists to prevent. A derived
+# coordinate still carries the wording it was derived from.
 DERIVED = "derived"
-# Never asked, because a gate coordinate already put this row outside what
-# this run serializes. A finding about the RUN'S SCOPE, and neither about the
-# plan nor about the model, so it is not "unstated" and not "unanswered". It
-# exists because the alternative is an empty cell, and an empty cell is the
-# one thing every state in this module was written to prevent.
+# Never asked, because a gate coordinate already put this row outside
+# what this run serializes. A finding about the run's scope, and
+# neither about the document nor about the model, so it is not
+# "unstated" and not "unanswered". It exists because the alternative
+# is an empty cell, and an empty cell is the one thing every state in
+# this module was written to prevent.
 OUT_OF_SLICE = "out_of_slice"
 
 
@@ -93,7 +100,7 @@ class Slot:
     options: tuple = ()
     # {"from": "unit", "value": uri} when the spec decides this coordinate.
     derive: Optional[dict] = None
-    # "own" | "local" | "any" — how far from the row its evidence may stand.
+    # "own" | "local" | "any": how far from the row its evidence may stand.
     evidence: str = "any"
 
     @property
@@ -104,7 +111,7 @@ class Slot:
         """The closed list as the request shows it, UNSTATED included.
 
         A finite set of correct answers is a choice, and "the passages do not
-        state it" is one of the correct answers — so it belongs in the list the
+        state it" is one of the correct answers, so it belongs in the list the
         model picks from, not only in the prose above it. It was in the prompt
         and not in the options, which asks the model to remember a rule instead
         of reading a row.
@@ -129,7 +136,7 @@ class Slot:
 
 
 def _options(vocabulary: dict, definitions: Optional[dict] = None) -> tuple:
-    """The closed list as options — first label canonical, rest synonyms.
+    """The closed list as options, first label canonical, rest synonyms.
 
     The spec writes a vocabulary as uri -> [labels] and the first label is the
     one the class is called by; the others exist so a document's own spelling
@@ -151,7 +158,7 @@ def _options(vocabulary: dict, definitions: Optional[dict] = None) -> tuple:
 
 
 def parameter_slot(spec) -> Slot:
-    """Which quantity a value is — a choice from the spec's own parameters.
+    """Which quantity a value is: a choice from the spec's own parameters.
 
     The plan used to be built per parameter, so a table holding a consumption
     and an emission was retrieved twice, read twice and paid for twice. It
@@ -159,7 +166,7 @@ def parameter_slot(spec) -> Slot:
     requests, which was 804 planned sources against 234 owners.
 
     Asked instead of assumed, it is the same shape as every other coordinate:
-    a finite list, one request, one quote. And it is a real question — a
+    a finite list, one request, one quote. And it is a real question: a
     passage rarely says "this is an emission", it says "t CO2-Äq", so the
     evidence is the wording that makes it one.
     """
@@ -180,7 +187,7 @@ def frame_slots(spec, names) -> list:
 
     A frame coordinate belongs to the DOCUMENT and not to the row. A plan has
     three scenario containers and a handful of reference years, and they stand
-    in headings, captions and column headers -- while the carrier and the
+    in headings, captions and column headers, while the carrier and the
     sector stand in the table row itself and are different in every cell. The
     first kind can be found once and then asked about; the second cannot.
 
@@ -191,7 +198,7 @@ def frame_slots(spec, names) -> list:
     Read off the first parameter that has all of them, because a frame is one
     per document: a spec whose parameters disagreed about it would have two
     frames and no way to say which one a value hangs in. A name no parameter
-    has yields nothing at all rather than a shorter frame -- half a frame is
+    has yields nothing at all rather than a shorter frame: half a frame is
     a pair set that is silently missing a coordinate.
     """
     wanted = [name for name in (names or ())]
@@ -234,8 +241,8 @@ def parameter_undecidable(spec, claim: dict) -> bool:
     """True when NO parameter of the spec could hold this row.
 
     `derive_parameter` returns None for three different situations and only
-    one of them is a question: a unit two parameters accept. The other two --
-    no unit at all, and a unit no parameter accepts -- are already decided
+    one of them is a question: a unit two parameters accept. The other two,
+    no unit at all, and a unit no parameter accepts, are already decided
     AGAINST every answer the model could give, because `verify._check_value`
     refuses on the same `unit_factor` lookup that just failed.
 
@@ -296,7 +303,7 @@ def axis_slots(parameter: Parameter) -> list:
     """Every coordinate of this parameter, in spec order, as its own question.
 
     A dynamic axis whose list the profile could not fill for this document has
-    no options left, so it degrades to a wording — the same rule verify.py
+    no options left, so it degrades to a wording, the same rule verify.py
     follows one step later.
     """
     out = []

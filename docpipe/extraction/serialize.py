@@ -1,12 +1,23 @@
 """
-serialize.py – From harvested tuples to the profile's target graph.
+serialize.py: Turns a document harvest into the profile's target graph.
 
-The core walks the JSONL harvest and hands each document's accepted tuples to
-a serializer the profile provides (profiles/<name>/kg.py exposes
-make_serializer(db_path), the runner's --serialize calls it). What a
-serializer emits — TTL with project IRI rules, LinkML YAML, anything — is
-entirely its business; the core only guarantees the walk, the grouping and
-that refusal rows never reach it.
+The module walks the JSONL harvest directory and keeps only the rows
+a run accepted (kind is "tuple"), grouped by document name (collect).
+run() hands each document's rows to a serializer the profile
+supplies: profiles/<name>/kg.py exposes make_serializer(db_path), and
+the runner's --serialize flag calls it. What the serializer emits
+(Turtle with project IRI rules, LinkML YAML, or another format) is
+the profile's own decision; the module guarantees only the walk, the
+per-document grouping, and that a refusal row never reaches the
+serializer.
+
+run() concatenates the output of every document whose serializer
+returned something and writes it to the output path. It raises
+ValueError and leaves that path untouched when no document produced
+anything. The check runs unconditionally at the end of a GPU job, so
+a run that ended in a counted exception still yields a graph; without
+the check, an empty or unreadable harvest directory would overwrite a
+valid graph from an earlier run with nothing.
 
 Author: Felix Vossel
 """

@@ -1,9 +1,10 @@
 """
-qa.py – Quality checks for VLM table extraction.
+qa.py: Quality checks for vision model table extraction.
 
-Pure helpers that judge a vision model's Markdown transcription of a table:
-coverage against the PyMuPDF source text (catches truncation) and row
-duplication (catches repetition loops).
+Pure helper functions that judge a vision model's Markdown
+transcription of a table. Coverage compares it against the PyMuPDF
+source text and catches truncation; duplication counts repeated rows
+and catches repetition loops.
 
 Author: Felix Vossel
 """

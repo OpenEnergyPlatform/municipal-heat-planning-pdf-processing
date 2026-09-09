@@ -1,26 +1,29 @@
 """
-kg_route.py – Answer a question from the graph the harvest wrote, before the
-documents are searched.
+kg_route.py: Answers a question from the graph the harvest wrote,
+before the documents are searched.
 
-`--serialize` turns a plan's harvested numbers into Turtle: one value node per
-coordinate tuple (the part of the plan it hangs under, the quantity class, the
-carrier, the sector, the year, the aggregation), and above each node the
-trust line and the evidence the serializer wrote as comments. A question that
-names those coordinates has an answer in that graph which no retrieval has to
-find and no model has to read off a page: the number, its unit, and how far
-the run stands behind it.
+`--serialize` turns a plan's harvested numbers into Turtle: one value
+node per coordinate tuple (the part of the plan it hangs under, the
+quantity class, the carrier, the sector, the year, the aggregation),
+with the trust line and the evidence the serializer wrote as comments
+above each node. A question that names those coordinates has an
+answer in that graph, one no retrieval has to find and no model has
+to read off a page: the number, its unit, and how far the run stands
+behind it.
 
-What this route does NOT do is guess. Every coordinate is one closed question
-over the spec's own list (one request per field, the harvest's own rule), an
-answer outside the list leaves the axis unbound, and an unbound axis adds no
-constraint. A value with no trust line is not shown with a blank badge: the
-route says why it did not answer and the caller falls back to the documents.
+The route does not guess. Every coordinate is one closed question
+over the spec's own list (one request per field, the harvest's own
+rule); an answer outside the list leaves the axis unbound, and an
+unbound axis adds no constraint. A value with no trust line is not
+shown with a blank badge: the route states why it did not answer,
+and the caller falls back to the documents.
 
-Which graph, which query, which axes: the profile's. `Hooks` carries them in
-the way `answer.Corpus` carries the corpus, and this module imports neither
-`profiles` nor `streamlit`. rdflib is imported inside the functions that need
-it, the convention docpipe/ontology.py states: the batch path never touches
-this module, and the check that does can run on the cluster without it.
+Which graph, which query and which axes are the profile's own.
+`Hooks` carries them the way `answer.Corpus` carries the corpus, and
+this module imports neither `profiles` nor `streamlit`. rdflib is
+imported inside the functions that need it, the convention
+`docpipe/ontology.py` states: the batch path never touches this
+module, and the check that does can run on the cluster without it.
 
 Author: Felix Vossel
 """

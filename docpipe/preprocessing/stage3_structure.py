@@ -1,9 +1,29 @@
 """
-stage3_structure.py – Deterministic section assembly from layout-annotated pages.
+stage3_structure.py: Assembles document sections deterministically
+from pages that carry the layout labels Stage 2 attached.
 
-Walks all blocks in reading order: SECTION_TITLE_CLASSES blocks open a new
-Section, tables/figures become a TableRef/FigureRef plus a [block_id]
-placeholder in the section content, and plain text is appended as prose.
+Walks every block in reading order. A block labelled as a section
+title opens a new Section; a table or figure block becomes a
+TableRef or FigureRef plus a [block_id] placeholder in the section
+content; plain text is appended as prose. Reading order across a
+multi-column page is settled first, by columns.sort_pages.
+
+Two passes run before assembly. strip_running_headers drops text
+blocks whose page-number-normalized text recurs in the same header
+or footer band on enough pages to be a running header or footer,
+without touching a section title. drop_directory_sections removes
+table-of-contents, list-of-figures and index sections by scoring how
+much of a section's text is directory-listing entries, while keeping
+a section that still references a real table or figure and routing a
+bibliography title to the Stage 4 literature path instead of
+dropping it.
+
+A table's or figure's caption is settled during assembly, where the
+section text and its placeholder are both available: resolve_title
+(docpipe.captions) chooses between the caption block Stage 2 attached
+by distance and a nearby sentence in the section text, for plans
+whose tables carry a rounding footnote that would otherwise be read
+as the caption.
 
 Author: Felix Vossel
 """

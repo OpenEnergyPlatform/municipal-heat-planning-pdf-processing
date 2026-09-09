@@ -1,25 +1,30 @@
 """
-page_text_fallback.py – Text for pages that carry no text layer.
+page_text_fallback.py: Synthesizes text blocks for pages that carry
+no usable PDF text layer.
 
-Stage 1 reads the PDF's own text layer. Some plans have none: the pages are
-vector graphics or images end to end, `get_text` returns nothing, and every
-section Stage 3 assembles is a body of bare [pNN_tbl0] markers. Eleven plans in
-the heat-plan corpus are like that, together holding 1270 tables and figures
-that Stage 2 transcribed and that then had no text to hang off.
+Stage 1 reads the PDF's own text layer. Some plans have none: the
+pages are vector graphics or images end to end, get_text returns
+nothing, and every section Stage 3 assembles from them is a body of
+bare [pNN_tbl0] markers. Eleven plans in the heat-plan corpus are
+like that, together holding 1270 tables and figures that Stage 2
+transcribed and that then had no text to explain them
+(tests/test_page_text_fallback.py).
 
-This module fills that gap at the level where it opens: a page's text BLOCKS.
-The page is rendered, one model call transcribes it, and the reply becomes
-Block(type="text") entries on the same PageData every other page carries. From
-there Stage 2, Stage 3, refinement, chunking and embedding run unchanged and
-know nothing about where the text came from.
+This module fills the gap at the level where it opens: a page's text
+blocks. The page is rendered, one model call transcribes it, and the
+reply becomes Block(type="text") entries on the same PageData every
+other page carries. Stage 2, Stage 3, refinement, chunking and
+embedding then run unchanged and read nothing about where the text
+came from.
 
-Deliberately ONE job per call. Transcription is not cleanup: the model is asked
-to read what is on the page and nothing else, and the refinement stage does its
-own work afterwards in its own calls. Asking for both at once is how a model
-starts inventing the tidy version of a page it cannot quite read.
+Each call does one job. Transcription is not cleanup: the model is
+asked to read what is on the page and nothing else, and refinement
+does its own work afterward, in its own calls. Asking for both at
+once is how a model starts inventing the tidy version of a page it
+cannot quite read.
 
-The model call is an injected callable, so the loop, the thresholds and the
-block synthesis are testable without a GPU.
+The model call is an injected callable, so the loop, the thresholds
+and the block synthesis are testable without a GPU.
 
 Author: Felix Vossel
 """

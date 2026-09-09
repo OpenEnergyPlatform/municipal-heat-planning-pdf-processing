@@ -54,10 +54,14 @@ PAGES_DIR = ROOT / "docs"
 # one.
 ALLOWED_ROOTS = ("docpipe", "profiles", "scripts", "docs")
 
-# The one page nobody generates, because it says what the parts are FOR and no
-# source carries that. It is a source here, not an output: checked where it
-# lives, linked from the index, and never written.
-HANDWRITTEN = ("pipeline.md",)
+# The pages nobody generates, because they say what the parts are FOR, how
+# the whole is run, and what the words mean, and no source carries that. They
+# are sources here, not outputs: checked where they live, linked from the
+# index, and never written.
+HANDWRITTEN = ("pipeline.md", "running.md", "glossary.md")
+HANDWRITTEN_TITLES = {"pipeline.md": "How the parts fit together",
+                      "running.md": "Running the pipeline",
+                      "glossary.md": "Glossary"}
 
 # Where a page's introduction lives: one Markdown file per generated page,
 # under `docs/_intros/<page>`. Prose, in a file, rather than a string in this
@@ -352,19 +356,65 @@ SOURCES = (
      (("docpipe/extraction/trust.py", None),)),
 )
 
-# The order the site's table of contents reads in. Named here because it is
-# the pipeline's order and nothing in the tree carries it: the packages are
-# named after what they do, not after when they run.
-ORDER = (
-    "pipeline.md",
-    "stages/fileprocessing.md", "stages/preprocessing.md",
-    "stages/refinement.md", "stages/visuals.md", "stages/chunking.md",
-    "stages/extraction.md", "stages/graph.md",
-    "stages/inference.md", "stages/app.md",
-    "stages/embedding.md", "stages/store.md", "stages/core.md",
-    "artifacts.md", "profiles.md",
-    "contract/states.md", "contract/trust.md",
+# The site's table of contents, in groups. Named here because the order is
+# the pipeline's and nothing in the tree carries it: the packages are named
+# after what they do, not after when they run. An entry ending in "/*" stands
+# for the pages a profile contributes, discovered rather than listed.
+GROUPS = (
+    ("Overview", ("pipeline.md", "running.md")),
+    ("The stages", ("stages/fileprocessing.md", "stages/preprocessing.md",
+                    "stages/refinement.md", "stages/visuals.md",
+                    "stages/chunking.md", "stages/extraction.md",
+                    "stages/graph.md", "stages/inference.md",
+                    "stages/app.md", "stages/embedding.md",
+                    "stages/store.md", "stages/core.md")),
+    ("Profiles", ("profiles.md", "profiles/*")),
+    ("Contracts", ("contract/states.md", "contract/trust.md",
+                   "contract/*")),
+    ("Reference", ("artifacts.md", "glossary.md")),
 )
+ORDER = tuple(page for _caption, pages in GROUPS for page in pages
+              if not page.endswith("/*"))
+
+
+def toctree_groups(pages) -> list:
+    """[(caption, [page, ...])] for the site's contents, wildcards expanded.
+
+    A page that no group names still reaches the contents, in a last group,
+    so a new page is a broken build (the Read the Docs build treats a page
+    outside every toctree as a warning) rather than an unreachable document.
+    """
+    have = set(pages) | set(HANDWRITTEN)
+    have -= {"README.md", "index.md"}
+    named = {page for _caption, members in GROUPS for page in members}
+    out, placed = [], set()
+    for caption, members in GROUPS:
+        listed = []
+        for member in members:
+            if member.endswith("/*"):
+                prefix = member[:-1]
+                listed += sorted(page for page in have
+                                 if page.startswith(prefix)
+                                 and page not in named)
+            elif member in have:
+                listed.append(member)
+        listed = [page for page in listed if page not in placed]
+        if listed:
+            out.append((caption, listed))
+            placed.update(listed)
+    rest = sorted(have - placed)
+    if rest:
+        out.append(("More", rest))
+    return out
+
+
+def _profile_sources() -> tuple:
+    """One page per profile, discovered, not listed: prose plus a table of
+    the parameters and axes read from the published contract."""
+    return tuple(
+        (f"profiles/{name}.md", f"The {name} profile",
+         ((_contract_rel(name), "harvest/$defs"),))
+        for name in _profile_names())
 
 
 def _contract_sources() -> tuple:
@@ -400,13 +450,13 @@ def resolve(sources) -> dict:
         if not (PAGES_DIR / name).is_file():
             raise SourceMoved(name, f"docs/{name}",
                               "the hand-written page is missing")
-    for page in out:
-        if not page.startswith("stages/"):
-            continue
-        if not (PAGES_DIR / "_intros" / page).is_file():
+    # Every generated page, the front page included, opens with prose that
+    # no source carries: what the thing is for. Without it a page is a table
+    # or a list of docstrings, and it is refused rather than published.
+    for page in list(out) + ["index.md"]:
+        if not (ROOT / INTRO_DIR / page).is_file():
             raise SourceMoved(page, f"{INTRO_DIR}/{page}",
-                              "a stage page has no introduction, so it would "
-                              "publish a list of docstrings and no order")
+                              "the page has no introduction")
     for page in ORDER:
         if page not in out and page not in HANDWRITTEN:
             raise SourceMoved(page, "scripts/build_docs.py",
@@ -431,6 +481,8 @@ def _lede(doc: str) -> str:
             continue
         lines.append(line.strip())
     text = " ".join(lines)
+    # A module docstring opens with its file name; the index names the page.
+    text = re.sub(r"^[\w./]+\.py\s*[:\u2013\u2014-]+\s*", "", text)
     found = re.match(r"(.+?[.!?])(\s|$)", text)
     return (found.group(1) if found else text).strip()
 
@@ -461,12 +513,69 @@ def render_stage_page(page: str, parts: list) -> str:
     intro = intro_of(page)
     if intro:
         out += [intro, ""]
-    out += ["## The modules", "",
-            "Verbatim from the module docstrings, generated by "
-            "`scripts/build_docs.py`. Edit the docstring, not this page.", ""]
+    out += ["## Module reference", "",
+            "The docstring of each module of this stage, verbatim from the "
+            "code and generated by `scripts/build_docs.py`. The chapter "
+            "above is the account; this is the reference. Edit the "
+            "docstring, not this page.", ""]
     for rel, doc in parts:
-        out += [f"### `{rel}`", "", doc, ""]
+        out += _collapsed(f"<code>{rel}</code>", doc)
     out += [f"[Back to the index]({_up(page)}README.md)", ""]
+    return NEWLINE.join(out)
+
+
+def _collapsed(summary: str, body: str) -> list:
+    """A `<details>` block whose body is still Markdown: the blank lines
+    around it end the HTML block, so what stands between is rendered."""
+    return ["<details>", f"<summary>{summary}</summary>", "", body, "",
+            "</details>", ""]
+
+
+def render_profile_page(name: str, harvest: dict, intro: str) -> str:
+    """The profile's own page: prose, then the parameters and their axes
+    read off the published contract, never off the spec (the spec carries
+    real corpus tables as examples)."""
+    out = [f"# The {name} profile", ""]
+    if intro:
+        out += [intro, ""]
+    out += ["## The parameters, from the published contract", "",
+            "Read from `profiles/%s/extraction_schema.json` by "
+            "`scripts/build_docs.py`. Each row is one record kind of the "
+            "harvest; an axis is a coordinate of that record, with the "
+            "kind of answer it takes. The full contract, every question and "
+            "every option, is on [contract/%s.md](../contract/%s.md)." %
+            (name, name, name), "",
+            "| parameter | value | axes | graph node |", "|---|---|---|---|"]
+    for key in sorted(harvest):
+        body = harvest[key]
+        if not (key.startswith("tuple_") and isinstance(body, dict)):
+            continue
+        props = body.get("properties") or {}
+        value = props.get("value") or {}
+        options = value.get("x-options")
+        kind = (f"choice of {len(options)}" if isinstance(options, dict)
+                and options else str(value.get("type", "")))
+        axes = []
+        for axis in sorted(props):
+            if f"{axis}_state" not in props:
+                continue
+            prop = props[axis] or {}
+            choices = prop.get("x-options")
+            kinds = prop.get("type")
+            kinds = [kinds] if isinstance(kinds, str) else list(kinds or [])
+            kinds = [k for k in kinds if k != "null"]
+            if axis == "parameter":
+                axes.append("`parameter` (one of the spec's parameters)")
+            elif isinstance(choices, dict) and choices:
+                axes.append(f"`{axis}` ({len(choices)} options)")
+            else:
+                axes.append(f"`{axis}` ({kinds[0] if kinds else 'per document'})")
+        kg = body.get("x-kg") if isinstance(body.get("x-kg"), dict) else {}
+        node = kg.get("node", "")
+        out.append(f"| `{key[len('tuple_'):]}` | {kind} | "
+                   f"{', '.join(axes) or 'none'} | "
+                   f"{'`' + str(node) + '`' if node else ''} |")
+    out += ["", "[Back to the index](../README.md)", ""]
     return NEWLINE.join(out)
 
 
@@ -500,23 +609,24 @@ def _kg_lines(kg: dict) -> list:
 
 
 def render_contract_page(profile: str, schema: dict, stamp=None,
-                         trace=None) -> str:
+                         trace=None, intro: str = "") -> str:
     """One section per record kind, straight out of the published schema,
     then the stamp beside the harvest file and the trace beside both."""
     harvest = schema
     out = [f"# The harvest contract: {profile}", "",
            "Generated from `profiles/%s/extraction_schema.json` by "
-           "`scripts/build_docs.py`, which is itself generated from the "
+           "`scripts/build_docs.py`; that file is itself generated from the "
            "profile's `extraction_spec.json` by "
            "`docpipe/extraction/schema.py`. Edit neither: change the spec and "
-           "regenerate." % profile,
-           "",
-           "One JSON object per line of a harvest file. Every line is one of "
-           "the kinds below and nothing else, and each of them is closed "
-           "(`additionalProperties: false`) — a new record kind costs a "
-           "branch in `docpipe/extraction/schema.py`, a regeneration of both "
-           "checked-in schemas, and a branch in `read_harvest` in "
-           "`scripts/harvest_compare.py`.", ""]
+           "regenerate." % profile, ""]
+    if intro:
+        out += [intro, ""]
+    out += ["One JSON object per line of a harvest file. Every line is one "
+            "of the kinds below and nothing else, and each of them is closed "
+            "(`additionalProperties: false`). A new record kind costs a "
+            "branch in `docpipe/extraction/schema.py`, a regeneration of both "
+            "checked-in schemas, and a branch in `read_harvest` in "
+            "`scripts/harvest_compare.py`.", ""]
     for name in sorted(harvest):
         if name in ("state", "provenance"):
             continue
@@ -552,7 +662,7 @@ def render_contract_page(profile: str, schema: dict, stamp=None,
                 out += _kg_lines(prop_kg) + [""]
         if body.get("allOf"):
             out += ["A coordinate is `null` unless its `<axis>_state` says it "
-                    "was read or derived — that is what the `allOf` branches "
+                    "was read or derived; that is what the `allOf` branches "
                     "encode, one per coordinate.", ""]
     out += _stamp_lines(stamp or {}) + _trace_lines(trace or {})
     out += ["[Back to the index](../README.md)", ""]
@@ -599,15 +709,13 @@ def _trace_lines(trace: dict) -> list:
     return out + [""]
 
 
-def render_states_page(rows) -> str:
+def render_states_page(rows, intro: str = "") -> str:
     out = ["# What a coordinate's state means", "",
            "Generated from `docpipe/extraction/fields.py` and the published "
-           "schema by `scripts/build_docs.py`.", "",
-           "Every coordinate of every accepted value carries one of these, "
-           "always. The distinction they exist for is the one between a "
-           "finding about the document and a finding about the run: \"the "
-           "plan does not say it\" and \"we stopped looking\" are not the "
-           "same fact, and an empty cell says neither.", "",
+           "schema by `scripts/build_docs.py`.", ""]
+    if intro:
+        out += [intro, ""]
+    out += [
            "| constant | value | what it says |", "|---|---|---|"]
     for name, value, gloss in rows:
         out.append(f"| `{name}` | `{value}` | {gloss} |")
@@ -616,11 +724,15 @@ def render_states_page(rows) -> str:
 
 
 def render_trust_page(levels, reasons, flag_reasons, marks, join,
-                      doc: str) -> str:
+                      doc: str, intro: str = "") -> str:
     out = ["# How much of a value the run can stand behind", "",
            "Generated from `docpipe/extraction/trust.py` and the published "
-           "schema by `scripts/build_docs.py`.", "", doc, "",
-           "## The levels", "", "| level | what it says |", "|---|---|"]
+           "schema by `scripts/build_docs.py`.", ""]
+    if intro:
+        out += [intro, ""]
+    out += ["## What `docpipe/extraction/trust.py` says", ""]
+    out += _collapsed("<code>docpipe/extraction/trust.py</code>", doc)
+    out += ["## The levels", "", "| level | what it says |", "|---|---|"]
     for level, gloss in levels:
         out.append(f"| `{level}` | {gloss} |")
     out += ["", "## The reasons", "",
@@ -643,12 +755,16 @@ def render_trust_page(levels, reasons, flag_reasons, marks, join,
     return NEWLINE.join(out)
 
 
-def render_artifacts_page(constants, doc: str) -> str:
+def render_artifacts_page(constants, doc: str, intro: str = "") -> str:
     out = ["# What each stage leaves behind", "",
            "Generated from `docpipe/artifacts.py` by "
            "`scripts/build_docs.py`: the names below and the stage against "
-           "each are that module's own constants and its own comments.", "",
-           doc, "", "## Directories", "", "| name | path |", "|---|---|"]
+           "each are that module's own constants and its own comments.", ""]
+    if intro:
+        out += [intro, ""]
+    out += ["## What `docpipe/artifacts.py` says", ""]
+    out += _collapsed("<code>docpipe/artifacts.py</code>", doc)
+    out += ["## Directories", "", "| name | path |", "|---|---|"]
     files = []
     for name, value, note in constants:
         if name.startswith("DIR_"):
@@ -673,48 +789,44 @@ def render_profiles_page(doc: str, profiles, intro: str = "") -> str:
     out = ["# Profiles", ""]
     if intro:
         out += [intro, ""]
-    out += ["## What `docpipe/profile.py` says", "",
-            "Verbatim from the module docstring, generated by "
-            "`scripts/build_docs.py`.", "", doc, "",
-            "## The profiles in this repository", ""]
+    out += ["## What `docpipe/profile.py` says", ""]
+    out += _collapsed("<code>docpipe/profile.py</code>", doc)
+    out += ["## The profiles in this repository", ""]
     for name in profiles:
-        out.append(f"- **{name}** — [the harvest contract]"
-                   f"(contract/{name}.md)")
+        out.append(f"- **{name}**: [the profile](profiles/{name}.md), "
+                   f"[its harvest contract](contract/{name}.md)")
     out += ["", "[Back to the index](README.md)", ""]
     return NEWLINE.join(out)
 
 
-def render_toctree(pages) -> str:
-    """`index.md` — the site's own front page, and the only toctree.
+def render_toctree(pages, intro: str = "") -> str:
+    """`index.md`: the site's front page, its introduction and its contents.
 
     Sphinx needs one document that names every other, in the order a reader
     should meet them. That order is the pipeline's, which is in no file: the
-    packages are named after what they do, not after when they run.
+    packages are named after what they do, not after when they run. One
+    toctree per group of GROUPS, so the sidebar carries the group names.
     """
-    out = ["# The pipeline, end to end", "",
-           "This is generated documentation. Every page but "
-           "`pipeline.md` is rendered from the code it describes by "
-           "`scripts/build_docs.py`, and the test suite fails when a page and "
-           "its source disagree.", "",
-           "```{toctree}", ":maxdepth: 2", ":caption: Contents", ""]
-    listed = [page for page in ORDER
-              if page in pages or page in HANDWRITTEN]
-    out += [page[:-3] for page in listed]
-    rest = sorted(set(pages) - set(listed) - {"README.md", "index.md"})
-    out += [page[:-3] for page in rest]
-    out += ["```", ""]
+    out = ["# Municipal heat planning PDF processing", ""]
+    if intro:
+        out += [intro, ""]
+    for caption, members in toctree_groups(pages):
+        out += ["```{toctree}", ":maxdepth: 1", f":caption: {caption}", ""]
+        out += [page[:-3] for page in members]
+        out += ["```", ""]
     return NEWLINE.join(out)
 
 
 def render_index(pages, ledes=None) -> str:
     out = ["# Documentation", "",
-           "Every page here except `pipeline.md` is generated from the code "
-           "it describes by `scripts/build_docs.py`, and "
+           "Every page here except the hand-written ones is generated from "
+           "the code it describes by `scripts/build_docs.py`, and "
            "`tests/test_docs_build.py` fails when a checked-in page and a "
            "fresh render disagree. Edit the source, then run:", "",
            "```", "python scripts/build_docs.py --out docs", "```", "",
-           "## Pages", "",
-           f"- [How the parts fit together](pipeline.md) — hand-written"]
+           "## Pages", ""]
+    for name in HANDWRITTEN:
+        out.append(f"- [{HANDWRITTEN_TITLES[name]}]({name}): hand-written")
     for page in sorted(pages):
         if page == "README.md":
             continue
@@ -731,7 +843,7 @@ def render_index(pages, ledes=None) -> str:
 def build() -> dict:
     """{page relpath: text}. Renders everything, writes nothing."""
     profiles = _profile_names()
-    manifest = SOURCES + _contract_sources()
+    manifest = SOURCES + _profile_sources() + _contract_sources()
     resolved = resolve(manifest)
     titles = {page: title for page, title, _ in manifest}
     pages: dict = {}
@@ -741,21 +853,26 @@ def build() -> dict:
             pages[page] = render_stage_page(page, parts)
         elif page == "artifacts.md":
             pages[page] = render_artifacts_page(
-                constants_of("docpipe/artifacts.py"), parts[0][1])
+                constants_of("docpipe/artifacts.py"), parts[0][1],
+                intro_of(page))
         elif page == "profiles.md":
             pages[page] = render_profiles_page(parts[0][1], profiles,
                                                intro_of(page))
+        elif page.startswith("profiles/"):
+            pages[page] = render_profile_page(page.split("/")[-1][:-3],
+                                              parts[0][1], intro_of(page))
         elif page == "contract/states.md":
-            pages[page] = render_states_page(states_table())
+            pages[page] = render_states_page(states_table(), intro_of(page))
         elif page == "contract/trust.md":
             levels, reasons, flags, marks, join = trust_table()
             pages[page] = render_trust_page(levels, reasons, flags, marks,
-                                            join, parts[0][1])
+                                            join, parts[0][1], intro_of(page))
         else:
             pages[page] = render_contract_page(page.split("/")[-1][:-3],
                                                parts[0][1],
                                                stamp=parts[1][1],
-                                               trace=parts[2][1])
+                                               trace=parts[2][1],
+                                               intro=intro_of(page))
     # The index line of a page is its title and the first line of its
     # primary source's docstring, where that source is a module.
     ledes = {page: (_lede(resolved[page][0][1])
@@ -767,7 +884,8 @@ def build() -> dict:
     # repository opens, `index.md` is what Sphinx builds the site from, and
     # only the second may carry a toctree.
     pages["index.md"] = render_toctree(
-        {page: titles[page] for page in pages if page != "README.md"})
+        {page: titles[page] for page in pages if page != "README.md"},
+        intro_of("index.md"))
     return pages
 
 

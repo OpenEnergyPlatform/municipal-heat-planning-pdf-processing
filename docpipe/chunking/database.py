@@ -1,11 +1,13 @@
 """
-database.py – Insert sections/tables/images from merged data, and write FAISS
-embedding IDs back. Documents themselves are populated by fileprocessing.
+database.py: Inserts sections, tables and images from merged data,
+and writes FAISS embedding ids back to the database.
 
-The DB is the source of truth for what has been embedded and for FAISS id
-allocation. Its schema lives in the file itself (`sqlite3 KWP.db .schema`):
-the checked-in copy is gone, because nothing read it and a second copy of a
-schema with no check against the first one only tells you what was true once.
+Documents themselves are populated by fileprocessing. The database
+is the source of truth for what has been embedded and for FAISS id
+allocation. Its schema lives only in the database file itself,
+readable with `sqlite3 KWP.db .schema`: a checked-in copy of the
+schema was removed because nothing read it, and an unchecked second
+copy would only record what was once true.
 
 Author: Felix Vossel
 """

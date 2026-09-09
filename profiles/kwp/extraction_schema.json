@@ -106,7 +106,7 @@
       ]
      },
      "title": {
-      "description": "The section title, or a table's or figure's caption -- resolved to the sentence before its placeholder where the stored caption is a footnote.",
+      "description": "The section title, or a table's or figure's caption, resolved to the sentence before its placeholder where the stored caption is a footnote.",
       "type": [
        "string",
        "null"
@@ -247,7 +247,7 @@
    },
    "summary": {
     "additionalProperties": false,
-    "description": "The last line of the file: how this document's own values are distributed. A contested identity is decided by the serializer and a second reading is a later pass, so neither is counted here -- the levels are a floor, and the graph side recomputes them.",
+    "description": "The last line of the file: how this document's own values are distributed. A contested identity is decided by the serializer and a second reading is a later pass, so neither is counted here. The levels are a floor, and the graph side recomputes them.",
     "properties": {
      "document_id": {
       "type": "integer"
@@ -640,7 +640,7 @@
       "type": "string"
      },
      "aggregation_raw_foreign": {
-      "description": "The wording does not name the option chosen for 'aggregation' -- the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.",
+      "description": "The wording does not name the option chosen for 'aggregation': the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.",
       "type": "boolean"
      },
      "aggregation_seen": {
@@ -728,7 +728,7 @@
       ],
       "x-kg": {
        "label": "is about",
-       "note": "Object is an OEO class (punning). `is about` (obo:IAO_0000136), whose domain is information content entity and which our value classes are under. NOT oeo:OEO_00000523 covers energy carrier / oeo:OEO_00000505 covers sector: both are domained on oeo:OEO_00020011 study, an occurrent, while every quantity value is a continuant, and the pin asserts obo:BFO_0000002 disjointWith obo:BFO_0000003 -- so those two edges made the whole graph unsatisfiable. Nothing in the pinned release both ranges over carrier or sector and accepts a value as its subject; `is about` is what OEO itself writes on this class (OEO_00240019, the parent of OEO_00050016, carries two of them). The role of an object is read from its own class: energy carrier is under BFO_0000040 and sector under BFO_0000031, and those two are disjoint, so carrier and sector stay apart. `outside_root` names the nine classes the plans write in the carrier column that OEO does not place under energy carrier -- district heat, electricity, solar thermal, geothermal and the ambient heat sources. They used to lose this edge, because `covers energy carrier` ranges over energy carrier and asserting them would have contradicted the TBox; `is about` declares no range, so they keep it and only the count remains, as the argument for the axioms the ontology side is adding.",
+       "note": "Object is an OEO class (punning). `is about` (obo:IAO_0000136), whose domain is information content entity and which our value classes are under. NOT oeo:OEO_00000523 covers energy carrier / oeo:OEO_00000505 covers sector: both are domained on oeo:OEO_00020011 study, an occurrent, while every quantity value is a continuant, and the pin asserts obo:BFO_0000002 disjointWith obo:BFO_0000003. Those two edges together made the whole graph unsatisfiable. Nothing in the pinned release both ranges over carrier or sector and accepts a value as its subject; `is about` is what OEO itself writes on this class (OEO_00240019, the parent of OEO_00050016, carries two of them). The role of an object is read from its own class: energy carrier is under BFO_0000040 and sector under BFO_0000031, and those two are disjoint, so carrier and sector stay apart. `outside_root` names the nine classes the plans write in the carrier column that OEO does not place under energy carrier: district heat, electricity, solar thermal, geothermal and the ambient heat sources. They used to lose this edge, because `covers energy carrier` ranges over energy carrier and asserting them would have contradicted the TBox; `is about` declares no range, so they keep it and only the count remains, as the argument for the axioms the ontology side is adding.",
        "outside_root": {
         "OEO_00000056": "ambient heat",
         "OEO_00000132": "district heating",
@@ -967,7 +967,7 @@
       "type": "string"
      },
      "carrier_raw_foreign": {
-      "description": "The wording does not name the option chosen for 'carrier' -- the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.",
+      "description": "The wording does not name the option chosen for 'carrier': the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.",
       "type": "boolean"
      },
      "carrier_seen": {
@@ -1053,7 +1053,7 @@
       "type": "string"
      },
      "parameter_raw_foreign": {
-      "description": "The wording does not name the option chosen for 'parameter' -- the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.",
+      "description": "The wording does not name the option chosen for 'parameter': the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.",
       "type": "boolean"
      },
      "parameter_seen": {
@@ -1215,7 +1215,7 @@
       "type": "string"
      },
      "quantity_raw_foreign": {
-      "description": "The wording does not name the option chosen for 'quantity' -- the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.",
+      "description": "The wording does not name the option chosen for 'quantity': the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.",
       "type": "boolean"
      },
      "quantity_seen": {
@@ -1363,7 +1363,7 @@
       "type": "string"
      },
      "scenario_raw_foreign": {
-      "description": "The wording does not name the option chosen for 'scenario' -- the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.",
+      "description": "The wording does not name the option chosen for 'scenario': the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.",
       "type": "boolean"
      },
      "scenario_seen": {
@@ -1428,7 +1428,7 @@
       ],
       "x-kg": {
        "label": "is about",
-       "note": "Object is an OEO sector class. `is about` (obo:IAO_0000136), whose domain is information content entity and which our value classes are under. NOT oeo:OEO_00000523 covers energy carrier / oeo:OEO_00000505 covers sector: both are domained on oeo:OEO_00020011 study, an occurrent, while every quantity value is a continuant, and the pin asserts obo:BFO_0000002 disjointWith obo:BFO_0000003 -- so those two edges made the whole graph unsatisfiable. Nothing in the pinned release both ranges over carrier or sector and accepts a value as its subject; `is about` is what OEO itself writes on this class (OEO_00240019, the parent of OEO_00050016, carries two of them). The role of an object is read from its own class: energy carrier is under BFO_0000040 and sector under BFO_0000031, and those two are disjoint, so carrier and sector stay apart.",
+       "note": "Object is an OEO sector class. `is about` (obo:IAO_0000136), whose domain is information content entity and which our value classes are under. NOT oeo:OEO_00000523 covers energy carrier / oeo:OEO_00000505 covers sector: both are domained on oeo:OEO_00020011 study, an occurrent, while every quantity value is a continuant, and the pin asserts obo:BFO_0000002 disjointWith obo:BFO_0000003. Those two edges together made the whole graph unsatisfiable. Nothing in the pinned release both ranges over carrier or sector and accepts a value as its subject; `is about` is what OEO itself writes on this class (OEO_00240019, the parent of OEO_00050016, carries two of them). The role of an object is read from its own class: energy carrier is under BFO_0000040 and sector under BFO_0000031, and those two are disjoint, so carrier and sector stay apart.",
        "predicate": "IAO_0000136",
        "prefix": "obo",
        "role": "edge"
@@ -1504,7 +1504,7 @@
       "type": "string"
      },
      "sector_raw_foreign": {
-      "description": "The wording does not name the option chosen for 'sector' -- the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.",
+      "description": "The wording does not name the option chosen for 'sector': the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.",
       "type": "boolean"
      },
      "sector_seen": {
@@ -1617,7 +1617,7 @@
       "type": "string"
      },
      "spatial_scope_raw_foreign": {
-      "description": "The wording does not name the option chosen for 'spatial_scope' -- the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.",
+      "description": "The wording does not name the option chosen for 'spatial_scope': the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.",
       "type": "boolean"
      },
      "spatial_scope_seen": {
@@ -1696,7 +1696,7 @@
       ],
       "x-kg": {
        "label": "is about",
-       "note": "The calendar year the aggregation is integrated over, as a node and no longer as a literal. A unit without a per-year marker carries the flag period:annual_in_quote or period:unstated. It was oeo:OEO_00020440 has scenario year value, which is wrong twice: its domain is oeo:OEO_00000365 scenario factsheet, so every value node was typed a factsheet and through it a document, and its declared range is xsd:dateTime while we wrote xsd:integer, which is an ill-typed literal. The pinned release has NO property at all whose domain a quantity value satisfies and whose range is a time, so the year becomes an object: `is about` a node of oeo:OEO_00030033 time step, \"a one-dimensional temporal region that has a start time and an ending time\". oeo:OEO_00020097 scenario year would be the narrower class and is not used, because it is defined as part of a scenario horizon and the inventory years are not. Cost, stated: the number 2030 is no longer a literal a reasoner can compare -- it is the node's IRI, its label, and part of the value's own identity. The term request is a property from quantity value to temporal region, and a way to write a year onto one.",
+       "note": "The calendar year the aggregation is integrated over, as a node and no longer as a literal. A unit without a per-year marker carries the flag period:annual_in_quote or period:unstated. It was oeo:OEO_00020440 has scenario year value, which is wrong twice: its domain is oeo:OEO_00000365 scenario factsheet, so every value node was typed a factsheet and through it a document, and its declared range is xsd:dateTime while we wrote xsd:integer, which is an ill-typed literal. The pinned release has NO property at all whose domain a quantity value satisfies and whose range is a time, so the year becomes an object: `is about` a node of oeo:OEO_00030033 time step, \"a one-dimensional temporal region that has a start time and an ending time\". oeo:OEO_00020097 scenario year would be the narrower class and is not used, because it is defined as part of a scenario horizon and the inventory years are not. Cost, stated: the number 2030 is no longer a literal a reasoner can compare; it is the node's IRI, its label, and part of the value's own identity. The term request is a property from quantity value to temporal region, and a way to write a year onto one.",
        "object_class": "OEO_00030033",
        "predicate": "IAO_0000136",
        "prefix": "obo",
@@ -1714,7 +1714,7 @@
       "type": "string"
      },
      "year_raw_foreign": {
-      "description": "The wording does not name the option chosen for 'year' -- the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.",
+      "description": "The wording does not name the option chosen for 'year': the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.",
       "type": "boolean"
      },
      "year_seen": {
@@ -2113,7 +2113,7 @@
       "type": "string"
      },
      "aggregation_raw_foreign": {
-      "description": "The wording does not name the option chosen for 'aggregation' -- the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.",
+      "description": "The wording does not name the option chosen for 'aggregation': the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.",
       "type": "boolean"
      },
      "aggregation_seen": {
@@ -2201,7 +2201,7 @@
       ],
       "x-kg": {
        "label": "is about",
-       "note": "Object is an OEO class (punning). `is about` (obo:IAO_0000136), whose domain is information content entity and which our value classes are under. NOT oeo:OEO_00000523 covers energy carrier / oeo:OEO_00000505 covers sector: both are domained on oeo:OEO_00020011 study, an occurrent, while every quantity value is a continuant, and the pin asserts obo:BFO_0000002 disjointWith obo:BFO_0000003 -- so those two edges made the whole graph unsatisfiable. Nothing in the pinned release both ranges over carrier or sector and accepts a value as its subject; `is about` is what OEO itself writes on this class (OEO_00240019, the parent of OEO_00050016, carries two of them). The role of an object is read from its own class: energy carrier is under BFO_0000040 and sector under BFO_0000031, and those two are disjoint, so carrier and sector stay apart. `outside_root` names the nine classes the plans write in the carrier column that OEO does not place under energy carrier -- district heat, electricity, solar thermal, geothermal and the ambient heat sources. They used to lose this edge, because `covers energy carrier` ranges over energy carrier and asserting them would have contradicted the TBox; `is about` declares no range, so they keep it and only the count remains, as the argument for the axioms the ontology side is adding.",
+       "note": "Object is an OEO class (punning). `is about` (obo:IAO_0000136), whose domain is information content entity and which our value classes are under. NOT oeo:OEO_00000523 covers energy carrier / oeo:OEO_00000505 covers sector: both are domained on oeo:OEO_00020011 study, an occurrent, while every quantity value is a continuant, and the pin asserts obo:BFO_0000002 disjointWith obo:BFO_0000003. Those two edges together made the whole graph unsatisfiable. Nothing in the pinned release both ranges over carrier or sector and accepts a value as its subject; `is about` is what OEO itself writes on this class (OEO_00240019, the parent of OEO_00050016, carries two of them). The role of an object is read from its own class: energy carrier is under BFO_0000040 and sector under BFO_0000031, and those two are disjoint, so carrier and sector stay apart. `outside_root` names the nine classes the plans write in the carrier column that OEO does not place under energy carrier: district heat, electricity, solar thermal, geothermal and the ambient heat sources. They used to lose this edge, because `covers energy carrier` ranges over energy carrier and asserting them would have contradicted the TBox; `is about` declares no range, so they keep it and only the count remains, as the argument for the axioms the ontology side is adding.",
        "outside_root": {
         "OEO_00000056": "ambient heat",
         "OEO_00000132": "district heating",
@@ -2440,7 +2440,7 @@
       "type": "string"
      },
      "carrier_raw_foreign": {
-      "description": "The wording does not name the option chosen for 'carrier' -- the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.",
+      "description": "The wording does not name the option chosen for 'carrier': the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.",
       "type": "boolean"
      },
      "carrier_seen": {
@@ -2526,7 +2526,7 @@
       "type": "string"
      },
      "parameter_raw_foreign": {
-      "description": "The wording does not name the option chosen for 'parameter' -- the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.",
+      "description": "The wording does not name the option chosen for 'parameter': the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.",
       "type": "boolean"
      },
      "parameter_seen": {
@@ -2689,7 +2689,7 @@
       "type": "string"
      },
      "quantity_raw_foreign": {
-      "description": "The wording does not name the option chosen for 'quantity' -- the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.",
+      "description": "The wording does not name the option chosen for 'quantity': the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.",
       "type": "boolean"
      },
      "quantity_seen": {
@@ -2837,7 +2837,7 @@
       "type": "string"
      },
      "scenario_raw_foreign": {
-      "description": "The wording does not name the option chosen for 'scenario' -- the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.",
+      "description": "The wording does not name the option chosen for 'scenario': the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.",
       "type": "boolean"
      },
      "scenario_seen": {
@@ -2902,7 +2902,7 @@
       ],
       "x-kg": {
        "label": "is about",
-       "note": "Object is an OEO sector class. `is about` (obo:IAO_0000136), whose domain is information content entity and which our value classes are under. NOT oeo:OEO_00000523 covers energy carrier / oeo:OEO_00000505 covers sector: both are domained on oeo:OEO_00020011 study, an occurrent, while every quantity value is a continuant, and the pin asserts obo:BFO_0000002 disjointWith obo:BFO_0000003 -- so those two edges made the whole graph unsatisfiable. Nothing in the pinned release both ranges over carrier or sector and accepts a value as its subject; `is about` is what OEO itself writes on this class (OEO_00240019, the parent of OEO_00050016, carries two of them). The role of an object is read from its own class: energy carrier is under BFO_0000040 and sector under BFO_0000031, and those two are disjoint, so carrier and sector stay apart.",
+       "note": "Object is an OEO sector class. `is about` (obo:IAO_0000136), whose domain is information content entity and which our value classes are under. NOT oeo:OEO_00000523 covers energy carrier / oeo:OEO_00000505 covers sector: both are domained on oeo:OEO_00020011 study, an occurrent, while every quantity value is a continuant, and the pin asserts obo:BFO_0000002 disjointWith obo:BFO_0000003. Those two edges together made the whole graph unsatisfiable. Nothing in the pinned release both ranges over carrier or sector and accepts a value as its subject; `is about` is what OEO itself writes on this class (OEO_00240019, the parent of OEO_00050016, carries two of them). The role of an object is read from its own class: energy carrier is under BFO_0000040 and sector under BFO_0000031, and those two are disjoint, so carrier and sector stay apart.",
        "predicate": "IAO_0000136",
        "prefix": "obo",
        "role": "edge"
@@ -2978,7 +2978,7 @@
       "type": "string"
      },
      "sector_raw_foreign": {
-      "description": "The wording does not name the option chosen for 'sector' -- the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.",
+      "description": "The wording does not name the option chosen for 'sector': the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.",
       "type": "boolean"
      },
      "sector_seen": {
@@ -3091,7 +3091,7 @@
       "type": "string"
      },
      "spatial_scope_raw_foreign": {
-      "description": "The wording does not name the option chosen for 'spatial_scope' -- the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.",
+      "description": "The wording does not name the option chosen for 'spatial_scope': the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.",
       "type": "boolean"
      },
      "spatial_scope_seen": {
@@ -3170,7 +3170,7 @@
       ],
       "x-kg": {
        "label": "is about",
-       "note": "The calendar year the aggregation is integrated over, as a node and no longer as a literal. A unit without a per-year marker carries the flag period:annual_in_quote or period:unstated. It was oeo:OEO_00020440 has scenario year value, which is wrong twice: its domain is oeo:OEO_00000365 scenario factsheet, so every value node was typed a factsheet and through it a document, and its declared range is xsd:dateTime while we wrote xsd:integer, which is an ill-typed literal. The pinned release has NO property at all whose domain a quantity value satisfies and whose range is a time, so the year becomes an object: `is about` a node of oeo:OEO_00030033 time step, \"a one-dimensional temporal region that has a start time and an ending time\". oeo:OEO_00020097 scenario year would be the narrower class and is not used, because it is defined as part of a scenario horizon and the inventory years are not. Cost, stated: the number 2030 is no longer a literal a reasoner can compare -- it is the node's IRI, its label, and part of the value's own identity. The term request is a property from quantity value to temporal region, and a way to write a year onto one.",
+       "note": "The calendar year the aggregation is integrated over, as a node and no longer as a literal. A unit without a per-year marker carries the flag period:annual_in_quote or period:unstated. It was oeo:OEO_00020440 has scenario year value, which is wrong twice: its domain is oeo:OEO_00000365 scenario factsheet, so every value node was typed a factsheet and through it a document, and its declared range is xsd:dateTime while we wrote xsd:integer, which is an ill-typed literal. The pinned release has NO property at all whose domain a quantity value satisfies and whose range is a time, so the year becomes an object: `is about` a node of oeo:OEO_00030033 time step, \"a one-dimensional temporal region that has a start time and an ending time\". oeo:OEO_00020097 scenario year would be the narrower class and is not used, because it is defined as part of a scenario horizon and the inventory years are not. Cost, stated: the number 2030 is no longer a literal a reasoner can compare; it is the node's IRI, its label, and part of the value's own identity. The term request is a property from quantity value to temporal region, and a way to write a year onto one.",
        "object_class": "OEO_00030033",
        "predicate": "IAO_0000136",
        "prefix": "obo",
@@ -3188,7 +3188,7 @@
       "type": "string"
      },
      "year_raw_foreign": {
-      "description": "The wording does not name the option chosen for 'year' -- the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.",
+      "description": "The wording does not name the option chosen for 'year': the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.",
       "type": "boolean"
      },
      "year_seen": {
@@ -3579,7 +3579,7 @@
       "type": "string"
      },
      "aggregation_raw_foreign": {
-      "description": "The wording does not name the option chosen for 'aggregation' -- the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.",
+      "description": "The wording does not name the option chosen for 'aggregation': the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.",
       "type": "boolean"
      },
      "aggregation_seen": {
@@ -3667,7 +3667,7 @@
       ],
       "x-kg": {
        "label": "is about",
-       "note": "Object is an OEO class (punning). `is about` (obo:IAO_0000136), whose domain is information content entity and which our value classes are under. NOT oeo:OEO_00000523 covers energy carrier / oeo:OEO_00000505 covers sector: both are domained on oeo:OEO_00020011 study, an occurrent, while every quantity value is a continuant, and the pin asserts obo:BFO_0000002 disjointWith obo:BFO_0000003 -- so those two edges made the whole graph unsatisfiable. Nothing in the pinned release both ranges over carrier or sector and accepts a value as its subject; `is about` is what OEO itself writes on this class (OEO_00240019, the parent of OEO_00050016, carries two of them). The role of an object is read from its own class: energy carrier is under BFO_0000040 and sector under BFO_0000031, and those two are disjoint, so carrier and sector stay apart. `outside_root` names the nine classes the plans write in the carrier column that OEO does not place under energy carrier -- district heat, electricity, solar thermal, geothermal and the ambient heat sources. They used to lose this edge, because `covers energy carrier` ranges over energy carrier and asserting them would have contradicted the TBox; `is about` declares no range, so they keep it and only the count remains, as the argument for the axioms the ontology side is adding.",
+       "note": "Object is an OEO class (punning). `is about` (obo:IAO_0000136), whose domain is information content entity and which our value classes are under. NOT oeo:OEO_00000523 covers energy carrier / oeo:OEO_00000505 covers sector: both are domained on oeo:OEO_00020011 study, an occurrent, while every quantity value is a continuant, and the pin asserts obo:BFO_0000002 disjointWith obo:BFO_0000003. Those two edges together made the whole graph unsatisfiable. Nothing in the pinned release both ranges over carrier or sector and accepts a value as its subject; `is about` is what OEO itself writes on this class (OEO_00240019, the parent of OEO_00050016, carries two of them). The role of an object is read from its own class: energy carrier is under BFO_0000040 and sector under BFO_0000031, and those two are disjoint, so carrier and sector stay apart. `outside_root` names the nine classes the plans write in the carrier column that OEO does not place under energy carrier: district heat, electricity, solar thermal, geothermal and the ambient heat sources. They used to lose this edge, because `covers energy carrier` ranges over energy carrier and asserting them would have contradicted the TBox; `is about` declares no range, so they keep it and only the count remains, as the argument for the axioms the ontology side is adding.",
        "outside_root": {
         "OEO_00000056": "ambient heat",
         "OEO_00000132": "district heating",
@@ -3906,7 +3906,7 @@
       "type": "string"
      },
      "carrier_raw_foreign": {
-      "description": "The wording does not name the option chosen for 'carrier' -- the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.",
+      "description": "The wording does not name the option chosen for 'carrier': the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.",
       "type": "boolean"
      },
      "carrier_seen": {
@@ -3992,7 +3992,7 @@
       "type": "string"
      },
      "parameter_raw_foreign": {
-      "description": "The wording does not name the option chosen for 'parameter' -- the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.",
+      "description": "The wording does not name the option chosen for 'parameter': the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.",
       "type": "boolean"
      },
      "parameter_seen": {
@@ -4059,7 +4059,7 @@
        "null"
       ],
       "x-kg": {
-       "note": "The class of the value node itself (rdf:type). OEO_00010157 is defined by its unit -- \"a quantity value that has a power unit as unit\" -- so it follows from units_accepted and is not a second assertion. An out:* answer is a deliberate non-class and mints no node.",
+       "note": "The class of the value node itself (rdf:type). OEO_00010157 is defined by its unit (\"a quantity value that has a power unit as unit\"), so it follows from units_accepted and is not a second assertion. An out:* answer is a deliberate non-class and mints no node.",
        "role": "type"
       },
       "x-options": {
@@ -4133,7 +4133,7 @@
       "type": "string"
      },
      "quantity_raw_foreign": {
-      "description": "The wording does not name the option chosen for 'quantity' -- the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.",
+      "description": "The wording does not name the option chosen for 'quantity': the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.",
       "type": "boolean"
      },
      "quantity_seen": {
@@ -4281,7 +4281,7 @@
       "type": "string"
      },
      "scenario_raw_foreign": {
-      "description": "The wording does not name the option chosen for 'scenario' -- the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.",
+      "description": "The wording does not name the option chosen for 'scenario': the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.",
       "type": "boolean"
      },
      "scenario_seen": {
@@ -4346,7 +4346,7 @@
       ],
       "x-kg": {
        "label": "is about",
-       "note": "Object is an OEO sector class. `is about` (obo:IAO_0000136), whose domain is information content entity and which our value classes are under. NOT oeo:OEO_00000523 covers energy carrier / oeo:OEO_00000505 covers sector: both are domained on oeo:OEO_00020011 study, an occurrent, while every quantity value is a continuant, and the pin asserts obo:BFO_0000002 disjointWith obo:BFO_0000003 -- so those two edges made the whole graph unsatisfiable. Nothing in the pinned release both ranges over carrier or sector and accepts a value as its subject; `is about` is what OEO itself writes on this class (OEO_00240019, the parent of OEO_00050016, carries two of them). The role of an object is read from its own class: energy carrier is under BFO_0000040 and sector under BFO_0000031, and those two are disjoint, so carrier and sector stay apart.",
+       "note": "Object is an OEO sector class. `is about` (obo:IAO_0000136), whose domain is information content entity and which our value classes are under. NOT oeo:OEO_00000523 covers energy carrier / oeo:OEO_00000505 covers sector: both are domained on oeo:OEO_00020011 study, an occurrent, while every quantity value is a continuant, and the pin asserts obo:BFO_0000002 disjointWith obo:BFO_0000003. Those two edges together made the whole graph unsatisfiable. Nothing in the pinned release both ranges over carrier or sector and accepts a value as its subject; `is about` is what OEO itself writes on this class (OEO_00240019, the parent of OEO_00050016, carries two of them). The role of an object is read from its own class: energy carrier is under BFO_0000040 and sector under BFO_0000031, and those two are disjoint, so carrier and sector stay apart.",
        "predicate": "IAO_0000136",
        "prefix": "obo",
        "role": "edge"
@@ -4422,7 +4422,7 @@
       "type": "string"
      },
      "sector_raw_foreign": {
-      "description": "The wording does not name the option chosen for 'sector' -- the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.",
+      "description": "The wording does not name the option chosen for 'sector': the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.",
       "type": "boolean"
      },
      "sector_seen": {
@@ -4535,7 +4535,7 @@
       "type": "string"
      },
      "spatial_scope_raw_foreign": {
-      "description": "The wording does not name the option chosen for 'spatial_scope' -- the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.",
+      "description": "The wording does not name the option chosen for 'spatial_scope': the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.",
       "type": "boolean"
      },
      "spatial_scope_seen": {
@@ -4614,7 +4614,7 @@
       ],
       "x-kg": {
        "label": "is about",
-       "note": "The calendar year the power is stated for, as a node and no longer as a literal. A unit without a per-year marker carries the flag period:annual_in_quote or period:unstated. It was oeo:OEO_00020440 has scenario year value, which is wrong twice: its domain is oeo:OEO_00000365 scenario factsheet, so every value node was typed a factsheet and through it a document, and its declared range is xsd:dateTime while we wrote xsd:integer, which is an ill-typed literal. The pinned release has NO property at all whose domain a quantity value satisfies and whose range is a time, so the year becomes an object: `is about` a node of oeo:OEO_00030033 time step, \"a one-dimensional temporal region that has a start time and an ending time\". oeo:OEO_00020097 scenario year would be the narrower class and is not used, because it is defined as part of a scenario horizon and the inventory years are not. Cost, stated: the number 2030 is no longer a literal a reasoner can compare -- it is the node's IRI, its label, and part of the value's own identity. The term request is a property from quantity value to temporal region, and a way to write a year onto one.",
+       "note": "The calendar year the power is stated for, as a node and no longer as a literal. A unit without a per-year marker carries the flag period:annual_in_quote or period:unstated. It was oeo:OEO_00020440 has scenario year value, which is wrong twice: its domain is oeo:OEO_00000365 scenario factsheet, so every value node was typed a factsheet and through it a document, and its declared range is xsd:dateTime while we wrote xsd:integer, which is an ill-typed literal. The pinned release has NO property at all whose domain a quantity value satisfies and whose range is a time, so the year becomes an object: `is about` a node of oeo:OEO_00030033 time step, \"a one-dimensional temporal region that has a start time and an ending time\". oeo:OEO_00020097 scenario year would be the narrower class and is not used, because it is defined as part of a scenario horizon and the inventory years are not. Cost, stated: the number 2030 is no longer a literal a reasoner can compare; it is the node's IRI, its label, and part of the value's own identity. The term request is a property from quantity value to temporal region, and a way to write a year onto one.",
        "object_class": "OEO_00030033",
        "predicate": "IAO_0000136",
        "prefix": "obo",
@@ -4632,7 +4632,7 @@
       "type": "string"
      },
      "year_raw_foreign": {
-      "description": "The wording does not name the option chosen for 'year' -- the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.",
+      "description": "The wording does not name the option chosen for 'year': the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.",
       "type": "boolean"
      },
      "year_seen": {
@@ -4767,7 +4767,7 @@
       "type": "string"
      },
      "parameter_raw_foreign": {
-      "description": "The wording does not name the option chosen for 'parameter' -- the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.",
+      "description": "The wording does not name the option chosen for 'parameter': the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.",
       "type": "boolean"
      },
      "parameter_seen": {
@@ -4850,7 +4850,7 @@
       "type": "string"
      },
      "value_uri": {
-      "description": "The entry of the parameter's own vocabulary the wording resolved to; null when the list did not hold it. Only a category parameter has a vocabulary, so this one never writes the key at all.",
+      "description": "The entry of the parameter's own vocabulary the wording resolved to. Null when the list does not hold it. Only a category parameter has a vocabulary. This one never writes the key at all.",
       "type": [
        "string",
        "null"
@@ -4911,7 +4911,7 @@
   "$id": "https://openenergyplatform.org/schema/mhpkg/extraction/stamp",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
-  "description": "A key that differs from the current run makes the document stale and it is harvested again -- every key but `spec`, which is recorded so a reader can say which file a harvest came from and is not compared. Withheld when the harvest did not happen. The parameter/, value/, axis/ and slot/ keys say WHICH question changed, so a moving ontology costs the coordinates it touched rather than a full re-read of the corpus; a stamp written before they existed carries none of them, and for it `spec` decides again, so it is stale in all of them.",
+  "description": "Every key but `spec` makes the document stale, and it is harvested again, when it differs from the current run. `spec` is recorded so a reader can say which file a harvest came from, and is not compared. Withheld when the harvest did not happen. The parameter/, value/, axis/ and slot/ keys record which question changed, so a moving ontology costs only the coordinates it touched rather than a full re-read of the corpus. A stamp written before those keys existed carries none of them, so for it `spec` decides again, and it is stale in all of them.",
   "patternProperties": {
    "^axis/[^/]+/[^/]+$": {
     "description": "What this coordinate asks and what it may answer: the question, the evidence rule, and the offered list with its spellings and its definitions. Everything the model sees for this axis, and nothing else.",
@@ -4924,12 +4924,12 @@
     "type": "string"
    },
    "^parameter/[^/]+$": {
-    "description": "What this parameter asks, without its axes and without its own list: label, description, value type, accepted units and the example. A new option on ONE axis, or in the list the parameter answers from, must not make every value of the parameter stale -- those have keys of their own.",
+    "description": "What this parameter asks, without its axes and without its own list: label, description, value type, accepted units and the example. A new option on ONE axis, or in the list the parameter answers from, must not make every value of the parameter stale. Those have keys of their own.",
     "pattern": "^[0-9a-f]{64}$",
     "type": "string"
    },
    "^question_text/[^/]+$": {
-    "description": "The sentence THIS document was searched with. Recorded and never compared: it is written per document, so the document itself is part of it and no two runs produce the same one. What decides whether the harvest is current is its recipe, and that is already here -- the generator prompt, the model, and the annotation inside parameter/.",
+    "description": "The sentence THIS document was searched with. Recorded and never compared: it is written per document, so the document itself is part of it and no two runs produce the same one. What decides whether the harvest is current is its recipe, and that is already here: the generator prompt, the model, and the annotation inside parameter/.",
     "items": {
      "type": "string"
     },

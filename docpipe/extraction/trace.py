@@ -1,19 +1,22 @@
 """
-trace.py – What the harvest did, written down so it can be counted afterwards.
+trace.py: Records what the harvest did as one JSON event per line, so it can be
+counted after the run.
 
-The text log says what happened to a human reading it live. It cannot answer
-"at which rank was this value found", "in which window did this coordinate
-close", "did the retry help", because those are questions about a million
-requests and the answer is a distribution, not a line. Every setting this
-stage has was picked without such a distribution at least once, and every one
-of those picks was wrong: top_k, the window budget, the batch threads.
+A text log tells a human reading it live what happened. It cannot answer
+questions about a distribution over many requests, such as at which rank a
+value was found, in which window a coordinate closed, or whether a retry
+helped. Every setting this stage has, including `top_k`, the window budget, and
+the batch thread count, was chosen at least once without such a distribution,
+and every one of those choices was wrong.
 
-So each document gets a second file next to its harvest, one JSON object per
-event, and nothing in it is aggregated. Aggregating is what the report script
-does, and it can be rewritten when the question changes. The trace cannot.
+Each document therefore gets a second file next to its harvest, with one JSON
+object per event and nothing aggregated. Aggregation is left to the report
+script, which can be rewritten when the question changes; the trace itself
+cannot be rewritten after the fact.
 
-Cost is a few hundred bytes per model request, about half a megabyte per
-document. EXTRACT_TRACE=0 turns it off and every call becomes a return.
+The cost is a few hundred bytes per model request, about half a megabyte per
+document. Setting `EXTRACT_TRACE=0` turns tracing off, and every call to record
+an event then returns immediately.
 
 Author: Felix Vossel
 """

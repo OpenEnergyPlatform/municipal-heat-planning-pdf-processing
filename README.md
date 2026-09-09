@@ -30,10 +30,14 @@ stage binds its prompts when it is imported, before the command line is parsed.
 A profile that carries prompts and is named only on the command line is refused
 rather than run with the wrong ones.
 
-Per-module reference, the artifact hand-off and the harvest contract are under
-[docs/](docs/README.md). Every page there except `docs/pipeline.md` is
-generated from the code it describes by `scripts/build_docs.py`, and the test
-suite fails when a page and its source disagree. Read the Docs builds and
+The documentation site is published at
+[municipal-heat-planning-pdf-processing.readthedocs.io](https://municipal-heat-planning-pdf-processing.readthedocs.io/en/latest/).
+It carries the pipeline walkthrough, a chapter per stage, a page per profile,
+the artifact hand-off and the harvest contract, and its sources are under
+[docs/](docs/README.md). Every page there except the three hand-written ones
+(`pipeline.md`, `running.md`, `glossary.md`) is generated from the code it
+describes by `scripts/build_docs.py`, and the test suite fails when a page and
+its source disagree. Read the Docs builds and
 hosts the pages from `.readthedocs.yaml`, one version per branch and tag, and
 `.github/workflows/docs.yml` renders the pages from the code on every push to
 `develop` and commits them when they changed, checks them on every tag and

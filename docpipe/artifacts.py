@@ -1,9 +1,10 @@
 """
-artifacts.py – The per-document files under ``<doc>/results/``, in the order
-the pipeline writes them.
+artifacts.py: Names the per-document result files under `<doc>/results/`,
+in the order the pipeline writes them.
 
-One definition for all five modules: a filename spelled out in four config.py
-files drifts, and the module that reads it is rarely the one that wrote it.
+One definition serves all five pipeline modules: a filename spelled out in
+four separate config.py files drifts, and the module that reads a file is
+rarely the one that wrote it.
 
 Author: Felix Vossel
 """

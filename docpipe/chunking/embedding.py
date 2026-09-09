@@ -1,8 +1,9 @@
 """
-embedding.py – Step 3: Create text + VL embeddings and build the FAISS index.
+embedding.py: Creates text and vision-language embeddings and builds
+the FAISS index, as chunking's third step.
 
-All embeddings live in one FAISS IDMap(IndexFlatIP) keyed by globally unique
-ids allocated from the DB.
+Every embedding lives in one FAISS IDMap(IndexFlatIP), keyed by
+globally unique ids allocated from the database.
 
 Author: Felix Vossel
 """

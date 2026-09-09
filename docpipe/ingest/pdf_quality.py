@@ -1,15 +1,15 @@
 """
-pdf_quality.py – What a source PDF's text layer is worth.
+pdf_quality.py: Grades what a source PDF's text layer is worth.
 
 Stage 1 reads text with PyMuPDF, never OCR. A PDF with a broken ToUnicode map
-yields symbol garbage, which is useless at every later stage; a PDF with no text
-layer at all yields nothing, which preprocessing can now make good by rendering
-the page and having the model read it (page_text_fallback).
+yields symbol garbage, useless at every later stage. A PDF with no text layer
+at all yields nothing, which preprocessing can now make good by rendering the
+page and having the model read it (page_text_fallback).
 
-`check()` reports the fact and nothing more. What to do about it is policy and
-lives in the ingest pipeline: garbage is refused, a scan is registered and put on
-a worklist. Keeping the two apart is the point — this module used to decide both,
-and its verdict on a scan cost the corpus eleven complete plans.
+`check()` reports the fact and nothing more. What to do about it is policy, and
+lives in the ingest pipeline: garbled text is refused, a scan is registered and
+put on a worklist. Keeping the two apart is the point. This module used to
+decide both, and its verdict on a scan cost the corpus eleven complete plans.
 """
 from __future__ import annotations
 

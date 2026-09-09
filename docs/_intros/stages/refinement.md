@@ -1,19 +1,390 @@
+## Purpose
+
+Stage 3 (`docpipe.preprocessing`) builds `sections.json` mechanically
+from PyMuPDF text extraction and PP-DocLayoutV3 layout boxes; its
+cleanup pass already strips repeated header and footer lines and drops
+obvious directory pages (see [Preprocessing](preprocessing.md)). What survives that
+pass is the kind of defect a fixed rule cannot resolve reliably: a caption
+on the wrong table, a heading split across a page break into two
+sections, an unstructured bibliography, an ALL-CAPS title. Stage 4
+hands each document's sections to an LLM, in windows, to resolve those
+cases (`docpipe/refinement/refine.py`).
+
+Stage 4 also enforces the size limit the embedding step needs: a
+retrieval chunk is one section and one vector, so a section long enough
+that its embedding no longer represents one topic, or long enough to
+exceed the embedding model's token limit, must become several before
+reaching chunking. That cut (`docpipe/refinement/split.py`) is asked of
+the model but performed mechanically, at segment boundaries, so nothing in
+the split text is rephrased, dropped, or invented. Skipping Stage 4 leaves
+both jobs undone; its two downstream consumers cope with that
+differently (see Position in the pipeline).
+
+## Position in the pipeline
+
 | | |
 |---|---|
-| **In** | Reads `results/sections.json` (the Stage-3 structured output) from each document directory under the processed root. |
-| **Out** | Writes `results/sections_refined.json`, `results/refinement_report.json`, and `results/.prompt_versions.json`. |
-| **Resumes on** | Skips a document once `sections_refined.json` exists; `--force` redoes everything, `--force-stale` redoes only documents whose recorded prompt hash changed. |
+| In | `results/sections.json`, written by [Preprocessing](preprocessing.md) (Stage 3) |
+| Out | `results/sections_refined.json`, `results/refinement_report.json`, `results/.prompt_versions.json` |
+| Resumes on | the presence of `sections_refined.json`; `--force` redoes every candidate document, `--force-stale` only those whose prompt hash no longer matches |
+| Needs | an OpenAI-compatible LLM server reachable at `LLM_BASE_URL`, checked before the first document by `assert_serving` |
 
-Stage 4 sits between the deterministic structuring pass of Stage 3 (`docpipe.preprocessing`) and the image enrichment of Stage 5. Stage 3 builds sections mechanically from PyMuPDF text and PP-DocLayoutV3 layout boxes, and its own cleanup pass already strips repeated header/footer lines and drops obvious directory pages. What survives that pass is the kind of thing a fixed rule cannot catch reliably: a caption attached to the wrong table, a heading split across a page break so it reads as two sections, a bibliography that is still walls of prose instead of structured entries, a title in ALL CAPS. Stage 4 hands the sections to an LLM to make those judgment calls, and it also does the size discipline Stage 6's embedding step needs: a section too long to be one retrieval chunk is cut into parts, mechanically at segment boundaries even when the model is the one asked where to cut. Skip this stage and Stage 5 and Stage 6 work from sections still carrying that noise, with a bibliography embedded as prose rather than as citable entries.
+Stage 4 follows Stage 3's structuring pass and precedes two consumers
+that treat `sections_refined.json` differently. [Visuals](visuals.md)
+(Stage 5) prefers it but falls back to `sections.json` when absent
+(`_resolve_input` in `docpipe/visuals/pipeline.py`), so the two stages
+can run against separate model servers without waiting on each other.
+[Chunking](chunking.md)'s merge step has no such fallback and requires
+`sections_refined.json` outright (`docpipe/chunking/merge.py`), so an
+unrefined document is not a merge candidate. The stage imports no GPU
+library; its only external dependency is the `openai` client reaching
+`LLM_BASE_URL`.
 
-It reads `results/sections.json` under each document directory -- the Stage-3 structured output. In `--batch` mode, only a directory that has one is a candidate at all (`_has_input`). It writes `results/sections_refined.json`, the file Stage 5 and Stage 6 read next, and `results/refinement_report.json` on every run, failures or none: an empty `failed_windows` list means this pass checked and found nothing wrong, while a missing file means nobody has looked yet. It also leaves a `.prompt_versions.json` next to those, recording the sha256 of the prompt(s) it ran with -- how a later run knows a cached result came from a prompt that has since changed.
+## Method
 
-Sections are processed in sliding windows of `WINDOW_SIZE` (3 by default, overridable per profile), not one section at a time and not the whole document at once: one at a time throws away the model's chance to see a section run into the next, and the whole document at once is a context budget nobody can afford. Because a heading split across a window boundary would then be invisible to the second window, each window after the first is handed the previous window's last section as read-only context, solely so the model can mark the new window's first section `merge_into_previous` when it is really a continuation. By default the model is asked to rewrite the whole section; setting `REFINE_RETURN_CORRECTIONS` switches it to asking for find/replace edits only, because measured over 60 ar6 documents 28% of sections came back byte-identical and the median was 99% unchanged -- the expensive half of a call is the tokens it writes, and the stage was mostly paying to retype its own input. That mode is safe only because `corrections.py` checks every edit before applying it: the quoted text must occur exactly once in the section as the model received it, an edit cannot add, drop, or alter a `[pN_tblM]`/`[pN_imgM]` placeholder, and the edits together may not shrink the section by more than 30% (`MAX_SHRINK`) -- anything that fails a check is dropped and logged, never applied on trust. Flipping the flag is not free: it changes which prompt id gets checked, so every document cached under the other mode reads as stale on the next run.
+### Preflight and caching
 
-The model never sees `segments` or `pages` -- they are stripped from the payload before the call and re-threaded onto the reply afterward, because letting the model repeat page numbers back is how they used to come back altered or dropped. When a window's output has the same section count, in the same order, as its input, provenance is reattached 1:1 by position. When it does not -- a split, or a section the reply simply omitted -- each segment is re-homed onto whichever output section actually contains it: tables and figures by their block id, text by which output's tokens contain the most of it, ties broken toward the output that already holds the segment's own page. A `remove` action is refused outright whenever the section still carries tables or figures, because those are Stage-2 artefacts with their own transcriptions and not the model's to discard -- eleven text-less plans lost 1270 transcribed tables and figures this way before that check existed, because a section that is nothing but `[pNN_tbl0]` markers looks empty to a reader of the text alone.
+`run()` calls `assert_serving` once, before the first document, with the
+worst case one window could cost (`max_request_tokens()`); an undersized
+or wrong server stops the run at once rather than letting individual
+requests fail mid-batch. When `results/sections_refined.json` exists,
+`run_single` compares its recorded prompt hashes against the prompts now
+in use with `prompts.check`: a moved hash sets `force` under
+`--force-stale`, otherwise it only logs a warning. `run_single` always
+calls `run_refine`, and it is `run_refine`, not `run_single`, that reads
+that file back without calling the LLM whenever it exists and `force` is
+false, so an unforced stale prompt is still served from cache. `prompts.record`
+writes the new hashes once refinement finishes.
 
-The only external dependency is the LLM itself, served through vLLM and reached over HTTP via the OpenAI client (`LLM_BASE_URL`, default `http://localhost:8000/v1`). No GPU work happens in this process; the GPU cost sits entirely on the vLLM server, which this stage neither starts nor manages. Before touching the first document, `run()` calls `assert_serving`, which asks the server what it serves and how large its context is, and refuses to run if the model name does not match or if the server's `max_model_len` is smaller than `max_request_tokens()` -- the worst case for one window: the system prompt plus `WINDOW_SIZE` sections at `SECTION_MAX_WORDS` words each plus the largest reply the stage could ask for. That check runs before the first document rather than after the first failure, because a server with too little context accepts the connection and then rejects individual requests mid-run, and an affected window then looks exactly like a window that needed no change. Concurrency is two independent knobs: `LLM_NUM_PARALLEL` windows in flight per document (default 8), and in `--batch` mode `DOC_PARALLEL` documents at once (default 8) -- the server sees roughly the product of the two as its total in-flight load.
+### Splitting oversized sections
 
-A document is skipped -- the cached dict returned, the LLM never called -- when `results/sections_refined.json` already exists. `--force` ignores that cache and re-refines regardless; the old file stays on disk until `dump_json_atomic` replaces it in one step at the end, so a run killed part-way through (a batch timeout, a job hitting its wall clock) leaves the previous refinement rather than nothing, which matters because a document with no refined output at all is skipped silently by the Stage-6 merge. `--force-stale` is the targeted version: it re-refines only documents whose recorded prompt hash no longer matches the prompt now in use (`prompts.check` against `.prompt_versions.json`), so editing one prompt does not force a full re-run of a corpus that took hours the first time.
+Before any window is built, `refine_sections` calls `split_oversized`.
+`needs_split` flags every section over `SECTION_MAX_WORDS` words;
+`_rebuild_matches` then checks that its `segments` still reproduce its
+`content` exactly, the precondition for a safe cut along a segment
+boundary. `_ask_all_cuts` fires every document's split requests at once,
+concurrently, before the refinement windows are dispatched. The model sees only
+the section's title and `outline()`, a compact per-segment listing, and
+answers with cut positions and part titles; `split_section` applies them,
+and `_enforce_max` re-cuts any part still over the limit, subdividing an
+oversized segment with `_subdivide_segments` when there is no boundary to
+cut on. A section whose provenance no longer matches its content is left
+whole, with a warning, rather than cut at a guessed position.
 
-Inside one window's call, an empty reply, invalid JSON, or a JSON object missing the `sections` key is retried up to `MAX_RETRIES` (4) with a message telling the model what was wrong, echoing back only a bounded head and tail of the bad answer rather than the whole thing, so the repair turn does not push the same window over the context limit that caused the trouble. A 4xx status other than 429 is not retried at all, since the server rejected the request itself and an identical retry fails identically, while a "maximum context length" error abandons the window with a loud log line, because the caller then keeps that window's raw, unrefined text, which otherwise reads exactly like a window that needed no edits. A reply that mentions only some of a window's sections is not read as permission to drop the rest: every section starts as itself, and only what the reply actually supplies is laid over that -- the earlier behavior of dropping whatever a reply omitted lost 123 of one book's 2697 sections, and 237 in another run. At the end of a document, `_report_dropped_text` shingles the input and output text and logs, by title and word count, every section that vanished entirely -- not flagged as wrong, since removing an index or an abbreviations list is the point, but reported as a fact rather than left hidden inside a word count that can legitimately fall for the same reason.
+### Windowed dispatch
+
+`refine_sections` groups the bounded sections into consecutive windows of
+`WINDOW_SIZE` and submits each to `_call_llm` on a `ThreadPoolExecutor`
+sized to `LLM_NUM_PARALLEL`. Every window but the first also receives
+`prev_ctx`, the previous window's last section, passed read-only so the
+model can recognise a heading split across the boundary and mark the new
+window's first section `merge_into_previous` instead of a new section.
+
+### The LLM call
+
+`_call_llm` strips `segments` and `pages` from the payload before it is
+sent (the model must not see or rewrite them) and, in edit mode, adds
+each section's index and reduces its tables and figures to `id` and
+`caption` only. The reply is parsed with `_loads_json_object`, which
+falls back to the outermost `{...}` block when the model wraps its JSON
+in other text. An empty reply is retried up to `MAX_RETRIES` times with an empty
+assistant turn appended rather than an echo; invalid JSON or a missing
+`sections` key is retried the same number of times, with a bounded echo
+of the bad answer (`_echo`, at most 400 leading and 200 trailing
+characters) rather than the whole thing. A 4xx status other than 429 is
+not retried, since an identical retry would be refused identically.
+A "maximum context length" error abandons the window with an error-level
+log line instead, since the caller then keeps that window's raw text,
+indistinguishable from a window that needed no change.
+
+### Materialising an edit-mode reply
+
+When `REFINE_RETURN_CORRECTIONS` is set, the model returns
+find-and-replace edits instead of a rewritten section, and
+`_materialise_corrections` rebuilds each output section from the
+original, not the reply: every section starts as itself, and only what
+the reply supplies (a title, a caption, an edit list) is applied on top.
+`apply_corrections` (`corrections.py`) checks each edit before applying
+it (see Failure modes for what gets one refused); a rejected edit is
+dropped and logged, the original passage kept.
+
+### Reattaching page provenance
+
+`_thread_provenance` restores `segments`, and from them `pages`, onto the
+LLM's cleaned output before `_apply_actions` runs, since
+`merge_into_previous` needs a kept section's segments already attached. A
+same-length, positionally-consistent window (`_positional_consistent`)
+reattaches one-to-one; otherwise `_redistribute_segments` re-homes each
+input segment onto whichever output contains it: a table or figure by its
+globally unique block id, a text segment by whichever output's tokens
+contain most of it, ties broken toward the output already holding its
+own page. An unmatched text segment, or an unmatched table or
+figure segment on a shrink, is dropped rather than attached to an
+arbitrary survivor that would then cite a page it does not hold; on a
+split, an unmatched table or figure segment instead gets a best-effort
+home at the nearest surviving output.
+
+### Applying the model's actions
+
+`_apply_actions` reads each section's `_action`, once its provenance is
+reattached. `remove` drops the section unless it still carries tables or
+figures, in which case the removal is refused and the section kept with a
+warning. `merge_into_previous` folds a section's content, tables,
+figures, and segments into the previous kept section, whether that
+section came from the same window or, via `previous_kept`, the window
+before it. `keep` and `replace` pass the section through as is.
+
+### Cleanup and reporting
+
+Once every window is assembled, `_reattach_media_bbox` restamps each
+table's and figure's `bbox` from the Stage 3 input, since the model
+re-emits those objects and may drop or alter the field. Sections left
+with no content, tables, or figures are dropped (`_is_empty_section`).
+`_finalize_pages` recomputes each section's `pages` from its segments and
+media; `_backfill_empty_pages` gives a still-empty one its nearest
+neighbour's page rather than leaving it uncitable. With
+`TITLE_CLEANUP_ENABLE`, `_normalize_title` strips leading numbering
+prefixes and capitalizes an ALL-CAPS title word-by-word (first letter
+kept, rest lowercased; short acronyms excepted). `_report_dropped_text`
+then compares input and output text by word-shingle overlap, logging the
+count and size of every section that vanished, naming only the largest
+six; a falling count is not itself a fault, since removing an index or an
+abbreviations list is expected here.
+
+## Data model
+
+`sections_refined.json` is `{"sections": [...]}`. Each element:
+
+| field | type | notes |
+|---|---|---|
+| `title` | string | `"[LITERATURE]"` marks a converted bibliography |
+| `content` | string, or list of strings | a list only for a `[LITERATURE]` section, one BibTeX entry per item |
+| `page_number` | int or null | the section's first page |
+| `pages` | list of int | every page the section's segments or media touch |
+| `tables` | list of objects | `id`, `path`, `caption`, `page_number`, `bbox` |
+| `figures` | list of objects | same shape as `tables` |
+| `segments` | list of objects | `page`, `kind` (`text`, `table`, or `figure`), and `text` or `ref` |
+
+A table's or figure's `id` is the block id a placeholder such as
+`[p5_tbl0]` refers to; the placeholder survives refinement verbatim, the
+only anchor `_thread_provenance` has between an input segment and the
+output section that ends up owning it.
+
+`refinement_report.json` is written on every run, whether or not anything
+failed: an empty `failed_windows` list means the pass checked and found
+nothing wrong, while a missing file means nobody has looked yet. Its shape:
+
+| field | type | notes |
+|---|---|---|
+| `total_windows` | int | windows attempted for this document |
+| `failed_windows` | list of objects | one entry per window that kept its original text |
+
+Each `failed_windows` entry carries `window` (1-based), `reason` (`no usable
+reply` or `no usable sections`), `sections` (0-based indices into the
+pre-refinement list), and `titles` (each truncated to 80 characters).
+
+`.prompt_versions.json` is written by `docpipe.prompts.record` and maps a
+prompt id to its sha256, for the two `PROMPT_IDS`: `refinement/refine` or
+`refinement/refine_corrections` per `REFINE_RETURN_CORRECTIONS`, plus
+`refinement/split` (see [Artifacts](../artifacts.md) for every stage's
+file layout).
+
+## Configuration
+
+| name | kind | default | effect | where read |
+|---|---|---|---|---|
+| `LLM_BASE_URL` | env, string | `http://localhost:8000/v1` | the OpenAI-compatible endpoint the stage calls | `config.py` |
+| `LLM_MODEL` | env, string | `Qwen/Qwen3.5-122B-A10B-FP8` | model name checked against the server's served models | `config.py` |
+| `LLM_API_KEY` | env, string | `EMPTY` | sent as the API key; ignored by vLLM | `config.py` |
+| `LLM_TIMEOUT` | env, seconds | `180` | per-request timeout of the OpenAI client | `config.py` |
+| `LLM_NUM_PARALLEL` | env, int | `8` | windows dispatched concurrently per document | `config.py` |
+| `DOC_PARALLEL` | env, int | `8` | documents refined concurrently in `--batch` mode | `pipeline.py` |
+| `MAX_RETRIES` | constant | `4` | retry attempts inside one window's LLM call | `config.py` |
+| `REFINE_WINDOW_SIZE` | env, int, or profile hook `refinement.WINDOW_SIZE` | `3` | sections sent to the LLM per call (`WINDOW_SIZE`) | `config.py` |
+| `SECTION_SPLIT_ENABLE` | constant | `True` | whether oversized sections are split at all | `config.py` |
+| `SECTION_MAX_WORDS` | constant | `1000` | threshold above which a section is split | `config.py` |
+| `SECTION_TARGET_WORDS` | constant | `600` | size a split aims each part at | `config.py` |
+| `SECTION_OUTLINE_WORDS` | constant | `14` | words per segment shown in the split outline | `config.py` |
+| `SPLIT_TEMPERATURE` | prompt front matter, float | `0.1` (both profiles) | sampling temperature for the section-split LLM call | `split.py` |
+| `SPLIT_MAX_TOKENS` | prompt front matter, int | `1024` (both profiles) | reply token ceiling for the section-split LLM call | `split.py` |
+| `TITLE_CLEANUP_ENABLE` | constant | `True` | whether the prefix strip and ALL-CAPS capitalization run | `config.py` |
+| `REFINE_RETURN_CORRECTIONS` | env, bool | off | switches the reply from a full rewrite to a find-and-replace edit list | `config.py` |
+| `MAX_SHRINK` | constant | `0.30` | ceiling on how much edit mode may shrink a section | `corrections.py` |
+| `REFINE_REPLY_CEILING` | env, int | `16384` | ceiling on one request's reply token budget (`REPLY_TOKENS_CEILING`) | `config.py` |
+| `LLM_TEMPERATURE` | env, float, or the prompt's front matter | `0.1` (both profiles) | sampling temperature | `config.py` |
+| `LLM_MAX_TOKENS` | env, int, or the prompt's front matter | `8192` (both profiles) | floor for the reply token budget on small windows | `config.py` |
+| `--force` | CLI flag | off | ignores an existing `sections_refined.json` and re-refines | `pipeline.py` |
+| `--force-stale` | CLI flag | off | re-refines only documents whose recorded prompt hash changed | `pipeline.py` |
+| `--print-context-budget` | CLI flag | off | prints `max_request_tokens()` and exits, for sizing the server's `--max-model-len` | `pipeline.py` |
+| `--profile` | CLI flag | `$DOCPIPE_PROFILE` | supplies the default input path (`profile.processed_dir`) when none is given | `pipeline.py` |
+| `--log-level` | CLI flag | `INFO` | logging level: `DEBUG`/`INFO`/`WARNING`/`ERROR` | `pipeline.py` |
+
+Neither current profile overrides `WINDOW_SIZE` (see
+[Profiles](../profiles.md)), so both run at the default of 3. Flipping
+`REFINE_RETURN_CORRECTIONS` changes which prompt id `PROMPT_IDS` names, so
+a document cached under the other mode reads as stale on the next run.
+
+## Failure modes
+
+`_call_llm` retries an empty reply, invalid JSON, or a missing `sections`
+key up to `MAX_RETRIES` (4) times (see Method for echo and abandonment
+details); a 4xx status other than 429 is not retried, and a "maximum
+context length" error abandons the window outright. 429, 5xx, connection,
+and timeout errors retry with backoff (`_backoff`, capped at 10 seconds).
+
+A window that exhausts its retries, or is abandoned, keeps its original
+sections verbatim, `_action` stripped, and is recorded under
+`failed_windows` in `refinement_report.json`. A `remove` action on a
+section still carrying tables or figures is refused; the section is kept,
+with a warning naming how many of each it holds. A `merge_into_previous`
+with no previous section available (a document's first window) is kept
+rather than dropped.
+
+In edit mode, an edit is refused, original text kept, when its quoted
+text is absent, occurs more than once, touches a placeholder, or the
+edits together shrink the section by more than `MAX_SHRINK`. A
+section whose `segments` no longer reproduce its `content` is left
+oversized rather than split at a guessed position; a split reply still
+over `SECTION_MAX_WORDS` is re-cut mechanically by `_enforce_max`.
+
+`run()`'s preflight (see Method) refuses to start before the first
+document rather than mid-run. A document with no `results/sections.json`
+is not a `--batch`-mode candidate (`_has_input`). A killed `--force` run
+never leaves a document without refined output, since `dump_json_atomic`
+replaces the old file in one step; a refinement report that
+fails to write is logged and swallowed rather than failing an
+already-successful run.
+
+## Measured behaviour
+
+Across 60 ar6 documents, 28% of sections came back byte-identical from a
+full rewrite, the median section was 99% unchanged, and only 166 of 4887
+sections were real conversions (`docpipe/refinement/corrections.py:6-8`,
+`docpipe/refinement/config.py:63-64`): the stage spent output tokens, a
+request's costliest part, retyping input it was not changing, which is
+why `REFINE_RETURN_CORRECTIONS` exists.
+
+Isolating each edit's quoted text against the original, rather than
+against the text left by earlier edits in the same section, changed how
+often a correction was refused: of 4828 corrections on one book, 1144
+were refused for overlapping a passage a preceding correction had just
+rewritten (`docpipe/refinement/corrections.py:28-29`).
+
+Before the check refusing `remove` on a section carrying tables or
+figures existed, eleven plans with no text layer, their section bodies
+placeholder markers only, lost 1270 transcribed tables and figures that
+way (`docpipe/refinement/refine.py:432-434`). Before every section of a
+window carried through by default rather than only what a reply named, a
+reply naming only some of a window's sections cost one book 123 of its
+2697 sections, and another run 237 (`docpipe/refinement/refine.py:159-160`).
+
+Before the context-size preflight existed, 42 windows silently kept raw
+text against a server whose `max_model_len` was smaller than a request
+could need (`docpipe/llm_preflight.py:8-9`). Under a flat, non-scaling
+reply budget, 24 of 1030 windows in one ar6 book run had their JSON reply
+truncated mid-string, each an "Unterminated string" error
+(`docpipe/refinement/config.py:97`).
+
+Before segments could be subdivided, 51 sections in one ar6 run stayed
+oversized however often the split was asked, up to 1409 words against the
+1000-word `SECTION_MAX_WORDS` limit, since their whole text sat in one
+segment with no boundary to cut on (`docpipe/refinement/split.py:254-256`).
+The model's proposed cut is a suggestion, not a bound: an 11596-word
+section came back as 10 parts, one still 2392 words, which is what
+`_enforce_max` exists to correct (`docpipe/refinement/split.py:285-286`).
+
+## Verification
+
+The retry and abandonment behaviour of `_call_llm`, and that a repair turn
+never resends the whole failed answer:
+`test_an_oversized_window_is_abandoned_not_retried`,
+`test_the_abandoned_window_is_named_out_loud`,
+`test_any_other_client_error_also_stops_at_once`,
+`test_a_busy_or_broken_server_is_still_retried`,
+`test_a_short_answer_is_echoed_whole`,
+`test_a_long_answer_is_bounded_before_it_goes_back`
+(`tests/test_textrefinement_refine.py`).
+
+Page provenance survives a split, a merge across a window boundary, and a
+section a reply silently omitted: `test_thread_provenance_split_in_middle_of_window_keeps_siblings_exact`,
+`test_redistribute_drops_unanchored_text_orphan_no_phantom_page`,
+`test_omission_shrink_does_not_leak_removed_section_pages`,
+`test_cross_window_merge_spans_both_windows` (`tests/test_textrefinement_provenance.py`).
+
+A `remove` action never discards a section's tables or figures:
+`test_remove_is_refused_for_a_section_that_carries_media`
+(`tests/test_refinement_force_keeps_output.py`).
+
+Title cleanup strips numbering prefixes and de-shouts ALL-CAPS titles,
+sparing acronyms and `[LITERATURE]`: `test_numbering_prefix_is_stripped`,
+`test_all_caps_is_deshouted_keeping_acronyms`,
+`test_literature_sentinel_and_years_untouched`
+(`tests/test_stage_cleanup.py`). `_reattach_media_bbox` restamps `bbox`
+from the Stage 3 input by block id across a split, a no-op without
+geometry: `test_reattach_media_bbox_stamps_by_id_across_split`,
+`test_reattach_media_bbox_noop_without_geometry`
+(`tests/test_segment_bbox.py`).
+
+A forced re-refine never leaves a document with no refined output, and
+`refinement_report.json` tells "checked, nothing failed" apart from
+"nobody has looked": `test_a_forced_run_that_dies_leaves_the_previous_refinement`,
+`test_run_single_passes_force_through_instead_of_unlinking`,
+`test_a_clean_run_records_an_empty_list_not_a_missing_file`,
+`test_the_stage_records_which_windows_kept_their_originals`
+(`tests/test_refinement_force_keeps_output.py`).
+
+Every edit in correction mode is checked against the text the model
+actually saw: `test_edits_are_checked_against_the_text_the_model_was_given`,
+`test_two_corrections_to_one_sentence_keep_the_longer_one`,
+`test_a_wholesale_deletion_is_refused`, `test_a_whitespace_only_miss_is_named_as_such`
+(`tests/test_corrections.py`).
+
+Splitting a section keeps its text intact and each part's own media and
+pages, drops slivers, and leaves an unreproducible section untouched:
+`test_the_parts_together_are_the_original_text`,
+`test_each_part_keeps_only_its_own_media_and_pages`,
+`test_a_cut_that_would_leave_a_sliver_is_dropped`,
+`test_a_section_whose_segments_do_not_match_its_content_is_not_touched`,
+`test_a_section_that_cannot_be_cut_is_not_asked_about`,
+`test_the_split_calls_go_out_together` (`tests/test_split.py`). Its cut
+never exceeds `SECTION_MAX_WORDS`; the context budget reacts to the
+knobs it names and covers the largest possible reply; and the preflight
+stops a run before the first document, not after a mid-run rejection:
+`test_split_holds_its_own_limit`,
+`test_one_huge_segment_is_subdivided_not_surrendered`,
+`test_budget_reacts_to_the_knobs_it_names`,
+`test_the_budget_covers_the_largest_reply_it_would_ask_for`,
+`test_preflight_rejects_a_server_with_too_little_context`,
+`test_preflight_rejects_a_server_serving_another_model`
+(`tests/test_context_budget.py`).
+
+## Modules
+
+`config.py` holds the stage's tunable constants and compiled system
+prompt: the LLM connection settings, `WINDOW_SIZE`, the oversized-section
+thresholds, and the reply-budget arithmetic. `pipeline.py`, `refine.py`,
+and `split.py` import from it; `corrections.py` keeps its own
+`MAX_SHRINK` and placeholder-pattern constants independently.
+
+`corrections.py` holds `apply_corrections`, checking one section's
+find-and-replace edits against the text the model was given: a single,
+exact match per edit, placeholders intact, `MAX_SHRINK` held on the whole
+list. Called from `refine.py`'s `_materialise_corrections` in edit mode.
+
+`split.py` cuts a section over `SECTION_MAX_WORDS` at segment boundaries:
+`split_oversized` drives the pass, `_ask_all_cuts` dispatches every
+document's requests concurrently, and `_enforce_max` with
+`_subdivide_segments` re-cut any part still oversized. Called by
+`refine.py`'s `refine_sections`, before windowing.
+
+`refine.py` is the stage's core: `refine_sections` dispatches the
+windows, `_call_llm` makes one window's request, `_thread_provenance` and
+`_redistribute_segments` reattach page provenance, `_apply_actions`
+applies the LLM's actions, and `_normalize_title` and
+`_report_dropped_text` finish the pass. Called by `pipeline.py`'s
+`run_refine`.
+
+`pipeline.py` orchestrates the stage: `run_single` decides between a
+cache hit and a fresh run, `run_batch` runs every document subdirectory
+concurrently, and `run` calls `assert_serving` first. Entry point for
+`python -m docpipe.refinement` and library callers of `run()`.

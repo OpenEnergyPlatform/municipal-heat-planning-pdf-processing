@@ -1,13 +1,14 @@
 """
-queries.py – Precise retrieval queries, generated from the spec.
+queries.py: Expands a profile's query templates into retrieval probes drawn
+from the spec.
 
-One broad question per parameter under-harvests: retrieval ranks, ranking
-caps, and the tenth-most-similar table wins over the eleventh for no reason
-a corpus cares about. So the profile supplies query *templates* and the spec
-supplies the material — parameter labels and axis vocabularies — and every
+One broad question per parameter under-harvests. Retrieval ranks, a rank has a
+cap, and the tenth-most-similar table wins over the eleventh for no reason a
+corpus cares about. So the profile supplies query templates and the spec
+supplies the material, a parameter's label and its axis vocabularies, and every
 combination becomes its own retrieval probe. The templates live with the
-profile because their wording is corpus language (German for the heat
-plans); this module only expands placeholders.
+profile because their wording is corpus language (German for kwp's plans); this
+module only expands placeholders.
 
 Placeholders:
     {label}        the parameter's label

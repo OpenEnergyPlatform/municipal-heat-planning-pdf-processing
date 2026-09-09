@@ -1,10 +1,10 @@
 """
-models.py – What a profile hands the ingest step.
+models.py: What a profile hands the ingest step.
 
-The core knows a document by four things: what to call it, where to get it,
-who it is, and which other documents are versions of it. Everything else is
-the profile's business and travels in `meta` (written to DocumentMeta) or
-`payload` (never inspected by the core).
+The core knows a document by four things: what to call it, where to get it, who
+it is, and which other documents are versions of it. Everything else is the
+profile's business and travels in `meta` (written to DocumentMeta) or `payload`
+(never inspected by the core).
 
 Author: Felix Vossel
 """

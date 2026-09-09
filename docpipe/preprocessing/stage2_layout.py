@@ -1,10 +1,29 @@
 """
-stage2_layout.py – Layout detection via PP-DocLayoutV3 (HuggingFace Transformers).
+stage2_layout.py: Detects page layout with PP-DocLayoutV3 and turns
+detections into tables, images, section titles and text suppressions
+for Stage 3.
 
-Renders the open fitz pages from Stage 1 per batch, runs object detection, and
-turns each surviving box into either a text suppression, a saved table/image
-crop, or a title/caption Block. Classes outside those sets are ignored — the
-Stage-1 PyMuPDF text blocks already cover that content.
+Renders the open fitz pages from Stage 1 in batches and runs object
+detection. Each surviving box becomes a text suppression, a saved
+table or image crop, or a title or caption Block; classes outside
+those sets are ignored, since the Stage 1 PyMuPDF text blocks already
+cover that content. A detection passes a global confidence filter,
+then a per-class threshold, then per-class non-maximum suppression
+and cross-class suppression among table and image boxes, so one
+region never yields two crops.
+
+Two passes run over the whole document afterward. Font-based heading
+promotion turns a plain text block into a section title when the
+layout model missed it, using the document's dominant body font size
+as the reference. Caption resolution attaches the nearest
+caption-like block to each table or image, first among the blocks
+the layout model labelled as captions, then, within a fixed distance,
+among plain text; the claimed block is removed from the page so it
+is not also read as section prose.
+
+A batch whose pages never reached the detection model is reported as
+LayoutDetectionFailed rather than left with text and no layout, so
+the caller drops the document for the next run to retry.
 
 Author: Felix Vossel
 """

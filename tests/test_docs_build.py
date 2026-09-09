@@ -101,10 +101,11 @@ def test_the_hand_written_page_does_not_restate_the_readme():
     readme = {line.strip() for line
               in (ROOT / "README.md").read_text(encoding="utf-8").splitlines()
               if len(line.strip()) > 40}
-    page = [line.strip() for line
-            in (ROOT / "docs" / "pipeline.md").read_text(encoding="utf-8")
-            .splitlines() if len(line.strip()) > 40]
-    assert [line for line in page if line in readme] == []
+    for name in build_docs.HANDWRITTEN:
+        page = [line.strip() for line
+                in (ROOT / "docs" / name).read_text(encoding="utf-8")
+                .splitlines() if len(line.strip()) > 40]
+        assert [line for line in page if line in readme] == [], name
 
 
 def test_the_index_links_every_page_and_nothing_else():
@@ -140,6 +141,11 @@ def test_the_index_says_what_each_page_is_about():
         == "The per-document files, in the order they are written."
     assert _lede("Writes results.json to disk. Then more.") \
         == "Writes results.json to disk."
+    # The file name a docstring opens with is not the page's subject.
+    assert _lede("trust.py: Grades every value. More.") \
+        == "Grades every value."
+    assert _lede("kg_route.py \u2013 Answers from the graph.\n") \
+        == "Answers from the graph."
     assert render_index({"a.md": "A"}, {"a.md": "Erste Zeile."}) \
         .count("](a.md): Erste Zeile.") == 1
 
@@ -149,23 +155,35 @@ def test_the_site_names_every_page_exactly_once_and_in_order():
     reachable from nothing; a page named twice is a warning, and the Read the
     Docs build treats warnings as errors."""
     pages = build()
-    body = pages["index.md"]
-    listed = [line.strip() for line in body.splitlines()
-              if line.strip() and not line.startswith(("#", "```", ":"))
-              and "/" in line or line.strip() in
-              {p[:-3] for p in pages} | {"pipeline"}]
-    listed = [line for line in listed if not line.startswith("This is")]
+    listed = _toctree_entries(pages["index.md"])
     wanted = ({page[:-3] for page in pages if page not in ("README.md",
                                                            "index.md")}
               | {name[:-3] for name in build_docs.HANDWRITTEN})
     assert sorted(listed) == sorted(wanted)
     assert len(listed) == len(set(listed)), "a page is named twice"
-    # And the order is the pipeline's, which is in no file.
-    ordered = [page[:-3] for page in build_docs.ORDER]
-    assert listed[:len(ordered)] == ordered
+    # And the order is the pipeline's, which is in no file: the groups in
+    # their order, the discovered profile pages inside their group.
+    groups = build_docs.toctree_groups(pages)
+    assert [page[:-3] for _c, members in groups for page in members] \
+        == listed
+    assert [page for _c, members in groups for page in members
+            if page in build_docs.ORDER] == list(build_docs.ORDER)
+    assert [caption for caption, _m in groups] \
+        == [caption for caption, _m in build_docs.GROUPS]
     # A page the manifest does not render still reaches the toctree, so a new
     # page is a broken build rather than an unreachable document.
     assert "neu" in render_toctree({"neu.md": "Neu"})
+    assert ("More", ["neu.md"]) in build_docs.toctree_groups({"neu.md": ""})
+
+
+def _toctree_entries(index: str) -> list:
+    """The pages every toctree block of index.md names, in order."""
+    out = []
+    for block in index.split("```{toctree}")[1:]:
+        inside = block.split("```")[0]
+        out += [line.strip() for line in inside.splitlines()
+                if line.strip() and not line.startswith(":")]
+    return out
 
 
 # ---------------------------------------------------------------------------
@@ -296,7 +314,10 @@ def test_every_state_of_fields_is_documented():
     page = pages["contract/states.md"]
     # It is an ANSWER a model may give, so it is all over the prompt wording
     # the contract pages quote. It is not a state, so it is not on this page.
-    assert "out:unstated" not in page
+    # In the generated table, that is: the introduction may explain the
+    # sentinel in prose, the table may not list it.
+    generated = page[page.index("| constant | value |"):]
+    assert "out:unstated" not in generated
     for _name, value, gloss in rows:
         assert value in page and gloss in page
     assert render_states_page(rows).count("|---|---|---|") == 1
@@ -339,7 +360,7 @@ def test_the_marks_of_a_trust_line_are_documented_in_their_order():
     _levels, _reasons, _flags, marks, join = trust_table()
     assert marks == tuple(literal["MARKS"]) and join == literal["REASON_JOIN"]
     page = build()["contract/trust.md"]
-    section = page[page.index("## The marks of a trust line"):]
+    section = page[page.index("\n## The marks of a trust line\n"):]
     listed = [line.split("`")[1] for line in section.splitlines()
               if line[:1].isdigit()]
     assert listed == list(marks)
@@ -356,15 +377,17 @@ def test_the_contract_page_documents_the_stamp_and_the_trace():
         rel = build_docs._contract_rel(name)
         stamp, trace = json_at(rel, "stamp"), json_at(rel, "trace")
         page = pages[f"contract/{name}.md"]
-        assert "## The stamp" in page and "## The trace" in page
-        stamp_part = page[page.index("## The stamp"):page.index("## The trace")]
+        # Heading lines, not mentions: an introduction may name the sections.
+        assert "\n## The stamp\n" in page and "\n## The trace\n" in page
+        stamp_part = page[page.index("\n## The stamp\n"):
+                          page.index("\n## The trace\n")]
         for key in stamp["properties"]:
             assert f"| `{key}` |" in stamp_part, key
         for pattern in stamp["patternProperties"]:
             # A pipe inside a code span still splits a table cell.
             cell = pattern.replace("|", "\\|")
             assert f"| `{cell}` |" in stamp_part, pattern
-        trace_part = page[page.index("## The trace"):]
+        trace_part = page[page.index("\n## The trace\n"):]
         kinds = [b["properties"]["t"]["const"] for b in trace["oneOf"]]
         assert len(kinds) == 11
         assert f"{len(kinds)} record kinds" in trace_part
@@ -457,10 +480,7 @@ def test_the_site_config_and_the_pages_agree():
     for excluded in ("_intros", "README.md"):
         assert excluded in values["exclude_patterns"], excluded
 
-    body = build()["index.md"]
-    inside = body.split("```{toctree}")[1].split("```")[0]
-    entries = [line.strip() for line in inside.splitlines()
-               if line.strip() and not line.startswith(":")]
+    entries = _toctree_entries(build()["index.md"])
     assert entries
     for entry in entries:
         assert (ROOT / "docs" / f"{entry}.md").is_file(), entry
@@ -483,20 +503,74 @@ def test_the_docs_build_needs_neither_the_corpus_nor_a_gpu():
     assert "fail_on_warning: true" in rtd
 
 
-def test_every_stage_page_says_what_the_stage_is_for():
-    """A page of docstrings is a list of parts. What no module can say is what
-    runs before it and what breaks if it is skipped, so a stage page without
-    an introduction is refused rather than published half-empty."""
+def test_every_page_says_what_it_is_for(monkeypatch):
+    """A page of docstrings or of tables is a list of parts. What no module
+    can say is what the thing is for, so every generated page, the front
+    page included, opens with prose from `docs/_intros/`, and a page without
+    it is refused rather than published half-empty."""
     from build_docs import intro_of
     pages = build()
     for page in sorted(pages):
-        if not page.startswith("stages/"):
+        if page == "README.md":
             continue
         intro = intro_of(page)
         assert intro, page
         assert intro in pages[page], page
         assert len(intro) > 200, f"{page}: {len(intro)} characters"
+        assert not intro.startswith("#") or intro.startswith("##"), page
     assert intro_of("stages/gibt_es_nicht.md") == ""
+    monkeypatch.setattr(build_docs, "INTRO_DIR", "docs/_gibt_es_nicht")
+    with pytest.raises(SourceMoved):
+        build()
+
+
+def test_the_module_reference_follows_the_chapter_collapsed():
+    """The chapter is the account and the docstrings are the reference: a
+    stage page carries every module's docstring after the prose, each in
+    its own collapsed block, so the reference is there without being read
+    first."""
+    pages = build()
+    for page, _title, entries in build_docs.SOURCES:
+        if not page.startswith("stages/"):
+            continue
+        text = pages[page]
+        assert text.index("## Module reference") > text.index(
+            build_docs.intro_of(page)[:80]), page
+        reference = text[text.index("## Module reference"):]
+        for rel, _pointer in entries:
+            assert f"<summary><code>{rel}</code></summary>" in reference, rel
+            assert docstring_of(rel) in reference, rel
+        assert reference.count("<details>") == len(entries)
+        assert reference.count("</details>") == len(entries)
+
+
+def test_a_profile_with_a_schema_gets_a_profile_page():
+    """Discovered like the contract pages: prose from `docs/_intros/`, then
+    the parameters and their axes read off the published contract, never
+    off the spec."""
+    have = {p.parent.name for p in (ROOT / "profiles")
+            .glob("*/extraction_schema.json")}
+    pages = build()
+    assert {page.split("/")[1][:-3] for page in pages
+            if page.startswith("profiles/")} == have
+    for name in sorted(have):
+        page = pages[f"profiles/{name}.md"]
+        harvest = json_at(build_docs._contract_rel(name), "harvest/$defs")
+        parameters = sorted(key[len("tuple_"):] for key in harvest
+                            if key.startswith("tuple_"))
+        assert parameters
+        for parameter in parameters:
+            assert f"| `{parameter}` |" in page, (name, parameter)
+        assert f"(../contract/{name}.md)" in page
+    from build_docs import render_profile_page
+    bare = render_profile_page("x", {"tuple_a": {
+        "properties": {"value": {"type": "number"},
+                       "year": {"type": "integer"}, "year_state": {},
+                       "carrier": {"x-options": {"a": {}, "b": {}}},
+                       "carrier_state": {}},
+        "x-kg": {"node": "value"}}}, "## Intro")
+    assert "| `a` | number | `carrier` (2 options), `year` (integer) | " \
+           "`value` |" in bare
 
 def test_the_profiles_page_says_what_a_profile_is_for():
     """The one page besides the stages that carries an introduction: what a
@@ -511,28 +585,72 @@ def test_the_profiles_page_says_what_a_profile_is_for():
     assert intro in render_profiles_page("x", ["kwp"], intro)
 
 
-def test_every_command_the_overview_prints_can_be_run():
-    """The one hand-written page is the one nobody regenerates, so a flag
-    renamed in a parser leaves it wrong with nothing to notice. Every module
-    it tells a reader to run, and every flag it names, is checked against the
-    parsers themselves."""
+def test_every_command_the_hand_written_pages_print_can_be_run():
+    """The hand-written pages are the ones nobody regenerates, so a flag
+    renamed in a parser leaves them wrong with nothing to notice. Every
+    module they tell a reader to run, and every flag they name, is checked
+    against the parsers themselves."""
     import re
-    page = (ROOT / "docs" / "pipeline.md").read_text(encoding="utf-8")
-
-    for module in sorted(set(re.findall(r"python -m ([\w.]+)", page))):
-        parts = module.split(".")
-        path = ROOT.joinpath(*parts)
-        assert (path / "__main__.py").is_file() or path.with_suffix(
-            ".py").is_file(), module
-
     flags = set()
     for path in sorted(ROOT.glob("docpipe/**/*.py")) + sorted(
             ROOT.glob("scripts/**/*.py")):
         flags |= set(re.findall(r'add_argument\(\s*"(--[\w-]+)"',
                                 path.read_text(encoding="utf-8")))
-    named = set(re.findall(r"`(--[\w-]+)", page))
-    assert named, "the page names no flag at all"
-    assert named <= flags, sorted(named - flags)
+    named_anywhere = set()
+    for name in build_docs.HANDWRITTEN:
+        page = (ROOT / "docs" / name).read_text(encoding="utf-8")
+        for module in sorted(set(re.findall(r"python -m ([\w.]+)", page))):
+            parts = module.split(".")
+            path = ROOT.joinpath(*parts)
+            assert (path / "__main__.py").is_file() or path.with_suffix(
+                ".py").is_file(), (name, module)
+        named = set(re.findall(r"`(--[\w-]+)", page))
+        assert named <= flags, (name, sorted(named - flags))
+        named_anywhere |= named
+    assert named_anywhere, "no hand-written page names a flag at all"
+
+
+def _prose_of(page: str) -> str:
+    """A page without its fenced code, its block quotes (the prompts' own
+    wording, in the model's language) and its collapsed blocks (docstrings
+    and the spec's own notes, checked at their source)."""
+    out, fenced, collapsed = [], False, False
+    for line in page.splitlines():
+        if line.startswith("```"):
+            fenced = not fenced
+            continue
+        if line.startswith("<details>"):
+            collapsed = True
+        if not fenced and not collapsed and not line.startswith(">"):
+            out.append(line)
+        if line.startswith("</details>"):
+            collapsed = False
+    return "\n".join(out)
+
+
+def _dashes(text: str) -> list:
+    return [line for line in text.splitlines()
+            if "\u2014" in line or "\u2013" in line or " -- " in line]
+
+
+def test_no_page_uses_a_dash_as_punctuation():
+    """The register of the site is settled: no em dash, no en dash and no
+    double hyphen standing in for one, in the prose of any page, in any
+    introduction, in any hand-written page and in any module docstring the
+    site renders. Fenced code, quoted prompts and the collapsed blocks are
+    left out here; the docstrings are checked at their source instead."""
+    for page, text in sorted(build().items()):
+        assert _dashes(_prose_of(text)) == [], page
+    for path in sorted((ROOT / "docs" / "_intros").rglob("*.md")):
+        assert _dashes(_prose_of(path.read_text(encoding="utf-8"))) == [], \
+            path.name
+    for name in build_docs.HANDWRITTEN:
+        text = (ROOT / "docs" / name).read_text(encoding="utf-8")
+        assert _dashes(_prose_of(text)) == [], name
+    rels = {rel for _p, _t, entries in build_docs.SOURCES
+            for rel, _pointer in entries}
+    for rel in sorted(rels):
+        assert _dashes(docstring_of(rel)) == [], rel
 
 
 def test_the_docs_workflow_regenerates_on_develop_and_checks_everywhere_else():
