@@ -33,11 +33,10 @@ rather than run with the wrong ones.
 Per-module reference, the artifact hand-off and the harvest contract are under
 [docs/](docs/README.md). Every page there except `docs/pipeline.md` is
 generated from the code it describes by `scripts/build_docs.py`, and the test
-suite fails when a page and its source disagree. `.github/workflows/docs.yml`
-publishes the pages on every push to `develop` and every tag, one directory per
-version, to
-[openenergyplatform.github.io/municipal-heat-planning-pdf-processing](https://openenergyplatform.github.io/municipal-heat-planning-pdf-processing/);
-`.readthedocs.yaml` builds the same tree on Read the Docs.
+suite fails when a page and its source disagree. Read the Docs builds and
+hosts the pages from `.readthedocs.yaml`, one version per branch and tag, and
+`.github/workflows/docs.yml` runs the same build as a check on every push to
+`develop`, every tag and every pull request that touches a documented source.
 
 ## Pipeline Overview
 

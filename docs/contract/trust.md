@@ -86,4 +86,17 @@ A closed list, because a reason nobody can enumerate is a reason nobody can coun
 | `quote_repaired` | `repaired` |
 | `review:disagree` | `review:disagree` |
 
+## The marks of a trust line
+
+The line the serializer writes above a value node is made of these marks, in this order, each worded by the profile in its own language (`TRUST_PROSE`) and only where it applies:
+
+1. `level`
+2. `image_origin`
+3. `image_origin_named`
+4. `corroborated`
+5. `reasons`
+6. `review`
+
+Inside the `reasons` mark the reasons are joined with `, `; the reason tokens themselves are never translated.
+
 [Back to the index](../README.md)

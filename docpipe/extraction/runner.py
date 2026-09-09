@@ -202,6 +202,19 @@ FIELD_ATTEMPTS = int(os.environ.get("EXTRACT_FIELD_ATTEMPTS", "3"))
 # passages out of it, and the two sharing a budget is what left the stage
 # unreachable for every sweep that needed it.
 REST_MAX_WINDOWS = int(os.environ.get("EXTRACT_REST_MAX_WINDOWS", "12"))
+
+
+def window_budget() -> dict:
+    """{stage: windows} for one coordinate's sweep, own then retrieval then
+    rest. Read at call time so a test that moves one constant moves this.
+
+    The sum is FIELD_MAX_WINDOWS + REST_MAX_WINDOWS. `own` can never bind --
+    one window, and the attempt loop already stops at FIELD_ATTEMPTS -- and
+    is written here so the three numbers add up in one place instead of two.
+    """
+    return {"own": FIELD_ATTEMPTS,
+            "retrieval": max(0, FIELD_MAX_WINDOWS - FIELD_ATTEMPTS),
+            "rest": REST_MAX_WINDOWS}
 # How many already-read passages ride along at the front of a window. Where
 # one coordinate of a row was read, the next one is usually a few lines away
 # — and today that passage went into `seen` after the window that showed it
@@ -2562,13 +2575,7 @@ def make_sweeper(ask: Callable, *,
         #     the rest allowance above the field one and it becomes 0, and the
         #     stage silently gets the whole budget.
         #
-        # The sum is what it was, FIELD_MAX_WINDOWS + REST_MAX_WINDOWS. `own`
-        # can never bind -- one window, and the attempt loop already stops at
-        # FIELD_ATTEMPTS -- and is written here so the three numbers add up in
-        # one place instead of two.
-        budget = {"own": FIELD_ATTEMPTS,
-                  "retrieval": max(0, FIELD_MAX_WINDOWS - FIELD_ATTEMPTS),
-                  "rest": REST_MAX_WINDOWS}
+        budget = window_budget()
         spent = {stage: 0 for stage in budget}
         state = {"answer": None, "stage": "own"}
 
@@ -3338,6 +3345,12 @@ QUESTION_KEYS = ("parameter/", "value/", "axis/", "slot/")
 # the review prompt is edited.
 RECORDED_PREFIXES = ("question_text/", "review/")
 
+# Where a top-up writes its trace: beside the harvest's `trace/`, never into
+# it. trace._handle opens "w", so the harvest's own file would be truncated,
+# and scripts/harvest_compare.py reads `trace/` alone, so a top-up's requests
+# are not counted into the harvest's cost.
+TOPUP_TRACE_DIR = "trace-topup"
+
 
 def recorded_questions(questions: Optional[dict]) -> dict:
     """{key: [sentence]} -> the stamp keys that record what was really asked.
@@ -3795,7 +3808,9 @@ def main(argv: Optional[list] = None) -> int:
     parser.add_argument("--top-up-key", action="append", metavar="KEY",
                         help="--top-up only: sweep this stamp key and no "
                              "other, e.g. axis/energy_consumption/sector. "
-                             "Repeatable")
+                             "Repeatable. extraction/field, the field "
+                             "prompt's sha, is swept only when named here: "
+                             "it means every asked coordinate of every row")
     parser.add_argument("--review", action="store_true",
                         help="read every value nobody can stand behind a "
                              "second time, over its own passage and the "
@@ -3894,10 +3909,26 @@ def main(argv: Optional[list] = None) -> int:
                        context_budget(review_prompt, spec),
                        what="extraction review", flag="--max-model-len")
         from .review import run as review_run
+        wanted = None
+        if args.document:
+            # The harvest files are named after the documents, so a
+            # restriction is resolved through the same listing the harvest
+            # selects from and fails the same way on an id that is not on it.
+            listing = sqlite3.connect(f"file:{args.db}?mode=ro", uri=True)
+            try:
+                chosen, missing = select_documents(_documents(listing),
+                                                   args.document)
+            finally:
+                listing.close()
+            if missing:
+                log.error("%d named document(s) not found or not current: %s",
+                          len(missing), ", ".join(str(m) for m in missing))
+                return 1
+            wanted = [Path(fn).stem for _did, fn in chosen]
         stats = review_run(args.out, spec,
                            ask=make_review_asker(args.image_root),
                            sources_for=make_review_sources(args.db),
-                           limit=args.review_limit,
+                           documents=wanted, limit=args.review_limit,
                            prompt_sha=review_prompt.sha256, model=LLM_MODEL)
         log.info("review: %d value(s) read again — %d agreed, %d disagreed, "
                  "%d could not be backed, over %d document(s)",
@@ -3976,11 +4007,14 @@ def main(argv: Optional[list] = None) -> int:
         BATCH_SOURCES = fitted
 
     if FIELDWISE:
+        budget = window_budget()
         log.info("extraction: one request per field, swept in windows of %d "
                  "(overlap %d) until read; %d batch thread(s), %d field "
-                 "thread(s), at most %d window(s) per coordinate",
+                 "thread(s), at most %d own + %d retrieval + %d rest = %d "
+                 "window(s) per coordinate",
                  FIELD_WINDOW, FIELD_OVERLAP, LLM_PARALLEL, FIELD_PARALLEL,
-                 FIELD_MAX_WINDOWS)
+                 budget["own"], budget["retrieval"], budget["rest"],
+                 sum(budget.values()))
     else:
         log.info("extraction: one request per tuple (EXTRACT_FIELDWISE=0)")
     locate = make_locate(args.db, args.pdf_root)
@@ -4029,11 +4063,7 @@ def main(argv: Optional[list] = None) -> int:
 
     if args.top_up:
         from . import topup
-        # Its own directory: trace._handle opens "w", so writing into the
-        # harvest's own trace/ would truncate the file that says what the
-        # harvest cost. scripts/harvest_compare.py reads trace/ alone, so a
-        # top-up's requests are not counted into the harvest's cost.
-        trace.open_trace(args.out / "trace-topup",
+        trace.open_trace(args.out / TOPUP_TRACE_DIR,
                          {did: Path(fn).stem for did, fn in documents}.get)
         frame_names = [slot.name for slot in frame_axes]
         listing = sqlite3.connect(f"file:{args.db}?mode=ro", uri=True)

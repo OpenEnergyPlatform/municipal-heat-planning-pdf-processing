@@ -11,6 +11,8 @@ neither the GPU stack nor the corpus.
 OpenCV, PyMuPDF and torch. The docstrings reach the site through the
 generator, which reads them with `ast`.
 """
+import re
+
 project = "municipal heat planning pdf processing"
 author = "Felix Vossel"
 copyright = "2026, Felix Vossel"
@@ -43,3 +45,21 @@ html_static_path = []
 # index links every page there is. Warnings are errors in .readthedocs.yaml,
 # so this is enforced rather than reported.
 nitpicky = True
+
+_README_LINK = re.compile(r"\]\((\.\./)?README\.md(#[^)]*)?\)")
+
+
+def _site_links(app, docname, source):
+    """`README.md` links become `index.md` links while the site is built.
+
+    Every generated page ends in a link back to `README.md`, the index a
+    reader of the repository opens. The site excludes that file (see above)
+    and has `index.md` in its place, so left alone each of those links is a
+    missing cross-reference and, with warnings as errors, a failed build.
+    Measured on the first build: 19 warnings, all of them this one.
+    """
+    source[0] = _README_LINK.sub(r"](\g<1>index.md\g<2>)", source[0])
+
+
+def setup(app):
+    app.connect("source-read", _site_links)

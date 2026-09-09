@@ -477,6 +477,41 @@ def test_the_top_up_leaves_the_trace_files_alone(tmp_path):
     assert trace_path.read_bytes() == before
 
 
+def test_the_top_up_writes_its_trace_beside_the_harvests_and_not_over_it(
+        tmp_path, monkeypatch):
+    """`trace._handle` opens "w", so a top-up tracing into the harvest's own
+    `trace/` would truncate the file that says what the harvest cost. Its
+    events land under `trace-topup/` and the original survives byte for
+    byte -- and the runner's `--top-up` branch opens exactly that directory.
+    """
+    import inspect
+    from docpipe.extraction import trace
+    monkeypatch.setattr(trace, "ENABLED", True)
+    # `close` closes the files and leaves the root; put both back afterwards.
+    monkeypatch.setattr(trace, "_root", None)
+    monkeypatch.setattr(trace, "_name_of", None)
+    harvest_trace = tmp_path / "trace" / "plan.trace.jsonl"
+    harvest_trace.parent.mkdir()
+    harvest_trace.write_text('{"t": "rows", "doc": 7, "ms": 10}',
+                             encoding="utf-8")
+    before = harvest_trace.read_bytes()
+    trace.open_trace(tmp_path / runner.TOPUP_TRACE_DIR, {7: "plan"}.get)
+    try:
+        trace.event("sweep", 7, field="sector", stage="own")
+        trace.flush()
+    finally:
+        trace.close()
+    assert harvest_trace.read_bytes() == before
+    written = (tmp_path / "trace-topup" / "plan.trace.jsonl").read_text(
+        encoding="utf-8")
+    assert json.loads(written)["t"] == "sweep"
+    branch = inspect.getsource(runner.main)
+    branch = branch[branch.index("if args.top_up:"):]
+    branch = branch[:branch.index("topup.run(")]
+    assert "trace.open_trace(args.out / TOPUP_TRACE_DIR" in branch
+    assert runner.TOPUP_TRACE_DIR == "trace-topup"
+
+
 def test_the_file_sha_moves_only_when_nothing_else_is_stale(tmp_path):
     """The whole-file sha is a coarse mirror of the keys under it, and moved
     early it makes a document read current with a changed prompt unaddressed.
@@ -491,25 +526,9 @@ def test_the_file_sha_moves_only_when_nothing_else_is_stale(tmp_path):
     assert stored["spec"] == "old", "another key is still stale"
 
 
-def test_the_sweeper_is_the_one_the_harvest_uses(monkeypatch):
-    """One sweep, one set of numbers. A second copy of those 300 lines would
-    be a second set, and every measurement the sweep has produced is about
-    this one."""
-    seen = []
-    real = runner.make_sweeper
-
-    def spy(ask, **kw):
-        seen.append(sorted(kw))
-        return real(ask, **kw)
-
-    monkeypatch.setattr(runner, "make_sweeper", spy)
-    monkeypatch.setattr(runner, "make_field_asker", lambda image_root=None:
-                        (lambda *a, **kw: None))
-    monkeypatch.setattr(runner, "make_harvester",
-                        lambda *a, **kw: (lambda batch, prior=None: {}))
-    runner.make_fieldwise_harvester(spec=SPEC)
-    assert seen == [["anchors", "more_sources", "parents",
-                     "rest_of_document"]]
+# `test_the_sweeper_is_the_one_the_harvest_uses` lives in
+# tests/test_extraction_fieldwise.py: the fieldwise suite is the guard against
+# this module growing a second copy of sweep_field.
 
 def test_the_key_names_one_coordinate_of_one_parameter():
     """`slot_of` is what turns a stamp key back into a question. A key the
@@ -660,3 +679,164 @@ def test_a_stale_document_is_not_filtered_away_before_the_pass_runs(
         documents, tmp_path, "sha", anchors_sha="anchors", spec=SPEC,
         top_up=True)
     assert topping_up == documents, "a top-up decides per key, not per stamp"
+
+
+# ---------------------------------------------------------------------------
+# The field prompt as a named key (WP12e)
+# ---------------------------------------------------------------------------
+
+def test_the_field_prompt_is_swept_only_when_named():
+    """The field prompt is the only prompt the sweep uses, so a document whose
+    stamp says it moved CAN be re-read coordinate by coordinate. But that is
+    every asked coordinate of every row, a corpus-sized decision, so the key
+    blocks unless --top-up-key names it."""
+    assert topup.FIELD_PROMPT == runner.FIELD_PROMPT_ID
+    key = topup.FIELD_PROMPT
+    assert topup.actionable([key], SPEC) == ([], [key])
+    assert topup.actionable([key], SPEC, only=[key]) == ([key], [])
+    # Named together with a coordinate key, both are swept and nothing blocks.
+    axis = f"axis/{PARAMETER}/sector"
+    assert topup.actionable([key, axis], SPEC, only=[key, axis]) \
+        == ([axis, key], [])
+    # And named alone while a coordinate also moved, the coordinate is left
+    # for another pass rather than claimed.
+    assert topup.actionable([key, axis], SPEC, only=[key]) == ([key], [])
+
+
+def test_a_named_field_prompt_re_reads_every_asked_coordinate(tmp_path):
+    """Every asked, unframed coordinate of every row goes through the sweep
+    once; a derived one does not (no request ever read it). The key is
+    carried forward only when every one of them settled."""
+    parameter = SPEC.by_uri[PARAMETER]
+    asked = sorted(s.name for s in fields.asked_slots(parameter)
+                   if s.name != "year")
+    assert "aggregation" not in asked, "derived, so never asked"
+    calls = []
+    path = _harvest(tmp_path, [_row(), _summary()],
+                    stamp=_stamp(**{topup.FIELD_PROMPT: "moved"}))
+    stats = topup.top_up_file(
+        path, SPEC, _stamp(),
+        _deps(sweep=_sweeper(calls=calls), frame_names=("year",)),
+        only=[topup.FIELD_PROMPT])
+    swept = sorted(slot.name for call in calls for slot in call["slots"])
+    assert swept == asked
+    # A sweep that answered nothing put every old block back, so the key is
+    # not the pass's to write forward.
+    stored = json.loads((tmp_path / "plan.stamp.json").read_text(
+        encoding="utf-8"))
+    assert stored[topup.FIELD_PROMPT] == "moved"
+    assert stats["stamps carried forward"] == 0
+
+    row = _row()
+    answers = {name: {"value": row[name], "raw": row.get(f"{name}_raw",
+                                                          row[name])}
+               for name in asked}
+    stats = topup.top_up_file(
+        path, SPEC, _stamp(),
+        _deps(sweep=_sweeper(answers), frame_names=("year",)),
+        only=[topup.FIELD_PROMPT])
+    # `rows` counts one re-verification per coordinate swept.
+    assert stats["rows"] == len(asked)
+    assert stats["stamps carried forward"] == 1
+    stored = json.loads((tmp_path / "plan.stamp.json").read_text(
+        encoding="utf-8"))
+    assert stored[topup.FIELD_PROMPT] == _stamp()[topup.FIELD_PROMPT]
+
+
+# ---------------------------------------------------------------------------
+# A dynamic axis, end to end (WP12e test 3)
+# ---------------------------------------------------------------------------
+
+def test_a_dynamic_axis_is_swept_against_this_documents_own_list(tmp_path):
+    """The scenarios `scenario` axis has no corpus-wide list: the profile
+    closes it per document. Swept with that list the coordinate comes out
+    the run identifier; without the hook the document is left alone, because
+    swept against an empty list the coordinate degrades to a wording."""
+    from docpipe.extraction.spec import fingerprints
+    other = _spec("scenarios")
+    region = "https://openenergyplatform.org/ontology/oekg/region/Germany"
+    text = ("The Current Policies scenario covers Germany. "
+            "Results are reported for 2050.")
+    row = {"kind": "tuple", "parameter": "scenario_region",
+           "value": "Germany", "value_raw": "Germany", "value_uri": region,
+           "quote": "covers Germany", "tier": "text_located",
+           "parameter_state": fields.READ,
+           "scenario": "the NDC scenario", "scenario_raw": "the NDC scenario",
+           "scenario_state": fields.READ, "scenario_source": ["section", 9],
+           "scenario_quote": "The Current Policies scenario covers Germany.",
+           "provenance": {"document_id": 1, "owner_kind": "section",
+                          "owner_id": 9, "parent_section": 9, "page": 9}}
+    summary = {"kind": "summary", "document_id": 1, "tuples": 1,
+               "refusals": 0, "levels": {"A": 1, "B": 0, "C": 0},
+               "reasons": {}, "image_origin": 0}
+    base = {"spec": "s", "model": "m", "anchors": "a",
+            "extraction/harvest": "h", "extraction/queries": "q",
+            "extraction/anchors": "an", "extraction/rows": "r",
+            "extraction/field": "f", **fingerprints(other)}
+    moved = {**base, "axis/scenario_region/scenario": "moved"}
+    lists = {"scenario": {"EN_NPi2020_300f": ["Current Policies", "CurPol"]},
+             "scenario_region": {region: ["Germany"]}}
+    answer = {"scenario": {"value": "Current Policies",
+                           "raw": "Current Policies",
+                           "quote": "The Current Policies scenario covers "
+                                    "Germany.",
+                           "source": ["section", 9]}}
+
+    def sources(owners):
+        return {(kind, owner): Source(kind, owner, text,
+                                      {"document_id": 1, "page": 9,
+                                       "parent_section": 9})
+                for kind, owner in owners}
+
+    path = _harvest(tmp_path, [row, summary], stamp=moved, name="geco")
+    deps = _deps(sweep=_sweeper(answer), owner_sources=sources,
+                 document_spec=lambda did: runner.fill_dynamic_axes(other,
+                                                                    lists))
+    stats = topup.top_up_file(path, other, base, deps)
+    assert stats["rows"] == 1 and stats["stamps carried forward"] == 1
+    stored = _rows(path)[0]
+    assert stored["scenario"] == "EN_NPi2020_300f", "a URI, not the wording"
+    assert stored["scenario_raw"] == "Current Policies"
+
+    # Without the hook the list cannot be closed and the file is left alone.
+    path = _harvest(tmp_path, [row, summary], stamp=moved, name="ohne")
+    before = path.read_bytes()
+    stats = topup.top_up_file(path, other, base,
+                              _deps(sweep=_sweeper(answer),
+                                    owner_sources=sources,
+                                    document_spec=lambda did: None))
+    assert stats["dynamic list unavailable"] == 1 and stats["rows"] == 0
+    assert path.read_bytes() == before
+
+
+# ---------------------------------------------------------------------------
+# The circle closed (WP12e test 20)
+# ---------------------------------------------------------------------------
+
+def test_a_topped_up_document_is_current_and_an_untouched_one_is_not(
+        tmp_path, monkeypatch):
+    """End to end through `already_done`/`stale`, mirroring
+    tests/test_extraction_remap.py: the swept document reads current on the
+    next run and the one the pass had to skip stays stale."""
+    monkeypatch.setattr(runner.prompts, "versions",
+                        lambda ids: {i: "v1" for i in ids})
+    monkeypatch.setattr(runner, "LLM_MODEL", "m")
+    current = runner._stamp_current("sha", "anchors", SPEC)
+    _harvest(tmp_path, [_row(), _summary()], name="plan",
+             stamp={**current, f"axis/{PARAMETER}/sector": "moved"})
+    _harvest(tmp_path, [_row(), _summary()], name="offen",
+             stamp={**current, "model": "alt"})
+    # Before: both stale, one in a coordinate and one in the model. A stale
+    # stamp is skipped with a warning by a plain harvest, so `already_done`
+    # is True for both; `stale` is what tells them apart.
+    assert runner.stale(tmp_path / "plan.stamp.json", current)         == [f"axis/{PARAMETER}/sector"]
+    assert runner.stale(tmp_path / "offen.stamp.json", current) == ["model"]
+
+    stats = topup.run(tmp_path, SPEC, current, _deps(sweep=_sweeper(
+        {"sector": {"value": "Haushalte", "raw": "Haushalte"}})))
+    assert stats["stamps carried forward"] == 1 and stats["blocked"] == 1
+
+    assert runner.stale(tmp_path / "plan.stamp.json", current) == []
+    assert runner.already_done("plan", tmp_path, "sha",
+                               anchors_sha="anchors", spec=SPEC) is True
+    assert runner.stale(tmp_path / "offen.stamp.json", current) == ["model"],         "the document the pass had to skip is still stale"

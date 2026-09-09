@@ -1646,7 +1646,7 @@ Axis 'year' of Leistung. null unless year_state is 'read' or 'derived'.
 
 The prompt's own wording:
 
-> Für welches Kalenderjahr gilt diese Jahressumme? Vierstellig. Das Jahr steht fast nie in der Zeile der Zahl selbst. Sieh in dieser Reihenfolge nach: (1) die Kopfzelle der Spalte, in der die Zahl steht, (2) der Titel der eigenen Tabelle, (3) der Satz, der die Tabelle in ihrem Abschnitt ankündigt ("Für das Jahr 2040 ergeben sich die in den nachfolgenden Tabellen zusammengestellten Kennzahlen"), (4) die Überschrift des Abschnitts. Das Jahr im Titel einer ANDEREN Tabelle gilt nicht, auch wenn dieser Titel im selben Abschnitt steht. Nennt die Quelle einen Zeitraum statt eines Jahres ("Durchschnittswert der Jahre 2022-2024"), dann gehört das LETZTE Jahr in value und der Zeitraum wörtlich in value_raw.
+> Für welches Kalenderjahr gilt diese Leistung? Vierstellig. Das Jahr steht fast nie in der Zeile der Zahl selbst. Sieh in dieser Reihenfolge nach: (1) die Kopfzelle der Spalte, in der die Zahl steht, (2) der Titel der eigenen Tabelle, (3) der Satz, der die Tabelle in ihrem Abschnitt ankündigt ("Für das Jahr 2040 ergeben sich die in den nachfolgenden Tabellen zusammengestellten Kennzahlen"), (4) die Überschrift des Abschnitts. Das Jahr im Titel einer ANDEREN Tabelle gilt nicht, auch wenn dieser Titel im selben Abschnitt steht. Eine Bestandsanlage trägt das Jahr der Bestandsaufnahme, nicht ihr Baujahr.
 
 - `label`: `is about`
 - `object_class`: `OEO_00030033`
@@ -1778,5 +1778,43 @@ The wording before any tidying (an organisation's legal form, a title's line bre
 ### `value_uri`
 
 The entry of the parameter's own vocabulary the wording resolved to; null when the list did not hold it. Only a category parameter has a vocabulary, so this one never writes the key at all.
+
+## The stamp
+
+One `<document>.stamp.json` beside each harvest file, closed like the records (`additionalProperties: false`).
+
+A key that differs from the current run makes the document stale and it is harvested again -- every key but `spec`, which is recorded so a reader can say which file a harvest came from and is not compared. Withheld when the harvest did not happen. The parameter/, value/, axis/ and slot/ keys say WHICH question changed, so a moving ontology costs the coordinates it touched rather than a full re-read of the corpus; a stamp written before they existed carries none of them, and for it `spec` decides again, so it is stale in all of them.
+
+| key | what it records |
+|---|---|
+| `anchors` | The anchor prompt, the model, the version of the target set and the profile's frozen anchor file, together. NOT the questions: which question was asked is carried by the parameter/, value/, axis/ and slot/ keys, and a question that is GONE by the rule that a key the stamp still carries and the run no longer asks makes the document stale. The anchors decide which passages a document was read from, so a document read under one set is not the same result as one read under another. Empty when anchors were off. |
+| `model` | the serving model |
+| `page_text_transcribed` | How many pages of this document a model read rather than the PDF. A harvest from a transcribed document is a reading of a reading. |
+| `spec` | sha256 of extraction_spec.json. A record, not a verdict: it moves on a comment, an indent or a graph annotation, none of which any question is asked through. Compared, it would outvote every key below it. |
+| `^axis/[^/]+/[^/]+$` | What this coordinate asks and what it may answer: the question, the evidence rule, and the offered list with its spellings and its definitions. Everything the model sees for this axis, and nothing else. |
+| `^extraction/(harvest\|queries\|anchors\|rows\|field\|phrase\|frame)$` | sha256 of the prompt file |
+| `^parameter/[^/]+$` | What this parameter asks, without its axes and without its own list: label, description, value type, accepted units and the example. A new option on ONE axis, or in the list the parameter answers from, must not make every value of the parameter stale -- those have keys of their own. |
+| `^question_text/[^/]+$` | The sentence THIS document was searched with. Recorded and never compared: it is written per document, so the document itself is part of it and no two runs produce the same one. What decides whether the harvest is current is its recipe, and that is already here -- the generator prompt, the model, and the annotation inside parameter/. |
+| `^review/(prompt\|model)$` | What read this document a second time. Recorded and never compared: the review does not decide whether the harvest is current, and comparing it would report every reviewed document stale the day the review prompt changes. |
+| `^slot/parameter$` | The one coordinate that belongs to no parameter: which quantity a number is. Its question and the parameters it offers, uri and label. Also the only key that moves when a parameter is dropped. |
+| `^value/[^/]+$` | The list a category parameter answers from. Its own key, because a moved option can be re-mapped from the wording the harvest kept while a rewritten question cannot. |
+
+## The trace
+
+One event per line; `t` names it and `doc` the document. Read by scripts/trace_report.py.
+
+11 record kinds, told apart by `t`:
+
+- `plan`: `chars`, `doc`, `image`, `kind`, `origin`, `owner`, `rank`
+- `anchor`: `doc`, `parameter`, `text`
+- `frame`: `attempt`, `completion_tokens`, `doc`, `missed`, `ms`, `pairs`, `prompt_tokens`, `scenarios`, `sources`, `status`, `years`
+- `rows`: `attempt`, `completion_tokens`, `doc`, `ms`, `origins`, `prompt`, `prompt_tokens`, `ranks`, `rows`, `sources`, `status`
+- `field`: `anchor`, `attempt`, `completion_tokens`, `doc`, `filled`, `filled_by`, `ms`, `open`, `parameter`, `prompt_tokens`, `raw_foreign`, `raw_missing`, `reply`, `shown`, `slot`, `stage`, `unbacked`, `unbacked_by`, `unquoted`, `unstated`, `window`
+- `sweep`: `anchor`, `asked`, `combed`, `doc`, `exhausted`, `filled`, `raw_foreign`, `raw_missing`, `retried`, `rows`, `slot`, `unbacked`, `unquoted`, `unstated`, `windows`
+- `drop`: `attempt`, `doc`, `field`, `row`, `slot`, `why`, `window`
+- `error`: `attempt`, `detail`, `doc`, `finish`, `kind`, `ms`, `slot`, `sources`, `status`, `where`, `why`
+- `coord`: `doc`, `kind`, `owner`, `parameter`, `states`, `tier`, `unit`, `value`
+- `refusal`: `doc`, `owner`, `parameter`, `reason`
+- `invalid`: `detail`, `doc`, `kind`, `where`, `why`
 
 [Back to the index](../README.md)

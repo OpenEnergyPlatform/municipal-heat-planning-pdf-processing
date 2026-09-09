@@ -29,7 +29,7 @@ from build_docs import (SourceMoved, build, check, constants_of,  # noqa: E402
                         render_index, render_stage_page, render_states_page,
                         render_toctree, render_trust_page,
                         render_profiles_page, resolve, states_table,
-                        trust_table, versions_index, versions_of, write)
+                        trust_table, write)
 
 
 # ---------------------------------------------------------------------------
@@ -121,6 +121,29 @@ def test_the_index_links_every_page_and_nothing_else():
     assert render_index({"a.md": "A"}).count("](a.md)") == 1
 
 
+def test_the_index_says_what_each_page_is_about():
+    """Each index line carries the first sentence of the page's primary
+    source's docstring, so a reader picks a page by what it is about and not
+    by its title alone. A page whose primary source is a schema has no
+    docstring and gets no lede, rather than a made-up one."""
+    from build_docs import _lede
+    text = build()["README.md"]
+    lines = {line.split("](")[1].split(")")[0]: line
+             for line in text.splitlines() if line.startswith("- [")}
+    lede = _lede(docstring_of("docpipe/extraction/__init__.py"))
+    assert lede.endswith(".") and " " in lede
+    assert lines["stages/extraction.md"].endswith(f"): {lede}")
+    assert lines["contract/kwp.md"].endswith(")")
+    # The lede is one sentence, joined across the docstring's lines.
+    assert _lede("The per-document files, in the order\nthey are "
+                 "written.\n\nSecond paragraph.") \
+        == "The per-document files, in the order they are written."
+    assert _lede("Writes results.json to disk. Then more.") \
+        == "Writes results.json to disk."
+    assert render_index({"a.md": "A"}, {"a.md": "Erste Zeile."}) \
+        .count("](a.md): Erste Zeile.") == 1
+
+
 def test_the_site_names_every_page_exactly_once_and_in_order():
     """Sphinx builds from one toctree. A page missing from it is built and
     reachable from nothing; a page named twice is a warning, and the Read the
@@ -163,10 +186,7 @@ def test_the_generator_reads_through_one_door():
     anywhere makes the guard decorative."""
     text = (ROOT / "scripts" / "build_docs.py").read_text(encoding="utf-8")
     tree = ast.parse(text)
-    # `versions_of` enumerates a BUILT site, an output of the docs workflow
-    # and never a source; it reads no file and writes through `write`.
-    allowed = {"read_source", "_profile_names", "write", "check",
-               "versions_of"}
+    allowed = {"read_source", "_profile_names", "write", "check"}
     inside = {}
     for node in ast.walk(tree):
         if isinstance(node, ast.FunctionDef):
@@ -281,7 +301,7 @@ def test_every_trust_level_and_reason_family_is_documented():
     """The reason that reaches the harvest is the VALUE of the flag mapping,
     not its key: rendered the other way the page publishes `quote_repaired`,
     which matches no pattern the schema accepts."""
-    levels, reasons, flags = trust_table()
+    levels, reasons, flags, marks, join = trust_table()
     assert [level for level, _gloss in levels] == ["A", "B", "C"]
     page = build()["contract/trust.md"]
     for value in flags.values():
@@ -289,7 +309,57 @@ def test_every_trust_level_and_reason_family_is_documented():
         assert any(value == pattern.strip("^$") for pattern in reasons), value
     for pattern in reasons:
         assert pattern in page
-    assert render_trust_page(levels, reasons, flags, "x").startswith("# How")
+    assert render_trust_page(levels, reasons, flags, marks, join,
+                             "x").startswith("# How")
+
+
+def test_the_marks_of_a_trust_line_are_documented_in_their_order():
+    """The line above a value node is the profile's words in the core's
+    order, and the order is a fact about trust.py that no profile can state.
+    Read off trust.py by AST here, independently of the generator's reader."""
+    tree = ast.parse((ROOT / "docpipe" / "extraction" / "trust.py")
+                     .read_text(encoding="utf-8"))
+    literal = {n.targets[0].id: ast.literal_eval(n.value) for n in tree.body
+               if isinstance(n, ast.Assign)
+               and isinstance(n.targets[0], ast.Name)
+               and n.targets[0].id in ("MARKS", "REASON_JOIN")}
+    _levels, _reasons, _flags, marks, join = trust_table()
+    assert marks == tuple(literal["MARKS"]) and join == literal["REASON_JOIN"]
+    page = build()["contract/trust.md"]
+    section = page[page.index("## The marks of a trust line"):]
+    listed = [line.split("`")[1] for line in section.splitlines()
+              if line[:1].isdigit()]
+    assert listed == list(marks)
+    assert f"joined with `{join}`" in section
+
+
+def test_the_contract_page_documents_the_stamp_and_the_trace():
+    """Both checked-in schemas carry three top-level branches, and the page
+    used to render one. The stamp is what the resume decides on and the
+    trace what the cost is read from, so a reader of the contract has to see
+    their keys and their record kinds, straight from the JSON."""
+    pages = build()
+    for name in build_docs._profile_names():
+        rel = build_docs._contract_rel(name)
+        stamp, trace = json_at(rel, "stamp"), json_at(rel, "trace")
+        page = pages[f"contract/{name}.md"]
+        assert "## The stamp" in page and "## The trace" in page
+        stamp_part = page[page.index("## The stamp"):page.index("## The trace")]
+        for key in stamp["properties"]:
+            assert f"| `{key}` |" in stamp_part, key
+        for pattern in stamp["patternProperties"]:
+            # A pipe inside a code span still splits a table cell.
+            cell = pattern.replace("|", "\\|")
+            assert f"| `{cell}` |" in stamp_part, pattern
+        trace_part = page[page.index("## The trace"):]
+        kinds = [b["properties"]["t"]["const"] for b in trace["oneOf"]]
+        assert len(kinds) == 11
+        assert f"{len(kinds)} record kinds" in trace_part
+        for kind in kinds:
+            assert f"- `{kind}`:" in trace_part, kind
+    # Rendered without them, the page says nothing about either.
+    bare = render_contract_page("x", {"refusal": {"type": "object"}})
+    assert "## The stamp" not in bare and "## The trace" not in bare
 
 
 def test_a_profile_with_a_schema_gets_a_contract_page():
@@ -439,39 +509,44 @@ def test_every_command_the_overview_prints_can_be_run():
     assert named <= flags, sorted(named - flags)
 
 
-# ---------------------------------------------------------------------------
-# The published site keeps every version
-# ---------------------------------------------------------------------------
-def test_the_site_index_lists_every_version_and_nothing_else(tmp_path):
-    """A directory is a version when it holds an index.html; tags sort by
-    their numbers, develop stays on top, scaffolding is not listed."""
-    for name in ("develop", "v1.2", "v1.10", "scaffold"):
-        (tmp_path / name).mkdir()
-    for name in ("develop", "v1.2", "v1.10"):
-        (tmp_path / name / "index.html").write_text("<p>x</p>", encoding="utf-8")
-    (tmp_path / "stray.html").write_text("", encoding="utf-8")
-    assert versions_of(tmp_path) == ["develop", "v1.10", "v1.2"]
-    names = versions_index(tmp_path)
-    assert names == ["develop", "v1.10", "v1.2"]
-    listed = json.loads((tmp_path / "versions.json").read_text(encoding="utf-8"))
-    assert [v["name"] for v in listed] == names
-    assert all(v["url"] == v["name"] + "/" for v in listed)
-    html = (tmp_path / "index.html").read_text(encoding="utf-8")
-    assert all(f'href="{name}/"' in html for name in names)
-    assert "scaffold" not in html and "stray" not in html
-    # Without it GitHub Pages drops Sphinx's `_static` directory.
-    assert (tmp_path / ".nojekyll").is_file()
-    assert main(["--versions", str(tmp_path)]) == 0
-
-
-def test_the_docs_workflow_checks_renders_and_keeps_every_version():
-    """The workflow refuses a stale page, treats a Sphinx warning as an
-    error, and replaces only the directory of the version it built."""
+def test_the_docs_workflow_checks_and_renders_the_pages_and_publishes_nothing():
+    """The workflow is the Read the Docs build as a gate: a stale page or a
+    Sphinx warning fails on the commit that caused it. Hosting and versions
+    are Read the Docs', so the workflow writes nowhere and needs no write
+    permission."""
     text = (ROOT / ".github" / "workflows" / "docs.yml").read_text(encoding="utf-8")
     assert "branches: [develop]" in text and 'tags: ["v*"]' in text
     assert "python scripts/build_docs.py --check" in text
     assert "python -m sphinx -W" in text
-    assert 'rm -rf "site/$VERSION"' in text
-    assert "python scripts/build_docs.py --versions site" in text
-    assert text.count("rm -rf") == 1
+    assert "contents: read" in text and "contents: write" not in text
+    for forbidden in ("gh-pages", "git push", "--versions"):
+        assert forbidden not in text, forbidden
+
+
+def test_the_site_turns_every_readme_link_into_an_index_link():
+    """The repository index and the site's toctree page are two files, and
+    the pages link the first. Without the rewrite the site build reports one
+    missing cross-reference per page, and warnings are errors there."""
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("docs_conf", ROOT / "docs" / "conf.py")
+    conf = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(conf)
+    source = ["[Back to the index](README.md) and [up](../README.md#pages) "
+              "and [kept](../README.md.bak) and [other](README.txt)"]
+    conf._site_links(None, "stages/app", source)
+    assert source[0] == ("[Back to the index](index.md) and [up](../index.md#pages) "
+                         "and [kept](../README.md.bak) and [other](README.txt)")
+    # Every generated page carries the link the rewrite is for.
+    for rel, text in build().items():
+        if rel not in ("README.md", "index.md"):
+            assert "](README.md)" in text or "](../README.md)" in text, rel
+    # And Sphinx is told to run it on every source it reads.
+    connected = []
+
+    class App:
+        def connect(self, event, handler):
+            connected.append((event, handler))
+
+    conf.setup(App())
+    assert connected == [("source-read", conf._site_links)]
 

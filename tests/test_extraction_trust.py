@@ -405,8 +405,14 @@ def test_a_scenario_lifted_from_another_section_is_now_a_finding():
     # The one axis that is `local`: a page distance is not reconstructible
     # from a row, so it is judged at harvest and not here.
     assert trust(row("scenario_region", far), own=own)["reasons"] == []
+    assert trust(row("scenario_region", far), own=own)["level"] == LEVEL_A
     # And with the old empty set nothing at all was findable.
     assert trust(row("scenario_type", far), own=frozenset())["reasons"] == []
+    # The `tier` key is what keeps these rows at A: a row without one is
+    # graded as taken off an image, which is B whatever its coordinates say.
+    tierless = row("scenario_region", here)
+    tierless.pop("tier")
+    assert trust(tierless, own=own)["level"] == LEVEL_B
 
 def test_parameter_states_names_every_parameter_of_the_spec():
     """One line per parameter, whatever came of it, keyed on the uri the

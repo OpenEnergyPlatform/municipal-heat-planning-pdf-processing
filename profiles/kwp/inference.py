@@ -20,9 +20,12 @@ NON_ANCHOR = re.compile(
 )
 
 # Why the graph route did not answer, one sentence per reason token of
-# docpipe.inference.kg_route.REASONS. Held against that tuple when the route
-# is built, so a token nobody worded is a finding at start-up and not a blank
-# caption once in a thousand turns.
+# docpipe.inference.kg_route.REASONS. Held against that tuple by
+# kg_route.hooks, which the app builds at start-up, so a token nobody worded
+# is a finding before the first turn and not a blank caption once in a
+# thousand turns. Not at import, the way kg.py checks TRUST_PROSE: the check
+# lives in docpipe.inference, and importing that package imports openai and
+# faiss -- a table of six sentences should not need either to load.
 ROUTE_NOTES = {
     "no_graph": "Kein Wissensgraph geladen.",
     "no_plan": ("Dieser Plan hat keinen Knoten im Wissensgraphen: ohne AGS "

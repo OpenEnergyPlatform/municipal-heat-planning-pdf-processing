@@ -361,6 +361,57 @@ def test_the_route_is_absent_where_the_profile_has_no_kg_query(hooks):
     assert hooks.label("OEO_00000292") == "Erdgas"
 
 
+def test_the_caption_tells_a_carrier_from_a_sector_by_the_specs_own_lists(
+        hooks):
+    """`?abouts` comes back under one predicate, carrier and sector mixed.
+    The split is membership in the spec's own lists, in the profile's axis
+    order, and an IRI in no list is kept rather than dropped or guessed."""
+    carrier = f"{kg.OEO}OEO_00000292"
+    sector = f"{kg.OEO}OEO_00000214"
+    stranger = "https://example.org/nobody"
+    got = kg_route.by_axis(hooks.spec, hooks.axes, [sector, carrier, stranger])
+    assert got == [("carrier", [carrier]), ("sector", [sector]),
+                   ("", [stranger])]
+    assert kg_route.by_axis(hooks.spec, hooks.axes, []) == []
+    # The app reads the split, never a list of its own. Read as text: the
+    # app imports streamlit, which this suite does not have.
+    from pathlib import Path
+    source = (Path(__file__).resolve().parent.parent / "scripts"
+              / "inference_app" / "app.py").read_text(encoding="utf-8")
+    render = source[source.index("def _render_kg("):]
+    render = render[:render.index("\ndef ")]
+    assert "kg_route.by_axis(" in render
+    assert "vocabulary" not in render, "no list of its own"
+
+
+def test_a_route_note_nobody_worded_stops_the_route_being_built(monkeypatch):
+    """The reason tokens are the core's and the sentences the profile's, and
+    the two are held against each other when the hooks are built -- which the
+    app does at start-up, so the finding is a start-up error and not a blank
+    caption. Not at import: importing the check would import openai and
+    faiss into a table of six sentences."""
+    short = {k: v for k, v in inference.ROUTE_NOTES.items() if k != "no_rows"}
+    monkeypatch.setattr(inference, "ROUTE_NOTES", short)
+    with pytest.raises(LookupError, match="no_rows"):
+        kg_route.hooks(load_profile("kwp"))
+
+
+def test_a_fragment_without_its_prefix_header_is_refused_on_load(
+        graph_fixture):
+    """The serializer writes the prefix header once per run. A file made of
+    several runs carries several headers and loads; a fragment cut from a
+    run's second document onward carries none, and is named as such instead
+    of failing on the first prefixed name."""
+    _db, ttl, _graph, _comments = graph_fixture
+    lines = ttl.splitlines()
+    body = lines[max(i for i, line in enumerate(lines)
+                     if line.startswith("@prefix")) + 1:]
+    with pytest.raises(ValueError, match="@prefix"):
+        kg_route.load_graph_from_text("\n".join(body))
+    twice, _ = kg_route.load_graph_from_text(ttl + "\n" + ttl)
+    assert len(twice) == len(_graph), "two headers, one set of triples"
+
+
 def test_no_oeo_class_is_both_a_carrier_and_a_sector():
     """The display splits `?abouts` by which spec list an IRI is in, so an
     overlap would show a value under the wrong axis."""

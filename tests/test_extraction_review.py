@@ -574,3 +574,99 @@ def test_a_document_with_nothing_to_review_is_rewritten_unchanged(tmp_path):
     assert seen == [], "no request was worth spending"
     assert stats["reviewed"] == 0
     assert path.read_text(encoding="utf-8") == before
+
+
+# ---------------------------------------------------------------------------
+# Which stamps the review may touch, and how the runner reaches it (T4)
+# ---------------------------------------------------------------------------
+
+def _stamped(tmp_path, name):
+    path = _harvest(tmp_path, [_row(), _summary()], name=name)
+    stamp = tmp_path / f"{name}.stamp.json"
+    stamp.write_text(json.dumps({"spec": "sha", "model": "m"}),
+                     encoding="utf-8")
+    return path, stamp
+
+
+def test_the_review_keys_reach_only_the_stamps_of_the_documents_it_read(
+        tmp_path):
+    """A run cut short by the limit has read some documents and not others,
+    and the stamp is the only place that difference is recorded. Writing the
+    review keys into every stamp in the directory would say every document
+    was reviewed."""
+    _stamped(tmp_path, "a")
+    _a, stamp_b = _stamped(tmp_path, "b")
+    seen = []
+    review.run(tmp_path, SPEC, ask=_asker(_agreeing(), seen),
+               sources_for=lambda row: _sources(), limit=1,
+               prompt_sha="abc123", model="ein-modell")
+    assert len(seen) == 1
+    stored_a = json.loads((tmp_path / "a.stamp.json").read_text(
+        encoding="utf-8"))
+    assert stored_a["review/prompt"] == "abc123"
+    stored_b = json.loads(stamp_b.read_text(encoding="utf-8"))
+    assert "review/prompt" not in stored_b and "review/model" not in stored_b
+
+
+def test_a_named_document_is_the_only_one_reviewed(tmp_path):
+    """`documents` names harvest files by stem, the way `--document` names
+    them through the corpus listing: the others are neither read nor
+    stamped."""
+    path_a, stamp_a = _stamped(tmp_path, "a")
+    path_b, stamp_b = _stamped(tmp_path, "b")
+    before = path_a.read_bytes()
+    seen = []
+    stats = review.run(tmp_path, SPEC, ask=_asker(_agreeing(), seen),
+                       sources_for=lambda row: _sources(),
+                       documents=["b"], prompt_sha="abc123",
+                       model="ein-modell")
+    assert stats["documents"] == 1 and len(seen) == 1
+    assert path_a.read_bytes() == before
+    assert "review/prompt" not in json.loads(
+        stamp_a.read_text(encoding="utf-8"))
+    assert json.loads(stamp_b.read_text(
+        encoding="utf-8"))["review/model"] == "ein-modell"
+    assert "review:agree" in _rows_of(path_b)[0]["flags"]
+
+
+def _rows_of(path):
+    return [json.loads(line) for line
+            in path.read_text(encoding="utf-8").strip().splitlines()]
+
+
+def test_each_no_harvest_mode_reaches_its_own_run(tmp_path, monkeypatch):
+    """`--review` and `--remap` return before the harvest's own guards, so
+    each has to reach its pass with what it needs and nothing the harvest
+    would have set up. Two regressions this pins: `hashlib` imported at module
+    level (the remap branch raised UnboundLocalError without it), and the
+    review branch above the harvest's serving check, which asks for a
+    different budget and a different index."""
+    from collections import Counter
+
+    from docpipe.extraction import remap
+    seen = []
+    monkeypatch.setattr(review, "run",
+                        lambda *a, **kw: seen.append(("review", kw)) or
+                        Counter())
+    monkeypatch.setattr(remap, "run",
+                        lambda *a, **kw: seen.append(("remap", a)) or
+                        Counter())
+    monkeypatch.setattr(runner, "assert_serving",
+                        lambda *a, **kw: seen.append(("serving",
+                                                      kw.get("what"))))
+    monkeypatch.setattr(runner, "make_review_asker",
+                        lambda image_root=None: (lambda *a, **kw: None))
+    monkeypatch.setattr(runner, "make_review_sources",
+                        lambda db: (lambda row: []))
+    db, index, out = (str(tmp_path / "no.db"), str(tmp_path / "no.index"),
+                      str(tmp_path / "out"))
+    assert runner.main([db, index, out, "--review", "--image-root",
+                        str(tmp_path)]) == 0
+    assert runner.main([db, index, out, "--remap"]) == 0
+    assert [what for what, _ in seen] == ["serving", "review", "remap"]
+    assert seen[0][1] == "extraction review"
+    assert seen[1][1]["documents"] is None
+    assert seen[1][1]["prompt_sha"] == runner.prompts.load(
+        runner.REVIEW_PROMPT_ID).sha256
+    stamp = seen[2][1][2]
+    assert stamp["model"] == runner.LLM_MODEL and len(stamp["spec"]) == 64

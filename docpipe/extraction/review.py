@@ -36,6 +36,7 @@ from typing import Callable, Optional
 
 from . import fields
 from .pipeline import answer_in_quote
+from .remap import stamp_path_of
 from .spec import Spec, fold_label, own_evidence
 from .trust import (LEVEL_C, REVIEW_AGREE, REVIEW_DISAGREE, REVIEW_UNBACKED,
                     document_summary, trust)
@@ -316,28 +317,37 @@ def review_file(path: Path, spec: Spec, *, ask: Callable,
 
 
 def run(harvest_dir: Path, spec: Spec, *, ask: Callable,
-        sources_for: Callable, limit: int = 0, prompt_sha: str = "",
-        model: str = "") -> Counter:
-    """Review a whole harvest directory.
+        sources_for: Callable, documents=None, limit: int = 0,
+        prompt_sha: str = "", model: str = "") -> Counter:
+    """Review a whole harvest directory, or the documents named by stem.
 
     The stamps stay, and none is created. The review changes nothing a resume
     decides on -- values, coordinates and states are byte-identical, only
     `flags` grows -- so dropping the stamps would make the next harvest read
     the corpus again and throw the review away. Creating one where none exists
     would do the opposite and skip a document that was never harvested.
+
+    What the review wrote goes into the stamps of the documents it READ and
+    no other: a run cut short by `limit` leaves the rest without a review
+    key, which is the only way a later run can tell them apart.
     """
     stats: Counter = Counter()
     harvest_dir = Path(harvest_dir)
     own = own_evidence(spec)
     working: list = []
     left = limit
+    wanted = None if documents is None else set(documents)
+    read: list = []
     for path in sorted(harvest_dir.glob("*.jsonl")):
         if path.name.endswith(".trace.jsonl"):
+            continue
+        if wanted is not None and path.stem not in wanted:
             continue
         got = review_file(path, spec, ask=ask, sources_for=sources_for,
                           own=own, limit=left, working=working)
         stats.update(got)
         stats["documents"] += 1
+        read.append(path)
         if limit:
             left = limit - stats["reviewed"]
             if left <= 0:
@@ -345,7 +355,8 @@ def run(harvest_dir: Path, spec: Spec, *, ask: Callable,
     for name, value in (("review/prompt", prompt_sha), ("review/model", model)):
         if not value:
             continue
-        for stamp in sorted(harvest_dir.glob("*.stamp.json")):
+        for path in read:
+            stamp = stamp_path_of(path)
             try:
                 stored = json.loads(stamp.read_text(encoding="utf-8"))
             except (OSError, json.JSONDecodeError):

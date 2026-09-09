@@ -41,8 +41,8 @@ import ast
 import difflib
 import io
 import json
-import pathlib
 import re
+import pathlib
 import sys
 import tokenize
 
@@ -260,7 +260,8 @@ def states_table() -> tuple:
 
 
 def trust_table() -> tuple:
-    """((level, gloss), ...), the reason patterns, and the flag reasons.
+    """((level, gloss), ...), the reason patterns, the flag reasons, the
+    marks of a trust line in their order, and the reason separator.
 
     The levels and the reason vocabulary are read from the published schema
     rather than from `trust.py` alone, because the schema is the copy an
@@ -272,10 +273,11 @@ def trust_table() -> tuple:
     reasons = json_at(
         rel, "harvest/$defs/summary/properties/reasons/propertyNames")
     flags = _literal("docpipe/extraction/trust.py", "FLAG_REASONS")
-    names = {value: name for name, value in
-             (("LEVEL_A", "A"), ("LEVEL_B", "B"), ("LEVEL_C", "C"))}
+    marks = _literal("docpipe/extraction/trust.py", "MARKS")
+    join = _literal("docpipe/extraction/trust.py", "REASON_JOIN")
     ordered = tuple((level, levels[level]) for level in sorted(levels))
-    return ordered, tuple(p["pattern"] for p in reasons["anyOf"]), flags
+    return (ordered, tuple(p["pattern"] for p in reasons["anyOf"]), flags,
+            tuple(marks), str(join))
 
 
 # ---------------------------------------------------------------------------
@@ -369,7 +371,9 @@ def _contract_sources() -> tuple:
     """One entry per profile that publishes a schema, discovered, not listed."""
     return tuple(
         (f"contract/{name}.md", f"The harvest contract: {name}",
-         ((_contract_rel(name), "harvest/$defs"),))
+         ((_contract_rel(name), "harvest/$defs"),
+          (_contract_rel(name), "stamp"),
+          (_contract_rel(name), "trace")))
         for name in _profile_names())
 
 
@@ -414,9 +418,21 @@ def resolve(sources) -> dict:
 # Rendering
 # ---------------------------------------------------------------------------
 def _lede(doc: str) -> str:
-    """The first sentence of a docstring, as one line."""
-    first = [line.strip() for line in doc.splitlines() if line.strip()]
-    return first[0] if first else ""
+    """The first sentence of a docstring's first paragraph, as one line.
+
+    A sentence and not a line: module docstrings wrap at 79 columns, and the
+    first line alone stops mid-thought more often than not.
+    """
+    lines: list = []
+    for line in doc.splitlines():
+        if not line.strip():
+            if lines:
+                break
+            continue
+        lines.append(line.strip())
+    text = " ".join(lines)
+    found = re.match(r"(.+?[.!?])(\s|$)", text)
+    return (found.group(1) if found else text).strip()
 
 
 def _up(page: str) -> str:
@@ -483,8 +499,10 @@ def _kg_lines(kg: dict) -> list:
     return out
 
 
-def render_contract_page(profile: str, schema: dict) -> str:
-    """One section per record kind, straight out of the published schema."""
+def render_contract_page(profile: str, schema: dict, stamp=None,
+                         trace=None) -> str:
+    """One section per record kind, straight out of the published schema,
+    then the stamp beside the harvest file and the trace beside both."""
     harvest = schema
     out = [f"# The harvest contract: {profile}", "",
            "Generated from `profiles/%s/extraction_schema.json` by "
@@ -536,8 +554,49 @@ def render_contract_page(profile: str, schema: dict) -> str:
             out += ["A coordinate is `null` unless its `<axis>_state` says it "
                     "was read or derived — that is what the `allOf` branches "
                     "encode, one per coordinate.", ""]
+    out += _stamp_lines(stamp or {}) + _trace_lines(trace or {})
     out += ["[Back to the index](../README.md)", ""]
     return NEWLINE.join(out)
+
+
+def _stamp_lines(stamp: dict) -> list:
+    """The resume stamp: one `<name>.stamp.json` beside each harvest file."""
+    if not stamp:
+        return []
+    out = ["## The stamp", "",
+           "One `<document>.stamp.json` beside each harvest file, closed like "
+           "the records (`additionalProperties: false`).", ""]
+    if stamp.get("description"):
+        out += [str(stamp["description"]), ""]
+    out += ["| key | what it records |", "|---|---|"]
+    # A pipe splits a table cell even inside a code span.
+    cell = lambda text: str(text).replace("|", chr(92) + "|")
+    for key in sorted(stamp.get("properties") or {}):
+        gloss = (stamp["properties"][key] or {}).get("description", "")
+        out.append(f"| `{cell(key)}` | {cell(gloss)} |")
+    for pattern in sorted(stamp.get("patternProperties") or {}):
+        gloss = (stamp["patternProperties"][pattern] or {}).get(
+            "description", "")
+        out.append(f"| `{cell(pattern)}` | {cell(gloss)} |")
+    return out + [""]
+
+
+def _trace_lines(trace: dict) -> list:
+    """The trace: one event per line, one record kind per `oneOf` branch."""
+    kinds = [branch for branch in (trace.get("oneOf") or [])
+             if isinstance(branch, dict)]
+    if not kinds:
+        return []
+    out = ["## The trace", ""]
+    if trace.get("description"):
+        out += [str(trace["description"]), ""]
+    out += [f"{len(kinds)} record kinds, told apart by `t`:", ""]
+    for branch in kinds:
+        props = branch.get("properties") or {}
+        name = (props.get("t") or {}).get("const", "?")
+        fields = ", ".join(f"`{k}`" for k in sorted(props) if k != "t")
+        out.append(f"- `{name}`: {fields}")
+    return out + [""]
 
 
 def render_states_page(rows) -> str:
@@ -556,7 +615,8 @@ def render_states_page(rows) -> str:
     return NEWLINE.join(out)
 
 
-def render_trust_page(levels, reasons, flag_reasons, doc: str) -> str:
+def render_trust_page(levels, reasons, flag_reasons, marks, join,
+                      doc: str) -> str:
     out = ["# How much of a value the run can stand behind", "",
            "Generated from `docpipe/extraction/trust.py` and the published "
            "schema by `scripts/build_docs.py`.", "", doc, "",
@@ -572,7 +632,14 @@ def render_trust_page(levels, reasons, flag_reasons, doc: str) -> str:
             "| flag on the row | reason it becomes |", "|---|---|"]
     for flag in sorted(flag_reasons):
         out.append(f"| `{flag}` | `{flag_reasons[flag]}` |")
-    out += ["", "[Back to the index](../README.md)", ""]
+    out += ["", "## The marks of a trust line", "",
+            "The line the serializer writes above a value node is made of "
+            "these marks, in this order, each worded by the profile in its "
+            "own language (`TRUST_PROSE`) and only where it applies:", ""]
+    out += [f"{n}. `{mark}`" for n, mark in enumerate(marks, 1)]
+    out += ["", f"Inside the `reasons` mark the reasons are joined with "
+            f"`{join}`; the reason tokens themselves are never translated.",
+            "", "[Back to the index](../README.md)", ""]
     return NEWLINE.join(out)
 
 
@@ -639,7 +706,7 @@ def render_toctree(pages) -> str:
     return NEWLINE.join(out)
 
 
-def render_index(pages) -> str:
+def render_index(pages, ledes=None) -> str:
     out = ["# Documentation", "",
            "Every page here except `pipeline.md` is generated from the code "
            "it describes by `scripts/build_docs.py`, and "
@@ -651,7 +718,9 @@ def render_index(pages) -> str:
     for page in sorted(pages):
         if page == "README.md":
             continue
-        out.append(f"- [{pages[page]}]({page})")
+        lede = (ledes or {}).get(page) or ""
+        out.append(f"- [{pages[page]}]({page})"
+                   + (f": {lede}" if lede else ""))
     out.append("")
     return NEWLINE.join(out)
 
@@ -679,14 +748,21 @@ def build() -> dict:
         elif page == "contract/states.md":
             pages[page] = render_states_page(states_table())
         elif page == "contract/trust.md":
-            levels, reasons, flags = trust_table()
-            pages[page] = render_trust_page(levels, reasons, flags,
-                                            parts[0][1])
+            levels, reasons, flags, marks, join = trust_table()
+            pages[page] = render_trust_page(levels, reasons, flags, marks,
+                                            join, parts[0][1])
         else:
             pages[page] = render_contract_page(page.split("/")[-1][:-3],
-                                               parts[0][1])
+                                               parts[0][1],
+                                               stamp=parts[1][1],
+                                               trace=parts[2][1])
+    # The index line of a page is its title and the first line of its
+    # primary source's docstring, where that source is a module.
+    ledes = {page: (_lede(resolved[page][0][1])
+                    if isinstance(resolved[page][0][1], str) else "")
+             for page in pages}
     pages["README.md"] = render_index(
-        {page: titles[page] for page in pages})
+        {page: titles[page] for page in pages}, ledes)
     # Two front pages on purpose: `README.md` is what a reader of the
     # repository opens, `index.md` is what Sphinx builds the site from, and
     # only the second may carry a toctree.
@@ -746,67 +822,13 @@ def check() -> int:
     return 0
 
 
-# ---------------------------------------------------------------------------
-# The published site: one directory per version
-# ---------------------------------------------------------------------------
-#
-# The docs workflow renders each push to develop and each tag into its own
-# directory on the gh-pages branch and never removes an older one. What ties
-# them together is written here: `versions.json` for anything that wants the
-# list, `index.html` for a reader, and `.nojekyll` because GitHub Pages
-# otherwise drops every `_static` directory Sphinx writes.
-
-def versions_of(site_dir) -> list:
-    """The version directories of a published site, newest first.
-
-    A directory is a version when it holds an `index.html`; the rest is
-    scaffolding. Tags sort by their numbers, so v1.10 stands above v1.2, and
-    `develop` stays on top as the moving edge.
-    """
-    site = pathlib.Path(site_dir)
-    names = [p.name for p in site.iterdir()
-             if p.is_dir() and (p / "index.html").is_file()]
-
-    def key(name):
-        numbers = tuple(-int(n) for n in re.findall(r"\d+", name))
-        return (name != "develop", numbers, name)
-
-    return sorted(names, key=key)
-
-
-def versions_index(site_dir) -> list:
-    """Write the index over a published site; the names it lists.
-
-    Through `write`, the module's one writer, so the site gets the same
-    newline and the same path guard as a page.
-    """
-    names = versions_of(site_dir)
-    items = "".join(f'<li><a href="{name}/">{name}</a></li>' for name in names)
-    write(site_dir, {
-        "versions.json": json.dumps(
-            [{"name": name, "url": f"{name}/"} for name in names],
-            indent=2) + NEWLINE,
-        "index.html": ("<!doctype html><meta charset=utf-8><title>docpipe"
-                       "</title><h1>docpipe</h1><p>Versions, newest first:"
-                       f"</p><ul>{items}</ul>{NEWLINE}"),
-        ".nojekyll": "",
-    })
-    return names
-
-
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--out", metavar="DIR",
                         help="write the pages into DIR")
     parser.add_argument("--check", action="store_true",
                         help="fail when a checked-in page has drifted")
-    parser.add_argument("--versions", metavar="SITE",
-                        help="write the version index over a published site")
     args = parser.parse_args(argv)
-    if args.versions:
-        names = versions_index(args.versions)
-        print(f"site: {len(names)} version(s): {', '.join(names)}")
-        return 0
     try:
         if args.check:
             return check()

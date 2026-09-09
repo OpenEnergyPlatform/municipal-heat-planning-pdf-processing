@@ -1133,18 +1133,28 @@ def test_the_field_prompt_states_the_rule_the_code_enforces(profile):
     name, _spec = profile
     text = (PROFILES / name / "prompts" / "extraction" / "field.md").read_text(
         encoding="utf-8")
-    if name != "kwp":
-        pytest.skip("the evidence rule is set per profile")
-    for promised in ('"source"', '"section"', '"block_id"', '"holds"',
-                     "EIGENEN Tabelle", "Nachbarseite"):
-        assert promised in text, promised
-    # The two captions the rule turns on, verbatim from Kassel 349525/349566.
-    assert "Tabelle 17: Endenergieverbrauch der Gesamtstadt" in text
-    assert "Tabelle 28: Endenergieverbrauch der Gesamtstadt" in text
-    # And the column rule no longer says the column is the year.
-    rules = text.split("4. Tabellen mit mehreren")[1]
-    column = rules.split(chr(10) + chr(10))[0]
-    assert "SEKTOR" in column and "JAHR" in column
+    # One entry per profile, and a profile the table does not name fails
+    # rather than skips: a third profile must not slip through green.
+    if name == "kwp":
+        for promised in ('"source"', '"section"', '"block_id"', '"holds"',
+                         "EIGENEN Tabelle", "Nachbarseite"):
+            assert promised in text, promised
+        # The two captions the rule turns on, verbatim from Kassel
+        # 349525/349566.
+        assert "Tabelle 17: Endenergieverbrauch der Gesamtstadt" in text
+        assert "Tabelle 28: Endenergieverbrauch der Gesamtstadt" in text
+        # And the column rule no longer says the column is the year.
+        rules = text.split("4. Tabellen mit mehreren")[1]
+        column = rules.split(chr(10) + chr(10))[0]
+        assert "SEKTOR" in column and "JAHR" in column
+    elif name == "scenarios":
+        # Three of the four axes are held to the row's own source, so the
+        # request has to say how it names that source and its section, and
+        # must not tell the model the passage need not be the source.
+        assert '"source"' in text and '"section"' in text
+        assert "Es muss NICHT die Quelle sein" not in text
+    else:
+        pytest.fail(f"no evidence rule listed for profile {name!r}")
 
 
 def test_the_own_window_shows_the_section_a_table_stands_in(monkeypatch):
@@ -2045,3 +2055,112 @@ def test_the_re_entry_is_capped_and_the_passage_that_answered_goes_first(
         assert {9001, 9002, 500} <= set(window), window
         assert 0 not in window, window
         assert len(window) <= runner.FIELD_WINDOW + runner.FIELD_RE_ENTRY, window
+
+
+# ---------------------------------------------------------------------------
+# The scenarios axes under the rule the paper shape argues (SC6)
+# ---------------------------------------------------------------------------
+
+def _scenarios_spec():
+    return load_spec(json.loads(
+        (PROFILES / "scenarios" / "extraction_spec.json")
+        .read_text(encoding="utf-8")))
+
+
+def test_a_scenario_named_in_another_section_does_not_place_the_value():
+    """The promise: a scenario type read off a passage that is not the row's
+    own is refused and the row stays open. Every scenarios axis slot is kind
+    `text` with no options, so this goes through `_one_row(kind=None)`, which
+    yields `scenario_type` and its `scenario` slot carrying `evidence="own"`
+    straight from the spec."""
+    from docpipe.extraction.pipeline import merge_field as merge, open_rows
+    batch, rows, slot = _one_row(("scenarios", _scenarios_spec()), kind=None)
+    assert batch is not None
+    assert batch.items[0].parameter.uri == "scenario_type"
+    assert slot.name == "scenario" and slot.evidence == "own"
+    own = batch.items[rows[0].item_index].source
+    far = Source("table", 999999, "Ganz woanders: the NDC scenario steht hier.",
+                 {"page": 900})
+    counts = merge(rows, [far], slot, {"answers": {rows[0].label: {
+        "value": "out:family", "value_raw": "the NDC scenario",
+        "quote": "Ganz woanders: the NDC scenario steht hier."}}},
+        owner_of={rows[0].label: own})
+    assert counts["filled"] == 0
+    assert [f["why"] for f in counts["failed"]] == ["quote_not_local"]
+    assert rows[0] in open_rows(rows, slot), "open, so the next window asks"
+
+    near = Source(own.owner_kind, own.owner_id,
+                  "In der eigenen Quelle: the NDC scenario.", own.provenance)
+    counts = merge(rows, [near], slot, {"answers": {rows[0].label: {
+        "value": "out:family", "value_raw": "the NDC scenario",
+        "quote": "In der eigenen Quelle: the NDC scenario."}}},
+        owner_of={rows[0].label: own})
+    assert counts["filled"] == 1
+    assert rows[0].claim["scenario_source"] == ["table", 0]
+
+
+def test_the_region_axis_takes_the_neighbouring_page_and_not_the_far_one():
+    """`scenario_region` is the one `local` axis of the scenarios spec:
+    coverage is stated once in the methods section while the scenario list
+    is a heading further on. Taken from the real spec, not hand-made -- the
+    hand-made rule is what the parametrised test above already covers."""
+    from docpipe.extraction.pipeline import evidence_is_local
+    spec = _scenarios_spec()
+    slot = next(s for s in fields.axis_slots(spec.by_uri["scenario_region"])
+                if s.name == "scenario")
+    assert slot.evidence == "local"
+    table, _parent, neighbour, far = _sources_near_and_far()
+    assert evidence_is_local(slot, neighbour, table) is True
+    assert evidence_is_local(slot, far, table) is False
+
+
+# ---------------------------------------------------------------------------
+# One sweep, one budget (WP9, WP12e)
+# ---------------------------------------------------------------------------
+
+def test_the_startup_line_reports_the_three_allowances_and_their_sum(
+        monkeypatch):
+    """The line used to end "at most N window(s) per coordinate" with
+    FIELD_MAX_WINDOWS alone, short by REST_MAX_WINDOWS since the rest
+    allowance landed. The three numbers and their sum come from the one
+    function the sweep itself budgets with."""
+    import inspect
+    monkeypatch.setattr(runner, "FIELD_ATTEMPTS", 3)
+    monkeypatch.setattr(runner, "FIELD_MAX_WINDOWS", 24)
+    monkeypatch.setattr(runner, "REST_MAX_WINDOWS", 12)
+    budget = runner.window_budget()
+    assert budget == {"own": 3, "retrieval": 21, "rest": 12}
+    assert sum(budget.values()) == 36
+    main = inspect.getsource(runner.main)
+    line = main[main.index("swept in windows of"):]
+    line = line[:line.index("window(s) per coordinate")]
+    assert "own" in line and "retrieval" in line and "rest" in line
+    assert "window_budget()" in main[:main.index("swept in windows of")]
+    # And the sweep budgets with the same function: move a constant and the
+    # sweep's own dict moves with it.
+    monkeypatch.setattr(runner, "REST_MAX_WINDOWS", 5)
+    assert runner.window_budget()["rest"] == 5
+    assert "budget = window_budget()" in inspect.getsource(runner.make_sweeper)
+
+
+def test_the_sweeper_is_the_one_the_harvest_uses(monkeypatch):
+    """One sweep, one set of numbers. A second copy of those 300 lines in the
+    top-up would be a second set, and every measurement the sweep has produced
+    is about this one."""
+    spec = load_spec(json.loads(
+        (PROFILES / "kwp" / "extraction_spec.json").read_text(encoding="utf-8")))
+    seen = []
+    real = runner.make_sweeper
+
+    def spy(ask, **kw):
+        seen.append(sorted(kw))
+        return real(ask, **kw)
+
+    monkeypatch.setattr(runner, "make_sweeper", spy)
+    monkeypatch.setattr(runner, "make_field_asker", lambda image_root=None:
+                        (lambda *a, **kw: None))
+    monkeypatch.setattr(runner, "make_harvester",
+                        lambda *a, **kw: (lambda batch, prior=None: {}))
+    runner.make_fieldwise_harvester(spec=spec)
+    assert seen == [["anchors", "more_sources", "parents",
+                     "rest_of_document"]]
