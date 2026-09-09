@@ -27,7 +27,7 @@ named `tuple_<uri>` and shown here after the uri.
 A tuple section opens with how its row becomes a node of MHPKG
 (`profiles/kwp/kg.py:2`, `:33`), then lists one `###` heading per key,
 sorted alphabetically rather than grouped by coordinate
-(`scripts/build_docs.py:643`). Eight belong to the `parameter`
+(`scripts/build_docs.py:649`). Eight belong to the `parameter`
 coordinate and to every axis: the value, plus seven keys that make it
 checkable without the run that produced it: state, raw wording, a flag
 for a wording naming no class, a wording merely noticed and never

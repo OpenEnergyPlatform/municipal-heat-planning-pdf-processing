@@ -23,7 +23,7 @@ extensions = ["myst_parser"]
 # (`../README.md`), because they are also read in the repository. Sphinx
 # resolves those to the built pages.
 myst_enable_extensions = ["colon_fence", "deflist"]
-myst_heading_anchors = 3
+myst_heading_anchors = 4
 
 source_suffix = {".md": "markdown"}
 master_doc = "index"

@@ -4,7 +4,7 @@
 
 `docpipe/artifacts.py`, `docpipe/profile.py`, `docpipe/prompts.py`,
 `docpipe/llm_preflight.py` and `docpipe/captions.py` are the five
-modules this page documents together (`scripts/build_docs.py:347-349`
+modules this page documents together (`scripts/build_docs.py:349-351`
 groups them under this page). Each is imported by a different subset of
 preprocessing, refinement, visuals, chunking, extraction and inference;
 only `profile.py` reaches all six (Position in the pipeline, below).

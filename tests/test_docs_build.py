@@ -110,14 +110,18 @@ def test_the_hand_written_page_does_not_restate_the_readme():
 
 def test_the_index_links_every_page_and_nothing_else():
     """A page nobody links is a page nobody reads, and a link to a page that
-    no longer exists is worse than no link."""
+    no longer exists is worse than no link. The module pages of the API
+    reference are the exception: they are reached through the reference's
+    own index, not from the front page."""
     pages = build()
     text = pages["README.md"]
     linked = {part.split(")")[0] for part in text.split("](")[1:]}
     linked = {link for link in linked if link.endswith(".md")}
     # `index.md` is Sphinx's front page and carries the toctree; the README is
-    # what a reader of the repository opens. Neither links the other.
-    assert linked == ((set(pages) - {"README.md", "index.md"})
+    # what a reader of the repository opens. Neither links the other. The
+    # module pages of the API reference are reached through its own index.
+    modules = {page for page in pages if build_docs.is_api_module(page)}
+    assert linked == ((set(pages) - {"README.md", "index.md"} - modules)
                       | set(build_docs.HANDWRITTEN))
     assert render_index({"a.md": "A"}).count("](a.md)") == 1
 
@@ -153,11 +157,14 @@ def test_the_index_says_what_each_page_is_about():
 def test_the_site_names_every_page_exactly_once_and_in_order():
     """Sphinx builds from one toctree. A page missing from it is built and
     reachable from nothing; a page named twice is a warning, and the Read the
-    Docs build treats warnings as errors."""
+    Docs build treats warnings as errors. The API reference's module pages
+    sit in a second layer, the hidden toctrees of `api/index.md`, and are
+    checked there."""
     pages = build()
     listed = _toctree_entries(pages["index.md"])
-    wanted = ({page[:-3] for page in pages if page not in ("README.md",
-                                                           "index.md")}
+    wanted = ({page[:-3] for page in pages
+               if page not in ("README.md", "index.md")
+               and not build_docs.is_api_module(page)}
               | {name[:-3] for name in build_docs.HANDWRITTEN})
     assert sorted(listed) == sorted(wanted)
     assert len(listed) == len(set(listed)), "a page is named twice"
@@ -204,7 +211,8 @@ def test_the_generator_reads_through_one_door():
     anywhere makes the guard decorative."""
     text = (ROOT / "scripts" / "build_docs.py").read_text(encoding="utf-8")
     tree = ast.parse(text)
-    allowed = {"read_source", "_profile_names", "_pages_on_disk", "write"}
+    allowed = {"read_source", "_profile_names", "_pages_on_disk",
+               "_api_modules", "write"}
     inside = {}
     for node in ast.walk(tree):
         if isinstance(node, ast.FunctionDef):
@@ -223,7 +231,8 @@ def test_the_generator_reads_through_one_door():
         where = inside.get(id(node))
         assert where in allowed, f"{name}() in {where}"
     # And the enumerators only enumerate.
-    for enumerating in ("_profile_names", "_pages_on_disk"):
+    for enumerating in ("_profile_names", "_pages_on_disk",
+                        "_api_modules"):
         enumerator = next(n for n in ast.walk(tree)
                           if isinstance(n, ast.FunctionDef)
                           and n.name == enumerating)
@@ -507,11 +516,15 @@ def test_every_page_says_what_it_is_for(monkeypatch):
     """A page of docstrings or of tables is a list of parts. What no module
     can say is what the thing is for, so every generated page, the front
     page included, opens with prose from `docs/_intros/`, and a page without
-    it is refused rather than published half-empty."""
+    it is refused rather than published half-empty.
+
+    A module page of the API reference is the exception: what it is for is
+    its module's own docstring, and the reference's index carries the
+    prose."""
     from build_docs import intro_of
     pages = build()
     for page in sorted(pages):
-        if page == "README.md":
+        if page == "README.md" or build_docs.is_api_module(page):
             continue
         intro = intro_of(page)
         assert intro, page
@@ -638,8 +651,15 @@ def test_no_page_uses_a_dash_as_punctuation():
     double hyphen standing in for one, in the prose of any page, in any
     introduction, in any hand-written page and in any module docstring the
     site renders. Fenced code, quoted prompts and the collapsed blocks are
-    left out here; the docstrings are checked at their source instead."""
+    left out here; the docstrings are checked at their source instead.
+
+    The module pages of the API reference are left out: they carry the
+    code's docstrings verbatim, and the register rule reaches a docstring
+    only where it is applied at the source, which is the module docstrings
+    the chapters render."""
     for page, text in sorted(build().items()):
+        if build_docs.is_api_module(page):
+            continue
         assert _dashes(_prose_of(text)) == [], page
     for path in sorted((ROOT / "docs" / "_intros").rglob("*.md")):
         assert _dashes(_prose_of(path.read_text(encoding="utf-8"))) == [], \
@@ -706,3 +726,172 @@ def test_the_site_turns_every_readme_link_into_an_index_link():
     conf.setup(App())
     assert connected == [("source-read", conf._site_links)]
 
+
+# ---------------------------------------------------------------------------
+# The API reference
+# ---------------------------------------------------------------------------
+_DEMO = '''"""demo.py: Reads rows.
+
+One line of <name>.jsonl per row; ``<b>`` stays, `<c>` stays, a lone ` then <d>.
+
+Usage:
+
+    demo.read(path) < 2
+"""
+from dataclasses import dataclass
+
+__all__ = ["Row"]
+__all__ += ["read"]
+
+
+@dataclass
+class Row:
+    """One row."""
+    label: str
+    # The cell the value sits in.
+    cell: tuple = ()
+    span: dict = {
+        "k": 1,  # not the note
+    }
+
+    def __init__(self, label: str):  # a note on the header
+        # not the signature
+        self.label = label
+
+    def quote(self, text: str,
+              limit: int = 0) -> str:
+        """The row's own quote."""
+        return text
+
+    def _hidden(self):
+        return None
+
+
+def read(path, *, limit: int = 0) -> list:
+    """Every row of the file.
+
+    # not a heading
+    """
+    return []
+
+
+def _private():
+    return 1
+
+
+def unlisted():
+    return 2
+'''
+
+
+def test_a_module_page_names_every_public_name_and_nothing_private():
+    """The reference is the code's public surface: every public function,
+    class and method with its signature as written, no private name, a
+    dataclass field with the comment above it, and a docstring rendered as
+    the Markdown it is written in, with `<name>` kept as text rather than
+    swallowed as a tag and a `#` kept as a character rather than a heading."""
+    from build_docs import (api_page, dotted, markdown_safe, parse_api,
+                            render_api_page)
+    assert dotted("docpipe/extraction/pipeline.py") == "docpipe.extraction.pipeline"
+    assert dotted("docpipe/extraction/__init__.py") == "docpipe.extraction"
+    # Outside code, a tag-like `<` and a leading `#` are escaped; inside a
+    # code span or an indented code block they are left as written.
+    assert markdown_safe("<name>.jsonl and `<b>`") == "\\<name>.jsonl and `<b>`"
+    assert markdown_safe("Usage:\n\n    x = a < b\n    # kept") \
+        == "Usage:\n\n    x = a < b\n    # kept"
+    module = parse_api(_DEMO, "docpipe/demo.py")
+    page = render_api_page(module, {"docpipe.demo"})
+    assert page.startswith("# docpipe.demo")
+    for heading in ("### Row", "#### Row.\\_\\_init\\_\\_", "#### Row.quote",
+                    "### read"):
+        assert heading in page, heading
+    assert "_hidden" not in page and "_private" not in page
+    assert "unlisted" not in page, "__all__ decides what is public"
+    assert "def read(path, *, limit: int = 0) -> list" in page
+    assert "@dataclass\nclass Row" in page
+    # The header ends at its colon: a comment on the header line, and a
+    # comment line between the header and the body, are not the signature.
+    assert "def __init__(self, label: str)\n```" in page
+    assert "not the signature" not in page and "a note on the header" not in page
+    assert "def quote(self, text: str,\n          limit: int = 0) -> str" in page
+    assert "- `cell: tuple = ()`: The cell the value sits in." in page
+    assert ": not the note" not in page
+    assert ("One line of \\<name>.jsonl per row; ``<b>`` stays, `<c>` stays, "
+            "a lone ` then \\<d>.") in page
+    assert "    demo.read(path) < 2" in page, "indented code is left alone"
+    assert "\\# not a heading" in page
+    assert "](../README.md)" in page
+    # A package's `__all__` decides what it exports, and the page says where
+    # each exported name is defined.
+    package = parse_api('"""pkg."""\nfrom .rows import read\n'
+                        '__all__ = ["read"]\n', "docpipe/pkg/__init__.py")
+    assert package["name"] == "docpipe.pkg"
+    assert package["exports"] == [("read", "docpipe.pkg.rows")]
+    assert ("- `read` from [docpipe.pkg.rows](docpipe.pkg.rows.md)"
+            in render_api_page(package, {"docpipe.pkg.rows"}))
+    # A plain module's relative import is relative to ITS package.
+    plain = parse_api('"""m."""\nfrom .other import thing\n'
+                      '__all__ = ("thing",)\n', "docpipe/pkg/mod.py")
+    assert plain["exports"] == [("thing", "docpipe.pkg.other")]
+    # Inside a list item, four spaces continue the item and are prose.
+    assert markdown_safe("- item\n\n    more <name> text") \
+        == "- item\n\n    more \\<name> text"
+    # Over the real tree: a module with anything to publish has a page, an
+    # empty `__init__.py` has none.
+    pages = build()
+    for rel in build_docs._api_modules():
+        module = build_docs.module_api(rel)
+        assert (api_page(rel) in pages) == build_docs._publishes(module), rel
+
+
+def test_the_reference_index_names_every_module_page_once():
+    """The module pages are not on the front page, which would be a list of
+    a hundred lines; they are reached through the reference's own index,
+    which names each of them once in its lists and once in its toctrees, and
+    the front page names that index."""
+    from build_docs import is_api_module, render_api_index
+    pages = build()
+    modules = sorted(page[len("api/"):-3] for page in pages
+                     if is_api_module(page))
+    # The index is the intro, then one list and one hidden toctree per
+    # package, the package's own page first.
+    demo = {"docpipe/demo/__init__.py": {"rel": "docpipe/demo/__init__.py",
+                                         "name": "docpipe.demo", "doc": "Demo.",
+                                         "functions": [], "classes": [],
+                                         "exports": []},
+            "docpipe/demo/rows.py": {"rel": "docpipe/demo/rows.py",
+                                     "name": "docpipe.demo.rows",
+                                     "doc": "rows.py: Reads rows. More.",
+                                     "functions": [{"name": "read"}],
+                                     "classes": [], "exports": []}}
+    index = render_api_index(demo, "What the reference is for.")
+    assert "What the reference is for." in index
+    assert "- [docpipe.demo.rows](docpipe.demo.rows.md): Reads rows. (1 function)" in index
+    assert _toctree_entries(index) == ["docpipe.demo", "docpipe.demo.rows"]
+    assert ":hidden:" in index
+    assert len(modules) > 100, "the reference is nearly empty"
+    listed = _toctree_entries(pages[build_docs.API_INDEX])
+    assert sorted(listed) == modules
+    assert len(listed) == len(set(listed)), "a module is named twice"
+    linked = [part.split(")")[0] for part
+              in pages[build_docs.API_INDEX].split("](")[1:]]
+    assert sorted(link[:-3] for link in linked
+                  if link.endswith(".md") and "/" not in link) == modules
+    assert "api/index" in _toctree_entries(pages["index.md"])
+    assert "](api/index.md)" in pages["README.md"]
+    for page in modules:
+        assert f"api/{page}" not in _toctree_entries(pages["index.md"])
+
+
+def test_a_removed_module_leaves_no_page_behind(tmp_path):
+    """A module that is renamed or deleted has no page in a fresh render,
+    and the page the last render wrote would stay on disk: Sphinx builds it
+    outside every toctree, which is a warning, which is a failed site."""
+    pages = build()
+    write(tmp_path, pages)
+    stale = tmp_path / "api" / "docpipe.gone.md"
+    stale.write_text("# docpipe.gone\n", encoding="utf-8")
+    write(tmp_path, pages)
+    assert not stale.exists()
+    assert (tmp_path / "api" / "index.md").is_file()
+    assert (tmp_path / "api" / "docpipe.artifacts.md").is_file()

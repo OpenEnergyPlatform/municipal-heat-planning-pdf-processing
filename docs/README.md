@@ -11,6 +11,7 @@ python scripts/build_docs.py --out docs
 - [How the parts fit together](pipeline.md): hand-written
 - [Running the pipeline](running.md): hand-written
 - [Glossary](glossary.md): hand-written
+- [API reference](api/index.md): Every public function, class and method of the modules under `docpipe/`, `profiles/` and the two script packages, with its signature as written and its docstring.
 - [What each stage leaves behind](artifacts.md): Names the per-document result files under `<doc>/results/`, in the order the pipeline writes them.
 - [The harvest contract: kwp](contract/kwp.md)
 - [The harvest contract: scenarios](contract/scenarios.md)
