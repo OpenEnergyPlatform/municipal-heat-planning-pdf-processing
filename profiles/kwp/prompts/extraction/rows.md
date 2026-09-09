@@ -10,14 +10,14 @@ Du bekommst ein JSON-Objekt mit diesen Feldern:
 
 - "quantities": die gesuchten Felder, jedes mit Label, Beschreibung und, bei einem Zahlenfeld, den akzeptierten Einheiten ("units_accepted"). Ein Wert gehört hierher, wenn er zu MINDESTENS EINEM davon passt. Welches es ist, entscheidest du hier nicht. Ein Feld OHNE "units_accepted" ist ein Textfeld: sein Wert ist eine Bezeichnung aus dem Dokument, keine Zahl.
 - "sources": MEHRERE Quellen aus DEMSELBEN Wärmeplan, jede mit einer Kennung ("id": "Q1", "Q2", …) — Tabellen (Markdown-Transkription), Textabschnitte oder Diagrammbeschreibungen.
-- "frame" (optional): das Szenario und das Jahr, für die DIESE Anfrage gilt. Es ist schon bestimmt und keine Frage an dich. Gib nur Werte aus, die zu genau diesem Szenario und diesem Jahr gehören: hat eine Tabelle die Spalten 2019, 2030 und 2045 und steht im "frame" das Jahr 2045, dann gehört nur die Spalte 2045 hierher, und die anderen beiden werden in ihrer eigenen Anfrage geholt. Steht kein "frame" im Objekt, gilt die Einschränkung nicht.
+- "frame" (optional): Szenario und Jahr DIESER Anfrage. Keine Frage an dich, sondern die Grenze. Eine Quelle gehört nur dann hierher, wenn sie dieses Szenario und dieses Jahr selbst nennt, in ihrem Titel, in einer Spalte oder im Text. Eine Tabelle eines anderen Jahres gehört NICHT hierher, auch nicht teilweise: sie wird in ihrer eigenen Anfrage geholt. Hat eine Tabelle mehrere Jahresspalten, gehört nur die Spalte des Frames hierher. Was aus einer Quelle kommt, die das Jahr des Frames nicht nennt, wird maschinell verworfen.
 - "prior" (optional): Zahlen, die aus diesem Plan schon geholt sind. Gib dieselbe Zahl aus derselben Passage NICHT noch einmal aus.
 
 Gib ausschließlich ein JSON-Objekt in dieser Form zurück, in EINER Zeile, OHNE Einrückung:
 
 {"tuples": [{"source": "Q2", "value": 126656132, "unit": "kWh/a", "unit_raw": "kWh/a", "quote": "| Gas H | 126.656.132 | 520.465.057 | 1.036.767.833 |"}, {"source": "Q5", "value": "endura kommunal", "unit": "", "unit_raw": "", "quote": "Bearbeitung durch das Projektkonsortium: endura kommunal GmbH Emmy-Noether-Str. 2 79110 Freiburg"}], "status": "complete", "need_more": []}
 
-Ein Wert pro Eintrag, und zwar VOLLSTÄNDIG: JEDER Wert in JEDER der Quellen, der zu einem der gesuchten Felder gehören kann, bekommt seinen Eintrag — jede Zeile und jede Spalte einer Tabelle einzeln. Eine Tabelle mit 13 Zeilen und 3 Zahlenspalten ergibt 39 Einträge. Eine leere Liste {"tuples": []} ist nur dann das Ergebnis, wenn keine der Quellen einen Wert zu einem der gesuchten Felder enthält.
+Ein Wert pro Eintrag, und innerhalb des Frames vollständig: JEDER Wert in JEDER Quelle, die zum Frame gehört, bekommt seinen Eintrag, jede Zeile und jede Spalte einzeln. Eine Tabelle des Frames mit 13 Zeilen und 3 Zahlenspalten ergibt 39 Einträge. Eine Tabelle eines anderen Jahres ergibt keinen. Eine leere Liste {"tuples": []} ist das richtige Ergebnis, wenn keine der Quellen zum Frame gehört oder keine einen gesuchten Wert enthält.
 
 Jeder Eintrag wird maschinell und wörtlich gegen die Quelle geprüft; was die Prüfung nicht besteht, wird verworfen. Deshalb gelten diese Regeln:
 
@@ -29,7 +29,7 @@ Jeder Eintrag wird maschinell und wörtlich gegen die Quelle geprüft; was die P
    - "unit": genau EIN Eintrag aus den "units_accepted" IRGENDEINER der Kennzahlen, nämlich der, den die Quelle meint. Zeichen für Zeichen aus der Liste abgeschrieben. Die Einheit ist oft schon der Hinweis darauf, um welche Kennzahl es geht — deshalb steht sie hier und die Kennzahl selbst nicht.
    - "unit_raw": die Einheit EXAKT so, wie sie in der Quelle steht. Steht sie nur im Spaltenkopf, in einer Blocküberschrift wie "Endenergieverbrauch [MWh/a]" oder in der Caption, gilt sie für alle zugehörigen Zellen.
    Beispiel: Quelle schreibt "t CO₂ eq/a", die Liste führt "t CO2eq/a" — dann "unit": "t CO2eq/a", "unit_raw": "t CO₂ eq/a".
-   Steht in der Quelle eine Einheit, die in keiner der Listen eine Entsprechung hat, lässt du "unit" leer und füllst nur "unit_raw". Rechne NIE um.
+   Steht in der Quelle eine Einheit, die in keiner der Listen eine Entsprechung hat, lässt du "unit" leer und füllst nur "unit_raw".
    Nur Zahlen ganz ohne erkennbare Einheit lässt du weg. Bei einem Textfeld bleiben "unit" und "unit_raw" leer — dort gibt es keine.
 
 3. "source": die Kennung der Quelle, in der der WERT steht — "Q1", "Q2" und so weiter. Das Feld entscheidet, gegen welchen Text dein "quote" geprüft wird.
@@ -40,8 +40,8 @@ Jeder Eintrag wird maschinell und wörtlich gegen die Quelle geprüft; was die P
    Steht dieselbe Zahl mehrfach in derselben Zeile, zitier die ganze Zeile: welche Spalte gemeint ist, wird im nächsten Schritt geklärt.
 
 5. "status" und "need_more":
-   - "complete": alles, was diese Quellen an Zahlen zu den gesuchten Kennzahlen hergeben, steht in "tuples". Auch dann, wenn "tuples" leer ist. Das ist der Normalfall.
-   - "partial": in einer der Quellen steht eine Zahl, deren EINHEIT du nicht bestimmen kannst, weil sie anderswo im Plan steht. Nur dafür. Fehlende Kennzahl, Träger, Jahre oder Szenarien sind hier kein Grund — danach wird gar nicht gefragt.
+   - "complete": alles, was diese Quellen zum Frame an Zahlen hergeben, steht in "tuples". Auch dann, wenn "tuples" leer ist. Das ist der Normalfall.
+   - "partial": in einer der Quellen steht eine Zahl, deren EINHEIT du nicht bestimmen kannst, weil sie anderswo im Plan steht. Nur dafür. Fehlende Kennzahl, Träger oder Gebiete sind hier kein Grund, danach wird gar nicht gefragt, und ein anderes Jahr ist keiner, weil es seine eigene Anfrage hat.
    - "need_more": bei "partial" ein bis drei Sätze, nach denen gesucht werden soll, wie sie im Plan STEHEN würden. Kein Stichwort.
      RICHTIG: "Die Endenergiebilanz ist in MWh pro Jahr angegeben."
      FALSCH: "Einheit" — zu kurz, findet alles und nichts.

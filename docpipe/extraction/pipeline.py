@@ -116,6 +116,10 @@ class Batch:
     # which is what takes the coordinate out of the model's hands.
     frame: Optional[dict] = None
     frame_index: int = 0
+    # Every pair of the document, so a passage that carries more than one of
+    # them can be recognised as one: a table with a column per year names
+    # three pairs and belongs to none of them alone.
+    frame_all: tuple = ()
 
     @property
     def sources(self) -> list:
@@ -439,8 +443,65 @@ def _invented_wording(claim: dict) -> bool:
     return flat(str(wording)).casefold() not in flat(quote).casefold()
 
 
-def rows_from_reply(batch: Batch, reply: Optional[dict]) -> tuple:
-    """(rows, orphans) from the value request — the only request that counts.
+
+def names_pair(source, pair: Optional[dict], slots: list) -> bool:
+    """Does this passage print the scenario and the year of this pair?
+
+    The whole passage, not a line of it. Where the year stands is the plan's
+    business: a column header, a caption, a sentence above the table.
+    """
+    text = (getattr(source, "text", "") or "")
+    for slot in slots:
+        if slot.name not in (pair or {}):
+            continue
+        if not answer_in_quote(slot, pair[slot.name],
+                               pair.get(f"{slot.name}_raw"), text):
+            return False
+    return True
+
+
+def frame_reading(source, pair: Optional[dict], index: int,
+                  pairs, slots: list) -> tuple:
+    """(read it, coordinates not to project) for one passage of one request.
+
+    The frame is a request, not a reading: `apply_frame` writes the pair onto
+    every row the request produced, and nothing else ever asks. Three cases,
+    and only the first one was handled.
+
+    A passage that prints none of this pair belongs to another one, and the
+    request for THAT pair is where its values are found. Measured on Kassel,
+    where nothing checked it: the frame had two pairs, 193 rows were stamped
+    2040 and 152 were stamped 2024, and of the 234 table tuples the hand
+    reading covers, 60 carried the year the table prints.
+
+    A passage that prints exactly this pair is this request's, and the
+    coordinate is projected onto every row it produced.
+
+    A passage that prints several of the frame's pairs, which is what a table
+    with a column per year is, belongs to all of them and to none of them
+    alone. It is read once, in the request of the first pair it names, so its
+    cells are not harvested twice, and the coordinates its pairs disagree
+    about are left open: `open_rows` then hands those rows to the per-row
+    sweep, which is given the cell each value sits in (`cell_index`) and can
+    tell the columns apart. Projecting instead is what stamped 39 cells of
+    one table with one year.
+    """
+    if not pair or not slots:
+        return True, ()
+    if not names_pair(source, pair, slots):
+        return False, ()
+    fits = [i for i, other in enumerate(pairs or ())
+            if names_pair(source, other, slots)]
+    if fits and index != fits[0]:
+        return False, ()
+    blind = tuple(slot.name for slot in slots
+                  if len({(pairs or ())[i].get(slot.name) for i in fits}) > 1)
+    return True, blind
+
+
+def rows_from_reply(batch: Batch, reply: Optional[dict],
+                    frame_axes: Optional[list] = None) -> tuple:
+    """(rows, orphans) from the value request - the only request that counts.
 
     Routing is the same as for a whole tuple: the quote decides which source a
     value belongs to, the label breaks a tie, and a claim that neither quotes
@@ -450,6 +511,19 @@ def rows_from_reply(batch: Batch, reply: Optional[dict]) -> tuple:
     routed, orphans = route_claims(batch, reply.get("tuples"))
     rows: list = []
     for item_index, claims in enumerate(routed):
+        source = batch.items[item_index].source
+        take, _blind = frame_reading(source, batch.frame, batch.frame_index,
+                                     batch.frame_all, frame_axes or [])
+        if claims and not take:
+            # Another pair's passage, or a passage of several pairs that the
+            # first of them already reads. Refused here rather than swept: the
+            # coordinates would all be paid for and the row would then be
+            # stamped with a year its own passage does not print.
+            why = ("passage is not of this pair"
+                   if not names_pair(source, batch.frame, frame_axes or [])
+                   else "passage is read for its first pair")
+            orphans.extend(dict(claim, _why=why) for claim in claims)
+            continue
         for claim in claims:
             if _invented_wording(claim):
                 # A wording that is not in the passage it cites is not a
@@ -465,7 +539,6 @@ def rows_from_reply(batch: Batch, reply: Optional[dict]) -> tuple:
             rows.append(Row(label=row_label(len(rows)),
                             item_index=item_index, claim=dict(claim)))
     return rows, orphans
-
 
 def answer_in_quote(slot, given, wording: Optional[str], quote: str) -> bool:
     """Does the coordinate actually stand in the passage cited for it?
@@ -608,6 +681,26 @@ def merge_field(rows: list, sources: list, slot, reply: Optional[dict],
         for label in group.get("rows") or ():
             pairs.append((label, group))
     by_label = {row.label: row for row in rows}
+    # One answer for many rows is how a table's thirteen rows share one
+    # caption. It is not how they share a column: rows the payload showed as
+    # different cells of the same quoted line have different column headers
+    # over them, and one number that stands in the quote stands in it for
+    # every one of them. `answer_in_quote` cannot tell those apart, because
+    # the header prints 2030 and 2045 in the same line the check runs over.
+    conflicted: set = set()
+    if slot.kind == NUMBER:
+        for group in reply.get("groups") or ():
+            if not isinstance(group, dict):
+                continue
+            labels = [str(label).strip() for label in group.get("rows") or ()]
+            cells = {cell_index(by_label[label].claim.get("quote"),
+                                by_label[label].claim.get("value"))
+                     for label in labels if label in by_label}
+            quote = group.get("quote")
+            if (len({cell[0] for cell in cells if cell}) > 1
+                    and len(numbers_in(quote if isinstance(quote, str)
+                                       else "")) > 1):
+                conflicted.update(labels)
     filled = unquoted = unbacked = unstated = raw_missing = raw_foreign = 0
     # Not just how many failed but which, and why. A model that is told "R7:
     # the passage you cited is in none of the sources" can fix R7; a model
@@ -627,8 +720,30 @@ def merge_field(rows: list, sources: list, slot, reply: Optional[dict],
             # whole identity down with them. The state belongs to the
             # coordinate, not to whoever answered most recently.
             continue
+        if row.label in conflicted:
+            # Open, not written: the next window can be asked again, and the
+            # answer it needs is one group per column rather than one for all
+            # of them.
+            row.claim[f"{slot.name}_state"] = UNBACKED
+            failed.append({"row": row.label, "why": "one answer, two columns",
+                           "reason": (
+                "Diese Zeilen stehen in verschiedenen Spalten derselben "
+                "Tabellenzeile, und dein \"quote\" enthält mehrere Zahlen. "
+                "Gib je Spalte eine eigene Gruppe mit ihrer eigenen Antwort.")})
+            unbacked += 1
+            continue
         given = answer.get("value")
         if given is None or (isinstance(given, str) and not given.strip()):
+            noticed = answer.get("value_raw")
+            if isinstance(noticed, str) and noticed.strip():
+                # The reply shape field.md asks for when the document says
+                # something the list has no entry for: the wording, and no
+                # answer. Dropped silently until now, so the one case the
+                # vocabulary needs to hear about was the one that left no
+                # trace. Kept as what it is, a wording nobody could map.
+                row.claim[f"{slot.name}_seen"] = noticed.strip()
+                row.claim[f"{slot.name}_state"] = SAID_UNSTATED
+                unstated += 1
             continue
         if str(given).strip() == UNSTATED:
             # "Not stated" needs no passage, and the model sometimes supplies
@@ -735,32 +850,52 @@ def merge_field(rows: list, sources: list, slot, reply: Optional[dict],
             "raw_foreign": raw_foreign, "failed": failed}
 
 
+
+def line_naming(slot, given, wording, text: str) -> Optional[str]:
+    """The line of this passage that carries the answer, or None.
+
+    So that a projected coordinate cites the passage the row itself was read
+    from rather than the passage the frame was read from. Both are true, and
+    only one of them tells a reader whether the row's own table says it.
+    """
+    for line in (text or "").splitlines():
+        line = line.strip()
+        if len(line) >= 8 and answer_in_quote(slot, given, wording, line):
+            return line
+    return None
+
+
 def apply_frame(rows: list, pair: Optional[dict], index: int,
-                slots: list) -> int:
+                slots: list, sources: Optional[list] = None,
+                pairs=None) -> int:
     """Write the document's frame onto these rows. Returns coordinates written.
 
-    The pair was read ONCE, for the document, from a caption or a heading, and
-    every row this request produced is a row of that pair -- the request asked
-    for it by name. So the coordinate is not asked again per row: it is
-    projected, with the quote and the source it was read from, and the window
-    says `frame` so a reader can tell a coordinate that was read for the
-    document from one that was read for the row.
+    The pair was read once, for the document, and every row this request
+    produced is a row of that pair: the request asked for it by name and
+    `in_frame` refused the passages that do not carry it. So the coordinate is
+    not asked again per row, it is projected, and the window says `frame` so a
+    reader can tell a coordinate that was read for the document from one that
+    was read for the row.
 
-    `read`, not `derived`. `derived` means the SPEC decides a coordinate
-    without anybody reading anything; this is a model reading with a passage
-    behind it, and calling it derived would put it in the one state the
-    evidence rules do not apply to.
+    Cited on the row's own passage where that passage names the answer, and on
+    the frame's passage otherwise. `read`, not `derived`: `derived` means the
+    SPEC decides a coordinate without anybody reading anything, and this is a
+    model reading with a passage behind it.
 
     A coordinate already read is left alone. The frame is what the request
-    asked for, but if the row itself carried a better answer the row wins --
-    the same rule `merge_field` has, and for the same reason.
+    asked for, but if the row itself carried a better answer the row wins,
+    the same rule `merge_field` has and for the same reason.
     """
     if not pair or not slots:
         return 0
     written = 0
     for row in rows:
+        source = None
+        if sources and 0 <= row.item_index < len(sources):
+            source = sources[row.item_index]
+        _take, blind = frame_reading(source, pair, index, pairs, slots)
         for slot in slots:
-            if slot.name not in pair:
+            if slot.name not in pair or slot.name in blind:
                 continue
             if row.claim.get(f"{slot.name}_state") == READ:
                 continue
@@ -773,13 +908,19 @@ def apply_frame(rows: list, pair: Optional[dict], index: int,
                         and not wording_names_option(slot, pair[slot.name],
                                                      wording)):
                     row.claim[f"{slot.name}_raw_foreign"] = True
-            row.claim[f"{slot.name}_quote"] = pair[f"{slot.name}_quote"]
-            row.claim[f"{slot.name}_source"] = list(
-                pair[f"{slot.name}_source"])
+            own = line_naming(slot, pair[slot.name], wording,
+                              getattr(source, "text", "") or "")
+            if own:
+                row.claim[f"{slot.name}_quote"] = own
+                row.claim[f"{slot.name}_source"] = [source.owner_kind,
+                                                    source.owner_id]
+            else:
+                row.claim[f"{slot.name}_quote"] = pair[f"{slot.name}_quote"]
+                row.claim[f"{slot.name}_source"] = list(
+                    pair[f"{slot.name}_source"])
             row.claim[f"{slot.name}_window"] = ["frame", index]
             written += 1
     return written
-
 
 def open_rows(rows: list, slot) -> list:
     """The rows this field still has no reading for.
@@ -902,15 +1043,28 @@ class Sweep:
             return fresh
 
 
+def sweep_key(batch: Batch) -> tuple:
+    """What one follow-up budget and one `prior` belong to.
+
+    The document, its parameter and the frame pair the request asks for. The
+    same passages are read once per pair, so telling the request for 2035 that
+    the request for 2040 already has these numbers tells it to skip its own:
+    `prior` says "do not repeat", and two pairs of the same table are not a
+    repeat.
+    """
+    return (batch.document_id, batch_uri(batch), batch.frame_index)
+
+
 def build_sweeps(batches: list, rounds: int = 1) -> dict:
-    """One Sweep per (document, parameter), keyed as the batches are.
+    """One Sweep per (document, parameter, frame pair), keyed as the batches
+    are.
 
     A document-level plan has no parameter, so the key is the document and the
     follow-up budget is the document's.
     """
     sweeps: dict = {}
     for batch in batches:
-        key = (batch.document_id, batch_uri(batch))
+        key = sweep_key(batch)
         sweep = sweeps.get(key)
         if sweep is None:
             sweep = sweeps[key] = Sweep(set(), rounds)
@@ -934,7 +1088,14 @@ def follow_up(batch: Batch, reply: dict, sweep: Sweep, more_sources: Callable,
     """
     if reply.get("status") != "partial" or not reply.get("need_more"):
         return []
-    extra = more_sources(batch.document_id, list(reply["need_more"]),
+    # A query is a sentence a plan could print. "Einheit" is not one:
+    # it matches everything and ranks nothing, and retrieval has no way to
+    # say so. The same floor the field sweep applies to its own follow-ups.
+    asked = [q for q in reply["need_more"]
+             if isinstance(q, str) and len(q.strip()) > 20]
+    if not asked:
+        return []
+    extra = more_sources(batch.document_id, asked,
                          set(sweep.seen)) or []
     fresh = sweep.take_followup(extra)
     if not fresh:
@@ -978,7 +1139,7 @@ def harvest_document(
     sweeps = build_sweeps(queue)
     while queue:
         batch = queue.pop(0)
-        sweep = sweeps[(batch.document_id, batch_uri(batch))]
+        sweep = sweeps[sweep_key(batch)]
         reply = harvest(batch, sweep.snapshot())
         reply = reply if isinstance(reply, dict) else {}
         # The follow-up runs first because it is what marks the reply as

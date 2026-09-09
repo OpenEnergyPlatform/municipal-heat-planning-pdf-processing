@@ -472,3 +472,282 @@ def test_no_frame_axis_is_held_to_the_rows_own_source(name):
     if name == "kwp":
         assert frame == ("scenario", "year")
     assert held, name
+
+# ---------------------------------------------------------------------------
+# The frame reads the whole plan
+# ---------------------------------------------------------------------------
+
+def test_the_frame_reads_every_window_of_the_plan_and_not_a_prefix():
+    """A pair may only be quoted from a passage that was SHOWN, so a year
+    printed past the cut cannot enter the frame at all, and a pair the frame
+    does not have loses every value of that pair. Measured on Kassel: 12 of
+    50 passages, 2 pairs, and 174 of the 234 table tuples the hand reading
+    covers then carried a year printed on another table."""
+    late = _source(99, "Tabelle 32: Zielszenario 2035\n| Erdgas | 42.005 |")
+    sources = [_source(i, "Nichts zu holen.") for i in range(1, 30)] + [late]
+    shown = []
+
+    def ask(passages, slots, document_id=None, known=None, usage_out=None,
+            candidates=None):
+        shown.append([s.owner_id for s in passages])
+        if late in passages:
+            return _reply(year=2035,
+                          year_quote="Tabelle 32: Zielszenario 2035",
+                          scenario_quote="Tabelle 32: Zielszenario 2035")
+        return {"pairs": [], "status": "complete", "need_more": []}
+
+    pairs, status, missed = runner.find_frame(sources, _slots(), 7, ask)
+    assert [p["year"] for p in pairs] == [2035]
+    assert status == "complete" and missed == []
+    assert len(shown) > 1, "one request over a prefix is the defect"
+    assert {i for window in shown for i in window} \
+        == {s.owner_id for s in sources}
+
+
+def test_a_window_holds_what_one_request_can_carry():
+    """Bounded by both, because a plan is fifty passages and a passage can be
+    a whole table: the count keeps the request answerable and the characters
+    keep it inside the model's window."""
+    small = [_source(i, "x" * 10) for i in range(1, 40)]
+    assert [len(w) for w in runner.frame_windows(small, max_sources=12,
+                                                 max_chars=10_000)] \
+        == [12, 12, 12, 3]
+    big = [_source(i, "x" * 4000) for i in range(1, 6)]
+    assert [len(w) for w in runner.frame_windows(big, max_sources=12,
+                                                 max_chars=9_000)] \
+        == [2, 2, 1]
+    assert runner.frame_windows([]) == []
+
+
+def test_the_second_pass_shows_the_passage_the_missed_year_stands_in():
+    """The scan finds a year the model did not name, and it stands in a
+    passage the model was not shown in the same request. Asking the first
+    window again by name asks about a year that is not in front of it."""
+    filler = [_source(i, "Nichts zu holen.") for i in range(1, 13)]
+    late = _source(99, "Tabelle 32: Zielszenario 2035\n| Erdgas | 42.005 |")
+    asked = []
+
+    def ask(passages, slots, document_id=None, known=None, usage_out=None,
+            candidates=None):
+        asked.append(([s.owner_id for s in passages], candidates))
+        if candidates and late in passages:
+            return _reply(year=2035,
+                          year_quote="Tabelle 32: Zielszenario 2035",
+                          scenario_quote="Tabelle 32: Zielszenario 2035")
+        return {"pairs": [], "status": "complete", "need_more": []}
+
+    pairs, status, missed = runner.find_frame(filler + [late], _slots(), 7,
+                                              ask)
+    rechecks = [a for a in asked if a[1]]
+    assert rechecks, "the scan found 2035 and nothing asked about it"
+    assert all(99 in window for window, _c in rechecks)
+    assert [p["year"] for p in pairs] == [2035] and missed == []
+
+
+# ---------------------------------------------------------------------------
+# A row belongs to the pair its passage names
+# ---------------------------------------------------------------------------
+
+_OWN = "Tabelle 30: Zielszenario 2045\n| Erdgas | 42.005 |"
+_FOREIGN = "Tabelle 28: Zielszenario 2030\n| Erdgas | 17.000 |"
+
+
+def _pair():
+    return runner.frame_pairs(_reply(), _slots(), _shown())[0]
+
+
+def _two_source_batch():
+    batch = Batch(7, None, [WorkItem(7, None, _source(1, _OWN)),
+                            WorkItem(7, None, _source(2, _FOREIGN))])
+    batch.frame = _pair()
+    return batch
+
+
+_TUPLES = {"tuples": [
+    {"source": "Q1", "value": 42005, "unit": "kWh/a", "unit_raw": "kWh/a",
+     "quote": "| Erdgas | 42.005 |"},
+    {"source": "Q2", "value": 17000, "unit": "kWh/a", "unit_raw": "kWh/a",
+     "quote": "| Erdgas | 17.000 |"}]}
+
+
+def test_a_passage_that_does_not_name_the_pair_yields_no_row():
+    """The frame is a request, not a reading: what comes back is stamped with
+    the pair and nothing else ever asks. So a passage that does not carry the
+    pair is refused here, before its coordinates are paid for, and the request
+    for ITS pair is where those values are found."""
+    from docpipe.extraction.pipeline import rows_from_reply
+    rows, orphans = rows_from_reply(_two_source_batch(), _TUPLES, _slots())
+    assert [row.claim["value"] for row in rows] == [42005]
+    assert [o["_why"] for o in orphans] == ["passage is not of this pair"]
+    assert [o["value"] for o in orphans] == [17000]
+
+
+def test_without_a_frame_every_passage_is_still_read():
+    """The check is the frame's, not a new rule about passages. A run whose
+    profile names no frame is untouched by it."""
+    from docpipe.extraction.pipeline import rows_from_reply
+    batch = _two_source_batch()
+    batch.frame = None
+    rows, orphans = rows_from_reply(batch, _TUPLES, _slots())
+    assert sorted(row.claim["value"] for row in rows) == [17000, 42005]
+    assert orphans == []
+    # And a run that has a frame but does not tell the reader which axes span
+    # it cannot refuse anything either.
+    rows, orphans = rows_from_reply(_two_source_batch(), _TUPLES, None)
+    assert len(rows) == 2 and orphans == []
+
+
+def test_a_projected_coordinate_cites_the_rows_own_passage_where_it_says_so():
+    """Both passages really say 2045, and only one of them tells a reader
+    whether the row's own table does. The frame's passage stays the evidence
+    where the row's own does not name the answer."""
+    slots = _slots()
+    rows = [_Row("R1")]
+    apply_frame(rows, _pair(), 0, slots, [_source(5, _OWN)])
+    assert rows[0].claim["year_source"] == ["table", 5]
+    assert rows[0].claim["year_quote"] == "Tabelle 30: Zielszenario 2045"
+    rows = [_Row("R1")]
+    apply_frame(rows, _pair(), 0, slots, [_source(6, "Ohne Jahreszahl.")])
+    assert rows[0].claim["year_source"] == ["table", 1]
+    assert rows[0].claim["year_quote"] == _TABLE
+
+
+def test_each_pair_has_its_own_prior_so_one_does_not_silence_the_other():
+    """`prior` says "do not repeat", and the same table read for 2035 is not
+    a repeat of the same table read for 2040. One budget per pair, or the
+    second pair is told its own values are already taken."""
+    from docpipe.extraction.pipeline import build_sweeps, sweep_key
+    first = Batch(7, None, [WorkItem(7, None, _source(1, _TABLE))])
+    second = Batch(7, None, [WorkItem(7, None, _source(1, _TABLE))])
+    first.frame_index, second.frame_index = 0, 1
+    assert sweep_key(first) != sweep_key(second)
+    assert len(build_sweeps([first, second], 1)) == 2
+    assert len(build_sweeps([first, first], 1)) == 1
+
+
+def test_the_prompt_bounds_completeness_by_the_frame():
+    """Where this began. The prompt told the model to return every value of
+    every passage, and told it in the input description to return only the
+    ones of this pair. It followed the loud rule, and 174 of 234 checked
+    tuples carried a foreign year."""
+    text = (PROFILES / "kwp" / "prompts" / "extraction"
+            / "rows.md").read_text(encoding="utf-8")
+    rule = [line for line in text.splitlines()
+            if "vollst" in line.lower() and "Eintrag" in line]
+    assert len(rule) == 1, rule
+    assert "Frame" in rule[0], rule[0]
+
+# ---------------------------------------------------------------------------
+# A table with a column per year belongs to every pair and to none alone
+# ---------------------------------------------------------------------------
+
+def _pair_at(year):
+    return runner.frame_pairs(_reply(year=year, year_quote=_TABLE),
+                              _slots(), _shown())[0]
+
+
+# One table, one scenario, a column per year: it names both pairs.
+_SHARED = ("Tabelle 30: Endenergie im Zielszenario" + chr(10) + _TABLE)
+
+
+def test_a_passage_of_several_pairs_is_read_once_and_keeps_that_axis_open():
+    """`_TABLE` prints 2030 and 2045 in its header, so it belongs to both
+    pairs. Projecting either year onto its rows is what stamped 39 cells of
+    one Kassel table with one year. It is read in the first pair that names
+    it, and the year is left to the per-row sweep, which is told which cell
+    each value sits in."""
+    from docpipe.extraction.pipeline import frame_reading
+    slots = _slots()
+    both = [_pair_at(2030), _pair_at(2045)]
+    source = _source(1, _SHARED)
+    take, blind = frame_reading(source, both[0], 0, both, slots)
+    assert take and blind == ("year",), "the pairs disagree about the year"
+    assert frame_reading(source, both[1], 1, both, slots) == (False, ())
+    rows = [_Row("R1")]
+    assert apply_frame(rows, both[0], 0, slots, [source], both) == 1
+    assert "year" not in rows[0].claim and "year_state" not in rows[0].claim
+    assert rows[0].claim["scenario"] == "Zielszenario", \
+        "the pairs agree about the scenario, so it is still projected"
+
+
+def test_a_passage_of_one_pair_still_gets_that_pair_written():
+    """The frame is not given up. A passage that prints one of the pairs and
+    not the others is that pair's, and its rows are stamped as before."""
+    from docpipe.extraction.pipeline import frame_reading
+    slots = _slots()
+    both = [_pair_at(2030), _pair_at(2045)]
+    only = _source(2, "Tabelle 30: Zielszenario 2045\n| Erdgas | 42.005 |")
+    assert frame_reading(only, both[1], 1, both, slots) == (True, ())
+    rows = [_Row("R1")]
+    apply_frame(rows, both[1], 1, slots, [only], both)
+    assert rows[0].claim["year"] == 2045
+    assert rows[0].claim["year_state"] == fields.READ
+
+
+def test_the_rows_of_a_shared_passage_are_harvested_exactly_once():
+    """Read once, under the first pair that names it. Twice would be the
+    same cell in the harvest twice, once per pair, which is what the two
+    Kassel passes produced."""
+    from docpipe.extraction.pipeline import rows_from_reply
+    slots = _slots()
+    both = [_pair_at(2030), _pair_at(2045)]
+    tuples = {"tuples": [{"source": "Q1", "value": 42005, "unit": "kWh/a",
+                          "unit_raw": "kWh/a", "quote": "| Erdgas | 42.005 |"}]}
+    kept = []
+    for index, pair in enumerate(both):
+        batch = Batch(7, None, [WorkItem(7, None, _source(1, _SHARED))])
+        batch.frame, batch.frame_index = pair, index
+        batch.frame_all = tuple(both)
+        rows, orphans = rows_from_reply(batch, tuples, slots)
+        kept.append(len(rows))
+        assert not rows or not orphans
+    assert kept == [1, 0], kept
+
+
+# ---------------------------------------------------------------------------
+# One answer, two columns
+# ---------------------------------------------------------------------------
+
+_HEADER = "| Energietraeger | 2030 | 2045 |"
+_LINE = "| Erdgas | 42.005 | 17.000 |"
+
+
+def _year_slot():
+    return _slots()[1]
+
+
+def test_one_answer_cannot_hold_for_two_columns_of_the_same_row():
+    """The check that was missing under the frame. Both numbers were quoted
+    from the same line, the header prints both years in the line the answer
+    cites, and `answer_in_quote` passes for either row whichever year is
+    given. One group per column, or nothing is written."""
+    from docpipe.extraction.pipeline import merge_field
+    slot = _year_slot()
+    source = _source(1, _HEADER + "\n" + _LINE)
+    rows = [_Row("R1", {"quote": _LINE, "value": 42005}),
+            _Row("R2", {"quote": _LINE, "value": 17000})]
+    rows[0].item_index = rows[1].item_index = 0
+    got = merge_field(rows, [source], slot,
+                      {"groups": [{"rows": ["R1", "R2"], "value": 2030,
+                                   "quote": _HEADER}]})
+    assert got["filled"] == 0 and got["unbacked"] == 2
+    for row in rows:
+        assert "year" not in row.claim
+        assert row.claim["year_state"] == fields.UNBACKED
+
+
+def test_one_answer_still_holds_for_rows_of_the_same_column():
+    """A table's thirteen rows really do share one year, and repeating the
+    caption thirteen times is how a reply runs into the token wall. Nothing
+    about that changes: the refusal is about columns, not about groups."""
+    from docpipe.extraction.pipeline import merge_field
+    slot = _year_slot()
+    source = _source(1, _HEADER + "\n| Erdgas | 42.005 |\n| Holz | 17.000 |")
+    rows = [_Row("R1", {"quote": "| Erdgas | 42.005 |", "value": 42005}),
+            _Row("R2", {"quote": "| Holz | 17.000 |", "value": 17000})]
+    rows[0].item_index = rows[1].item_index = 0
+    got = merge_field(rows, [source], slot,
+                      {"groups": [{"rows": ["R1", "R2"], "value": 2030,
+                                   "quote": _HEADER}]})
+    assert got["filled"] == 2
+    assert [row.claim["year"] for row in rows] == [2030, 2030]

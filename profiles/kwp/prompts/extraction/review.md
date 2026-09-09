@@ -13,7 +13,7 @@ Es sind höchstens zwei Passagen, und sie sind die einzigen, aus denen du zitier
 
 Ein Zitat aus irgendetwas anderem wird verworfen, auch wenn es stimmt.
 
-Unter `row` steht, was beim ersten Lesen herauskam: `value`, `unit`, das Zitat, und wenn die Zeile mehrere Spalten hat, in welcher der Wert steht (`column` von `columns`). Das ist eine Angabe, keine Vorgabe. **Lies die Passage und gib zurück, was DORT steht. Wiederhole nicht, was dir gezeigt wird.** Wenn die zwei Passagen etwas anderes sagen, dann schreib das andere.
+Unter `row` steht, was beim ersten Lesen herauskam: `value`, `unit`, das Zitat, und wenn die Zeile mehrere Spalten hat, in welcher der Wert steht (`column` von `columns`). Das ist eine Angabe, keine Vorgabe: lies die Passage und gib zurück, was DORT steht, auch wenn es von `row` abweicht.
 
 Unter `fields` steht, was gefragt ist. `value` ist immer dabei, dazu die Koordinaten, die strittig sind.
 
@@ -21,6 +21,7 @@ Für jedes Feld:
 
 - die Antwort selbst unter dem Namen des Feldes,
 - ein Zitat unter `<name>_quote`: mindestens 8 Zeichen, Zeichen für Zeichen aus `Q1` oder `Q2` kopiert, und die Antwort muss DARIN stehen,
+- `<name>_raw`, sobald die Quelle die Sache anders schreibt als die Liste sie nennt: der Wortlaut des Dokuments, Zeichen für Zeichen. Ohne ihn wird das Zitat gegen den Listennamen geprüft, den die Quelle gar nicht schreibt, und die Antwort fällt durch,
 - bei einer Zahl zusätzlich `unit` in der Schreibweise des Dokuments,
 - bei einer Auswahlliste (`options`) genau ein Schlüssel aus dieser Liste, Zeichen für Zeichen. Erfinde keinen.
 

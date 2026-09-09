@@ -387,7 +387,7 @@ def test_a_model_that_keeps_asking_cannot_loop():
 
     def harvest(batch, prior=None):
         rounds.append(1)
-        return {"tuples": [], "status": "partial", "need_more": ["mehr davon"]}
+        return {"tuples": [], "status": "partial", "need_more": ["Die Endenergiebilanz ist in MWh pro Jahr angegeben."]}
 
     harvest_document(7, SPEC, TEMPLATES, retrieve=_per_probe(retrieve),
                      harvest=harvest, more_sources=more_sources)
@@ -457,7 +457,7 @@ def test_passages_the_model_asked_for_are_counted_as_harvested():
     def harvest(batch, prior=None):
         if batch.followed_up:
             return {"tuples": [], "status": "complete", "need_more": []}
-        return {"tuples": [], "status": "partial", "need_more": ["mehr davon"]}
+        return {"tuples": [], "status": "partial", "need_more": ["Die Endenergiebilanz ist in MWh pro Jahr angegeben."]}
 
     report = harvest_document(7, SPEC, TEMPLATES, retrieve=_per_probe(retrieve),
                               harvest=harvest, more_sources=more_sources)
