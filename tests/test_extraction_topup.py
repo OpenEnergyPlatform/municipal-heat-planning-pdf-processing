@@ -839,4 +839,9 @@ def test_a_topped_up_document_is_current_and_an_untouched_one_is_not(
     assert runner.stale(tmp_path / "plan.stamp.json", current) == []
     assert runner.already_done("plan", tmp_path, "sha",
                                anchors_sha="anchors", spec=SPEC) is True
+    # The stamp says current because the row really carries the new reading,
+    # not because the key was written forward on its own.
+    after = _rows(tmp_path / "plan.jsonl")[0]
+    assert after["sector_raw"] == "Haushalte"
+    assert after["sector"] != _row()["sector"]
     assert runner.stale(tmp_path / "offen.stamp.json", current) == ["model"],         "the document the pass had to skip is still stale"
