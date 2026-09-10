@@ -124,6 +124,10 @@ class _Collect(logging.Handler):
         self.records: list = []
 
     def emit(self, record):
+        # Formatted now. A serializer that logs a dict and keeps adding to it
+        # showed the later additions in this line: 40 Kassel values read as
+        # not serialized that were in the graph.
+        record.msg, record.args = record.getMessage(), None
         self.records.append(record)
 
 
@@ -203,18 +207,18 @@ def truth_report(files: list, truth: dict) -> list:
             checked[coordinate] += seen
             if not seen:
                 continue
-            lines.append("  %s %-10s richtig %d von %d (%.0f%%)" % (
+            lines.append("  %s %-10s correct %d of %d (%.0f%%)" % (
                 path.stem, coordinate, got["hit"], seen,
                 100.0 * got["hit"] / seen))
             for owner, count in got["worst"]:
-                lines.append("      falsch: %s (%dx)" % (owner, count))
+                lines.append("      wrong: %s (%dx)" % (owner, count))
     for coordinate in sorted(wanted):
         if not checked[coordinate]:
             # Named rather than silent. A truth file matching no owner of any
             # harvest here is exactly the state the old code was permanently
             # in, and it read as an empty section rather than as a failure.
-            lines.append("  %s: kein Tupel von einem Eigner, den die "
-                         "Wahrheitsdatei nennt" % coordinate)
+            lines.append("  %s: no tuple from an owner the truth file "
+                         "names" % coordinate)
     return lines
 
 
@@ -232,7 +236,7 @@ def main(argv=None) -> int:
     profile = load_profile(args.profile)
     factory = profile.component("kg", "make_serializer")
     if factory is None:
-        print(f"profiles/{profile.name}/kg.py hat kein make_serializer")
+        print(f"profiles/{profile.name}/kg.py has no make_serializer")
         return 1
     serializer = factory(args.db)
     collector = _Collect()
@@ -250,7 +254,7 @@ def main(argv=None) -> int:
         wanted = set(args.document)
         files = [f for f in files if f.stem in wanted]
     if not files:
-        print(f"keine Ernte in {args.directory}")
+        print(f"no harvest in {args.directory}")
         return 1
 
     totals: collections.Counter = collections.Counter()
@@ -295,23 +299,23 @@ def main(argv=None) -> int:
                              cost["rows"] + cost["field"]))
 
     print(f"\n=== {args.directory} ===")
-    print(f"Dokumente {totals['documents']}, Tupel {totals['tuples']}, "
-          f"Ablehnungen {totals['refusals']}, Wertknoten {totals['nodes']}")
+    print(f"documents {totals['documents']}, tuples {totals['tuples']}, "
+          f"refusals {totals['refusals']}, value nodes {totals['nodes']}")
     if totals["tuples"]:
-        print("  Knoten je Tupel: %.3f" % (totals["nodes"] / totals["tuples"]))
-    print("  nicht serialisiert: " + (", ".join(
-        f"{k}={v}" for k, v in skipped.most_common()) or "nichts"))
-    print(f"  Anfragen: {totals['rows_requests']} Zeilen + "
-          f"{totals['field_requests']} Felder = "
+        print("  nodes per tuple: %.3f" % (totals["nodes"] / totals["tuples"]))
+    print("  not serialized: " + (", ".join(
+        f"{k}={v}" for k, v in skipped.most_common()) or "nothing"))
+    print(f"  requests: {totals['rows_requests']} rows + "
+          f"{totals['field_requests']} fields = "
           f"{totals['rows_requests'] + totals['field_requests']}, "
-          f"davon unlesbar {totals['unparsable']}")
+          f"of which unreadable {totals['unparsable']}")
     if totals["documents"]:
-        print("  je Dokument: %.0f Anfragen, %.1f Minuten Modellzeit"
+        print("  per document: %.0f requests, %.1f minutes model time"
               % ((totals["rows_requests"] + totals["field_requests"])
                  / totals["documents"],
                  totals["ms"] / 60000.0 / totals["documents"]))
 
-    print("\nZustaende je Koordinate")
+    print("\nStates per coordinate")
     for axis in sorted(states):
         counts = states[axis]
         total = sum(counts.values()) or 1
@@ -322,7 +326,7 @@ def main(argv=None) -> int:
                                    for s, n in ordered)))
 
     if parameters:
-        print("\nZustaende je Parameter (ein Dokument, eine Zeile)")
+        print("\nStates per parameter (one document, one line)")
         for parameter in sorted(parameters):
             counts = parameters[parameter]
             print("  %-24s %s" % (
@@ -331,32 +335,32 @@ def main(argv=None) -> int:
                     if counts.get(s))))
 
     if truth:
-        print("\nGegen die bekannte Wahrheit")
+        print("\nAgainst the known truth")
         for line in truth_report(files, truth):
             print(line)
 
     if summaries:
         total = sum(levels.values()) or 1
-        print("\nVertrauen je Wert (Ernteblick, ohne Konflikt und Zweitlesung)")
+        print("\nTrust per value (harvest's own view, no conflict or second read)")
         print("  " + ", ".join("%s=%d (%.0f%%)" % (level, levels[level],
                                                    100.0 * levels[level] / total)
                                for level in ("A", "B", "C")))
-        print("  Gruende: " + (", ".join(f"{k}={v}" for k, v
-                                         in reasons.most_common(8)) or "keine"))
+        print("  reasons: " + (", ".join(f"{k}={v}" for k, v
+                                         in reasons.most_common(8)) or "none"))
         shares = sorted(
             ((s["levels"].get("C", 0) / (s["tuples"] or 1), name, s)
              for name, s in summaries), reverse=True)[:5]
-        print("  Plaene mit dem hoechsten C-Anteil")
+        print("  Plans with the highest C share")
         for share, name, s in shares:
-            print("      %s: %.0f%% von %d Tupeln" % (name, 100.0 * share,
+            print("      %s: %.0f%% of %d tuples" % (name, 100.0 * share,
                                                       s["tuples"]))
     else:
-        print("\nVertrauen je Wert: keine Zusammenfassungszeile in dieser Ernte")
+        print("\nTrust per value: no summary line in this harvest")
 
     worst = sorted(per_document, key=lambda r: r[2])[:5]
-    print("\nSchwaechste Dokumente (Knoten)")
+    print("\nWeakest documents (nodes)")
     for name, tuples, nodes, requests in worst:
-        print(f"  {name}: {nodes} Knoten aus {tuples} Tupeln, {requests} Anfragen")
+        print(f"  {name}: {nodes} node(s) from {tuples} tuple(s), {requests} request(s)")
     return 0
 
 

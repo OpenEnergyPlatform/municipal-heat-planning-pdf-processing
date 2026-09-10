@@ -205,7 +205,7 @@ uuid` on a bundle, though domained on report or factsheet alone.
 Every value's trust verdict, `{level, reasons, image_origin,
 corroborated}`, is rendered into one line by a profile's own
 `TRUST_PROSE` table, written as the last comment above the value's
-node, German for `kwp`, English for `scenarios`. The level is a floor,
+node, in English for both `kwp` and `scenarios`. The level is a floor,
 computed once and never raised by later human review, and where a
 coordinate's passage stands is no reason. The levels, reasons and
 marks a trust line is built from are at

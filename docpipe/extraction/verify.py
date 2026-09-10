@@ -93,8 +93,15 @@ def numbers_in(text: str) -> set:
     return found
 
 
+# A table transcription breaks a long cell label with <br>: "holzige<br>
+# Festbrennstoffe". It is a line break like the whitespace collapsed here,
+# and read as text it kept "holzige Festbrennstoffe" out of its own quote:
+# on Kassel six carriers stayed open and three value pairs collided.
+_BR = re.compile(r"<br\s*/?>", re.I)
+
+
 def flat(text: str) -> str:
-    return _WS.sub(" ", text or "").strip()
+    return _WS.sub(" ", _BR.sub(" ", text or "")).strip()
 
 
 def quote_in(source: str, quote: str) -> bool:

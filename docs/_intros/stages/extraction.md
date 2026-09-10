@@ -67,7 +67,7 @@ checked for its quote and its answer, wherever the passage stands.
 since which quantity a number belongs to is asked as a coordinate later.
 Two rules used to feed it: every table and figure taken whole through the
 `structure` callable, since over 65 documents 12,094 of 15,082 values
-came from one of the two (`pipeline.py:177`); prose ranked and capped at
+came from one of the two (`pipeline.py:186`); prose ranked and capped at
 `prose_top` sections, the half a ranking retains. A newer
 single cut (`top`, `EXTRACT_PLAN_TOP`) replaces both with one fused
 ranking, keeping the structural floor only as a counter of what it would
@@ -88,7 +88,7 @@ label, description, the document's name and an early caption; recorded,
 never compared, in the stamp as `question_text/<key>`.
 Dropping query templates for it was measured directly: with templates
 included alongside the anchor, a value's real source sat at median rank
-84; without them, rank 26 (`pipeline.py:187`). `plan_document` falls back to
+84; without them, rank 26 (`pipeline.py:196`). `plan_document` falls back to
 `queries.expand`'s templates only when no anchor exists. `make_anchors` (`runner.py:1327`) is the second,
 corpus-wide mechanism: one set per question the field sweep asks, each
 axis question and the parameter choice, written once per run and cached
@@ -119,7 +119,7 @@ own pair's column
 (`test_a_passage_of_several_pairs_is_read_under_each_of_them`,
 `tests/test_extraction_frame.py:628`). A passage that prints none of a
 request's pair gives no row: its claims are refused as `passage is not of
-this pair` (`rows_from_reply`, `pipeline.py:471`). The gain was measured directly: before the frame
+this pair` (`rows_from_reply`, `pipeline.py:509`). The gain was measured directly: before the frame
 existed, the year axis alone produced 1,849 refusals against 0 readings,
 since every window after the first excluded the row's own source
 (`runner.py:2958`).
@@ -137,9 +137,9 @@ whitespace-collapsed test verification uses, `quote_in`, not a literal
 substring test: a stricter test would refuse claims verification would
 have accepted, since a table row retyped without its padding is the
 normal case, not the exception, worth 276 of one pilot's refusals
-(`pipeline.py:364`). A
+(`pipeline.py:379`). A
 wording not in its own quote is caught here too, before it becomes a
-row (`pipeline.py:506`). A `Row` is created only here, never later. The request can turn to
+row (`pipeline.py:544`). A `Row` is created only here, never later. The request can turn to
 a code sandbox, bounded
 to `CODE_ROUNDS` rounds, and a reply cut off at the token ceiling is
 rescued rather than retried, since retrying recovered nothing over one
@@ -174,14 +174,14 @@ coordinates batched into one request rather than one request each
 holding every answer to the two clauses the value's own quote is held to:
 its cited passage sits verbatim in a shown source, and it contains the
 answer, with a floor of `MIN_QUOTE_CHARS` so that a quote names a place.
-Those are the whole check (`pipeline.py:694-716`;
+Those are the whole check (`pipeline.py:732-754`;
 `test_a_coordinate_is_dropped_for_the_agreed_reasons_and_no_other`,
 `tests/test_extraction_reasons.py:111`). Which table the passage belongs
 to, how far from the row it stands and which column of a table it heads
 are the model's reading, not a rule. Failures are recorded separately,
 `unquoted` against `unbacked`, so a retry can name what to fix. A
 coordinate already read once is never overwritten by a later window
-(`pipeline.py:650`). A wording naming no token of the option
+(`pipeline.py:688`). A wording naming no token of the option
 it claims is counted `raw_foreign` rather than trusted silently.
 
 ### Folding and verification
@@ -195,12 +195,12 @@ not verbatim in its source but the value occurs there
 exactly once, the quote is rebuilt around that occurrence rather than the
 claim refused: on the 16-document pilot, 303 of 377 such refusals were
 repaired this way, against 8 where the value truly was absent
-(`verify.py:284`). A verified tuple's tier comes from its source
+(`verify.py:291`). A verified tuple's tier comes from its source
 alone, not whether the quote could be placed on the page:
 `text_located` for prose, `visual_source` for a table transcription or
 figure description, an uncheckable model reading of a picture. A prose
 quote that could not be placed on the PDF page still keeps the
-`text_located` tier; it only gains a `not_located` flag (`verify.py:436`).
+`text_located` tier; it only gains a `not_located` flag (`verify.py:443`).
 Non-fatal findings are carried as flags: `quote_repaired`, `computed`
 (a sandbox result checked against its own printed output),
 `unit_not_chosen`, `not_located`, `unmapped:<axis>:<wording>`, and, for
@@ -247,7 +247,7 @@ Every tuple, refusal, parameter state and summary line is checked
 against the published schema before it is written:
 `_harvest_validators` builds one `jsonschema` validator per branch from
 `schema.build(spec)["harvest"]`, run by `check_against_schema` inside
-`finish_document` on every call carrying a spec (`runner.py:3642`). A
+`finish_document` on every call carrying a spec (`runner.py:3653`). A
 row the schema refuses is counted
 and logged as an `invalid` trace event, never withheld, since blocking on
 a schema mismatch would turn a documentation defect into a data loss.
@@ -403,8 +403,8 @@ on.
 At the document level, `finish_document` withholds the stamp entirely,
 forcing a full redo on the next run, when more than half a document's
 planned sources came back from a server it could not reach
-(`UNREACHABLE_LIMIT`, `0.5`, `runner.py:3584`, `:3626`) or when not one
-batch answered at all (`runner.py:3631`); the JSONL file is still
+(`UNREACHABLE_LIMIT`, `0.5`, `runner.py:3594`, `:3637`) or when not one
+batch answered at all (`runner.py:3642`); the JSONL file is still
 written either way, so only a resume, not a byte count, tells the two
 cases apart from a genuinely finished document.
 

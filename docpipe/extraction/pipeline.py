@@ -123,6 +123,11 @@ class Batch:
     # the plan's own words, what the request asks for, so the pair reaches
     # the model as a question and not only as a field.
     anchors: tuple = ()
+    # The pair a passage that names no pair at all is read under, and its
+    # index: the profile's FRAME_DEFAULT. The request reads it like the
+    # rest, and the pair is written onto its rows afterwards.
+    frame_default: Optional[dict] = None
+    frame_default_index: int = 0
 
     @property
     def sources(self) -> list:
@@ -151,6 +156,10 @@ class DocumentReport:
     # What the plan was built from, so a run can be read back against the
     # settings it ran under instead of against the ones in the file today.
     planned: dict = field(default_factory=dict)
+    # parameter uri -> {(owner kind, owner id)}: what that parameter's own
+    # anchors rank. Planned from nothing; it tells a parameter whose
+    # passages a cut-off request held from one whose passages were read.
+    sources_of: dict = field(default_factory=dict)
 
 
 def plan_document(
@@ -220,6 +229,12 @@ def plan_document(
 
     ranked = retrieve(probes, document_id, set()) or []
     rank_of = {(s.owner_kind, s.owner_id): i for i, s in enumerate(ranked)}
+    for parameter in spec.parameters:
+        own = [p for p in (extra_probes or {}).get(parameter.uri, ()) if p]
+        if own:
+            report.sources_of[parameter.uri] = {
+                (s.owner_kind, s.owner_id)
+                for s in retrieve(own, document_id, set()) or []}
 
     if top is not None:
         taken = ranked[:max(0, top)]
@@ -465,6 +480,29 @@ def names_pair(source, pair: Optional[dict], slots: list) -> bool:
         if not answer_in_quote(slot, pair[slot.name],
                                pair.get(f"{slot.name}_raw"), text):
             return False
+    return True
+
+
+_YEAR_LIKE = re.compile(r"(?<!\d)(?:19|20)\d{2}(?!\d)")
+
+
+def names_no_pair_at_all(source, pairs: list, slots: list) -> bool:
+    """Does this passage print no scenario of any pair and no year at all?
+
+    The one kind of passage a document's default pair is read under: an
+    inventory table that states neither is the plan's inventory. A passage
+    that prints a year, any year, or the scenario of one of the pairs keeps
+    what it says and stays where its year is asked per row.
+    """
+    text = (getattr(source, "text", "") or "")
+    if _YEAR_LIKE.search(text):
+        return False
+    for pair in pairs or ():
+        for slot in slots:
+            if (slot.name != "year" and slot.name in pair
+                    and answer_in_quote(slot, pair[slot.name],
+                                        pair.get(f"{slot.name}_raw"), text)):
+                return False
     return True
 
 

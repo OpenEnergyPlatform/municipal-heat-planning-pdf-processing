@@ -29,8 +29,8 @@ def percentile(values: list, share: float):
 
 def spread(name: str, values: list, unit: str = "") -> str:
     if not values:
-        return f"  {name:<28} keine"
-    return ("  %-28s n=%-7d Median %s%s  90%% %s%s  99%% %s%s  max %s%s"
+        return f"  {name:<28} none"
+    return ("  %-28s n=%-7d median %s%s  90%% %s%s  99%% %s%s  max %s%s"
             % (name, len(values), percentile(values, .5), unit,
                percentile(values, .9), unit, percentile(values, .99), unit,
                max(values), unit))
@@ -51,7 +51,7 @@ def main(argv=None) -> int:
     parser.add_argument("--top", type=int, default=12)
     args = parser.parse_args(argv)
     if not args.directory.is_dir():
-        print(f"kein Verzeichnis: {args.directory}", file=sys.stderr)
+        print(f"not a directory: {args.directory}", file=sys.stderr)
         return 1
 
     planned = collections.Counter()
@@ -124,34 +124,34 @@ def main(argv=None) -> int:
                 states[state] += 1
                 per_axis[axis][state] += 1
 
-    print(f"{len(documents)} Dokument(e), {sum(planned.values())} geplante Quelle(n)")
+    print(f"{len(documents)} document(s), {sum(planned.values())} planned source(s)")
     for origin, count in planned.most_common():
         print(f"  {origin or '-':<12} {count}")
 
-    print("\n1. Bei welchem Rang wird ein Wert gefunden")
+    print("\n1. At which rank is a value found")
     ranks = [r for r, n in productive.items() if r is not None
              for _ in range(n)]
     unranked = productive.get(None, 0)
-    print(spread("Rang der ergiebigen Quelle", ranks))
+    print(spread("rank of the productive source", ranks))
     if ranks:
         total = len(ranks) + unranked
         for cap in (10, 20, 30, 50, 75, 100, 150):
             keep = sum(1 for r in ranks if r < cap)
-            print("    Deckel %4d -> %5.1f%% der Werte" % (cap, 100.0 * keep / total))
+            print("    cap %4d -> %5.1f%% of values" % (cap, 100.0 * keep / total))
     if unranked:
-        print(f"    ohne Rang (nur ueber die Struktur geplant): {unranked}")
+        print(f"    without rank (planned via structure only): {unranked}")
 
-    print("\n2. In welchem Fenster schliesst eine Koordinate")
+    print("\n2. In which window does a coordinate close")
     for axis in sorted(window_of_read):
         print(spread(axis, window_of_read[axis]))
-    print("  Fenster je Sweep insgesamt:")
+    print("  windows per sweep, total:")
     for axis in sorted(windows):
         print(spread("  " + axis, windows[axis]))
     if stage_hits:
-        print("  gefuellt je Stufe: " + ", ".join(
+        print("  filled per stage: " + ", ".join(
             f"{k}={v}" for k, v in stage_hits.most_common()))
 
-    print("\n3. Zustaende und Fehler")
+    print("\n3. States and errors")
     total_states = sum(states.values()) or 1
     for state, count in states.most_common():
         print("  %-12s %8d  %5.1f%%" % (state, count, 100.0 * count / total_states))
@@ -161,29 +161,29 @@ def main(argv=None) -> int:
         print("    %-14s %5.1f%% read  %s"
               % (axis, 100.0 * counts.get("read", 0) / n, dict(counts)))
     if drops:
-        print("  verworfen: " + ", ".join(f"{k}={v}" for k, v in drops.most_common()))
+        print("  dropped: " + ", ".join(f"{k}={v}" for k, v in drops.most_common()))
     # Per COORDINATE, not per request. Five fields answer in one reply, so a
     # count that names the request names five things at once and points at
     # none of them.
     if filled_by_field or unbacked_by_field:
-        print("  je Koordinate (gefuellt / ohne Beleg):")
+        print("  per coordinate (filled / unbacked):")
         for field in sorted(set(filled_by_field) | set(unbacked_by_field)):
             print("    %-16s %7d / %7d" % (field, filled_by_field[field],
                                            unbacked_by_field[field]))
     if any(wording.values()):
-        print("  Wortlaut: %d Auswahl(en) ohne value_raw, %d, deren value_raw "
-              "die gewaehlte Option nicht nennt"
+        print("  wording: %d selection(s) without value_raw, %d whose value_raw "
+              "does not name the chosen option"
               % (wording["raw_missing"], wording["raw_foreign"]))
     if drops_by_field:
-        print("  verworfen je Koordinate und Grund:")
+        print("  dropped per coordinate and reason:")
         for (field, why), count in drops_by_field.most_common(args.top):
             print(f"    {field}/{why}: {count}")
     if errors:
-        print("  Fehler:")
+        print("  errors:")
         for (where, why), count in errors.most_common(args.top):
             print(f"    {where}/{why}: {count}")
 
-    print("\n4. Was hat es gekostet")
+    print("\n4. What it cost")
     for name, values in sorted(latency.items()):
         print(spread(name + " (ms)", values))
     for name, values in sorted(tokens.items()):

@@ -77,7 +77,7 @@ one row. The stamp is `<document>.stamp.json`: whole-run keys (`spec`,
 `slot/parameter` and `question_text/` families, written one per
 question instead (`docpipe/extraction/schema.py:564` to `670`).
 `page_text_transcribed`, `review/*` and `question_text/*` are recorded,
-never compared (`NEVER_COMPARED`, `docpipe/extraction/runner.py:3402`;
+never compared (`NEVER_COMPARED`, `docpipe/extraction/runner.py:3412`;
 `RECORDED_PREFIXES`, `:3373`;
 `tests/test_extraction_runner.py::test_what_the_stamp_records_about_the_document_never_redoes_it`);
 `spec` is compared only until a per-question key exists (`COARSE`,
@@ -85,11 +85,11 @@ never compared (`NEVER_COMPARED`, `docpipe/extraction/runner.py:3402`;
 `tests/test_extraction_runner.py::test_a_stamp_from_before_the_detail_is_stale_in_all_of_it`).
 Only `model`, `anchors`, `extraction/*` and the per-question families
 make a document eligible for `--force-stale`'s full re-harvest
-(`stale`, `docpipe/extraction/runner.py:3468` to `3505`, `3552` to
-`3577`); redoing only the changed question is
+(`stale`, `docpipe/extraction/runner.py:3478` to `3515`, `3562` to
+`3587`); redoing only the changed question is
 `top_up_file`'s job (`docpipe/extraction/topup.py:296` to `330`). The
 trace is `<document>.trace.jsonl`: eleven event kinds told apart by
 `t`, `plan` through `invalid` in source order
 (`docpipe/extraction/schema.py:680` to `764`), read by
 `scripts/trace_report.py` and, for a cost report, by `trace_costs` in
-`scripts/harvest_compare.py:130` to `149`, never by a resume.
+`scripts/harvest_compare.py:134` to `153`, never by a resume.

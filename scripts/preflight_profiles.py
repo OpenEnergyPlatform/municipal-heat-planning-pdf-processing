@@ -37,7 +37,7 @@ hard = 0
 
 def check(profile: str, what: str, ok: bool, detail: str = "", fatal=True):
     global hard
-    rows.append((profile, what, "ok" if ok else ("FEHLER" if fatal else "warn"),
+    rows.append((profile, what, "ok" if ok else ("FAIL" if fatal else "warn"),
                  detail))
     if not ok and fatal:
         hard += 1
@@ -52,17 +52,17 @@ def audit(profile: str) -> None:
 
     base = ROOT / "profiles" / profile
     spec_file = base / "extraction_spec.json"
-    if not check(profile, "spec vorhanden", spec_file.is_file(), str(spec_file)):
+    if not check(profile, "spec present", spec_file.is_file(), str(spec_file)):
         return
     spec = load_spec(json.loads(spec_file.read_text(encoding="utf-8")))
-    check(profile, "Parameter geladen", bool(spec.parameters),
-          f"{len(spec.parameters)} Parameter")
+    check(profile, "parameters loaded", bool(spec.parameters),
+          f"{len(spec.parameters)} parameter(s)")
 
     # Every coordinate carries the rule the field request needs.
     blank = [f"{p.uri.split('/')[-1]}.{s.name}"
              for p in spec.parameters for s in fields.asked_slots(p)
              if not (s.question or "").strip()]
-    check(profile, "jede Achse hat eine Frage", not blank, ", ".join(blank))
+    check(profile, "every axis has a question", not blank, ", ".join(blank))
 
     # What the spec decides instead of asking. The derivation reads the unit,
     # so it is only sound while no unit belongs to two numeric parameters:
@@ -73,8 +73,8 @@ def audit(profile: str) -> None:
                      for second in numeric[i + 1:]
                      for u in first.units_accepted
                      if second.unit_factor(u) is not None})
-    check(profile, "die Einheiten der Zahlparameter sind disjunkt",
-          not shared, ", ".join(shared) or f"{len(numeric)} Zahlparameter")
+    check(profile, "units of numeric parameters are disjoint",
+          not shared, ", ".join(shared) or f"{len(numeric)} numeric parameter(s)")
 
     # A derived coordinate is claimed for every accepted unit of its
     # parameter, so every one of them has to imply it. `integral` is an
@@ -84,13 +84,13 @@ def audit(profile: str) -> None:
                for name, axis in p.axes.items() if axis.derive]
     bad = [f"{p.label}.{name}" for p, name, axis in derived
            if axis.derive.get("value") not in (axis.vocabulary or {})]
-    check(profile, "jede abgeleitete Achse trifft ihr eigenes Vokabular",
-          not bad, ", ".join(bad) or f"{len(derived)} abgeleitet")
+    check(profile, "every derived axis hits its own vocabulary",
+          not bad, ", ".join(bad) or f"{len(derived)} derived")
 
     # Which quantity a value is, is a coordinate now. Without its question the
     # field request carries no rule and the whole document-level plan collapses
     # into rows nobody can assign a parameter to.
-    check(profile, "die Parameterfrage steht in der Spec",
+    check(profile, "the parameter question is in the spec",
           bool((spec.parameter_question or "").strip()),
           (spec.parameter_question or "")[:60])
 
@@ -103,15 +103,15 @@ def audit(profile: str) -> None:
     targets = anchor_targets(spec)
     keys = [t[0] for t in targets]
     wanted = 1 + sum(len(fields.asked_slots(p)) for p in spec.parameters)
-    check(profile, "ein Anker je Frage",
-          len(keys) == len(set(keys)) == wanted, f"{len(keys)} Ziel(e)")
+    check(profile, "one anchor per question",
+          len(keys) == len(set(keys)) == wanted, f"{len(keys)} target(s)")
     with_question = [t for t in targets if t[3]]
-    check(profile, "jedes Achsenziel traegt seine Frage",
+    check(profile, "every axis target carries its question",
           len(with_question) >= wanted - 1,
-          f"{len(with_question)} mit Frage")
-    check(profile, "kein Anker fuer den Wert selbst",
+          f"{len(with_question)} with question")
+    check(profile, "no anchor for the value itself",
           not {p.uri for p in spec.parameters} & set(keys),
-          "der Plan sucht mit dem Satz je Dokument")
+          "the plan searches with one sentence per document")
 
     # No entry that means "I do not know". Those are states now.
     shrugs = []
@@ -123,7 +123,7 @@ def audit(profile: str) -> None:
         for uri in (p.vocabulary or {}):
             if uri.strip().casefold() in SHRUGS:
                 shrugs.append(f"{p.uri.split('/')[-1]}.value={uri}")
-    check(profile, "kein Achselzucker im Vokabular", not shrugs,
+    check(profile, "no shrug in the vocabulary", not shrugs,
           ", ".join(shrugs))
 
     # And the way to say it is absent exists, as an entry and not as prose.
@@ -139,44 +139,44 @@ def audit(profile: str) -> None:
                for name in dynamic}) if dynamic else spec
     closed = [s for p in filled.parameters for s in fields.axis_slots(p)
               if s.options]
-    check(profile, "out:unstated ist waehlbar",
+    check(profile, "out:unstated is selectable",
           bool(closed) and all(fields.UNSTATED in s.answerable()
                                for s in closed),
-          f"{len(closed)} geschlossene Achse(n)"
-          + (f", davon dynamisch: {sorted(dynamic)}" if dynamic else ""))
+          f"{len(closed)} closed axis/axes"
+          + (f", of which dynamic: {sorted(dynamic)}" if dynamic else ""))
 
     for prompt_id in ("extraction/rows", "extraction/field",
                       "extraction/queries", "extraction/anchors"):
         try:
             prompt = prompts.load(prompt_id)
         except Exception as exc:
-            check(profile, f"Prompt {prompt_id}", False, str(exc))
+            check(profile, f"prompt {prompt_id}", False, str(exc))
             continue
         ok = bool(prompt.text.strip())
-        check(profile, f"Prompt {prompt_id}", ok, f"{len(prompt.text)} Zeichen")
+        check(profile, f"prompt {prompt_id}", ok, f"{len(prompt.text)} char(s)")
         if prompt_id in ("extraction/rows", "extraction/field"):
             temp = float(prompt.meta.get("temperature", 1))
             check(profile, f"{prompt_id}: temperature 0", temp == 0,
                   f"temperature={temp}")
-            check(profile, f"{prompt_id}: Antwortraum",
+            check(profile, f"{prompt_id}: answer room",
                   int(prompt.meta.get("max_tokens", 0)) >= 4096,
                   f"max_tokens={prompt.meta.get('max_tokens')}")
     field_text = prompts.load("extraction/field").text
     for key in ("groups", "answers", "value_raw", "quote", "corrections",
                 fields.UNSTATED):
-        check(profile, f"Feld-Prompt nennt {key!r}", f'"{key}"' in field_text)
+        check(profile, f"field prompt names {key!r}", f'"{key}"' in field_text)
     # The value request reads a passage once for every quantity at once, so it
     # must be told about all of them and not about one.
     # The field request asks for several fields at once now, and the reply is
     # keyed by field name. A prompt still describing one field per request
     # answers in the old shape, nothing folds, and every coordinate comes back
     # empty — an entire run of empty tuples with no error anywhere.
-    check(profile, "Feld-Prompt kennt mehrere Felder",
+    check(profile, "field prompt knows several fields",
           '"fields"' in field_text and '"field":' not in field_text)
 
     rows_text = prompts.load("extraction/rows").text
-    check(profile, "Zeilen-Prompt nennt 'quantities'", '"quantities"' in rows_text)
-    check(profile, "Zeilen-Prompt fixiert keinen Parameter mehr",
+    check(profile, "rows prompt names 'quantities'", '"quantities"' in rows_text)
+    check(profile, "rows prompt no longer fixes one parameter",
           '"parameter": die gesucht' not in rows_text)
 
     # A text parameter comes out of the same request as the numbers, so the
@@ -197,14 +197,14 @@ def audit(profile: str) -> None:
                 continue
             shown = shown or any(isinstance(t.get("value"), str)
                                  for t in parsed.get("tuples") or ())
-        check(profile, "Zeilen-Prompt zeigt einen Textwert", shown,
-              "%d Textparameter: %s" % (len(text_parameters),
-                                        ", ".join(text_parameters[:3])))
+        check(profile, "rows prompt shows a text value", shown,
+              "%d text parameter(s): %s" % (len(text_parameters),
+                                            ", ".join(text_parameters[:3])))
     anchors_text = prompts.load("extraction/anchors").text
-    check(profile, "Anker-Prompt kennt die Frage", '"question"' in anchors_text)
+    check(profile, "anchors prompt knows the question", '"question"' in anchors_text)
 
     kg = base / "kg.py"
-    check(profile, "Serializer vorhanden", kg.is_file(), str(kg))
+    check(profile, "serializer present", kg.is_file(), str(kg))
 
     # The published shape of what this run writes. It is generated, so a spec
     # change that nobody regenerated leaves the schema describing a harvest
@@ -215,14 +215,14 @@ def audit(profile: str) -> None:
         has_jsonschema = True
     except ImportError:
         has_jsonschema = False
-    check(profile, "jsonschema importierbar", has_jsonschema,
+    check(profile, "jsonschema importable", has_jsonschema,
           "" if has_jsonschema else "pip install jsonschema")
     from docpipe.extraction import schema as schema_mod
     written = schema_mod.schema_path(profile)
-    if check(profile, "Schema vorhanden", written.is_file(), str(written)):
+    if check(profile, "schema present", written.is_file(), str(written)):
         current = (written.read_text(encoding="utf-8")
                    == schema_mod.serialize(schema_mod.build(spec)))
-        check(profile, "Schema aktuell", current,
+        check(profile, "schema current", current,
               "" if current else
               f"python -m docpipe.extraction.schema {profile} --write")
 
@@ -235,23 +235,23 @@ def audit(profile: str) -> None:
         import importlib
         module = importlib.import_module(f"profiles.{profile}.vocabulary")
         snapshot_file = getattr(module, "VOCABULARY_PATH", None)
-        if check(profile, "Vokabular-Schnappschuss vorhanden",
+        if check(profile, "vocabulary snapshot present",
                  bool(snapshot_file and snapshot_file.is_file()),
                  str(snapshot_file)):
             snapshot = module.load()
             problems = module.check(
                 json.loads(spec_file.read_text(encoding="utf-8")), snapshot)
-            check(profile, "jede Ontologie-Id passt zum Pin", not problems,
+            check(profile, "every ontology id matches the pin", not problems,
                   "; ".join(problems[:3]))
-            check(profile, "Pin benannt",
+            check(profile, "pin named",
                   bool(snapshot.get("pin", {}).get("oeo_version_iri")),
                   snapshot.get("pin", {}).get("oeo_version_iri") or "")
             foreign = {u for _w, u, _l, _o in
                        module.foreign_labels(
                            json.loads(spec_file.read_text(encoding="utf-8")),
                            snapshot)}
-            check(profile, "Beschriftungen aus dem Korpus statt der Ontologie",
-                  not foreign, f"{len(foreign)} Eintrag/Eintraege", fatal=False)
+            check(profile, "labels from the corpus rather than the ontology",
+                  not foreign, f"{len(foreign)} entry/entries", fatal=False)
             # Named rather than silent. A term of an ontology no file of this
             # snapshot covers -- kwp names six MHPO classes and MHPO ships
             # only as OWL functional syntax, which rdflib does not read -- is
@@ -261,7 +261,7 @@ def audit(profile: str) -> None:
             from docpipe import ontology as _ontology
             open_families = _ontology.uncovered(
                 json.loads(spec_file.read_text(encoding="utf-8")), snapshot)
-            check(profile, "jede Id-Familie hat eine Datei, die sie kennt",
+            check(profile, "every id family has a file that knows it",
                   not open_families,
                   ", ".join(f"{k}_* ({len(v)}x)"
                             for k, v in sorted(open_families.items())),
@@ -272,7 +272,7 @@ def audit(profile: str) -> None:
     # but an axis with no kg block at all is one nobody decided about.
     silent = [f"{p.uri}.{name}" for p in spec.parameters
               for name, axis in p.axes.items() if not axis.kg]
-    check(profile, "jede Achse sagt, was sie im Graphen wird", not silent,
+    check(profile, "every axis says what it becomes in the graph", not silent,
           ", ".join(silent), fatal=False)
 
     # And the same question one level up, which was asked nowhere: the axes
@@ -282,7 +282,7 @@ def audit(profile: str) -> None:
     # them. Read from the raw file: `kg` is passed through to the serializer
     # and is not a field of the loaded Parameter.
     mute = silent_parameters(json.loads(spec_file.read_text(encoding="utf-8")))
-    check(profile, "jeder Parameter sagt, was er im Graphen wird", not mute,
+    check(profile, "every parameter says what it becomes in the graph", not mute,
           ", ".join(mute), fatal=False)
 
 
@@ -306,9 +306,9 @@ def main(argv: list) -> int:
         if profile != current:
             print(f"\n=== {profile} ===")
             current = profile
-        mark = {"ok": "  ", "warn": "! ", "FEHLER": "X "}[verdict]
+        mark = {"ok": "  ", "warn": "! ", "FAIL": "X "}[verdict]
         print(f"{mark}{what.ljust(width)}  {detail}")
-    print(f"\n{len(rows)} Pruefung(en), {hard} Fehler")
+    print(f"\n{len(rows)} check(s), {hard} failure(s)")
     return 1 if hard else 0
 
 

@@ -91,8 +91,8 @@ kind: eleven, fixed by the schema for every profile rather than drawn
 from this one's spec (`docpipe/extraction/schema.py:673` to `784`). A
 stamp key differing from today's run makes the document eligible for
 a full re-harvest under `--force-stale`
-(`docpipe/extraction/runner.py:3468` to `3577`); `top_up_file` redoes
+(`docpipe/extraction/runner.py:3478` to `3587`); `top_up_file` redoes
 only the changed question
 (`docpipe/extraction/topup.py:296` to `330`). The trace is read by
 `scripts/trace_report.py` and, for cost, by `trace_costs`
-(`scripts/harvest_compare.py:130` to `149`), never by a resume.
+(`scripts/harvest_compare.py:134` to `153`), never by a resume.

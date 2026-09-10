@@ -134,11 +134,11 @@ def main(argv=None) -> int:
     args = parser.parse_args(argv)
 
     if not args.directory.is_dir():
-        print(f"kein Verzeichnis: {args.directory}", file=sys.stderr)
+        print(f"not a directory: {args.directory}", file=sys.stderr)
         return 1
     order = [LEVEL_A, LEVEL_B, LEVEL_C]
     if args.level not in order:
-        print(f"unbekannte Stufe: {args.level}", file=sys.stderr)
+        print(f"unknown level: {args.level}", file=sys.stderr)
         return 1
     levels = set(order[order.index(args.level):])
 
@@ -148,7 +148,7 @@ def main(argv=None) -> int:
         wanted = set(args.document)
         files = [f for f in files if f.stem in wanted]
     if not files:
-        print(f"keine Ernte in {args.directory}", file=sys.stderr)
+        print(f"no harvest in {args.directory}", file=sys.stderr)
         return 1
 
     rows: list = []
@@ -165,24 +165,24 @@ def main(argv=None) -> int:
             if why:
                 by_reason[why] += 1
 
-    print(f"{len(rows)} von {seen} Werten aus {len(files)} Plaenen, "
-          f"Stufe {args.level} und schlechter"
-          + (f", Grund {args.reason!r}" if args.reason else ""))
-    print("  Gruende: " + (", ".join(f"{k}={v}" for k, v
-                                     in by_reason.most_common(10)) or "keine"))
+    print(f"{len(rows)} of {seen} values from {len(files)} plan(s), "
+          f"level {args.level} and worse"
+          + (f", reason {args.reason!r}" if args.reason else ""))
+    print("  reasons: " + (", ".join(f"{k}={v}" for k, v
+                                     in by_reason.most_common(10)) or "none"))
 
     if args.out:
         with open(args.out, "w", encoding="utf-8", newline="") as handle:
             writer = csv.DictWriter(handle, fieldnames=COLUMNS)
             writer.writeheader()
             writer.writerows(rows)
-        print(f"  geschrieben: {args.out}")
+        print(f"  written: {args.out}")
         return 0
 
     for row in rows[: args.limit or 25]:
         print("\n  %s | %s | %s" % (row["document"], row["level"],
                                     row["reasons"]))
-        print("    %s %s  S. %s  %s" % (row["value"], row["unit"], row["page"],
+        print("    %s %s  p. %s  %s" % (row["value"], row["unit"], row["page"],
                                         row["owner"]))
         if row["title"]:
             print(f"    {row['title']}")
@@ -190,7 +190,7 @@ def main(argv=None) -> int:
         if row["image"]:
             print(f"    {row['image']}")
     if not args.limit and len(rows) > 25:
-        print(f"\n  ... {len(rows) - 25} weitere, --out fuer die ganze Liste")
+        print(f"\n  ... {len(rows) - 25} more, --out for the full list")
     return 0
 
 

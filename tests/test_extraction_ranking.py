@@ -131,8 +131,11 @@ def test_the_plan_is_built_from_the_anchors_and_not_from_the_templates():
                   extra_probes={p.uri: [f"Anker fuer {p.label}."]
                                 for p in SPEC.parameters},
                   retrieve=retrieve)
-    assert asked == [["Anker fuer Endenergieverbrauch.", "Anker fuer Emission."]]
-    assert not any("Tabelle" in probe for probe in asked[0]), (
+    # The ranking, then each parameter's own anchors alone: those name the
+    # passages a cut-off request can hold from that parameter.
+    assert asked == [["Anker fuer Endenergieverbrauch.", "Anker fuer Emission."],
+                     ["Anker fuer Endenergieverbrauch."], ["Anker fuer Emission."]]
+    assert not any("Tabelle" in probe for probes in asked for probe in probes), (
         "a template names the thing, an anchor says the sentence")
 
 

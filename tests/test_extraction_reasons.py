@@ -355,3 +355,15 @@ def test_the_closure_guard_sees_the_bug_it_is_there_for(tmp_path):
         "    return handlers\n", encoding="utf-8")
     assert {(name, var) for _line, name, var in late_bound(bad)} == {
         ("plan", "index"), ("lambda", "item")}
+
+
+def test_a_line_break_inside_a_table_cell_is_whitespace_to_the_check():
+    """A transcription wraps a long cell label with <br>. Read as text,
+    "holzige Festbrennstoffe" never stood in its own quote: on Kassel six
+    carriers stayed open and three value pairs collided in the graph."""
+    from docpipe.extraction.verify import flat, quote_in
+    cell = "| holzige<br>Festbrennstoffe | 7 | 0 |"
+    assert quote_in(cell, "holzige Festbrennstoffe")
+    assert flat("sonstige biogene<br/>Festbrennstoffe") == (
+        "sonstige biogene Festbrennstoffe")
+    assert not quote_in(cell, "fossile Festbrennstoffe")
