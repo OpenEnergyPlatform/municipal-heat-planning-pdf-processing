@@ -5,8 +5,8 @@
 topup.py: Re-reads the one coordinate a stamp names as moved, instead of the
 whole document.
 
-A question is reworded, an option list gains a class the model can now choose,
-or an evidence rule tightens. The stamp knows exactly which key moved, and a
+A question is reworded, or an option list gains a class the model can now
+choose. The stamp knows exactly which key moved, and a
 resume then does the only thing it can: it reports the document stale, and the
 next run harvests it again from the first passage. For one axis of one
 parameter, that is a full corpus run spent answering a question nothing else

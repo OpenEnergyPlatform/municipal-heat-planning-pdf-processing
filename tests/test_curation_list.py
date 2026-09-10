@@ -49,7 +49,7 @@ def test_only_the_values_nobody_can_stand_behind_are_listed(tmp_path):
     _harvest(tmp_path, "plan_a", [
         _row(),                                          # A
         _row(tier=TIER_VISUAL),                          # B
-        _row(year_source=["table", 87517]),              # C
+        _row(sector_state=fields.EXHAUSTED),             # C
         {"kind": "refusal", "reason": "value is not a number"},
         {"kind": "summary", "document_id": 857, "tuples": 3, "refusals": 1,
          "levels": {"A": 1, "B": 1, "C": 1}, "reasons": {}, "image_origin": 1},
@@ -58,7 +58,7 @@ def test_only_the_values_nobody_can_stand_behind_are_listed(tmp_path):
     assert len(tuples) == 3, "a refusal is not a value and neither is a summary"
 
     only_c = cl.rows_of("plan_a", tuples, levels={"C"})
-    assert [r["reasons"] for r in only_c] == ["nonlocal:year"]
+    assert [r["reasons"] for r in only_c] == ["exhausted:sector"]
     # And asking for everything gives everything, with its level named.
     everything = cl.rows_of("plan_a", tuples, levels={"A", "B", "C"})
     assert sorted(r["level"] for r in everything) == ["A", "B", "C"]
@@ -69,7 +69,7 @@ def test_a_row_says_where_to_look_without_opening_the_harvest(tmp_path):
     them the list says a value is doubtful and leaves the reader to find it,
     which is the work the list exists to remove."""
     tuples = cl.read_tuples(_harvest(tmp_path, "plan_a",
-                                     [_row(year_source=["table", 87517])]))
+                                     [_row(sector_state=fields.EXHAUSTED)]))
     row = cl.rows_of("plan_a", tuples, levels={"C"})[0]
     assert row["page"] == 86 and row["owner"] == "table 87457"
     assert row["title"] == "Tabelle 17: Endenergie"
@@ -87,8 +87,8 @@ def test_the_worst_value_comes_first(tmp_path):
     three values with one. Ordering is the only thing a list of 10.000 rows
     can do for a curator who reads 50."""
     tuples = cl.read_tuples(_harvest(tmp_path, "plan_a", [
-        _row(year_source=["table", 87517]),                       # 1 reason
-        _row(year_source=["table", 87517], flags=["computed"],
+        _row(flags=["computed"]),                                 # 1 reason
+        _row(year_state=fields.UNBACKED, flags=["computed"],
              sector_state=fields.EXHAUSTED),                      # 3 reasons
         _row(flags=["not_located"]),                              # 1 reason
     ]))
@@ -98,17 +98,17 @@ def test_the_worst_value_comes_first(tmp_path):
 
 
 def test_a_reason_filter_matches_the_family_not_the_exact_word(tmp_path):
-    """"nonlocal:" is a question about evidence locality and covers every
-    axis; typing out the seven axes is how one gets forgotten."""
+    """"exhausted:" is a question about where the run gave up and covers
+    every axis; typing out the seven axes is how one gets forgotten."""
     tuples = cl.read_tuples(_harvest(tmp_path, "plan_a", [
-        _row(year_source=["table", 87517]),
-        _row(carrier_source=["section", 1]),
+        _row(year_state=fields.EXHAUSTED),
+        _row(carrier_state=fields.EXHAUSTED),
         _row(flags=["computed"]),
     ]))
-    got = cl.rows_of("plan_a", tuples, levels={"C"}, reason="nonlocal:")
+    got = cl.rows_of("plan_a", tuples, levels={"C"}, reason="exhausted:")
     assert len(got) == 2
     assert cl.rows_of("plan_a", tuples, levels={"C"},
-                      reason="nonlocal:year")[0]["reasons"] == "nonlocal:year"
+                      reason="exhausted:year")[0]["reasons"] == "exhausted:year"
     assert cl.rows_of("plan_a", tuples, levels={"C"}, reason="erfunden") == []
 
 
@@ -117,22 +117,16 @@ def test_a_long_passage_is_cut_where_the_reader_can_see_it(tmp_path):
     cell that breaks a spreadsheet row is a cell nobody reads."""
     long_quote = "Der Endenergieverbrauch der privaten Haushalte betrug " * 20
     tuples = cl.read_tuples(_harvest(tmp_path, "plan_a", [
-        _row(year_source=["table", 87517], quote=long_quote)]))
+        _row(sector_state=fields.EXHAUSTED, quote=long_quote)]))
     cell = cl.rows_of("plan_a", tuples, levels={"C"})[0]["quote"]
     assert len(cell) < len(long_quote) and cell.endswith(" …")
 
 
-def test_the_list_holds_only_the_axes_the_spec_holds(tmp_path):
-    """A curation list is a filter, and a filter that fires on readings that
-    broke no rule is a list nobody finishes. The year may stand a page away;
-    the carrier may not."""
+def test_where_a_passage_stands_puts_no_value_on_the_list(tmp_path):
+    """A year or a carrier cited from another table is a reading the harvest
+    took. Listing it would be a check the harvest does not make."""
     tuples = cl.read_tuples(_harvest(tmp_path, "plan_a", [
         _row(year_source=["table", 87517]),
         _row(carrier_source=["table", 87517]),
     ]))
-    own = frozenset({("https://x/energy_consumption", "carrier")})
-    got = cl.rows_of("plan_a", tuples, levels={"C"}, own=own)
-    assert [r["reasons"] for r in got] == ["nonlocal:carrier"]
-    # And without a rule every coordinate is judged, which is what a harvest
-    # from before the rule deserves.
-    assert len(cl.rows_of("plan_a", tuples, levels={"C"})) == 2
+    assert cl.rows_of("plan_a", tuples, levels={"C"}) == []

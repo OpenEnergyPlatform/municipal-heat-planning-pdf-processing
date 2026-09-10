@@ -60,11 +60,11 @@ TRUST_LEVEL_DOC = {
     LEVEL_C: "something is off; see reasons",
 }
 
-# Anchored, so "nonlocal" alone or a reason nobody named cannot slip in.
+# Anchored, so a reason nobody named, or one without its axis, cannot slip in.
 TRUST_REASONS = tuple(
     [f"^{r}$" for r in sorted(FLAG_REASONS.values())]
     + ["^conflict$", "^page_transcribed$",
-       r"^(nonlocal|exhausted|unbacked):[a-z_]+$"])
+       r"^(exhausted|unbacked):[a-z_]+$"])
 
 # What a coordinate's state can be, and what each one is a finding ABOUT. The
 # distinction is the whole point of carrying seven of them instead of a null:
@@ -117,7 +117,7 @@ FLAG_PATTERN = (
     r"|review:(agree|disagree|unbacked)"
     r"|quote_repaired|computed|not_located)$")
 
-# The eleven families a refusal reason belongs to. Every one is raised in
+# The thirteen families a refusal reason belongs to. Every one is raised in
 # verify.py or pipeline.py and none is composed at runtime from user text.
 REFUSAL_REASONS = [
     r"^claim names no parameter of the spec$",
@@ -133,11 +133,14 @@ REFUSAL_REASONS = [
     r"^quote not found in the source it cites$",
     r"^value .* does not occur in the quote$",
     r"^text value not in its quote$",
+    r"^passage is not of this pair$",
 ]
 
 # Why a coordinate reading was dropped. Each is written by merge_field and
 # each is a different repair, so they are enumerated rather than free text.
-DROP_REASONS = ["quote_not_in_source", "quote_not_local", "quote_too_short",
+# tests/test_extraction_reasons.py holds merge_field to this list: a reason it
+# writes that is not listed here is a check nobody agreed to.
+DROP_REASONS = ["quote_not_in_source", "quote_too_short",
                 "answer_not_in_quote", "unbacked"]
 
 
@@ -588,9 +591,8 @@ def stamp_schema() -> dict:
                                     "outvote every key below it."},
             "model": {"type": "string", "description": "the serving model"},
             "anchors": {"type": "string", "pattern": "^([0-9a-f]{16})?$",
-                        "description": "The anchor prompt, the model, the "
-                                       "version of the target set and the "
-                                       "profile's frozen anchor file, "
+                        "description": "The anchor prompt, the model and "
+                                       "the version of the target set, "
                                        "together. NOT the questions: which "
                                        "question was asked is carried by the "
                                        "parameter/, value/, axis/ and slot/ "
@@ -657,10 +659,10 @@ def stamp_schema() -> dict:
             "^axis/[^/]+/[^/]+$": {
                 **sha,
                 "description": "What this coordinate asks and what it may "
-                               "answer: the question, the evidence rule, and "
-                               "the offered list with its spellings and its "
-                               "definitions. Everything the model sees for "
-                               "this axis, and nothing else."}},
+                               "answer: the question and the offered list "
+                               "with its spellings and its definitions. "
+                               "Everything the model sees for this axis, and "
+                               "nothing else."}},
         "required": ["spec", "model", "anchors", "extraction/harvest",
                      "extraction/queries", "extraction/anchors",
                      "extraction/rows", "extraction/field"],

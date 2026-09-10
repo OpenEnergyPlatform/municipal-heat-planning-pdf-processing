@@ -58,7 +58,6 @@ Fields:
 - `required: bool = False`
 - `dynamic: bool = False`
 - `question: Optional[str] = None`: The one line the field request asks. It lives on the axis because the harvest asks per field: a rule buried in a prompt that covers sixteen fields at once is a rule the model can skip, and skipping is what cost the corpus run 63.5% of its years.
-- `evidence: str = "any"`: How far from the row a passage may stand and still be its evidence: "own" the row's own source or the section it stands in, "local" also a source on the neighbouring page, "any" anywhere in the window.  Measured on Kassel: 370 of 455 year readings and 87 percent of the area readings cited a passage outside the row's own table and its section, and 146 of them cited the annotated placeholder of a DIFFERENT table. A row label and a column header are read off the table they are in; a scenario is often named a page earlier; a class is argued in a methods chapter anywhere in the plan. So this is per axis and the profile sets it, not one rule for all seven.
 - `derive: Optional[dict] = None`: A coordinate the SPEC already decides, so no request asks for it: {"from": "unit", "value": "\<a key of this axis' vocabulary>"}.  Principle one, applied one step further. The structure of a tuple is deterministic, and so is a coordinate every accepted unit of the parameter fixes: measured over Kassel, all 452 aggregations the model answered were `integral`, every one of them evidenced by the unit string it had just been handed. Asking cost a fifth of the reply of every five-field request for a coordinate the spec knew. What the unit does NOT fix stays a question — the profile decides which is which.
 - `kg: Optional[dict] = None`: What this coordinate becomes in the graph: {"role": "type"|"edge"| "parent"|"comment", ...}. The serializer reads the predicate from here and the JSON schema publishes it, so the two cannot drift: a predicate changed in one place used to leave the other describing a graph nobody was writing.
 
@@ -291,23 +290,5 @@ only against a prefix the profile's own Turtle header binds: the scenarios
 graph writes four namespaces where kwp writes five, and the same block is
 legal in one profile and unwritable in the other. `dc:abstract` in a kwp
 block would look right in the diff and produce a file no reader can load.
-
-### own_evidence
-
-```python
-def own_evidence(spec: "Spec") -> frozenset
-```
-
-(parameter uri, axis name) for every axis whose evidence rule is `own`.
-
-The rule is per axis and the profile sets it: a row label is read off the
-table it is in, a scenario is often named a page earlier, a class is
-argued in a methods chapter anywhere in the plan. Only `own` can be
-checked from what a harvest row records -- an owner and an id -- because
-`local` is a statement about pages and `any` is no restriction at all.
-
-So this is the set of axes a later reader may hold to the row's own
-source. Everything outside it was already judged by the harvest, where
-the pages were still in hand.
 
 [Back to the index](../README.md)

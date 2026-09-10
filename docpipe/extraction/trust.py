@@ -4,66 +4,41 @@ behind it.
 
 Every accepted tuple is verified: its number is in its quote, its
 quote is in a shown source, and every coordinate names the passage it
-was read in. That is a floor, not a grade. Two values that both clear
-it can still differ by a lot:
-
-  one has every coordinate read off its own table, in the document's
-  own text
-  one has its year read off the caption of a different table three
-  pages away
-
-The second case is the failure this module addresses, and before this
-module existed nothing downstream could tell the two apart. A reader
-of the graph saw two numbers with no way to compare their reliability.
+was read in, and that passage carries its answer. That is a floor, not
+a grade. Two values that both clear it can still differ: one was read
+out of the document's own text with every coordinate read, the other
+out of a picture, with a coordinate the run gave up on.
 
 The module computes a deterministic level per value, from what the
 harvest already records: no model call, no second opinion, no
 threshold anybody tuned.
 
-  A  the document's own text states it, every coordinate read, every
-     passage local
+  A  the document's own text states it, every coordinate read
   B  the same, but read out of a table transcription or a figure
      description (a model's reading of a picture), or out of a
      document whose pages had no text layer and were transcribed page
      by page
-  C  something is off: a passage that belongs to another row, a
-     coordinate the run gave up on, a repaired quote, a computed
-     number, a contested identity
+  C  something is off: a coordinate the run gave up on or could not
+     back, a repaired quote, a computed number, a contested identity
 
 The reasons form a closed list, because a reason nobody can enumerate
 is a reason nobody can count. What makes a value a C is what a curator
 should examine.
 
+Where in the document a coordinate's passage stands is not a reason.
+The harvest takes a reading whose quote stands in a shown passage and
+carries the answer, and grading it again by that passage's distance
+from the row would be a check the harvest does not make.
+
 A value can be read a second time (`review.py`), and what that reading
 came to is recorded here as a mark. It never raises a level: the
 second reading uses the same model over a narrower window, so an
-agreement states that the reading is self-consistent, not that the
-passage it cites belongs to the row.
+agreement states that the reading is self-consistent, not that it is
+right.
 
-Measured on Kassel's 559 tuples, which is why the levels are cut at
-this point and not elsewhere: 527 of 559 tuples came out of a table or
-figure image, so image origin alone separates nothing and is not by
-itself a warning. What did separate, on that run: 370 of 455 year
-readings cited a passage outside the row's own table and its section,
-as did 87 percent of the area readings, 47 percent of the scenarios,
-49 percent of the sectors, and 13 percent of the carriers, the one
-coordinate the row itself carries directly.
-
-That run had no evidence rule at all, so reading those numbers
-requires care. The spec now sets the rule per axis (own, local or
-any), and the harvest enforces it: a coordinate that breaks its own
-rule comes out `unbacked`, never `read`. On a harvest written under
-the rule, a passage outside the row's own source is a finding only
-for an axis whose rule is `own`; for the others it is the rule
-working as written. Judging all seven axes by the strictest rule
-would report every legal reading as a doubt, a signal that fires
-across the whole corpus and separates nothing, the same mistake image
-origin was kept out of the reasons for.
-
-Hence `own`: the set of axes a reader may hold to the row's own
-source. It is a property of the spec, so the caller passes it in;
-without it, every read coordinate is judged, matching the treatment
-of a harvest written before the rule existed.
+Measured on Kassel's 559 tuples, 527 came out of a table or figure
+image, so image origin alone separates nothing and is not by itself a
+warning.
 
 Author: Felix Vossel
 """
@@ -99,62 +74,23 @@ FLAG_REASONS = {"quote_repaired": "repaired", "computed": "computed",
                 REVIEW_DISAGREE: "review:disagree"}
 
 
-def _owners(row: dict) -> set:
-    """The sources a coordinate of THIS row may have been read in.
-
-    Its own table or section, and the section that table stands in. The same
-    pair `pipeline.evidence_is_local` enforces for an axis with evidence
-    "own" -- read here from what the harvest wrote down, because by the time
-    a graph is built the window is long gone.
-    """
-    provenance = row.get("provenance") or {}
-    out = set()
-    kind, owner = provenance.get("owner_kind"), provenance.get("owner_id")
-    if kind and owner is not None:
-        out.add((kind, owner))
-    parent = provenance.get("parent_section")
-    if parent is not None:
-        out.add(("section", parent))
-    return out
-
-
-def reasons(row: dict, *, conflict: bool = False, transcribed: bool = False,
-            own: Optional[frozenset] = None) -> list:
+def reasons(row: dict, *, conflict: bool = False,
+            transcribed: bool = False) -> list:
     """Every reason this value is not an A, in a fixed order.
 
     An empty list means the harvest sees nothing wrong with the value.
-
-    `own` is (parameter uri, axis name) for the axes whose evidence
-    rule is `own` (`spec.own_evidence`). Only those axes are held to
-    the row's own source; an axis the spec lets read a page away was
-    already judged where the pages were, and reporting it here would
-    mark a legal reading as a doubt. A value of None judges every
-    axis, matching the treatment of a harvest written before the rule
-    existed.
     """
     found: list = []
-    local = _owners(row)
-    parameter = row.get("parameter")
     for key in sorted(row):
         if not key.endswith("_state"):
             continue
-        name = key[:-len("_state")]
         state = row[key]
+        # Read, derived, "the document does not say it", or never asked
+        # because the row left at the gate: none of those is a doubt
+        # about the reading. The last three are findings about the
+        # document or about this run's scope, recorded as such elsewhere.
         if state in (EXHAUSTED, UNBACKED):
-            found.append(f"{state}:{name}")
-            continue
-        if state != READ:
-            # Derived, "the document does not say it", or never asked
-            # because the row left at the gate: none of those is a
-            # doubt about the reading. They are findings about the
-            # document or about this run's scope, and are recorded as
-            # such elsewhere.
-            continue
-        if own is not None and (parameter, name) not in own:
-            continue
-        source = row.get(f"{name}_source")
-        if local and source and tuple(source) not in local:
-            found.append(f"nonlocal:{name}")
+            found.append(f"{state}:{key[:-len('_state')]}")
     for flag in row.get("flags") or []:
         reason = FLAG_REASONS.get(flag)
         if reason and reason not in found:
@@ -172,9 +108,9 @@ def reasons(row: dict, *, conflict: bool = False, transcribed: bool = False,
 
 
 def trust(row: dict, *, conflict: bool = False, transcribed: bool = False,
-          corroborated: bool = False, own: Optional[frozenset] = None) -> dict:
+          corroborated: bool = False) -> dict:
     """{level, reasons, image_origin, corroborated} for one accepted tuple."""
-    why = reasons(row, conflict=conflict, transcribed=transcribed, own=own)
+    why = reasons(row, conflict=conflict, transcribed=transcribed)
     # The review's own answer, read off the row rather than passed in: the
     # serializers build a verdict from a stored tuple and have no second
     # reading to hand. It never enters `hard`, so it never lifts a level --
@@ -208,7 +144,7 @@ MARKS = ("level", "image_origin", "image_origin_named", "corroborated",
 
 # Inside the reasons mark. The reason tokens themselves are never
 # translated: they are a closed machine vocabulary, anchored by
-# schema.TRUST_REASONS, and a curator greps for `nonlocal:carrier` in
+# schema.TRUST_REASONS, and a curator greps for `exhausted:carrier` in
 # either corpus.
 REASON_JOIN = ", "
 
@@ -266,8 +202,7 @@ def render(verdict: dict, prose: dict, *, join: str,
                      for mark, args in marks(verdict, row))
 
 
-def document_summary(document_id, tuples, refusals,
-                     *, own: Optional[frozenset] = None) -> dict:
+def document_summary(document_id, tuples, refusals) -> dict:
     """One `kind: summary` line per document: the harvest's view of its run.
 
     A corpus of 1.082 plans cannot be read tuple by tuple, and the question a
@@ -286,15 +221,12 @@ def document_summary(document_id, tuples, refusals,
     arguments for exactly that reason, and the graph side recomputes the
     levels with them. The levels here are the floor: a value that is a C
     already will not become an A later.
-
-    `own` is passed straight to `trust`; see there for why an axis the spec
-    lets read a page away is not held to the row's own source.
     """
     levels = {LEVEL_A: 0, LEVEL_B: 0, LEVEL_C: 0}
     why: dict = {}
     image = 0
     for row in tuples:
-        verdict = trust(row, own=own)
+        verdict = trust(row)
         levels[verdict["level"]] += 1
         image += bool(verdict["image_origin"])
         for reason in verdict["reasons"]:

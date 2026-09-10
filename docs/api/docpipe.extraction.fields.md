@@ -58,7 +58,6 @@ Fields:
 - `question: Optional[str] = None`
 - `options: tuple = ()`
 - `derive: Optional[dict] = None`: {"from": "unit", "value": uri} when the spec decides this coordinate.
-- `evidence: str = "any"`: "own" | "local" | "any": how far from the row its evidence may stand.
 
 #### Slot.is_closed
 

@@ -29,7 +29,7 @@ Two profiles ship. `kwp` covers German municipal heat plans, a corpus of
 values go into MHPKG on the Open Energy Platform. `scenarios` covers the
 literature the IIASA AR6 scenario database cites
 (`profiles/scenarios/profile.py:1`), a 164-document harvest
-(`profiles/scenarios/kg.py:800`), and answers in English; its values go
+(`profiles/scenarios/kg.py:790`), and answers in English; its values go
 into OEKG on the same platform. Each has its own
 page, [kwp](profiles/kwp.md) and [scenarios](profiles/scenarios.md), for
 what its own modules do beyond the interface points here.
@@ -65,7 +65,7 @@ Five entry points, preprocessing, refinement, visuals, extraction, and
 chunking, reach `load_profile` through `resolve_profile(args)` rather than
 calling it directly (`docpipe/preprocessing/pipeline.py:501`,
 `docpipe/refinement/pipeline.py:233`, `docpipe/visuals/pipeline.py:473`,
-`docpipe/extraction/runner.py:3863`, `docpipe/chunking/pipeline.py:346`),
+`docpipe/extraction/runner.py:3973`, `docpipe/chunking/pipeline.py:346`),
 and each adds the `--profile` flag through `add_profile_argument(parser)`
 (`docpipe/profile.py:172-176`). `resolve_profile` reads `args.profile` or,
 failing that, `$DOCPIPE_PROFILE`, loads the named profile, and writes the
@@ -150,20 +150,19 @@ shipped profile provides.
 | Repairing the text | `refinement.WINDOW_SIZE` | optional (`component`, `docpipe/refinement/config.py:40`) | not set, falls back to 3 | not set, falls back to 3 |
 | The answer app | `catalog.CATALOG` | optional (`component`, `docpipe/inference/catalog.py:140`) | `KwpCatalog`: municipality, Land, year | `Ar6Catalog`: year, venue, AR6 scenario |
 | The answer app | `inference.PHRASES`, `NON_ANCHOR`, `READOFF_MARKER`, `READOFF_NOTE` | required at first use (`profile.require`, variable `attr`, `docpipe/inference/wording.py:39`) | German phrasing, 29 keys checked against `wording.REQUIRED` | English phrasing, same 29 keys |
-| Reading the values out | `extraction.SPEC_PATH` | required in practice; refused with `SystemExit` otherwise (`component`, `docpipe/extraction/runner.py:3917-3920`) | `extraction_spec.json` | `extraction_spec.json` |
-| Reading the values out | `extraction.ANCHORS_PATH` | optional (`component`, `docpipe/extraction/runner.py:1204`) | frozen anchors; measured over 150 documents and 4,785 prose values, 18.0% land in the top 10 sections against 11.0% for anchors the model writes and 7.6% for chance (`docpipe/extraction/runner.py:1196-1198`) | none; every anchor is written by the model |
-| Reading the values out | `extraction.SLICE` | optional (`component`, `docpipe/extraction/runner.py:3974`) | `{"quantity": None}`, gates a row on its quantity class alone | not provided; no gate |
-| Reading the values out | `extraction.FRAME` | optional (`component`, `docpipe/extraction/runner.py:3994`) | `("scenario", "year")`, found once per document | not provided; nothing repeats that way |
-| Reading the values out | `extraction.document_axes` | optional (`component`, `docpipe/extraction/runner.py:3985`) | not provided | this publication's AR6 scenarios and the study regions it names, out of 249 (`profiles/scenarios/regions.json`) |
-| Reading the values out | `extraction.document_context` | optional (`component`, `docpipe/extraction/runner.py:3990`) | the plan's own municipality name | not provided |
-| The knowledge graph | `kg.make_serializer` | required for `--serialize`; refused with `SystemExit` otherwise (`component`, `docpipe/extraction/runner.py:3896-3899`) | tuples to MHPKG Turtle | tuples to OEKG Turtle |
+| Reading the values out | `extraction.SPEC_PATH` | required in practice; refused with `SystemExit` otherwise (`component`, `docpipe/extraction/runner.py:4027-4030`) | `extraction_spec.json` | `extraction_spec.json` |
+| Reading the values out | `extraction.SLICE` | optional (`component`, `docpipe/extraction/runner.py:4079`) | `{"quantity": None}`, gates a row on its quantity class alone | not provided; no gate |
+| Reading the values out | `extraction.FRAME` | optional (`component`, `docpipe/extraction/runner.py:4099`) | `("scenario", "year")`, found once per document | not provided; nothing repeats that way |
+| Reading the values out | `extraction.document_axes` | optional (`component`, `docpipe/extraction/runner.py:4090`) | not provided | this publication's AR6 scenarios and the study regions it names, out of 249 (`profiles/scenarios/regions.json`) |
+| Reading the values out | `extraction.document_context` | optional (`component`, `docpipe/extraction/runner.py:4095`) | the plan's own municipality name | not provided |
+| The knowledge graph | `kg.make_serializer` | required for `--serialize`; refused with `SystemExit` otherwise (`component`, `docpipe/extraction/runner.py:4006-4009`) | tuples to MHPKG Turtle | tuples to OEKG Turtle |
 | The answer app | `kg.VALUE_QUERY` plus six more attributes, and `inference.ROUTE_NOTES` | optional; absent returns `None` (`component`, `docpipe/inference/kg_route.py:104-106`), present but missing any of the other seven raises `LookupError` instead (`111-114`), all eight present builds the route | provided; the app can answer a coordinate question straight from the graph | not provided; the app never queries a graph |
 
 ## The two profiles in comparison
 
 | | `kwp` | `scenarios` |
 |---|---|---|
-| Corpus | German municipal heat plans, 801 documents (`profiles/kwp/profile.py:10`) | the AR6 scenario literature, a 164-document harvest (`profiles/scenarios/kg.py:800`) |
+| Corpus | German municipal heat plans, 801 documents (`profiles/kwp/profile.py:10`) | the AR6 scenario literature, a 164-document harvest (`profiles/scenarios/kg.py:790`) |
 | Target graph | MHPKG, Open Energy Platform | OEKG, Open Energy Platform |
 | `source_language` / `answer_language` | de / de | en / en |
 | `document_noun` | "Wärmeplan" | "Publikation" |
@@ -171,11 +170,9 @@ shipped profile provides.
 | Facets in the answer app | `gemeinde`, `bundesland_lang`, `jahr` | `year`, `venue`, `scenario` |
 | `catalog.CATALOG` | `KwpCatalog` | `Ar6Catalog` |
 | `--backfill-meta` | provided, refreshes `MunicipalityMeta` from a re-read KWW sheet | not provided |
-| Frozen extraction anchors | yes, curated from an earlier run's own `anchors.json` | no |
 | `SLICE` / `FRAME` | gates on quantity; frames on scenario and year | neither set |
 | Per-document choice lists (`document_axes`) | not used | the AR6 scenarios and study regions a publication names, out of 1389 scenarios and 249 regions in `regions.json` (`profiles/scenarios/extraction.py:7-12`) |
 | Answer app's graph route (`kg_route`) | wired; a coordinate question can be answered straight from MHPKG | not wired; every answer comes from retrieval |
-| `extraction_anchors.json` | present | absent |
 
 ## Adding a profile
 
@@ -231,12 +228,13 @@ shipped profile provides.
    least, `kg.py` with `make_serializer`, and `prompts/extraction/*.md`.
    `python scripts/preflight_profiles.py <name>` exercises, without a GPU,
    a model, or a database: the spec
-   (`scripts/preflight_profiles.py:54-55`), any frozen anchors
-   (`scripts/preflight_profiles.py:116-127`), each extraction prompt's
+   (`scripts/preflight_profiles.py:54-55`), one anchor per axis question
+   and none for the value (`scripts/preflight_profiles.py:106-114`),
+   each extraction prompt's
    presence and non-empty text, `temperature` and `max_tokens` for
    `extraction/rows` and `extraction/field` specifically
-   (`scripts/preflight_profiles.py:161-176`), and `kg.py`'s presence
-   (`scripts/preflight_profiles.py:219-220`).
+   (`scripts/preflight_profiles.py:148-163`), and `kg.py`'s presence
+   (`scripts/preflight_profiles.py:206-207`).
 
 Throughout, `pytest tests/test_architecture.py -k <name>` is the one
 command that reports what is missing by name rather than by where it
@@ -268,5 +266,5 @@ late `--profile` naming a profile whose prompts are already bound
 add their own `SystemExit`, via `parser.error()` for extraction:
 `scripts/fileprocessing/pipeline.py:60,67,70` for a missing `SOURCE` or
 `backfill_meta`, and
-`docpipe/extraction/runner.py:3896-3899,3917-3920` for a missing
+`docpipe/extraction/runner.py:4006-4009,4027-4030` for a missing
 `SPEC_PATH` or `make_serializer`.

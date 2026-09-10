@@ -17,7 +17,7 @@ import pytest
 
 from docpipe.extraction import fields, review, runner, trust
 from docpipe.extraction.pipeline import Source
-from docpipe.extraction.spec import load as load_spec, own_evidence
+from docpipe.extraction.spec import load as load_spec
 
 PROFILES = Path(__file__).resolve().parent.parent / "profiles"
 PARAMETER = "energy_consumption"
@@ -29,25 +29,23 @@ def _spec(name="kwp"):
 
 
 SPEC = _spec()
-OWN = own_evidence(SPEC)
 QUOTE = "| Erdgas | 241 | MWh/a |"
 PARENT_TEXT = ("Abschnitt 4: Endenergieverbrauch. Die folgende Tabelle "
                "[p85_tbl0] zeigt den Verbrauch im Jahr 2020.")
 
 
 def _row(**overrides):
-    """One accepted tuple, read off its own table, with one foreign passage.
+    """One accepted tuple at the lowest level: its carrier is `unbacked`.
 
-    The foreign passage is what makes it the lowest level: `carrier` is an
-    axis the spec holds to the row's own source, and this one was read in
-    table 999.
+    The stored carrier stays on the row, so a second reading has something to
+    agree or disagree with.
     """
     row = {
         "kind": "tuple", "parameter": PARAMETER, "value": 241.0,
         "value_target": 241.0, "unit": "MWh/a", "unit_raw": "MWh/a",
         "quote": QUOTE, "tier": "text_located", "flags": [],
         "carrier": "OEO_00000292", "carrier_raw": "Erdgas",
-        "carrier_state": fields.READ, "carrier_source": ["table", 999],
+        "carrier_state": fields.UNBACKED, "carrier_source": ["table", 1],
         "carrier_quote": QUOTE,
         "year": 2020, "year_state": fields.READ, "year_source": ["table", 1],
         "provenance": {"document_id": 7, "owner_kind": "table",
@@ -91,7 +89,7 @@ def _harvest(tmp_path, rows, name="plan"):
 
 def _summary(**overrides):
     line = {"kind": "summary", "document_id": 7, "tuples": 1, "refusals": 0,
-            "levels": {"A": 0, "B": 0, "C": 1}, "reasons": {"nonlocal:carrier": 1},
+            "levels": {"A": 0, "B": 0, "C": 1}, "reasons": {"unbacked:carrier": 1},
             "image_origin": 0}
     line.update(overrides)
     return line
@@ -101,14 +99,14 @@ def _summary(**overrides):
 # Which values, and which questions about them
 # ---------------------------------------------------------------------------
 def test_only_the_values_nobody_can_stand_behind_are_reviewed():
-    """One request per value reviewed. A value whose passages are all its own
-    and whose coordinates were all read has nothing a narrower window can
-    find, so spending a request on it buys nothing."""
-    good = _row(carrier_source=["table", 1])
-    image = _row(carrier_source=["table", 1], tier="image")
+    """One request per value reviewed. A value whose coordinates were all read
+    has nothing a narrower window can find, so spending a request on it buys
+    nothing."""
+    good = _row(carrier_state=fields.READ)
+    image = _row(carrier_state=fields.READ, tier="image")
     bad = _row()
-    got = review.rows_to_review([good, image, bad], own=OWN)
-    assert [trust.trust(r, own=OWN)["level"] for r in (good, image, bad)] == [
+    got = review.rows_to_review([good, image, bad])
+    assert [trust.trust(r)["level"] for r in (good, image, bad)] == [
         "A", "B", "C"], "the fixture must really carry all three"
     assert got == [bad]
 
@@ -118,15 +116,14 @@ def test_a_row_is_reviewed_once():
     this the pass re-reads its own work on every run and the flags say
     nothing about how many values were actually looked at."""
     done = _row(flags=[trust.REVIEW_UNBACKED])
-    assert review.rows_to_review([done], own=OWN) == []
-    assert review.rows_to_review([done], own=OWN, force=True) == [done]
+    assert review.rows_to_review([done]) == []
+    assert review.rows_to_review([done], force=True) == [done]
 
 
 def test_the_disputed_coordinate_is_the_one_the_reason_names():
-    """Three of the reasons name a coordinate and five do not. Split on ":"
+    """Two kinds of reason name a coordinate and six do not. Split on ":"
     without the whitelist and `review:disagree` asks for a coordinate called
     "disagree" on every row this pass has already seen."""
-    assert review.disputed({"reasons": ["nonlocal:carrier"]}) == ["carrier"]
     assert review.disputed({"reasons": ["exhausted:year"]}) == ["year"]
     assert review.disputed({"reasons": ["unbacked:sector"]}) == ["sector"]
     assert review.disputed({"reasons": [
@@ -305,16 +302,16 @@ def test_agreement_writes_the_flag_and_moves_nothing_else():
 
 def test_a_corroborated_row_is_still_a_c():
     """The same model over a narrower window agreeing with itself does not
-    make the passage it cites belong to the row. A level lifted here would be
-    a signal that fires on the corpus and separates nothing."""
+    make the reading right. A level lifted here would be a signal that fires
+    on the corpus and separates nothing."""
     parameter = SPEC.by_uri[PARAMETER]
     row = _row()
-    plain = trust.trust(row, own=OWN)
+    plain = trust.trust(row)
     review.review_row(row, parameter,
                       review.review_fields(parameter, ["carrier"]),
                       _sources(), _asker(_agreeing()))
     assert row["flags"] == [trust.REVIEW_AGREE]
-    verdict = trust.trust(row, own=OWN)
+    verdict = trust.trust(row)
     assert verdict["corroborated"] is True
     assert verdict["level"] == trust.LEVEL_C
     assert verdict["reasons"] == plain["reasons"]
@@ -334,9 +331,9 @@ def test_a_disagreement_is_a_reason_a_curator_can_count():
                              review.review_fields(parameter, ["carrier"]),
                              shown, _asker(reply))
     assert flag == trust.REVIEW_DISAGREE
-    verdict = trust.trust(row, own=OWN)
+    verdict = trust.trust(row)
     assert "review:disagree" in verdict["reasons"]
-    summary = trust.document_summary(7, [row], [], own=OWN)
+    summary = trust.document_summary(7, [row], [])
     assert summary["reasons"]["review:disagree"] == 1
 
 
@@ -352,7 +349,7 @@ def test_a_review_answer_whose_quote_is_in_neither_passage_decides_nothing():
                              _sources(), _asker(reply))
     assert flag == trust.REVIEW_UNBACKED
     assert row["flags"] == [trust.REVIEW_UNBACKED]
-    assert trust.trust(row, own=OWN)["corroborated"] is False
+    assert trust.trust(row)["corroborated"] is False
 
 
 def test_a_review_answer_whose_quote_does_not_carry_it_decides_nothing():
@@ -564,13 +561,13 @@ def test_a_document_with_nothing_to_review_is_rewritten_unchanged(tmp_path):
     """`review_file` reads and rewrites the file whether or not it spends a
     request, so a document whose values are all above the lowest level must
     come back saying exactly what it said."""
-    good = _row(carrier_source=["table", 1])
+    good = _row(carrier_state=fields.READ)
     path = _harvest(tmp_path, [good, _summary(levels={"A": 1, "B": 0, "C": 0},
                                               reasons={})])
     before = path.read_text(encoding="utf-8")
     seen = []
     stats = review.review_file(path, SPEC, ask=_asker(_agreeing(), seen),
-                               sources_for=lambda row: _sources(), own=OWN)
+                               sources_for=lambda row: _sources())
     assert seen == [], "no request was worth spending"
     assert stats["reviewed"] == 0
     assert path.read_text(encoding="utf-8") == before

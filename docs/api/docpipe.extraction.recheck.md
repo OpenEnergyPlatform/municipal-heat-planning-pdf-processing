@@ -2,8 +2,8 @@
 
 `docpipe/extraction/recheck.py`, read with `ast` by `scripts/build_docs.py`. The docstrings are the code's own: edit them there, not here.
 
-recheck.py: Reapplies the evidence rule to a harvest written before the rule
-existed.
+recheck.py: Reapplies the answer-in-quote rule to a harvest written before
+the rule existed.
 
 A coordinate is only as good as the passage cited for it. For one corpus run,
 that passage was checked against the wrong thing: `merge_field` held it to

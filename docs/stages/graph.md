@@ -28,7 +28,7 @@ corpus run rather than inspecting Turtle afterward. The two tools do
 not call each other: `vocabulary.py`'s `edges()` imports the profile's
 `kg.py` module directly to read its `EDGES` table, and that import
 alone runs `kg.py`'s own module level calls to `spec.py`'s
-`kg_name`/`own_evidence` and `trust.py`'s `check_prose`, a side effect
+`kg_name` and `load` and `trust.py`'s `check_prose`, a side effect
 rather than a call the ontology check makes itself.
 
 ## Position in the pipeline
@@ -208,9 +208,8 @@ Every value's trust verdict, `{level, reasons, image_origin,
 corroborated}`, is rendered into one line by a profile's own
 `TRUST_PROSE` table, written as the last comment above the value's
 node, German for `kwp`, English for `scenarios`. The level is a floor,
-computed once and never raised by later human review; only an `own`
-evidence axis can produce a `nonlocal:<axis>` reason, since a `local`
-axis was already judged where the pages were. The levels, reasons and
+computed once and never raised by later human review, and where a
+coordinate's passage stands is no reason. The levels, reasons and
 marks a trust line is built from are at
 [contract/trust.md](../contract/trust.md).
 
@@ -354,9 +353,8 @@ CLI, never called from a `--serialize` run.
 `docpipe/extraction/spec.py` parses and validates
 `extraction_spec.json` into typed `Spec`, `Parameter` and `Axis`
 objects, including a `kg` block's shape; `kg_name` qualifies a
-`{prefix, predicate}` block against a profile's header and
-`own_evidence` extracts the axes whose evidence rule is `own`, both at
-import time. `docpipe/extraction/trust.py` computes the trust verdict
+`{prefix, predicate}` block against a profile's header at import
+time. `docpipe/extraction/trust.py` computes the trust verdict
 for one tuple and renders it against a profile's `TRUST_PROSE` table.
 `docpipe/extraction/fields.py`'s `DERIVED` state, imported only by
 `profiles/kwp/kg.py`, marks a derived aggregation in its evidence

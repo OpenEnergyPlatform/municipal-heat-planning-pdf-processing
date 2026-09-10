@@ -210,6 +210,9 @@
        },
        {
         "pattern": "^text value not in its quote$"
+       },
+       {
+        "pattern": "^passage is not of this pair$"
        }
       ],
       "description": "Why the claim was refused; one of the reason families of verify.py and pipeline.py.",
@@ -311,7 +314,7 @@
          "pattern": "^page_transcribed$"
         },
         {
-         "pattern": "^(nonlocal|exhausted|unbacked):[a-z_]+$"
+         "pattern": "^(exhausted|unbacked):[a-z_]+$"
         }
        ]
       },
@@ -4914,7 +4917,7 @@
   "description": "Every key but `spec` makes the document stale, and it is harvested again, when it differs from the current run. `spec` is recorded so a reader can say which file a harvest came from, and is not compared. Withheld when the harvest did not happen. The parameter/, value/, axis/ and slot/ keys record which question changed, so a moving ontology costs only the coordinates it touched rather than a full re-read of the corpus. A stamp written before those keys existed carries none of them, so for it `spec` decides again, and it is stale in all of them.",
   "patternProperties": {
    "^axis/[^/]+/[^/]+$": {
-    "description": "What this coordinate asks and what it may answer: the question, the evidence rule, and the offered list with its spellings and its definitions. Everything the model sees for this axis, and nothing else.",
+    "description": "What this coordinate asks and what it may answer: the question and the offered list with its spellings and its definitions. Everything the model sees for this axis, and nothing else.",
     "pattern": "^[0-9a-f]{64}$",
     "type": "string"
    },
@@ -4952,7 +4955,7 @@
   },
   "properties": {
    "anchors": {
-    "description": "The anchor prompt, the model, the version of the target set and the profile's frozen anchor file, together. NOT the questions: which question was asked is carried by the parameter/, value/, axis/ and slot/ keys, and a question that is GONE by the rule that a key the stamp still carries and the run no longer asks makes the document stale. The anchors decide which passages a document was read from, so a document read under one set is not the same result as one read under another. Empty when anchors were off.",
+    "description": "The anchor prompt, the model and the version of the target set, together. NOT the questions: which question was asked is carried by the parameter/, value/, axis/ and slot/ keys, and a question that is GONE by the rule that a key the stamp still carries and the run no longer asks makes the document stale. The anchors decide which passages a document was read from, so a document read under one set is not the same result as one read under another. Empty when anchors were off.",
     "pattern": "^([0-9a-f]{16})?$",
     "type": "string"
    },
@@ -5453,7 +5456,6 @@
      "why": {
       "enum": [
        "quote_not_in_source",
-       "quote_not_local",
        "quote_too_short",
        "answer_not_in_quote",
        "unbacked"

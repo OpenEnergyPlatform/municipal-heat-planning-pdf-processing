@@ -28,7 +28,7 @@ passes can act on without asking a model again.
 
 | | |
 |---|---|
-| **In** | The corpus [chunking](chunking.md) built: the SQLite database's `Sections`, `Tables`, `Images`, `Embeddings`, `Documents` and `DocumentMeta` rows, and the FAISS index. No file under `results/` is read directly. Also a profile's validated `extraction_spec.json` (`spec.load`) and, optionally, a frozen `extraction_anchors.json`. |
+| **In** | The corpus [chunking](chunking.md) built: the SQLite database's `Sections`, `Tables`, `Images`, `Embeddings`, `Documents` and `DocumentMeta` rows, and the FAISS index. No file under `results/` is read directly. Also a profile's validated `extraction_spec.json` (`spec.load`). |
 | **Out** | One `<document>.jsonl` harvest and one `<document>.stamp.json` resume stamp per document, a per-document trace file under `trace/`, and, written once per run, `anchors.json` and `query_cache.db`. A `--serialize` call reads the harvest back and writes one Turtle file, feeding [the knowledge graph](graph.md) stage. |
 | **Resumes on** | `<document>.stamp.json`, compared key by key against what today's spec, model, anchor set and prompts would produce. A document with no stamp is read as fully stale, never as finished. |
 | **Needs** | A served LLM reached over the network, the query embedder, the FAISS index, the corpus database, and, unless `EXTRACT_LOCATE=0`, the source PDF (`--pdf-root`) to place a quote's highlight rectangles. Unless `EXTRACT_ATTACH_IMAGES=0`, also the `images/` directory (`--image-root`) with the table and figure crops that ride along with every request. |
@@ -59,9 +59,9 @@ the majority type in the scenarios profile, 11 of its 14 parameters
 compared after `normalise_unit` or `fold_label`, not as raw strings: on
 the 16-document pilot, 661 findings were refused for their unit and 302
 of them already carried an accepted spelling under another form
-(`spec.py:43`). Each axis also carries its own
-evidence rule, `own`, `local` or `any`, set here and enforced later by
-the field sweep.
+(`spec.py:43`). An axis that still sets an evidence rule is refused at
+load time (`spec.py:293-298`): a coordinate is
+checked for its quote and its answer, wherever the passage stands.
 
 ### The retrieval plan
 
@@ -69,7 +69,7 @@ the field sweep.
 since which quantity a number belongs to is asked as a coordinate later.
 Two rules used to feed it: every table and figure taken whole through the
 `structure` callable, since over 65 documents 12,094 of 15,082 values
-came from one of the two (`pipeline.py:170`); prose ranked and capped at
+came from one of the two (`pipeline.py:177`); prose ranked and capped at
 `prose_top` sections, the half a ranking retains. A newer
 single cut (`top`, `EXTRACT_PLAN_TOP`) replaces both with one fused
 ranking, keeping the structural floor only as a counter of what it would
@@ -78,27 +78,27 @@ document, not asked again with everything already found excluded. The
 single call fuses every probe into one ranked
 list rather than concatenating a ranking per probe: over 65 documents and
 15,082 values, concatenation put a value's real source at median rank 77,
-fusion at rank 26 (`runner.py:347`).
+fusion at rank 26 (`runner.py:357`).
 
 ### Anchors
 
 The plan searches not with the spec's query templates but a sentence
 written as a document would state the answer, a HyDE anchor; two
-mechanisms produce them. `document_anchor` (`runner.py:834`) writes the
+mechanisms produce them. `document_anchor` (`runner.py:844`) writes the
 plan's own probe per document and parameter, from the parameter's
 label, description, the document's name and an early caption; recorded,
 never compared, in the stamp as `question_text/<key>`.
 Dropping query templates for it was measured directly: with templates
 included alongside the anchor, a value's real source sat at median rank
-84; without them, rank 26 (`pipeline.py:180`). `plan_document` falls back to
-`queries.expand`'s templates only when no anchor exists. `make_anchors` (`runner.py:1284`) is the second,
-corpus-wide mechanism: one set per question, a parameter's value and each
-of its axes, written once per run or read from a profile's frozen
-`extraction_anchors.json`, real sentences a corpus already produced
-rather than one written fresh per document (`runner.py:1196`,
-`frozen_anchors`). This set backs the field sweep once a
-coordinate is not in the value's own passage, cached per question and
-fingerprinted as one `anchors` stamp key.
+84; without them, rank 26 (`pipeline.py:187`). `plan_document` falls back to
+`queries.expand`'s templates only when no anchor exists. `make_anchors` (`runner.py:1327`) is the second,
+corpus-wide mechanism: one set per question the field sweep asks, each
+axis question and the parameter choice, written once per run and cached
+per question. The value itself has no set: the plan searches with the
+one short sentence `document_anchor` writes (`anchor_targets`,
+`runner.py:819`). This set backs the field sweep once a
+coordinate is not in the value's own passage, and is fingerprinted as
+one `anchors` stamp key.
 
 ### The frame
 
@@ -112,13 +112,19 @@ deterministic cross-check, `years_in_sources`, scans the same passages
 for year-shaped numbers the model did not name and offers them back once,
 never adding a year on its own. Which coordinates form a frame is named
 by the profile: kwp sets `FRAME = ("scenario", "year")`
-(`profiles/kwp/extraction.py:78`); the scenarios profile sets none.
+(`profiles/kwp/extraction.py:73`); the scenarios profile sets none.
 `pipeline.apply_frame` projects each pair onto its rows, state `read`,
 before any field job is queued; a row that already answered better keeps
-its own reading. The gain was measured directly: before the frame
+its own reading. A passage that prints several pairs, a table with a
+column per year, is read under each of them, and each request takes its
+own pair's column
+(`test_a_passage_of_several_pairs_is_read_under_each_of_them`,
+`tests/test_extraction_frame.py:628`). A passage that prints none of a
+request's pair gives no row: its claims are refused as `passage is not of
+this pair` (`rows_from_reply`, `pipeline.py:471`). The gain was measured directly: before the frame
 existed, the year axis alone produced 1,849 refusals against 0 readings,
 since every window after the first excluded the row's own source
-(`runner.py:2898`).
+(`runner.py:2958`).
 
 ### The row request
 
@@ -133,13 +139,13 @@ whitespace-collapsed test verification uses, `quote_in`, not a literal
 substring test: a stricter test would refuse claims verification would
 have accepted, since a table row retyped without its padding is the
 normal case, not the exception, worth 276 of one pilot's refusals
-(`pipeline.py:352`). A
+(`pipeline.py:364`). A
 wording not in its own quote is caught here too, before it becomes a
-row (`pipeline.py:460`). A `Row` is created only here, never later. The request can turn to
+row (`pipeline.py:506`). A `Row` is created only here, never later. The request can turn to
 a code sandbox, bounded
 to `CODE_ROUNDS` rounds, and a reply cut off at the token ceiling is
 rescued rather than retried, since retrying recovered nothing over one
-pilot (`runner.py:2100`).
+pilot (`runner.py:2159`).
 
 ### The field sweep: three window stages and a budget
 
@@ -156,30 +162,29 @@ overlapping windows (`FIELD_WINDOW` 2, `FIELD_OVERLAP` 1) for up to
 `FIELD_ROUNDS` (4) rounds. **Rest** is the floor: once retrieval has
 nothing new, `rest_of_document` reads the document's own remaining
 sections in order, rotated to start near the open rows, until the
-coordinate closes or the document runs out (`runner.py:2831`). A
+coordinate closes or the document runs out (`runner.py:2891`). A
 coordinate the whole sweep cannot close is `exhausted`, never
 `unstated`: the first is a finding about the run, the second about the
 document. The budget sums to `FIELD_MAX_WINDOWS`
 (24) plus `REST_MAX_WINDOWS` (12) per coordinate, with several
 coordinates batched into one request rather than one request each
-(`runner.py:2552`).
+(`runner.py:2613`).
 
-### Merging a coordinate and the evidence rule
+### Merging a coordinate
 
 `pipeline.merge_field` folds each field's answers onto the open rows,
 holding every answer to the two clauses the value's own quote is held to:
 its cited passage sits verbatim in a shown source, and it contains the
-answer. Failures are recorded separately, `unquoted` against `unbacked`,
-so a retry can name what to fix. Beyond containment, what matters is
-which source carried the passage: `evidence_is_local` reads the axis's
-own rule, `own`, `local` or `any`: an `own` axis needs the row's own
-table or section, `local` also accepts a neighbouring page, `any`
-accepts anything shown. On Kassel, 370 of 455 year readings and 87% of area readings cited
-a passage outside the row's own table and section, every one still
-verified: real, but not that row's (`spec.py:148`). A coordinate
-already read once is never overwritten by
-a later window (`pipeline.py:625`). A wording naming no token of the
-option it claims is counted `raw_foreign` rather than trusted silently.
+answer, with a floor of `MIN_QUOTE_CHARS` so that a quote names a place.
+Those are the whole check (`pipeline.py:694-716`;
+`test_a_coordinate_is_dropped_for_the_agreed_reasons_and_no_other`,
+`tests/test_extraction_reasons.py:111`). Which table the passage belongs
+to, how far from the row it stands and which column of a table it heads
+are the model's reading, not a rule. Failures are recorded separately,
+`unquoted` against `unbacked`, so a retry can name what to fix. A
+coordinate already read once is never overwritten by a later window
+(`pipeline.py:650`). A wording naming no token of the option
+it claims is counted `raw_foreign` rather than trusted silently.
 
 ### Folding and verification
 
@@ -207,14 +212,12 @@ an amount over a span, whether the quote states the year it runs over.
 
 `trust.trust` grades every accepted tuple deterministically, from what
 the harvest already recorded, no further model call and no tuned
-threshold. Level A: its own text states it, every coordinate read and
-local. Level B: the same, from an image transcription or a
-model-transcribed page. Level C: one of the following holds: a
-nonlocal passage on an `own` axis, a coordinate the sweep gave up on, a
-repaired quote, a computed number, or a contested identity decided at
-graph build time. Locality is judged only for `spec.own_evidence`'s
-`own`-rule parameter and axis pairs; an axis allowed to read a page
-away was already judged there. A second
+threshold. Level A: its own text states it, every coordinate read.
+Level B: the same, from an image transcription or a model-transcribed
+page. Level C: one of the following holds: a coordinate the sweep could
+not back or gave up on, a repaired quote, a computed number, or a
+contested identity decided at graph build time. Where a coordinate's
+passage stands is no reason. A second
 reading from `--review` can mark a tuple `corroborated`, described
 under The passes that revisit a harvest, but never raises its level.
 `trust.document_summary`
@@ -246,13 +249,13 @@ Every tuple, refusal, parameter state and summary line is checked
 against the published schema before it is written:
 `_harvest_validators` builds one `jsonschema` validator per branch from
 `schema.build(spec)["harvest"]`, run by `check_against_schema` inside
-`finish_document` on every call carrying a spec (`runner.py:3579`). A
+`finish_document` on every call carrying a spec (`runner.py:3642`). A
 row the schema refuses is counted
 and logged as an `invalid` trace event, never withheld, since blocking on
 a schema mismatch would turn a documentation defect into a data loss.
 `scripts/preflight_profiles.py` calls `schema.build` directly, ahead of
 any run, to confirm a profile's published schema file is current
-(`scripts/preflight_profiles.py:233`).
+(`scripts/preflight_profiles.py:220`).
 
 ### The passes that revisit a harvest
 
@@ -267,7 +270,7 @@ and what they may touch.
 | `--top-up` | The model, the FAISS index, the embedder, the database | One named coordinate of every row that has it | Writes forward only the exact stamp keys it could settle |
 | `--review` | The model, and the crops for image-attached prompts | Only a row's `flags` | Adds `review/prompt` and `review/model`, compared by nothing |
 
-`--recheck` (`recheck.py`) reapplies today's evidence rule to the
+`--recheck` (`recheck.py`) reapplies the answer-in-quote rule to the
 wording and quote already on disk: a coordinate whose quote does not
 contain its claimed answer is stripped back to `unanswered`; on a
 corpus written before the rule existed, 27.6% of years cited a passage
@@ -402,8 +405,8 @@ on.
 At the document level, `finish_document` withholds the stamp entirely,
 forcing a full redo on the next run, when more than half a document's
 planned sources came back from a server it could not reach
-(`UNREACHABLE_LIMIT`, `0.5`, `runner.py:3520`, `:3563`) or when not one
-batch answered at all (`runner.py:3568`); the JSONL file is still
+(`UNREACHABLE_LIMIT`, `0.5`, `runner.py:3584`, `:3626`) or when not one
+batch answered at all (`runner.py:3631`); the JSONL file is still
 written either way, so only a resume, not a byte count, tells the two
 cases apart from a genuinely finished document.
 
@@ -420,20 +423,20 @@ never sends leaves no trace, so the row is offered again later.
 
 - Planning per parameter instead of per document once turned one
   document's owner set into three documents' worth of requests: 804
-  planned sources against 234 real owners (`fields.py:166`).
+  planned sources against 234 real owners (`fields.py:164`).
 - The kwp spec's numeric units, nine for energy and forty-two for
   emissions, share not one spelling; on Kassel not one of 559 accepted
   tuples contradicted its own unit, yet asking the model to choose the
   parameter anyway cost 322 of 1,043 field windows, 30.9%, and 18.0 of
   187.5 field minutes per plan, before the unit was used to derive it
-  instead (`fields.py:220`).
+  instead (`fields.py:218`).
 - Letting the passage a coordinate was last read in drop out of the
   window after one use, rather than remaining in the window, cost one
-  batch 520 dropped readings against 31 kept (`runner.py:2708`).
+  batch 520 dropped readings against 31 kept (`runner.py:2769`).
 - On the 20-plan draft where the slice gate was measured, of 6,763
   harvested tuples the serializer dropped 1,554 for a quantity the graph
   does not hold and, while the scenario axis still gated a row, 2,510
-  more for not being the target scenario (`profiles/kwp/extraction.py:16`).
+  more for not being the target scenario (`profiles/kwp/extraction.py:11`).
 
 ## Verification
 
@@ -443,27 +446,31 @@ pins the retrieval plan and routing, among them
 `test_the_plan_asks_retrieval_once_and_not_until_the_document_is_gone`,
 `test_every_table_is_planned_whether_or_not_a_probe_ranked_it` and
 `test_only_verified_values_become_the_next_batch_s_prior`.
-`tests/test_extraction_fieldwise.py` pins the field sweep and the evidence
-rule: `test_an_answer_whose_evidence_is_not_in_the_source_is_not_written`,
+`tests/test_extraction_fieldwise.py` pins the field sweep and its two
+checks: `test_an_answer_whose_evidence_is_not_in_the_source_is_not_written`,
 `test_a_quote_that_does_not_contain_the_answer_is_not_evidence`,
-`test_the_axis_decides_how_far_its_evidence_may_stand`,
-`test_a_passage_from_another_table_leaves_the_coordinate_open`,
+`test_the_field_prompt_states_the_two_checks_and_no_other`,
 `test_a_read_coordinate_is_not_overwritten_by_a_later_window`,
 `test_a_row_outside_the_slice_is_not_asked_for_its_other_axes`,
 `test_a_sweep_that_ran_out_of_budget_still_reads_the_rest_of_the_plan`,
 `test_the_last_stage_keeps_its_allowance_when_it_is_larger_than_the_first`,
 `test_the_sweep_starts_again_where_it_last_read_instead_of_striking_it_off`
 and `test_the_sweeper_is_the_one_the_harvest_uses`.
-`tests/test_extraction_frame.py` pins the frame's own evidence rule and its
-projection onto rows: `test_every_half_of_a_pair_quotes_for_itself`,
-`test_the_distance_rule_is_not_applied_to_a_frame_reading`,
+`tests/test_extraction_frame.py` pins the frame's two quotes per pair and
+its projection onto rows: `test_every_half_of_a_pair_quotes_for_itself`,
+`test_a_frame_reading_may_quote_a_heading_anywhere_in_the_plan`,
+`test_a_passage_of_several_pairs_is_read_under_each_of_them`,
+`test_every_row_gets_the_year_of_its_own_pair`,
 `test_a_coordinate_the_row_itself_answered_is_not_overwritten` and
 `test_a_search_that_never_completes_says_exhausted_rather_than_complete`.
 `tests/test_extraction_verify.py` pins `canonical_number`, quote repair,
 and the evidence tiers. `tests/test_extraction_trust.py` pins the level
-cutoffs and the `own` set. `tests/test_extraction_schema.py` validates
+cutoffs. `tests/test_extraction_reasons.py` pins that a coordinate is
+dropped for the agreed reasons and no other, that every reason a claim is
+refused for is a published one, and that no closure in the package reads
+a name bound after it. `tests/test_extraction_schema.py` validates
 that a harvest, a stamp and a trace event all conform to the published
-contract. `tests/test_extraction_runner.py`, 83 tests, pins `runner.py`
+contract. `tests/test_extraction_runner.py`, 79 tests, pins `runner.py`
 itself: among them `test_a_document_the_server_never_answered_for_is_not_stamped`,
 `test_a_document_no_reply_ever_came_back_for_is_not_stamped`,
 `test_the_image_root_follows_the_pdf_root` and
@@ -599,10 +606,13 @@ complete when it is not.
 
 `Sweep` and `build_sweeps` carry the tuples a document's batches have already
 verified forward as a hint to later batches, and grant a bounded follow-up
-budget when a reply says more passages are needed (`follow_up`). `fold_claims`,
-`fold_batch` and `fold_fieldwise` verify a reply's claims into a
+budget when a reply says more passages are needed (`follow_up`).
+`fold_claims` and `fold_batch` verify a reply's claims into a
 `DocumentReport`; `write_report` writes that report's tuples, refusals,
 per-parameter states and one summary line to one JSONL file, atomically.
+
+A coordinate is checked for two things and no third: its quote stands in a
+passage that was shown, and the quote carries the answer (`merge_field`).
 
 The three expensive dependencies, retrieval, the harvesting LLM call, and
 locating a quote on its PDF page, are injected callables. The module's own
@@ -633,11 +643,11 @@ concatenation. `make_candidates` is a deterministic floor under that ranking,
 matched by LIKE over the corpus's own vocabulary tokens. A probe is either one
 of the spec's query templates (`queries.expand`), stable across the whole
 corpus so `prime_probe_cache`'s embeddings hit for every document, or a
-HyDE-style anchor sentence a model writes for one question: `make_anchors`
-writes one set per parameter or axis, cached under `anchors.json` and reusable
-across documents, or frozen by the profile (`frozen_anchors`) over the model's
-own guess; `document_anchor` writes a further sentence per parameter for the
-one document being planned, which is a cache miss by construction.
+HyDE-style anchor sentence a model writes: `make_anchors` writes one set per
+question the field sweep asks, cached under `anchors.json` and reusable across
+documents, and `document_anchor` writes the one short sentence per parameter
+the document being planned is searched with, which is a cache miss by
+construction.
 
 `make_harvester` and `make_fieldwise_harvester` build the request to the model,
 parse its reply, and rescue the tuples already written when a reply is cut off
@@ -775,66 +785,41 @@ behind it.
 
 Every accepted tuple is verified: its number is in its quote, its
 quote is in a shown source, and every coordinate names the passage it
-was read in. That is a floor, not a grade. Two values that both clear
-it can still differ by a lot:
-
-  one has every coordinate read off its own table, in the document's
-  own text
-  one has its year read off the caption of a different table three
-  pages away
-
-The second case is the failure this module addresses, and before this
-module existed nothing downstream could tell the two apart. A reader
-of the graph saw two numbers with no way to compare their reliability.
+was read in, and that passage carries its answer. That is a floor, not
+a grade. Two values that both clear it can still differ: one was read
+out of the document's own text with every coordinate read, the other
+out of a picture, with a coordinate the run gave up on.
 
 The module computes a deterministic level per value, from what the
 harvest already records: no model call, no second opinion, no
 threshold anybody tuned.
 
-  A  the document's own text states it, every coordinate read, every
-     passage local
+  A  the document's own text states it, every coordinate read
   B  the same, but read out of a table transcription or a figure
      description (a model's reading of a picture), or out of a
      document whose pages had no text layer and were transcribed page
      by page
-  C  something is off: a passage that belongs to another row, a
-     coordinate the run gave up on, a repaired quote, a computed
-     number, a contested identity
+  C  something is off: a coordinate the run gave up on or could not
+     back, a repaired quote, a computed number, a contested identity
 
 The reasons form a closed list, because a reason nobody can enumerate
 is a reason nobody can count. What makes a value a C is what a curator
 should examine.
 
+Where in the document a coordinate's passage stands is not a reason.
+The harvest takes a reading whose quote stands in a shown passage and
+carries the answer, and grading it again by that passage's distance
+from the row would be a check the harvest does not make.
+
 A value can be read a second time (`review.py`), and what that reading
 came to is recorded here as a mark. It never raises a level: the
 second reading uses the same model over a narrower window, so an
-agreement states that the reading is self-consistent, not that the
-passage it cites belongs to the row.
+agreement states that the reading is self-consistent, not that it is
+right.
 
-Measured on Kassel's 559 tuples, which is why the levels are cut at
-this point and not elsewhere: 527 of 559 tuples came out of a table or
-figure image, so image origin alone separates nothing and is not by
-itself a warning. What did separate, on that run: 370 of 455 year
-readings cited a passage outside the row's own table and its section,
-as did 87 percent of the area readings, 47 percent of the scenarios,
-49 percent of the sectors, and 13 percent of the carriers, the one
-coordinate the row itself carries directly.
-
-That run had no evidence rule at all, so reading those numbers
-requires care. The spec now sets the rule per axis (own, local or
-any), and the harvest enforces it: a coordinate that breaks its own
-rule comes out `unbacked`, never `read`. On a harvest written under
-the rule, a passage outside the row's own source is a finding only
-for an axis whose rule is `own`; for the others it is the rule
-working as written. Judging all seven axes by the strictest rule
-would report every legal reading as a doubt, a signal that fires
-across the whole corpus and separates nothing, the same mistake image
-origin was kept out of the reasons for.
-
-Hence `own`: the set of axes a reader may hold to the row's own
-source. It is a property of the spec, so the caller passes it in;
-without it, every read coordinate is judged, matching the treatment
-of a harvest written before the rule existed.
+Measured on Kassel's 559 tuples, 527 came out of a table or figure
+image, so image origin alone separates nothing and is not by itself a
+warning.
 
 Author: Felix Vossel
 
@@ -906,8 +891,8 @@ Author: Felix Vossel
 <details>
 <summary><code>docpipe/extraction/recheck.py</code></summary>
 
-recheck.py: Reapplies the evidence rule to a harvest written before the rule
-existed.
+recheck.py: Reapplies the answer-in-quote rule to a harvest written before
+the rule existed.
 
 A coordinate is only as good as the passage cited for it. For one corpus run,
 that passage was checked against the wrong thing: `merge_field` held it to
@@ -983,12 +968,11 @@ subset of the one the sweep already walked, the row's own passage and the
 section that passage stands in. It is a self-consistency check under a narrowed
 window, not an independent second reading.
 
-That narrowing is enough to catch the failure the lowest trust level names, a
-value read off a passage belonging to another row, because the narrowed window
-holds no such passage. It cannot catch the same picture misread the same way
-twice. An independent second opinion would need a different model or a
-different window, the page image rather than the transcription, and this pass
-is neither.
+What it can catch is a reading that does not hold up when the model looks
+again at the two passages a row's labels, header and caption stand in. It
+cannot catch the same picture misread the same way twice. An independent
+second opinion would need a different model or a different window, the page
+image rather than the transcription, and this pass is neither.
 
 An agreement between the two readings never raises the trust level; it is
 recorded as a mark and nothing else. A disagreement is treated as a reason,
@@ -1011,8 +995,8 @@ Author: Felix Vossel
 topup.py: Re-reads the one coordinate a stamp names as moved, instead of the
 whole document.
 
-A question is reworded, an option list gains a class the model can now choose,
-or an evidence rule tightens. The stamp knows exactly which key moved, and a
+A question is reworded, or an option list gains a class the model can now
+choose. The stamp knows exactly which key moved, and a
 resume then does the only thing it can: it reports the document stale, and the
 next run harvests it again from the first passage. For one axis of one
 parameter, that is a full corpus run spent answering a question nothing else

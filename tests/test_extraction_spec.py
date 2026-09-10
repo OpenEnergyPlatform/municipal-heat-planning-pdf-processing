@@ -204,7 +204,7 @@ def _spec_of(**overrides):
             "tuples": [{"value": 42005, "unit_raw": "MWh/a",
                         "carrier": "Erdgas", "year": 2020}]},
         "axes": {"carrier": {"question": "Welcher Traeger?",
-                             "evidence": "own", "required": True,
+                             "required": True,
                              "vocabulary": {"oeo:1": {"label": "Erdgas",
                                                       "spellings": ["Gas"],
                                                       "definition": "Ein Gas."}}},
@@ -219,7 +219,7 @@ def test_a_new_option_moves_its_own_axis_and_nothing_else():
     coordinate, not the year, not the parameter, and not another parameter."""
     before = spec_mod.fingerprints(_spec_of())
     after = spec_mod.fingerprints(_spec_of(axes={
-        "carrier": {"question": "Welcher Traeger?", "evidence": "own",
+        "carrier": {"question": "Welcher Traeger?",
                     "required": True,
                     "vocabulary": {"oeo:1": {"label": "Erdgas",
                                              "spellings": ["Gas"],
@@ -233,13 +233,12 @@ def test_a_new_option_moves_its_own_axis_and_nothing_else():
 
 @pytest.mark.parametrize("field,value", [
     ("question", "Welcher Energietraeger steht in dieser Zeile?"),
-    ("evidence", "any"),
     ("required", False),
 ])
 def test_everything_the_model_sees_is_in_the_axis_fingerprint(field, value):
     """A fingerprint that ignores the question is a fingerprint that says a
     document read under another question is still current."""
-    axes = {"carrier": {"question": "Welcher Traeger?", "evidence": "own",
+    axes = {"carrier": {"question": "Welcher Traeger?",
                         "required": True, "vocabulary": {"oeo:1": ["Erdgas"]}},
             "year": {"question": "Welches Jahr?", "type": "int"}}
     before = spec_mod.fingerprints(_spec_of(axes=axes))
@@ -305,20 +304,20 @@ def test_the_axes_are_not_in_the_parameter_fingerprint():
     # Three ways an axis can move: its question, its offered list, and one
     # more axis existing at all. None of them is the parameter's business.
     for axes in (
-        {"carrier": {"question": "eine ganz andere Frage", "evidence": "own",
+        {"carrier": {"question": "eine ganz andere Frage",
                      "required": True,
                      "vocabulary": {"oeo:1": {"label": "Erdgas",
                                               "spellings": ["Gas"],
                                               "definition": "Ein Gas."}}},
          "year": {"question": "Welches Jahr?", "type": "int"}},
-        {"carrier": {"question": "Welcher Traeger?", "evidence": "own",
+        {"carrier": {"question": "Welcher Traeger?",
                      "required": True,
                      "vocabulary": {"oeo:1": {"label": "Erdgas",
                                               "spellings": ["Gas"],
                                               "definition": "Ein Gas."},
                                     "oeo:2": {"label": "Klaergas"}}},
          "year": {"question": "Welches Jahr?", "type": "int"}},
-        {"carrier": {"question": "Welcher Traeger?", "evidence": "own",
+        {"carrier": {"question": "Welcher Traeger?",
                      "required": True,
                      "vocabulary": {"oeo:1": {"label": "Erdgas",
                                               "spellings": ["Gas"],
@@ -570,3 +569,14 @@ def test_integrated_belongs_to_a_numeric_parameter_only():
         text["parameters"][0].pop(key)
     with pytest.raises(SpecError, match=r"integrated"):
         load(text)
+
+
+def test_an_axis_that_still_names_an_evidence_rule_is_refused():
+    """The rule is gone. A spec that still sets it is refused rather than
+    read, so it cannot come back through a profile without anyone deciding
+    it again."""
+    with pytest.raises(spec_mod.SpecError, match="evidence"):
+        _spec_of(axes={"carrier": {"question": "Welcher Traeger?",
+                                   "evidence": "own",
+                                   "vocabulary": {"oeo:1": ["Erdgas"]}},
+                       "year": {"question": "Welches Jahr?", "type": "int"}})

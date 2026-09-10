@@ -19,11 +19,11 @@ concatenation. `make_candidates` is a deterministic floor under that ranking,
 matched by LIKE over the corpus's own vocabulary tokens. A probe is either one
 of the spec's query templates (`queries.expand`), stable across the whole
 corpus so `prime_probe_cache`'s embeddings hit for every document, or a
-HyDE-style anchor sentence a model writes for one question: `make_anchors`
-writes one set per parameter or axis, cached under `anchors.json` and reusable
-across documents, or frozen by the profile (`frozen_anchors`) over the model's
-own guess; `document_anchor` writes a further sentence per parameter for the
-one document being planned, which is a cache miss by construction.
+HyDE-style anchor sentence a model writes: `make_anchors` writes one set per
+question the field sweep asks, cached under `anchors.json` and reusable across
+documents, and `document_anchor` writes the one short sentence per parameter
+the document being planned is searched with, which is a cache miss by
+construction.
 
 `make_harvester` and `make_fieldwise_harvester` build the request to the model,
 parse its reply, and rescue the tuples already written when a reply is cut off
@@ -180,10 +180,10 @@ def make_review_sources(db_path: Path) -> Callable
 (row) -> the passages one stored tuple may legally quote from.
 
 Exactly two, in this order: the row's own source, and the section that
-source stands in. That pair is what the evidence rule accepts for an axis
-held to its own source, and it is a strict SUBSET of the window the sweep
-already walked -- which is what makes the second reading a check on the
-first and not an independent one.
+source stands in. That pair is where a row's labels, header and caption
+stand, and it is a strict SUBSET of the window the sweep already walked --
+which is what makes the second reading a check on the first and not an
+independent one.
 
 The parent goes through `make_parents` rather than being fetched from
 `parent_section` directly, so a section too long for the window arrives
@@ -281,12 +281,12 @@ not moved.
 ### anchors_key
 
 ```python
-def anchors_key(frozen_sha: str = "") -> str
+def anchors_key() -> str
 ```
 
 Everything an anchor set depends on that is NOT one question: the
-anchor prompt, the model, the version of the target SET, and whatever the
-profile froze. The cache is stored under it and the stamp records it.
+anchor prompt, the model and the version of the target SET. The cache is
+stored under it and the stamp records it.
 
 Not the questions, though it used to hash them. Everything a target tuple
 carries is already a stamp key of its own -- a parameter's label and
@@ -297,11 +297,9 @@ description in `parameter/<uri>`, an axis' question in
 every document in the corpus stale over ONE changed question, which is
 exactly what the per-question keys were written to stop.
 
-The frozen sha belongs in here rather than per question, because a
-question DROPPED from the profile's file would otherwise keep being
-answered out of the frozen text a previous run had written into the
-store. Paid for by rewriting every model-written set when that file
-changes, which is a rare and deliberate edit.
+The empty last field held the sha of a file of anchors a profile could
+freeze. That file is gone, and the field stays empty rather than going,
+so a harvest that never had one keeps its key.
 
 ### anchor_key
 
@@ -325,6 +323,10 @@ sentence that states its reference year are not the same sentence. Six
 anchors written from "Endenergieverbrauch" find tables of consumption and
 say nothing about where a bilanz year is printed, which is why the field
 sweep searched with the raw question and found captions by accident.
+
+The value itself has no set here. The plan searches with the one short
+sentence `document_anchor` writes for the document it plans, and a set
+written once for the whole corpus was never searched with.
 
 ### document_anchor
 
@@ -376,6 +378,20 @@ Reported, never added. "2045 MWh/a" is a year-shaped number and is not a
 year, and a cross-check that decided would put it in the frame and ask
 every table for a year the plan does not have.
 
+### fitted_max_tokens
+
+```python
+def fitted_max_tokens(exc, asked: int, where: str = "") -> Optional[int]
+```
+
+A completion budget that fits the window this request overflowed, or
+None when the error is another one or no answer fits.
+
+The server names both numbers when it refuses. Measured on Kassel: one
+field request of 26,625 prompt tokens asked for 6,144 more, was refused
+for one token over 32,768, and the break on a 4xx wrote its coordinates
+off. The prompt is what it is, so the room for the answer is what gives.
+
 ### make_frame_asker
 
 ```python
@@ -400,12 +416,11 @@ The pairs of a reply that carry their own evidence, in order.
 
 Every coordinate is held to what a field answer is held to: its quote sits
 verbatim in one of the passages that were SHOWN, and the quote contains
-the answer. What is NOT applied is the distance rule. A frame reading is
+the answer. Nothing else is checked. A frame reading is
 document-level by construction -- it is read once, from a caption or a
 heading, and every row of the document inherits it -- so "is this passage
-near this row" is not a question about it. The distance rule exists
-because a per-row reading that cites a foreign table is a wrong reading,
-and that is a different claim.
+near this row" is not a question about it, and no reading anywhere in
+the harvest is asked it.
 
 ### frame_windows
 
@@ -443,24 +458,6 @@ passages that no pair names. It is a finding for the second pass, never an
 addition to the frame, and the second pass shows the window that CARRIES
 the missed year instead of the first window again.
 
-### frozen_anchors
-
-```python
-def frozen_anchors(profile, spec: Spec) -> tuple
-```
-
-(anchors, sha) the profile froze, or ({}, "") if it freezes none.
-
-An anchor the model writes is a guess at how the corpus phrases a value.
-These are not guesses: they are sections of an earlier run that really
-produced one, taken verbatim. Measured over 150 documents and 4,785 prose
-values, the kwp profile's frozen set puts 18.0% of them in the top 10
-sections where the written ones put 11.0%, against 7.6% for chance.
-
-Only the questions the file names are frozen. Everything else, the axis
-questions above all, is still written per run, so a profile can freeze what
-it has measured and leave the rest alone.
-
 ### load_anchors
 
 ```python
@@ -494,18 +491,18 @@ Write the sets and, beside each, the question it answers.
 
 ```python
 def make_anchors(spec: Spec, client=None, *, store: Optional[Path] = None,
-                 key: str = "", frozen: Optional[dict] = None) -> dict
+                 key: str = "") -> dict
 ```
 
-parameter uri -> search anchors the model wrote from its definition.
+anchor id -> search anchors the model wrote for one question.
 
 The QA app turns a question into a HyDE anchor before it searches: a
 sentence written as it would READ in the document, because that is what a
 similarity search matches against. This stage searched with the spec's
 templates alone, which name the thing rather than say it.
 
-Once per run and per parameter, not per document: the anchor depends on the
-definition, not on the plan, and a stable probe string is what makes the
+Once per run and per question, not per document: the anchor depends on
+the question, not on the plan, and a stable probe string is what makes the
 query-embedding cache hit across the whole corpus.
 
 ### usable_anchor
@@ -962,6 +959,27 @@ def select_documents(documents: list, wanted: Optional[list]) -> tuple
 means superseded rather than absent: `_documents` lists current versions
 only. A pilot has to hear about that instead of quietly being smaller than
 it was meant to be.
+
+### pair_batches
+
+```python
+def pair_batches(items: list, pairs: list, pair_plans: list, frame_axes: list,
+                 anchors: list, *, max_sources: int = BATCH_SOURCES,
+                 max_chars: int = BATCH_CHARS) -> tuple
+```
+
+(batches, rest, added) for one document with a frame.
+
+A pair is read over every passage that prints it. Its own search and the
+document's search keep `PLAN_TOP` passages each, cut from two rankings.
+A table the document's search found that prints 2045, below the cut of
+the 2045 search, was in no batch at all: not under the pair, whose search
+had not kept it, and not in the rest, which is what prints none of the
+pairs. So every passage any search of the document planned goes to every
+pair it prints. `added` counts the ones a pair's own search had not kept;
+a pair whose own search failed (`None`) is read over those alone.
+
+`rest` is what the document's search found that prints none of the pairs.
 
 ### main
 

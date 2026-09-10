@@ -164,7 +164,7 @@ The three positional paths (database, FAISS index, output directory)
 have no profile default. `--document` restricts the run to one document
 id and is repeatable. `--image-root`, left unset, defaults to the
 profile's processed directory (`docpipe/extraction/runner.py` lines
-3910 to 3912). `--pdf-root` has no such default: left unset it stays
+4020 to 4022). `--pdf-root` has no such default: left unset it stays
 `None` and disables the digit-exact native check that locates a quote's
 highlight rectangles in the source PDF (lines 3800 to 3804, 3201 to
 3213). `--force` and `--force-stale` behave as in refinement.
@@ -181,7 +181,7 @@ python -m docpipe.extraction data/kwp/kwp.db data/kwp/faiss_index.bin data/kwp/e
 `--serialize` switches the run to serialize-only: no harvest, no model.
 It hands the JSONL already in the output directory to the profile's
 `kg.make_serializer` and writes Turtle (`docpipe/extraction/runner.py`
-lines 3895 to 3902); a profile with no `kg.py` is refused. Unlike the
+lines 4005 to 4012); a profile with no `kg.py` is refused. Unlike the
 earlier stages it does not resume: it walks the whole harvest directory
 again on every call (`docpipe/extraction/serialize.py`).
 
@@ -198,9 +198,9 @@ environment variables setting a stage's server and model defaults.
 | Visuals | `VLM_MODEL` | `Qwen/Qwen3.5-122B-A10B-FP8` | served model name requested | `docpipe/visuals/config.py:43` |
 | Chunking | `EMBEDDING_BACKEND` | `local` | `local`, `api`, or an import path | `docpipe/embedding/config.py:19` |
 | Chunking | `EMBEDDING_MODEL` | `Qwen/Qwen3-VL-Embedding-8B` | HF model id for every embedding | `docpipe/embedding/config.py:21` |
-| Extraction | `LLM_BASE_URL` | `http://localhost:8000/v1` | harvesting model's endpoint | `docpipe/extraction/runner.py:80` |
-| Extraction | `LLM_MODEL` | `Qwen/Qwen3.5-122B-A10B-FP8` | harvesting model's name | `docpipe/extraction/runner.py:82` |
-| Extraction | `EXTRACT_BATCH_SOURCES` | `6` | sources sharing one harvest request | `docpipe/extraction/runner.py:100` |
+| Extraction | `LLM_BASE_URL` | `http://localhost:8000/v1` | harvesting model's endpoint | `docpipe/extraction/runner.py:81` |
+| Extraction | `LLM_MODEL` | `Qwen/Qwen3.5-122B-A10B-FP8` | harvesting model's name | `docpipe/extraction/runner.py:83` |
+| Extraction | `EXTRACT_BATCH_SOURCES` | `6` | sources sharing one harvest request | `docpipe/extraction/runner.py:101` |
 | App | `INFERENCE_DB_PATH` | profile `db_path`, else `data/KWP.db` | SQLite corpus database, opened read-only | `scripts/inference_app/config.py:61` |
 | App | `INFERENCE_INDEX_PATH` | profile `index_path`, else `data/faiss_index.bin` | FAISS index loaded into memory | `scripts/inference_app/config.py:62` |
 | App | `INFERENCE_KG_TTL_PATH` | profile `root/graph.ttl`, else `data/graph.ttl` | Turtle file from `--serialize` | `scripts/inference_app/config.py:66` |
@@ -213,10 +213,10 @@ already-written harvest directory, instead of or before harvesting.
 
 - `--print-context-budget` prints the worst-case tokens one harvest
   request needs and exits before contacting a server
-  (`docpipe/extraction/runner.py` lines 4004 to 4007); the same check
+  (`docpipe/extraction/runner.py` lines 4109 to 4112); the same check
   runs automatically before the first document too.
-- `--recheck` needs no model and no index. It reapplies the evidence
-  rule to a harvest on disk, drops any coordinate whose quote no longer
+- `--recheck` needs no model and no index. It reapplies the
+  answer-in-quote rule to a harvest on disk, drops any coordinate whose quote no longer
   carries the answer, and clears the affected stamps unless
   `--keep-stamps` is given.
 - `--remap` needs no model. It maps a coordinate's recorded wording onto
@@ -230,7 +230,7 @@ already-written harvest directory, instead of or before harvesting.
 - `--review`, bounded with `--review-limit N`, needs the model. It reads
   every value nobody can stand behind a second time, over its own
   passage and section, and records only a disagreement as a trust
-  reason (`docpipe/extraction/runner.py` lines 3955 to 3964); see
+  reason (`docpipe/extraction/runner.py` lines 4065 to 4074); see
   [the trust contract](contract/trust.md).
 - `--serialize TTL` needs no harvest and no model, as in stage 8 above,
   and produces or refreshes [the knowledge graph](stages/graph.md).
@@ -308,7 +308,7 @@ python scripts/build_docs.py --check
 
 renders every generated page fresh and fails, writing nothing, if a
 checked-in page has drifted from its source (`scripts/build_docs.py`
-lines 1425 to 1430).
+lines 1394 to 1423).
 
 ## Documentation build
 
@@ -322,7 +322,7 @@ the checked-in extraction schemas, and named constants
 python scripts/build_docs.py --out docs
 ```
 
-(`scripts/build_docs.py` lines 1423 to 1426).
+(`scripts/build_docs.py` lines 1440 to 1442).
 
 Sphinx then builds the HTML site, warnings promoted to errors:
 `.github/workflows/docs.yml` runs `-W --keep-going -b html docs

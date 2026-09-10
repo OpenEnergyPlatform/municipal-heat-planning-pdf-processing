@@ -36,12 +36,12 @@ Trust computation for this profile also has to account for one
 corpus-wide fact: `ar6.db`'s `Documents` table carries no
 `page_text_transcribed` column, so `PAGE_TRANSCRIBED` is fixed `False`
 for every value this profile serializes, never read per document the
-way an axis coordinate is (`profiles/scenarios/kg.py`, lines 496 to
-500). Over the 164-document ar6 harvest the module calls its own, 298 of
+way an axis coordinate is (`profiles/scenarios/kg.py`, lines 487 to
+491). Over the 164-document ar6 harvest the module calls its own, 298 of
 11,129 scenario-scope tuples could not be attached to any scenario: 289
 because the run's window budget was exhausted, 9 because the paper
 itself never states which scenario the value belongs to
-(`profiles/scenarios/kg.py`, lines 800 to 804; the full account is at
+(`profiles/scenarios/kg.py`, lines 790 to 794; the full account is at
 [../stages/graph.md](../stages/graph.md)).
 
 ## What the profile contributes to each stage
@@ -72,7 +72,7 @@ dataclass); `Parameter.vocabulary_dynamic` marks a parameter's own value
 the same way, and `_validate_parameter` refuses a spec that gives a
 category parameter both a fixed vocabulary and `vocabulary_dynamic` at
 once, or gives `vocabulary_dynamic` to a parameter that is not a category
-at all (`spec.py`, lines 441 to 465). Either way, the vocabulary key
+at all (`spec.py`, lines 432 to 456). Either way, the vocabulary key
 stays out of `extraction_spec.json` and a profile hook fills it in before
 the harvest runs; where no hook fills it, the coordinate degrades to a
 plain wording, the glossary's definition of a dynamic list.
@@ -186,7 +186,7 @@ label describes why nothing fit, not what the document states (`kg.py`,
 lines 260 to 271). Every chosen sentinel, together with every
 `scenario_label`, `scenario_region` or `scenario_type` row that resolved
 no `value_uri`, is counted once into an `out_of_graph` tally, logged per
-document and never written as a triple (`kg.py`, lines 592 to 609).
+document and never written as a triple (`kg.py`, lines 583 to 600).
 Measured over a corpus run, the model answered with a sentinel 1,171
 times for a wording its own document-scoped AR6 list could resolve
 without a guess, 347 of those a character-for-character spelling match;
@@ -197,7 +197,7 @@ the model still answered `out:not_documented` (`kg.py`, lines 318 to 321,
 `tests/test_scenarios_extraction.py`, lines 1093 to 1096). Those readings
 are not lost: `resolve_wording()` rescues a link the document's own list
 settles unambiguously even where the model gave up, logged on its own
-line, separate from the sentinel tally (`kg.py`, lines 706 to 714).
+line, separate from the sentinel tally (`kg.py`, lines 696 to 704).
 
 ## The graph: one report, one bundle, a factsheet per run
 
@@ -234,7 +234,7 @@ with no path segment at all (`COLLECTIONS`, `kg.py`, lines 59 to 67;
 One document mints exactly one study report and one scenario bundle. The
 report's IRI comes from the resolved title; the bundle's comes from
 `study_project_name` where the document names a project, and from the
-title again where it does not (`kg.py`, lines 645 to 648). Both carry a
+title again where it does not (`kg.py`, lines 636 to 639). Both carry a
 fixed has-uuid triple regardless, since the OEKG mints a UUID on every
 node it holds, although that predicate's declared domain names only a
 report or a factsheet, not a bundle; `edges()` records the gap with its
@@ -250,7 +250,7 @@ no run still gets its own factsheet, keyed by the wording alone. A
 factsheet's `rdfs:label` is the AR6 database's own spelling where a run
 was resolved, and the document's own wording is kept alongside as
 `dc:acronym`; with no long name known for a run, both carry the same
-string, the usual case in this corpus (`kg.py`, lines 850 to 853). Every
+string, the usual case in this corpus (`kg.py`, lines 840 to 843). Every
 factsheet also carries a fixed `OEO_00020517` annotation on top of
 whatever `scenario_type` classes the model read off the text
 (`IAM_SCENARIO`, `kg.py`, lines 196, 866).
@@ -288,7 +288,7 @@ evidence, and the crawl's copy is only the cross-check
 
 Every triple this serializer writes about a value carries, immediately
 above it, the passage it was read from. By default that passage is a
-flattened Turtle comment (`_evidence_comment`, `kg.py`, lines 519 to 542)
+flattened Turtle comment (`_evidence_comment`, `kg.py`, lines 510 to 533)
 rather than a linked node, since the OEKG's node shapes are currently
 declared `sh:closed`, and an unanticipated triple on a report or a
 factsheet would invalidate the node it documents. Setting `OEKG_EVIDENCE`
@@ -299,17 +299,8 @@ stays off by default (`kg.py`, line 467 and the module docstring). Either
 branch is followed by one rendered trust line, worded in English
 throughout `TRUST_PROSE` (`kg.py`, lines 472 to 480); the full
 trust-level and reason vocabulary is published at
-[../contract/trust.md](../contract/trust.md). Three of the four scenario
-axes, `scenario_type`, `scenario_abstract` and `scenario_year`, hold
-their own evidence rule `own`, since a name borrowed from another
-section is inference about the scenario, not a reading of it, and only
-an axis whose rule is `own` can produce a nonlocal reason in the
-rendered trust line. `scenario_region` alone is `local`, since coverage
-and the heading naming the scenario list typically sit on neighbouring
-pages rather than one passage (`kg.py`, lines 482 to 493; `OWN_EVIDENCE`
-is computed once from the spec by `docpipe/extraction/spec.py`'s
-`own_evidence()`). The state vocabulary those rules write into, `read`,
-`derived`, `unstated` and the rest, is published in full at
+[../contract/trust.md](../contract/trust.md). The state vocabulary a coordinate ends in,
+`read`, `derived`, `unstated` and the rest, is published in full at
 [../contract/states.md](../contract/states.md).
 
 ## What is refused
@@ -318,13 +309,13 @@ A spec that mismatches the two dynamic mechanisms above refuses to load
 before any document is touched: a category parameter naming both a fixed
 vocabulary and `vocabulary_dynamic`, or a non-category parameter naming
 `vocabulary_dynamic` at all, raises `SpecError` naming the offending
-field (`docpipe/extraction/spec.py`, lines 441 to 465). A `kg` block
+field (`docpipe/extraction/spec.py`, lines 432 to 456). A `kg` block
 whose class is not an identifier shape, or whose predicate is not a
 single token, is refused the same way, at spec load time
-(`_validate_kg_ids`, `spec.py`, lines 675 to 708); this rule is shared
+(`_validate_kg_ids`, `spec.py`, lines 665 to 698); this rule is shared
 with the kwp profile. This profile's own `kg.py` calls that same loader
 again, on its own copy of the spec, at import time (`load_spec(_SPEC)`,
-`kg.py`, line 494), so a spec broken this way fails to import the whole
+`kg.py`, line 485), so a spec broken this way fails to import the whole
 serializer before a single document is processed, not partway through a
 run. `kg.py`'s own lookup helpers, `_property`, `_name`, `_class` and
 `_kg`, raise `KeyError` for a key the spec does not carry rather than
@@ -333,7 +324,7 @@ default silently, the narrower guarantee
 
 A document whose `publication_title` never resolved is refused whole:
 the serializer returns `None` and logs at `INFO` level, before a bundle,
-a factsheet or an author node is built (`kg.py`, lines 621 to 623). A
+a factsheet or an author node is built (`kg.py`, lines 612 to 614). A
 missing `publication_date` or `publication_author` is not refused this
 way, only named in the per-document summary line as a missing required
 field (`REQUIRED`, `kg.py`, line 210 and lines 619 to 620, 934).
@@ -355,7 +346,7 @@ hides (`ambiguous()`, `kg.py`, lines 274 to 290; the merge report, lines
 Every `out:` choice, and every unresolved `scenario_label`,
 `scenario_region` or `scenario_type` row, is refused a place in the
 graph the same way: no class, no IRI, no link, only a count and a log
-line (`kg.py`, lines 592 to 609). A region wording the document's own
+line (`kg.py`, lines 583 to 600). A region wording the document's own
 narrowed list did not hold is refused identically rather than minted as
 a new individual.
 
@@ -366,7 +357,7 @@ its later journal version sharing one title, for example, is only
 logged, naming both documents and the shared IRI; both documents'
 single-valued triples land on that one shared subject rather than the
 second document being dropped whole, the way kwp refuses a duplicate
-identity (`kg.py`, lines 645 to 656; the contrast is documented at
+identity (`kg.py`, lines 636 to 642; the contrast is documented at
 [../stages/graph.md](../stages/graph.md)).
 
 ## Verification

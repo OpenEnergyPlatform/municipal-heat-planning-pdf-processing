@@ -15,10 +15,13 @@ complete when it is not.
 
 `Sweep` and `build_sweeps` carry the tuples a document's batches have already
 verified forward as a hint to later batches, and grant a bounded follow-up
-budget when a reply says more passages are needed (`follow_up`). `fold_claims`,
-`fold_batch` and `fold_fieldwise` verify a reply's claims into a
+budget when a reply says more passages are needed (`follow_up`).
+`fold_claims` and `fold_batch` verify a reply's claims into a
 `DocumentReport`; `write_report` writes that report's tuples, refusals,
 per-parameter states and one summary line to one JSONL file, atomically.
+
+A coordinate is checked for two things and no third: its quote stands in a
+passage that was shown, and the quote carries the answer (`merge_field`).
 
 The three expensive dependencies, retrieval, the harvesting LLM call, and
 locating a quote on its PDF page, are injected callables. The module's own
@@ -116,10 +119,6 @@ class Batch:
     # which is what takes the coordinate out of the model's hands.
     frame: Optional[dict] = None
     frame_index: int = 0
-    # Every pair of the document, so a passage that carries more than one of
-    # them can be recognised as one: a table with a column per year names
-    # three pairs and belongs to none of them alone.
-    frame_all: tuple = ()
     # The sentences this request's passages were searched with. They say, in
     # the plan's own words, what the request asks for, so the pair reaches
     # the model as a question and not only as a field.
@@ -345,6 +344,11 @@ def route_claims(batch: Batch, tuples: Optional[list]) -> tuple:
     from the fourth passage could be accepted carrying the first passage's
     page, section and image as its provenance. It comes back as unroutable
     instead, and the caller refuses it.
+
+    The claims handed in are not changed. A routed claim is a copy without
+    its label: the runner routes one reply twice, once for the next batch's
+    prior and once to fold it, and popping the label in place took from the
+    fold the label the field-wise harvester had put back for it.
     """
     routed: list = [[] for _ in batch.items]
     orphans: list = []
@@ -373,6 +377,7 @@ def route_claims(batch: Batch, tuples: Optional[list]) -> tuple:
         else:
             orphans.append(claim)
             continue
+        claim = dict(claim)
         claim.pop("source", None)
         routed[index].append(claim)
     return routed, orphans
@@ -424,35 +429,6 @@ def cell_index(quote: str, value) -> Optional[tuple]:
     return (hits[0], len(cells)) if len(hits) == 1 else None
 
 
-def column_answer(quote: str, cell: Optional[tuple]) -> Optional[str]:
-    """What the cited passage prints in THIS row's own column, or None.
-
-    A table's header is one line with one cell per column, and the line the
-    value was quoted from has the same number of cells. So the answer that
-    belongs to a value is the header's cell at the value's own position, and
-    an answer naming a different cell is naming another column. That is what
-    `answer_in_quote` cannot see: the header prints 2030 and 2045 in the same
-    line, so either of them verifies against it for either row.
-
-    None when nothing lines up: no cell, no line of the same width, or a
-    header cell that prints no answer at all (a sector column, a label). A
-    check that cannot be evaluated refuses nothing.
-    """
-    if not cell:
-        return None
-    index, count = cell
-    for line in (quote or "").splitlines():
-        if line.count("|") < 2:
-            continue
-        cells = [c.strip() for c in line.strip().strip("|").split("|")]
-        if len(cells) != count or not 1 <= index <= count:
-            continue
-        printed = cells[index - 1]
-        if numbers_in(printed):
-            return printed
-    return None
-
-
 def _invented_wording(claim: dict) -> bool:
     """A non-numeric value that its own quote does not contain.
 
@@ -476,7 +452,6 @@ def _invented_wording(claim: dict) -> bool:
     return flat(str(wording)).casefold() not in flat(quote).casefold()
 
 
-
 def names_pair(source, pair: Optional[dict], slots: list) -> bool:
     """Does this passage print the scenario and the year of this pair?
 
@@ -493,45 +468,6 @@ def names_pair(source, pair: Optional[dict], slots: list) -> bool:
     return True
 
 
-def frame_reading(source, pair: Optional[dict], index: int,
-                  pairs, slots: list) -> tuple:
-    """(read it, coordinates not to project) for one passage of one request.
-
-    The frame is a request, not a reading: `apply_frame` writes the pair onto
-    every row the request produced, and nothing else ever asks. Three cases,
-    and only the first one was handled.
-
-    A passage that prints none of this pair belongs to another one, and the
-    request for THAT pair is where its values are found. Measured on Kassel,
-    where nothing checked it: the frame had two pairs, 193 rows were stamped
-    2040 and 152 were stamped 2024, and of the 234 table tuples the hand
-    reading covers, 60 carried the year the table prints.
-
-    A passage that prints exactly this pair is this request's, and the
-    coordinate is projected onto every row it produced.
-
-    A passage that prints several of the frame's pairs, which is what a table
-    with a column per year is, belongs to all of them and to none of them
-    alone. It is read once, in the request of the first pair it names, so its
-    cells are not harvested twice, and the coordinates its pairs disagree
-    about are left open: `open_rows` then hands those rows to the per-row
-    sweep, which is given the cell each value sits in (`cell_index`) and can
-    tell the columns apart. Projecting instead is what stamped 39 cells of
-    one table with one year.
-    """
-    if not pair or not slots:
-        return True, ()
-    if not names_pair(source, pair, slots):
-        return False, ()
-    fits = [i for i, other in enumerate(pairs or ())
-            if names_pair(source, other, slots)]
-    if fits and index != fits[0]:
-        return False, ()
-    blind = tuple(slot.name for slot in slots
-                  if len({(pairs or ())[i].get(slot.name) for i in fits}) > 1)
-    return True, blind
-
-
 def rows_from_reply(batch: Batch, reply: Optional[dict],
                     frame_axes: Optional[list] = None) -> tuple:
     """(rows, orphans) from the value request - the only request that counts.
@@ -539,23 +475,32 @@ def rows_from_reply(batch: Batch, reply: Optional[dict],
     Routing is the same as for a whole tuple: the quote decides which source a
     value belongs to, the label breaks a tie, and a claim that neither quotes
     nor names any source of the batch is an orphan.
+
+    Under a frame, a passage that does not print the request's pair gives no
+    row: `apply_frame` writes the pair onto every row, so the pair has to
+    stand in the passage the row was read from. A passage that prints several
+    pairs, a table with a column per year, is read under each of them, and
+    each request takes the column of its own pair.
+
+    A sentinel for a request that never came back is not a claim. It passes
+    through untouched, its `_why` included, because the resume reads it there.
     """
     reply = reply if isinstance(reply, dict) else {}
-    routed, orphans = route_claims(batch, reply.get("tuples"))
+    given = [claim for claim in reply.get("tuples") or ()
+             if isinstance(claim, dict)]
+    sentinels = [claim for claim in given if claim.get("_harvest_failed")]
+    routed, orphans = route_claims(
+        batch, [claim for claim in given if not claim.get("_harvest_failed")])
+    orphans = sentinels + orphans
     rows: list = []
     for item_index, claims in enumerate(routed):
         source = batch.items[item_index].source
-        take, _blind = frame_reading(source, batch.frame, batch.frame_index,
-                                     batch.frame_all, frame_axes or [])
-        if claims and not take:
-            # Another pair's passage, or a passage of several pairs that the
-            # first of them already reads. Refused here rather than swept: the
+        if claims and not names_pair(source, batch.frame, frame_axes or []):
+            # Another pair's passage. Refused here rather than swept: the
             # coordinates would all be paid for and the row would then be
-            # stamped with a year its own passage does not print.
-            why = ("passage is not of this pair"
-                   if not names_pair(source, batch.frame, frame_axes or [])
-                   else "passage is read for its first pair")
-            orphans.extend(dict(claim, _why=why) for claim in claims)
+            # stamped with a pair its own passage does not print.
+            orphans.extend(dict(claim, _why="passage is not of this pair")
+                           for claim in claims)
             continue
         for claim in claims:
             if _invented_wording(claim):
@@ -644,47 +589,14 @@ def wording_names_option(slot, given, wording) -> bool:
     return False
 
 
-def evidence_is_local(slot, found, own) -> bool:
-    """May this passage be the evidence for a coordinate of THIS row?
-
-    A row label and a column header are read off the table the row is in. A
-    scenario is usually named in the section around it or a page earlier. A
-    class is argued in a methods chapter that can be anywhere. So the answer
-    depends on the axis, and the axis says which of the three it is.
-
-    The measured need: 370 of Kassel's 455 year readings cited a passage
-    outside the row's own table and its section, 146 of them the annotated
-    placeholder of a different table, and every one of those verified --
-    the passage was real, it was shown, and it carried a year. It was just
-    not this row's year.
-    """
-    rule = getattr(slot, "evidence", None) or "any"
-    if rule == "any" or own is None or found is None:
-        return True
-    if (found.owner_kind, found.owner_id) == (own.owner_kind, own.owner_id):
-        return True
-    parent = (own.provenance or {}).get("parent_section")
-    if (parent is not None and found.owner_kind == "section"
-            and found.owner_id == parent):
-        return True
-    if rule == "local":
-        here = (own.provenance or {}).get("page")
-        there = (found.provenance or {}).get("page")
-        if isinstance(here, int) and isinstance(there, int):
-            return abs(here - there) <= 1
-    return False
-
-
 def merge_field(rows: list, sources: list, slot, reply: Optional[dict],
-                *, window: Optional[tuple] = None,
-                owner_of: Optional[dict] = None) -> dict:
+                *, window: Optional[tuple] = None) -> dict:
     """Fold one field's answers. Returns {"filled", "unquoted", "unbacked"}.
 
     *window* is (stage, index) and is written next to each coordinate this
     call reads, together with the source the passage was found in. Which
     passage proved a coordinate is the one thing a later audit cannot
-    reconstruct: measured on Kassel, 370 of 455 year readings cited a passage
-    outside the row's own table and its section, and none of them said so.
+    reconstruct.
 
     Every answer brings its own passage, and that passage has to pass exactly
     what the value's own quote passes: it sits verbatim in one of the sources
@@ -699,6 +611,13 @@ def merge_field(rows: list, sources: list, slot, reply: Optional[dict],
     routinely in a different passage than the number's. Checking it against
     the row's own source would refuse exactly the readings this stage exists
     to collect.
+
+    Those two clauses, and a quote long enough to name a place in the
+    document, are the whole check. Which table a passage belongs to, how far
+    from the row it stands, and which column of a table it heads are the
+    model's reading, not a rule of this function. Every reason a reading is
+    dropped for is listed in `schema.DROP_REASONS`, and a test holds this
+    function to that list.
     """
     reply = reply if isinstance(reply, dict) else {}
     pairs: list = []
@@ -714,26 +633,6 @@ def merge_field(rows: list, sources: list, slot, reply: Optional[dict],
         for label in group.get("rows") or ():
             pairs.append((label, group))
     by_label = {row.label: row for row in rows}
-    # One answer for many rows is how a table's thirteen rows share one
-    # caption. It is not how they share a column: rows the payload showed as
-    # different cells of the same quoted line have different column headers
-    # over them, and one number that stands in the quote stands in it for
-    # every one of them. `answer_in_quote` cannot tell those apart, because
-    # the header prints 2030 and 2045 in the same line the check runs over.
-    conflicted: set = set()
-    if slot.kind == NUMBER:
-        for group in reply.get("groups") or ():
-            if not isinstance(group, dict):
-                continue
-            labels = [str(label).strip() for label in group.get("rows") or ()]
-            cells = {cell_index(by_label[label].claim.get("quote"),
-                                by_label[label].claim.get("value"))
-                     for label in labels if label in by_label}
-            quote = group.get("quote")
-            if (len({cell[0] for cell in cells if cell}) > 1
-                    and len(numbers_in(quote if isinstance(quote, str)
-                                       else "")) > 1):
-                conflicted.update(labels)
     filled = unquoted = unbacked = unstated = raw_missing = raw_foreign = 0
     # Not just how many failed but which, and why. A model that is told "R7:
     # the passage you cited is in none of the sources" can fix R7; a model
@@ -752,18 +651,6 @@ def merge_field(rows: list, sources: list, slot, reply: Optional[dict],
             # there, 10 more collided with the first reading and took their
             # whole identity down with them. The state belongs to the
             # coordinate, not to whoever answered most recently.
-            continue
-        if row.label in conflicted:
-            # Open, not written: the next window can be asked again, and the
-            # answer it needs is one group per column rather than one for all
-            # of them.
-            row.claim[f"{slot.name}_state"] = UNBACKED
-            failed.append({"row": row.label, "why": "one answer, two columns",
-                           "reason": (
-                "Diese Zeilen stehen in verschiedenen Spalten derselben "
-                "Tabellenzeile, und dein \"quote\" enthält mehrere Zahlen. "
-                "Gib je Spalte eine eigene Gruppe mit ihrer eigenen Antwort.")})
-            unbacked += 1
             continue
         given = answer.get("value")
         if given is None or (isinstance(given, str) and not given.strip()):
@@ -796,10 +683,8 @@ def merge_field(rows: list, sources: list, slot, reply: Optional[dict],
             unstated += 1
             continue
         quote = answer.get("quote")
-        # WHICH source, not whether any. The passage a coordinate was read in
-        # decides whether the reading is local to the row or borrowed from
-        # somewhere else in the document, and that question cannot be asked
-        # afterwards from a boolean.
+        # WHICH source, not whether any: it is written next to the
+        # coordinate, and a boolean cannot be turned back into a source.
         found = None
         if isinstance(quote, str):
             found = next((s for s in sources if quote_in(s.text or "", quote)),
@@ -813,19 +698,6 @@ def merge_field(rows: list, sources: list, slot, reply: Optional[dict],
                 "oder aus dem \"quote\" der Zeile selbst.")})
             unquoted += 1
             continue
-        if not evidence_is_local(slot, found, (owner_of or {}).get(row.label)):
-            # Refused, and the row stays OPEN. The passage is real and it
-            # carries the answer -- it just carries somebody else's. The next
-            # window shows other passages, so this is a reason to ask again
-            # and not a reason to write the coordinate off.
-            row.claim[f"{slot.name}_state"] = UNBACKED
-            failed.append({"row": row.label, "why": "quote_not_local",
-                           "reason": (
-                "Dein \"quote\" steht in einer anderen Quelle als der Zeile "
-                "selbst. Zitier aus der Quelle, in der die Zeile steht, oder "
-                "aus dem Abschnitt, in dem diese Quelle steht.")})
-            unbacked += 1
-            continue
         if len(quote.strip()) < MIN_QUOTE_CHARS:
             row.claim[f"{slot.name}_state"] = UNBACKED
             failed.append({"row": row.label, "why": "quote_too_short",
@@ -833,24 +705,6 @@ def merge_field(rows: list, sources: list, slot, reply: Optional[dict],
                 f"Dein \"quote\" ist zu kurz, um eine Stelle zu benennen "
                 f"(mindestens {MIN_QUOTE_CHARS} Zeichen). Zitier den ganzen "
                 f"Satz oder die ganze Zeile, in der die Antwort steht.")})
-            unbacked += 1
-            continue
-        printed = (column_answer(quote, cell_index(row.claim.get("quote"),
-                                                   row.claim.get("value")))
-                   if slot.kind == NUMBER else None)
-        if (printed is not None
-                and quote.strip() != str(row.claim.get("quote") or "").strip()
-                and canonical_number(given) not in numbers_in(printed)):
-            # The answer is a number this passage prints, and it prints it
-            # over a different column than the one the value sits in. Open,
-            # not written: the next window is asked again, and this is the
-            # question it has to answer.
-            row.claim[f"{slot.name}_state"] = UNBACKED
-            failed.append({"row": row.label, "why": "wrong column",
-                           "given": given, "reason": (
-                f"Der Wert dieser Zeile steht in der Spalte, ueber der "
-                f"{printed!r} steht, nicht {given!r}. Antworte mit dem, was "
-                f"ueber der Spalte DIESES Wertes steht.")})
             unbacked += 1
             continue
         wording = answer.get("value_raw")
@@ -917,16 +771,19 @@ def line_naming(slot, given, wording, text: str) -> Optional[str]:
 
 
 def apply_frame(rows: list, pair: Optional[dict], index: int,
-                slots: list, sources: Optional[list] = None,
-                pairs=None) -> int:
+                slots: list, sources: Optional[list] = None) -> int:
     """Write the document's frame onto these rows. Returns coordinates written.
 
     The pair was read once, for the document, and every row this request
     produced is a row of that pair: the request asked for it by name and
-    `in_frame` refused the passages that do not carry it. So the coordinate is
-    not asked again per row, it is projected, and the window says `frame` so a
-    reader can tell a coordinate that was read for the document from one that
-    was read for the row.
+    `rows_from_reply` refused the passages that do not print it. So the
+    coordinate is not asked again per row, it is projected, and the window
+    says `frame` so a reader can tell a coordinate that was read for the
+    document from one that was read for the row.
+
+    A table with a column per year is no exception. It prints several pairs
+    and is read under each of them, the request for one pair takes the column
+    of that pair, and every row it produced carries that pair's year.
 
     Cited on the row's own passage where that passage names the answer, and on
     the frame's passage otherwise. `read`, not `derived`: `derived` means the
@@ -944,9 +801,8 @@ def apply_frame(rows: list, pair: Optional[dict], index: int,
         source = None
         if sources and 0 <= row.item_index < len(sources):
             source = sources[row.item_index]
-        _take, blind = frame_reading(source, pair, index, pairs, slots)
         for slot in slots:
-            if slot.name not in pair or slot.name in blind:
+            if slot.name not in pair:
                 continue
             if row.claim.get(f"{slot.name}_state") == READ:
                 continue
@@ -1027,14 +883,6 @@ def mark_unanswered(rows: list, slots: list) -> int:
             row.claim[f"{slot.name}_state"] = UNANSWERED
             unanswered += 1
     return unanswered
-
-
-def rows_by_item(batch: Batch, rows: list) -> list:
-    """The finished claims, grouped back into one list per source."""
-    out: list = [[] for _ in batch.items]
-    for row in rows:
-        out[row.item_index].append(row.claim)
-    return out
 
 
 class Sweep:
@@ -1277,6 +1125,16 @@ def batch_uri(batch: Batch) -> Optional[str]:
     return batch.parameter.uri if batch.parameter is not None else None
 
 
+def refused_upstream(claim) -> bool:
+    """A claim the harvester already refused, its reason in `_why`.
+
+    Not a sentinel: a sentinel's `_why` says why a request never came back,
+    and it stays on the claim for the resume to read.
+    """
+    return (isinstance(claim, dict) and bool(claim.get("_why"))
+            and not claim.get("_harvest_failed"))
+
+
 def fold_batch(batch: Batch, reply: Optional[dict], report: DocumentReport, *,
                locate: Optional[Callable] = None,
                spec: Optional[Spec] = None) -> None:
@@ -1287,19 +1145,36 @@ def fold_batch(batch: Batch, reply: Optional[dict], report: DocumentReport, *,
     parameter, `partial` with `need_more` means a value is in here but its
     context is not. The second is the number that matters for the next
     sweep — it is the model telling us where retrieval was too narrow.
+
+    A claim the harvester already refused keeps the reason it was refused
+    for. Verified a second time, 631 of Kassel's claims came out as "claim
+    names no parameter of the spec" instead of saying why.
     """
     reply = reply if isinstance(reply, dict) else {}
-    routed, orphans = route_claims(batch, reply.get("tuples"))
-    for item, claims in zip(batch.items, routed):
-        fold_claims(item, claims, report, locate=locate, spec=spec)
+    claims = reply.get("tuples") or []
+    routed, orphans = route_claims(
+        batch, [claim for claim in claims if not refused_upstream(claim)])
+    for item, routed_claims in zip(batch.items, routed):
+        fold_claims(item, routed_claims, report, locate=locate, spec=spec)
+    first = batch.items[0].source
     for claim in orphans:
         # Named no source of this batch and quoted none of them either. There
         # is no text to check it against, so there is no way to accept it.
         report.refusals.append(
             {"parameter": batch_uri(batch), "reason": "claim names no source",
-             "claim": claim,
-             "owner": [batch.items[0].source.owner_kind,
-                       batch.items[0].source.owner_id]})
+             "claim": claim, "owner": [first.owner_kind, first.owner_id]})
+    for claim in claims:
+        if not refused_upstream(claim):
+            continue
+        claim = dict(claim)
+        why = claim.pop("_why")
+        quote = claim.get("quote")
+        source = next((item.source for item in batch.items
+                       if isinstance(quote, str)
+                       and quote_in(item.source.text or "", quote)), first)
+        report.refusals.append(
+            {"parameter": batch_uri(batch), "reason": why, "claim": claim,
+             "owner": [source.owner_kind, source.owner_id]})
     counts = report.followups.setdefault(
         batch_uri(batch) or "document", {"asked": 0, "served": 0})
     if reply.get("status") == "partial" and reply.get("need_more"):
@@ -1313,34 +1188,7 @@ def fold_batch(batch: Batch, reply: Optional[dict], report: DocumentReport, *,
         report.owners_harvested += len(batch.items)
 
 
-def fold_fieldwise(batch: Batch, rows: list, orphans: list,
-                   report: DocumentReport, *,
-                   locate: Optional[Callable] = None,
-                   spec: Optional[Spec] = None) -> None:
-    """Verify a field-wise batch into the report.
-
-    By the time this runs the rows carry every coordinate a field request
-    could evidence, so what is left is exactly what fold_batch does: hand each
-    source its claims and let verify decide. The difference is upstream — a
-    coordinate that is empty here is empty because a request asked for it and
-    the passage did not say, not because a sixteen-field answer skipped it.
-    """
-    for item, claims in zip(batch.items, rows_by_item(batch, rows)):
-        fold_claims(item, claims, report, locate=locate, spec=spec)
-    for claim in orphans:
-        claim = dict(claim)
-        why = claim.pop("_why", "claim names no source")
-        report.refusals.append(
-            {"parameter": batch_uri(batch), "reason": why,
-             "claim": claim,
-             "owner": [batch.items[0].source.owner_kind,
-                       batch.items[0].source.owner_id]})
-    if batch.followed_up:
-        report.owners_harvested += len(batch.items)
-
-
 def write_report(report: DocumentReport, out_path: Path,
-                 own: Optional[frozenset] = None,
                  states: Optional[list] = None) -> None:
     """Tuples, refusals, parameter states and one summary, written atomically.
 
@@ -1350,10 +1198,7 @@ def write_report(report: DocumentReport, out_path: Path,
     The last line (kind=summary) is the distribution over this document's own
     values, so "how much of this plan can I use" has an answer that does not
     require reading 559 rows. It goes last because it is computed from
-    everything above it. `own` names the axes whose evidence rule is
-    `own` (spec.own_evidence); without it the summary holds every coordinate
-    to the row's own source, which over-reports on a harvest written under
-    the rule.
+    everything above it.
 
     `states` is one line per PARAMETER (kind=parameter_state). Every other
     state in this file belongs to a row, so a parameter that produced no row
@@ -1378,7 +1223,7 @@ def write_report(report: DocumentReport, out_path: Path,
         handle.write(json.dumps(
             {"kind": "summary",
              **document_summary(report.document_id, report.tuples,
-                                report.refusals, own=own)},
+                                report.refusals)},
             ensure_ascii=False) + "\n")
         temp = Path(handle.name)
     temp.replace(out_path)

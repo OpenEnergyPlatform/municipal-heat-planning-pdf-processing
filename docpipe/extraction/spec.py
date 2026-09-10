@@ -141,18 +141,6 @@ class Axis:
     # fields at once is a rule the model can skip, and skipping is what cost
     # the corpus run 63.5% of its years.
     question: Optional[str] = None
-    # How far from the row a passage may stand and still be its evidence:
-    # "own" the row's own source or the section it stands in, "local" also a
-    # source on the neighbouring page, "any" anywhere in the window.
-    #
-    # Measured on Kassel: 370 of 455 year readings and 87 percent of the area
-    # readings cited a passage outside the row's own table and its section,
-    # and 146 of them cited the annotated placeholder of a DIFFERENT table.
-    # A row label and a column header are read off the table they are in; a
-    # scenario is often named a page earlier; a class is argued in a methods
-    # chapter anywhere in the plan. So this is per axis and the profile sets
-    # it, not one rule for all seven.
-    evidence: str = "any"
     # A coordinate the SPEC already decides, so no request asks for it:
     # {"from": "unit", "value": "<a key of this axis' vocabulary>"}.
     #
@@ -302,9 +290,12 @@ def _validate_axis(path: str, name: str, raw) -> Axis:
         if role == "edge" and not str(kg.get("predicate") or "").strip():
             _fail(path, "an edge names the predicate it writes")
         _validate_kg_ids(path, kg)
-    evidence = raw.get("evidence", "any")
-    if evidence not in ("own", "local", "any"):
-        _fail(path, "evidence must be one of: own, local, any")
+    if "evidence" in raw:
+        # Refused rather than ignored, so the rule cannot come back through a
+        # profile without anyone deciding it again.
+        _fail(path, "evidence is not a key of an axis: a coordinate is "
+                    "checked for its quote and its answer, wherever the "
+                    "passage stands")
     derive = raw.get("derive")
     if derive is not None:
         if not isinstance(derive, dict):
@@ -351,7 +342,7 @@ def _validate_axis(path: str, name: str, raw) -> Axis:
     return Axis(name=name, vocabulary=vocabulary, type=axis_type,
                 enum=enum, required=bool(raw.get("required", False)),
                 dynamic=dynamic, question=question, derive=derive,
-                evidence=evidence, kg=kg, definitions=definitions)
+                kg=kg, definitions=definitions)
 
 
 def _validate_example(path: str, raw, value_type: str,
@@ -547,7 +538,6 @@ def axis_fingerprint(axis: "Axis") -> str:
         "enum": sorted(axis.enum) if axis.enum else None,
         "required": axis.required,
         "dynamic": axis.dynamic,
-        "evidence": axis.evidence,
         "derive": axis.derive,
         # The offered list: identifier, the spellings a plan may use, and the
         # sentence saying what the term means. All three reach the model, so
@@ -706,24 +696,3 @@ def _validate_kg_ids(path: str, kg) -> None:
             text = str(predicate)
             if not text.strip() or text.split() != [text]:
                 _fail(path, f"kg predicate {predicate!r} is not one token")
-
-
-def own_evidence(spec: "Spec") -> frozenset:
-    """(parameter uri, axis name) for every axis whose evidence rule is `own`.
-
-    The rule is per axis and the profile sets it: a row label is read off the
-    table it is in, a scenario is often named a page earlier, a class is
-    argued in a methods chapter anywhere in the plan. Only `own` can be
-    checked from what a harvest row records -- an owner and an id -- because
-    `local` is a statement about pages and `any` is no restriction at all.
-
-    So this is the set of axes a later reader may hold to the row's own
-    source. Everything outside it was already judged by the harvest, where
-    the pages were still in hand.
-    """
-    out = set()
-    for parameter in spec.parameters:
-        for name, axis in (parameter.axes or {}).items():
-            if axis.evidence == "own":
-                out.add((parameter.uri, name))
-    return frozenset(out)

@@ -342,7 +342,7 @@ def test_a_row_whose_source_no_longer_carries_its_quote_is_left_alone(
 
 def test_the_passage_a_coordinate_was_read_in_is_shown_again(tmp_path):
     """The sweep can only offer a passage that is in the batch, and the one a
-    coordinate was last read in is the one its evidence rule accepts."""
+    coordinate was last read in is the one that already carried its answer."""
     row = _row(sector_source=["section", 5])
     _harvest(tmp_path, [row, _summary()],
              stamp=_stamp(**{f"axis/{PARAMETER}/sector": "moved"}))
