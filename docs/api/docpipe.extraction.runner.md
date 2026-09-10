@@ -505,20 +505,6 @@ Once per run and per question, not per document: the anchor depends on
 the question, not on the plan, and a stable probe string is what makes the
 query-embedding cache hit across the whole corpus.
 
-### usable_anchor
-
-```python
-def usable_anchor(text: str) -> bool
-```
-
-Is this sentence usable as a search anchor?
-
-What phrase.md and anchors.md both ask for and nothing checked: 12 to 35
-words, and never a negation. An anchor is embedded and held against the
-passages of the plan, so "Es liegen keine Angaben zum Ingenieurbuero vor"
-retrieves the passages that say nothing, which is the opposite of what
-the anchor is for. The floor used to be twenty characters.
-
 ### probe_texts
 
 ```python

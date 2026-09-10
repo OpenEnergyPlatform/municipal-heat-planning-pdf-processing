@@ -76,25 +76,25 @@ document, not asked again with everything already found excluded. The
 single call fuses every probe into one ranked
 list rather than concatenating a ranking per probe: over 65 documents and
 15,082 values, concatenation put a value's real source at median rank 77,
-fusion at rank 26 (`runner.py:357`).
+fusion at rank 26 (`runner.py:354`).
 
 ### Anchors
 
 The plan searches not with the spec's query templates but a sentence
 written as a document would state the answer, a HyDE anchor; two
-mechanisms produce them. `document_anchor` (`runner.py:844`) writes the
+mechanisms produce them. `document_anchor` (`runner.py:841`) writes the
 plan's own probe per document and parameter, from the parameter's
 label, description, the document's name and an early caption; recorded,
 never compared, in the stamp as `question_text/<key>`.
 Dropping query templates for it was measured directly: with templates
 included alongside the anchor, a value's real source sat at median rank
 84; without them, rank 26 (`pipeline.py:196`). `plan_document` falls back to
-`queries.expand`'s templates only when no anchor exists. `make_anchors` (`runner.py:1327`) is the second,
+`queries.expand`'s templates only when no anchor exists. `make_anchors` (`runner.py:1324`) is the second,
 corpus-wide mechanism: one set per question the field sweep asks, each
 axis question and the parameter choice, written once per run and cached
 per question. The value itself has no set: the plan searches with the
 one short sentence `document_anchor` writes (`anchor_targets`,
-`runner.py:819`). This set backs the field sweep once a
+`runner.py:816`). This set backs the field sweep once a
 coordinate is not in the value's own passage, and is fingerprinted as
 one `anchors` stamp key.
 
@@ -117,12 +117,12 @@ its own reading. A passage that prints several pairs, a table with a
 column per year, is read under each of them, and each request takes its
 own pair's column
 (`test_a_passage_of_several_pairs_is_read_under_each_of_them`,
-`tests/test_extraction_frame.py:628`). A passage that prints none of a
+`tests/test_extraction_frame.py:650`). A passage that prints none of a
 request's pair gives no row: its claims are refused as `passage is not of
 this pair` (`rows_from_reply`, `pipeline.py:509`). The gain was measured directly: before the frame
 existed, the year axis alone produced 1,849 refusals against 0 readings,
 since every window after the first excluded the row's own source
-(`runner.py:2958`).
+(`runner.py:2935`).
 
 ### The row request
 
@@ -143,7 +143,7 @@ row (`pipeline.py:544`). A `Row` is created only here, never later. The request 
 a code sandbox, bounded
 to `CODE_ROUNDS` rounds, and a reply cut off at the token ceiling is
 rescued rather than retried, since retrying recovered nothing over one
-pilot (`runner.py:2159`).
+pilot (`runner.py:2136`).
 
 ### The field sweep: three window stages and a budget
 
@@ -160,13 +160,13 @@ overlapping windows (`FIELD_WINDOW` 2, `FIELD_OVERLAP` 1) for up to
 `FIELD_ROUNDS` (4) rounds. **Rest** is the floor: once retrieval has
 nothing new, `rest_of_document` reads the document's own remaining
 sections in order, rotated to start near the open rows, until the
-coordinate closes or the document runs out (`runner.py:2891`). A
+coordinate closes or the document runs out (`runner.py:2868`). A
 coordinate the whole sweep cannot close is `exhausted`, never
 `unstated`: the first is a finding about the run, the second about the
 document. The budget sums to `FIELD_MAX_WINDOWS`
 (24) plus `REST_MAX_WINDOWS` (12) per coordinate, with several
 coordinates batched into one request rather than one request each
-(`runner.py:2613`).
+(`runner.py:2590`).
 
 ### Merging a coordinate
 
@@ -247,7 +247,7 @@ Every tuple, refusal, parameter state and summary line is checked
 against the published schema before it is written:
 `_harvest_validators` builds one `jsonschema` validator per branch from
 `schema.build(spec)["harvest"]`, run by `check_against_schema` inside
-`finish_document` on every call carrying a spec (`runner.py:3653`). A
+`finish_document` on every call carrying a spec (`runner.py:3630`). A
 row the schema refuses is counted
 and logged as an `invalid` trace event, never withheld, since blocking on
 a schema mismatch would turn a documentation defect into a data loss.
@@ -403,8 +403,8 @@ on.
 At the document level, `finish_document` withholds the stamp entirely,
 forcing a full redo on the next run, when more than half a document's
 planned sources came back from a server it could not reach
-(`UNREACHABLE_LIMIT`, `0.5`, `runner.py:3594`, `:3637`) or when not one
-batch answered at all (`runner.py:3642`); the JSONL file is still
+(`UNREACHABLE_LIMIT`, `0.5`, `runner.py:3571`, `:3614`) or when not one
+batch answered at all (`runner.py:3619`); the JSONL file is still
 written either way, so only a resume, not a byte count, tells the two
 cases apart from a genuinely finished document.
 
@@ -430,7 +430,7 @@ never sends leaves no trace, so the row is offered again later.
   instead (`fields.py:218`).
 - Letting the passage a coordinate was last read in drop out of the
   window after one use, rather than remaining in the window, cost one
-  batch 520 dropped readings against 31 kept (`runner.py:2769`).
+  batch 520 dropped readings against 31 kept (`runner.py:2746`).
 - On the 20-plan draft where the slice gate was measured, of 6,763
   harvested tuples the serializer dropped 1,554 for a quantity the graph
   does not hold and, while the scenario axis still gated a row, 2,510

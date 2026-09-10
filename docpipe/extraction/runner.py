@@ -199,9 +199,6 @@ FRAME_CHARS = int(os.environ.get("EXTRACT_FRAME_CHARS", str(BATCH_CHARS)))
 # the very passages the model was shown and did not name. A plan writes 2045
 # as a target and 2045 as a megawatt-hour, so this reports and decides
 # nothing.
-# What both anchor prompts ask a sentence to be, so that `usable_anchor` and
-# the prompts cannot drift apart.
-ANCHOR_WORDS = (12, 35)
 FRAME_YEAR_MIN = int(os.environ.get("EXTRACT_FRAME_YEAR_MIN", "1990"))
 FRAME_YEAR_MAX = int(os.environ.get("EXTRACT_FRAME_YEAR_MAX", "2100"))
 _YEAR_RE = re.compile(r"(?<![0-9])([0-9]{4})(?![0-9])")
@@ -900,7 +897,7 @@ def document_anchor(spec: Spec, context: Optional[dict] = None,
                 ).choices[0].message.content
                 phrase = ((_loads_object(reply) or {}).get("phrase") or "")
                 phrase = phrase.strip() if isinstance(phrase, str) else ""
-                if usable_anchor(phrase):
+                if phrase:
                     return parameter.uri, [phrase]
             except Exception as exc:
                 log.warning("phrase %s attempt %d failed: %s",
@@ -1375,7 +1372,7 @@ def make_anchors(spec: Spec, client=None, *, store: Optional[Path] = None,
                 ).choices[0].message.content
                 parsed = _loads_object(reply)
                 anchors = [a.strip() for a in (parsed or {}).get("anchors", ())
-                           if isinstance(a, str) and len(a.strip()) > 20]
+                           if isinstance(a, str) and a.strip()]
                 if anchors:
                     return anchor_id, anchors
             except Exception as exc:
@@ -1398,26 +1395,6 @@ def make_anchors(spec: Spec, client=None, *, store: Optional[Path] = None,
         for anchor in anchors:
             log.info("   anchor %s: %s", uri, anchor)
     return out
-
-
-def usable_anchor(text: str) -> bool:
-    """Is this sentence usable as a search anchor?
-
-    What phrase.md and anchors.md both ask for and nothing checked: 12 to 35
-    words, and never a negation. An anchor is embedded and held against the
-    passages of the plan, so "Es liegen keine Angaben zum Ingenieurbuero vor"
-    retrieves the passages that say nothing, which is the opposite of what
-    the anchor is for. The floor used to be twenty characters.
-    """
-    words = (text or "").split()
-    if not ANCHOR_WORDS[0] <= len(words) <= ANCHOR_WORDS[1]:
-        return False
-    low = " ".join(words).casefold()
-    if any(phrase in low for phrase in ("nicht enthalten", "liegen nicht vor",
-                                        "nicht vor", "nicht angegeben")):
-        return False
-    return not {w.strip(".,;:").casefold() for w in words} & {"keine", "kein",
-                                                              "keinen"}
 
 
 def probe_texts(spec: Spec, templates: list, anchors: Optional[dict] = None) -> list:

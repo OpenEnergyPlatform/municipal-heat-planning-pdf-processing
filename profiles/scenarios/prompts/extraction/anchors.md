@@ -14,7 +14,7 @@ Regeln:
 2. Setze plausible Werte samt Einheit ein — sie sind nur Suchanker, nicht Behauptungen. RICHTIG: "Global CO2 emissions fall to 12.4 GtCO2/yr by 2050 in the NDC pathway."
 3. Streue über die Formen, in denen die Angabe in einer Publikation auftaucht: Titelseite, Impressum, Abstract, Methodenkapitel, Tabellenüberschrift, Abbildungsunterschrift, Danksagung, Literaturangabe der eigenen Arbeit.
 4. Schreibe auf Englisch, denn diese Publikationen sind englisch. Nutze die Wörter, die dort tatsächlich stehen: scenario, pathway, mitigation, carbon budget, Integrated Assessment Model, funded by, corresponding author.
-5. Jede Aussage 12 bis 35 Wörter. Keine zwei Aussagen, die dasselbe anders sagen.
+5. Keine zwei Aussagen, die dasselbe anders sagen.
 
 Antworte mit NUR einem JSON-Objekt, kein Markdown, kein Text davor oder danach:
 {"anchors": ["<Aussage 1>", "<Aussage 2>", "<Aussage 3>", "<Aussage 4>", "<Aussage 5>", "<Aussage 6>"]}
