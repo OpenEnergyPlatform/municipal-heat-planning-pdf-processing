@@ -812,14 +812,14 @@ def main(argv=None) -> int:
     spec_file = (Path(__file__).resolve().parent.parent.parent / "profiles"
                  / args.profile / "extraction_spec.json")
     if not spec_file.is_file():
-        print(f"kein Spec: {spec_file}")
+        print(f"no spec: {spec_file}")
         return 1
     text = serialize(build(load_spec(spec_file)))
     if args.write:
         out = schema_path(args.profile)
         with io.open(out, "w", encoding="utf-8", newline=chr(10)) as handle:
             handle.write(text)
-        print(f"{out} ({len(text)} Bytes)")
+        print(f"{out} ({len(text)} bytes)")
     else:
         sys.stdout.write(text)
     return 0

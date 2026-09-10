@@ -306,7 +306,7 @@ per document, so this section documents its stamp on its own.
 written only once `finish_document` decides a harvest actually happened;
 a document is left unstamped, so the next run redoes it, when more than
 half its planned sources came back unreachable or nothing answered at all
-(`UNREACHABLE_LIMIT = 0.5`, `docpipe/extraction/runner.py:3584`). Inside
+(`UNREACHABLE_LIMIT = 0.5`, `docpipe/extraction/runner.py:3594`). Inside
 it:
 
 | Key | What it records | Compared on a redo |
@@ -327,14 +327,14 @@ The fine keys (`parameter/`, `value/`, `axis/`, `slot/`) come from
 their presence is what licenses ignoring the coarse `spec` key. An earlier
 design hashed the whole spec file as one number, so one new label anywhere
 in it made a whole corpus stale together, about 93 GPU hours to reread
-1,082 documents over one added word (`docpipe/extraction/runner.py:3377`
-to `3380`); the ontology behind the spec is revised repeatedly, so the
+1,082 documents over one added word (`docpipe/extraction/runner.py:3387`
+to `3390`); the ontology behind the spec is revised repeatedly, so the
 same cost would recur each time it is. With one key per parameter, per value list
 and per axis, `stale()` names exactly which question changed and leaves
 the rest of the corpus alone; it checks both directions, so a question
 dropped from the spec counts as changed too, the one case the old
 whole-file hash used to catch that a purely additive scheme would
-otherwise miss (`docpipe/extraction/runner.py:3483` to `3487`). A file
+otherwise miss (`docpipe/extraction/runner.py:3493` to `3497`). A file
 with no stamp at all is read as fully stale, on principle: the opposite
 reading, a missing stamp taken as nothing left to do, had already let a
 run silently skip 165 documents with exit code 0
@@ -376,7 +376,7 @@ refinement, visuals and extraction checks the served model's context size
 before its first document and refuses to start rather than fail midway
 (`docpipe/llm_preflight.py`, called from `docpipe/refinement/
 pipeline.py:165` and `247`, `docpipe/visuals/pipeline.py:501`, and
-`docpipe/extraction/runner.py:4045` and `4113`).
+`docpipe/extraction/runner.py:4078` and `4147`).
 
 Select the profile once, in the environment, before any stage that
 overrides prompts is imported:

@@ -117,16 +117,16 @@ def test_a_coordinate_the_plan_does_not_state_is_not_a_doubt():
 
 def test_the_line_says_what_to_do_about_it():
     """The core no longer writes the words, so this is asked through a
-    profile's table. kwp's, because kwp's German is the published wording."""
+    profile's table. kwp's, because kwp's line is the published wording."""
     from profiles.kwp.kg import TRUST_JOIN, TRUST_PROSE
     line = render(trust(_row(tier=TIER_VISUAL,
                              year_state=fields.EXHAUSTED)),
                   TRUST_PROSE, join=TRUST_JOIN, row=_row(tier=TIER_VISUAL))
-    assert line.startswith("Vertrauen: C")
+    assert line.startswith("Trust: C")
     assert "exhausted:year" in line
-    assert "Prüfung empfohlen" in line
+    assert "review recommended" in line
     # An A says its level and nothing else: there is nothing to act on.
-    assert render(trust(_row()), TRUST_PROSE, join=TRUST_JOIN) == "Vertrauen: A"
+    assert render(trust(_row()), TRUST_PROSE, join=TRUST_JOIN) == "Trust: A"
 
 
 # ---------------------------------------------------------------------------
@@ -215,24 +215,24 @@ def test_a_table_that_words_a_mark_that_is_not_one_is_refused():
 def _sentence_before_sc3(verdict, row=None):
     """`trust.sentence` as it stood before the marks were split out.
 
-    Frozen on purpose. The kwp graph's German is a published artifact and this
-    change was supposed to MOVE it, not rewrite it, so the claim is checked
-    against a copy instead of argued in a commit message.
+    Frozen on purpose, in its order and its joins. The words are English
+    since 2026-09-10 (the owner: the graph's language is English), so the
+    copy was reworded and nothing else, and the claim is still checked here.
     """
-    parts = ["Vertrauen: %s" % verdict["level"]]
+    parts = ["Trust: %s" % verdict["level"]]
     if verdict.get("image_origin"):
         image = ((row or {}).get("provenance") or {}).get("image")
-        parts.append("aus einem Bild" + (" (%s)" % image if image else ""))
+        parts.append("from an image" + (" (%s)" % image if image else ""))
     if verdict.get("corroborated"):
-        parts.append("zweite Quelle bestätigt")
+        parts.append("confirmed by a second reading")
     if verdict["reasons"]:
         parts.append(", ".join(verdict["reasons"]))
     if verdict["level"] == LEVEL_C:
-        parts.append("Prüfung empfohlen")
+        parts.append("review recommended")
     return " · ".join(parts)
 
 
-def test_the_german_line_is_the_one_that_stood_there_before():
+def test_the_kwp_line_is_the_one_that_stood_there_before():
     """Every combination, not the seven of the matrix: the order of the marks
     and the two joins are as easy to get wrong as the words, and only one of
     the three shows up in a spot check."""
@@ -324,3 +324,70 @@ def test_parameter_states_names_every_parameter_of_the_spec():
         "heat_load": fields.SAID_UNSTATED}
     assert [(g["tuples"], g["refusals"]) for g in got] == [
         (2, 1), (0, 1), (0, 0), (0, 0)]
+
+
+def _kwp_spec():
+    import json
+    from pathlib import Path
+
+    from docpipe.extraction.spec import load as load_spec
+    root = Path(__file__).resolve().parent.parent
+    return load_spec(json.loads(
+        (root / "profiles" / "kwp" / "extraction_spec.json")
+        .read_text(encoding="utf-8")))
+
+
+def test_a_parameter_whose_own_passages_were_read_is_unstated_not_exhausted():
+    """Kassel's planning_organisation was marked exhausted because a
+    table request elsewhere in the plan was cut off, while its one
+    candidate passage had been read in full. Exhausted is a statement about
+    the run, so it needs the run to have missed one of the parameter's own
+    passages."""
+    from docpipe.extraction.trust import parameter_states
+    spec = _kwp_spec()
+    cut = [{"parameter": None, "reason": "claim names no parameter of the spec",
+            "claim": {"_harvest_failed": True, "_cut_off": True},
+            "owner": ["table", 87517]}]
+    sources_of = {"planning_organisation": {("section", 349407)},
+                  "heat_load": {("table", 87517), ("section", 1)}}
+    got = {g["parameter"]: g["state"] for g in parameter_states(
+        spec, [], cut, harvested=10, answered=5, sources_of=sources_of)}
+    assert got["planning_organisation"] == fields.SAID_UNSTATED
+    assert got["heat_load"] == fields.EXHAUSTED
+    # No sources known for a parameter: a cut anywhere still counts.
+    assert got["energy_consumption"] == fields.EXHAUSTED
+
+    # Nothing answered at all: every empty parameter is exhausted.
+    got = {g["parameter"]: g["state"] for g in parameter_states(
+        spec, [], [], harvested=10, answered=0, sources_of=sources_of)}
+    assert got["planning_organisation"] == fields.EXHAUSTED
+
+    # A failed request that names no source cannot be placed.
+    anonymous = [{"parameter": None, "reason": "unreachable",
+                  "claim": {"_harvest_failed": True, "_why": "unreachable"}}]
+    got = {g["parameter"]: g["state"] for g in parameter_states(
+        spec, [], anonymous, harvested=10, answered=5,
+        sources_of=sources_of)}
+    assert got["planning_organisation"] == fields.EXHAUSTED
+
+
+def test_the_plan_keeps_which_passages_each_parameters_own_anchors_rank():
+    """Planned from nothing: the fused ranking still decides what is
+    read. It is what tells a cut-off before a parameter's passages from a
+    reading of them that found nothing."""
+    from docpipe.extraction.pipeline import Source, plan_document
+    spec = _kwp_spec()
+    office = Source("section", 1, "Erstellt durch ...", {})
+    table = Source("table", 2, "| Erdgas | 512 |", {})
+
+    def retrieve(probes, document_id, exclude):
+        return ([office] if "office" in probes else []) + (
+            [table] if "gwh" in probes else [])
+
+    _items, report = plan_document(
+        7, spec, [], retrieve=retrieve, top=50,
+        extra_probes={"planning_organisation": ["office"],
+                      "energy_consumption": ["gwh"]})
+    assert report.sources_of == {
+        "planning_organisation": {("section", 1)},
+        "energy_consumption": {("table", 2)}}

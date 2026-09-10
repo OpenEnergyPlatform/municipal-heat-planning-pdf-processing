@@ -80,14 +80,13 @@ LEGAL = r"(gmbh\s*&\s*co\.?\s*kg|gmbh|mbh|ag|kg|ohg|e\.?\s*v\.?|gbr|se|ug)"
 
 _SPEC = json.loads(
     Path(__file__).with_name("extraction_spec.json").read_text(encoding="utf-8"))
-# Zielgroesse je OEO-Klasse, nicht je Parameter: welche Klasse ein Wert ist,
-# entscheidet das Modell auf der Achse `quantity`, und die Einheit haengt an
-# der Klasse.
-# Die Klassen, die der Graph aufnimmt. Die uebrigen Eintraege der Liste
-# beginnen mit `out:` und sind ausdruecklich waehlbare Nicht-Klassen: eine
-# kumulierte Summe, eine vermiedene oder abgeschiedene Menge, ein Potenzial.
-# Sie stehen in der Auswahl, damit das Modell sie WAEHLEN kann, statt die
-# naechstbeste echte Klasse zu nehmen.
+# The target quantity is per OEO class, not per parameter: which class a
+# value is gets decided by the model on the `quantity` axis, and the unit
+# hangs off the class.
+# The classes the graph takes. The remaining entries of the list start with
+# `out:` and are deliberately choosable non-classes: a cumulative sum, an
+# avoided or captured amount, a potential. They stand in the selection so
+# the model can CHOOSE them, instead of reaching for the nearest real class.
 NOT_IN_GRAPH = "out:"
 
 
@@ -109,9 +108,9 @@ UNIT_TARGET = {uri: par["unit_target"]
                if par.get("unit_target")
                for uri in par["axes"]["quantity"]["vocabulary"]
                if not uri.startswith(NOT_IN_GRAPH)}
-# Wie ein Wert ueber Zeit oder Raum zusammengefasst ist, waehlt das Modell aus
-# den fuenf Klassen, die OEO unter `aggregation type` fuehrt. Frueher stand hier
-# immer `integral`, also wurde eine Spitzenlast als Jahressumme behauptet.
+# How a value is aggregated over time or space is chosen by the model from
+# the five classes OEO carries under `aggregation type`. It used to always
+# say `integral` here, so a peak load was asserted as a year's sum.
 AGGREGATIONS = {uri for par in _SPEC["parameters"]
                 if "aggregation" in par.get("axes", {})
                 for uri in par["axes"]["aggregation"]["vocabulary"]}
@@ -475,15 +474,16 @@ def _value_iri(heatplan: str, row: dict) -> str:
 
 
 # The words of the trust line; the marks and their order are the core's
-# (docpipe.extraction.trust.MARKS). German, because this corpus is German and
-# the graph is read by the people who wrote the plans.
+# (docpipe.extraction.trust.MARKS). English, the project's own language: the
+# corpus the graph is read from is German, but German stays only in what the
+# model reads or writes, and a Turtle comment is neither.
 TRUST_PROSE = check_prose({
-    "level": "Vertrauen: {level}",
-    "image_origin": "aus einem Bild",
-    "image_origin_named": "aus einem Bild ({image})",
-    "corroborated": "zweite Quelle bestätigt",
+    "level": "Trust: {level}",
+    "image_origin": "from an image",
+    "image_origin_named": "from an image ({image})",
+    "corroborated": "confirmed by a second reading",
     "reasons": "{reasons}",
-    "review": "Prüfung empfohlen",
+    "review": "review recommended",
 }, "profiles/kwp/kg.py TRUST_PROSE")
 TRUST_JOIN = " · "
 
@@ -492,6 +492,47 @@ def _ttl_comment(text) -> str:
     """One Turtle comment line, flattened so a quote cannot break the file."""
     flat = re.sub(r"\s+", " ", str(text or "")).strip()
     return "# " + flat[:400]
+
+
+# Short English labels for the two coordinates that mint no OEO class of
+# their own -- the scenario part and the whole-municipality scope -- and for
+# an axis' `out:` entries, which are deliberate non-classes and so hold no
+# vocabulary.json label either. The spec's own label for each of these is
+# worded for the model's prompt and stays German on purpose (`extraction_spec
+# .json`'s own `label`); this is the short table for the one place a reader
+# of the GRAPH sees them.
+SCENARIO_LABEL_EN = {"status_quo": "baseline inventory",
+                     "trend": "trend scenario", "target": "target scenario"}
+OUT_LABEL_EN = {
+    "out:potential": "potential", "out:generation": "generation/supply",
+    "out:useful_energy": "useful energy", "out:saving": "saving",
+    "out:share": "share",
+    "out:specific": "specific value (per area, head or building)",
+    "out:other": "other", "out:cumulative": "cumulative amount",
+    "out:avoided": "avoided amount", "out:captured": "captured amount",
+    "out:factor": "emission factor", "out:electric": "electrical power",
+    "out:seasonal": "seasonal power", "out:total": "sum",
+    "out:variant": "variant",
+}
+
+
+def _english_label(uri) -> str:
+    """A coordinate's value in English: the pinned vocabulary's own label for
+    a real OEO class, the short label above for a deliberate non-class, or
+    the bare identifier when neither table holds it.
+
+    Not `label_of`, below: that one gives a reader of the ANSWER APP the
+    spec's own first spelling, German, because the corpus is German and so
+    is that reader. This is for a Turtle comment, whose reader reads the
+    project's other language.
+    """
+    if not uri:
+        return ""
+    if is_class(uri):
+        from profiles.kwp import vocabulary
+        term = vocabulary.load()["terms"].get(_bare(uri)) or {}
+        return term.get("label") or _bare(uri)
+    return OUT_LABEL_EN.get(uri, _bare(uri))
 
 
 def evidence_comment(row: dict, document: str, *,
@@ -512,17 +553,25 @@ def evidence_comment(row: dict, document: str, *,
     prov = row.get("provenance") or {}
     where = [f"{document}.pdf"]
     if prov.get("page"):
-        where.append(f"Seite {prov['page']}")
-    kind = {"section": "Abschnitt", "table": "Tabelle",
-            "figure": "Abbildung"}.get(prov.get("owner_kind"))
+        where.append(f"page {prov['page']}")
+    kind = {"section": "section", "table": "table",
+            "figure": "figure"}.get(prov.get("owner_kind"))
     if kind:
-        where.append(kind + (f" „{prov['title']}“" if prov.get("title") else ""))
-    what = [row.get("quantity_raw") or "", row.get("scenario_raw") or "",
-            row.get("spatial_scope_raw") or "", row.get("carrier_raw") or "",
-            row.get("sector_raw") or ""]
+        where.append(kind + (f' "{prov["title"]}"' if prov.get("title") else ""))
+    # The row's own coordinates, in English: the class the model chose, not
+    # the document's raw wording, which stays German because the plan does.
+    # A named sub-area is the one exception -- its own name is the reading,
+    # not a spec label, and it stays exactly as the plan spells it.
+    scope = ("whole municipality" if row.get("spatial_scope") == "municipality"
+             else (row.get("spatial_scope_raw") or "").strip() or "sub-area")
+    what = [_english_label(row.get("quantity")),
+           SCENARIO_LABEL_EN.get(row.get("scenario"), row.get("scenario") or ""),
+           scope,
+           _english_label(row.get("carrier")),
+           _english_label(row.get("sector"))]
     lines = [_ttl_comment(" · ".join(x for x in what if x))] if any(what) else []
     if row.get("quote"):
-        lines.append(_ttl_comment(f"„{row['quote']}“"))
+        lines.append(_ttl_comment(f'"{row["quote"]}"'))
     lines.append(_ttl_comment(", ".join(where)))
     aggregation = row.get("aggregation")
     if aggregation:
@@ -535,13 +584,13 @@ def evidence_comment(row: dict, document: str, *,
         if row.get("aggregation_state") == DERIVED:
             note = f"Aggregation: {aggregation}"
             lines.append(_ttl_comment(
-                note + (f" (aus der Einheit {raw})" if raw else "")))
+                note + (f" (from the unit {raw})" if raw else "")))
         elif raw:
-            lines.append(_ttl_comment(f"Aggregation: {aggregation} „{raw}“"))
+            lines.append(_ttl_comment(f'Aggregation: {aggregation} "{raw}"'))
     if row.get("compute"):
         # A value the sandbox computed carries the code and its inputs, so the
         # arithmetic is checkable without re-running anything.
-        lines.append(_ttl_comment(f"berechnet: {row['compute']}"))
+        lines.append(_ttl_comment(f"computed: {row['compute']}"))
     if row.get("flags"):
         lines.append(_ttl_comment("Flags: " + ", ".join(row["flags"])))
     lines.append(_ttl_comment(render(verdict, TRUST_PROSE,
@@ -561,6 +610,7 @@ def make_serializer(db_path: Path):
 
     def serializer(name: str, rows: list):
         skipped: dict = {}
+        outside_root: dict = {}
 
         def skip(reason: str, n: int = 1) -> None:
             skipped[reason] = skipped.get(reason, 0) + n
@@ -672,11 +722,11 @@ def make_serializer(db_path: Path):
             return None
         if skipped:
             log.info("kg: %s: %d value(s) serialized, skipped %s",
-                     name, len(values), skipped)
+                     name, len(values), dict(skipped))
 
-        # Das beauftragte Planungsbuero, ueber den normalisierten Namen
-        # gepraegt: "Kassel Wärme Ingenieurbüro GmbH" und dieselbe Schreibweise
-        # ohne Rechtsform ergeben einen Knoten, nicht zwei.
+        # The commissioned planning office, minted over the normalised name:
+        # "Kassel Wärme Ingenieurbüro GmbH" and the same spelling without its
+        # legal form mint one node, not two.
         office_iris = {mint("organisation", key): label
                        for key, label in offices.items()}
         areas = {normalise(r["spatial_scope_raw"]): r["spatial_scope_raw"].strip()
@@ -736,8 +786,8 @@ def make_serializer(db_path: Path):
                     # the nine OEO does not call carriers keep this edge; the
                     # count is what argues for the axioms that would let them
                     # be called carriers.
-                    skip(f"carrier_outside_root:"
-                         f"{CARRIER_OUTSIDE_ROOT[carrier]}")
+                    label = CARRIER_OUTSIDE_ROOT[carrier]
+                    outside_root[label] = outside_root.get(label, 0) + 1
                 lines.append(f"    {P_CARRIER} oeo:{carrier} ;")
             if row.get("sector") and is_class(row["sector"]):
                 lines.append(f"    {P_SECTOR} oeo:{row['sector']} ;")
@@ -745,6 +795,10 @@ def make_serializer(db_path: Path):
             lines.append(f"    {P_YEAR} <{year_iri(row['year'])}> ;")
             lines.append(f"    {P_AGGREGATION} oeo:{row['aggregation']} .")
             parts.append("\n".join(lines) + "\n")
+        if outside_root:
+            log.info("kg: %s: %d value(s) keep a carrier OEO does not call a "
+                     "carrier, serialized and counted: %s", name,
+                     sum(outside_root.values()), dict(outside_root))
         for year in sorted(years):
             parts.append(f"<{year_iri(year)}>\n"
                          f"    a {CLS_YEAR} ;\n"

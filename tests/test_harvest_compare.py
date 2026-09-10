@@ -170,12 +170,12 @@ def test_the_truth_file_is_read_the_way_it_is_written(tmp_path):
     lines = hc.truth_report(files, truth)
     body = NEWLINE.join(lines)
 
-    assert "keine Ernte" not in body
+    assert "no harvest" not in body
     # 87457 wants 2040 and got it, 87517 wants 2030 and got 2040.
-    assert "years      richtig 1 von 2 (50%)" in body
-    assert "falsch: 87517: 2040 (1x)" in body
-    assert "scenarios  richtig 1 von 2 (50%)" in body
-    assert "falsch: 87438: target (1x)" in body
+    assert "years      correct 1 of 2 (50%)" in body
+    assert "wrong: 87517: 2040 (1x)" in body
+    assert "scenarios  correct 1 of 2 (50%)" in body
+    assert "wrong: 87438: target (1x)" in body
     # `_comment` is prose, not a coordinate, and must not become a line.
     assert "_comment" not in body
     # And the owner nobody claimed is untested, not right.
@@ -190,5 +190,24 @@ def test_a_truth_file_that_matches_nothing_says_so(tmp_path):
            [{"kind": "tuple", "provenance": {"owner_id": 1}, "year": 2040}])
     lines = hc.truth_report(sorted(tmp_path.glob("*.jsonl")),
                             {"years": {"87457": 2040}})
-    assert lines == ["  years: kein Tupel von einem Eigner, den die "
-                     "Wahrheitsdatei nennt"]
+    assert lines == ["  years: no tuple from an owner the truth file "
+                     "names"]
+
+
+def test_a_logged_dict_is_read_as_it_was_when_it_was_logged():
+    """The serializer logs its skip counts and keeps counting into the
+    same dict. Read later, the line showed the later additions: 40 Kassel
+    values reported as not serialized that were in the graph."""
+    import logging
+    log = logging.getLogger("tests.harvest_compare.capture")
+    handler = hc._Collect()
+    log.addHandler(handler)
+    log.setLevel(logging.INFO)
+    try:
+        counts = {"year": 1}
+        log.info("kg: x: 1 value(s) serialized, skipped %s", counts)
+        counts["later"] = 22
+        assert handler.records[0].getMessage() == (
+            "kg: x: 1 value(s) serialized, skipped {'year': 1}")
+    finally:
+        log.removeHandler(handler)

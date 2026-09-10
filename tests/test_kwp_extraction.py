@@ -290,6 +290,28 @@ def test_a_carrier_oeo_does_not_call_a_carrier_keeps_its_edge_and_is_counted(
     assert "OEO_00000523" not in ttl and "OEO_00000505" not in ttl
 
 
+def test_a_carrier_oeo_does_not_call_a_carrier_is_not_in_the_skip_line(
+        tmp_path, caplog):
+    """Kept and counted is a different finding from dropped and counted: a
+    value whose carrier OEO does not place under `energy carrier` must not
+    inflate the ordinary 'serialized, skipped' tally, since nothing about it
+    was skipped -- it gets its own line instead, naming the carrier."""
+    serializer = kg.make_serializer(_database(tmp_path))
+    with caplog.at_level(logging.INFO, logger="profiles.kwp.kg"):
+        ttl = serializer("waermeplan_kassel_20240315", [
+            _row(carrier="OEO_00000132"),   # Fernwaerme, district heating
+            _row(scenario=None),            # an unrelated, genuine skip
+        ])
+    assert ttl.count("obo:IAO_0000136 oeo:OEO_00000132") == 1
+    messages = [r.getMessage() for r in caplog.records]
+    skip_line = next(m for m in messages if "serialized, skipped" in m)
+    assert "district heating" not in skip_line
+    assert "OEO_00000132" not in skip_line
+    keep_line = next(m for m in messages
+                     if "keep a carrier OEO does not call a carrier" in m)
+    assert "district heating" in keep_line
+
+
 def test_a_value_conflict_on_one_coordinate_drops_every_claimant(tmp_path):
     serializer = kg.make_serializer(_database(tmp_path))
     ttl = serializer("waermeplan_kassel_20240315", [
@@ -606,9 +628,9 @@ def test_every_value_carries_where_it_was_read(tmp_path):
              provenance={"document_id": 857, "page": 84, "owner_kind": "table",
                          "title": "Endenergie im Zielszenario"}),
     ])
-    assert "# Endenergieverbrauch" in ttl
-    assert "„| Erdgas | 241 |“" in ttl
-    assert "Seite 84" in ttl and "Tabelle" in ttl
+    assert "# final energy consumption value" in ttl
+    assert '"| Erdgas | 241 |"' in ttl
+    assert "page 84" in ttl and "table" in ttl
 
 
 def test_the_unit_is_chosen_from_the_list_and_the_wording_is_evidence():
@@ -814,7 +836,7 @@ def test_the_evidence_says_whether_the_aggregation_was_read_or_derived(tmp_path)
     reader of the graph has to be able to tell them apart."""
     serializer = kg.make_serializer(_database(tmp_path))
     ttl = serializer("waermeplan_kassel_20240315", [_row()])
-    assert "# Aggregation: OEO_00140070 (aus der Einheit kWh/a)" in ttl
+    assert "# Aggregation: OEO_00140070 (from the unit kWh/a)" in ttl
 
     second = tmp_path / "second"
     second.mkdir()
@@ -822,8 +844,8 @@ def test_the_evidence_says_whether_the_aggregation_was_read_or_derived(tmp_path)
         "waermeplan_kassel_20240315",
         [_row(aggregation="OEO_00140073", aggregation_state="read",
               aggregation_raw="Spitzenlast")])
-    assert "# Aggregation: OEO_00140073 „Spitzenlast“" in ttl
-    assert "aus der Einheit" not in ttl
+    assert '# Aggregation: OEO_00140073 "Spitzenlast"' in ttl
+    assert "from the unit" not in ttl
 
 
 # --- the questions, after the Kassel read-through --------------------------
@@ -1001,13 +1023,13 @@ def test_the_same_value_is_a_from_a_pdf_and_b_from_a_transcribed_plan(tmp_path):
     serializer = kg.make_serializer(_database(tmp_path))
     with_text = serializer("waermeplan_kassel_20240315",
                            [_row(tier="text_located")])
-    assert "# Vertrauen: A" in with_text
+    assert "# Trust: A" in with_text
 
     transcribed = serializer("waermeplan_ohne_textebene",
                              [_row(tier="text_located",
                                    provenance={"document_id": 1082})])
-    assert "# Vertrauen: B · page_transcribed" in transcribed
-    assert "Vertrauen: A" not in transcribed
+    assert "# Trust: B · page_transcribed" in transcribed
+    assert "Trust: A" not in transcribed
 
 
 def test_the_graph_says_which_values_want_looking_at(tmp_path):
@@ -1019,9 +1041,9 @@ def test_the_graph_says_which_values_want_looking_at(tmp_path):
                                 "owner_id": 87457, "parent_section": 349525},
                     sector_state="unbacked")
     ttl = serializer("waermeplan_kassel_20240315", [doubtful])
-    assert "# Vertrauen: C" in ttl
+    assert "# Trust: C" in ttl
     assert "unbacked:sector" in ttl
-    assert "Prüfung empfohlen" in ttl
+    assert "review recommended" in ttl
 
 
 def test_where_a_coordinates_passage_stands_is_no_warning(tmp_path):
@@ -1037,7 +1059,7 @@ def test_where_a_coordinates_passage_stands_is_no_warning(tmp_path):
              carrier_state="read", carrier_source=["table", 87517]),
     ])
     assert "nonlocal" not in ttl
-    assert "# Vertrauen: B" in ttl, "out of a table image, and nothing else"
+    assert "# Trust: B" in ttl, "out of a table image, and nothing else"
 
 
 def test_the_spellings_the_corpus_writes_are_in_the_lists():

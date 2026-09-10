@@ -138,7 +138,8 @@ already will not become an A later.
 ```python
 def parameter_states(spec, tuples: list, refusals: list, *,
                      harvested: int = 0,
-                     answered: Optional[int] = None) -> list
+                     answered: Optional[int] = None,
+                     sources_of: Optional[dict] = None) -> list
 ```
 
 One state per parameter of the spec, in spec order.
@@ -151,10 +152,13 @@ the same empty file. Measured on Kassel: `planning_organisation` came back
 with 0 tuples and no state at all.
 
 `exhausted` is the one that is a fact about the RUN and not about the
-document, and it is document-wide rather than per parameter: under the
-document-level plan there is no per-parameter run signal to read, the
-report keys its rounds by the literal string "document". So a truncated
-run marks every unanswered parameter exhausted together, which is the
-honest reading of "we stopped before the end".
+document. A parameter is exhausted when nothing of the document was
+answered, or when a request that never came back held one of the
+parameter's own sources, the passages its own anchors ranked
+(`sources_of`, from `plan_document`). Kassel's `planning_organisation`
+was once marked exhausted by a cut-off table request while its one
+candidate passage had been read in full, and its answer is "the plan
+does not say". Without `sources_of` for a parameter, or for a failed
+request that names no source, a cut anywhere counts for every parameter.
 
 [Back to the index](../README.md)

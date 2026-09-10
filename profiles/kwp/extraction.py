@@ -71,3 +71,10 @@ def document_context(conn, document_id: int) -> dict:
 # refusals against 0 readings, because every window after the first excluded
 # the row's own source and only that one could carry the year.
 FRAME = ("scenario", "year")
+
+# The pair a passage is read under when it names no part of any pair the
+# frame found, no scenario and no year: an inventory table that states
+# neither is the plan's inventory. Owner decision 2026-09-10, after Kassel's
+# Tabelle 3 (CO2 by sector and carrier, no year anywhere) left 35 values
+# without one. Used only when a document has exactly one such pair.
+FRAME_DEFAULT = {"scenario": "status_quo"}

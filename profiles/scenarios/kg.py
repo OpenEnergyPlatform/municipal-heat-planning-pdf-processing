@@ -190,7 +190,7 @@ def edges() -> list:
                      if cls == CLS_BUNDLE else None}
         for cls in (CLS_BUNDLE, CLS_REPORT, CLS_SCENARIO)]
 
-# Mirjam: "alle IAM scenarios bekommen erst mal die Annotation". JH notes it is
+# Mirjam: "all IAM scenarios get the annotation for now". JH notes it is
 # not in the release nor in the shape's sh:in list yet, so a graph written
 # today will fail that constraint until it is.
 IAM_SCENARIO = "OEO_00020517"

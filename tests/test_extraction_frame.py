@@ -684,7 +684,7 @@ def test_a_passage_that_prints_a_pair_is_read_under_it_whichever_search_found_it
         return out
 
     # The 2045 search kept only the prose, and `both` only the 2030 search.
-    batches, rest, added = runner.pair_batches(
+    batches, rest, added, _assumed = runner.pair_batches(
         document_search, pairs, [[only_2030, both], [prose]], slots,
         [("a",), ("b",)])
     assert read_under(batches) == {0: {1, 3}, 1: {4, 2, 3}}
@@ -693,9 +693,55 @@ def test_a_passage_that_prints_a_pair_is_read_under_it_whichever_search_found_it
     assert {b.anchors for b in batches if b.frame_index == 1} == {("b",)}
 
     # The 2045 search failed: the pair is read over what the others found.
-    batches, _rest, _added = runner.pair_batches(
+    batches, _rest, _added, _assumed = runner.pair_batches(
         document_search, pairs, [[only_2030, both], None], slots, [(), ()])
     assert read_under(batches) == {0: {1, 3}, 1: {2, 3}}
+
+
+def test_a_passage_that_names_no_pair_is_read_under_the_inventory_pair():
+    """Kassel's Tabelle 3 (CO2 by sector and carrier) prints no scenario
+    and no year, and 35 of its values ended without a year. The owner's
+    rule: a passage that names no pair at all is read under the document's
+    one inventory pair. A passage that names part of a pair, or any year,
+    keeps what it says and stays in the rest."""
+    slots = _slots()
+    target = {"scenario": "target", "scenario_raw": "Zielszenario",
+              "year": 2045}
+    inventory = {"scenario": "status_quo", "scenario_raw": "Bestand",
+                 "year": 2024}
+    printed = WorkItem(7, None, _source(
+        1, "Tabelle 17: Endenergie im Zielszenario 2045\n| Erdgas | 42.005 |"))
+    bare = WorkItem(7, None, _source(
+        2, "Tabelle 3: CO2-Emissionen nach Sektor\n| Erdgas | 175.557 |"))
+    half = WorkItem(7, None, _source(
+        3, "Im Zielszenario sinkt der Verbrauch.\n| Erdgas | 300 |"))
+    other_year = WorkItem(7, None, _source(
+        4, "Tabelle 9: Verbrauch 2019\n| Erdgas | 512 |"))
+    items = [printed, bare, half, other_year]
+
+    batches, rest, _added, assumed = runner.pair_batches(
+        items, [target, inventory], [[printed], []], slots, [(), ()],
+        default={"scenario": "status_quo"})
+    [default] = [b for b in batches if b.frame_default]
+    assert [i.source.owner_id for i in default.items] == [2]
+    assert default.frame is None
+    assert default.frame_default is inventory
+    assert default.frame_default_index == 1
+    assert assumed == 1
+    assert sorted(i.source.owner_id for i in rest) == [3, 4]
+
+    # Two inventory pairs: which one is not the code's to guess.
+    earlier = dict(inventory, year=2021)
+    batches, rest, _added, assumed = runner.pair_batches(
+        items, [target, earlier, inventory], [[printed], [], []], slots,
+        [(), (), ()], default={"scenario": "status_quo"})
+    assert assumed == 0 and not any(b.frame_default for b in batches)
+    assert 2 in [i.source.owner_id for i in rest]
+
+    # No default in the profile: nothing changes.
+    batches, rest, _added, assumed = runner.pair_batches(
+        items, [target, inventory], [[printed], []], slots, [(), ()])
+    assert assumed == 0 and 2 in [i.source.owner_id for i in rest]
 
 
 def test_a_passage_of_one_pair_still_gets_that_pair_written():
