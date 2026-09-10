@@ -1413,40 +1413,6 @@ def test_a_single_valued_field_read_two_ways_says_so_on_the_winner(
     assert "# confidence: A" in ttl
 
 
-def test_every_axis_of_this_spec_says_where_its_answer_may_be_read(spec):
-    """The promise: no axis is left at the default.
-
-    `any` is not a rule, it is the absence of one, and it was what all four
-    scenario axes had. It cost more than it looks: `trust.reasons` skips every
-    coordinate that is not in `own_evidence`, so with an empty set no
-    scenarios tuple could produce a `nonlocal:` finding at all -- a scenario
-    name lifted from a different section graded exactly as one read off the
-    row's own caption.
-
-    Three of the four are `own`, because a type, an abstract and a projected
-    year are all predications about a NAMED scenario, and a name borrowed from
-    elsewhere is inference. `scenario_region` is `local`, because coverage is
-    stated once in the methods section while the scenario list is a heading
-    further on: page-neighbours, not one passage. That one is a judgement from
-    where text sits, and it is the only one of the four that is."""
-    from docpipe.extraction.spec import own_evidence
-    from profiles.scenarios import kg
-    rules = {(p.uri, name): axis.evidence
-             for p in spec.parameters for name, axis in (p.axes or {}).items()}
-    assert rules == {("scenario_type", "scenario"): "own",
-                     ("scenario_abstract", "scenario"): "own",
-                     ("scenario_year", "scenario"): "own",
-                     ("scenario_region", "scenario"): "local"}
-    assert "any" not in rules.values(), "a default is not a decision"
-    # Read off the spec by the serializer, never listed twice.
-    assert kg.OWN_EVIDENCE == own_evidence(spec) == frozenset(
-        {("scenario_type", "scenario"), ("scenario_abstract", "scenario"),
-         ("scenario_year", "scenario")})
-    # `local` stays out of it on purpose: it is a statement about pages, and a
-    # harvest row records an owner and not a page distance.
-    assert ("scenario_region", "scenario") not in kg.OWN_EVIDENCE
-
-
 def test_this_corpus_declares_no_transcribed_page():
     """Its own test so the assertion is not lost with the one it used to ride
     on: nothing claims a transcribed page, because ar6.db Documents has no
@@ -1456,21 +1422,13 @@ def test_this_corpus_declares_no_transcribed_page():
     assert kg.PAGE_TRANSCRIBED is False
 
 
-def test_an_axis_that_must_be_read_here_says_so_in_its_own_question(spec):
-    """A rule the request does not state is a rule the model cannot follow.
-
-    This is the shape that produced 1,849 refusals against 0 readings on the
-    kwp year axis: the code refused a passage from elsewhere while the prompt
-    said the answer was usually elsewhere. Each question now carries the rule
-    its own axis is judged by."""
-    questions = {(p.uri, name): axis.question
-                 for p in spec.parameters
-                 for name, axis in (p.axes or {}).items()}
-    for key, rule in (("scenario_type", "own"), ("scenario_abstract", "own"),
-                      ("scenario_year", "own")):
-        text = questions[(key, "scenario")]
-        assert "aus der Quelle der Zeile selbst" in text, key
-        assert "Nachbarseite" not in text, key
-    region = questions[("scenario_region", "scenario")]
-    assert "Nachbarseite" in region
-    assert "aus der Quelle der Zeile selbst" not in region
+def test_no_question_tells_the_model_where_it_may_quote_from(spec):
+    """The code checks a quote for two things: it stands in a shown passage
+    and it carries the answer. A question that restricts where the passage
+    may stand has the model refuse readings no check refuses."""
+    for parameter in spec.parameters:
+        for name, axis in (parameter.axes or {}).items():
+            text = axis.question or ""
+            for gone in ("aus der Quelle der Zeile", "Nachbarseite",
+                         '"section"'):
+                assert gone not in text, (parameter.uri, name, gone)

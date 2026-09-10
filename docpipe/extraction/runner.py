@@ -16,11 +16,11 @@ concatenation. `make_candidates` is a deterministic floor under that ranking,
 matched by LIKE over the corpus's own vocabulary tokens. A probe is either one
 of the spec's query templates (`queries.expand`), stable across the whole
 corpus so `prime_probe_cache`'s embeddings hit for every document, or a
-HyDE-style anchor sentence a model writes for one question: `make_anchors`
-writes one set per parameter or axis, cached under `anchors.json` and reusable
-across documents, or frozen by the profile (`frozen_anchors`) over the model's
-own guess; `document_anchor` writes a further sentence per parameter for the
-one document being planned, which is a cache miss by construction.
+HyDE-style anchor sentence a model writes: `make_anchors` writes one set per
+question the field sweep asks, cached under `anchors.json` and reusable across
+documents, and `document_anchor` writes the one short sentence per parameter
+the document being planned is searched with, which is a cache miss by
+construction.
 
 `make_harvester` and `make_fieldwise_harvester` build the request to the model,
 parse its reply, and rescue the tuples already written when a reply is cut off
@@ -68,13 +68,13 @@ from .pipeline import (Source, WorkItem, apply_frame, batch_uri,
                        build_sweeps, cell_index as pipeline_cell_index,
                        fold_batch, follow_up, group_items, harvest_document,
                        merge_field, mark_unanswered, open_rows, plan_document,
-                       names_pair, route_claims, rows_from_reply,
-                       sweep_key, window_sources,
+                       names_pair, refused_upstream, route_claims,
+                       rows_from_reply, sweep_key, window_sources,
                        write_report)
 from .fields import EXHAUSTED
 from .queries import expand as expand_queries
 from .trust import document_summary, parameter_states
-from .spec import Spec, fingerprints, load as load_spec, own_evidence
+from .spec import Spec, fingerprints, load as load_spec
 
 log = logging.getLogger(__name__)
 
@@ -567,10 +567,10 @@ def make_review_sources(db_path: Path) -> Callable:
     """(row) -> the passages one stored tuple may legally quote from.
 
     Exactly two, in this order: the row's own source, and the section that
-    source stands in. That pair is what the evidence rule accepts for an axis
-    held to its own source, and it is a strict SUBSET of the window the sweep
-    already walked -- which is what makes the second reading a check on the
-    first and not an independent one.
+    source stands in. That pair is where a row's labels, header and caption
+    stand, and it is a strict SUBSET of the window the sweep already walked --
+    which is what makes the second reading a check on the first and not an
+    independent one.
 
     The parent goes through `make_parents` rather than being fetched from
     `parent_section` directly, so a section too long for the window arrives
@@ -788,10 +788,10 @@ def anchor_question_key(target) -> str:
                              sort_keys=True, separators=(",", ":")))
 
 
-def anchors_key(frozen_sha: str = "") -> str:
+def anchors_key() -> str:
     """Everything an anchor set depends on that is NOT one question: the
-    anchor prompt, the model, the version of the target SET, and whatever the
-    profile froze. The cache is stored under it and the stamp records it.
+    anchor prompt, the model and the version of the target SET. The cache is
+    stored under it and the stamp records it.
 
     Not the questions, though it used to hash them. Everything a target tuple
     carries is already a stamp key of its own -- a parameter's label and
@@ -802,15 +802,13 @@ def anchors_key(frozen_sha: str = "") -> str:
     every document in the corpus stale over ONE changed question, which is
     exactly what the per-question keys were written to stop.
 
-    The frozen sha belongs in here rather than per question, because a
-    question DROPPED from the profile's file would otherwise keep being
-    answered out of the frozen text a previous run had written into the
-    store. Paid for by rewriting every model-written set when that file
-    changes, which is a rare and deliberate edit.
+    The empty last field held the sha of a file of anchors a profile could
+    freeze. That file is gone, and the field stays empty rather than going,
+    so a harvest that never had one keeps its key.
     """
     versions = prompts.versions((ANCHORS_PROMPT_ID,))
     return _key16(f"{versions.get(ANCHORS_PROMPT_ID)}|{LLM_MODEL}"
-                  f"|{ANCHOR_SCHEMA}|{frozen_sha}")
+                  f"|{ANCHOR_SCHEMA}|")
 
 
 def anchor_key(parameter_uri: str, slot_name: Optional[str] = None) -> str:
@@ -827,11 +825,13 @@ def anchor_targets(spec: Spec) -> list:
     anchors written from "Endenergieverbrauch" find tables of consumption and
     say nothing about where a bilanz year is printed, which is why the field
     sweep searched with the raw question and found captions by accident.
+
+    The value itself has no set here. The plan searches with the one short
+    sentence `document_anchor` writes for the document it plans, and a set
+    written once for the whole corpus was never searched with.
     """
     out: list = [(PARAMETER_ANCHOR, "Kennzahl", "", spec.parameter_question)]
     for parameter in spec.parameters:
-        out.append((anchor_key(parameter.uri), parameter.label,
-                    parameter.description, None))
         # asked_slots, not axis_slots: an anchor is a sentence to search
         # with, and a coordinate the spec derives is never searched for.
         for slot in fields.asked_slots(parameter):
@@ -977,10 +977,42 @@ def _frame_payload(sources: list, slots: list, known: Optional[list] = None,
         # The second pass. These numbers really stand in the passages above
         # and the first round did not name them, which is either a year it
         # missed or a number that only looks like one. The model decides
-        # which, against the same evidence rule as everything else -- so a
-        # candidate that is a megawatt-hour simply comes back unquotable.
+        # which, and its answer is checked like every other: the quote stands
+        # in a shown passage and carries the year -- so a candidate that is a
+        # megawatt-hour simply comes back unquotable.
         payload["candidates"] = list(candidates)
     return payload
+
+
+# How vLLM words a request whose prompt and completion together do not fit
+# the model's window: "maximum context length is 32768 tokens. However, you
+# requested 6144 output tokens and your prompt contains at least 26625 input
+# tokens".
+_OVERFLOW = re.compile(r"maximum context length is (\d+) tokens.*?"
+                       r"(\d+) input tokens", re.S)
+# What an answer needs at the very least. Less room than this and the request
+# is refused for good, as it was before.
+MIN_ANSWER_TOKENS = 256
+
+
+def fitted_max_tokens(exc, asked: int, where: str = "") -> Optional[int]:
+    """A completion budget that fits the window this request overflowed, or
+    None when the error is another one or no answer fits.
+
+    The server names both numbers when it refuses. Measured on Kassel: one
+    field request of 26,625 prompt tokens asked for 6,144 more, was refused
+    for one token over 32,768, and the break on a 4xx wrote its coordinates
+    off. The prompt is what it is, so the room for the answer is what gives.
+    """
+    match = _OVERFLOW.search(str(exc))
+    if not match:
+        return None
+    room = int(match.group(1)) - int(match.group(2)) - 32
+    if room < MIN_ANSWER_TOKENS or room >= asked:
+        return None
+    log.warning("   %s: %d output token(s) do not fit next to the prompt, "
+                "asked again with %d", where or "request", asked, room)
+    return room
 
 
 def make_frame_asker(image_root: Optional[Path] = None) -> Callable:
@@ -1018,12 +1050,13 @@ def make_frame_asker(image_root: Optional[Path] = None) -> Callable:
                 parts.append(part)
         if len(parts) > 1:
             content = parts
+        limit = max_tokens
         for attempt in range(1, MAX_RETRIES + 1):
             started = time.time()
             try:
                 completion = client.chat.completions.create(
                     model=LLM_MODEL, temperature=temperature,
-                    max_tokens=max_tokens,
+                    max_tokens=limit,
                     messages=[{"role": "system", "content": prompt.text},
                               {"role": "user", "content": content}],
                     extra_body={"chat_template_kwargs":
@@ -1048,6 +1081,10 @@ def make_frame_asker(image_root: Optional[Path] = None) -> Callable:
                 trace.event("error", document_id, where="frame",
                             kind="exception", attempt=attempt,
                             detail=str(exc)[:200])
+                fitted = fitted_max_tokens(exc, limit, "frame")
+                if fitted is not None:
+                    limit = fitted
+                    continue
             if attempt < MAX_RETRIES:
                 time.sleep(min(2 * attempt, 6))
         return None
@@ -1060,12 +1097,11 @@ def frame_pairs(reply: Optional[dict], slots: list, sources: list) -> list:
 
     Every coordinate is held to what a field answer is held to: its quote sits
     verbatim in one of the passages that were SHOWN, and the quote contains
-    the answer. What is NOT applied is the distance rule. A frame reading is
+    the answer. Nothing else is checked. A frame reading is
     document-level by construction -- it is read once, from a caption or a
     heading, and every row of the document inherits it -- so "is this passage
-    near this row" is not a question about it. The distance rule exists
-    because a per-row reading that cites a foreign table is a wrong reading,
-    and that is a different claim.
+    near this row" is not a question about it, and no reading anywhere in
+    the harvest is asked it.
     """
     from .pipeline import answer_in_quote
     from .verify import quote_in
@@ -1240,51 +1276,6 @@ def find_frame(sources: list, slots: list, document_id: int, ask: Callable,
                 completion_tokens=None, ms=0)
     return pairs, status, missed
 
-def frozen_anchors(profile, spec: Spec) -> tuple:
-    """(anchors, sha) the profile froze, or ({}, "") if it freezes none.
-
-    An anchor the model writes is a guess at how the corpus phrases a value.
-    These are not guesses: they are sections of an earlier run that really
-    produced one, taken verbatim. Measured over 150 documents and 4,785 prose
-    values, the kwp profile's frozen set puts 18.0% of them in the top 10
-    sections where the written ones put 11.0%, against 7.6% for chance.
-
-    Only the questions the file names are frozen. Everything else, the axis
-    questions above all, is still written per run, so a profile can freeze what
-    it has measured and leave the rest alone.
-    """
-    raw_path = profile.component("extraction", "ANCHORS_PATH") if profile else None
-    if raw_path is None:
-        return {}, ""
-    path = Path(raw_path)
-    raw = path.read_bytes()
-    stored = json.loads(raw.decode("utf-8"))
-    anchors = stored.get("anchors") if isinstance(stored, dict) else None
-    if not isinstance(anchors, dict) or not anchors:
-        raise LookupError(f"{path} names no anchors object")
-    # The file outlives the spec it was measured against. A key that is no
-    # question of this run would be dropped by every reader without a word,
-    # and the run would search with a set nobody had checked.
-    targets = {target[0] for target in anchor_targets(spec)}
-    unknown = sorted(set(anchors) - targets)
-    if unknown:
-        raise LookupError(
-            f"{path}: {', '.join(unknown)} is no question of this spec, which "
-            f"asks {len(targets)}. Either the spec moved or the file did.")
-    out, empty = {}, []
-    for anchor_id, texts in anchors.items():
-        usable = [t.strip() for t in texts
-                  if isinstance(t, str) and len(t.strip()) > 20]
-        if not usable:
-            empty.append(anchor_id)
-        out[anchor_id] = usable
-    if empty:
-        raise LookupError(f"{path}: {', '.join(sorted(empty))} freezes no "
-                          f"usable anchor, which is a broken file and not a "
-                          f"decision to leave the question to the model")
-    import hashlib
-    return out, hashlib.sha256(raw).hexdigest()[:16]
-
 
 def load_anchors(path: Path, key: str, targets: list) -> dict:
     """The anchor sets a previous run wrote that are still the answer to the
@@ -1334,20 +1325,20 @@ def save_anchors(path: Path, key: str, anchors: dict,
 
 
 def make_anchors(spec: Spec, client=None, *, store: Optional[Path] = None,
-                 key: str = "", frozen: Optional[dict] = None) -> dict:
-    """parameter uri -> search anchors the model wrote from its definition.
+                 key: str = "") -> dict:
+    """anchor id -> search anchors the model wrote for one question.
 
     The QA app turns a question into a HyDE anchor before it searches: a
     sentence written as it would READ in the document, because that is what a
     similarity search matches against. This stage searched with the spec's
     templates alone, which name the thing rather than say it.
 
-    Once per run and per parameter, not per document: the anchor depends on the
-    definition, not on the plan, and a stable probe string is what makes the
+    Once per run and per question, not per document: the anchor depends on
+    the question, not on the plan, and a stable probe string is what makes the
     query-embedding cache hit across the whole corpus.
     """
     prompt = prompts.load(ANCHORS_PROMPT_ID)
-    # Frozen, because they decide which passages the whole corpus is harvested
+    # Stored, because they decide which passages the whole corpus is harvested
     # from. Two calls in one job shared 0 of 18 strings, so a restart searched
     # a different document set with nothing in any of the 1082 output files
     # saying which set had found it. The file carries the reproducibility;
@@ -1355,13 +1346,6 @@ def make_anchors(spec: Spec, client=None, *, store: Optional[Path] = None,
     targets = anchor_targets(spec)
     out: dict = (dict(load_anchors(store, key, targets))
                  if store is not None else {})
-    # The profile's frozen anchors win over anything a previous run wrote for
-    # the same question: those are the model's guess, these are measured.
-    frozen = frozen or {}
-    if frozen:
-        out.update({k: list(v) for k, v in frozen.items()})
-        log.info("extraction: %d anchor set(s) frozen in the profile: %s",
-                 len(frozen), ", ".join(sorted(frozen)))
     todo = [t for t in targets if not out.get(t[0])]
     if store is not None and out:
         log.info("extraction: %d anchor set(s) reused from %s, %d to write",
@@ -2120,13 +2104,14 @@ def make_harvester(image_root: Optional[Path] = None,
         first = batch.items[0].source
         why = ["no_answer"]
         conversation: list = [{"role": "user", "content": content}]
+        limit = max_tokens
         # A compute round is a turn of the same conversation, not a retry, so
         # the attempt budget grows with the rounds actually used.
         for attempt in range(1, MAX_RETRIES + CODE_ROUNDS + 1):
             try:
                 response = client.chat.completions.create(
                     model=LLM_MODEL, temperature=temperature,
-                    max_tokens=max_tokens,
+                    max_tokens=limit,
                     messages=[{"role": "system", "content": prompt.text},
                               *conversation],
                     # Refinement and the vision path have said this for
@@ -2231,6 +2216,10 @@ def make_harvester(image_root: Optional[Path] = None,
                 # a harvested document.
                 why[0] = "no_answer" if isinstance(status, int) else "unreachable"
                 if isinstance(status, int) and 400 <= status < 500 and status != 429:
+                    fitted = fitted_max_tokens(exc, limit, prompt_id)
+                    if fitted is not None:
+                        limit = fitted
+                        continue
                     # A request the server refuses is refused every time. The
                     # last run spent three tries and eight seconds of sleep on
                     # each over-long section before writing the same sentinel.
@@ -2264,9 +2253,8 @@ def _field_payload(shown: list, rows: list, slots,
 
     Several fields at once. One request per field was one round trip per
     coordinate: measured over 60 documents, 2,108 field requests each, which
-    is what made a corpus run 82 hours. The evidence rule does not change —
-    every field still answers for itself and quotes for itself — only the
-    number of round trips does.
+    is what made a corpus run 82 hours. Every field still answers for itself
+    and quotes for itself; only the number of round trips changes.
 
     Sources first, rows second, the field last. Consecutive windows then share
     the part of the prefix that did not move, which is what makes asking many
@@ -2284,8 +2272,6 @@ def _field_payload(shown: list, rows: list, slots,
         for key in ("page", "block_id"):
             if source.provenance.get(key):
                 entry[key] = source.provenance[key]
-        if source.provenance.get("via") == "parent":
-            entry["holds"] = "der Abschnitt, in dem die Tabelle steht"
         sources.append(entry)
     # Which shown source is which, so a row can name its own by id rather
     # than by the model recognising its own quote among five passages.
@@ -2296,20 +2282,11 @@ def _field_payload(shown: list, rows: list, slots,
         entry = {"id": row.label,
                  "value": row.claim.get("value"),
                  "quote": row.claim.get("quote")}
-        # The evidence rule is per axis and about the distance between a
-        # passage and THIS row. A rule the request does not state is a rule
-        # the model cannot follow, so the row says which source is its own
-        # and which of the shown passages is the section that source stands
-        # in -- the two the rule lets it quote from.
         own = (owner_of or {}).get(row.label)
-        if own is not None:
-            here = where.get((own.owner_kind, own.owner_id))
-            if here:
-                entry["source"] = here
-            parent = (own.provenance or {}).get("parent_section")
-            there = where.get(("section", parent)) if parent else None
-            if there:
-                entry["section"] = there
+        here = (where.get((own.owner_kind, own.owner_id))
+                if own is not None else None)
+        if here:
+            entry["source"] = here
         unit = row.claim.get("unit_raw") or row.claim.get("unit")
         if unit:
             entry["unit"] = unit
@@ -2411,11 +2388,12 @@ def make_field_asker(image_root: Optional[Path] = None) -> Callable:
         # failure is. Retrying a malformed reply without saying what was
         # malformed is one attempt three times.
         conversation: list = [{"role": "user", "content": content}]
+        limit = max_tokens
         for attempt in range(1, MAX_RETRIES + 1):
             try:
                 response = client.chat.completions.create(
                     model=LLM_MODEL, temperature=temperature,
-                    max_tokens=max_tokens,
+                    max_tokens=limit,
                     messages=[{"role": "system", "content": prompt.text},
                               *conversation],
                     extra_body={"chat_template_kwargs": {"enable_thinking": False}},
@@ -2469,6 +2447,10 @@ def make_field_asker(image_root: Optional[Path] = None) -> Callable:
                             kind="exception", slot=name, attempt=attempt,
                             status=status, detail=str(exc)[:300])
                 if isinstance(status, int) and 400 <= status < 500 and status != 429:
+                    fitted = fitted_max_tokens(exc, limit, f"field {name}")
+                    if fitted is not None:
+                        limit = fitted
+                        continue
                     break
             if attempt < MAX_RETRIES:
                 time.sleep(min(2 * attempt, 6))
@@ -2561,11 +2543,12 @@ def make_review_asker(image_root: Optional[Path] = None) -> Callable:
         if len(parts) > 1:
             content = parts
         conversation: list = [{"role": "user", "content": content}]
+        limit = max_tokens
         for attempt in range(1, MAX_RETRIES + 1):
             try:
                 response = client.chat.completions.create(
                     model=LLM_MODEL, temperature=temperature,
-                    max_tokens=max_tokens,
+                    max_tokens=limit,
                     messages=[{"role": "system", "content": prompt.text},
                               *conversation],
                     extra_body={"chat_template_kwargs": {"enable_thinking": False}},
@@ -2592,6 +2575,10 @@ def make_review_asker(image_root: Optional[Path] = None) -> Callable:
                 log.warning("   review attempt %d failed: %s", attempt, exc)
                 status = getattr(exc, "status_code", None)
                 if isinstance(status, int) and 400 <= status < 500 and status != 429:
+                    fitted = fitted_max_tokens(exc, limit, "review")
+                    if fitted is not None:
+                        limit = fitted
+                        continue
                     break
             if attempt < MAX_RETRIES:
                 time.sleep(min(2 * attempt, 6))
@@ -2648,9 +2635,9 @@ def make_sweeper(ask: Callable, *,
         """
         slots = list(slots) if isinstance(slots, (list, tuple)) else [slots]
         name = "+".join(slot.name for slot in slots)
-        # Which source each row came from. The evidence rule is about the
-        # distance between a passage and the row it is offered for, and that
-        # distance cannot be measured from the reply alone.
+        # Which source each row came from: the request names it for the
+        # row, and a later window shows it and its section again
+        # (`re_entry`).
         owner_of = {row.label: batch.items[row.item_index].source
                     for row in rows
                     if 0 <= row.item_index < len(batch.items)}
@@ -2703,8 +2690,8 @@ def make_sweeper(ask: Callable, *,
             - the section the row's own passage stands in. It is also the only
               one of the three that is in no checked pool from the second
               window on, so an answer quoting the caption of its own table
-              comes back unbacked — the `local` rule's own passage, dropped
-              for not being present.
+              came back unbacked: its quote stood in no passage the check was
+              given.
             - the row's own passage last, because `merge_field` checks against
               `batch.sources` in every window anyway and the row carries its
               own quote in the request, so it is the one that is not lost when
@@ -2802,8 +2789,7 @@ def make_sweeper(ask: Callable, *,
                         got = merge_field(rows, list(shown) + batch.sources,
                                           slot, answered.get(slot.name),
                                           window=(state["stage"],
-                                                  sum(spent.values())),
-                                          owner_of=owner_of)
+                                                  sum(spent.values())))
                         for key in ("filled", "unquoted", "unbacked",
                                     "unstated", "raw_missing",
                                     "raw_foreign"):
@@ -2973,15 +2959,19 @@ def make_fieldwise_harvester(image_root: Optional[Path] = None,
             # because every later window excluded the row's own source and
             # only that one could carry the year.
             written = apply_frame(rows, batch.frame, batch.frame_index,
-                                  frame_axes, batch.sources, batch.frame_all)
+                                  frame_axes, batch.sources)
             if written:
                 log.debug("   frame %s: %d coordinate(s) on %d row(s)",
                           batch.document_id, written, len(rows))
         if not rows:
-            # Either nothing is in these passages or the value request died.
-            # Both are already stated in the reply the row request returned,
-            # sentinels included, so it is passed through untouched.
-            return reply
+            # Nothing to sweep: no value in these passages, a value request
+            # that died, or every claim refused above. What goes back is what
+            # `rows_from_reply` made of the claims, sentinels and reasons
+            # included. The raw claims went back until now, and verified a
+            # second time they came out as "claim names no parameter of the
+            # spec": 598 of Kassel's refusals.
+            return {**(reply if isinstance(reply, dict) else {}),
+                    "tuples": orphans}
         counts: dict = {}
         jobs: list = []          # (rows, slot, anchor id)
         slots_of: dict = {}      # row label -> the slots that apply to it
@@ -3618,7 +3608,6 @@ def finish_document(report, name: str, out_dir: Path, spec_sha: str,
               if r.get("claim", {}).get("_harvest_failed")]
     if failed:
         log.warning("extraction: %s: %d source(s) never answered", name, len(failed))
-    own = own_evidence(spec) if spec is not None else None
     # One line per parameter, whatever it came to. Every other state in the
     # file belongs to a row, so a parameter that produced no row produced no
     # record at all: on Kassel, planning_organisation came back with 0 tuples
@@ -3630,7 +3619,7 @@ def finish_document(report, name: str, out_dir: Path, spec_sha: str,
               if spec is not None else None)
     if spec is not None:
         check_against_schema(report, name, spec, states)
-    write_report(report, out_dir / f"{name}.jsonl", own, states)
+    write_report(report, out_dir / f"{name}.jsonl", states)
     unreachable = sum(1 for r in failed
                       if r.get("claim", {}).get("_why") == "unreachable")
     sources = max(report.owners_harvested, len(failed))
@@ -3712,7 +3701,7 @@ def check_against_schema(report, name: str, spec,
     # it is built here the same way and checked with everything else. A line
     # the schema refuses is a line downstream cannot read, whoever wrote it.
     summary = document_summary(report.document_id, report.tuples,
-                               report.refusals, own=own_evidence(spec))
+                               report.refusals)
     for kind, rows in (("tuple", report.tuples), ("refusal", report.refusals),
                        ("parameter_state",
                         [{"document_id": report.document_id, **r}
@@ -3864,6 +3853,52 @@ def select_documents(documents: list, wanted: Optional[list]) -> tuple:
     return chosen, sorted(ids - {d[0] for d in chosen})
 
 
+def pair_batches(items: list, pairs: list, pair_plans: list, frame_axes: list,
+                 anchors: list, *, max_sources: int = BATCH_SOURCES,
+                 max_chars: int = BATCH_CHARS) -> tuple:
+    """(batches, rest, added) for one document with a frame.
+
+    A pair is read over every passage that prints it. Its own search and the
+    document's search keep `PLAN_TOP` passages each, cut from two rankings.
+    A table the document's search found that prints 2045, below the cut of
+    the 2045 search, was in no batch at all: not under the pair, whose search
+    had not kept it, and not in the rest, which is what prints none of the
+    pairs. So every passage any search of the document planned goes to every
+    pair it prints. `added` counts the ones a pair's own search had not kept;
+    a pair whose own search failed (`None`) is read over those alone.
+
+    `rest` is what the document's search found that prints none of the pairs.
+    """
+    def key(item):
+        return (item.source.owner_kind, item.source.owner_id,
+                item.source.text or "")
+
+    known: dict = {}
+    for item in list(items) + [item for planned in pair_plans
+                               for item in planned or ()]:
+        known.setdefault(key(item), item)
+    batches: list = []
+    added = 0
+    for pair_index, pair in enumerate(pairs):
+        planned = list((pair_plans[pair_index]
+                        if pair_index < len(pair_plans) else None) or ())
+        have = {key(item) for item in planned}
+        extra = [item for k, item in known.items()
+                 if k not in have and names_pair(item.source, pair, frame_axes)]
+        added += len(extra)
+        for batch in group_items(planned + extra, max_sources=max_sources,
+                                 max_chars=max_chars):
+            batch.frame = pair
+            batch.frame_index = pair_index
+            batch.anchors = tuple(anchors[pair_index]
+                                  if pair_index < len(anchors) else ())
+            batches.append(batch)
+    rest = [item for item in items
+            if not any(names_pair(item.source, pair, frame_axes)
+                       for pair in pairs)]
+    return batches, rest, added
+
+
 def main(argv: Optional[list] = None) -> int:
     parser = argparse.ArgumentParser(
         prog="python -m docpipe.extraction",
@@ -3893,10 +3928,11 @@ def main(argv: Optional[list] = None) -> int:
                         help="No harvest: hand the JSONL in OUT to the "
                              "profile's kg.make_serializer and write TTL")
     parser.add_argument("--recheck", action="store_true",
-                        help="No harvest and no model: apply the current "
-                             "evidence rule to the JSONL already in OUT, drop "
-                             "every coordinate whose quote does not carry it, "
-                             "and clear the stamps so the next run redoes them")
+                        help="No harvest and no model: check every "
+                             "coordinate of the JSONL already in OUT again, "
+                             "drop every one whose quote does not carry its "
+                             "answer, and clear the stamps so the next run "
+                             "redoes them")
     parser.add_argument("--keep-stamps", action="store_true",
                         help="--recheck only: leave the resume stamps in place")
     parser.add_argument("--top-up", action="store_true",
@@ -4037,11 +4073,6 @@ def main(argv: Optional[list] = None) -> int:
                  stats["unbacked"], stats["documents"])
         return 0
     spec_sha = hashlib.sha256(spec_path.read_bytes()).hexdigest()
-    # Read here rather than beside make_anchors, because the resume stamps are
-    # checked before the anchors are ever built and a stamp that does not know
-    # which anchors produced a document cannot tell it from one produced under
-    # another set. A broken anchors file raises here, before the model loads.
-    frozen, frozen_sha = frozen_anchors(profile, spec)
     # Which coordinates decide whether a value belongs in the graph at all.
     # The profile's business: "scenario == target" is what the kwp target
     # slice holds and says nothing about any other corpus.
@@ -4050,7 +4081,7 @@ def main(argv: Optional[list] = None) -> int:
         log.info("extraction: slice gate on %s — a row that falls out here "
                  "is not asked for its other coordinates",
                  ", ".join(sorted(slice_gate)))
-    anchors_sha = anchors_key(frozen_sha)
+    anchors_sha = anchors_key()
     templates = [line for line in
                  prompts.load(QUERIES_PROMPT_ID).text.splitlines()
                  if line.strip() and not line.lstrip().startswith("#")]
@@ -4085,7 +4116,10 @@ def main(argv: Optional[list] = None) -> int:
     from concurrent.futures import ThreadPoolExecutor, as_completed
 
     from docpipe.inference import faiss_store, query_cache
-    index, id_to_pos = faiss_store.load_global_index(args.index)
+    # Not `index`. `plan` below closes over this name and reads it when it
+    # runs, and the pair loop further down bound an `index` of its own: pairs
+    # 8, 9 and 10 of Kassel were planned against an int and the job failed.
+    faiss_index, id_to_pos = faiss_store.load_global_index(args.index)
     args.out.mkdir(parents=True, exist_ok=True)
     if ATTACH_IMAGES and not Path(args.image_root).is_dir():
         # Loud here, at second one. The alternative is what happened last
@@ -4149,18 +4183,20 @@ def main(argv: Optional[list] = None) -> int:
              len(documents), len(spec.parameters), TOP_K, MAX_ROUNDS,
              PLAN_PARALLEL, LLM_PARALLEL, group_size)
 
-    # One call per parameter, before anything is planned: the anchors depend on
-    # the definition, not on the document, and a probe string that is the same
-    # for the whole corpus is what makes the query-embedding cache pay.
+    # One call per question the field sweep asks, before anything is
+    # planned: the anchors depend on the question, not on the document, and a
+    # probe string that is the same for the whole corpus is what makes the
+    # query-embedding cache pay.
     anchors = ({} if os.environ.get("EXTRACT_ANCHORS", "1") == "0"
                else make_anchors(spec, store=args.out / "anchors.json",
-                                 key=anchors_sha, frozen=frozen))
+                                 key=anchors_sha))
 
     cache_path = args.out / "query_cache.db"
     primer = query_cache.connect(cache_path)
     prime_probe_cache(primer, spec, templates, anchors)
     primer.close()
-    more_sources = make_more_sources(args.db, index, id_to_pos, cache_path)
+    more_sources = make_more_sources(args.db, faiss_index, id_to_pos,
+                                     cache_path)
 
     if args.top_up:
         from . import topup
@@ -4253,8 +4289,8 @@ def main(argv: Optional[list] = None) -> int:
                     log.info("extract: %s: choice lists %s", Path(filename).stem,
                              ", ".join(f"{k}={len(v)}"
                                        for k, v in sorted(lists.items())))
-            retrieve = make_retrieve(conn, index, id_to_pos, cache_conn,
-                                     fetch, limit=PLAN_TOP)
+            retrieve = make_retrieve(conn, faiss_index, id_to_pos,
+                                     cache_conn, fetch, limit=PLAN_TOP)
             # The anchor is written for THIS document, so the document has to
             # say something first. One cheap probe out of the spec's own
             # templates, and what comes back carries its caption -- the words
@@ -4315,7 +4351,9 @@ def main(argv: Optional[list] = None) -> int:
         """
         from .verify import Refusal, verify_tuple
 
-        routed, _orphans = route_claims(batch, reply.get("tuples"))
+        routed, _orphans = route_claims(
+            batch, [claim for claim in reply.get("tuples") or ()
+                    if not refused_upstream(claim)])
         rows: list = []
         for item, claims in zip(batch.items, routed):
             for claim in claims:
@@ -4418,23 +4456,24 @@ def main(argv: Optional[list] = None) -> int:
         # pair a field in the request and left the search untouched, which is
         # how a plan with four target years ran with two.
         pair_items: dict = {}
-        jobs = [(name, index, pair) for name, _items, _report in plans
-                for index, pair in enumerate(frames.get(name) or ())]
+        jobs = [(name, pair_index, pair) for name, _items, _report in plans
+                for pair_index, pair in enumerate(frames.get(name) or ())]
         if jobs:
             where = {Path(fn).stem: (did, fn) for did, fn in group}
             with ThreadPoolExecutor(max_workers=PLAN_PARALLEL) as pool:
-                futures = {pool.submit(plan, *where[name], pair, index):
-                           (name, index) for name, index, pair in jobs}
+                futures = {pool.submit(plan, *where[name], pair, pair_index):
+                           (name, pair_index)
+                           for name, pair_index, pair in jobs}
                 for future in as_completed(futures):
-                    name, index = futures[future]
+                    name, pair_index = futures[future]
                     try:
                         _name, items, _report = future.result()
                     except Exception:
                         failures += 1
                         log.exception("extraction: planning %s for pair %d "
-                                      "failed", name, index)
+                                      "failed", name, pair_index)
                         continue
-                    pair_items[(name, index)] = items
+                    pair_items[(name, pair_index)] = items
 
         # Every batch of every document goes into one pool. A batch belongs
         # to exactly one document, so the replies come back where they can be
@@ -4443,28 +4482,23 @@ def main(argv: Optional[list] = None) -> int:
         owner_of: dict = {}
         for name, items, report in plans:
             found = list(frames.get(name) or ())
-            for index, pair in enumerate(found):
-                planned = pair_items.get((name, index))
-                if planned is None:
-                    continue
-                for batch in group_items(planned, max_sources=BATCH_SOURCES,
-                                         max_chars=BATCH_CHARS):
-                    batch.frame = pair
-                    batch.frame_index = index
-                    batch.frame_all = tuple(found)
-                    batch.anchors = tuple(anchor_texts.get((name, index), ()))
-                    batches.append(batch)
-                    owner_of[id(batch)] = name
+            framed, rest, added = pair_batches(
+                items, found,
+                [pair_items.get((name, i)) for i in range(len(found))],
+                frame_axes,
+                [anchor_texts.get((name, i), ()) for i in range(len(found))],
+                max_sources=BATCH_SOURCES, max_chars=BATCH_CHARS)
+            for batch in framed:
+                batches.append(batch)
+                owner_of[id(batch)] = name
             # The rest: what prints none of the pairs. A value the frame
             # search has no pair for is harvested here without one, and its
             # year is read per row or ends `unstated`, so a year the search
             # missed is a countable gap and not a silent loss.
-            rest = [item for item in items
-                    if not any(names_pair(item.source, pair, frame_axes)
-                               for pair in found)]
             if found:
                 log.info("extract: %s: %d pair(s), %d passage(s) print none "
-                         "of them", name, len(found), len(rest))
+                         "of them, %d read under a pair its own search had "
+                         "not kept", name, len(found), len(rest), added)
             for batch in group_items(rest, max_sources=BATCH_SOURCES,
                                      max_chars=BATCH_CHARS):
                 batches.append(batch)

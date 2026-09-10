@@ -18,7 +18,7 @@ Gib ausschließlich ein JSON-Objekt in dieser Form zurück, in EINER Zeile, OHNE
 
 {"tuples": [{"source": "Q2", "value": 126656132, "unit": "kWh/a", "unit_raw": "kWh/a", "quote": "| Gas H | 126.656.132 | 520.465.057 | 1.036.767.833 |"}, {"source": "Q5", "value": "endura kommunal", "unit": "", "unit_raw": "", "quote": "Bearbeitung durch das Projektkonsortium: endura kommunal GmbH Emmy-Noether-Str. 2 79110 Freiburg"}], "status": "complete", "need_more": []}
 
-Ein Wert pro Eintrag, und innerhalb des Frames vollständig: JEDER Wert in JEDER Quelle, die zum Frame gehört, bekommt seinen Eintrag, jede Zeile und jede Spalte einzeln. Eine Tabelle des Frames mit 13 Zeilen und 3 Zahlenspalten ergibt 39 Einträge. Eine Tabelle eines anderen Jahres ergibt keinen. Eine leere Liste {"tuples": []} ist das richtige Ergebnis, wenn keine der Quellen zum Frame gehört oder keine einen gesuchten Wert enthält.
+Ein Wert pro Eintrag, und innerhalb des Frames vollständig: JEDER Wert des Frames in JEDER Quelle, die zum Frame gehört, bekommt seinen Eintrag, jede Zeile einzeln. Unterscheiden die Spalten einer Tabelle Jahre oder Szenarien, gehört nur die Spalte des Frames dazu: 13 Zeilen mit den Jahresspalten 2022, 2030 und 2045 ergeben im Frame 2030 genau 13 Einträge, alle aus der Spalte 2030. Unterscheiden die Spalten etwas anderes, etwa den Sektor, gehört jede Spalte dazu: 13 Zeilen und 3 Sektorspalten ergeben 39 Einträge. Eine Tabelle eines anderen Jahres ergibt keinen. Eine leere Liste {"tuples": []} ist das richtige Ergebnis, wenn keine der Quellen zum Frame gehört oder keine einen gesuchten Wert enthält.
 
 Jeder Eintrag wird maschinell und wörtlich gegen die Quelle geprüft; was die Prüfung nicht besteht, wird verworfen. Deshalb gelten diese Regeln:
 

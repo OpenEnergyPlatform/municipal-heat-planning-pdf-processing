@@ -1,4 +1,4 @@
-"""The evidence rule applied backwards, over a harvest written without it.
+"""The answer-in-quote rule applied backwards, over a harvest written without it.
 
 Every claim in a harvest file carries its wording and its passage, which is
 what makes a rule that tightens enforceable on what is already written. These
@@ -128,12 +128,10 @@ def test_a_rewritten_harvest_gets_a_rewritten_summary(tmp_path):
     Carried over it would report a run that no longer exists, and it is the
     one line a reader of 1.082 plans actually reads.
 
-    The case: a carrier read off a DIFFERENT table. The carrier is the one
-    coordinate the spec holds to the row's own source (evidence "own"), so
-    that made the value a C. This pass strips the reading whose passage does
-    not carry it, and that value is then an ordinary one with one coordinate
-    fewer -- the whole point of applying the rule backwards. A kept summary
-    would go on reporting two unusable values.
+    The case: two carrier readings, one whose passage carries the wording and
+    one whose passage does not. This pass strips the second, and the summary
+    written after it counts what the tuples now say rather than what the
+    stale line above them claimed.
     """
     spec = _spec()
     parameter = _numeric_parameter(spec)
@@ -146,15 +144,14 @@ def test_a_rewritten_harvest_gets_a_rewritten_summary(tmp_path):
                 "carrier_quote": quote, "carrier_state": fields.READ,
                 "provenance": {"document_id": 857, "owner_kind": "table",
                                "owner_id": 1},
-                # A foreign table: for an "own" axis that is the finding.
-                "carrier_source": ["table", 87517], "tier": "text_located"}
+                "carrier_source": ["table", 1], "tier": "text_located"}
 
     path = _write(tmp_path, [
         _row(listed, f"| {listed} | 42.005 | MWh/a | im Jahr 2020 |"),
         _row(listed, "Tabelle 1: Bestehende Waermenetze und Heizwerke"),
         {"kind": "summary", "document_id": 857, "tuples": 2, "refusals": 0,
          "levels": {"A": 0, "B": 0, "C": 2},
-         "reasons": {"nonlocal:carrier": 2}, "image_origin": 0}])
+         "reasons": {"unbacked:carrier": 2}, "image_origin": 0}])
 
     stats = recheck.recheck_file(path, spec)
     assert stats["summaries rewritten"] == 1
@@ -162,11 +159,11 @@ def test_a_rewritten_harvest_gets_a_rewritten_summary(tmp_path):
             in path.read_text(encoding="utf-8").strip().splitlines()]
     assert len(rows) == 3 and rows[-1]["kind"] == "summary", "still last"
     assert rows[-1]["document_id"] == 857 and rows[-1]["tuples"] == 2
-    # The first quote carries the wording and stays, read off a foreign
-    # table; the second does not and goes. One value keeps its C, one loses
-    # it, and a carried-over summary would report neither.
-    assert rows[-1]["levels"] == {"A": 1, "B": 0, "C": 1}
-    assert rows[-1]["reasons"] == {"nonlocal:carrier": 1}
+    # The first quote carries the wording and stays; the second does not and
+    # goes, and the coordinate is left for the next run to read. Neither is a
+    # doubt about the value, and the stale line claimed two.
+    assert rows[-1]["levels"] == {"A": 2, "B": 0, "C": 0}
+    assert rows[-1]["reasons"] == {}
 
 def test_a_recheck_does_not_turn_a_parameter_state_into_a_refusal(tmp_path):
     """This pass rewrites the tuples and rebuilds the summary from them, and

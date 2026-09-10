@@ -210,6 +210,9 @@
        },
        {
         "pattern": "^text value not in its quote$"
+       },
+       {
+        "pattern": "^passage is not of this pair$"
        }
       ],
       "description": "Why the claim was refused; one of the reason families of verify.py and pipeline.py.",
@@ -311,7 +314,7 @@
          "pattern": "^page_transcribed$"
         },
         {
-         "pattern": "^(nonlocal|exhausted|unbacked):[a-z_]+$"
+         "pattern": "^(exhausted|unbacked):[a-z_]+$"
         }
        ]
       },
@@ -1246,7 +1249,7 @@
        "note": "Which factsheet holds the value. Unlike the kwp `parent` axis there is no map from the answer to a container class: the answer IS the identity of a node minted per document from the AR6 run the wording resolves to. A wording that resolves to no run is its own factsheet, and an out: entry is none at all.",
        "role": "parent"
       },
-      "x-question": "Auf welches Szenario dieser Publikation bezieht sich der Wert? Die Liste führt die Laufkennungen, die genau diese Publikation in der AR6-Datenbank dokumentiert. Im Text stehen sie fast nie, dort heißt dasselbe Szenario \"Current Policies\" oder \"the NDC scenario\". Nennt das Dokument nur die Familie, ist \"Szenario-Familie\" die richtige Antwort und keine Kennung. Belege mit einer Passage aus der Quelle der Zeile selbst oder aus dem Abschnitt, in dem diese Quelle steht. Steht die eigene Quelle unter den gezeigten, nennt die Anfrage sie als \"source\"; steht auch ihr Abschnitt darunter, als \"section\"."
+      "x-question": "Auf welches Szenario dieser Publikation bezieht sich der Wert? Die Liste führt die Laufkennungen, die genau diese Publikation in der AR6-Datenbank dokumentiert. Im Text stehen sie fast nie, dort heißt dasselbe Szenario \"Current Policies\" oder \"the NDC scenario\". Nennt das Dokument nur die Familie, ist \"Szenario-Familie\" die richtige Antwort und keine Kennung."
      },
      "scenario_quote": {
       "description": "The verbatim passage carrying 'scenario'. Present exactly when scenario_state is 'read'.",
@@ -1665,7 +1668,7 @@
        "note": "Which factsheet holds the value. Unlike the kwp `parent` axis there is no map from the answer to a container class: the answer IS the identity of a node minted per document from the AR6 run the wording resolves to. A wording that resolves to no run is its own factsheet, and an out: entry is none at all.",
        "role": "parent"
       },
-      "x-question": "Auf welches Szenario dieser Publikation bezieht sich der Wert? Die Liste führt die Laufkennungen, die genau diese Publikation in der AR6-Datenbank dokumentiert. Im Text stehen sie fast nie, dort heißt dasselbe Szenario \"Current Policies\" oder \"the NDC scenario\". Nennt das Dokument nur die Familie, ist \"Szenario-Familie\" die richtige Antwort und keine Kennung. Belege mit einer Passage aus der Quelle der Zeile, aus dem Abschnitt, in dem sie steht, oder von der Nachbarseite. Die ersten beiden nennt die Anfrage als \"source\" und \"section\", soweit sie mitgezeigt werden."
+      "x-question": "Auf welches Szenario dieser Publikation bezieht sich der Wert? Die Liste führt die Laufkennungen, die genau diese Publikation in der AR6-Datenbank dokumentiert. Im Text stehen sie fast nie, dort heißt dasselbe Szenario \"Current Policies\" oder \"the NDC scenario\". Nennt das Dokument nur die Familie, ist \"Szenario-Familie\" die richtige Antwort und keine Kennung."
      },
      "scenario_quote": {
       "description": "The verbatim passage carrying 'scenario'. Present exactly when scenario_state is 'read'.",
@@ -1930,7 +1933,7 @@
        "note": "Which factsheet holds the value. Unlike the kwp `parent` axis there is no map from the answer to a container class: the answer IS the identity of a node minted per document from the AR6 run the wording resolves to. A wording that resolves to no run is its own factsheet, and an out: entry is none at all.",
        "role": "parent"
       },
-      "x-question": "Auf welches Szenario dieser Publikation bezieht sich der Wert? Die Liste führt die Laufkennungen, die genau diese Publikation in der AR6-Datenbank dokumentiert. Im Text stehen sie fast nie, dort heißt dasselbe Szenario \"Current Policies\" oder \"the NDC scenario\". Nennt das Dokument nur die Familie, ist \"Szenario-Familie\" die richtige Antwort und keine Kennung. Belege mit einer Passage aus der Quelle der Zeile selbst oder aus dem Abschnitt, in dem diese Quelle steht. Steht die eigene Quelle unter den gezeigten, nennt die Anfrage sie als \"source\"; steht auch ihr Abschnitt darunter, als \"section\"."
+      "x-question": "Auf welches Szenario dieser Publikation bezieht sich der Wert? Die Liste führt die Laufkennungen, die genau diese Publikation in der AR6-Datenbank dokumentiert. Im Text stehen sie fast nie, dort heißt dasselbe Szenario \"Current Policies\" oder \"the NDC scenario\". Nennt das Dokument nur die Familie, ist \"Szenario-Familie\" die richtige Antwort und keine Kennung."
      },
      "scenario_quote": {
       "description": "The verbatim passage carrying 'scenario'. Present exactly when scenario_state is 'read'.",
@@ -2345,7 +2348,7 @@
        "note": "Which factsheet holds the value. Unlike the kwp `parent` axis there is no map from the answer to a container class: the answer IS the identity of a node minted per document from the AR6 run the wording resolves to. A wording that resolves to no run is its own factsheet, and an out: entry is none at all.",
        "role": "parent"
       },
-      "x-question": "Auf welches Szenario dieser Publikation bezieht sich der Wert? Die Liste führt die Laufkennungen, die genau diese Publikation in der AR6-Datenbank dokumentiert. Im Text stehen sie fast nie, dort heißt dasselbe Szenario \"Current Policies\" oder \"the NDC scenario\". Nennt das Dokument nur die Familie, ist \"Szenario-Familie\" die richtige Antwort und keine Kennung. Belege mit einer Passage aus der Quelle der Zeile selbst oder aus dem Abschnitt, in dem diese Quelle steht. Steht die eigene Quelle unter den gezeigten, nennt die Anfrage sie als \"source\"; steht auch ihr Abschnitt darunter, als \"section\"."
+      "x-question": "Auf welches Szenario dieser Publikation bezieht sich der Wert? Die Liste führt die Laufkennungen, die genau diese Publikation in der AR6-Datenbank dokumentiert. Im Text stehen sie fast nie, dort heißt dasselbe Szenario \"Current Policies\" oder \"the NDC scenario\". Nennt das Dokument nur die Familie, ist \"Szenario-Familie\" die richtige Antwort und keine Kennung."
      },
      "scenario_quote": {
       "description": "The verbatim passage carrying 'scenario'. Present exactly when scenario_state is 'read'.",
@@ -3143,7 +3146,7 @@
   "description": "Every key but `spec` makes the document stale, and it is harvested again, when it differs from the current run. `spec` is recorded so a reader can say which file a harvest came from, and is not compared. Withheld when the harvest did not happen. The parameter/, value/, axis/ and slot/ keys record which question changed, so a moving ontology costs only the coordinates it touched rather than a full re-read of the corpus. A stamp written before those keys existed carries none of them, so for it `spec` decides again, and it is stale in all of them.",
   "patternProperties": {
    "^axis/[^/]+/[^/]+$": {
-    "description": "What this coordinate asks and what it may answer: the question, the evidence rule, and the offered list with its spellings and its definitions. Everything the model sees for this axis, and nothing else.",
+    "description": "What this coordinate asks and what it may answer: the question and the offered list with its spellings and its definitions. Everything the model sees for this axis, and nothing else.",
     "pattern": "^[0-9a-f]{64}$",
     "type": "string"
    },
@@ -3181,7 +3184,7 @@
   },
   "properties": {
    "anchors": {
-    "description": "The anchor prompt, the model, the version of the target set and the profile's frozen anchor file, together. NOT the questions: which question was asked is carried by the parameter/, value/, axis/ and slot/ keys, and a question that is GONE by the rule that a key the stamp still carries and the run no longer asks makes the document stale. The anchors decide which passages a document was read from, so a document read under one set is not the same result as one read under another. Empty when anchors were off.",
+    "description": "The anchor prompt, the model and the version of the target set, together. NOT the questions: which question was asked is carried by the parameter/, value/, axis/ and slot/ keys, and a question that is GONE by the rule that a key the stamp still carries and the run no longer asks makes the document stale. The anchors decide which passages a document was read from, so a document read under one set is not the same result as one read under another. Empty when anchors were off.",
     "pattern": "^([0-9a-f]{16})?$",
     "type": "string"
    },
@@ -3682,7 +3685,6 @@
      "why": {
       "enum": [
        "quote_not_in_source",
-       "quote_not_local",
        "quote_too_short",
        "answer_not_in_quote",
        "unbacked"

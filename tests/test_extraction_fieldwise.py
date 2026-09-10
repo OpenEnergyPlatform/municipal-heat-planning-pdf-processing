@@ -23,7 +23,7 @@ import pytest
 
 from docpipe.extraction import fields, runner
 from docpipe.extraction.pipeline import (DocumentReport, Source, WorkItem,
-                                         fold_fieldwise, group_items,
+                                         fold_batch, group_items,
                                          merge_field, rows_from_reply)
 from docpipe.extraction.spec import load as load_spec
 
@@ -206,7 +206,10 @@ def test_the_example_survives_the_field_wise_round_trip(profile):
                                       "value_raw": wording, "quote": quote}
             merge_field(rows, batch.sources, slot, {"answers": answers})
         report = DocumentReport(document_id=7)
-        fold_fieldwise(batch, rows, orphans, report)
+        for row in rows:
+            row.claim["source"] = batch.label(row.item_index)
+        fold_batch(batch, {"tuples": [row.claim for row in rows] + orphans},
+                   report)
         assert report.tuples, f"{parameter.uri}: nothing survived"
         assert not report.refusals, \
             f"{parameter.uri}: {report.refusals[0]['reason']}"
@@ -1126,35 +1129,31 @@ def test_the_row_prompt_example_names_no_place_this_corpus_contains(profile):
         assert "anderen Plan" in text
 
 
-def test_the_field_prompt_states_the_rule_the_code_enforces(profile):
-    """A rule the request does not state is a rule the model cannot follow.
-    The code refuses a passage from another source; the prompt has to say
-    which source is the row's own and how the request names it."""
+def test_the_field_prompt_states_the_two_checks_and_no_other(profile):
+    """A field answer is checked for two things: its quote stands in one of
+    the shown sources, and the quote carries the answer. A prompt that
+    promises a third, which source a quote may come from, has the model
+    refuse readings no check refuses."""
     name, _spec = profile
     text = (PROFILES / name / "prompts" / "extraction" / "field.md").read_text(
         encoding="utf-8")
-    # One entry per profile, and a profile the table does not name fails
-    # rather than skips: a third profile must not slip through green.
+    assert "EINER der gezeigten Quellen" in text
+    for gone in ("AUS WELCHER Quelle", "Nachbarseite", "erlaubten Quellen",
+                 '"holds"', '"section"'):
+        assert gone not in text, gone
     if name == "kwp":
-        for promised in ('"source"', '"section"', '"block_id"', '"holds"',
-                         "EIGENEN Tabelle", "Nachbarseite"):
-            assert promised in text, promised
-        # The two captions the rule turns on, verbatim from Kassel
-        # 349525/349566.
+        # The row still says which source is its own, and the two captions
+        # the column rule turns on stay, verbatim from Kassel 349525/349566.
+        assert '"source"' in text and "EIGENEN Tabelle" in text
         assert "Tabelle 17: Endenergieverbrauch der Gesamtstadt" in text
         assert "Tabelle 28: Endenergieverbrauch der Gesamtstadt" in text
-        # And the column rule no longer says the column is the year.
         rules = text.split("4. Tabellen mit mehreren")[1]
         column = rules.split(chr(10) + chr(10))[0]
         assert "SEKTOR" in column and "JAHR" in column
     elif name == "scenarios":
-        # Three of the four axes are held to the row's own source, so the
-        # request has to say how it names that source and its section, and
-        # must not tell the model the passage need not be the source.
-        assert '"source"' in text and '"section"' in text
-        assert "Es muss NICHT die Quelle sein" not in text
+        assert '"source"' in text
     else:
-        pytest.fail(f"no evidence rule listed for profile {name!r}")
+        pytest.fail(f"no prompt check listed for profile {name!r}")
 
 
 def test_the_own_window_shows_the_section_a_table_stands_in(monkeypatch):
@@ -1253,8 +1252,8 @@ def test_a_parent_section_is_not_fetched_twice_and_a_long_one_is_cut(tmp_path):
 
 
 def test_the_request_says_where_a_source_stands(monkeypatch):
-    """Which source is the table and which is the section around it is a fact
-    the request carries, not one the model infers from the order."""
+    """Where a source stands, its page and its block id, is a fact the request
+    carries, not one the model infers from the order."""
     spec, _reply = _two_row_spec_and_reply()
     parameter = spec.parameters[0]
     batch = _batch(parameter)
@@ -1267,107 +1266,14 @@ def test_the_request_says_where_a_source_stands(monkeypatch):
                                     fields.asked_slots(parameter))
     first, second = payload["sources"]
     assert first["block_id"] == "p85_tbl0" and first["page"] == 86
-    assert "holds" not in first
-    assert second["holds"], "the parent says what it is"
-
-
-# ---------------------------------------------------------------------------
-# How far from a row its evidence may stand
-#
-# 370 of Kassel's 455 year readings cited a passage outside the row's own
-# table and its section, 146 of them the annotated placeholder of a DIFFERENT
-# table, and every one of them verified: the passage was real, it was shown,
-# and it carried a year. It was just not this row's year.
-# ---------------------------------------------------------------------------
-
-def _sources_near_and_far():
-    table = Source("table", 87458, "| Erdgas | 42.005 | MWh/a |",
-                   {"page": 87, "parent_section": 349525})
-    parent = Source("section", 349525,
-                    "Tabelle 18: CO2-Emissionen im Zielszenario 2040",
-                    {"page": 86})
-    neighbour = Source("table", 87457, "| Erdgas | 1 | 2040 |", {"page": 86})
-    far = Source("table", 87517, "| Erdgas | 9 | 2030 |", {"page": 163})
-    return table, parent, neighbour, far
-
-
-@pytest.mark.parametrize("rule,which,allowed", [
-    ("own", "own", True), ("own", "parent", True),
-    ("own", "neighbour", False), ("own", "far", False),
-    ("local", "own", True), ("local", "parent", True),
-    ("local", "neighbour", True), ("local", "far", False),
-    ("any", "own", True), ("any", "neighbour", True), ("any", "far", True),
-])
-def test_the_axis_decides_how_far_its_evidence_may_stand(rule, which, allowed):
-    from docpipe.extraction.pipeline import evidence_is_local
-    table, parent, neighbour, far = _sources_near_and_far()
-    found = {"own": table, "parent": parent, "neighbour": neighbour,
-             "far": far}[which]
-    slot = fields.Slot(name="year", kind=fields.NUMBER, question="?",
-                       evidence=rule)
-    assert evidence_is_local(slot, found, table) is allowed
-
-
-def test_a_passage_from_another_table_leaves_the_coordinate_open(profile):
-    """The promise: a reading whose passage belongs to another row is refused
-    AND the row stays open, because the next window shows other passages.
-
-    Refusing without leaving it open would trade a wrong year for a missing
-    one. The passage is real and it carries an answer, it just carries
-    somebody else's.
-    """
-    from docpipe.extraction.pipeline import merge_field as merge, open_rows
-    batch, rows, slot = _one_row(profile, kind=fields.CHOICE)
-    if batch is None:
-        pytest.skip("this profile has no choice axis")
-    strict = fields.Slot(name=slot.name, kind=slot.kind, question=slot.question,
-                         options=slot.options, evidence="own")
-    own = batch.items[rows[0].item_index].source
-    label = strict.options[0].label
-    far = Source("table", 999999, f"Ganz woanders: {label} steht hier.",
-                 {"page": 900})
-    counts = merge(rows, [far], strict, {"answers": {rows[0].label: {
-        "value": label, "value_raw": label,
-        "quote": f"Ganz woanders: {label} steht hier."}}},
-        owner_of={rows[0].label: own})
-    assert counts["filled"] == 0
-    assert [f["why"] for f in counts["failed"]] == ["quote_not_local"]
-    assert rows[0] in open_rows(rows, strict), "open, so the next window asks"
-
-    # The same reading from the row's own source is taken.
-    near = Source(own.owner_kind, own.owner_id,
-                  f"In der eigenen Tabelle: {label}.", own.provenance)
-    counts = merge(rows, [near], strict, {"answers": {rows[0].label: {
-        "value": label, "value_raw": label,
-        "quote": f"In der eigenen Tabelle: {label}."}}},
-        owner_of={rows[0].label: own})
-    assert counts["filled"] == 1
-
-
-def test_the_kwp_axes_carry_the_rule_their_measurement_calls_for():
-    """A row label is read off its own table, a scenario is named nearby, a
-    class is argued in a methods chapter anywhere in the plan."""
-    spec = load_spec(json.loads(
-        (PROFILES / "kwp" / "extraction_spec.json").read_text(encoding="utf-8")))
-    for parameter in spec.parameters:
-        rules = {s.name: s.evidence for s in fields.axis_slots(parameter)}
-        if not rules:
-            continue
-        assert rules.get("carrier") == "own"
-        assert rules.get("sector") == "own"
-        assert rules.get("year") == "local"
-        assert rules.get("scenario") == "local"
-        assert rules.get("quantity") == "local"
+    assert second["kind"] == "section" and second["page"] == 86
 
 
 # ---------------------------------------------------------------------------
 # Which source is a row's own, and whether the wording names the class chosen
 #
-# The evidence rule is per axis and about the distance between a passage and
-# THIS row (see above). A rule the request does not state is a rule the model
-# cannot follow: measured on Kassel, 146 year readings cited the annotated
-# placeholder of ANOTHER table out of the passages it was shown, and every one
-# of them verified.
+# The row says which shown source is its own, so the model finds its table's
+# header and caption without recognising its own quote among five passages.
 # ---------------------------------------------------------------------------
 
 def _row_and_its_neighbours():
@@ -1395,18 +1301,10 @@ def test_the_request_tells_each_row_which_source_is_its_own():
                                     {r.label: own for r in rows})
     assert payload["sources"][1]["block_id"] == "p85_tbl0", "Q2 is the own one"
     assert [r["source"] for r in payload["rows"]] == ["Q2"] * len(rows)
-    assert [r["section"] for r in payload["rows"]] == ["Q3"] * len(rows)
 
-    # Its parent section is NOT among the shown passages: then the row says
-    # nothing about it rather than pointing at whatever else is there.
-    payload = runner._field_payload([other, own], rows, slots, None,
-                                    {r.label: own for r in rows})
-    assert [r["source"] for r in payload["rows"]] == ["Q2"] * len(rows)
-    assert all("section" not in r for r in payload["rows"])
-
-    # And with no ownership handed over, neither key is invented.
+    # And with no ownership handed over, no source is invented.
     bare = runner._field_payload([other, own, section], rows, slots)
-    assert all("source" not in r and "section" not in r for r in bare["rows"])
+    assert all("source" not in r for r in bare["rows"])
 
 
 @pytest.mark.parametrize("given,wording,names", [
@@ -1887,9 +1785,8 @@ def test_the_sweep_starts_again_where_it_last_read_instead_of_striking_it_off(
 
     Every passage a window showed went into `seen` and was never shown again.
     So the sweep read the sector out of a table and then looked for the
-    aggregation everywhere except that table -- and the `own` and `local`
-    evidence rules, which accept a quote from exactly that passage and its
-    section, had nothing left to accept it from.
+    aggregation everywhere except that table, which is where the header and
+    the caption that carry it stand.
 
     Two things are pinned here, because the second is what keeps the first
     honest: the passage a coordinate was read in rides along afterwards, AND
@@ -1924,9 +1821,9 @@ def test_the_sweep_starts_again_where_it_last_read_instead_of_striking_it_off(
             shown_at.append([s.owner_id for s in shown])
             slots = slots if isinstance(slots, (list, tuple)) else [slots]
             answered = {}
-            # Answers once, in the window that shows 9001, and only the axis
-            # whose evidence rule accepts a passage from elsewhere. Everything
-            # else stays open, which is what keeps the sweep walking.
+            # Answers once, in the window that shows 9001, and only the one
+            # axis. Everything else stays open, which is what keeps the sweep
+            # walking.
             if any(s.owner_id == 9001 for s in shown):
                 for slot in slots:
                     if slot.name == "spatial_scope":
@@ -1996,8 +1893,7 @@ def test_the_re_entry_is_capped_and_the_passage_that_answered_goes_first(
     which = "Tabelle 17 zeigt den Zielpfad der Waermeversorgung."
     said = {"spatial_scope": (9001, "Gemeindegebiet", "Stadtgebiet", where),
             "scenario": (9002, "Zielszenario", "Zielpfad", which)}
-    # 9001 is read from anywhere, 9002 only from a page next to the row's
-    # own: two axes with different evidence rules, both riding along after.
+    # 9001 carries one axis and 9002 the other, and both ride along after.
     pool = [Source("section", 9001, where, {"document_id": 7, "page": 11}),
             Source("section", 9002, which, {"document_id": 7, "page": 2})]
     pool += [_far_source(9003 + n) for n in range(4)]
@@ -2055,63 +1951,6 @@ def test_the_re_entry_is_capped_and_the_passage_that_answered_goes_first(
         assert {9001, 9002, 500} <= set(window), window
         assert 0 not in window, window
         assert len(window) <= runner.FIELD_WINDOW + runner.FIELD_RE_ENTRY, window
-
-
-# ---------------------------------------------------------------------------
-# The scenarios axes under the rule the paper shape argues (SC6)
-# ---------------------------------------------------------------------------
-
-def _scenarios_spec():
-    return load_spec(json.loads(
-        (PROFILES / "scenarios" / "extraction_spec.json")
-        .read_text(encoding="utf-8")))
-
-
-def test_a_scenario_named_in_another_section_does_not_place_the_value():
-    """The promise: a scenario type read off a passage that is not the row's
-    own is refused and the row stays open. Every scenarios axis slot is kind
-    `text` with no options, so this goes through `_one_row(kind=None)`, which
-    yields `scenario_type` and its `scenario` slot carrying `evidence="own"`
-    straight from the spec."""
-    from docpipe.extraction.pipeline import merge_field as merge, open_rows
-    batch, rows, slot = _one_row(("scenarios", _scenarios_spec()), kind=None)
-    assert batch is not None
-    assert batch.items[0].parameter.uri == "scenario_type"
-    assert slot.name == "scenario" and slot.evidence == "own"
-    own = batch.items[rows[0].item_index].source
-    far = Source("table", 999999, "Ganz woanders: the NDC scenario steht hier.",
-                 {"page": 900})
-    counts = merge(rows, [far], slot, {"answers": {rows[0].label: {
-        "value": "out:family", "value_raw": "the NDC scenario",
-        "quote": "Ganz woanders: the NDC scenario steht hier."}}},
-        owner_of={rows[0].label: own})
-    assert counts["filled"] == 0
-    assert [f["why"] for f in counts["failed"]] == ["quote_not_local"]
-    assert rows[0] in open_rows(rows, slot), "open, so the next window asks"
-
-    near = Source(own.owner_kind, own.owner_id,
-                  "In der eigenen Quelle: the NDC scenario.", own.provenance)
-    counts = merge(rows, [near], slot, {"answers": {rows[0].label: {
-        "value": "out:family", "value_raw": "the NDC scenario",
-        "quote": "In der eigenen Quelle: the NDC scenario."}}},
-        owner_of={rows[0].label: own})
-    assert counts["filled"] == 1
-    assert rows[0].claim["scenario_source"] == ["table", 0]
-
-
-def test_the_region_axis_takes_the_neighbouring_page_and_not_the_far_one():
-    """`scenario_region` is the one `local` axis of the scenarios spec:
-    coverage is stated once in the methods section while the scenario list
-    is a heading further on. Taken from the real spec, not hand-made -- the
-    hand-made rule is what the parametrised test above already covers."""
-    from docpipe.extraction.pipeline import evidence_is_local
-    spec = _scenarios_spec()
-    slot = next(s for s in fields.axis_slots(spec.by_uri["scenario_region"])
-                if s.name == "scenario")
-    assert slot.evidence == "local"
-    table, _parent, neighbour, far = _sources_near_and_far()
-    assert evidence_is_local(slot, neighbour, table) is True
-    assert evidence_is_local(slot, far, table) is False
 
 
 # ---------------------------------------------------------------------------

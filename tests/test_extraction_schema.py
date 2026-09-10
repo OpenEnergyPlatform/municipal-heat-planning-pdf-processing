@@ -308,7 +308,7 @@ def test_the_parameter_state_line_matches_its_own_branch_of_the_schema(
     states = parameter_states(spec, report.tuples, [])
 
     out = tmp_path / "plan.jsonl"
-    write_report(report, out, None, states)
+    write_report(report, out, states)
     rows = [json.loads(line) for line
             in out.read_text(encoding="utf-8").strip().splitlines()]
     written = [r for r in rows if r["kind"] == "parameter_state"]
@@ -385,19 +385,20 @@ def test_the_summary_line_is_the_last_one_and_matches_its_own_branch(
 def test_the_summary_names_only_reasons_the_schema_knows():
     """The reasons are a closed list precisely so they can be counted. A
     reason the schema does not describe is a column nobody downstream can
-    add up, and "nonlocal" without its axis is exactly that."""
+    add up, and "exhausted" without its axis is exactly that."""
     spec = load_spec(PROFILES / "kwp" / "extraction_spec.json")
     validator = VALIDATOR({**build(spec)["harvest"]})
     line = {"kind": "summary", "document_id": 7, "tuples": 1, "refusals": 0,
             "levels": {"A": 0, "B": 0, "C": 1}, "image_origin": 0,
-            "reasons": {"nonlocal:year": 1}}
+            "reasons": {"exhausted:year": 1}}
     assert validator.is_valid(line)
     assert validator.is_valid({**line, "reasons": {"exhausted:carrier": 1,
                                                    "conflict": 1,
                                                    "page_transcribed": 1,
                                                    "repaired": 0}})
-    for bad in ({"nonlocal": 1}, {"nonlocal:Jahr": 1}, {"erfunden": 1},
-                {"nonlocal:year extra": 1}):
+    # "nonlocal" was a reason until where a passage stands stopped being one.
+    for bad in ({"exhausted": 1}, {"exhausted:Jahr": 1}, {"erfunden": 1},
+                {"exhausted:year extra": 1}, {"nonlocal:year": 1}):
         assert not validator.is_valid({**line, "reasons": bad}), bad
     # A level the schema does not list is a level nobody can act on.
     assert not validator.is_valid({**line, "levels": {"A": 0, "B": 0, "C": 1,

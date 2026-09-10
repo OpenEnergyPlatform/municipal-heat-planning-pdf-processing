@@ -161,13 +161,13 @@ plus, by default, the table and figure crops under each document's own
 `images/` directory (`EXTRACT_ATTACH_IMAGES=0` turns that off); no PDF and
 no `results/` file. For each document it plans which passages
 answer which of the active profile's spec questions, groups them into
-model requests, and folds a reply's claims through an evidence rule before
+model requests, and checks every claim's quote against its source before
 a claim becomes an accepted tuple; a claim that fails is a refusal, not a
 row (`docpipe/extraction/verify.py`). The output is one JSONL harvest file
 per document (tuples, refusals, one summary line) and one stamp file
 recording what produced it. Five further passes act on an already-written
 harvest without repeating the whole document: `--recheck` reapplies the
-evidence rule with no model, `--remap` re-resolves a coordinate's wording
+answer-in-quote rule with no model, `--remap` re-resolves a coordinate's wording
 against a changed vocabulary with no model, `--top-up` resweeps only the
 coordinates a stamp says moved, `--review` reads the lowest trust level
 values a second time, and `--serialize` hands accepted tuples to stage 8.
@@ -306,7 +306,7 @@ per document, so this section documents its stamp on its own.
 written only once `finish_document` decides a harvest actually happened;
 a document is left unstamped, so the next run redoes it, when more than
 half its planned sources came back unreachable or nothing answered at all
-(`UNREACHABLE_LIMIT = 0.5`, `docpipe/extraction/runner.py:3520`). Inside
+(`UNREACHABLE_LIMIT = 0.5`, `docpipe/extraction/runner.py:3584`). Inside
 it:
 
 | Key | What it records | Compared on a redo |
@@ -323,18 +323,18 @@ it:
 | `review/*` | what a second reading of a value came to | never |
 
 The fine keys (`parameter/`, `value/`, `axis/`, `slot/`) come from
-`spec.fingerprints()` (`docpipe/extraction/spec.py:628` to `650`), and
+`spec.fingerprints()` (`docpipe/extraction/spec.py:618` to `640`), and
 their presence is what licenses ignoring the coarse `spec` key. An earlier
 design hashed the whole spec file as one number, so one new label anywhere
 in it made a whole corpus stale together, about 93 GPU hours to reread
-1,082 documents over one added word (`docpipe/extraction/runner.py:3313`
-to `3316`); the ontology behind the spec is revised repeatedly, so the
+1,082 documents over one added word (`docpipe/extraction/runner.py:3377`
+to `3380`); the ontology behind the spec is revised repeatedly, so the
 same cost would recur each time it is. With one key per parameter, per value list
 and per axis, `stale()` names exactly which question changed and leaves
 the rest of the corpus alone; it checks both directions, so a question
 dropped from the spec counts as changed too, the one case the old
 whole-file hash used to catch that a purely additive scheme would
-otherwise miss (`docpipe/extraction/runner.py:3419` to `3423`). A file
+otherwise miss (`docpipe/extraction/runner.py:3483` to `3487`). A file
 with no stamp at all is read as fully stale, on principle: the opposite
 reading, a missing stamp taken as nothing left to do, had already let a
 run silently skip 165 documents with exit code 0
@@ -344,7 +344,7 @@ The review prompt (`extraction/review`) is deliberately left out of
 `PROMPT_IDS` itself, not merely out of the comparison: a review leaves a
 value unchanged, only its `flags` grow, so folding the review prompt's sha
 into every stamp would report the whole corpus stale the day that one
-prompt is edited (`docpipe/extraction/runner.py:145` to `151`).
+prompt is edited (`docpipe/extraction/runner.py:146` to `152`).
 
 Three passes act on a moved key without opening the document again.
 
@@ -353,8 +353,8 @@ Three passes act on a moved key without opening the document again.
   file and the spec file. It carries a document's stamp forward for
   exactly the answer spaces it could fully resolve; a wording that matches
   nothing in either list is left open for `--top-up` instead of guessed.
-- `--recheck`, no model, no index: reapplies the evidence rule as it reads
-  today to what a harvest already wrote, drops a coordinate whose recorded
+- `--recheck`, no model, no index: reapplies the answer-in-quote rule to
+  what a harvest already wrote, drops a coordinate whose recorded
   quote does not actually carry the answer, and clears the stamp (unless
   `--keep-stamps`) so the next harvest redoes exactly those.
 - `--top-up`, the only one of the three that needs the model and the
@@ -376,7 +376,7 @@ refinement, visuals and extraction checks the served model's context size
 before its first document and refuses to start rather than fail midway
 (`docpipe/llm_preflight.py`, called from `docpipe/refinement/
 pipeline.py:165` and `247`, `docpipe/visuals/pipeline.py:501`, and
-`docpipe/extraction/runner.py:3935` and `4008`).
+`docpipe/extraction/runner.py:4045` and `4113`).
 
 Select the profile once, in the environment, before any stage that
 overrides prompts is imported:

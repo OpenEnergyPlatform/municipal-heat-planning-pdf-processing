@@ -1012,36 +1012,31 @@ def test_the_same_value_is_a_from_a_pdf_and_b_from_a_transcribed_plan(tmp_path):
 
 def test_the_graph_says_which_values_want_looking_at(tmp_path):
     """A reader of the Turtle sees the number and the level next to it, and a
-    C names what is wrong with it. Without that a carrier read off another
-    table is presented as a fact.
-
-    The carrier and not the year, because the spec holds only the carrier and
-    the sector to the row's own source. The year may stand a page away, so a
-    year cited from elsewhere is the rule working as written -- reporting it
-    would put a warning on readings that broke nothing.
-    """
+    C names what is wrong with it. Without that a value whose sector the run
+    could not back is presented as a fact."""
     serializer = kg.make_serializer(_database(tmp_path))
-    own = _row(provenance={"document_id": 857, "owner_kind": "table",
-                           "owner_id": 87457, "parent_section": 349525},
-               carrier_state="read", carrier_source=["table", 87517])
-    ttl = serializer("waermeplan_kassel_20240315", [own])
+    doubtful = _row(provenance={"document_id": 857, "owner_kind": "table",
+                                "owner_id": 87457, "parent_section": 349525},
+                    sector_state="unbacked")
+    ttl = serializer("waermeplan_kassel_20240315", [doubtful])
     assert "# Vertrauen: C" in ttl
-    assert "nonlocal:carrier" in ttl
+    assert "unbacked:sector" in ttl
     assert "Prüfung empfohlen" in ttl
 
 
-def test_a_coordinate_the_spec_lets_read_a_page_away_is_no_warning(tmp_path):
-    """The same shape on the year, which the spec sets to "local". The
-    harvest already refused what broke that rule; a second, stricter judge in
-    the serializer would mark 370 of Kassel's 455 year readings as doubtful
-    for doing what they were told."""
+def test_where_a_coordinates_passage_stands_is_no_warning(tmp_path):
+    """A year or a carrier cited from another table is a reading the harvest
+    took, because its quote stands in a shown passage and carries the answer.
+    A second judge in the serializer grading it by distance would be a check
+    the harvest does not make."""
     serializer = kg.make_serializer(_database(tmp_path))
     ttl = serializer("waermeplan_kassel_20240315", [
         _row(provenance={"document_id": 857, "owner_kind": "table",
                          "owner_id": 87457, "parent_section": 349525},
-             year_state="read", year_source=["table", 87517]),
+             year_state="read", year_source=["table", 87517],
+             carrier_state="read", carrier_source=["table", 87517]),
     ])
-    assert "nonlocal:year" not in ttl
+    assert "nonlocal" not in ttl
     assert "# Vertrauen: B" in ttl, "out of a table image, and nothing else"
 
 
@@ -1291,17 +1286,6 @@ def test_instantaneous_is_not_offered_for_a_power():
     for other in ("energy_consumption", "emission"):
         assert "OEO_00140069" in SPEC.by_uri[other].axes[
             "aggregation"].vocabulary, other
-
-
-def test_the_aggregation_of_a_power_may_be_read_from_the_page():
-    """`own` is the strictest of the three rules and it is enforced at write
-    time: an answer read from a column header or a caption belonging to
-    another source comes back unbacked. The question this axis asks names
-    exactly those places, so `own` would refuse what it asked for."""
-    from docpipe.extraction.spec import own_evidence
-    power = SPEC.by_uri["heat_load"]
-    assert power.axes["aggregation"].evidence == "local"
-    assert ("heat_load", "aggregation") not in own_evidence(SPEC)
 
 
 def test_the_two_powers_of_one_row_do_not_collide_on_one_node(tmp_path,

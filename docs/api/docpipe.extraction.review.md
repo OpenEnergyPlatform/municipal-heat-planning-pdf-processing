@@ -11,12 +11,11 @@ subset of the one the sweep already walked, the row's own passage and the
 section that passage stands in. It is a self-consistency check under a narrowed
 window, not an independent second reading.
 
-That narrowing is enough to catch the failure the lowest trust level names, a
-value read off a passage belonging to another row, because the narrowed window
-holds no such passage. It cannot catch the same picture misread the same way
-twice. An independent second opinion would need a different model or a
-different window, the page image rather than the transcription, and this pass
-is neither.
+What it can catch is a reading that does not hold up when the model looks
+again at the two passages a row's labels, header and caption stand in. It
+cannot catch the same picture misread the same way twice. An independent
+second opinion would need a different model or a different window, the page
+image rather than the transcription, and this pass is neither.
 
 An agreement between the two readings never raises the trust level; it is
 recorded as a mark and nothing else. A disagreement is treated as a reason,
@@ -36,15 +35,14 @@ Author: Felix Vossel
 ### rows_to_review
 
 ```python
-def rows_to_review(tuples: list, *, own: Optional[frozenset] = None,
-                   force: bool = False) -> list
+def rows_to_review(tuples: list, *, force: bool = False) -> list
 ```
 
 The values a second reading is worth spending a request on.
 
-The lowest level and nothing above it: a value whose passages are all
-local and whose coordinates were all read has nothing for a narrower
-window to find. And each row once -- a row already carrying a review flag
+The lowest level and nothing above it: a value whose coordinates were all
+read and whose quote needed no repair has nothing for a narrower window
+to find. And each row once -- a row already carrying a review flag
 is not asked again, because the second answer would be the second answer
 to the same question and no more.
 
@@ -113,8 +111,8 @@ disagreement is a disagreement with.
 
 ```python
 def review_file(path: Path, spec: Spec, *, ask: Callable,
-                sources_for: Callable, own: Optional[frozenset] = None,
-                limit: int = 0, working: Optional[list] = None) -> Counter
+                sources_for: Callable, limit: int = 0,
+                working: Optional[list] = None) -> Counter
 ```
 
 Review one harvest file in place. Returns what the reading came to.

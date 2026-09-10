@@ -31,10 +31,7 @@ Regeln:
 
 3. "quote": eine wörtliche, zusammenhängende Zeichenkette aus EINER der gezeigten Quellen (mindestens 8 Zeichen), und in der deine Antwort auch wirklich steht. Zeichen für Zeichen kopieren.
    Das ist FAST NIE die Zeile der Zahl selbst. Der Energieträger steht in der Zeilenbeschriftung, das Jahr im Spaltenkopf oder im Tabellentitel, das Szenario im Abschnittstitel, das Gebiet in der Caption. Zitier die Stelle, an der die Angabe wirklich steht.
-   AUS WELCHER Quelle du zitieren darfst, hängt vom Feld ab, und die Zeile sagt dir, welche ihre eigene ist: "source" nennt die Quelle, in der die Zahl steht, "section" den Abschnitt, in dem diese Quelle steht (eine Quelle mit "holds" ist so ein Abschnitt).
-   - "carrier" und "sector": nur aus der eigenen Quelle oder ihrem Abschnitt. Beide stehen in der Zeilenbeschriftung oder in der Kopfzeile DERSELBEN Tabelle.
-   - "year", "scenario" und "quantity": zusätzlich aus einer Quelle auf der Nachbarseite ("page" um 1 daneben). Der ankündigende Satz steht oft im Absatz davor.
-   Ein Zitat aus einer anderen Quelle wird abgelehnt, auch wenn es richtig klingt. Die Angabe darin ist echt, sie gehört nur einer anderen Zeile.
+   Die Zeile nennt unter "source" die Quelle, in der ihre Zahl steht.
    Im Abschnittstext steht bei jedem Platzhalter der Titel dabei: "[p85_tbl0: Tabelle 17: ... 2040]". Dieser Titel gehört zu GENAU dieser einen Tabelle. Trägt die Quelle, die deine Zeile unter "source" nennt, dieselbe "block_id", ist es ihr Titel. Sonst ist es der Titel einer fremden Tabelle, und er datiert deine Zahl nicht, benennt ihr Szenario nicht und sagt nichts über ihr Gebiet.
    RICHTIG für das Jahr einer Zahl aus p85_tbl0: "Tabelle 17: Endenergieverbrauch der Gesamtstadt nach Sektor und Energieträger im Zielszenario 2040"
    FALSCH für dieselbe Zahl: "Tabelle 28: Endenergieverbrauch der Gesamtstadt nach Sektor und Energieträger 2030" — echter Satz, echtes Jahr, andere Tabelle.

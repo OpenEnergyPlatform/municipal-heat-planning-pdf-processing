@@ -39,7 +39,7 @@ from collections import Counter
 from pathlib import Path
 from typing import Optional
 
-from docpipe.extraction.spec import kg_name, load as load_spec, own_evidence
+from docpipe.extraction.spec import kg_name, load as load_spec
 from docpipe.extraction.trust import check_prose, render, trust
 
 log = logging.getLogger(__name__)
@@ -479,19 +479,10 @@ TRUST_PROSE = check_prose({
 }, "profiles/scenarios/kg.py TRUST_PROSE")
 TRUST_JOIN = ", "
 
-# Read off the spec, never listed here. Three of the four scenario axes are
-# `own` -- type, abstract and year -- because all three are predications about
-# a NAMED scenario and a name borrowed from another section is inference, not
-# a reading. `scenario_region` is `local` instead: coverage is stated once in
-# the methods section while the scenario list is a heading further on, so the
-# two are page-neighbours rather than one passage, and holding it to `own`
-# would refuse the honest reading.
-#
-# Passed rather than left at None: None means "judge every axis by the
-# strictest rule", which would report every legal reading of a paper as a
-# doubt. It was `frozenset()` until the rules were set, and an empty set means
-# `trust.reasons` suppresses every nonlocal finding there is.
-OWN_EVIDENCE = own_evidence(load_spec(_SPEC))
+# Through the core's loader once, at import, for what that loader refuses:
+# a spec broken that way stops the serializer before a single document is
+# written, not partway through a run.
+load_spec(_SPEC)
 
 # This corpus has no transcribed pages to declare: ar6.db Documents carries
 # no page_text_transcribed column, so `trust` is never told a page was itself
@@ -687,8 +678,7 @@ def make_serializer(db_path: Path):
                 # mint one IRI. `_pick_one` already decided and counted the
                 # rivals; without this the winner is graded as if it had been
                 # the only reading.
-                verdict = trust(row, own=OWN_EVIDENCE,
-                                transcribed=PAGE_TRANSCRIBED,
+                verdict = trust(row, transcribed=PAGE_TRANSCRIBED,
                                 conflict=bool(contested.get(row.get("parameter"))))
                 lines.append(_ttl_comment(render(verdict, TRUST_PROSE,
                                                  join=TRUST_JOIN, row=row)))

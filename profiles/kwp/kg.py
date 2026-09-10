@@ -25,8 +25,7 @@ from pathlib import Path
 from typing import Optional
 
 from docpipe.extraction.fields import DERIVED
-from docpipe.extraction.spec import (
-    kg_name, load as load_spec, own_evidence)
+from docpipe.extraction.spec import kg_name, load as load_spec
 from docpipe.extraction.trust import check_prose, render, trust
 
 log = logging.getLogger(__name__)
@@ -231,13 +230,9 @@ P_SECTOR = _predicate("sector")
 P_YEAR = _predicate("year")
 P_AGGREGATION = _predicate("aggregation")       # oeo: has aggregation type
 
-# Which coordinate a reader of the graph may hold to the row's own source.
-# The spec sets it per axis, and only `own` is checkable from what a
-# harvest row records: `local` is a statement about pages and `any` is no
-# restriction. Judging all seven by the strictest rule marked every legal
-# reading as a doubt, which is a warning that fires on the whole corpus.
+# The spec as the extraction stage loads it. The answer app's graph route
+# reads its lists off it (`docpipe.inference.kg_route`).
 SPEC = load_spec(_SPEC)
-OWN_EVIDENCE = own_evidence(SPEC)
 
 # Which part of a heat plan a value hangs under, by the scenario it belongs
 # to. The law names three of them and MHPO asserts the has-part edges for
@@ -511,11 +506,9 @@ def evidence_comment(row: dict, document: str, *,
     """
     # How much of this value the run can stand behind, in the one place a
     # reader of the graph looks. Every accepted tuple is verified, and that
-    # is a floor and not a grade: a value with every coordinate read off its
-    # own table and one with its year read off another table's caption both
-    # clear it, and the graph showed a reader two numbers.
-    verdict = trust(row, transcribed=transcribed, conflict=conflict,
-                    own=OWN_EVIDENCE)
+    # is a floor and not a grade: the level adds what else is known, an
+    # image origin, a repaired quote, a contested identity.
+    verdict = trust(row, transcribed=transcribed, conflict=conflict)
     prov = row.get("provenance") or {}
     where = [f"{document}.pdf"]
     if prov.get("page"):

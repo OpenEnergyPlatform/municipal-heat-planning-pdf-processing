@@ -94,37 +94,24 @@ def audit(profile: str) -> None:
           bool((spec.parameter_question or "").strip()),
           (spec.parameter_question or "")[:60])
 
-    # One anchor set per QUESTION. Six sentences about a parameter say nothing
-    # about where its reference year is printed, and the field sweep searched
-    # with the raw question until this was measured.
+    # One anchor set per question the field sweep asks, and none for the
+    # value: the plan searches with the one sentence written per document.
+    # Six sentences about a parameter say nothing about where its reference
+    # year is printed, and the sweep searched with the raw question until
+    # this was measured.
     from docpipe.extraction.runner import anchor_key, anchor_targets
     targets = anchor_targets(spec)
     keys = [t[0] for t in targets]
-    wanted = 1 + sum(1 + len(fields.asked_slots(p)) for p in spec.parameters)
+    wanted = 1 + sum(len(fields.asked_slots(p)) for p in spec.parameters)
     check(profile, "ein Anker je Frage",
           len(keys) == len(set(keys)) == wanted, f"{len(keys)} Ziel(e)")
     with_question = [t for t in targets if t[3]]
     check(profile, "jedes Achsenziel traegt seine Frage",
-          len(with_question) >= wanted - len(spec.parameters) - 1,
+          len(with_question) >= wanted - 1,
           f"{len(with_question)} mit Frage")
-
-    # What the profile freezes, and what it leaves to the model. A frozen
-    # anchor is a section that really produced a value, so the file outlives
-    # the spec it was measured against: a key that is no question of this spec
-    # would be dropped by every reader without a word, and the run would search
-    # with a set nobody checked. It fails here rather than on five GPUs.
-    from docpipe.extraction.runner import frozen_anchors
-    from docpipe.profile import load_profile
-    try:
-        fixed, fixed_sha = frozen_anchors(load_profile(profile), spec)
-    except Exception as exc:
-        check(profile, "eingefrorene Anker lesbar", False, str(exc)[:140])
-    else:
-        check(profile, "eingefrorene Anker lesbar", True,
-              (f"{sum(len(v) for v in fixed.values())} Anker fuer {len(fixed)} "
-               f"von {len(keys)} Frage(n), sha {fixed_sha}, den Rest schreibt "
-               f"das Modell" if fixed else "keine, das Modell schreibt alle"),
-              fatal=False)
+    check(profile, "kein Anker fuer den Wert selbst",
+          not {p.uri for p in spec.parameters} & set(keys),
+          "der Plan sucht mit dem Satz je Dokument")
 
     # No entry that means "I do not know". Those are states now.
     shrugs = []

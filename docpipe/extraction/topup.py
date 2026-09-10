@@ -2,8 +2,8 @@
 topup.py: Re-reads the one coordinate a stamp names as moved, instead of the
 whole document.
 
-A question is reworded, an option list gains a class the model can now choose,
-or an evidence rule tightens. The stamp knows exactly which key moved, and a
+A question is reworded, or an option list gains a class the model can now
+choose. The stamp knows exactly which key moved, and a
 resume then does the only thing it can: it reports the document stale, and the
 next run harvests it again from the first passage. For one axis of one
 parameter, that is a full corpus run spent answering a question nothing else
@@ -42,7 +42,7 @@ from typing import Callable, Optional
 from . import fields
 from .pipeline import (Row, WorkItem, group_items, mark_unanswered, row_label)
 from .remap import stamp_forward, stamp_path_of
-from .spec import Spec, own_evidence
+from .spec import Spec
 from .trust import document_summary
 from .verify import Refusal, quote_in, verify_tuple
 
@@ -371,8 +371,7 @@ def top_up_file(path: Path, spec: Spec, current: dict, deps: dict, *,
 
     if document_id is not None:
         lines.append({"kind": "summary",
-                      **document_summary(document_id, tuples, refusals,
-                                         own=own_evidence(spec))})
+                      **document_summary(document_id, tuples, refusals)})
     out = [json.dumps(row, ensure_ascii=False) if isinstance(row, dict)
            else row for row in lines]
     tmp = Path(path).with_suffix(".jsonl.tmp")

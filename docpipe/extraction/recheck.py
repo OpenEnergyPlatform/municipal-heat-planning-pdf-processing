@@ -1,6 +1,6 @@
 """
-recheck.py: Reapplies the evidence rule to a harvest written before the rule
-existed.
+recheck.py: Reapplies the answer-in-quote rule to a harvest written before
+the rule existed.
 
 A coordinate is only as good as the passage cited for it. For one corpus run,
 that passage was checked against the wrong thing: `merge_field` held it to
@@ -31,7 +31,7 @@ from pathlib import Path
 
 from .fields import DERIVED, NUMBER, READ, UNANSWERED, asked_slots
 from .pipeline import answer_in_quote
-from .spec import Spec, own_evidence
+from .spec import Spec
 from .trust import document_summary
 from .verify import quote_in
 
@@ -50,7 +50,7 @@ def recheck_row(row: dict, slots: list) -> Counter:
             continue
         if row.get(f"{name}_state") == DERIVED:
             # The spec decided this one, so no passage was ever claimed to
-            # carry it and the evidence rule has nothing to say about it.
+            # carry it and the answer-in-quote rule has nothing to say about it.
             # Holding it to the rule would strip a correct coordinate for
             # failing a test it was never entered into.
             dropped["derived"] += 1
@@ -118,8 +118,7 @@ def recheck_file(path: Path, spec: Spec) -> Counter:
     if document_id is not None:
         lines.append(json.dumps(
             {"kind": "summary",
-             **document_summary(document_id, tuples, refusals,
-                                own=own_evidence(spec))},
+             **document_summary(document_id, tuples, refusals)},
             ensure_ascii=False))
     tmp = Path(path).with_suffix(".jsonl.tmp")
     tmp.write_text("\n".join(lines) + "\n", encoding="utf-8")

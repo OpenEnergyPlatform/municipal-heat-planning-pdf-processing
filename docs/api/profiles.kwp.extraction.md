@@ -2,7 +2,8 @@
 
 `profiles/kwp/extraction.py`, read with `ast` by `scripts/build_docs.py`. The docstrings are the code's own: edit them there, not here.
 
-Extraction stage wiring: where the kwp spec and its anchors live.
+Extraction stage wiring: the kwp spec, the slice gate, the frame, and what
+a plan says about itself.
 
 ## Functions
 

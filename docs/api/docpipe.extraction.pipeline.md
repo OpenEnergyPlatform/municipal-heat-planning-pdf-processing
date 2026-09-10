@@ -18,10 +18,13 @@ complete when it is not.
 
 `Sweep` and `build_sweeps` carry the tuples a document's batches have already
 verified forward as a hint to later batches, and grant a bounded follow-up
-budget when a reply says more passages are needed (`follow_up`). `fold_claims`,
-`fold_batch` and `fold_fieldwise` verify a reply's claims into a
+budget when a reply says more passages are needed (`follow_up`).
+`fold_claims` and `fold_batch` verify a reply's claims into a
 `DocumentReport`; `write_report` writes that report's tuples, refusals,
 per-parameter states and one summary line to one JSONL file, atomically.
+
+A coordinate is checked for two things and no third: its quote stands in a
+passage that was shown, and the quote carries the answer (`merge_field`).
 
 The three expensive dependencies, retrieval, the harvesting LLM call, and
 locating a quote on its PDF page, are injected callables. The module's own
@@ -103,7 +106,6 @@ Fields:
 - `followed_up: bool = False`: True for a batch the model asked for, which the plan never counted.
 - `frame: Optional[dict] = None`: Which of the document's (scenario, year) pairs this request asks for, and its index. The same passages are read once per pair: a table with four year columns is four requests, each one asking for one column, which is what takes the coordinate out of the model's hands.
 - `frame_index: int = 0`
-- `frame_all: tuple = ()`: Every pair of the document, so a passage that carries more than one of them can be recognised as one: a table with a column per year names three pairs and belongs to none of them alone.
 - `anchors: tuple = ()`: The sentences this request's passages were searched with. They say, in the plan's own words, what the request asks for, so the pair reaches the model as a question and not only as a field.
 
 #### Batch.sources
@@ -307,6 +309,11 @@ from the fourth passage could be accepted carrying the first passage's
 page, section and image as its provenance. It comes back as unroutable
 instead, and the caller refuses it.
 
+The claims handed in are not changed. A routed claim is a copy without
+its label: the runner routes one reply twice, once for the next batch's
+prior and once to fold it, and popping the label in place took from the
+fold the label the field-wise harvester had put back for it.
+
 ### row_label
 
 ```python
@@ -332,25 +339,6 @@ year the header's nth cell names.
 None whenever it is not certain: no table row, the value in no cell, or
 the same number in two of them. A wrong column is worse than none.
 
-### column_answer
-
-```python
-def column_answer(quote: str, cell: Optional[tuple]) -> Optional[str]
-```
-
-What the cited passage prints in THIS row's own column, or None.
-
-A table's header is one line with one cell per column, and the line the
-value was quoted from has the same number of cells. So the answer that
-belongs to a value is the header's cell at the value's own position, and
-an answer naming a different cell is naming another column. That is what
-`answer_in_quote` cannot see: the header prints 2030 and 2045 in the same
-line, so either of them verifies against it for either row.
-
-None when nothing lines up: no cell, no line of the same width, or a
-header cell that prints no answer at all (a sector column, a label). A
-check that cannot be evaluated refuses nothing.
-
 ### names_pair
 
 ```python
@@ -361,37 +349,6 @@ Does this passage print the scenario and the year of this pair?
 
 The whole passage, not a line of it. Where the year stands is the plan's
 business: a column header, a caption, a sentence above the table.
-
-### frame_reading
-
-```python
-def frame_reading(source, pair: Optional[dict], index: int,
-                  pairs, slots: list) -> tuple
-```
-
-(read it, coordinates not to project) for one passage of one request.
-
-The frame is a request, not a reading: `apply_frame` writes the pair onto
-every row the request produced, and nothing else ever asks. Three cases,
-and only the first one was handled.
-
-A passage that prints none of this pair belongs to another one, and the
-request for THAT pair is where its values are found. Measured on Kassel,
-where nothing checked it: the frame had two pairs, 193 rows were stamped
-2040 and 152 were stamped 2024, and of the 234 table tuples the hand
-reading covers, 60 carried the year the table prints.
-
-A passage that prints exactly this pair is this request's, and the
-coordinate is projected onto every row it produced.
-
-A passage that prints several of the frame's pairs, which is what a table
-with a column per year is, belongs to all of them and to none of them
-alone. It is read once, in the request of the first pair it names, so its
-cells are not harvested twice, and the coordinates its pairs disagree
-about are left open: `open_rows` then hands those rows to the per-row
-sweep, which is given the cell each value sits in (`cell_index`) and can
-tell the columns apart. Projecting instead is what stamped 39 cells of
-one table with one year.
 
 ### rows_from_reply
 
@@ -405,6 +362,15 @@ def rows_from_reply(batch: Batch, reply: Optional[dict],
 Routing is the same as for a whole tuple: the quote decides which source a
 value belongs to, the label breaks a tie, and a claim that neither quotes
 nor names any source of the batch is an orphan.
+
+Under a frame, a passage that does not print the request's pair gives no
+row: `apply_frame` writes the pair onto every row, so the pair has to
+stand in the passage the row was read from. A passage that prints several
+pairs, a table with a column per year, is read under each of them, and
+each request takes the column of its own pair.
+
+A sentinel for a request that never came back is not a claim. It passes
+through untouched, its `_why` included, because the resume reads it there.
 
 ### answer_in_quote
 
@@ -450,31 +416,11 @@ document's word belongs to a class the spec spells differently. What we
 have no measurement of is how often it decides wrongly, and that is
 exactly what this counter is for.
 
-### evidence_is_local
-
-```python
-def evidence_is_local(slot, found, own) -> bool
-```
-
-May this passage be the evidence for a coordinate of THIS row?
-
-A row label and a column header are read off the table the row is in. A
-scenario is usually named in the section around it or a page earlier. A
-class is argued in a methods chapter that can be anywhere. So the answer
-depends on the axis, and the axis says which of the three it is.
-
-The measured need: 370 of Kassel's 455 year readings cited a passage
-outside the row's own table and its section, 146 of them the annotated
-placeholder of a different table, and every one of those verified --
-the passage was real, it was shown, and it carried a year. It was just
-not this row's year.
-
 ### merge_field
 
 ```python
 def merge_field(rows: list, sources: list, slot, reply: Optional[dict],
-                *, window: Optional[tuple] = None,
-                owner_of: Optional[dict] = None) -> dict
+                *, window: Optional[tuple] = None) -> dict
 ```
 
 Fold one field's answers. Returns {"filled", "unquoted", "unbacked"}.
@@ -482,8 +428,7 @@ Fold one field's answers. Returns {"filled", "unquoted", "unbacked"}.
 *window* is (stage, index) and is written next to each coordinate this
 call reads, together with the source the passage was found in. Which
 passage proved a coordinate is the one thing a later audit cannot
-reconstruct: measured on Kassel, 370 of 455 year readings cited a passage
-outside the row's own table and its section, and none of them said so.
+reconstruct.
 
 Every answer brings its own passage, and that passage has to pass exactly
 what the value's own quote passes: it sits verbatim in one of the sources
@@ -498,6 +443,13 @@ the scenario is in the section heading, so a coordinate's evidence is
 routinely in a different passage than the number's. Checking it against
 the row's own source would refuse exactly the readings this stage exists
 to collect.
+
+Those two clauses, and a quote long enough to name a place in the
+document, are the whole check. Which table a passage belongs to, how far
+from the row it stands, and which column of a table it heads are the
+model's reading, not a rule of this function. Every reason a reading is
+dropped for is listed in `schema.DROP_REASONS`, and a test holds this
+function to that list.
 
 ### line_naming
 
@@ -515,18 +467,21 @@ only one of them tells a reader whether the row's own table says it.
 
 ```python
 def apply_frame(rows: list, pair: Optional[dict], index: int,
-                slots: list, sources: Optional[list] = None,
-                pairs=None) -> int
+                slots: list, sources: Optional[list] = None) -> int
 ```
 
 Write the document's frame onto these rows. Returns coordinates written.
 
 The pair was read once, for the document, and every row this request
 produced is a row of that pair: the request asked for it by name and
-`in_frame` refused the passages that do not carry it. So the coordinate is
-not asked again per row, it is projected, and the window says `frame` so a
-reader can tell a coordinate that was read for the document from one that
-was read for the row.
+`rows_from_reply` refused the passages that do not print it. So the
+coordinate is not asked again per row, it is projected, and the window
+says `frame` so a reader can tell a coordinate that was read for the
+document from one that was read for the row.
+
+A table with a column per year is no exception. It prints several pairs
+and is read under each of them, the request for one pair takes the column
+of that pair, and every row it produced carries that pair's year.
 
 Cited on the row's own passage where that passage names the answer, and on
 the frame's passage otherwise. `read`, not `derived`: `derived` means the
@@ -581,14 +536,6 @@ cell — 16% to 34% of every axis on the 1079-document run, and no way to
 tell which half was the corpus and which half was the harvest. A row that
 reaches this with no state was asked and did not answer, and that is a
 defect of the run, not a property of the plan.
-
-### rows_by_item
-
-```python
-def rows_by_item(batch: Batch, rows: list) -> list
-```
-
-The finished claims, grouped back into one list per source.
 
 ### sweep_key
 
@@ -691,6 +638,17 @@ by the same thing. It was not, and the runner reached through
 `batch.parameter.uri` in three places, which is how a plan that had
 correctly dropped 825 sources to 162 died on its first batch.
 
+### refused_upstream
+
+```python
+def refused_upstream(claim) -> bool
+```
+
+A claim the harvester already refused, its reason in `_why`.
+
+Not a sentinel: a sentinel's `_why` says why a request never came back,
+and it stays on the claim for the resume to read.
+
 ### fold_batch
 
 ```python
@@ -707,28 +665,14 @@ parameter, `partial` with `need_more` means a value is in here but its
 context is not. The second is the number that matters for the next
 sweep — it is the model telling us where retrieval was too narrow.
 
-### fold_fieldwise
-
-```python
-def fold_fieldwise(batch: Batch, rows: list, orphans: list,
-                   report: DocumentReport, *,
-                   locate: Optional[Callable] = None,
-                   spec: Optional[Spec] = None) -> None
-```
-
-Verify a field-wise batch into the report.
-
-By the time this runs the rows carry every coordinate a field request
-could evidence, so what is left is exactly what fold_batch does: hand each
-source its claims and let verify decide. The difference is upstream — a
-coordinate that is empty here is empty because a request asked for it and
-the passage did not say, not because a sixteen-field answer skipped it.
+A claim the harvester already refused keeps the reason it was refused
+for. Verified a second time, 631 of Kassel's claims came out as "claim
+names no parameter of the spec" instead of saying why.
 
 ### write_report
 
 ```python
 def write_report(report: DocumentReport, out_path: Path,
-                 own: Optional[frozenset] = None,
                  states: Optional[list] = None) -> None
 ```
 
@@ -740,10 +684,7 @@ audit that only shows the survivors cannot answer why a value is missing.
 The last line (kind=summary) is the distribution over this document's own
 values, so "how much of this plan can I use" has an answer that does not
 require reading 559 rows. It goes last because it is computed from
-everything above it. `own` names the axes whose evidence rule is
-`own` (spec.own_evidence); without it the summary holds every coordinate
-to the row's own source, which over-reports on a harvest written under
-the rule.
+everything above it.
 
 `states` is one line per PARAMETER (kind=parameter_state). Every other
 state in this file belongs to a row, so a parameter that produced no row

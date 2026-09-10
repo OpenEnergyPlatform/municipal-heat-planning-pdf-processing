@@ -463,8 +463,7 @@
         "scenario": {
           "dynamic": true,
           "required": false,
-          "question": "Auf welches Szenario dieser Publikation bezieht sich der Wert? Die Liste führt die Laufkennungen, die genau diese Publikation in der AR6-Datenbank dokumentiert. Im Text stehen sie fast nie, dort heißt dasselbe Szenario \"Current Policies\" oder \"the NDC scenario\". Nennt das Dokument nur die Familie, ist \"Szenario-Familie\" die richtige Antwort und keine Kennung. Belege mit einer Passage aus der Quelle der Zeile selbst oder aus dem Abschnitt, in dem diese Quelle steht. Steht die eigene Quelle unter den gezeigten, nennt die Anfrage sie als \"source\"; steht auch ihr Abschnitt darunter, als \"section\".",
-          "evidence": "own",
+          "question": "Auf welches Szenario dieser Publikation bezieht sich der Wert? Die Liste führt die Laufkennungen, die genau diese Publikation in der AR6-Datenbank dokumentiert. Im Text stehen sie fast nie, dort heißt dasselbe Szenario \"Current Policies\" oder \"the NDC scenario\". Nennt das Dokument nur die Familie, ist \"Szenario-Familie\" die richtige Antwort und keine Kennung.",
           "kg": {
             "role": "parent",
             "node": "scenariofactsheet",
@@ -517,8 +516,7 @@
         "scenario": {
           "dynamic": true,
           "required": false,
-          "question": "Auf welches Szenario dieser Publikation bezieht sich der Wert? Die Liste führt die Laufkennungen, die genau diese Publikation in der AR6-Datenbank dokumentiert. Im Text stehen sie fast nie, dort heißt dasselbe Szenario \"Current Policies\" oder \"the NDC scenario\". Nennt das Dokument nur die Familie, ist \"Szenario-Familie\" die richtige Antwort und keine Kennung. Belege mit einer Passage aus der Quelle der Zeile selbst oder aus dem Abschnitt, in dem diese Quelle steht. Steht die eigene Quelle unter den gezeigten, nennt die Anfrage sie als \"source\"; steht auch ihr Abschnitt darunter, als \"section\".",
-          "evidence": "own",
+          "question": "Auf welches Szenario dieser Publikation bezieht sich der Wert? Die Liste führt die Laufkennungen, die genau diese Publikation in der AR6-Datenbank dokumentiert. Im Text stehen sie fast nie, dort heißt dasselbe Szenario \"Current Policies\" oder \"the NDC scenario\". Nennt das Dokument nur die Familie, ist \"Szenario-Familie\" die richtige Antwort und keine Kennung.",
           "kg": {
             "role": "parent",
             "node": "scenariofactsheet",
@@ -560,8 +558,7 @@
         "scenario": {
           "dynamic": true,
           "required": false,
-          "question": "Auf welches Szenario dieser Publikation bezieht sich der Wert? Die Liste führt die Laufkennungen, die genau diese Publikation in der AR6-Datenbank dokumentiert. Im Text stehen sie fast nie, dort heißt dasselbe Szenario \"Current Policies\" oder \"the NDC scenario\". Nennt das Dokument nur die Familie, ist \"Szenario-Familie\" die richtige Antwort und keine Kennung. Belege mit einer Passage aus der Quelle der Zeile, aus dem Abschnitt, in dem sie steht, oder von der Nachbarseite. Die ersten beiden nennt die Anfrage als \"source\" und \"section\", soweit sie mitgezeigt werden.",
-          "evidence": "local",
+          "question": "Auf welches Szenario dieser Publikation bezieht sich der Wert? Die Liste führt die Laufkennungen, die genau diese Publikation in der AR6-Datenbank dokumentiert. Im Text stehen sie fast nie, dort heißt dasselbe Szenario \"Current Policies\" oder \"the NDC scenario\". Nennt das Dokument nur die Familie, ist \"Szenario-Familie\" die richtige Antwort und keine Kennung.",
           "kg": {
             "role": "parent",
             "node": "scenariofactsheet",
@@ -629,8 +626,7 @@
         "scenario": {
           "dynamic": true,
           "required": false,
-          "question": "Auf welches Szenario dieser Publikation bezieht sich der Wert? Die Liste führt die Laufkennungen, die genau diese Publikation in der AR6-Datenbank dokumentiert. Im Text stehen sie fast nie, dort heißt dasselbe Szenario \"Current Policies\" oder \"the NDC scenario\". Nennt das Dokument nur die Familie, ist \"Szenario-Familie\" die richtige Antwort und keine Kennung. Belege mit einer Passage aus der Quelle der Zeile selbst oder aus dem Abschnitt, in dem diese Quelle steht. Steht die eigene Quelle unter den gezeigten, nennt die Anfrage sie als \"source\"; steht auch ihr Abschnitt darunter, als \"section\".",
-          "evidence": "own",
+          "question": "Auf welches Szenario dieser Publikation bezieht sich der Wert? Die Liste führt die Laufkennungen, die genau diese Publikation in der AR6-Datenbank dokumentiert. Im Text stehen sie fast nie, dort heißt dasselbe Szenario \"Current Policies\" oder \"the NDC scenario\". Nennt das Dokument nur die Familie, ist \"Szenario-Familie\" die richtige Antwort und keine Kennung.",
           "kg": {
             "role": "parent",
             "node": "scenariofactsheet",

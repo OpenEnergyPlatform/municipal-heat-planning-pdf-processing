@@ -54,6 +54,32 @@ verletzt: ein falsches Zitat, eine veraltete Datei, ein leeres Ergebnis.
 `kept = tuples - dropped_coordinates` ergab −253.666. Jede berichtete Zahl
 sagt, wovon sie zählt: Tupel, Koordinaten, Dokumente, Anfragen.
 
+# Die Vorgaben des Eigentümers
+
+Geprüft wird bei einem Wert und bei jeder Koordinate genau zweierlei: das
+Zitat steht in einer gezeigten Passage, und die Antwort steht im Zitat. Dazu
+kommt nur die Mindestlänge, damit ein Zitat eine Stelle benennt. Wo die
+Passage steht, welche Tabelle sie ist und über welcher Spalte eine Zahl
+steht, ist Lesen und keine Prüfung.
+
+Drei Prüfungen darüber hinaus (Belegregel own/local/any, „eine Antwort, zwei
+Spalten", „falsche Spalte") sind ohne Auftrag gebaut worden und haben den
+Kassel-Pilot 12881827 mitgekippt. Deshalb:
+
+- Keine neue Prüfung, kein neuer Ablehnungsgrund, kein neuer Filter ohne
+  ausdrückliche Zustimmung. Wer eine für nötig hält, fragt und baut nicht.
+  `tests/test_extraction_reasons.py` hält die Gründe fest; ein neuer Grund
+  muss dort offen eingetragen werden, sonst fällt der Test.
+- Den Ablauf so bauen, wie er vorgegeben ist. Weicht ein Entwurf ab, wird die
+  Abweichung vor dem Bauen genannt und entschieden, nicht hinterher berichtet.
+- Ein Frame-Paar wird über jede Passage gelesen, die es druckt, und die
+  Zeilen bekommen das Jahr ihres Paars.
+- Anker sind kurze Sätze: einer je Dokument und Wert, ein Satz je
+  Achsenfrage. Keine langen Passagen als Anker, keine eingefrorenen Anker
+  im Profil.
+- Keine Closure liest einen Namen, der danach neu gebunden wird. Derselbe
+  Test prüft das für `docpipe/extraction`.
+
 # Was der Lauf hinterlässt
 
 Eine Koordinate endet immer mit einem Zustand, nie leer:

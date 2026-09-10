@@ -8,12 +8,11 @@ subset of the one the sweep already walked, the row's own passage and the
 section that passage stands in. It is a self-consistency check under a narrowed
 window, not an independent second reading.
 
-That narrowing is enough to catch the failure the lowest trust level names, a
-value read off a passage belonging to another row, because the narrowed window
-holds no such passage. It cannot catch the same picture misread the same way
-twice. An independent second opinion would need a different model or a
-different window, the page image rather than the transcription, and this pass
-is neither.
+What it can catch is a reading that does not hold up when the model looks
+again at the two passages a row's labels, header and caption stand in. It
+cannot catch the same picture misread the same way twice. An independent
+second opinion would need a different model or a different window, the page
+image rather than the transcription, and this pass is neither.
 
 An agreement between the two readings never raises the trust level; it is
 recorded as a mark and nothing else. A disagreement is treated as a reason,
@@ -40,7 +39,7 @@ from typing import Callable, Optional
 from . import fields
 from .pipeline import answer_in_quote
 from .remap import stamp_path_of
-from .spec import Spec, fold_label, own_evidence
+from .spec import Spec, fold_label
 from .trust import (LEVEL_C, REVIEW_AGREE, REVIEW_DISAGREE, REVIEW_UNBACKED,
                     document_summary, trust)
 from .verify import MIN_QUOTE_CHARS, quote_in, value_in_quote
@@ -51,7 +50,7 @@ log = logging.getLogger(__name__)
 # three of the reasons carry a colon and name nothing a question could be
 # asked about -- `review:disagree` most of all, which would otherwise ask for
 # a coordinate called "disagree" on every row this pass has already seen.
-NAMES_AN_AXIS = ("nonlocal", "exhausted", "unbacked")
+NAMES_AN_AXIS = ("exhausted", "unbacked")
 
 # What the second reading said, beside what a curator needs to find the value.
 # Its own file: the harvest is evidence and this is a working list.
@@ -67,19 +66,18 @@ def _cell(text) -> str:
     return flat if len(flat) <= CELL else flat[:CELL].rstrip() + " …"
 
 
-def rows_to_review(tuples: list, *, own: Optional[frozenset] = None,
-                   force: bool = False) -> list:
+def rows_to_review(tuples: list, *, force: bool = False) -> list:
     """The values a second reading is worth spending a request on.
 
-    The lowest level and nothing above it: a value whose passages are all
-    local and whose coordinates were all read has nothing for a narrower
-    window to find. And each row once -- a row already carrying a review flag
+    The lowest level and nothing above it: a value whose coordinates were all
+    read and whose quote needed no repair has nothing for a narrower window
+    to find. And each row once -- a row already carrying a review flag
     is not asked again, because the second answer would be the second answer
     to the same question and no more.
     """
     out = []
     for row in tuples:
-        if trust(row, own=own)["level"] != LEVEL_C:
+        if trust(row)["level"] != LEVEL_C:
             continue
         if not force and any(f.startswith("review:")
                              for f in row.get("flags") or ()):
@@ -255,8 +253,8 @@ def _working_lines(document: str, row: dict, parameter, slots: list,
 
 
 def review_file(path: Path, spec: Spec, *, ask: Callable,
-                sources_for: Callable, own: Optional[frozenset] = None,
-                limit: int = 0, working: Optional[list] = None) -> Counter:
+                sources_for: Callable, limit: int = 0,
+                working: Optional[list] = None) -> Counter:
     """Review one harvest file in place. Returns what the reading came to.
 
     The summary is recomputed rather than carried over: a disagreement is a
@@ -286,14 +284,14 @@ def review_file(path: Path, spec: Spec, *, ask: Callable,
             continue
         tuples.append(row)
         lines.append(row)
-    for row in rows_to_review(tuples, own=own):
+    for row in rows_to_review(tuples):
         if limit and stats["reviewed"] >= limit:
             break
         parameter = spec.by_uri.get(row.get("parameter"))
         if parameter is None:
             stats["unknown parameter kept"] += 1
             continue
-        slots = review_fields(parameter, disputed(trust(row, own=own)))
+        slots = review_fields(parameter, disputed(trust(row)))
         shown = sources_for(row) or []
         if not shown:
             stats["no passage"] += 1
@@ -313,8 +311,7 @@ def review_file(path: Path, spec: Spec, *, ask: Callable,
     if document_id is not None:
         out.append(json.dumps(
             {"kind": "summary",
-             **document_summary(document_id, tuples, refusals,
-                                own=own_evidence(spec))},
+             **document_summary(document_id, tuples, refusals)},
             ensure_ascii=False))
     tmp = Path(path).with_suffix(".jsonl.tmp")
     tmp.write_text("\n".join(out) + "\n", encoding="utf-8")
@@ -339,7 +336,6 @@ def run(harvest_dir: Path, spec: Spec, *, ask: Callable,
     """
     stats: Counter = Counter()
     harvest_dir = Path(harvest_dir)
-    own = own_evidence(spec)
     working: list = []
     left = limit
     wanted = None if documents is None else set(documents)
@@ -350,7 +346,7 @@ def run(harvest_dir: Path, spec: Spec, *, ask: Callable,
         if wanted is not None and path.stem not in wanted:
             continue
         got = review_file(path, spec, ask=ask, sources_for=sources_for,
-                          own=own, limit=left, working=working)
+                          limit=left, working=working)
         stats.update(got)
         stats["documents"] += 1
         read.append(path)

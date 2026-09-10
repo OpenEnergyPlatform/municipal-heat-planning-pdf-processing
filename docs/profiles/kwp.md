@@ -7,7 +7,7 @@ publish under the federal Wärmeplanungsgesetz, sourced from the KWW
 register, an Excel sheet the source module filters to rows marked
 "abgeschlossen" (completed) that carry a usable PDF link
 (`profiles/kwp/source.py:34` to `44`, `load_and_filter_excel`). The corpus
-stands at 1,082 documents (`docpipe/extraction/trust.py:273`,
+stands at 1,082 documents (`docpipe/extraction/trust.py:208`,
 `docpipe/extraction/remap.py:6`). Eleven carry no PDF text layer and are
 read page by page by a vision model instead
 (`docpipe/store/schema.sql:31` to `37`, `page_text_transcribed`); their
@@ -72,7 +72,7 @@ table gives kwp's own answer.
 | Refinement | `prompts/refinement/*.md` | `refine`, `refine_corrections`, `split` | repairs German extraction artefacts, proposes section cuts |
 | Visuals | `prompts/visuals/*.md` | seven prompt ids | table transcription, figure description and captions, in German |
 | The picker (app) | `catalog.py`, `profile.py` | `CATALOG`, `facets` | plan-centric labels, convoy membership, three filters |
-| Extraction | `extraction.py` | `SPEC_PATH`, `ANCHORS_PATH`, `SLICE`, `FRAME`, `document_context` | the spec, frozen anchors, the slice gate, the frame axes |
+| Extraction | `extraction.py` | `SPEC_PATH`, `SLICE`, `FRAME`, `document_context` | the spec, the slice gate, the frame axes |
 | Extraction | `prompts/extraction/*.md` | eight prompt ids | phrase, frame, rows, field, anchors, queries, harvest, review |
 | The graph | `kg.py` | `make_serializer` and seven more names | MHPKG Turtle, the coordinate query, the trust wording |
 | The answer app | `inference.py` | `PHRASES`, `NON_ANCHOR`, `READOFF_MARKER`, `READOFF_NOTE`, `ROUTE_NOTES` | the German chat wording and the graph route's refusal sentences |
@@ -94,31 +94,31 @@ on a `value` node in the graph. The fourth, `planning_organisation`, is a
 | `planning_organisation` | `text` | none | none | none |
 
 `heat_load` is split from the two amounts purely by unit family, and the
-spec marks it `integrated=False` (`docpipe/extraction/spec.py:193` to
-`199`), the one field that tells a rate apart from an amount stated over
+spec marks it `integrated=False` (`docpipe/extraction/spec.py:181` to
+`187`), the one field that tells a rate apart from an amount stated over
 a span; the other two numeric parameters leave `integrated` at its
 default of true.
 
 All three numeric parameters share the same five non-quantity axes, each
-a closed vocabulary except `year`, a plain integer read locally:
+a closed vocabulary except `year`, a plain integer:
 
-| axis | kind | evidence rule | vocabulary size | of which `out:` |
-|---|---|---|---|---|
-| `carrier` | vocabulary | `own` | 29 | 2 |
-| `sector` | vocabulary | `own` | 6 | 1 |
-| `scenario` | vocabulary | `local` | 4 | 1 |
-| `spatial_scope` | vocabulary | `any` | 2 | 0 |
-| `year` | integer | `local` | (not applicable) | (not applicable) |
+| axis | kind | vocabulary size | of which `out:` |
+|---|---|---|---|
+| `carrier` | vocabulary | 29 | 2 |
+| `sector` | vocabulary | 6 | 1 |
+| `scenario` | vocabulary | 4 | 1 |
+| `spatial_scope` | vocabulary | 2 | 0 |
+| `year` | integer | (not applicable) | (not applicable) |
 
 `quantity` and `aggregation`, the two axes that carry a parameter's own
 answer space, differ by parameter, and `heat_load` differs from the two
 amounts in how its aggregation is decided:
 
-| parameter | `quantity` size (`out:`) | `quantity` evidence | `aggregation` size (`out:`) | `aggregation` evidence | `aggregation` derived |
-|---|---|---|---|---|---|
-| `energy_consumption` | 9 (7) | `local` | 5 (0) | `any` | yes, from the unit |
-| `emission` | 9 (7) | `local` | 5 (0) | `any` | yes, from the unit |
-| `heat_load` | 6 (5) | `local` | 4 (0) | `local` | no, asked |
+| parameter | `quantity` size (`out:`) | `aggregation` size (`out:`) | `aggregation` derived |
+|---|---|---|---|
+| `energy_consumption` | 9 (7) | 5 (0) | yes, from the unit |
+| `emission` | 9 (7) | 5 (0) | yes, from the unit |
+| `heat_load` | 6 (5) | 4 (0) | no, asked |
 
 An axis or a parameter answer beginning `out:` is a deliberate non-class,
 not a gap. The convention is the core's: the sentinel a coordinate
@@ -126,7 +126,7 @@ carries when a passage genuinely does not state it is `out:unstated`
 (`docpipe/extraction/fields.py:37` to `47`), and a profile's own vocabulary
 rides the same prefix so a serializer can refuse every one of them by
 shape rather than by a second, hand-kept list
-(`profiles/kwp/kg.py:94` to `103`, `is_class`). Most of `quantity`'s own
+(`profiles/kwp/kg.py:93` to `102`, `is_class`). Most of `quantity`'s own
 list is such an entry: a potential rather than a delivered amount, a
 share expressed as a percentage, a per-person or per-area figure, and a
 residual catch-all, so the model can name what a number really is
@@ -138,31 +138,31 @@ rather than asking, carried as the `derived` state
 (`docpipe/extraction/fields.py:67` to `74`; [glossary](../glossary.md)):
 every unit `energy_consumption` or `emission` accepts names a span, so
 their aggregation is always the closed list's integral entry, never asked
-(`docpipe/extraction/spec.py:156` to `166`, `Axis.derive`). Before this was
+(`docpipe/extraction/spec.py:144` to `154`, `Axis.derive`). Before this was
 derived, all 452 aggregation answers the model gave for these two
 parameters over one plan were that same entry every time, evidenced
 only by the unit string the request had itself just handed over
-(`docpipe/extraction/spec.py:161` to `165`). `heat_load`'s aggregation is
+(`docpipe/extraction/spec.py:149` to `153`). `heat_load`'s aggregation is
 not derived, since a watt is not integrated over a span the way a
 watt-hour is: this axis is asked instead, with evidence allowed one page
 away, and a peak load can come back distinct from an average one.
 
 The frame is the pair of coordinates found once per document rather than
 once per row: `FRAME = ("scenario", "year")`
-(`profiles/kwp/extraction.py:78`). A plan states its scenario containers
+(`profiles/kwp/extraction.py:73`). A plan states its scenario containers
 and its reference years in headings and column headers, not inside every
 cell, so the run reads that pair first and projects every combination it
 found onto the rows that follow, rather than asking each row to name its
 own scenario and year again; not a cross product, since a plan with a
 target scenario for four years and one inventory year contributes five
-pairs, not twenty (`profiles/kwp/extraction.py:65` to `77`). Before the
+pairs, not twenty (`profiles/kwp/extraction.py:60` to `72`). Before the
 frame existed, the year axis alone produced 1,849 refusals against zero
 readings, because every retrieval window after the first excluded the one
 source that could carry the year.
 
 The slice gate decides, before any other coordinate is asked, whether a
 row belongs in this run's graph at all: `SLICE = {"quantity": None}`
-(`profiles/kwp/extraction.py:33`). `None` means any real class the graph
+(`profiles/kwp/extraction.py:28`). `None` means any real class the graph
 takes, every entry that does not begin `out:`. Asking this axis first and
 alone is cheaper when a row fails it, three requests spent rather than
 eight, and on a 20-plan draft it dropped 1,554 of 6,763 harvested tuples
@@ -173,17 +173,16 @@ scenario, a decision about what the graph could hold rather than what
 the plan said. The gate
 no longer includes scenario, because the ontology names all three plan
 parts and the graph now serializes all three
-(`profiles/kwp/extraction.py:12` to `29`; see
+(`profiles/kwp/extraction.py:7` to `24`; see
 [The knowledge graph](#the-knowledge-graph)).
 
 Every question a run asks carries its own fingerprint, so a resumed run
 can tell exactly which question changed rather than treating the whole
-spec as one block (`docpipe/extraction/spec.py:628` to `650`,
+spec as one block (`docpipe/extraction/spec.py:618` to `640`,
 `fingerprints`): one key for the parameter-choice question itself, one per
 parameter for its own question, unit list and worked example, one per
 category parameter for its closed list of spellings and definitions, and
-one per axis for its question, type, evidence rule, derive rule and
-vocabulary. These are what the extraction stamp compares on a rerun,
+one per axis for its question, type, derive rule and vocabulary. These are what the extraction stamp compares on a rerun,
 described in full on [extraction](../stages/extraction.md).
 
 Every parameter, axis and spelling this spec states today is published
@@ -199,17 +198,17 @@ wording of each spec question:
 |---|---|---|
 | `extraction/phrase` | once per document, before any row | the one sentence this document is searched with |
 | `extraction/frame` | once per document, before any row | which scenario and year pairs the plan actually carries |
-| `extraction/anchors` | per parameter or axis, where no frozen anchor exists | six hypothetical sentences a passage stating this value could read |
+| `extraction/anchors` | once per run, per question the field sweep asks | six hypothetical sentences a passage stating this coordinate could read |
 | `extraction/queries` | once per run, as a plain template list | one retrieval query template per parameter or per vocabulary entry |
 | `extraction/rows` | per retrieved window, the default field-wise contract | which values a passage states, without their coordinates |
 | `extraction/field` | once per row per coordinate, the field-wise contract | one axis's own answer, from its closed list or its type |
 | `extraction/harvest` | per retrieved window, only when `EXTRACT_FIELDWISE=0` | a whole tuple at once, coordinates included |
-| `extraction/review` | only under `--review`; excluded from the extraction stamp | a second reading of one value, over a window narrowed to its two legal passages |
+| `extraction/review` | only under `--review`; excluded from the extraction stamp | a second reading of one value, over a window narrowed to its own passage and the section it stands in |
 | `kg/coordinate` | once per chat turn the graph route tries | one closed answer to one coordinate axis, for the SPARQL query |
 
 `extraction/rows` and `extraction/field` are the field-wise pair that
 replaces the whole-tuple `extraction/harvest` request by default
-(`EXTRACT_FIELDWISE` defaults to on, `docpipe/extraction/runner.py:157`):
+(`EXTRACT_FIELDWISE` defaults to on, `docpipe/extraction/runner.py:158`):
 one call finds which values a passage states, a second asks each
 coordinate as its own question. `extraction/review` is deliberately
 outside the set the extraction stamp hashes, because a review only ever
@@ -232,10 +231,10 @@ asks for by name, in both directions.
 `profiles/kwp/kg.py` turns an accepted harvest into MHPKG Turtle, the
 target graph on the Open Energy Platform. Five namespaces are declared
 once, `rdfs`, `xsd`, `obo`, `mhpo` and `oeo`
-(`profiles/kwp/kg.py:39` to `45`), and every identifier the serializer
+(`profiles/kwp/kg.py:38` to `44`), and every identifier the serializer
 writes is qualified against exactly that header; a predicate whose prefix
 the header does not bind raises rather than silently writing Turtle
-nobody can load (`kg_name`, `docpipe/extraction/spec.py:656` to `672`).
+nobody can load (`kg_name`, `docpipe/extraction/spec.py:646` to `662`).
 The full mechanism is on [stages/graph.md](../stages/graph.md); this
 section names what is specific to kwp's own graph.
 
@@ -263,23 +262,23 @@ the kwp pilot (`tests/test_kwp_extraction.py`,
 A named sub area is linked `part of` the municipality.
 
 The IRI base is `https://openenergyplatform.org/id/mhpkg/`
-(`profiles/kwp/kg.py:33`). Every minted collection draws its own UUIDv5
+(`profiles/kwp/kg.py:32`). Every minted collection draws its own UUIDv5
 sub-namespace off that base, and minting always uses UUIDv5 over an
-identifying name, never UUIDv4 (`profiles/kwp/kg.py:347` to `372`,
+identifying name, never UUIDv4 (`profiles/kwp/kg.py:342` to `367`,
 `mint`), so two runs over one document produce byte-identical Turtle
 (`tests/test_kwp_extraction.py`,
 `test_value_minting_matches_the_schema_repo_reference` and
 `test_normalise_and_organisation_minting_match_the_reference`). The plan
 and municipality nodes are not minted at all: their IRIs are built
 directly from the register key, `heatplan/AGS_<ags>_<published>` and
-`municipality/AGS_<ags>` (`profiles/kwp/kg.py:431` to `434`, `644`). A
+`municipality/AGS_<ags>` (`profiles/kwp/kg.py:426` to `429`, `637`). A
 year IRI is likewise unminted, one node per calendar year, keyed by the
-year itself (`profiles/kwp/kg.py:337` to `344`).
+year itself (`profiles/kwp/kg.py:333` to `340`).
 
 A value's identity is a UUIDv5 over its own coordinates joined in order:
 the scenario part's IRI, the quantity class, the carrier and sector
 classes where present, the year, the aggregation, and, only for a named
-sub area, the normalised area wording (`profiles/kwp/kg.py:452` to `478`,
+sub area, the normalised area wording (`profiles/kwp/kg.py:447` to `473`,
 `_value_iri`). This departs on purpose from the schema repository's own
 published coordinate list, adding the sector, because this corpus carries
 several sectors per carrier and year that list would otherwise collide
@@ -287,7 +286,7 @@ onto one node (`profiles/kwp/kg.py:4` to `9`). The area is left out of a
 whole-plan-area value's identity, since one 2040 figure stated under
 three different whole-plan-area wordings on three pages of one plan
 became three indistinguishable nodes before this rule, 129 of 1,294 value
-nodes overall (`profiles/kwp/kg.py:463` to `466`); a named sub area keeps
+nodes overall (`profiles/kwp/kg.py:458` to `461`); a named sub area keeps
 its wording, since one plan can carry several sub-area tables whose
 figures would otherwise collide onto one node instead.
 
@@ -296,10 +295,10 @@ read: the wording and quote, the page and its table, figure or section,
 whether the aggregation was read or derived, and a trust line rendered
 from the same six marks `docpipe/extraction/trust.py` defines for every
 profile, in German here, checked against the core's own list at import
-(`check_prose`, `profiles/kwp/kg.py:484` to `491`). Comments only, never
+(`check_prose`, `profiles/kwp/kg.py:479` to `486`). Comments only, never
 triples: MHPKG's shapes are `sh:closed`, and an unanticipated triple
-would invalidate the node it documents (`profiles/kwp/kg.py:501` to
-`510`).
+would invalidate the node it documents (`profiles/kwp/kg.py:496` to
+`505`).
 
 What the serializer refuses, briefly (in full on
 [stages/graph.md](../stages/graph.md)): a row failing the scenario,
@@ -337,7 +336,7 @@ graph-route hooks at start-up (`docpipe/inference/kg_route.py:52` to `57`,
 (`docpipe/inference/kg_route.py:66` to `78`, the `Hooks` dataclass): a
 SPARQL template (`VALUE_QUERY`), the five axes a question may fix, in
 order, `(scenario, quantity, carrier, sector, year)`
-(`COORDINATE_AXES`, `profiles/kwp/kg.py:784` to `792`), `heatplan_iri`,
+(`COORDINATE_AXES`, `profiles/kwp/kg.py:777` to `785`), `heatplan_iri`,
 `value_bindings`, `label_of`, and the same `TRUST_PROSE` the serializer
 writes with. `spatial_scope` is left out because the graph has no edge
 yet from a value to its area; `aggregation` is left out because the route
@@ -396,7 +395,7 @@ The extraction spec:
 `test_instantaneous_is_not_offered_for_a_power`,
 `test_the_units_of_the_two_numeric_parameters_share_no_spelling`,
 `test_the_two_quantity_questions_are_not_the_same_text` and
-`test_a_coordinate_the_spec_lets_read_a_page_away_is_no_warning`.
+`test_where_a_coordinates_passage_stands_is_no_warning`.
 
 The graph:
 `test_value_minting_matches_the_schema_repo_reference`,

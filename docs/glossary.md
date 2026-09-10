@@ -13,7 +13,7 @@ anchor
 axis
 : One dimension a parameter's value varies along: a closed vocabulary, an
   integer, an enum, or a per-document dynamic list, each with its own
-  question and its own evidence rule. Defined as the `Axis` dataclass in
+  question. Defined as the `Axis` dataclass in
   `docpipe/extraction/spec.py`; see [extraction](stages/extraction.md).
 
 backend
@@ -116,13 +116,6 @@ embedding_type
   `docpipe/chunking/config.py` and written to the `Embeddings` table by
   `docpipe/chunking/database.py`; see [chunking](stages/chunking.md).
 
-evidence rule
-: The per-axis setting, `own`, `local` or `any`, for how far from a row's
-  own source a passage may stand and still count as that coordinate's
-  evidence. Set in `docpipe/extraction/spec.py`'s `Axis.evidence` and
-  enforced by `docpipe.extraction.pipeline.evidence_is_local`; see
-  [extraction](stages/extraction.md) and [trust](contract/trust.md).
-
 exhausted
 : The state of a coordinate still open when the field sweep's window
   budget ran out with the document unread to the end, a finding about the
@@ -150,8 +143,8 @@ flag
 fold (folding)
 : Turning a model reply's claims into a document's tuples and refusals by
   routing each claim to its real source and running it through the
-  verifier. Performed by `docpipe.extraction.pipeline.fold_claims`,
-  `fold_batch` and `fold_fieldwise`; see [extraction](stages/extraction.md).
+  verifier. Performed by `docpipe.extraction.pipeline.fold_claims`
+  and `fold_batch`; see [extraction](stages/extraction.md).
 
 follow-up
 : A batch's own request for more context: a `status: partial` reply naming
@@ -274,7 +267,7 @@ quote
   once in its source. See [extraction](stages/extraction.md).
 
 recheck
-: The `--recheck` pass that reapplies the current evidence rule to an
+: The `--recheck` pass that reapplies the answer-in-quote rule to an
   already-written harvest with no model call, dropping any coordinate
   whose recorded quote does not actually carry its answer and clearing the
   affected stamps. Implemented in `docpipe/extraction/recheck.py`; see
@@ -340,7 +333,7 @@ slice
 : The profile-named coordinate, or coordinates, that decide first whether
   a row belongs in the graph a run serializes at all, also called the
   gate. A row that fails it is closed with state `out_of_slice` and never
-  asked its other axes, for example `profiles/kwp/extraction.py:33`'s
+  asked its other axes, for example `profiles/kwp/extraction.py:28`'s
   `SLICE = {"quantity": None}`. See [extraction](stages/extraction.md) and
   [kwp](profiles/kwp.md).
 
@@ -411,8 +404,8 @@ trust level
 trust reason
 : One token in a verdict's `reasons` list, naming why a tuple is not
   level A: `repaired`, `computed`, `not_located`, `review:disagree`,
-  `conflict`, `page_transcribed`, or a `nonlocal:<axis>`,
-  `exhausted:<axis>` or `unbacked:<axis>` pointer at the axis at fault.
+  `conflict`, `page_transcribed`, or an `exhausted:<axis>` or
+  `unbacked:<axis>` pointer at the axis at fault.
   Produced by `docpipe/extraction/trust.py`'s `reasons` and published as
   the closed pattern list `docpipe/extraction/schema.py`'s
   `TRUST_REASONS`; see [trust](contract/trust.md).

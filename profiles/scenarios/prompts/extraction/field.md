@@ -10,7 +10,7 @@ Du bekommst ein JSON-Objekt mit diesen Feldern:
 
 - "fields": die gesuchten Felder, je Feld "name", die Frage ("question") und, wenn es eine geschlossene Liste gibt, die zulässigen Einträge ("options": je Eintrag ein Name und die Schreibweisen, unter denen er vorkommt). Jedes Feld hat seine eigene Frage und braucht seine eigene Antwort mit eigenem Zitat.
 - "sources": die Quellen aus DERSELBEN Publikation, jede mit einer Kennung ("id": "Q1", "Q2", …) — dieselben Texte, aus denen die Werte stammen.
-- "rows": die Werte, jeder mit einer Kennung ("id": "R1", "R2", …), seiner Quelle und der Passage, in der er steht. Stammt der Wert aus einer Tabellenzeile, steht zusätzlich "column": in welcher Zelle dieser Zeile er steht, von "columns" Zellen insgesamt. Das ist ausgezählt und nicht geraten. Benennt die Kopfzeile je Spalte ein Szenario, dann entscheidet diese Nummer, welches gilt. Steht die eigene Quelle der Zeile unter den gezeigten, nennt "source" ihre Kennung; steht auch der Abschnitt, in dem sie steht, darunter, nennt "section" dessen Kennung.
+- "rows": die Werte, jeder mit einer Kennung ("id": "R1", "R2", …), seiner Quelle und der Passage, in der er steht. Stammt der Wert aus einer Tabellenzeile, steht zusätzlich "column": in welcher Zelle dieser Zeile er steht, von "columns" Zellen insgesamt. Das ist ausgezählt und nicht geraten. Benennt die Kopfzeile je Spalte ein Szenario, dann entscheidet diese Nummer, welches gilt. Steht die eigene Quelle der Zeile unter den gezeigten, nennt "source" ihre Kennung.
 
 Gib ausschließlich ein JSON-Objekt in dieser Form zurück, in EINER Zeile, ohne Einrückung:
 
@@ -27,7 +27,6 @@ Regeln:
 2. "value_raw": IMMER zusätzlich, der Name so, wie das Dokument ihn schreibt — "Current Policies", "the NDC scenario", "unser 1,5-Grad-Pfad". Daran wird deine Zuordnung nachträglich geprüft. "das erste Szenario" ist kein Name aus dem Dokument und keine gültige Antwort.
 
 3. "quote": eine wörtliche, zusammenhängende Zeichenkette aus EINER der gezeigten Quellen (mindestens 8 Zeichen), und in der der Name aus "value_raw" steht. Zeichen für Zeichen kopieren. Erfundene Passagen werden verworfen, und mit ihnen die Antwort.
-   AUS WELCHER Quelle du zitieren darfst, sagt die Frage des Feldes selbst ("question"). Eine Passage aus einer Quelle, die die Frage nicht zulässt, wird verworfen, auch wenn sie inhaltlich richtig ist. Findest du die Angabe in den erlaubten Quellen nicht, ist "out:unstated" die richtige Antwort.
 
 4. Die Kennungen sind Lauf-Kennungen wie "EN_INDCi2030_300f". Im Text stehen sie fast nie; dort heißt dasselbe Szenario "Current Policies", "the NDC scenario" oder "unser 1,5-Grad-Pfad". Genau diese Zuordnung ist deine Aufgabe: die Beschreibung im Text mit der Kennung zusammenbringen. Anhaltspunkte sind das Ambitionsniveau, das Zieljahr, das Klimaziel und die Reihenfolge, in der die Publikation ihre Szenarien einführt.
 

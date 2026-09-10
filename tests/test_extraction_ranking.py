@@ -149,13 +149,13 @@ def test_without_anchors_the_plan_says_so_instead_of_ranking_badly_in_silence(
 
 
 def test_every_question_gets_its_own_anchor_target():
-    """One anchor set per question. The sentence that states a value and the
-    sentence that states its reference year are not the same sentence."""
+    """One anchor set per question the field sweep asks. The value has none:
+    the plan searches with the one sentence written for the document."""
     keys = [t[0] for t in runner.anchor_targets(SPEC)]
     assert runner.PARAMETER_ANCHOR in keys, (
         "which quantity a number is, is asked for and so must be searched for")
     for parameter in SPEC.parameters:
-        assert parameter.uri in keys
+        assert parameter.uri not in keys
         assert runner.anchor_key(parameter.uri, "year") in keys
     assert len(keys) == len(set(keys))
 
@@ -167,9 +167,6 @@ def test_an_axis_anchor_is_written_from_the_axis_question():
     target = next(t for t in runner.anchor_targets(SPEC)
                   if t[0] == runner.anchor_key(SPEC.parameters[0].uri, "year"))
     assert target[3] == "Für welches Jahr?"
-    value = next(t for t in runner.anchor_targets(SPEC)
-                 if t[0] == SPEC.parameters[0].uri)
-    assert value[3] is None, "the value question is the parameter itself"
 
 
 def test_the_parameter_is_a_choice_over_the_spec_with_a_way_to_say_nothing():

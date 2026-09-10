@@ -487,28 +487,6 @@ class _StubClient:
         return _StubReply(self.content)
 
 
-def test_the_anchors_are_written_once_per_parameter_not_per_document():
-    """The QA app writes a HyDE anchor per question. Here the question is the
-    parameter's definition, which does not change between documents — so one
-    call each, and a probe string that is stable for the whole corpus is what
-    makes the query-embedding cache pay."""
-    from docpipe.extraction import runner
-    from docpipe.extraction.spec import load
-
-    spec = load({"parameters": [{
-        "uri": "OEO_00050016", "label": "Endenergieverbrauch",
-        "description": "the energy delivered to and consumed by end users",
-        "unit_target": "OEO_00050008", "units_accepted": {"MWh/a": 1.0},
-        "axes": {}, "example": {"source": "| x | 5 | MWh/a |",
-                                "tuples": [{"value": 5, "unit_raw": "MWh/a"}]}}]})
-    client = _StubClient('{"anchors": ["Der Endenergieverbrauch fuer Waerme im '
-                         'Stadtgebiet betrug 2022 rund 512 GWh/a.", "zu kurz"]}')
-    anchors = runner.make_anchors(spec, client=client)
-    assert len(client.seen) == 1, "one call per parameter"
-    assert len(anchors["OEO_00050016"]) == 1, "a two-word anchor is no anchor"
-    assert "512 GWh/a" in anchors["OEO_00050016"][0]
-
-
 def test_anchors_that_never_arrive_leave_the_templates_alone():
     """No anchors is not fatal: templates are what this stage searched with
     until now."""
@@ -519,10 +497,11 @@ def test_anchors_that_never_arrive_leave_the_templates_alone():
         "uri": "OEO_00050016", "label": "Endenergieverbrauch",
         "description": "the energy delivered to and consumed by end users",
         "unit_target": "OEO_00050008", "units_accepted": {"MWh/a": 1.0},
-        "axes": {}, "example": {"source": "| x | 5 | MWh/a |",
-                                "tuples": [{"value": 5, "unit_raw": "MWh/a"}]}}]})
+        "axes": {"year": {"type": "int", "question": "Welches Jahr?"}},
+        "example": {"source": "| x | 5 | MWh/a |",
+                    "tuples": [{"value": 5, "unit_raw": "MWh/a"}]}}]})
     assert runner.make_anchors(spec, client=_StubClient("not json")) == {
-        "OEO_00050016": []}
+        runner.anchor_key("OEO_00050016", "year"): []}
 
 
 def test_an_action_object_is_read_as_code_and_an_answer_is_not():
@@ -912,10 +891,10 @@ def test_the_anchors_are_frozen_so_a_restart_searches_the_same_way(tmp_path, mon
     first = runner.make_anchors(SPEC, store=store, key=key)
     wanted = len(runner.anchor_targets(SPEC))
     assert len(calls) == wanted > 1, (
-        "one anchor set per question, not one per parameter: the sentence "
-        "that states a value and the sentence that states its reference year "
-        "are not the same sentence")
-    assert first[SPEC.parameters[0].uri]
+        "one anchor set per question the field sweep asks")
+    assert SPEC.parameters[0].uri not in first, (
+        "the value has no set: the plan searches with the sentence written "
+        "per document")
     assert first[runner.anchor_key(SPEC.parameters[0].uri, "year")]
     second = runner.make_anchors(SPEC, store=store, key=key)
     assert second == first, "a restart must search with the same anchors"
@@ -1103,105 +1082,8 @@ def test_the_unreadable_diagnostic_shows_the_end_and_marks_the_cut():
 
 
 # ---------------------------------------------------------------------------
-# Anchors the profile freezes
-#
-# The promise: planning searches with the anchors the profile froze wherever it
-# names any, the questions it does not name are still written by the model, an
-# anchor belonging to no question of this spec stops the run instead of
-# vanishing, and a document harvested under another set does not count as done.
-# Four clauses, four tests.
+# The anchors a document was planned with are part of its stamp
 # ---------------------------------------------------------------------------
-
-class _FrozenProfile:
-    """A profile that names an anchors file and nothing else."""
-
-    def __init__(self, path):
-        self.name, self.path = "test", path
-
-    def component(self, module, attr):
-        if (module, attr) == ("extraction", "ANCHORS_PATH"):
-            return self.path
-        return None
-
-
-def _anchor_file(tmp_path, anchors, name="anchors.json"):
-    path = tmp_path / name
-    path.write_text(json.dumps({"anchors": anchors}, ensure_ascii=False),
-                    encoding="utf-8")
-    return path
-
-
-REAL = ("Endenergiebilanz. Abbildung 28 zeigt den Median des bereinigten "
-        "Endenergieverbrauchs auf Ebene der Baubloecke.")
-
-
-def test_the_frozen_anchor_is_the_one_that_plans(tmp_path):
-    """Measured over 150 documents and 4,785 prose values: a set taken from
-    sections that really produced a value puts 18.0% of them in the top 10
-    sections, where the set the model wrote from the same definitions puts
-    11.0% and chance puts 7.6%. So the frozen one has to win — over the model,
-    and over whatever a previous run of the same output directory wrote."""
-    uri = SPEC.parameters[0].uri
-    store = tmp_path / "store.json"
-    # With its targets, so the set really is read back and really loses.
-    # Written without them it would be dropped as unplaceable, and the store
-    # half of the promise below would pass for the wrong reason.
-    runner.save_anchors(store, "k", {uri: ["Ein alter Satz aus einem "
-                                           "frueheren Lauf des Verzeichnisses."]},
-                        runner.anchor_targets(SPEC))
-    frozen, sha = runner.frozen_anchors(_FrozenProfile(
-        _anchor_file(tmp_path, {uri: [REAL]})), SPEC)
-    assert sha, "a frozen set has to be identifiable"
-
-    client = _StubClient('{"anchors": ["Ein erfundener Satz, wie das Modell '
-                         'ihn schreiben wuerde, ueber zwanzig Zeichen."]}')
-    anchors = runner.make_anchors(SPEC, client=client, store=store, key="k",
-                                  frozen=frozen)
-    assert anchors[uri] == [REAL], (
-        "neither the store nor the model may overwrite what was measured")
-    asked = [json.loads(call["messages"][-1]["content"])["label"]
-             for call in client.seen]
-    assert SPEC.parameters[0].label not in asked, (
-        "and the model must not even be asked for a question already frozen")
-
-
-def test_a_question_the_profile_leaves_open_is_still_written(tmp_path):
-    """Only the value anchors were measured. The axis questions were not, and
-    freezing the ones we have must not silently drop the ones we do not."""
-    uri = SPEC.parameters[0].uri
-    frozen, _sha = runner.frozen_anchors(_FrozenProfile(
-        _anchor_file(tmp_path, {uri: [REAL]})), SPEC)
-    client = _StubClient('{"anchors": ["Das Bilanzjahr der Auswertung ist '
-                         'das Jahr 2022."]}')
-    anchors = runner.make_anchors(SPEC, client=client, frozen=frozen)
-
-    year = runner.anchor_key(uri, "year")
-    assert anchors[year] and anchors[year] != [REAL], (
-        "the axis anchors are still the model's job")
-    assert len(client.seen) == len(runner.anchor_targets(SPEC)) - 1, (
-        "one call for every question that was NOT frozen, and no more")
-
-
-def test_an_anchor_for_a_question_this_spec_does_not_ask_stops_the_run(tmp_path):
-    """The file is measured once and then outlives the spec it was measured
-    against. A key that is no question of this run would be dropped by every
-    reader without a word, and the corpus would be harvested with a set nobody
-    had checked."""
-    bad = _anchor_file(tmp_path, {"OEO_00050016": [REAL],
-                                  "eine_kennzahl_die_es_nicht_mehr_gibt": [REAL]})
-    with pytest.raises(LookupError) as caught:
-        runner.frozen_anchors(_FrozenProfile(bad), SPEC)
-    assert "eine_kennzahl_die_es_nicht_mehr_gibt" in str(caught.value)
-
-    # An empty list is the same defect wearing a different hat: the script that
-    # writes these files writes [] for a parameter it found nothing for.
-    empty = _anchor_file(tmp_path, {SPEC.parameters[0].uri: []}, "leer.json")
-    with pytest.raises(LookupError):
-        runner.frozen_anchors(_FrozenProfile(empty), SPEC)
-
-    # And a profile that freezes nothing is not an error, it is the default.
-    assert runner.frozen_anchors(_FrozenProfile(None), SPEC) == ({}, "")
-
 
 def test_a_document_harvested_under_other_anchors_is_not_current(tmp_path, monkeypatch):
     """The anchors are the only probes the plan searches with, so they decide
@@ -1236,34 +1118,6 @@ def test_a_document_harvested_under_other_anchors_is_not_current(tmp_path, monke
         "and a different set is reported as exactly that, not as a spec change")
     runner.run_document(*args, anchors_sha="anker-b", force_stale=True)
     assert calls == [1, 1], "another set is another harvest"
-
-
-def test_the_kwp_profile_freezes_anchors_its_own_spec_asks_for():
-    """The shipped file against the shipped spec, which is the pairing the
-    corpus run actually loads."""
-    from pathlib import Path
-
-    from docpipe.extraction.spec import load as load_spec
-    from docpipe.profile import load_profile
-
-    profile = load_profile("kwp")
-    spec = load_spec(Path(profile.component("extraction", "SPEC_PATH")))
-    frozen, sha = runner.frozen_anchors(profile, spec)
-    assert len(sha) == 16
-    assert set(frozen) <= {p.uri for p in spec.parameters}, (
-        "only parameters are frozen; a key that is no question of this spec "
-        "would be dropped by every reader without a word")
-    # The three the 2026-08 run measured. A parameter added since has no
-    # measured section to freeze -- the file's own `origin` says the passages
-    # come from sections that really produced a value -- and the model writes
-    # that parameter's anchor per document instead (runner.document_anchor).
-    assert {"energy_consumption", "emission", "planning_organisation"}         <= set(frozen), "a measured anchor set was dropped"
-    assert all(len(text) > 100 for texts in frozen.values() for text in texts), (
-        "these are passages, not the one-line queries this replaced")
-    # The key a run reads its own anchors.json back under has to move with the
-    # file, or changing it leaves every existing output directory on the old
-    # set with no line anywhere saying so.
-    assert runner.anchors_key(sha) != runner.anchors_key()
 
 
 def test_a_document_no_reply_ever_came_back_for_is_not_stamped(tmp_path, monkeypatch):
@@ -1624,13 +1478,16 @@ def test_the_sentence_a_document_was_asked_is_recorded_and_never_compared(
 def test_the_anchors_stamp_key_carries_only_what_no_other_key_does(monkeypatch):
     """It used to hash the questions too, and then ONE changed question made
     every document in the corpus stale -- which is the bill the per-question
-    keys exist to avoid. What is left is the target-set version and the
-    profile's frozen file, and neither is anywhere else in the stamp."""
+    keys exist to avoid. What is left is the target-set version, which is
+    nowhere else in the stamp."""
     monkeypatch.setattr(runner.prompts, "versions",
                         lambda ids: {i: "v1" for i in ids})
-    plain, frozen = runner.anchors_key(), runner.anchors_key("frozen-b")
-    assert plain != frozen, "the profile's frozen file is in no other key"
+    plain = runner.anchors_key()
     assert len(plain) == 16
+    # The field a profile's frozen file used to fill stays, empty, so a
+    # harvest that never had such a file keeps the key it was stamped with.
+    assert plain == runner._key16(
+        f"v1|{runner.LLM_MODEL}|{runner.ANCHOR_SCHEMA}|")
     # The prompt and the model ARE elsewhere in the stamp, and belong here as
     # well: this key is also what the anchor CACHE is stored under, and a set
     # another model wrote is not this run's set.
@@ -1638,16 +1495,16 @@ def test_the_anchors_stamp_key_carries_only_what_no_other_key_does(monkeypatch):
                         lambda ids: {i: "v2" for i in ids})
     assert runner.anchors_key() != plain
     monkeypatch.setattr(runner, "LLM_MODEL", "ein-anderes-modell")
-    assert runner.anchors_key() not in (plain, frozen)
+    assert runner.anchors_key() != plain
 
 
-def test_the_written_summary_is_judged_by_the_specs_own_rule(tmp_path,
-                                                             monkeypatch):
+def test_the_written_summary_does_not_grade_where_a_passage_stands(
+        tmp_path, monkeypatch):
     """finish_document is where a harvest file gets its summary line, and the
-    line is what a reader of 1.082 plans reads. Computed without the spec's
-    per-axis evidence rule it holds every coordinate to the row's own source
-    and reports a clean run as a broken one -- a year the rule lets stand a
-    page away would come out as a doubt."""
+    line is what a reader of 1.082 plans reads. A carrier and a year cited
+    from another table are readings the harvest took, because their quotes
+    stand in a shown passage and carry the answer. The summary grading them
+    again by distance would be a check the harvest does not make."""
     from docpipe.extraction.pipeline import DocumentReport
 
     monkeypatch.setattr(runner.prompts, "versions",
@@ -1659,18 +1516,16 @@ def test_the_written_summary_is_judged_by_the_specs_own_rule(tmp_path,
                        "im Plan bilanziert.",
         "unit_target": "OEO_00050008",
         "units_accepted": {"MWh/a": 1.0},
-        "axes": {"carrier": {"vocabulary": {"OEO_00000292": ["Erdgas"]},
-                             "evidence": "own"},
-                 # No rule: the plan may name the year anywhere.
+        "axes": {"carrier": {"vocabulary": {"OEO_00000292": ["Erdgas"]}},
                  "year": {"type": "int"}},
         "example": {"source": "| Erdgas | 42.005 | MWh/a | im Jahr 2020 |",
                     "tuples": [{"value": 42005, "unit_raw": "MWh/a"}]},
     }]})
     row = {"parameter": "OEO_00050016", "value": 42005, "tier": "text_located",
            "carrier": "OEO_00000292", "carrier_state": "read",
-           "carrier_source": ["table", 1],
+           "carrier_source": ["table", 99],
            "year": 2020, "year_state": "read",
-           "year_source": ["table", 99],          # legal: no rule on year
+           "year_source": ["table", 99],
            "provenance": {"document_id": 7, "owner_kind": "table",
                           "owner_id": 1, "parent_section": 5}}
     report = DocumentReport(document_id=7)
@@ -1680,15 +1535,8 @@ def test_the_written_summary_is_judged_by_the_specs_own_rule(tmp_path,
     summary = json.loads((tmp_path / "plan_x.jsonl")
                          .read_text(encoding="utf-8").strip().splitlines()[-1])
     assert summary["kind"] == "summary"
-    assert summary["reasons"] == {}, "the year broke no rule"
+    assert summary["reasons"] == {}
     assert summary["levels"] == {"A": 1, "B": 0, "C": 0}
-
-    # And the axis the spec does hold to its own source still counts.
-    report.tuples = [{**row, "carrier_source": ["table", 99]}]
-    runner.finish_document(report, "plan_y", tmp_path, "sha", spec=spec)
-    other = json.loads((tmp_path / "plan_y.jsonl")
-                       .read_text(encoding="utf-8").strip().splitlines()[-1])
-    assert other["reasons"] == {"nonlocal:carrier": 1}
 
 
 def test_a_parameter_nobody_answered_still_ends_with_a_state(tmp_path,
@@ -1826,7 +1674,7 @@ def test_one_changed_question_rewrites_one_anchor_set_and_no_other(
 
     first = runner.make_anchors(_spec(), store=store, key=key)
     wrote = len(calls)
-    assert wrote == len(runner.anchor_targets(_spec())) > 2
+    assert wrote == len(runner.anchor_targets(_spec())) > 1
 
     moved = _spec(year_question="Auf welches Bilanzjahr bezieht sich das?")
     second = runner.make_anchors(moved, store=store, key=key)
@@ -1854,7 +1702,7 @@ def test_a_new_model_or_prompt_rewrites_every_anchor_set(what, tmp_path,
     store = tmp_path / "anchors.json"
     runner.make_anchors(_spec(), store=store, key=runner.anchors_key())
     wrote = len(calls)
-    assert wrote > 2
+    assert wrote > 1
 
     if what == "prompt":
         monkeypatch.setattr(runner.prompts, "versions",
@@ -1875,23 +1723,24 @@ def test_a_store_that_cannot_say_which_question_is_reused_for_nothing(
                         lambda ids: {i: "v1" for i in ids})
     key = runner.anchors_key()
     store = tmp_path / "anchors.json"
+    year = runner.anchor_key("OEO_00050016", "year")
     store.write_text(json.dumps({"key": key, "model": "m",
-                                 "anchors": {"OEO_00050016": ["Ein Satz."]}}),
+                                 "anchors": {year: ["Ein Satz."]}}),
                      encoding="utf-8")
     targets = runner.anchor_targets(_spec())
     assert runner.load_anchors(store, key, targets) == {}
     # A map that is there but is not a map is the same case, and must not be
     # a crash in the middle of a run either.
     store.write_text(json.dumps({"key": key, "model": "m", "questions": [],
-                                 "anchors": {"OEO_00050016": ["Ein Satz."]}}),
+                                 "anchors": {year: ["Ein Satz."]}}),
                      encoding="utf-8")
     assert runner.load_anchors(store, key, targets) == {}
     # And the case the whole-file key alone stands against, which nothing
     # else in this test reaches: every per-question key still matches -- the
     # question tuple did not move -- and only the model or the prompt did.
-    # Written as a real store, so removing the key check really lets three
-    # sets of another model's sentences into the run.
-    runner.save_anchors(store, runner.anchors_key("ein-anderer-satz"),
+    # Written as a real store, so removing the key check really lets every
+    # set of another model's sentences into the run.
+    runner.save_anchors(store, "ein-anderer-schluessel",
                         {t[0]: ["Ein Satz, den ein anderes Modell schrieb."]
                          for t in targets}, targets)
     assert runner.load_anchors(store, key, targets) == {}
@@ -1909,15 +1758,16 @@ def test_a_set_for_a_question_this_spec_no_longer_asks_is_not_carried_forward(
     runner.save_anchors(store, key, {t[0]: ["Ein Satz."] for t in targets},
                         targets)
     kept = runner.load_anchors(store, key, runner.anchor_targets(_spec()))
-    assert "OEO_00010079" not in kept
-    assert "OEO_00050016" in kept
+    dropped = runner.anchor_key("OEO_00010079", "year")
+    assert dropped not in kept
+    assert runner.anchor_key("OEO_00050016", "year") in kept
     # The same set with no recorded question at all: a file can be written
     # half, or by hand. Not a target and not placeable is two reasons to
     # leave it, and either alone has to be enough.
     stored = json.loads(store.read_text(encoding="utf-8"))
-    stored["questions"].pop("OEO_00010079")
+    stored["questions"].pop(dropped)
     store.write_text(json.dumps(stored), encoding="utf-8")
-    assert "OEO_00010079" not in runner.load_anchors(
+    assert dropped not in runner.load_anchors(
         store, key, runner.anchor_targets(_spec()))
 
 
@@ -1935,3 +1785,58 @@ def test_the_store_says_which_question_each_set_answers(tmp_path, monkeypatch):
     )
     assert stored["questions"][targets[0][0]] \
         == runner.anchor_question_key(targets[0])
+
+
+def test_a_request_one_token_over_the_window_is_asked_again_with_room(
+        monkeypatch):
+    """Measured on Kassel: a field request of 26,625 prompt tokens asked for
+    6,144 more, the server refused it for one token over 32,768, and the
+    break on a 4xx wrote its coordinates off. The server names both numbers,
+    so the answer is given the room that is left, and anything else the
+    server refuses stays refused."""
+    from docpipe.extraction import fields
+
+    class _Refused(Exception):
+        status_code = 400
+
+    said = ("This model's maximum context length is 32768 tokens. However, "
+            "you requested 6144 output tokens and your prompt contains at "
+            "least 26625 input tokens, for a total of at least 32769 tokens. "
+            "Please reduce the length of the input prompt or the number of "
+            "requested output tokens. (parameter=input_tokens, value=26625)")
+    asked = []
+
+    class _Message:
+        content = '{"fields": {}}'
+        reasoning_content = ""
+
+    class _Choice:
+        message = _Message()
+        finish_reason = "stop"
+
+    class _Response:
+        choices = [_Choice()]
+        usage = None
+
+    class _Client:
+        class chat:
+            class completions:
+                @staticmethod
+                def create(**kw):
+                    asked.append(kw["max_tokens"])
+                    if len(asked) == 1:
+                        raise _Refused(said)
+                    return _Response()
+
+    monkeypatch.setattr(runner, "_client", lambda: _Client())
+    monkeypatch.setattr(runner.time, "sleep", lambda s: None)
+    monkeypatch.setattr(runner.prompts, "load", lambda _id: type(
+        "P", (), {"text": "sys", "meta": {"max_tokens": 6144}})())
+    ask = runner.make_field_asker()
+    slot = fields.Slot(name="year", kind=fields.NUMBER, question="?")
+    assert ask([], [], [slot]) == {"fields": {}}
+    assert asked == [6144, 32768 - 26625 - 32]
+
+    assert runner.fitted_max_tokens(_Refused("bad request"), 6144) is None
+    no_room = said.replace("26625", "32600")
+    assert runner.fitted_max_tokens(_Refused(no_room), 6144) is None

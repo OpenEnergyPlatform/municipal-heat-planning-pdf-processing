@@ -15,7 +15,7 @@ fills every key below as a publication is read.
 `parameter_state`, `refusal` and `summary` are the three record kinds
 every profile's contract shares. `parameter_state` closes one
 parameter with its state and tuple and refusal counts
-(`docpipe/extraction/schema.py:530` to `554`); `refusal` records a
+(`docpipe/extraction/schema.py:533` to `557`); `refusal` records a
 claim the run did not accept: why it failed, the claim as returned,
 and its source (`:460` to `488`); `summary`, the file's last line, counts a
 document's tuples and refusals by trust level and reason (`:489` to
@@ -26,7 +26,7 @@ Such a section opens with how its row becomes a node or an edge of the
 OEKG, where the parameter mints one at all. The `parameter` coordinate
 and every axis expand into eight `###` headings: the value, plus
 seven keys that make it checkable without the run that produced it
-(`docpipe/extraction/schema.py:209` to `262`). Four parameters carry
+(`docpipe/extraction/schema.py:212` to `265`). Four parameters carry
 the same `scenario` axis, `scenario_type`, `scenario_abstract`,
 `scenario_region` and `scenario_year`, each stating which of the
 publication's AR6 scenarios the row belongs to
@@ -36,7 +36,7 @@ test_a_document_field_carries_no_axes_and_a_scenario_field_carries_one`).
 A tuple's `provenance` names where its `quote` sits: `document_id`,
 `owner_kind` and `owner_id` always present, the rest, page and
 section location among them, filled in as the source allows
-(`docpipe/extraction/schema.py:411` to `459`); a coordinate's
+(`docpipe/extraction/schema.py:414` to `462`); a coordinate's
 `<name>_source` and a refusal's `owner` use the shorter
 `[owner_kind, owner_id]` pair instead (`:144` to `148`).
 
@@ -47,7 +47,7 @@ coordinate answers from a closed list, `x-options` names every entry
 with its ontology uri and definition, and its corpus spellings where
 any are recorded. A tuple section closes with the `allOf` rule: a
 coordinate is `null` unless its own `<name>_state` says `read` or
-`derived` (`docpipe/extraction/schema.py:265` to `280`).
+`derived` (`docpipe/extraction/schema.py:268` to `283`).
 
 ## The lists this page cannot publish
 
@@ -64,13 +64,13 @@ The other two are marked `vocabulary_dynamic` in the spec: their value
 resolves through `_value_uri`, which for a dynamic list types it as a
 plain nullable string with no `x-options`, stating in the
 `description` that a list exists but is not published here
-(`docpipe/extraction/schema.py:171` to `206`). The `scenario` axis on
+(`docpipe/extraction/schema.py:174` to `209`). The `scenario` axis on
 the same four parameters takes a different path: the spec marks it
 `dynamic`, not `vocabulary_dynamic`, and `axis_slots` types it as
 plain text through a path that never calls `_value_uri` at all; that
 call runs earlier in the same function, for the parameter's own
-`value` key (`docpipe/extraction/fields.py:302` to `327`;
-`docpipe/extraction/schema.py:349`, `:369` to `381`).
+`value` key (`docpipe/extraction/fields.py:300` to `325`;
+`docpipe/extraction/schema.py:352`, `:372` to `384`).
 
 What the list holds is decided once, before harvest starts, by
 `document_axes` in `profiles/scenarios/extraction.py:172`. It reads
@@ -89,13 +89,13 @@ entry on every tuple, recording what the list held at harvest time.
 Two sections close the page: `## The stamp`, the schema of
 `<publication>.stamp.json` (four fixed keys, `spec`, `model`,
 `anchors`, `page_text_transcribed`, plus per-question patterns,
-`docpipe/extraction/schema.py:561` to `668`), and `## The trace`, the
+`docpipe/extraction/schema.py:564` to `670`), and `## The trace`, the
 schema of `<publication>.trace.jsonl`, one `oneOf` branch per event
 kind: eleven, fixed by the schema for every profile rather than drawn
-from this one's spec (`docpipe/extraction/schema.py:671` to `782`). A
+from this one's spec (`docpipe/extraction/schema.py:673` to `784`). A
 stamp key differing from today's run makes the document eligible for
 a full re-harvest under `--force-stale`
-(`docpipe/extraction/runner.py:3404` to `3513`); `top_up_file` redoes
+(`docpipe/extraction/runner.py:3468` to `3577`); `top_up_file` redoes
 only the changed question
 (`docpipe/extraction/topup.py:296` to `330`). The trace is read by
 `scripts/trace_report.py` and, for cost, by `trace_costs`
@@ -696,7 +696,7 @@ Axis 'scenario' of Kurzbeschreibung eines Szenarios. null unless scenario_state 
 
 The prompt's own wording:
 
-> Auf welches Szenario dieser Publikation bezieht sich der Wert? Die Liste führt die Laufkennungen, die genau diese Publikation in der AR6-Datenbank dokumentiert. Im Text stehen sie fast nie, dort heißt dasselbe Szenario "Current Policies" oder "the NDC scenario". Nennt das Dokument nur die Familie, ist "Szenario-Familie" die richtige Antwort und keine Kennung. Belege mit einer Passage aus der Quelle der Zeile selbst oder aus dem Abschnitt, in dem diese Quelle steht. Steht die eigene Quelle unter den gezeigten, nennt die Anfrage sie als "source"; steht auch ihr Abschnitt darunter, als "section".
+> Auf welches Szenario dieser Publikation bezieht sich der Wert? Die Liste führt die Laufkennungen, die genau diese Publikation in der AR6-Datenbank dokumentiert. Im Text stehen sie fast nie, dort heißt dasselbe Szenario "Current Policies" oder "the NDC scenario". Nennt das Dokument nur die Familie, ist "Szenario-Familie" die richtige Antwort und keine Kennung.
 
 - `class`: `OEO_00000365`
 - `linked_by`: `{'label': 'has part', 'node': 'scenariobundle', 'predicate': 'BFO_0000051', 'prefix': 'obo'}`
@@ -933,7 +933,7 @@ Axis 'scenario' of Betrachtete Region eines Szenarios. null unless scenario_stat
 
 The prompt's own wording:
 
-> Auf welches Szenario dieser Publikation bezieht sich der Wert? Die Liste führt die Laufkennungen, die genau diese Publikation in der AR6-Datenbank dokumentiert. Im Text stehen sie fast nie, dort heißt dasselbe Szenario "Current Policies" oder "the NDC scenario". Nennt das Dokument nur die Familie, ist "Szenario-Familie" die richtige Antwort und keine Kennung. Belege mit einer Passage aus der Quelle der Zeile, aus dem Abschnitt, in dem sie steht, oder von der Nachbarseite. Die ersten beiden nennt die Anfrage als "source" und "section", soweit sie mitgezeigt werden.
+> Auf welches Szenario dieser Publikation bezieht sich der Wert? Die Liste führt die Laufkennungen, die genau diese Publikation in der AR6-Datenbank dokumentiert. Im Text stehen sie fast nie, dort heißt dasselbe Szenario "Current Policies" oder "the NDC scenario". Nennt das Dokument nur die Familie, ist "Szenario-Familie" die richtige Antwort und keine Kennung.
 
 - `class`: `OEO_00000365`
 - `linked_by`: `{'label': 'has part', 'node': 'scenariobundle', 'predicate': 'BFO_0000051', 'prefix': 'obo'}`
@@ -1075,7 +1075,7 @@ Axis 'scenario' of Art des Szenarios. null unless scenario_state is 'read' or 'd
 
 The prompt's own wording:
 
-> Auf welches Szenario dieser Publikation bezieht sich der Wert? Die Liste führt die Laufkennungen, die genau diese Publikation in der AR6-Datenbank dokumentiert. Im Text stehen sie fast nie, dort heißt dasselbe Szenario "Current Policies" oder "the NDC scenario". Nennt das Dokument nur die Familie, ist "Szenario-Familie" die richtige Antwort und keine Kennung. Belege mit einer Passage aus der Quelle der Zeile selbst oder aus dem Abschnitt, in dem diese Quelle steht. Steht die eigene Quelle unter den gezeigten, nennt die Anfrage sie als "source"; steht auch ihr Abschnitt darunter, als "section".
+> Auf welches Szenario dieser Publikation bezieht sich der Wert? Die Liste führt die Laufkennungen, die genau diese Publikation in der AR6-Datenbank dokumentiert. Im Text stehen sie fast nie, dort heißt dasselbe Szenario "Current Policies" oder "the NDC scenario". Nennt das Dokument nur die Familie, ist "Szenario-Familie" die richtige Antwort und keine Kennung.
 
 - `class`: `OEO_00000365`
 - `linked_by`: `{'label': 'has part', 'node': 'scenariobundle', 'predicate': 'BFO_0000051', 'prefix': 'obo'}`
@@ -1254,7 +1254,7 @@ Axis 'scenario' of Projiziertes Jahr eines Szenarios. null unless scenario_state
 
 The prompt's own wording:
 
-> Auf welches Szenario dieser Publikation bezieht sich der Wert? Die Liste führt die Laufkennungen, die genau diese Publikation in der AR6-Datenbank dokumentiert. Im Text stehen sie fast nie, dort heißt dasselbe Szenario "Current Policies" oder "the NDC scenario". Nennt das Dokument nur die Familie, ist "Szenario-Familie" die richtige Antwort und keine Kennung. Belege mit einer Passage aus der Quelle der Zeile selbst oder aus dem Abschnitt, in dem diese Quelle steht. Steht die eigene Quelle unter den gezeigten, nennt die Anfrage sie als "source"; steht auch ihr Abschnitt darunter, als "section".
+> Auf welches Szenario dieser Publikation bezieht sich der Wert? Die Liste führt die Laufkennungen, die genau diese Publikation in der AR6-Datenbank dokumentiert. Im Text stehen sie fast nie, dort heißt dasselbe Szenario "Current Policies" oder "the NDC scenario". Nennt das Dokument nur die Familie, ist "Szenario-Familie" die richtige Antwort und keine Kennung.
 
 - `class`: `OEO_00000365`
 - `linked_by`: `{'label': 'has part', 'node': 'scenariobundle', 'predicate': 'BFO_0000051', 'prefix': 'obo'}`
@@ -1688,11 +1688,11 @@ Every key but `spec` makes the document stale, and it is harvested again, when i
 
 | key | what it records |
 |---|---|
-| `anchors` | The anchor prompt, the model, the version of the target set and the profile's frozen anchor file, together. NOT the questions: which question was asked is carried by the parameter/, value/, axis/ and slot/ keys, and a question that is GONE by the rule that a key the stamp still carries and the run no longer asks makes the document stale. The anchors decide which passages a document was read from, so a document read under one set is not the same result as one read under another. Empty when anchors were off. |
+| `anchors` | The anchor prompt, the model and the version of the target set, together. NOT the questions: which question was asked is carried by the parameter/, value/, axis/ and slot/ keys, and a question that is GONE by the rule that a key the stamp still carries and the run no longer asks makes the document stale. The anchors decide which passages a document was read from, so a document read under one set is not the same result as one read under another. Empty when anchors were off. |
 | `model` | the serving model |
 | `page_text_transcribed` | How many pages of this document a model read rather than the PDF. A harvest from a transcribed document is a reading of a reading. |
 | `spec` | sha256 of extraction_spec.json. A record, not a verdict: it moves on a comment, an indent or a graph annotation, none of which any question is asked through. Compared, it would outvote every key below it. |
-| `^axis/[^/]+/[^/]+$` | What this coordinate asks and what it may answer: the question, the evidence rule, and the offered list with its spellings and its definitions. Everything the model sees for this axis, and nothing else. |
+| `^axis/[^/]+/[^/]+$` | What this coordinate asks and what it may answer: the question and the offered list with its spellings and its definitions. Everything the model sees for this axis, and nothing else. |
 | `^extraction/(harvest\|queries\|anchors\|rows\|field\|phrase\|frame)$` | sha256 of the prompt file |
 | `^parameter/[^/]+$` | What this parameter asks, without its axes and without its own list: label, description, value type, accepted units and the example. A new option on ONE axis, or in the list the parameter answers from, must not make every value of the parameter stale. Those have keys of their own. |
 | `^question_text/[^/]+$` | The sentence THIS document was searched with. Recorded and never compared: it is written per document, so the document itself is part of it and no two runs produce the same one. What decides whether the harvest is current is its recipe, and that is already here: the generator prompt, the model, and the annotation inside parameter/. |
