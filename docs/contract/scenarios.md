@@ -93,11 +93,15 @@ Two sections close the page: `## The stamp`, the schema of
 schema of `<publication>.trace.jsonl`, one `oneOf` branch per event
 kind: eleven, fixed by the schema for every profile rather than drawn
 from this one's spec (`docpipe/extraction/schema.py:673` to `784`). A
-stamp key differing from today's run makes the document eligible for
-a full re-harvest under `--force-stale`
-(`docpipe/extraction/runner.py:3455` to `3564`); `top_up_file` redoes
+`parameter/`, `value/`, `axis/` or `slot/` key differing from today's
+run makes the document eligible for a full re-harvest under
+`--force-stale`; `model`, `anchors` and every prompt id are written for
+a reader and never compared, so a reworded prompt or another model
+leaves a harvested corpus current (`stale`,
+`docpipe/extraction/runner.py:3419` to `3456`; `already_done`, `:3499`
+to `3524`). `top_up_file` redoes
 only the changed question
-(`docpipe/extraction/topup.py:296` to `330`). The trace is read by
+(`docpipe/extraction/topup.py:284` to `318`). The trace is read by
 `scripts/trace_report.py` and, for cost, by `trace_costs`
 (`scripts/harvest_compare.py:134` to `153`), never by a resume.
 

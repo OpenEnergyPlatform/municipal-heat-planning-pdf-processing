@@ -59,7 +59,7 @@ table gives this profile's own answer.
 | The picker (app) | `catalog.py`, `profile.py` | `CATALOG`, `facets` | publication labels and three filters |
 | Extraction | `extraction.py`, `prompts/extraction/*.md` | `SPEC_PATH`, `document_axes`, eight prompt ids | the spec, the per-document scenario and region lists, and the harvest's own questions |
 | The graph | `kg.py` | `make_serializer` | OEKG Turtle, the trust wording |
-| The answer app | `inference.py`, `prompts/inference/*.md` | `PHRASES`, `NON_ANCHOR`, `READOFF_MARKER`, `READOFF_NOTE`, 16 prompt ids | the English chat wording and the answer loop's own prompts |
+| The answer app | `inference.py`, `prompts/inference/*.md` | `PHRASES`, `READOFF_MARKER`, `READOFF_NOTE`, 15 prompt ids | the English chat wording and the answer loop's own prompts |
 
 ## Per-document choice lists: dynamic axes and dynamic values
 

@@ -767,7 +767,8 @@ Without it a harvest cannot be placed at all -- "which sentence found these
 passages" has no answer, and `--force-stale` loses its meaning, because
 nothing says what would be redone differently.
 
-So it is written down and never compared. See `RECORDED_PREFIXES`.
+So it is written down, and never compared: `stale` compares the
+ontology keys alone.
 
 ### stale
 
@@ -775,25 +776,26 @@ So it is written down and never compared. See `RECORDED_PREFIXES`.
 def stale(stamp_path: Path, current: dict) -> list
 ```
 
-Which stamped versions differ from now; everything when unstamped.
+Which ontology keys differ from now; everything when unstamped.
+
+Only the ontology keys are compared (`QUESTION_KEYS`: one per parameter,
+value list, axis and slot), and the whole-file sha `spec` only for a stamp
+that has none of them. The model, the anchors, every prompt and every
+recorded sentence are in the stamp for a reader and decide nothing: the
+owner's rule of 2026-09-10 is that a stamp rests on the KG/ontology
+parameters alone, so a reworded prompt or another model leaves a
+harvested corpus current.
 
 A key the stored stamp does not have counts as changed, which is what
-makes a stamp from before the per-parameter keys read as fully stale: it
-cannot vouch for a coordinate it never recorded, and pretending otherwise
-is how a document keeps a harvest nobody can place.
+makes a stamp from before the per-parameter keys read as stale: it cannot
+vouch for a coordinate it never recorded, and pretending otherwise is how
+a document keeps a harvest nobody can place.
 
-What it does NOT count is the whole-file sha, once there are per-question
-keys to go on. That is the point of them: a change no question is asked
-through must cost nothing. Writing a graph block for all fourteen
-scenarios parameters moves `spec` and not one question -- measured -- and
-a run that re-read the corpus over it would be re-reading it over a
-comment.
-
-Both directions, and the second one is why: every key is written from what
-the spec still HAS, so a question that is gone is in no current key at
-all. Dropping an axis moved nothing and the document read as current under
-a spec that no longer asks that coordinate -- the whole-file sha used to
-catch it, and stopped once it was no longer compared.
+Both directions: every key is written from what the spec still HAS, so a
+question that is gone is in no current key at all. Dropping an axis moved
+nothing and the document read as current under a spec that no longer asks
+that coordinate -- the whole-file sha used to catch it, and stopped once
+it was no longer compared.
 
 ### documents_to_harvest
 
@@ -829,8 +831,7 @@ def already_done(name: str, out_dir: Path, spec_sha: str, *,
 ```
 
 True when this document needs no work: harvested under the current
-spec, prompts, model and anchors — or stale with nobody asking for the
-redo.
+ontology keys — or stale with nobody asking for the redo.
 
 ### finish_document
 

@@ -60,16 +60,6 @@ def phrases(profile: Optional[Profile] = None) -> dict:
     return got
 
 
-def non_anchor(profile: Optional[Profile] = None):
-    """Pattern matching a search anchor that turned into a refusal.
-
-    Which words those are is a property of the language the model answers in,
-    so the core cannot hold the list — with the wrong one the check silently
-    never fires and every refusal is used as a retrieval probe.
-    """
-    return _component("NON_ANCHOR", profile)
-
-
 def readoff(profile: Optional[Profile] = None) -> tuple:
     """(marker, note) for values the model read off a figure.
 

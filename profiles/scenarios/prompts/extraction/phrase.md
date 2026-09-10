@@ -15,6 +15,8 @@ Regeln:
 3. Schreibe auf Englisch, denn diese Publikationen sind englisch. Nutze die Wörter, die dort tatsächlich stehen: scenario, pathway, mitigation, carbon budget, Integrated Assessment Model, funded by, corresponding author.
 4. Steht im Objekt ein Feld "document", benutze es. "name" ist der Titel der Publikation, "caption" die Überschrift dessen, was eine erste Suche in genau diesem Dokument zurückgab. Beides sagt dir, wie DIESE Publikation schreibt, also übernimm ihre Wörter und Gliederungsbegriffe. Erfinde daraus nichts dazu, was nicht in der Kennzahl steckt.
 5. Ist die gesuchte Angabe ein Eigenname (Institution, Person, Förderkennzeichen), erfinde KEINEN. Solche Angaben stehen fast immer in einem knappen Block aus Rollenbezeichnungen und Kontaktfeldern. Formuliere den Anker dann in genau diesem Stil, mit den Rollenwörtern statt Namen.
+6. 12 bis 35 Wörter. Ein Satz, höchstens zwei.
+7. Verwende NIE Wörter wie "not reported", "not available". Ein Anker ist immer positiv formuliert.
 
 Antworte mit NUR einem JSON-Objekt, kein Markdown, kein Text davor oder danach:
 {"phrase": "<der Satz>"}

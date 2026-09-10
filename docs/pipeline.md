@@ -306,15 +306,15 @@ per document, so this section documents its stamp on its own.
 written only once `finish_document` decides a harvest actually happened;
 a document is left unstamped, so the next run redoes it, when more than
 half its planned sources came back unreachable or nothing answered at all
-(`UNREACHABLE_LIMIT = 0.5`, `docpipe/extraction/runner.py:3571`). Inside
+(`UNREACHABLE_LIMIT = 0.5`, `docpipe/extraction/runner.py:3530`). Inside
 it:
 
 | Key | What it records | Compared on a redo |
 |---|---|---|
 | `spec` | sha256 of the whole `extraction_spec.json` file | only while no finer key is present |
-| `model` | the model served at harvest time (`LLM_MODEL`) | yes |
-| `anchors` | sha of the retrieval anchors the plan searched with | yes |
-| one entry per `PROMPT_IDS` id | sha256 of that prompt file | yes |
+| `model` | the model served at harvest time (`LLM_MODEL`) | never |
+| `anchors` | sha of the retrieval anchors the plan searched with | never |
+| one entry per `PROMPT_IDS` id | sha256 of that prompt file | never |
 | `parameter/<uri>` | fingerprint of one parameter's own question | yes |
 | `value/<uri>` | fingerprint of a value's own closed list | yes |
 | `axis/<uri>/<name>` | fingerprint of one axis's question and vocabulary | yes |
@@ -322,19 +322,24 @@ it:
 | `question_text/<key>` | the sentence this document was actually searched with | never |
 | `review/*` | what a second reading of a value came to | never |
 
-The fine keys (`parameter/`, `value/`, `axis/`, `slot/`) come from
+The owner decided on 2026-09-10 that a stamp rests on the KG/ontology
+parameters alone (`parameter/`, `value/`, `axis/`, `slot/`,
+`docpipe/extraction/runner.py:3387`). The model, the anchors and every
+prompt id are still written into the stamp, so a reader can place a
+harvest, but a reworded prompt or another model no longer makes a
+document stale. The fine keys come from
 `spec.fingerprints()` (`docpipe/extraction/spec.py:618` to `640`), and
 their presence is what licenses ignoring the coarse `spec` key. An earlier
 design hashed the whole spec file as one number, so one new label anywhere
 in it made a whole corpus stale together, about 93 GPU hours to reread
-1,082 documents over one added word (`docpipe/extraction/runner.py:3364`
-to `3367`); the ontology behind the spec is revised repeatedly, so the
+1,082 documents over one added word (`docpipe/extraction/runner.py:3354`
+to `3357`); the ontology behind the spec is revised repeatedly, so the
 same cost would recur each time it is. With one key per parameter, per value list
 and per axis, `stale()` names exactly which question changed and leaves
 the rest of the corpus alone; it checks both directions, so a question
 dropped from the spec counts as changed too, the one case the old
 whole-file hash used to catch that a purely additive scheme would
-otherwise miss (`docpipe/extraction/runner.py:3470` to `3474`). A file
+otherwise miss (`docpipe/extraction/runner.py:3439` to `3439`). A file
 with no stamp at all is read as fully stale, on principle: the opposite
 reading, a missing stamp taken as nothing left to do, had already let a
 run silently skip 165 documents with exit code 0
@@ -344,7 +349,7 @@ The review prompt (`extraction/review`) is deliberately left out of
 `PROMPT_IDS` itself, not merely out of the comparison: a review leaves a
 value unchanged, only its `flags` grow, so folding the review prompt's sha
 into every stamp would report the whole corpus stale the day that one
-prompt is edited (`docpipe/extraction/runner.py:146` to `152`).
+prompt is edited (`docpipe/extraction/runner.py:146` to `148`).
 
 Three passes act on a moved key without opening the document again.
 
@@ -376,7 +381,7 @@ refinement, visuals and extraction checks the served model's context size
 before its first document and refuses to start rather than fail midway
 (`docpipe/llm_preflight.py`, called from `docpipe/refinement/
 pipeline.py:165` and `247`, `docpipe/visuals/pipeline.py:501`, and
-`docpipe/extraction/runner.py:4055` and `4124`).
+`docpipe/extraction/runner.py:4012` and `4081`).
 
 Select the profile once, in the environment, before any stage that
 overrides prompts is imported:

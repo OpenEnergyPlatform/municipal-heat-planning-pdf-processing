@@ -21,7 +21,7 @@ decides, such as kwp's `aggregation` coordinate on `energy_consumption` and
 `emission` parameters, derived to `integral`, the only `derive` rules in
 either profile (`profiles/kwp/extraction_spec.json:173,920`). Which
 parameter a row belongs to is a separate decision, `derive_parameter`
-(`fields.py:212-235`), written directly in `runner.py:2981-2994`, not
+(`fields.py:212-235`), written directly in `runner.py:2977-2990`, not
 through `apply_derived`. `out_of_slice` is written the same way: a gate
 coordinate the profile's `SLICE` names has put the row outside what this
 run serializes, or no parameter of the spec could hold it, so none of its
@@ -63,7 +63,7 @@ same conflation about a whole run, and the reason the sweep reads past
 retrieval first: before that stage existed, a harvest meant to mark plans
 read to the end wrote 789 `exhausted` against 0 `unstated` on the M3 run,
 because nothing after retrieval read a document the rest of the way
-(`docpipe/extraction/runner.py:2868`). The two the sweep skips are kept
+(`docpipe/extraction/runner.py:2864`). The two the sweep skips are kept
 apart from `unstated` for the same reason it exists: asking the parameter
 question anyway on the Kassel run would have cost 322 of 1,043 field
 windows, 30.9 percent (`docpipe/extraction/fields.py:218`); asking the
@@ -72,7 +72,7 @@ cost 178 of 853 field requests, 20.9 percent
 (`docpipe/extraction/fields.py:250`); and before the slice gate ran first,
 4,064 of 6,763 tuples harvested across 20 plans had all seven axes
 filled in before being dropped for the two gate coordinates
-(`docpipe/extraction/runner.py:3030`). The same split holds past the
+(`docpipe/extraction/runner.py:3026`). The same split holds past the
 coordinate: `docpipe/extraction/trust.py`'s `reasons` counts only
 `exhausted` and `unbacked` as doubt about a reading, and treats every
 other state, `derived`, `unstated` and `out_of_slice`, as a fact about the

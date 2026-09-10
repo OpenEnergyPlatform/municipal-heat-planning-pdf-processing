@@ -84,7 +84,7 @@ is for and what it hands to what; this is the reference.
 - [docpipe.inference.pdf_locate](docpipe.inference.pdf_locate.md): Locates where a quote sits on the page of the source PDF. (3 functions)
 - [docpipe.inference.query_cache](docpipe.inference.query_cache.md): On-disk cache mapping a query to its embedding vector, so an identical query skips the on-demand model load. (5 functions)
 - [docpipe.inference.request_log](docpipe.inference.request_log.md): Request logging in a separate SQLite file. (2 functions)
-- [docpipe.inference.wording](docpipe.inference.wording.md): What the answer loop says around the prompts. (3 functions)
+- [docpipe.inference.wording](docpipe.inference.wording.md): What the answer loop says around the prompts. (2 functions)
 
 ## docpipe.ingest
 

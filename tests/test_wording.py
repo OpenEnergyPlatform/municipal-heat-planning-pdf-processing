@@ -27,7 +27,7 @@ def test_a_profile_that_answers_provides_all_of_it(name):
     profile = load_profile(name)
 
     assert wording.REQUIRED <= set(wording.phrases(profile))
-    assert wording.non_anchor(profile).search("") is None       # a usable pattern
+    assert not hasattr(wording, "non_anchor")
     marker, note = wording.readoff(profile)
     assert marker and note
 
@@ -61,44 +61,3 @@ def test_an_incomplete_set_says_which_pieces_are_missing(monkeypatch):
 
     assert "history_heading" in str(exc.value)
     assert "task_heading" not in str(exc.value)
-
-
-# ---------------------------------------------------------------------------
-# The pattern that has to fire in its own language
-# ---------------------------------------------------------------------------
-
-REFUSALS = {
-    "kwp": ["Diese Angabe ist im bereitgestellten Kontext nicht enthalten.",
-            "Dazu liegen keine Daten vor.",
-            "Das lässt sich aus den Auszügen nicht ermitteln.",
-            "Es ist keine Abbildung mit ähnlichen Angaben vorhanden."],
-    "scenarios": ["This is not reported in the provided context.",
-            "No data available for this scenario.",
-            "The value cannot be determined from the excerpts.",
-            "There is no figure showing that."],
-}
-
-ANCHORS = {
-    "kwp": ["Die Gemeinde hat 19.499 Einwohner und eine Fläche von 24 km².",
-            "Abbildung 3: Wärmebedarf nach Sektoren im Jahr 2035."],
-    "scenarios": ["The scenario reaches net-zero CO2 emissions in 2050.",
-            "Figure 3: Final energy demand by sector under SSP2-1.9."],
-}
-
-
-@pytest.mark.parametrize("name", sorted(REFUSALS))
-def test_a_refusal_in_the_profiles_language_is_recognised(name):
-    """A refusal that slips through is used as the retrieval probe, and the
-    correction turn that would have caught it never runs."""
-    pattern = wording.non_anchor(load_profile(name))
-
-    for text in REFUSALS[name]:
-        assert pattern.search(text), text
-
-
-@pytest.mark.parametrize("name", sorted(ANCHORS))
-def test_a_real_anchor_is_left_alone(name):
-    pattern = wording.non_anchor(load_profile(name))
-
-    for text in ANCHORS[name]:
-        assert not pattern.search(text), text

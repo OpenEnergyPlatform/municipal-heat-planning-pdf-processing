@@ -52,11 +52,17 @@ def test_everything_is_stale_without_a_stamp(tmp_path):
     assert stale(tmp_path / "none.json", {"a": "1"}) == ["a"]
 
 
-def test_only_the_changed_version_is_stale(tmp_path):
+def test_only_a_changed_ontology_key_is_stale(tmp_path):
+    """The owner's rule of 2026-09-10: a stamp rests on the KG/ontology
+    parameters alone. Model, anchors and prompts are recorded, not compared."""
     stamp = tmp_path / "s.json"
-    stamp.write_text(json.dumps({"a": "1", "b": "2"}), encoding="utf-8")
-    assert stale(stamp, {"a": "1", "b": "2"}) == []
-    assert stale(stamp, {"a": "1", "b": "NEW"}) == ["b"]
+    stored = {"axis/p/carrier": "1", "model": "m", "anchors": "a",
+              "extraction/field": "f"}
+    stamp.write_text(json.dumps(stored), encoding="utf-8")
+    assert stale(stamp, stored) == []
+    assert stale(stamp, {**stored, "model": "other", "anchors": "b",
+                         "extraction/field": "g"}) == []
+    assert stale(stamp, {**stored, "axis/p/carrier": "2"}) == ["axis/p/carrier"]
 
 
 def _per_probe(fn):
@@ -108,6 +114,12 @@ def test_run_document_writes_then_skips_then_redoes_on_stale(tmp_path, monkeypat
 
     monkeypatch.setattr(runner.prompts, "versions",
                         lambda ids: {i: "v2" for i in ids})
+    runner.run_document(*args, force_stale=True)
+    assert calls == [1], "a changed prompt is recorded, never compared"
+
+    real = runner.fingerprints
+    monkeypatch.setattr(runner, "fingerprints", lambda spec: {
+        **real(spec), "axis/OEO_00050016/carrier": "moved"})
     runner.run_document(*args)
     assert calls == [1], "stale without --force-stale only warns"
     runner.run_document(*args, force_stale=True)
@@ -1082,15 +1094,16 @@ def test_the_unreadable_diagnostic_shows_the_end_and_marks_the_cut():
 
 
 # ---------------------------------------------------------------------------
-# The anchors a document was planned with are part of its stamp
+# The anchors a document was planned with are recorded in its stamp
 # ---------------------------------------------------------------------------
 
-def test_a_document_harvested_under_other_anchors_is_not_current(tmp_path, monkeypatch):
-    """The anchors are the only probes the plan searches with, so they decide
-    WHICH passages a document was read from. When an interrupted run has
-    already stamped documents, leaving the anchors out of the stamp makes
-    exactly those come back "current" and stay the only ones on the old set,
-    with nothing in the corpus saying which document was read with what."""
+def test_the_anchors_are_recorded_in_the_stamp_and_never_compared(
+        tmp_path, monkeypatch):
+    """The anchors decide WHICH passages a document was read from, so the
+    stamp records them and the corpus can still say which document was read
+    with what. They decide nothing about whether it is current: the owner's
+    rule of 2026-09-10 is that a stamp rests on the KG/ontology parameters
+    alone."""
     monkeypatch.setattr(runner.prompts, "versions",
                         lambda ids: {i: "v1" for i in ids})
     calls = []
@@ -1113,11 +1126,12 @@ def test_a_document_harvested_under_other_anchors_is_not_current(tmp_path, monke
     runner.run_document(*args, anchors_sha="anker-a")
     assert calls == [1], "the same anchors are the same result"
 
-    assert runner.stale(tmp_path / "plan_a.stamp.json",
-                        runner._stamp_current("sha-1", "anker-b")) == ["anchors"], (
-        "and a different set is reported as exactly that, not as a spec change")
+    stamp = tmp_path / "plan_a.stamp.json"
+    assert json.loads(stamp.read_text(encoding="utf-8"))["anchors"] == "anker-a"
+    assert runner.stale(stamp, runner._stamp_current("sha-1", "anker-b",
+                                                     SPEC)) == []
     runner.run_document(*args, anchors_sha="anker-b", force_stale=True)
-    assert calls == [1, 1], "another set is another harvest"
+    assert calls == [1], "another set is recorded, not a reason to re-read"
 
 
 def test_a_document_no_reply_ever_came_back_for_is_not_stamped(tmp_path, monkeypatch):
@@ -1444,10 +1458,8 @@ def test_the_sentence_a_document_was_asked_is_recorded_and_never_compared(
     wording, so every run would produce a different one and every document
     would read stale forever.
 
-    Both directions. `NEVER_COMPARED` is matched by NAME and these keys carry a
-    parameter uri, so the exact-match lane skips nothing -- and the backward
-    sweep, which reports a key the run no longer asks, would report every one
-    of them.
+    Both directions: the backward sweep, which reports a key the run no longer
+    asks, looks at the ontology keys alone, so it reports none of them.
     """
     monkeypatch.setattr(runner.prompts, "versions",
                         lambda ids: {i: "v1" for i in ids})
@@ -1471,8 +1483,9 @@ def test_the_sentence_a_document_was_asked_is_recorded_and_never_compared(
     # And the lane really is a prefix and not a name.
     assert any(k.startswith("question_text/") for k in
                json.loads(stamp.read_text(encoding="utf-8")))
-    # It stays a stamp, not a free-for-all: a real key still decides.
-    assert runner.stale(stamp, {**current, "model": "another"}) == ["model"]
+    # It stays a stamp, not a free-for-all: an ontology key still decides.
+    key = next(k for k in current if k.startswith("axis/"))
+    assert runner.stale(stamp, {**current, key: "another"}) == [key]
 
 
 def test_the_anchors_stamp_key_carries_only_what_no_other_key_does(monkeypatch):

@@ -27,18 +27,6 @@ The profile's labels and guides, complete.
 Cached: citation_label asks once per retrieval hit, and the completeness
 check has nothing new to say the second time.
 
-### non_anchor
-
-```python
-def non_anchor(profile: Optional[Profile] = None)
-```
-
-Pattern matching a search anchor that turned into a refusal.
-
-Which words those are is a property of the language the model answers in,
-so the core cannot hold the list — with the wrong one the check silently
-never fires and every refusal is used as a retrieval probe.
-
 ### readoff
 
 ```python

@@ -144,12 +144,8 @@ PROMPT_IDS = (HARVEST_PROMPT_ID, QUERIES_PROMPT_ID, ANCHORS_PROMPT_ID,
               ROWS_PROMPT_ID, FIELD_PROMPT_ID, PHRASE_PROMPT_ID,
               FRAME_PROMPT_ID)
 # The second reading of one value, under a window narrowed to the two passages
-# the row may legally quote from. Deliberately NOT in PROMPT_IDS: those are
-# folded into every document's stamp and compared by `stale`, and a key absent
-# from a stored stamp counts as changed -- so adding it here would report all
-# 1.082 stamped documents stale the day this prompt is first written, and the
-# next harvest would redo them. What the review writes into a stamp goes under
-# the recorded lane instead, see RECORDED_PREFIXES.
+# the row may legally quote from. Not in PROMPT_IDS, which are the harvest's
+# own prompts: what the review writes into a stamp goes under `review/`.
 REVIEW_PROMPT_ID = "extraction/review"
 
 # One request per field, or one request per tuple. The old way is kept
@@ -3350,17 +3346,11 @@ def _stamp_current(spec_sha: str, anchors_sha: str = "",
                    spec: Optional[Spec] = None) -> dict:
     """What a harvest was produced by, key by key.
 
-    The model is part of it: tuples harvested by another model are not
-    "current" any more than tuples harvested with another prompt.
+    The model, the anchors and every prompt are written so a reader can
+    place a harvest, and never compared: the owner decided on 2026-09-10
+    that a stamp rests on the KG/ontology parameters alone.
 
-    So are the anchors. They are the only probes the plan searches with, so
-    they decide WHICH passages a document was read from, and a document
-    harvested under one set is not the same result as one harvested under
-    another. Without this the documents an interrupted run had already
-    stamped come back "current", stay the only ones on the old set, and
-    nothing in the corpus says which document was read with what.
-
-    And so is every parameter and every coordinate, one key each. `spec` is
+    Those are one key per parameter and per coordinate. `spec` is
     the sha of the whole file, which answers "did anything change" and
     nothing else: one new energy carrier moves it, and all 1.082 documents
     become stale together -- about 93 GPU hours to re-read a corpus over a
@@ -3381,13 +3371,6 @@ def _stamp_current(spec_sha: str, anchors_sha: str = "",
             **(fingerprints(spec) if spec is not None else {})}
 
 
-# Recorded so a reader can place a harvest, and never a reason to redo one:
-# how many pages of the document a model read rather than the PDF is a fact
-# about the DOCUMENT, not about what produced the harvest. Compared, a
-# document that carries it would read stale against every run that does not
-# write it, and stay that way.
-NEVER_COMPARED = ("page_text_transcribed",)
-
 # Recorded, and compared only while there is nothing finer to go on: the sha
 # of the whole spec file. It moves on a comment, an indent, a reordering, a
 # graph annotation -- none of which any question is asked through, and all of
@@ -3398,30 +3381,10 @@ NEVER_COMPARED = ("page_text_transcribed",)
 COARSE = ("spec",)
 
 # What a run really asks a document through, one key per question and per
-# answer space. Their presence is what licenses ignoring `spec`: with nothing
-# finer in the stamp there is nothing else to go on.
+# answer space: the ontology keys, and the only ones `stale` compares. Their
+# presence is what licenses ignoring `spec`: with nothing finer in the stamp
+# there is nothing else to go on.
 QUESTION_KEYS = ("parameter/", "value/", "axis/", "slot/")
-
-# Recorded per document and never compared: the sentence THIS document was
-# actually asked. A question built at runtime has no stable wording -- the
-# document contributes to it -- so comparing it would report every document
-# stale on every run, forever. What is compared instead is its recipe, and
-# that is already in the stamp: the generator prompt is a `PROMPT_IDS` entry,
-# the model is `model`, and the annotation it reads is inside
-# `parameter_fingerprint`. So the wording is kept for a reader to place a
-# harvest by, and the recipe decides whether the harvest is current.
-#
-# A PREFIX, not a name. `NEVER_COMPARED` is matched exactly and these keys
-# carry a parameter uri, so putting the prefix there would skip nothing:
-# measured, `stale` returned ["question_text/energy_consumption"] before and
-# after such an edit.
-#
-# `review/` is the second one: what read a document a second time is a fact
-# about that document and never a reason to harvest it again. The review
-# leaves values, coordinates and states byte-identical -- only `flags` grows
-# -- so comparing its prompt would throw a whole reviewed corpus away the day
-# the review prompt is edited.
-RECORDED_PREFIXES = ("question_text/", "review/")
 
 # Where a top-up writes its trace: beside the harvest's `trace/`, never into
 # it. trace._handle opens "w", so the harvest's own file would be truncated,
@@ -3439,7 +3402,8 @@ def recorded_questions(questions: Optional[dict]) -> dict:
     passages" has no answer, and `--force-stale` loses its meaning, because
     nothing says what would be redone differently.
 
-    So it is written down and never compared. See `RECORDED_PREFIXES`.
+    So it is written down, and never compared: `stale` compares the
+    ontology keys alone.
     """
     out: dict = {}
     for key, texts in (questions or {}).items():
@@ -3453,25 +3417,26 @@ def recorded_questions(questions: Optional[dict]) -> dict:
 
 
 def stale(stamp_path: Path, current: dict) -> list:
-    """Which stamped versions differ from now; everything when unstamped.
+    """Which ontology keys differ from now; everything when unstamped.
+
+    Only the ontology keys are compared (`QUESTION_KEYS`: one per parameter,
+    value list, axis and slot), and the whole-file sha `spec` only for a stamp
+    that has none of them. The model, the anchors, every prompt and every
+    recorded sentence are in the stamp for a reader and decide nothing: the
+    owner's rule of 2026-09-10 is that a stamp rests on the KG/ontology
+    parameters alone, so a reworded prompt or another model leaves a
+    harvested corpus current.
 
     A key the stored stamp does not have counts as changed, which is what
-    makes a stamp from before the per-parameter keys read as fully stale: it
-    cannot vouch for a coordinate it never recorded, and pretending otherwise
-    is how a document keeps a harvest nobody can place.
+    makes a stamp from before the per-parameter keys read as stale: it cannot
+    vouch for a coordinate it never recorded, and pretending otherwise is how
+    a document keeps a harvest nobody can place.
 
-    What it does NOT count is the whole-file sha, once there are per-question
-    keys to go on. That is the point of them: a change no question is asked
-    through must cost nothing. Writing a graph block for all fourteen
-    scenarios parameters moves `spec` and not one question -- measured -- and
-    a run that re-read the corpus over it would be re-reading it over a
-    comment.
-
-    Both directions, and the second one is why: every key is written from what
-    the spec still HAS, so a question that is gone is in no current key at
-    all. Dropping an axis moved nothing and the document read as current under
-    a spec that no longer asks that coordinate -- the whole-file sha used to
-    catch it, and stopped once it was no longer compared.
+    Both directions: every key is written from what the spec still HAS, so a
+    question that is gone is in no current key at all. Dropping an axis moved
+    nothing and the document read as current under a spec that no longer asks
+    that coordinate -- the whole-file sha used to catch it, and stopped once
+    it was no longer compared.
     """
     if not stamp_path.is_file():
         return sorted(current)
@@ -3480,18 +3445,13 @@ def stale(stamp_path: Path, current: dict) -> list:
     except (OSError, json.JSONDecodeError):
         return sorted(current)
     detailed = any(k.startswith(QUESTION_KEYS) for k in current)
-    skip = set(NEVER_COMPARED) | (set(COARSE) if detailed else set())
 
     def compared(key: str) -> bool:
-        return key not in skip and not key.startswith(RECORDED_PREFIXES)
+        return key.startswith(QUESTION_KEYS) or (not detailed and key in COARSE)
 
     changed = {k for k in current
                if compared(k) and stored.get(k) != current[k]}
     if detailed:
-        # Both directions, or the backward sweep re-creates exactly the noise
-        # the recorded lane exists to avoid: a per-document key is in no
-        # `current` built from the spec alone, so every one of them would come
-        # back as "the run no longer asks this".
         changed |= {k for k in stored if k not in current and compared(k)}
     return sorted(changed)
 
@@ -3540,8 +3500,7 @@ def already_done(name: str, out_dir: Path, spec_sha: str, *,
                  force: bool = False, force_stale: bool = False,
                  anchors_sha: str = "", spec: Optional[Spec] = None) -> bool:
     """True when this document needs no work: harvested under the current
-    spec, prompts, model and anchors — or stale with nobody asking for the
-    redo."""
+    ontology keys — or stale with nobody asking for the redo."""
     if force or not (out_dir / f"{name}.jsonl").exists():
         return False
     stamp_path = out_dir / f"{name}.stamp.json"
@@ -3955,9 +3914,7 @@ def main(argv: Optional[list] = None) -> int:
     parser.add_argument("--top-up-key", action="append", metavar="KEY",
                         help="--top-up only: sweep this stamp key and no "
                              "other, e.g. axis/energy_consumption/sector. "
-                             "Repeatable. extraction/field, the field "
-                             "prompt's sha, is swept only when named here: "
-                             "it means every asked coordinate of every row")
+                             "Repeatable")
     parser.add_argument("--review", action="store_true",
                         help="read every value nobody can stand behind a "
                              "second time, over its own passage and the "
@@ -4114,7 +4071,7 @@ def main(argv: Optional[list] = None) -> int:
                  "one value request per pair",
                  " x ".join(slot.name for slot in frame_axes))
     # Which sentence each document was really asked. Written into that
-    # document's stamp and compared by nothing -- see RECORDED_PREFIXES.
+    # document's stamp for a reader; `stale` compares the ontology keys alone.
     asked: dict = {}
 
     required = context_budget(prompts.load(HARVEST_PROMPT_ID), spec)

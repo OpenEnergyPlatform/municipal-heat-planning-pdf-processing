@@ -6,19 +6,6 @@ docpipe/inference/wording.py for what each piece is used for.
 
 Author: Felix Vossel
 """
-import re
-
-# A search anchor is a hypothetical passage. When the model evaluates or refuses
-# instead, the string is not an anchor at all — these are the ways it does that
-# in English.
-NON_ANCHOR = re.compile(
-    r"(?i)(provided\s+context|not\s+(?:reported|stated|mentioned|available|"
-    r"specified|given|provided|contained|discussed|shown|present)|"
-    r"cannot\s+be\s+(?:determined|derived|inferred|established)|"
-    r"(?:can|could)(?:not|\s+not)|unable\s+to|"
-    r"no\s+(?:such\s+)?(?:data|information|figure\w*|chart\w*|values?|"
-    r"evidence|details?|mention)\b)"
-)
 
 READOFF_MARKER = "read off"
 READOFF_NOTE = ("(Note: some values were read off from figures – estimates, "
