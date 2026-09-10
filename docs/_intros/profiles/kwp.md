@@ -303,7 +303,7 @@ profile, in English here, checked against the core's own list at import
 (`check_prose`, `profiles/kwp/kg.py:478` to `486`). Comments only, never
 triples: MHPKG's shapes are `sh:closed`, and an unanticipated triple
 would invalidate the node it documents (`profiles/kwp/kg.py:496` to
-`546`).
+`595`).
 
 What the serializer refuses, briefly (in full on
 [stages/graph.md](../stages/graph.md)): a row failing the scenario,

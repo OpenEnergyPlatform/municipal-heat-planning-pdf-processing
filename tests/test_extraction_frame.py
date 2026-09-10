@@ -364,6 +364,28 @@ def test_a_parameter_whose_sentence_could_not_be_written_is_left_out(
     assert runner.document_anchor(_spec(), {}, client=make_client(responder)) == {}
 
 
+def test_the_anchor_is_the_sentence_the_model_wrote_whatever_its_length(
+        make_client):
+    """No filter on the sentence: not on its word count, not on a
+    negation, not on a character floor. None was ever approved, and a search
+    sentence can always be written. An empty reply is no sentence at all."""
+    import types
+    said = {"phrase": "Es liegen keine Angaben vor."}
+
+    def responder(kwargs):
+        return types.SimpleNamespace(choices=[types.SimpleNamespace(
+            message=types.SimpleNamespace(content=json.dumps(said)))])
+
+    spec = _spec()
+    out = runner.document_anchor(spec, {}, client=make_client(responder))
+    assert out == {p.uri: ["Es liegen keine Angaben vor."]
+                   for p in spec.parameters}
+
+    said = {"anchors": ["Kurz.", "Planungsbüro:"]}
+    got = runner.make_anchors(spec, client=make_client(responder))
+    assert got and all(v == ["Kurz.", "Planungsbüro:"] for v in got.values())
+
+
 def test_the_frame_request_offers_the_closed_list_and_leaves_the_year_open():
     """Finite sets are a choice, not a generation -- and there is no list of
     years to choose from, so the one coordinate that has a vocabulary gets it
