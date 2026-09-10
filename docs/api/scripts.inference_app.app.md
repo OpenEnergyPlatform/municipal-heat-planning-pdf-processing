@@ -6,10 +6,10 @@ app.py: Streamlit RAG chat over a docpipe corpus, the only module in this
 package that imports Streamlit.
 
 What the corpus is about comes from the profile: its catalog supplies the
-labels, the filters and the detail shown for a selected document. With a
-graph configured (`INFERENCE_KG_TTL_PATH`, the file `--serialize` wrote) a
-question goes to the graph first, and to the documents only when the graph
-states why it has no answer.
+labels, the filters and the detail shown for a selected document. Answers
+come from the documents alone. The graph route is not offered while no
+corpus graph exists, and `docpipe.inference.kg_route` stays in the core for
+the day it does.
 
 Run:
     DOCPIPE_PROFILE=kwp streamlit run scripts/inference_app/app.py \

@@ -72,6 +72,10 @@ Kassel-Pilot 12881827 mitgekippt. Deshalb:
   muss dort offen eingetragen werden, sonst fällt der Test.
 - Den Ablauf so bauen, wie er vorgegeben ist. Weicht ein Entwurf ab, wird die
   Abweichung vor dem Bauen genannt und entschieden, nicht hinterher berichtet.
+- Bei Details, die der Auftrag offenlässt, im Chat fragen statt selbst
+  entscheiden. Eine kurze Frage hätte hier viel Arbeit erspart: der
+  Eigentümer hätte seine Vorstellung direkt genannt, statt dass Prüfungen
+  gebaut, gemessen und wieder ausgebaut werden.
 - Ein Frame-Paar wird über jede Passage gelesen, die es druckt, und die
   Zeilen bekommen das Jahr ihres Paars.
 - Anker sind kurze Sätze: einer je Dokument und Wert, ein Satz je
