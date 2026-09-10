@@ -358,10 +358,8 @@ fallback naming which reason applied, cheapest checked first: no plan
 costs one SQLite read, no coordinates the closed questions themselves, no
 rows one SPARQL query (`answer_from_graph`,
 `docpipe/inference/kg_route.py:260` to `293`).
-`scripts/inference_app/app.py` wires a per-turn choice around that
-outcome: force the graph, force a document search, or try the graph first
-and fall back to a search captioned with the graph's own refusal sentence
-(`scripts/inference_app/app.py:361` to `386`; see
+The answer app does not offer this route while no corpus graph exists
+(`scripts/inference_app/app.py:347` to `349`, see
 [app](../stages/app.md)).
 
 ## Verification

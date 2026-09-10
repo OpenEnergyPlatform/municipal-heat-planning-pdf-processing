@@ -25,22 +25,21 @@ citations (`app.py:154`). The embedding model is left out of
 the `st.cache_resource` set that
 covers the database, the index and the two caches: `get_embedder()` is
 imported lazily inside `embed_query()` so that a query-cache hit never
-imports `torch` (`app.py:112`). Where a profile's graph exists, a
-question goes to it first, through `kg_route.answer_from_graph`; the
-sidebar's `Antwortweg` radio can force either side (`app.py:271`,
-`365`).
+imports `torch` (`app.py:112`). The app answers from the documents
+alone: no graph route is offered while no corpus graph exists
+(`app.py:347-349`).
 
 ## Position in the pipeline
 
 | | |
 |---|---|
-| In | One profile's read-only corpus: database at `DB_PATH`, FAISS index at `INDEX_PATH` (chunking, stage 6), `IMAGE_ROOT`/`PDF_ROOT` for table, figure and PDF paths, and, once produced, the graph at `KG_TTL_PATH`; one chat turn (task, optional image, document selection). |
+| In | One profile's read-only corpus: database at `DB_PATH`, FAISS index at `INDEX_PATH` (chunking, stage 6), `IMAGE_ROOT`/`PDF_ROOT` for table, figure and PDF paths; one chat turn (task, optional image, document selection). |
 | Out | Nothing written to the corpus, read-only here. Its durable output: two SQLite files created on first use, `QUERY_CACHE_PATH` and `REQUEST_LOG_PATH`; chat history lives only in Streamlit's session state. |
 | Resumes on | Nothing: one question is one turn, with no per-document stamp. The one thing an identical query skips is re-embedding, served from `QUERY_CACHE_PATH`; the LLM calls always run. |
-| Needs | An OpenAI-compatible LLM endpoint at `LLM_BASE_URL`, the embedding backend `docpipe.embedding.get_embedder()` returns, and a corpus chunking already wrote; `KG_TTL_PATH` and a code-exec sandbox are optional. |
+| Needs | An OpenAI-compatible LLM endpoint at `LLM_BASE_URL`, the embedding backend `docpipe.embedding.get_embedder()` returns, and a corpus chunking already wrote; a code-exec sandbox is optional. |
 
-No numbered stage runs after this one; it reads what chunking and,
-optionally, the graph stage (8) wrote, and writes back into neither.
+No numbered stage runs after this one; it reads what chunking wrote
+and writes nothing back.
 The batch chain must finish first (see [Running the
 pipeline](../running.md)); this one starts directly:
 
@@ -63,7 +62,7 @@ viewer's ES modules, since some Python installs otherwise serve them as
 `sys.path` insert of the repository root, since `streamlit run` gives no
 package context for the imports below (`app.py:36-38`).
 
-### Picking a document, a scope and an answer path
+### Picking a document and a scope
 
 The sidebar is built from the active profile's catalog. A `Historische
 Versionen einbeziehen` checkbox sets `include_old`, passed to
@@ -76,22 +75,18 @@ capped at `COMPARE_MAX_DOCUMENTS`, several to compare; with exactly one
 selected, its `detail` expanders open below the picker, a per-profile
 addition since the base `Catalog` returns none (`app.py:254-257`). A
 scope multiselect defaults to
-every embedding type; an answer-format radio chooses prose or JSON, and
-a third, with a graph configured, offers `Automatik`,
-`Wissensgraph` or `Dokumentsuche` (`app.py:219`). Changing the document
-selection resets chat history and follow-up memory (`app.py:288`,
-`292`).
+every embedding type, and an answer-format radio chooses prose or JSON
+(`app.py:258-265`). Changing the document
+selection resets chat history and follow-up memory (`app.py:274`,
+`278`).
 
-### The graph route
+### No graph route
 
-When the answer path is not `Dokumentsuche`, `run_kg_turn()` asks the
-graph first, through `kg_route.answer_from_graph`. A hit ends the turn
-there, rendered per value; a miss carries one of `kg_route`'s five
-reason tokens, worded by the profile. `Automatik`
-shows that sentence as a caption and still runs the document search; the
-forced `Wissensgraph` mode shows it and stops, since a silent fallback
-would hide that the graph found nothing (`app.py:375-382`). Image upload
-and scope apply to the document search only.
+The graph route is not offered: there is no corpus graph yet, and a
+selector for a source that does not exist would promise what the app
+cannot keep (`app.py:347-349`). `kg_route` stays in the core, and
+`run_kg_turn()` and `_render_kg()` stay in the app, unused, for the day
+a graph is there.
 
 ### One document, and several
 
@@ -113,7 +108,7 @@ the answers differ (`app.py:154`).
 ### Locating a citation in the source PDF
 
 `_pdf_link_for()` builds a citation's deep link in fallback steps
-(`app.py:557`). Since a section's chunk text is refined and not
+(`app.py:523`). Since a section's chunk text is refined and not
 byte-identical to the PDF's text layer, `pdf_link.locate_quote()`
 matches the quote against the raw, page-tagged `Segments` instead,
 returning a page and a fallback phrase. When a page is found,
@@ -124,30 +119,29 @@ rectangles reach the browser as the deep link's
 `&mhl=` parameter (`pdf_link.encode_rects()`, `pdf_link.py:99`);
 `pdfjs_overlay.js`, in the pdf.js bundle's `web/` directory and not
 imported by `app.py`, decodes them client-side and draws the boxes on
-the page (`app.py:578-579`). Either library missing, or the fuzzy match
+the page (`app.py:544-545`). Either library missing, or the fuzzy match
 scoring under 55, degrades the link further: a bare page link, or none
 when `PDF_URL_PREFIX` is empty or the filename is unknown.
 
 ### Rendering and remembering
 
 `main()` dispatches a finished turn to `_render_answer`,
-`_render_citation`, `_render_comparison` or `_render_kg`; a
+`_render_citation` or `_render_comparison`, and a
 document-search or comparison answer also shows any sandbox-run code
-through `_render_compute()` (`app.py:411`, `425`, `496`), skipped only
-for the graph route, a value node having no compute data (`app.py:373`,
-`382`). `_remember()` then appends the turn, a failed one included, to
+through `_render_compute()` (`app.py:377`, `391`, `462`).
+`_remember()` then appends the turn, a failed one included, to
 `turns_by_doc[document_id]` and keeps only the last five, because a
 "check again" follow-up is asked precisely after a failure and needs it
-in context to search past (`app.py:441`).
+in context to search past (`app.py:407`).
 
 ## Data model
 
 Chat history lives only in `st.session_state["chat_history"]`, a list of
 role/content dicts. An assistant entry carries `citations`, `phrase`,
 `as_json`, `recheck_note`, `route_note` and `compute` for a
-document-search answer, `kg_values` for a graph answer, or `rows` for a
+document-search answer, or `rows` for a
 comparison; the render loop dispatches on whichever key is present
-(`app.py:296`). `st.session_state["turns_by_doc"]` maps a document id to
+(`app.py:282`). `st.session_state["turns_by_doc"]` maps a document id to
 its own remembered turns (`task`, `phrase`, `answer`, `examined`,
 `recheck`), capped at five and kept separate per document so a re-check
 in one plan never excludes another's sources.
@@ -176,7 +170,7 @@ regardless of the query's embedding coming from `QUERY_CACHE_PATH`.
 | `INFERENCE_DB_PATH` | env var | profile `db_path`, else `data/KWP.db` | Corpus database, opened read-only | `config.py:61` |
 | `INFERENCE_INDEX_PATH` | env var | profile `index_path`, else `data/faiss_index.bin` | Global FAISS index, loaded once into RAM | `config.py:62` |
 | `INFERENCE_IMAGE_ROOT` | env var | profile `processed_dir`, else `data/pdf/processed` | Root `Tables.path`/`Images.path` resolve against | `config.py:64` |
-| `INFERENCE_KG_TTL_PATH` | env var | profile `root/graph.ttl`, else `data/graph.ttl` | Turtle file the graph route reads; missing, the route is off | `config.py:66` |
+| `INFERENCE_KG_TTL_PATH` | env var | profile `root/graph.ttl`, else `data/graph.ttl` | Turtle file a graph route would read, read by nothing while the route is not offered | `config.py:66` |
 | `QUERY_CACHE_PATH` | env var | `data/inference_app_query_cache.db` | Query-to-vector cache, separate from the corpus | `config.py:103` |
 | `REQUEST_LOG_PATH` | env var | `data/inference_app_request_log.db` | Per-turn request log, separate from the corpus | `config.py:108` |
 | `PDF_URL_PREFIX` | env var | `/app/static/pdf` | URL prefix PDFs are served under; empty hides every PDF link | `config.py:121` |
@@ -201,19 +195,12 @@ endpoint (`config.py:14`).
 
 - An empty `Documents` table (`app.py:223`), a filter matching no
   document (`app.py:236`), a document multiselect left empty
-  (`app.py:251`), or a turn with no search scope selected (`app.py:337`),
+  (`app.py:251`), or a turn with no search scope selected (`app.py:323`),
   each stop before retrieval with its own message.
 - A comparison naming more documents than `COMPARE_MAX_DOCUMENTS` cannot
   reach `compare_documents` through the sidebar, whose multiselect already
   caps the selection; its own slice and `dropped` list are a second
   check for any caller (`docpipe/inference/compare.py:94`, `97`).
-- A profile's `ROUTE_NOTES` missing a reason token, or wording an extra
-  one, makes `kg_route.hooks()` raise `LookupError`; cached at the first
-  sidebar render, `get_kg_hooks()` turns that into a start-up error, not
-  a blank caption mid-conversation (see Verification).
-- Forcing `Wissensgraph` against a question the graph cannot answer ends
-  the turn without falling back to document search (see Method, The
-  graph route; `app.py:375-382`).
 - Neither PyMuPDF nor `rapidfuzz` importable makes both PDF-link helpers
   return `None`, degrading the citation as a low fuzzy-match score does
   (see Method, Locating a citation; `pdf_link.py:147`).

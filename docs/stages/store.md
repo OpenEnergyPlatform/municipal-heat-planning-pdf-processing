@@ -243,7 +243,7 @@ Reading the tables back out is not this package's job.
   `docpipe/inference/db.py`'s `section_segments_geo` catches, returning
   bbox-less segments from the older `section_segments` query and leaving
   the phrase-search fallback to its caller
-  (`scripts/inference_app/app.py:571` to `589`).
+  (`scripts/inference_app/app.py:537` to `555`).
 - `Embeddings.owner_id` carries no foreign key, so deleting a document's
   `Sections` rows never cascades to its `Embeddings` rows; those, and the
   FAISS vectors they name, are left for chunking's force path to clear.
