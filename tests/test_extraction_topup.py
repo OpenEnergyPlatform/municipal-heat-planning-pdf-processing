@@ -194,18 +194,17 @@ def test_a_named_key_is_the_only_one_swept():
     assert keys == [f"axis/{PARAMETER}/sector"] and blocked == []
 
 
-def test_a_stale_model_or_prompt_stops_the_document_before_a_request(tmp_path):
-    """Not one token spent, and the file untouched: what is stale is not
-    something a coordinate sweep can answer."""
-    path = _harvest(tmp_path, [_row(), _summary()], stamp=_stamp(model="alt"))
+def test_a_changed_model_or_prompt_leaves_the_document_current(tmp_path):
+    """Not one token spent, and the file untouched: the stamp rests on the
+    ontology keys alone, and a model or a prompt is not one of them."""
+    path = _harvest(tmp_path, [_row(), _summary()],
+                    stamp=_stamp(model="alt", **{"extraction/field": "g"}))
     before = path.read_bytes()
-    stamp_before = (tmp_path / "plan.stamp.json").read_bytes()
     calls = []
     stats = topup.run(tmp_path, SPEC, _stamp(), _deps(sweep=_sweeper(calls=calls)))
     assert calls == []
-    assert stats["blocked"] == 1
+    assert stats["already current"] == 1
     assert path.read_bytes() == before
-    assert (tmp_path / "plan.stamp.json").read_bytes() == stamp_before
 
 
 def test_nothing_is_asked_and_nothing_is_written_when_the_stamp_is_current(
@@ -514,11 +513,12 @@ def test_the_top_up_writes_its_trace_beside_the_harvests_and_not_over_it(
 
 def test_the_file_sha_moves_only_when_nothing_else_is_stale(tmp_path):
     """The whole-file sha is a coarse mirror of the keys under it, and moved
-    early it makes a document read current with a changed prompt unaddressed.
-    """
-    stale_prompt = _stamp(**{f"axis/{PARAMETER}/sector": "moved",
-                             "spec": "old", "extraction/rows": "old"})
-    _harvest(tmp_path, [_row(), _summary()], stamp=stale_prompt)
+    early it makes a document read current with a changed coordinate
+    unaddressed."""
+    two_moved = _stamp(**{f"axis/{PARAMETER}/sector": "moved",
+                          f"axis/{PARAMETER}/carrier": "moved",
+                          "spec": "old"})
+    _harvest(tmp_path, [_row(), _summary()], stamp=two_moved)
     topup.run(tmp_path, SPEC, _stamp(), _deps(sweep=_sweeper(
         {"sector": {"value": "Haushalte", "raw": "Haushalte"}})))
     stored = json.loads((tmp_path / "plan.stamp.json").read_text(
@@ -661,7 +661,7 @@ def test_a_stale_document_is_not_filtered_away_before_the_pass_runs(
                         lambda ids: {i: "v1" for i in ids})
     _harvest(tmp_path, [_row(), _summary()], name="fresh")
     _harvest(tmp_path, [_row(), _summary()], name="stale",
-             stamp=_stamp(model="alt"))
+             stamp=_stamp(**{f"axis/{PARAMETER}/sector": "moved"}))
     _harvest(tmp_path, [_row(), _summary()], name="neu")
     current = runner._stamp_current("sha", "anchors", SPEC)
     (tmp_path / "fresh.stamp.json").write_text(json.dumps(current),
@@ -679,68 +679,6 @@ def test_a_stale_document_is_not_filtered_away_before_the_pass_runs(
         documents, tmp_path, "sha", anchors_sha="anchors", spec=SPEC,
         top_up=True)
     assert topping_up == documents, "a top-up decides per key, not per stamp"
-
-
-# ---------------------------------------------------------------------------
-# The field prompt as a named key (WP12e)
-# ---------------------------------------------------------------------------
-
-def test_the_field_prompt_is_swept_only_when_named():
-    """The field prompt is the only prompt the sweep uses, so a document whose
-    stamp says it moved CAN be re-read coordinate by coordinate. But that is
-    every asked coordinate of every row, a corpus-sized decision, so the key
-    blocks unless --top-up-key names it."""
-    assert topup.FIELD_PROMPT == runner.FIELD_PROMPT_ID
-    key = topup.FIELD_PROMPT
-    assert topup.actionable([key], SPEC) == ([], [key])
-    assert topup.actionable([key], SPEC, only=[key]) == ([key], [])
-    # Named together with a coordinate key, both are swept and nothing blocks.
-    axis = f"axis/{PARAMETER}/sector"
-    assert topup.actionable([key, axis], SPEC, only=[key, axis]) \
-        == ([axis, key], [])
-    # And named alone while a coordinate also moved, the coordinate is left
-    # for another pass rather than claimed.
-    assert topup.actionable([key, axis], SPEC, only=[key]) == ([key], [])
-
-
-def test_a_named_field_prompt_re_reads_every_asked_coordinate(tmp_path):
-    """Every asked, unframed coordinate of every row goes through the sweep
-    once; a derived one does not (no request ever read it). The key is
-    carried forward only when every one of them settled."""
-    parameter = SPEC.by_uri[PARAMETER]
-    asked = sorted(s.name for s in fields.asked_slots(parameter)
-                   if s.name != "year")
-    assert "aggregation" not in asked, "derived, so never asked"
-    calls = []
-    path = _harvest(tmp_path, [_row(), _summary()],
-                    stamp=_stamp(**{topup.FIELD_PROMPT: "moved"}))
-    stats = topup.top_up_file(
-        path, SPEC, _stamp(),
-        _deps(sweep=_sweeper(calls=calls), frame_names=("year",)),
-        only=[topup.FIELD_PROMPT])
-    swept = sorted(slot.name for call in calls for slot in call["slots"])
-    assert swept == asked
-    # A sweep that answered nothing put every old block back, so the key is
-    # not the pass's to write forward.
-    stored = json.loads((tmp_path / "plan.stamp.json").read_text(
-        encoding="utf-8"))
-    assert stored[topup.FIELD_PROMPT] == "moved"
-    assert stats["stamps carried forward"] == 0
-
-    row = _row()
-    answers = {name: {"value": row[name], "raw": row.get(f"{name}_raw",
-                                                          row[name])}
-               for name in asked}
-    stats = topup.top_up_file(
-        path, SPEC, _stamp(),
-        _deps(sweep=_sweeper(answers), frame_names=("year",)),
-        only=[topup.FIELD_PROMPT])
-    # `rows` counts one re-verification per coordinate swept.
-    assert stats["rows"] == len(asked)
-    assert stats["stamps carried forward"] == 1
-    stored = json.loads((tmp_path / "plan.stamp.json").read_text(
-        encoding="utf-8"))
-    assert stored[topup.FIELD_PROMPT] == _stamp()[topup.FIELD_PROMPT]
 
 
 # ---------------------------------------------------------------------------
@@ -825,12 +763,13 @@ def test_a_topped_up_document_is_current_and_an_untouched_one_is_not(
     _harvest(tmp_path, [_row(), _summary()], name="plan",
              stamp={**current, f"axis/{PARAMETER}/sector": "moved"})
     _harvest(tmp_path, [_row(), _summary()], name="offen",
-             stamp={**current, "model": "alt"})
-    # Before: both stale, one in a coordinate and one in the model. A stale
+             stamp={**current, f"value/{PARAMETER}": "moved"})
+    # Before: both stale, one in a coordinate and one in the value list, which
+    # no sweep answers. A stale
     # stamp is skipped with a warning by a plain harvest, so `already_done`
     # is True for both; `stale` is what tells them apart.
     assert runner.stale(tmp_path / "plan.stamp.json", current)         == [f"axis/{PARAMETER}/sector"]
-    assert runner.stale(tmp_path / "offen.stamp.json", current) == ["model"]
+    assert runner.stale(tmp_path / "offen.stamp.json", current) == [f"value/{PARAMETER}"]
 
     stats = topup.run(tmp_path, SPEC, current, _deps(sweep=_sweeper(
         {"sector": {"value": "Haushalte", "raw": "Haushalte"}})))
@@ -844,4 +783,4 @@ def test_a_topped_up_document_is_current_and_an_untouched_one_is_not(
     after = _rows(tmp_path / "plan.jsonl")[0]
     assert after["sector_raw"] == "Haushalte"
     assert after["sector"] != _row()["sector"]
-    assert runner.stale(tmp_path / "offen.stamp.json", current) == ["model"],         "the document the pass had to skip is still stale"
+    assert runner.stale(tmp_path / "offen.stamp.json", current) == [f"value/{PARAMETER}"],         "the document the pass had to skip is still stale"

@@ -30,7 +30,7 @@ passes can act on without asking a model again.
 |---|---|
 | **In** | The corpus [chunking](chunking.md) built: the SQLite database's `Sections`, `Tables`, `Images`, `Embeddings`, `Documents` and `DocumentMeta` rows, and the FAISS index. No file under `results/` is read directly. Also a profile's validated `extraction_spec.json` (`spec.load`). |
 | **Out** | One `<document>.jsonl` harvest and one `<document>.stamp.json` resume stamp per document, a per-document trace file under `trace/`, and, written once per run, `anchors.json` and `query_cache.db`. A `--serialize` call reads the harvest back and writes one Turtle file, feeding [the knowledge graph](graph.md) stage. |
-| **Resumes on** | `<document>.stamp.json`, compared key by key against what today's spec, model, anchor set and prompts would produce. A document with no stamp is read as fully stale, never as finished. |
+| **Resumes on** | `<document>.stamp.json`, compared against what today's spec would produce, one key per parameter, value list, axis and slot; the whole-file spec sha stands in only for a stamp that carries none of those. The model, the anchor set and every prompt are written into the stamp for a reader and are never compared. A document with no stamp is read as fully stale, never as finished. |
 | **Needs** | A served LLM reached over the network, the query embedder, the FAISS index, the corpus database, and, unless `EXTRACT_LOCATE=0`, the source PDF (`--pdf-root`) to place a quote's highlight rectangles. Unless `EXTRACT_ATTACH_IMAGES=0`, also the `images/` directory (`--image-root`) with the table and figure crops that ride along with every request. |
 
 Extraction is the seventh of the pipeline's eight stages. [Chunking,
@@ -78,25 +78,25 @@ document, not asked again with everything already found excluded. The
 single call fuses every probe into one ranked
 list rather than concatenating a ranking per probe: over 65 documents and
 15,082 values, concatenation put a value's real source at median rank 77,
-fusion at rank 26 (`runner.py:354`).
+fusion at rank 26 (`runner.py:350`).
 
 ### Anchors
 
 The plan searches not with the spec's query templates but a sentence
 written as a document would state the answer, a HyDE anchor; two
-mechanisms produce them. `document_anchor` (`runner.py:841`) writes the
+mechanisms produce them. `document_anchor` (`runner.py:837`) writes the
 plan's own probe per document and parameter, from the parameter's
 label, description, the document's name and an early caption; recorded,
 never compared, in the stamp as `question_text/<key>`.
 Dropping query templates for it was measured directly: with templates
 included alongside the anchor, a value's real source sat at median rank
 84; without them, rank 26 (`pipeline.py:196`). `plan_document` falls back to
-`queries.expand`'s templates only when no anchor exists. `make_anchors` (`runner.py:1324`) is the second,
+`queries.expand`'s templates only when no anchor exists. `make_anchors` (`runner.py:1320`) is the second,
 corpus-wide mechanism: one set per question the field sweep asks, each
 axis question and the parameter choice, written once per run and cached
 per question. The value itself has no set: the plan searches with the
 one short sentence `document_anchor` writes (`anchor_targets`,
-`runner.py:816`). This set backs the field sweep once a
+`runner.py:812`). This set backs the field sweep once a
 coordinate is not in the value's own passage, and is fingerprinted as
 one `anchors` stamp key.
 
@@ -124,7 +124,7 @@ request's pair gives no row: its claims are refused as `passage is not of
 this pair` (`rows_from_reply`, `pipeline.py:509`). The gain was measured directly: before the frame
 existed, the year axis alone produced 1,849 refusals against 0 readings,
 since every window after the first excluded the row's own source
-(`runner.py:2935`).
+(`runner.py:2931`).
 
 ### The row request
 
@@ -145,7 +145,7 @@ row (`pipeline.py:544`). A `Row` is created only here, never later. The request 
 a code sandbox, bounded
 to `CODE_ROUNDS` rounds, and a reply cut off at the token ceiling is
 rescued rather than retried, since retrying recovered nothing over one
-pilot (`runner.py:2136`).
+pilot (`runner.py:2132`).
 
 ### The field sweep: three window stages and a budget
 
@@ -162,13 +162,13 @@ overlapping windows (`FIELD_WINDOW` 2, `FIELD_OVERLAP` 1) for up to
 `FIELD_ROUNDS` (4) rounds. **Rest** is the floor: once retrieval has
 nothing new, `rest_of_document` reads the document's own remaining
 sections in order, rotated to start near the open rows, until the
-coordinate closes or the document runs out (`runner.py:2868`). A
+coordinate closes or the document runs out (`runner.py:2864`). A
 coordinate the whole sweep cannot close is `exhausted`, never
 `unstated`: the first is a finding about the run, the second about the
 document. The budget sums to `FIELD_MAX_WINDOWS`
 (24) plus `REST_MAX_WINDOWS` (12) per coordinate, with several
 coordinates batched into one request rather than one request each
-(`runner.py:2590`).
+(`runner.py:2586`).
 
 ### Merging a coordinate
 
@@ -249,7 +249,7 @@ Every tuple, refusal, parameter state and summary line is checked
 against the published schema before it is written:
 `_harvest_validators` builds one `jsonschema` validator per branch from
 `schema.build(spec)["harvest"]`, run by `check_against_schema` inside
-`finish_document` on every call carrying a spec (`runner.py:3630`). A
+`finish_document` on every call carrying a spec (`runner.py:3589`). A
 row the schema refuses is counted
 and logged as an `invalid` trace event, never withheld, since blocking on
 a schema mismatch would turn a documentation defect into a data loss.
@@ -294,9 +294,9 @@ coordinate: a key naming no coordinate the spec still asks blocks
 outright, and so does one naming a frame axis, since the frame decides
 how many passes a document gets, or, unless allowed, a dynamic axis
 with no per-document list, since sweeping it empty would demote a class
-to a wording (`topup.py:78-115`). The field prompt itself is swept only
-when named with `--top-up-key`, since that means re-reading every
-coordinate of every row. `reopen` strips one coordinate's keys before
+to a wording (`topup.py:69-103`). `--top-up-key` names only one axis
+coordinate, `axis/<uri>/<name>` (`slot_of`, `topup.py:109-120`); nothing
+sweeps every asked coordinate of every row at once any more. `reopen` strips one coordinate's keys before
 the sweep runs; `restore` puts the old block back unless the fresh
 sweep genuinely improves on it. A row whose passage no longer carries
 its stored quote is left untouched, and top-up traces land under their
@@ -340,11 +340,13 @@ different kind of finding.
 | `out_of_slice` | Never asked: a gate coordinate put the row outside what this run serializes |
 
 The resume stamp, `<document>.stamp.json`, is a flat dict: `spec` (the
-whole file's sha; see Method for how it is compared), `model`,
-`anchors`, one entry per `PROMPT_IDS` prompt, `slot/parameter` (the value
-question itself), `parameter/<uri>` and, where it has one, `value/<uri>`
-per parameter, `axis/<uri>/<name>` per axis, plus `question_text/<key>`
-and `review/*`, recorded but never compared. A trace event is one JSON
+whole file's sha; see Method for how it is compared), `slot/parameter`
+(the value question itself), `parameter/<uri>` and, where it has one,
+`value/<uri>` per parameter, `axis/<uri>/<name>` per axis; these are the
+only keys `stale` compares. `model`, `anchors`, one entry per
+`PROMPT_IDS` prompt, `question_text/<key>` and `review/*` are written
+into the stamp too, so a reader can place a harvest, and are never
+compared. A trace event is one JSON
 line, `{"t": kind, "doc": document_id, ...}`, of one of eleven kinds
 (`schema.py`'s `trace_schema`): `plan`, `anchor`, `frame`, `rows`,
 `field`, `sweep`, `drop` and `error` from the harvest loop, `coord` and
@@ -374,7 +376,7 @@ run, `anchors.json` and `query_cache.db`; and, only after `--top-up`,
 | `--document ID` / `--force` / `--force-stale` | CLI flag (ID repeatable) | none / off / off | `--document` restricts a run to named ids; `--force` redoes every document, `--force-stale` only those `stale` | `runner.main`, `runner.stale` |
 | `--image-root` / `--pdf-root` | CLI flag | profile's processed dir / none | Crop directory for `EXTRACT_ATTACH_IMAGES`, and source PDF directory for `EXTRACT_LOCATE`; `--pdf-root` also backs `--image-root` when absent | `runner.main`, `resolve_image_root`, `make_locate` |
 | `--recheck` / `--remap` / `--keep-stamps` | CLI flag | off | Runs `recheck.run` / `remap.run` over `--out`, no model needed; `--keep-stamps` (recheck only) leaves stamps instead of clearing them | `runner.main`, `recheck.run` |
-| `--top-up` / `--top-up-key KEY` | CLI flag (KEY repeatable) | off / none named | Runs `topup.run`, needing the model and index; `--top-up-key` restricts, or for the field prompt permits, the changed key swept | `runner.main`, `topup.actionable` |
+| `--top-up` / `--top-up-key KEY` | CLI flag (KEY repeatable) | off / none named | Runs `topup.run`, needing the model and index; `--top-up-key` restricts the changed keys swept to the named axis coordinates | `runner.main`, `topup.actionable` |
 | `--review` / `--review-limit N` | CLI flag | off / `0` | Runs `review.run`, one request per level-C value, up to N total | `review.run` |
 | `--serialize TTL` / `--print-context-budget` | CLI flag | none / off | `--serialize`: no harvest, hands `--out` to `serialize.run`, which calls the profile's `kg.make_serializer`. `--print-context-budget`: prints the tokens one harvest request needs, then exits | `serialize.run`, `runner.main` |
 | `SLICE` / `FRAME` | profile hook | none / none (every coordinate per row) | `SLICE`: gate coordinate(s) asked first, a row that fails them never asked its others. `FRAME`: document-level coordinates found once and projected onto every row | `runner.main`, `topup.actionable` |
@@ -405,8 +407,8 @@ on.
 At the document level, `finish_document` withholds the stamp entirely,
 forcing a full redo on the next run, when more than half a document's
 planned sources came back from a server it could not reach
-(`UNREACHABLE_LIMIT`, `0.5`, `runner.py:3571`, `:3614`) or when not one
-batch answered at all (`runner.py:3619`); the JSONL file is still
+(`UNREACHABLE_LIMIT`, `0.5`, `runner.py:3530`, `:3573`) or when not one
+batch answered at all (`runner.py:3578`); the JSONL file is still
 written either way, so only a resume, not a byte count, tells the two
 cases apart from a genuinely finished document.
 
@@ -432,7 +434,7 @@ never sends leaves no trace, so the row is offered again later.
   instead (`fields.py:218`).
 - Letting the passage a coordinate was last read in drop out of the
   window after one use, rather than remaining in the window, cost one
-  batch 520 dropped readings against 31 kept (`runner.py:2746`).
+  batch 520 dropped readings against 31 kept (`runner.py:2742`).
 - On the 20-plan draft where the slice gate was measured, of 6,763
   harvested tuples the serializer dropped 1,554 for a quantity the graph
   does not hold and, while the scenario axis still gated a row, 2,510

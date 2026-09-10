@@ -6,18 +6,6 @@ for what each piece is used for.
 
 Author: Felix Vossel
 """
-import re
-
-# A search anchor is a hypothetical passage. When the model evaluates or refuses
-# instead, the string is not an anchor at all — these are the ways it does that
-# in German.
-NON_ANCHOR = re.compile(
-    r"(?i)(bereitgestellt\w*\s+kontext|nicht\s+nachweisbar|nicht\s+enthalten|"
-    r"nicht\s+vorhanden|nicht\s+ersichtlich|nicht\s+erkennbar|"
-    r"nicht\s+ableit\w*|nicht\s+ermittel\w*|liegen?\s+nicht\s+vor|"
-    r"lässt\s+sich\s+nicht|kann(?:st)?\s+nicht|"
-    r"keine\s+(?:ähnlich\w*|angaben|information\w*|daten|diagramm\w*|abbildung\w*))"
-)
 
 # Why the graph route did not answer, one sentence per reason token of
 # docpipe.inference.kg_route.REASONS. Held against that tuple by

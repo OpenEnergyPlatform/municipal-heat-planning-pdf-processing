@@ -44,11 +44,12 @@ searches on an uploaded image alone, an image with text adds a
 caption-style anchor, and text alone anchors on the plain task
 (`answer.py:118-135`). The anchor, `llm_client.make_search_phrase`, is a
 HyDE-style construction: a short hypothetical passage written as it
-would appear in the corpus, not a question. A refusal-reading reply is
-retried once, then falls back to the raw task text; the function never
-raises (`llm_client.py:281-323`). The same call sets `recheck`, true
+would appear in the corpus, not a question. Whatever non-empty phrase the
+model writes is used as the anchor; the function falls back to the raw
+task text only on a transport or parse error, or an empty reply, and it
+never raises (`llm_client.py:273-309`). The same call sets `recheck`, true
 only when the model marks the task a repetition and history is
-non-empty (`llm_client.py:320`); when true, `answer_question` walks
+non-empty (`llm_client.py:307`); when true, `answer_question` walks
 history backward, folding every `(owner_kind, owner_id)` pair each turn
 examined into one exclude set, stopping at the first non-recheck turn
 (`answer.py:144-150`).
@@ -85,9 +86,9 @@ and parses back `{"ok", "stdout", "stderr", "exit_code", "error"}`
 (`code_exec.py:22-54`), never raising (see Failure modes). An image
 requester may separately return a crop the section text only points at,
 through `db.request_item`. Both draw one shared round budget,
-`CODE_EXEC_MAX_ROUNDS` plus `REQUEST_IMAGE_MAX` (`llm_client.py:592`); a
+`CODE_EXEC_MAX_ROUNDS` plus `REQUEST_IMAGE_MAX` (`llm_client.py:577`); a
 repeated crop id stops the loop and forces an answer
-(`llm_client.py:613-620`). The loop stops once a batch reports complete
+(`llm_client.py:598-605`). The loop stops once a batch reports complete
 with a citation accepted (`answer.py:249-250`).
 
 ### Grounding, image refinement and finishing the turn
@@ -96,7 +97,7 @@ Every claim must point at a batch index and either a verbatim quote or,
 for an attached image, a reading. A text quote is accepted only through
 `llm_client.grounded_quote`, a match of at least 12 characters against
 the excerpt shown (`_quote_is_grounded`, `llm_client.py:145-156`). An
-image-based support, `visual_reading` (`llm_client.py:514-531`), is
+image-based support, `visual_reading` (`llm_client.py:499-516`), is
 accepted only when its index was among the crops attached to the call
 and the reading is at least 8 characters, so background knowledge alone
 cannot count as grounded evidence. Citations are deduplicated by
@@ -107,11 +108,11 @@ grounded citations" from "Answer ignored the response envelope"
 
 Every visual citation is then re-read in a focused, single-image call,
 `llm_client.read_off_image`, up to `READOFF_MAX_CALLS` per turn: a first
-pass often misreads a chart (`llm_client.py:454-459`). Readings fold
+pass often misreads a chart (`llm_client.py:439-444`). Readings fold
 back through `revise_with_readings`, unchanged on failure
-(`llm_client.py:497-511`).
+(`llm_client.py:482-496`).
 A JSON answer then goes through `llm_client.format_as_json`
-(`llm_client.py:671-678`), the only call here with no failure handling
+(`llm_client.py:656-663`), the only call here with no failure handling
 of its own (see Failure modes); every turn is logged through
 `request_log.log_request` (`answer.py:325-330`).
 
@@ -120,9 +121,9 @@ of its own (see Failure modes); every turn is logged through
 Every phrase and label the loop wraps around the model comes from the
 active profile through `wording.py`. `phrases()` checks a profile's
 `PHRASES` dict against `REQUIRED`, a frozenset of 29 keys
-(`wording.py:22-32`). `llm_client.py` calls `phrases()` and
-`non_anchor()` at module level (`llm_client.py:47, 269`), so this
-package needs an active profile to import (see Failure modes).
+(`wording.py:22-32`). `llm_client.py` calls `phrases()` at module level
+(`llm_client.py:47`), so this package needs an active profile to import
+(see Failure modes).
 
 ### The knowledge-graph route
 
@@ -247,7 +248,7 @@ before any LLM call runs (`answer.py:170-173`); where hits exist but
 nothing could be grounded, `answer` comes back `None` (see Method;
 `answer.py:299-306`). An unknown or missing crop id comes back
 `None` and is logged (`answer.py:77-92`); a repeated id stops the loop
-and forces an answer (`llm_client.py:613-620`).
+and forces an answer (`llm_client.py:598-605`).
 
 `pdf_locate._have_deps()` checks once for PyMuPDF and rapidfuzz and logs
 an error (`log.error`) if either is missing; when it fails, quote
@@ -260,7 +261,7 @@ raising `RuntimeError` (`llm_client.py:119-199`); callers above it
 degrade instead: `make_search_phrase` falls back to the raw task, and
 `answer_from_sources` comes back `{"found": False}`. `format_as_json`
 has no such wrapper and can raise past this package
-(`llm_client.py:671-678`; `answer.py:308-314`). `code_exec.run_code`
+(`llm_client.py:656-663`; `answer.py:308-314`). `code_exec.run_code`
 degrades without raising: any transport or JSON failure comes back
 `{"ok": False, "error": ...}`, read as no calculation, not a failed turn
 (`code_exec.py:36-62`).
@@ -275,8 +276,8 @@ The wording contract fails the same way: a profile whose `PHRASES` dict
 is missing a required key raises `LookupError` at the first check
 (`wording.py:56-58`), and no active profile raises `LookupError` from
 `wording._component` (`wording.py:35-39`) for any lookup a turn needs.
-`llm_client.py` resolves its own phrases and refusal pattern at import
-(`llm_client.py:47, 269`), so the
+`llm_client.py` resolves its own phrases at import
+(`llm_client.py:47`), so the
 missing-profile case can surface as an import error before a turn is
 asked.
 
@@ -295,7 +296,7 @@ about 470 candidate vectors, and the batched call measured 0.421 to
 of 5.5 (`faiss_store.py:76-81`).
 
 The grounding gate's floor of 12 characters (`llm_client.py:145-156`) and
-the image-reading floor of 8 characters (`llm_client.py:514-531`) are
+the image-reading floor of 8 characters (`llm_client.py:499-516`) are
 sized the same way, long enough to reject a short stray word standing
 in for evidence; the code names "GmbH" as the concrete case the
 12-character floor rejects.
@@ -345,10 +346,10 @@ The picker's filters and its fallback:
 `test_without_a_profile_the_generic_catalog_is_used`
 (`tests/test_catalog.py`).
 
-The wording contract and refusal pattern:
-`test_a_profile_that_answers_provides_all_of_it`,
-`test_a_refusal_in_the_profiles_language_is_recognised`
-(`tests/test_wording.py`).
+The wording contract: `test_a_profile_that_answers_provides_all_of_it`
+(`tests/test_wording.py`). The search anchor is the sentence the model
+wrote: `test_the_search_phrase_is_the_sentence_the_model_wrote`
+(`tests/test_inference_app.py`).
 
 The graph route:
 `test_the_query_names_only_predicates_the_serializer_writes`,
@@ -399,9 +400,9 @@ so does the extraction stage's `runner.py`.
 `request_item`. Called by `faiss_store.py`, `answer.py`, the app, and
 the extraction stage's `runner.py` (as `inference_db`).
 
-`wording.py` holds `REQUIRED`, `phrases`, `non_anchor` and `readoff`,
-the profile's phrase contract described in Method and Failure modes.
-Called by `answer.py`, `chunker.py` and, at module level, `llm_client.py`.
+`wording.py` holds `REQUIRED`, `phrases` and `readoff`, the profile's
+phrase contract described in Method and Failure modes. Called by
+`answer.py`, `chunker.py` and, at module level, `llm_client.py`.
 
 `code_exec.py` holds `is_enabled` and `run_code`, the sandbox client.
 Called by `answer.py` and, for the same feature, `runner.py`.

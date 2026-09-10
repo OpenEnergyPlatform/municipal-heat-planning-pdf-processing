@@ -15,7 +15,7 @@ Regeln:
 3. Streue über die Formen, in denen die Angabe in einem Plan auftaucht: Fließtext einer Bestandsanalyse, Tabellenüberschrift mit Einheit in eckigen Klammern, Abbildungsunterschrift, Zwischenüberschrift, Aufzählung im Ergebniskapitel, Satz aus dem Zielszenario-Kapitel.
    Zwei Formen fehlen sonst immer und tragen die Angaben, die am häufigsten unbelegt bleiben. Der ankündigende Satz einer Bestandsaufnahme: "Wie viel Wärme pro Jahr verbraucht wird und welche Energieträger dafür bislang eingesetzt werden." Und der Methodiksatz: "Die Treibhausgasemissionen sind in Tonnen CO2-Äquivalenten angegeben und nach BISKO bilanziert." Schreib von den sechs Aussagen je eine in diesen beiden Formen.
 4. Nutze die Wörter, die deutsche Wärmepläne benutzen, nicht die der Ontologie: Endenergieverbrauch, Wärmebedarf, Energieträgermix, Bilanzjahr, Zielszenario, THG-Emissionen, Bestandsanalyse, Fokusgebiet.
-5. Keine zwei Aussagen, die dasselbe anders sagen.
+5. Jede Aussage 12 bis 35 Wörter. Keine zwei Aussagen, die dasselbe anders sagen.
 
 Antworte mit NUR einem JSON-Objekt, kein Markdown, kein Text davor oder danach:
 {"anchors": ["<Aussage 1>", "<Aussage 2>", "<Aussage 3>", "<Aussage 4>", "<Aussage 5>", "<Aussage 6>"]}

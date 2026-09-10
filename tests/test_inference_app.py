@@ -466,34 +466,22 @@ def test_ask_chunk_stub_quote_is_grounded():
 
 
 # ---------------------------------------------------------------------------
-# llm_client.py – search-anchor guard (reject evaluation/refusal phrases)
+# llm_client.py – the search anchor is the sentence the model wrote
 # ---------------------------------------------------------------------------
-def test_non_anchor_detects_refusal_phrase():
+def test_the_search_phrase_is_the_sentence_the_model_wrote(monkeypatch):
+    """No filter on the anchor: none was ever approved, and the answer still
+    comes from the retrieved text under the grounding gate. Only an empty
+    phrase falls back to the task."""
     llm = pytest.importorskip("docpipe.inference.llm_client")
-    # the exact self-contradictory string the gateway produced for an image query
-    assert llm._looks_like_non_anchor(
-        "Abbildung: Keine ähnlichen Diagramme im bereitgestellten Kontext nachweisbar."
-    ) is True
-
-
-@pytest.mark.parametrize("bad", [
-    "Die Information ist nicht enthalten.",
-    "Dazu liegen keine Angaben vor.",
-    "Lässt sich aus dem Kontext nicht ableiten.",
-])
-def test_non_anchor_detects_variants(bad):
-    llm = pytest.importorskip("docpipe.inference.llm_client")
-    assert llm._looks_like_non_anchor(bad) is True
-
-
-@pytest.mark.parametrize("good", [
-    "Abbildung: Gestapeltes Balkendiagramm des jährlichen Wärmebedarfs nach Sektoren in MWh/a.",
-    "Die kommunale Wärmeplanung wurde durch die Musterplan Energie GmbH aus Freiburg erstellt.",
-    "Säulendiagramm der Baualtersklassen der Gebäude im Gemeindegebiet, Anteile in Prozent.",
-])
-def test_non_anchor_passes_real_anchors(good):
-    llm = pytest.importorskip("docpipe.inference.llm_client")
-    assert llm._looks_like_non_anchor(good) is False
+    monkeypatch.setattr(llm, "LLM_STUB_MODE", False)
+    said = {"phrase": "Dazu liegen keine Angaben vor.", "repetition": False}
+    monkeypatch.setattr(llm, "_chat_json", lambda *a, **k: dict(said))
+    assert llm.make_search_phrase("Wer hat den Plan erstellt?") == (
+        "Dazu liegen keine Angaben vor.", False)
+    said["phrase"] = ""
+    assert llm.make_search_phrase("Wer hat den Plan erstellt?") == (
+        "Wer hat den Plan erstellt?", False)
+    assert not hasattr(llm, "_looks_like_non_anchor")
 
 
 # ---------------------------------------------------------------------------

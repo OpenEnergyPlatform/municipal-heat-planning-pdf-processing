@@ -262,25 +262,12 @@ def _history_context(history: Optional[list], limit: int = 5) -> str:
     return f"\n\n{_W['history_heading']}:\n" + "\n".join(blocks)
 
 
-# A search anchor is a HYPOTHETICAL, present-tense passage/caption. If the model
-# slips into evaluating or refusing instead, the string is not an anchor at all;
-# detect that and regenerate / fall back. Which words give that away is a
-# property of the answer's language, so the profile supplies the pattern.
-_NON_ANCHOR_RE = wording.non_anchor()
-
 _ENVELOPE_CORRECTION = prompts.text("inference/envelope_correction")
-
-_ANCHOR_CORRECTION = prompts.text("inference/anchor_correction")
 
 
 def _is_off_envelope(parsed) -> bool:
     """True if the model replied with some other object instead of the answer envelope."""
     return isinstance(parsed, dict) and bool(parsed) and "found" not in parsed
-
-
-def _looks_like_non_anchor(phrase: str) -> bool:
-    """True if the 'phrase' reads as an evaluation/refusal instead of an anchor."""
-    return bool(_NON_ANCHOR_RE.search(phrase or ""))
 
 
 def make_search_phrase(task: str, visual: bool = False,
@@ -307,19 +294,17 @@ def make_search_phrase(task: str, visual: bool = False,
     prompt = IMAGE_PHRASE_SYSTEM_PROMPT if visual else PHRASE_SYSTEM_PROMPT
     base = f"{prompt}{_history_context(history)}\n\n{_W['task_heading']}:\n{task}"
     messages = [{"role": "user", "content": base}]
-    # If the model evaluates/denies instead of anchoring, re-ask once with a
-    # correction, then fall back to the raw task.
-    for attempt in range(2):
-        try:
-            parsed = _chat_json(messages, temperature=LLM_TEMPERATURE)
-        except Exception as e:
-            log.warning("Search-phrase generation failed, using raw task: %s", e)
-            return task.strip(), False
-        phrase = str(parsed.get("phrase", "")).strip()
-        if phrase and not _looks_like_non_anchor(phrase):
-            return phrase, bool(parsed.get("repetition")) and bool(history)
-        log.warning("Search phrase read as evaluation/denial, retrying: %r", phrase)
-        messages = [{"role": "user", "content": f"{base}\n\n{_ANCHOR_CORRECTION}"}]
+    try:
+        parsed = _chat_json(messages, temperature=LLM_TEMPERATURE)
+    except Exception as e:
+        log.warning("Search-phrase generation failed, using raw task: %s", e)
+        return task.strip(), False
+    # Whatever sentence the model wrote is the anchor: no filter on it was
+    # ever approved. Only an empty one is no sentence at all.
+    phrase = str(parsed.get("phrase", "")).strip()
+    if phrase:
+        return phrase, bool(parsed.get("repetition")) and bool(history)
+    log.warning("Search phrase came back empty, using raw task")
     return task.strip(), False
 
 

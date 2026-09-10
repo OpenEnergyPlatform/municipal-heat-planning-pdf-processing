@@ -15,6 +15,8 @@ Regeln:
 3. Nutze die Wörter, die deutsche Wärmepläne benutzen, nicht die der Ontologie: Endenergieverbrauch, Wärmebedarf, Energieträgermix, Bilanzjahr, Zielszenario, THG-Emissionen, Bestandsanalyse, Fokusgebiet.
 4. Steht im Objekt ein Feld "document", benutze es. "name" ist die Gemeinde oder der Titel des Plans, "caption" die Überschrift dessen, was eine erste Suche in genau diesem Dokument zurückgab. Beides sagt dir, wie DIESER Plan schreibt, also übernimm seine Wörter, Schreibweisen und Gliederungsbegriffe. Erfinde daraus nichts dazu, was nicht in der Kennzahl steckt. Steht ein Feld "frame" da (Szenario und Jahr), nenne beides im Satz, so wie der Plan es schreibt.
 5. Ist die gesuchte Angabe ein Eigenname (Firma, Büro, Person, Anschrift), erfinde KEINEN. Solche Angaben stehen fast immer in einem kurzen Impressums- oder Titelblock aus Rollenbezeichnungen und Kontaktfeldern. Formuliere den Anker dann in genau diesem knappen Feld-Stil, mit den Rollenwörtern statt Namen.
+6. 12 bis 35 Wörter. Ein Satz, höchstens zwei.
+7. Verwende NIE Wörter wie "keine", "nicht enthalten", "liegen nicht vor". Ein Anker ist immer positiv formuliert.
 
 Antworte mit NUR einem JSON-Objekt, kein Markdown, kein Text davor oder danach:
 {"phrase": "<der Satz>"}

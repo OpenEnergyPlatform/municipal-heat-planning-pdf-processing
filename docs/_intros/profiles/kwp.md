@@ -73,8 +73,8 @@ table gives kwp's own answer.
 | Extraction | `extraction.py` | `SPEC_PATH`, `SLICE`, `FRAME`, `document_context` | the spec, the slice gate, the frame axes |
 | Extraction | `prompts/extraction/*.md` | eight prompt ids | phrase, frame, rows, field, anchors, queries, harvest, review |
 | The graph | `kg.py` | `make_serializer` and seven more names | MHPKG Turtle, the coordinate query, the trust wording |
-| The answer app | `inference.py` | `PHRASES`, `NON_ANCHOR`, `READOFF_MARKER`, `READOFF_NOTE`, `ROUTE_NOTES` | the German chat wording and the graph route's refusal sentences |
-| The answer app | `prompts/inference/*.md`, `prompts/kg/coordinate.md` | 16 plus 1 prompt ids | the answer loop's own prompts and the graph route's closed question |
+| The answer app | `inference.py` | `PHRASES`, `READOFF_MARKER`, `READOFF_NOTE`, `ROUTE_NOTES` | the German chat wording and the graph route's refusal sentences |
+| The answer app | `prompts/inference/*.md`, `prompts/kg/coordinate.md` | 15 plus 1 prompt ids | the answer loop's own prompts and the graph route's closed question |
 
 ## The extraction spec
 
@@ -213,7 +213,7 @@ wording of each spec question:
 
 `extraction/rows` and `extraction/field` are the field-wise pair that
 replaces the whole-tuple `extraction/harvest` request by default
-(`EXTRACT_FIELDWISE` defaults to on, `docpipe/extraction/runner.py:158`):
+(`EXTRACT_FIELDWISE` defaults to on, `docpipe/extraction/runner.py:154`):
 one call finds which values a passage states, a second asks each
 coordinate as its own question. `extraction/review` is deliberately
 outside the set the extraction stamp hashes, because a review only ever
@@ -223,10 +223,10 @@ stamp would report an entire corpus stale the day it is edited.
 The profile also carries the full prompt set every other stage's own code
 asks for by id: one for preprocessing's page transcription, three for
 refinement, seven for visuals (a system and a user prompt each for
-tables and figures, plus three caption variants), and sixteen for the
+tables and figures, plus three caption variants), and fifteen for the
 answer app, bound as module-level constants when `docpipe.inference.llm_client`
-is imported (`docpipe/inference/llm_client.py:49` to `78`, `271` to `273`,
-`447` to `451`). `test_a_profile_provides_every_prompt_the_core_loads` and
+is imported (`docpipe/inference/llm_client.py:49` to `78`, `265`,
+`432` to `436`). `test_a_profile_provides_every_prompt_the_core_loads` and
 `test_a_profile_carries_no_prompt_nobody_loads`
 (`tests/test_architecture.py`) hold this set to what the core actually
 asks for by name, in both directions.
@@ -303,7 +303,7 @@ profile, in English here, checked against the core's own list at import
 (`check_prose`, `profiles/kwp/kg.py:478` to `486`). Comments only, never
 triples: MHPKG's shapes are `sh:closed`, and an unanticipated triple
 would invalidate the node it documents (`profiles/kwp/kg.py:496` to
-`595`).
+`645`).
 
 What the serializer refuses, briefly (in full on
 [stages/graph.md](../stages/graph.md)): a row failing the scenario,
@@ -322,17 +322,18 @@ wraps around every turn. `PHRASES`, 29 keys matching
 `docpipe.inference.wording.REQUIRED` exactly, covers the task and history
 headings, JSON parse-error recovery, the code-execution sandbox's own
 headings, the image read-off headings, and how a citation names its page,
-section, table or figure (`profiles/kwp/inference.py:45` to `90`).
-`NON_ANCHOR` is a compiled pattern for the German ways a model evaluates
-or refuses instead of naming a hypothetical passage, so a refusal is
-never mistaken for the anchor text itself (`profiles/kwp/inference.py:11`
-to `20`; see [inference](../stages/inference.md)). `READOFF_MARKER` and
-`READOFF_NOTE` mark a value read off a chart image rather than table text.
+section, table or figure (`profiles/kwp/inference.py:33` to `78`).
+`READOFF_MARKER` and `READOFF_NOTE` mark a value read off a chart image
+rather than table text. `make_search_phrase` (see
+[inference](../stages/inference.md)) no longer filters the model's anchor
+sentence for a refusal or an evaluation; it takes whatever non-empty
+phrase the model wrote and falls back to the raw task only on an error or
+an empty reply.
 
 `ROUTE_NOTES` words the five reasons `docpipe.inference.kg_route` can give
 for not answering from the graph at all: no graph loaded, no plan node for
 this document, no coordinate the question named, no matching row, or a
-matching row with no trust line (`profiles/kwp/inference.py:22` to `39`),
+matching row with no trust line (`profiles/kwp/inference.py:10` to `27`),
 checked against the core's own five-token list when the app builds its
 graph-route hooks at start-up (`docpipe/inference/kg_route.py:52` to `57`,
 `80` to `92`).
