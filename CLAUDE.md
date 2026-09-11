@@ -62,6 +62,10 @@ kommt nur die Mindestlänge, damit ein Zitat eine Stelle benennt. Wo die
 Passage steht, welche Tabelle sie ist und über welcher Spalte eine Zahl
 steht, ist Lesen und keine Prüfung.
 
+Dazu kommt, entschieden am 2026-09-11: eine Antwort auf eine geschlossene
+Liste ist einer ihrer Einträge. Eine Antwort außerhalb der Liste wird mit
+Begründung neu gefragt und nie als gelesen markiert (`not_an_option`).
+
 Drei Prüfungen darüber hinaus (Belegregel own/local/any, „eine Antwort, zwei
 Spalten", „falsche Spalte") sind ohne Auftrag gebaut worden und haben den
 Kassel-Pilot 12881827 mitgekippt. Deshalb:

@@ -65,7 +65,7 @@ Five entry points, preprocessing, refinement, visuals, extraction, and
 chunking, reach `load_profile` through `resolve_profile(args)` rather than
 calling it directly (`docpipe/preprocessing/pipeline.py:501`,
 `docpipe/refinement/pipeline.py:233`, `docpipe/visuals/pipeline.py:473`,
-`docpipe/extraction/runner.py:3978`, `docpipe/chunking/pipeline.py:346`),
+`docpipe/extraction/runner.py:4005`, `docpipe/chunking/pipeline.py:346`),
 and each adds the `--profile` flag through `add_profile_argument(parser)`
 (`docpipe/profile.py:172-176`). `resolve_profile` reads `args.profile` or,
 failing that, `$DOCPIPE_PROFILE`, loads the named profile, and writes the
@@ -150,12 +150,12 @@ shipped profile provides.
 | Repairing the text | `refinement.WINDOW_SIZE` | optional (`component`, `docpipe/refinement/config.py:40`) | not set, falls back to 3 | not set, falls back to 3 |
 | The answer app | `catalog.CATALOG` | optional (`component`, `docpipe/inference/catalog.py:140`) | `KwpCatalog`: municipality, Land, year | `Ar6Catalog`: year, venue, AR6 scenario |
 | The answer app | `inference.PHRASES`, `READOFF_MARKER`, `READOFF_NOTE` | required at first use (`profile.require`, variable `attr`, `docpipe/inference/wording.py:39`) | German phrasing, 29 keys checked against `wording.REQUIRED` | English phrasing, same 29 keys |
-| Reading the values out | `extraction.SPEC_PATH` | required in practice; refused with `SystemExit` otherwise (`component`, `docpipe/extraction/runner.py:4032-4035`) | `extraction_spec.json` | `extraction_spec.json` |
-| Reading the values out | `extraction.SLICE` | optional (`component`, `docpipe/extraction/runner.py:4084`) | `{"quantity": None}`, gates a row on its quantity class alone | not provided; no gate |
-| Reading the values out | `extraction.FRAME` | optional (`component`, `docpipe/extraction/runner.py:4104`) | `("scenario", "year")`, found once per document | not provided; nothing repeats that way |
-| Reading the values out | `extraction.document_axes` | optional (`component`, `docpipe/extraction/runner.py:4095`) | not provided | this publication's AR6 scenarios and the study regions it names, out of 249 (`profiles/scenarios/regions.json`) |
-| Reading the values out | `extraction.document_context` | optional (`component`, `docpipe/extraction/runner.py:4100`) | the plan's own municipality name | not provided |
-| The knowledge graph | `kg.make_serializer` | required for `--serialize`; refused with `SystemExit` otherwise (`component`, `docpipe/extraction/runner.py:4011-4014`) | tuples to MHPKG Turtle | tuples to OEKG Turtle |
+| Reading the values out | `extraction.SPEC_PATH` | required in practice; refused with `SystemExit` otherwise (`component`, `docpipe/extraction/runner.py:4059-4062`) | `extraction_spec.json` | `extraction_spec.json` |
+| Reading the values out | `extraction.SLICE` | optional (`component`, `docpipe/extraction/runner.py:4111`) | `{"quantity": None}`, gates a row on its quantity class alone | not provided; no gate |
+| Reading the values out | `extraction.FRAME` | optional (`component`, `docpipe/extraction/runner.py:4131`) | `("scenario", "year")`, found once per document | not provided; nothing repeats that way |
+| Reading the values out | `extraction.document_axes` | optional (`component`, `docpipe/extraction/runner.py:4122`) | not provided | this publication's AR6 scenarios and the study regions it names, out of 249 (`profiles/scenarios/regions.json`) |
+| Reading the values out | `extraction.document_context` | optional (`component`, `docpipe/extraction/runner.py:4127`) | the plan's own municipality name | not provided |
+| The knowledge graph | `kg.make_serializer` | required for `--serialize`; refused with `SystemExit` otherwise (`component`, `docpipe/extraction/runner.py:4038-4041`) | tuples to MHPKG Turtle | tuples to OEKG Turtle |
 | The answer app | `kg.VALUE_QUERY` plus six more attributes, and `inference.ROUTE_NOTES` | optional; absent returns `None` (`component`, `docpipe/inference/kg_route.py:104-106`), present but missing any of the other seven raises `LookupError` instead (`111-114`), all eight present builds the route | provided; the app can answer a coordinate question straight from the graph | not provided; the app never queries a graph |
 
 ## The two profiles in comparison
@@ -266,5 +266,5 @@ late `--profile` naming a profile whose prompts are already bound
 add their own `SystemExit`, via `parser.error()` for extraction:
 `scripts/fileprocessing/pipeline.py:60,67,70` for a missing `SOURCE` or
 `backfill_meta`, and
-`docpipe/extraction/runner.py:4011-4014,4032-4035` for a missing
+`docpipe/extraction/runner.py:4038-4041,4059-4062` for a missing
 `SPEC_PATH` or `make_serializer`.

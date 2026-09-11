@@ -24,7 +24,8 @@ import pytest
 from docpipe.extraction import fields, runner
 from docpipe.extraction.pipeline import (DocumentReport, Source, WorkItem,
                                          fold_batch, group_items,
-                                         merge_field, rows_from_reply)
+                                         merge_field, open_rows,
+                                         rows_from_reply)
 from docpipe.extraction.spec import load as load_spec
 
 PROFILES = Path(__file__).resolve().parent.parent / "profiles"
@@ -63,6 +64,13 @@ def _value_reply(parameter, label):
     return {"tuples": [{**{k: t[k] for k in keep if k in t}, "source": label}
                        for t in _example_tuples(parameter)],
             "status": "complete", "need_more": []}
+
+
+def _an_answer(slot, fallback):
+    """A correct answer to this slot: an entry of its list when it has one.
+    An answer off a closed list is never read (owner, 2026-09-11), so a test
+    about quotes, windows or groups has to answer with an entry."""
+    return slot.options[0].label if slot.is_closed else fallback
 
 
 def test_the_skeleton_is_the_specs_and_not_the_models(profile):
@@ -106,7 +114,7 @@ def test_an_answer_whose_evidence_is_not_in_the_source_is_not_written(profile):
             continue
         slot = slots[0]
         counts = merge_field(rows, batch.sources, slot, {"answers": {
-            rows[0].label: {"value": "was auch immer",
+            rows[0].label: {"value": _an_answer(slot, "was auch immer"),
                             "quote": "diese Passage steht in keiner Quelle"}}})
         assert (counts["filled"], counts["unquoted"], counts["unbacked"],
                 counts["unstated"]) == (0, 1, 0, 0)
@@ -161,10 +169,12 @@ def test_a_group_answer_reaches_every_row_it_names(profile):
         # The wording has to stand in the passage, so it is taken FROM it.
         wording = quote.strip().split()[0]
         counts = merge_field(rows, batch.sources, slot, {"groups": [
-            {"rows": [r.label for r in rows], "value": "Sammelantwort",
+            {"rows": [r.label for r in rows],
+             "value": _an_answer(slot, "Sammelantwort"),
              "value_raw": wording, "quote": quote}]})
         assert counts["filled"] == len(rows)
-        assert all(r.claim[slot.name] == "Sammelantwort" for r in rows)
+        assert all(r.claim[slot.name] == _an_answer(slot, "Sammelantwort")
+                   for r in rows)
         assert all(r.claim[f"{slot.name}_quote"] == quote for r in rows)
         return
 
@@ -301,7 +311,8 @@ def test_one_window_saying_nothing_here_does_not_end_the_sweep(profile):
         # another window that says the coordinate is not in ITS passages.
         quote = rows[0].claim["quote"]
         merge(rows, batch.sources, slot, {"answers": {rows[0].label: {
-            "value": "gelesen", "value_raw": quote.strip().split()[0],
+            "value": _an_answer(slot, "gelesen"),
+            "value_raw": quote.strip().split()[0],
             "quote": quote}}})
         assert rows[0] not in open_rows(rows, slot)
         merge(rows, batch.sources, slot,
@@ -331,7 +342,8 @@ def test_a_rows_own_passage_stays_checkable_after_the_window_moves_on(profile):
         slot, quote = slots[0], rows[0].claim["quote"]
         far_away = [Source("section", 999, "eine ganz andere Passage", {})]
         answer = {"answers": {rows[0].label: {
-            "value": "gelesen", "value_raw": quote.strip().split()[0],
+            "value": _an_answer(slot, "gelesen"),
+            "value_raw": quote.strip().split()[0],
             "quote": quote}}}
         assert merge(list(rows), far_away, slot, answer)["unquoted"] == 1
         assert merge(rows, far_away + batch.sources, slot, answer)["filled"] == 1
@@ -496,6 +508,114 @@ def test_a_wording_offered_with_not_stated_is_kept_for_the_vocabulary_review(pro
         assert f"{slot.name}_quote" not in claim, "and it is not evidence"
         assert claim[f"{slot.name}_seen"].startswith("CCS/CCU")
         return
+
+
+def test_an_answer_that_is_not_on_the_list_is_never_read(profile):
+    """An answer to a closed list is one of its entries. 171 tuples of
+    corpus_m5 said "read" with no class behind them: the sector was answered
+    "Teilgebiet", its wording stood in the quote, and the lookup that makes it
+    a class came back empty. The owner's rule (2026-09-11): asked again, told
+    why, and never read. An answer that IS an entry, by label, spelling or
+    URI, is read as before."""
+    _name, spec = profile
+    for parameter in spec.parameters:
+        closed = [s for s in fields.axis_slots(parameter) if s.is_closed]
+        if not closed:
+            continue
+        batch = _batch(parameter)
+        rows, _ = rows_from_reply(batch, _value_reply(parameter, batch.label(0)))
+        if not rows:
+            continue
+        slot, quote = closed[0], rows[0].claim["quote"]
+        wording = quote.strip().split()[0]
+        for off in ("Teilgebiet", {"uri": "x"}, ["Teilgebiet"]):
+            row = rows[0]
+            row.claim = {k: v for k, v in row.claim.items()
+                         if not k.startswith(slot.name)}
+            counts = merge_field(rows, batch.sources, slot, {"answers": {
+                row.label: {"value": off, "value_raw": wording,
+                            "quote": quote}}})
+            assert (counts["filled"], counts["unbacked"]) == (0, 1), off
+            assert row.claim[f"{slot.name}_state"] == fields.UNBACKED
+            assert slot.name not in row.claim, "no value written for it"
+            assert f"{slot.name}_quote" not in row.claim
+            assert row.claim[f"{slot.name}_seen"] == wording
+            assert row in open_rows(rows, slot), "it stays open"
+            [bad] = counts["failed"]
+            assert bad["why"] == "not_an_option"
+            assert repr(off) in bad["reason"] and "options" in bad["reason"]
+        option = slot.options[0]
+        for named in (option.label, option.uri, *option.synonyms[:1]):
+            row = rows[0]
+            row.claim = {k: v for k, v in row.claim.items()
+                         if not k.startswith(slot.name)}
+            counts = merge_field(rows, batch.sources, slot, {"answers": {
+                row.label: {"value": named, "value_raw": wording,
+                            "quote": quote}}})
+            assert counts["filled"] == 1, named
+            assert row.claim[f"{slot.name}_state"] == fields.READ
+        return
+    pytest.skip("no profile parameter with a closed axis and an example")
+
+
+def test_an_answer_off_the_list_is_asked_again_with_the_reason(monkeypatch):
+    """The retry is told what was wrong, and a retry that picks an entry is
+    read. One that never does ends unbacked, with no value, and the tuple it
+    leaves passes the published schema, which 171 such rows did not."""
+    pytest.importorskip("jsonschema")
+    spec = load_spec(json.loads(
+        (PROFILES / "kwp" / "extraction_spec.json").read_text(encoding="utf-8")))
+    quote = "| Private Haushalte | Erdgas | 42.005 | MWh/a |"
+    rows_reply = {"tuples": [{"source": "Q1", "value": 42005, "unit": "MWh/a",
+                              "unit_raw": "MWh/a", "quote": quote}],
+                  "status": "complete", "need_more": []}
+    monkeypatch.setattr(runner, "make_harvester",
+                        lambda *a, **kw: (lambda batch, prior=None: rows_reply))
+
+    def harvest_with(pick):
+        told: list = []
+
+        def make_asker(image_root=None):
+            def ask(shown, rows, slots, corrections=None, document_id=None,
+                    usage_out=None, owner_of=None):
+                slots = slots if isinstance(slots, (list, tuple)) else [slots]
+                told.extend(corrections or [])
+                out = {}
+                for slot in slots:
+                    value = (pick(slot, corrections) if slot.name == "sector"
+                             else fields.UNSTATED)
+                    out[slot.name] = {"answers": {r.label: {
+                        "value": value, "value_raw": "Private Haushalte",
+                        "quote": quote} for r in rows}}
+                return {"fields": out}
+            return ask
+
+        monkeypatch.setattr(runner, "make_field_asker", make_asker)
+        batch = group_items([WorkItem(7, None, Source(
+            "table", 1, quote, {"document_id": 7, "page": 1}))],
+            max_sources=runner.BATCH_SOURCES)[0]
+        reply = runner.make_fieldwise_harvester(spec=spec, slice_gate={})(batch)
+        return batch, reply, told
+
+    sector = next(s for s in fields.axis_slots(spec.parameters[0])
+                  if s.name == "sector")
+    batch, reply, told = harvest_with(
+        lambda slot, corrections: (sector.options[0].label if corrections
+                                   else "Teilgebiet"))
+    assert any(c["why"] == "not_an_option" and "Teilgebiet" in c["reason"]
+               for c in told), "the retry says what was wrong"
+    row = reply["tuples"][0]
+    assert row["sector_state"] == fields.READ
+    assert row["sector"] == sector.options[0].label
+
+    batch, reply, told = harvest_with(lambda slot, corrections: "Teilgebiet")
+    row = reply["tuples"][0]
+    assert row["sector_state"] == fields.UNBACKED
+    assert row.get("sector") is None
+    report = DocumentReport(document_id=7)
+    fold_batch(batch, reply, report, spec=spec)
+    assert report.tuples, "the value itself is still kept"
+    assert runner.check_against_schema(report, "stub", spec) == 0
 
 
 # ---------------------------------------------------------------------------
@@ -886,15 +1006,17 @@ def test_a_read_coordinate_is_not_overwritten_by_a_later_window(profile):
         pytest.skip("this profile has no axes")
     quote = rows[0].claim["quote"]
     first = quote.strip().split()[0]
+    answer = _an_answer(slot, "gelesen")
     merge_field(rows, batch.sources, slot, {"answers": {rows[0].label: {
-        "value": "gelesen", "value_raw": first, "quote": quote}}})
+        "value": answer, "value_raw": first, "quote": quote}}})
     assert rows[0].claim[f"{slot.name}_state"] == fields.READ
 
     later = Source("section", 4242, "Ganz woanders steht gelesen anders.", {})
     counts = merge_field(rows, [later], slot, {"answers": {rows[0].label: {
-        "value": "anders", "value_raw": "anders",
+        "value": slot.options[-1].label if slot.is_closed else "anders",
+        "value_raw": "anders",
         "quote": "Ganz woanders steht gelesen anders."}}})
-    assert rows[0].claim[slot.name] == "gelesen", "a reading is final"
+    assert rows[0].claim[slot.name] == answer, "a reading is final"
     assert rows[0].claim[f"{slot.name}_raw"] == first
     assert rows[0].claim[f"{slot.name}_quote"] == quote
     assert counts["filled"] == 0, "and the second answer is not counted as one"
@@ -917,7 +1039,8 @@ def test_a_quote_too_short_to_name_a_place_is_not_evidence(profile):
     assert len(short) < MIN_QUOTE_CHARS
     sources = [Source("table", 77, f"| Jahr | {short} |", {})]
     counts = merge_field(rows, sources, slot, {"answers": {rows[0].label: {
-        "value": short, "value_raw": short, "quote": short}}})
+        "value": _an_answer(slot, short), "value_raw": short,
+        "quote": short}}})
     assert counts["filled"] == 0
     assert rows[0].claim[f"{slot.name}_state"] == fields.UNBACKED
     assert [f["why"] for f in counts["failed"]] == ["quote_too_short"]
@@ -927,8 +1050,8 @@ def test_a_quote_too_short_to_name_a_place_is_not_evidence(profile):
     assert len(long) >= MIN_QUOTE_CHARS
     counts = merge_field(rows, [Source("table", 77, long, {})],
                          slot, {"answers": {rows[0].label: {
-                             "value": short, "value_raw": short,
-                             "quote": long}}})
+                             "value": _an_answer(slot, short),
+                             "value_raw": short, "quote": long}}})
     assert counts["filled"] == 1
 
 
@@ -948,7 +1071,8 @@ def test_every_reading_says_which_passage_and_which_window_it_came_from(profile)
     quote = rows[0].claim["quote"]
     near = Source("section", 4711, f"Im Abschnitt steht: {quote}", {})
     merge_field(rows, [near], slot, {"answers": {rows[0].label: {
-        "value": "gelesen", "value_raw": quote.strip().split()[0],
+        "value": _an_answer(slot, "gelesen"),
+            "value_raw": quote.strip().split()[0],
         "quote": quote}}}, window=("retrieval", 3))
     assert rows[0].claim[f"{slot.name}_source"] == ["section", 4711]
     assert rows[0].claim[f"{slot.name}_window"] == ["retrieval", 3]

@@ -1790,11 +1790,45 @@ def _unparsable(reply) -> str:
         """
         if len(text) <= 2 * keep:
             return repr(text)
-        return f"{text[:keep]!r} …{len(text) - 2 * keep} weitere… {text[-keep:]!r}"
+        return f"{text[:keep]!r} …{len(text) - 2 * keep} more… {text[-keep:]!r}"
 
     return (f" [finish={getattr(reply, 'finish_reason', '?')}"
             f" | content {len(content)}ch: {show(content)}"
             f" | reasoning {len(reasoning)}ch: {show(reasoning)}]")
+
+
+def _unreadable_correction(reply, limit: int) -> str:
+    """What was wrong with a reply that could not be read, said to the model.
+
+    The retry said the same sentence whatever had gone wrong, and a model told
+    nothing specific answers the same way again. A reply cut off at the
+    ceiling has to be shorter, not reformatted; a reply that broke the syntax
+    has to see where it broke.
+    """
+    if getattr(reply, "finish_reason", None) == "length":
+        return (f"Deine Antwort wurde nach {limit} Tokens abgeschnitten und ist "
+                "deshalb kein vollständiges JSON-Objekt. Schreib kürzer: fasse "
+                "Zeilen mit derselben Antwort in \"groups\" zusammen und "
+                "zitiere nur die kurze Stelle, an der die Angabe steht.")
+    message = getattr(reply, "message", None)
+    text = _THINK_RE.sub("", getattr(message, "content", None) or "")
+    text = _FENCE_CLOSE.sub("", _FENCE_OPEN.sub("", text)).strip()
+    where = ""
+    start = text.find("{")
+    if start == -1:
+        where = " Sie enthielt gar kein JSON-Objekt."
+    else:
+        try:
+            _DECODER.raw_decode(text, start)
+        except json.JSONDecodeError as exc:
+            around = text[max(start, exc.pos - 60):exc.pos + 20]
+            where = (f" Sie bricht bei Zeichen {exc.pos - start} ab "
+                     f"({exc.msg}), an dieser Stelle: {around!r}.")
+    return ("Deine Antwort war kein lesbares JSON-Objekt." + where
+            + " Gib NUR das Objekt aus, in EINER Zeile, ohne Text davor oder "
+            "danach und ohne ein zweites Objekt. Anführungszeichen INNERHALB "
+            "eines Zitats müssen als \\\" escaped sein — ist das mühsam, kürz "
+            "das Zitat auf eine Stelle ohne Anführungszeichen.")
 
 
 def _parse_action(text) -> Optional[str]:
@@ -2416,13 +2450,8 @@ def make_field_asker(image_root: Optional[Path] = None) -> Callable:
                             finish=getattr(reply, "finish_reason", None))
                 conversation.append({"role": "assistant",
                                      "content": reply.message.content or ""})
-                conversation.append({"role": "user", "content": (
-                    "Deine Antwort war kein lesbares JSON-Objekt. Gib NUR das "
-                    "Objekt aus, in EINER Zeile, ohne Text davor oder danach "
-                    "und ohne ein zweites Objekt. Anführungszeichen INNERHALB "
-                    "eines Zitats müssen als \\\" escaped sein — ist das "
-                    "mühsam, kürz das Zitat auf eine Stelle ohne "
-                    "Anführungszeichen.")})
+                conversation.append({"role": "user", "content":
+                                     _unreadable_correction(reply, limit)})
             except Exception as exc:
                 log.warning("   field %s attempt %d failed: %s",
                             name, attempt, exc)
@@ -2551,10 +2580,8 @@ def make_review_asker(image_root: Optional[Path] = None) -> Callable:
                             attempt, _unparsable(reply))
                 conversation.append({"role": "assistant",
                                      "content": reply.message.content or ""})
-                conversation.append({"role": "user", "content": (
-                    "Deine Antwort war kein lesbares JSON-Objekt. Gib NUR das "
-                    "Objekt aus, in EINER Zeile, ohne Text davor oder danach "
-                    "und ohne ein zweites Objekt.")})
+                conversation.append({"role": "user", "content":
+                                     _unreadable_correction(reply, limit)})
             except Exception as exc:
                 log.warning("   review attempt %d failed: %s", attempt, exc)
                 status = getattr(exc, "status_code", None)

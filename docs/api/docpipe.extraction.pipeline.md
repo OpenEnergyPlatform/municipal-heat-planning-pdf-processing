@@ -407,6 +407,18 @@ A number is compared as a number, a wording as text — the same split
 value_in_quote makes for the value itself, because these are the same
 question asked one level down.
 
+### option_named
+
+```python
+def option_named(slot, given)
+```
+
+The entry of a closed list an answer names, or None.
+
+By its label, by any spelling the spec lists for it, or by its URI: the
+same lookup `verify_tuple` resolves a coordinate with, so an answer taken
+here is one that resolves there.
+
 ### wording_names_option
 
 ```python

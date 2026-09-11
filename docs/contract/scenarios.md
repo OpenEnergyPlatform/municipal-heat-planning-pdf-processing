@@ -15,7 +15,7 @@ fills every key below as a publication is read.
 `parameter_state`, `refusal` and `summary` are the three record kinds
 every profile's contract shares. `parameter_state` closes one
 parameter with its state and tuple and refusal counts
-(`docpipe/extraction/schema.py:533` to `557`); `refusal` records a
+(`docpipe/extraction/schema.py:534` to `558`); `refusal` records a
 claim the run did not accept: why it failed, the claim as returned,
 and its source (`:460` to `488`); `summary`, the file's last line, counts a
 document's tuples and refusals by trust level and reason (`:489` to
@@ -26,7 +26,7 @@ Such a section opens with how its row becomes a node or an edge of the
 OEKG, where the parameter mints one at all. The `parameter` coordinate
 and every axis expand into eight `###` headings: the value, plus
 seven keys that make it checkable without the run that produced it
-(`docpipe/extraction/schema.py:212` to `265`). Four parameters carry
+(`docpipe/extraction/schema.py:212` to `266`). Four parameters carry
 the same `scenario` axis, `scenario_type`, `scenario_abstract`,
 `scenario_region` and `scenario_year`, each stating which of the
 publication's AR6 scenarios the row belongs to
@@ -36,7 +36,7 @@ test_a_document_field_carries_no_axes_and_a_scenario_field_carries_one`).
 A tuple's `provenance` names where its `quote` sits: `document_id`,
 `owner_kind` and `owner_id` always present, the rest, page and
 section location among them, filled in as the source allows
-(`docpipe/extraction/schema.py:414` to `462`); a coordinate's
+(`docpipe/extraction/schema.py:415` to `463`); a coordinate's
 `<name>_source` and a refusal's `owner` use the shorter
 `[owner_kind, owner_id]` pair instead (`:144` to `148`).
 
@@ -47,7 +47,7 @@ coordinate answers from a closed list, `x-options` names every entry
 with its ontology uri and definition, and its corpus spellings where
 any are recorded. A tuple section closes with the `allOf` rule: a
 coordinate is `null` unless its own `<name>_state` says `read` or
-`derived` (`docpipe/extraction/schema.py:268` to `283`).
+`derived` (`docpipe/extraction/schema.py:269` to `283`).
 
 ## The lists this page cannot publish
 
@@ -70,7 +70,7 @@ the same four parameters takes a different path: the spec marks it
 plain text through a path that never calls `_value_uri` at all; that
 call runs earlier in the same function, for the parameter's own
 `value` key (`docpipe/extraction/fields.py:300` to `325`;
-`docpipe/extraction/schema.py:352`, `:372` to `384`).
+`docpipe/extraction/schema.py:353`, `:373` to `385`).
 
 What the list holds is decided once, before harvest starts, by
 `document_axes` in `profiles/scenarios/extraction.py:172`. It reads
@@ -89,16 +89,16 @@ entry on every tuple, recording what the list held at harvest time.
 Two sections close the page: `## The stamp`, the schema of
 `<publication>.stamp.json` (four fixed keys, `spec`, `model`,
 `anchors`, `page_text_transcribed`, plus per-question patterns,
-`docpipe/extraction/schema.py:564` to `670`), and `## The trace`, the
+`docpipe/extraction/schema.py:565` to `671`), and `## The trace`, the
 schema of `<publication>.trace.jsonl`, one `oneOf` branch per event
 kind: eleven, fixed by the schema for every profile rather than drawn
-from this one's spec (`docpipe/extraction/schema.py:673` to `784`). A
+from this one's spec (`docpipe/extraction/schema.py:674` to `785`). A
 `parameter/`, `value/`, `axis/` or `slot/` key differing from today's
 run makes the document eligible for a full re-harvest under
 `--force-stale`; `model`, `anchors` and every prompt id are written for
 a reader and never compared, so a reworded prompt or another model
 leaves a harvested corpus current (`stale`,
-`docpipe/extraction/runner.py:3448` to `3485`; `already_done`, `:3499`
+`docpipe/extraction/runner.py:3475` to `3512`; `already_done`, `:3499`
 to `3524`). `top_up_file` redoes
 only the changed question
 (`docpipe/extraction/topup.py:284` to `318`). The trace is read by
@@ -218,7 +218,7 @@ The wording does not name the option chosen for 'parameter': the model mapped a 
 
 ### `parameter_seen`
 
-A wording the model noticed for 'parameter' while answering 'not stated'. Vocabulary review material, never evidence.
+A wording the model noticed for 'parameter' while answering 'not stated', or offered as an answer the closed list does not hold. Vocabulary review material, never evidence.
 
 ### `parameter_source`
 
@@ -313,7 +313,7 @@ The wording does not name the option chosen for 'parameter': the model mapped a 
 
 ### `parameter_seen`
 
-A wording the model noticed for 'parameter' while answering 'not stated'. Vocabulary review material, never evidence.
+A wording the model noticed for 'parameter' while answering 'not stated', or offered as an answer the closed list does not hold. Vocabulary review material, never evidence.
 
 ### `parameter_source`
 
@@ -406,7 +406,7 @@ The wording does not name the option chosen for 'parameter': the model mapped a 
 
 ### `parameter_seen`
 
-A wording the model noticed for 'parameter' while answering 'not stated'. Vocabulary review material, never evidence.
+A wording the model noticed for 'parameter' while answering 'not stated', or offered as an answer the closed list does not hold. Vocabulary review material, never evidence.
 
 ### `parameter_source`
 
@@ -493,7 +493,7 @@ The wording does not name the option chosen for 'parameter': the model mapped a 
 
 ### `parameter_seen`
 
-A wording the model noticed for 'parameter' while answering 'not stated'. Vocabulary review material, never evidence.
+A wording the model noticed for 'parameter' while answering 'not stated', or offered as an answer the closed list does not hold. Vocabulary review material, never evidence.
 
 ### `parameter_source`
 
@@ -587,7 +587,7 @@ The wording does not name the option chosen for 'parameter': the model mapped a 
 
 ### `parameter_seen`
 
-A wording the model noticed for 'parameter' while answering 'not stated'. Vocabulary review material, never evidence.
+A wording the model noticed for 'parameter' while answering 'not stated', or offered as an answer the closed list does not hold. Vocabulary review material, never evidence.
 
 ### `parameter_source`
 
@@ -674,7 +674,7 @@ The wording does not name the option chosen for 'parameter': the model mapped a 
 
 ### `parameter_seen`
 
-A wording the model noticed for 'parameter' while answering 'not stated'. Vocabulary review material, never evidence.
+A wording the model noticed for 'parameter' while answering 'not stated', or offered as an answer the closed list does not hold. Vocabulary review material, never evidence.
 
 ### `parameter_source`
 
@@ -727,7 +727,7 @@ The wording does not name the option chosen for 'scenario': the model mapped a w
 
 ### `scenario_seen`
 
-A wording the model noticed for 'scenario' while answering 'not stated'. Vocabulary review material, never evidence.
+A wording the model noticed for 'scenario' while answering 'not stated', or offered as an answer the closed list does not hold. Vocabulary review material, never evidence.
 
 ### `scenario_source`
 
@@ -818,7 +818,7 @@ The wording does not name the option chosen for 'parameter': the model mapped a 
 
 ### `parameter_seen`
 
-A wording the model noticed for 'parameter' while answering 'not stated'. Vocabulary review material, never evidence.
+A wording the model noticed for 'parameter' while answering 'not stated', or offered as an answer the closed list does not hold. Vocabulary review material, never evidence.
 
 ### `parameter_source`
 
@@ -911,7 +911,7 @@ The wording does not name the option chosen for 'parameter': the model mapped a 
 
 ### `parameter_seen`
 
-A wording the model noticed for 'parameter' while answering 'not stated'. Vocabulary review material, never evidence.
+A wording the model noticed for 'parameter' while answering 'not stated', or offered as an answer the closed list does not hold. Vocabulary review material, never evidence.
 
 ### `parameter_source`
 
@@ -964,7 +964,7 @@ The wording does not name the option chosen for 'scenario': the model mapped a w
 
 ### `scenario_seen`
 
-A wording the model noticed for 'scenario' while answering 'not stated'. Vocabulary review material, never evidence.
+A wording the model noticed for 'scenario' while answering 'not stated', or offered as an answer the closed list does not hold. Vocabulary review material, never evidence.
 
 ### `scenario_source`
 
@@ -1053,7 +1053,7 @@ The wording does not name the option chosen for 'parameter': the model mapped a 
 
 ### `parameter_seen`
 
-A wording the model noticed for 'parameter' while answering 'not stated'. Vocabulary review material, never evidence.
+A wording the model noticed for 'parameter' while answering 'not stated', or offered as an answer the closed list does not hold. Vocabulary review material, never evidence.
 
 ### `parameter_source`
 
@@ -1106,7 +1106,7 @@ The wording does not name the option chosen for 'scenario': the model mapped a w
 
 ### `scenario_seen`
 
-A wording the model noticed for 'scenario' while answering 'not stated'. Vocabulary review material, never evidence.
+A wording the model noticed for 'scenario' while answering 'not stated', or offered as an answer the closed list does not hold. Vocabulary review material, never evidence.
 
 ### `scenario_source`
 
@@ -1232,7 +1232,7 @@ The wording does not name the option chosen for 'parameter': the model mapped a 
 
 ### `parameter_seen`
 
-A wording the model noticed for 'parameter' while answering 'not stated'. Vocabulary review material, never evidence.
+A wording the model noticed for 'parameter' while answering 'not stated', or offered as an answer the closed list does not hold. Vocabulary review material, never evidence.
 
 ### `parameter_source`
 
@@ -1285,7 +1285,7 @@ The wording does not name the option chosen for 'scenario': the model mapped a w
 
 ### `scenario_seen`
 
-A wording the model noticed for 'scenario' while answering 'not stated'. Vocabulary review material, never evidence.
+A wording the model noticed for 'scenario' while answering 'not stated', or offered as an answer the closed list does not hold. Vocabulary review material, never evidence.
 
 ### `scenario_source`
 
@@ -1368,7 +1368,7 @@ The wording does not name the option chosen for 'parameter': the model mapped a 
 
 ### `parameter_seen`
 
-A wording the model noticed for 'parameter' while answering 'not stated'. Vocabulary review material, never evidence.
+A wording the model noticed for 'parameter' while answering 'not stated', or offered as an answer the closed list does not hold. Vocabulary review material, never evidence.
 
 ### `parameter_source`
 
@@ -1457,7 +1457,7 @@ The wording does not name the option chosen for 'parameter': the model mapped a 
 
 ### `parameter_seen`
 
-A wording the model noticed for 'parameter' while answering 'not stated'. Vocabulary review material, never evidence.
+A wording the model noticed for 'parameter' while answering 'not stated', or offered as an answer the closed list does not hold. Vocabulary review material, never evidence.
 
 ### `parameter_source`
 
@@ -1546,7 +1546,7 @@ The wording does not name the option chosen for 'parameter': the model mapped a 
 
 ### `parameter_seen`
 
-A wording the model noticed for 'parameter' while answering 'not stated'. Vocabulary review material, never evidence.
+A wording the model noticed for 'parameter' while answering 'not stated', or offered as an answer the closed list does not hold. Vocabulary review material, never evidence.
 
 ### `parameter_source`
 
@@ -1640,7 +1640,7 @@ The wording does not name the option chosen for 'parameter': the model mapped a 
 
 ### `parameter_seen`
 
-A wording the model noticed for 'parameter' while answering 'not stated'. Vocabulary review material, never evidence.
+A wording the model noticed for 'parameter' while answering 'not stated', or offered as an answer the closed list does not hold. Vocabulary review material, never evidence.
 
 ### `parameter_source`
 
