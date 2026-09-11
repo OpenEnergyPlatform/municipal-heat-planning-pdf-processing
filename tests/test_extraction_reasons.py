@@ -35,8 +35,11 @@ PIPELINE = EXTRACTION / "pipeline.py"
 RUNNER = EXTRACTION / "runner.py"
 
 # The owner's rule, spelled out: the quote stands in a shown source, it is
-# long enough to name a place, and the answer stands in it. Nothing else.
-AGREED_DROPS = {"quote_not_in_source", "quote_too_short", "answer_not_in_quote"}
+# long enough to name a place, and the answer stands in it. And, decided by
+# the owner on 2026-09-11, an answer to a closed list is one of its entries:
+# one that is not is asked again and never marked read. Nothing else.
+AGREED_DROPS = {"quote_not_in_source", "quote_too_short", "answer_not_in_quote",
+                "not_an_option"}
 
 
 def _tree(path):

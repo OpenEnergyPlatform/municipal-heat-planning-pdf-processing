@@ -383,7 +383,7 @@
       "type": "boolean"
      },
      "parameter_seen": {
-      "description": "A wording the model noticed for 'parameter' while answering 'not stated'. Vocabulary review material, never evidence.",
+      "description": "A wording the model noticed for 'parameter' while answering 'not stated', or offered as an answer the closed list does not hold. Vocabulary review material, never evidence.",
       "type": "string"
      },
      "parameter_source": {
@@ -533,7 +533,7 @@
       "type": "boolean"
      },
      "parameter_seen": {
-      "description": "A wording the model noticed for 'parameter' while answering 'not stated'. Vocabulary review material, never evidence.",
+      "description": "A wording the model noticed for 'parameter' while answering 'not stated', or offered as an answer the closed list does not hold. Vocabulary review material, never evidence.",
       "type": "string"
      },
      "parameter_source": {
@@ -691,7 +691,7 @@
       "type": "boolean"
      },
      "parameter_seen": {
-      "description": "A wording the model noticed for 'parameter' while answering 'not stated'. Vocabulary review material, never evidence.",
+      "description": "A wording the model noticed for 'parameter' while answering 'not stated', or offered as an answer the closed list does not hold. Vocabulary review material, never evidence.",
       "type": "string"
      },
      "parameter_source": {
@@ -843,7 +843,7 @@
       "type": "boolean"
      },
      "parameter_seen": {
-      "description": "A wording the model noticed for 'parameter' while answering 'not stated'. Vocabulary review material, never evidence.",
+      "description": "A wording the model noticed for 'parameter' while answering 'not stated', or offered as an answer the closed list does not hold. Vocabulary review material, never evidence.",
       "type": "string"
      },
      "parameter_source": {
@@ -993,7 +993,7 @@
       "type": "boolean"
      },
      "parameter_seen": {
-      "description": "A wording the model noticed for 'parameter' while answering 'not stated'. Vocabulary review material, never evidence.",
+      "description": "A wording the model noticed for 'parameter' while answering 'not stated', or offered as an answer the closed list does not hold. Vocabulary review material, never evidence.",
       "type": "string"
      },
      "parameter_source": {
@@ -1179,7 +1179,7 @@
       "type": "boolean"
      },
      "parameter_seen": {
-      "description": "A wording the model noticed for 'parameter' while answering 'not stated'. Vocabulary review material, never evidence.",
+      "description": "A wording the model noticed for 'parameter' while answering 'not stated', or offered as an answer the closed list does not hold. Vocabulary review material, never evidence.",
       "type": "string"
      },
      "parameter_source": {
@@ -1265,7 +1265,7 @@
       "type": "boolean"
      },
      "scenario_seen": {
-      "description": "A wording the model noticed for 'scenario' while answering 'not stated'. Vocabulary review material, never evidence.",
+      "description": "A wording the model noticed for 'scenario' while answering 'not stated', or offered as an answer the closed list does not hold. Vocabulary review material, never evidence.",
       "type": "string"
      },
      "scenario_source": {
@@ -1408,7 +1408,7 @@
       "type": "boolean"
      },
      "parameter_seen": {
-      "description": "A wording the model noticed for 'parameter' while answering 'not stated'. Vocabulary review material, never evidence.",
+      "description": "A wording the model noticed for 'parameter' while answering 'not stated', or offered as an answer the closed list does not hold. Vocabulary review material, never evidence.",
       "type": "string"
      },
      "parameter_source": {
@@ -1598,7 +1598,7 @@
       "type": "boolean"
      },
      "parameter_seen": {
-      "description": "A wording the model noticed for 'parameter' while answering 'not stated'. Vocabulary review material, never evidence.",
+      "description": "A wording the model noticed for 'parameter' while answering 'not stated', or offered as an answer the closed list does not hold. Vocabulary review material, never evidence.",
       "type": "string"
      },
      "parameter_source": {
@@ -1684,7 +1684,7 @@
       "type": "boolean"
      },
      "scenario_seen": {
-      "description": "A wording the model noticed for 'scenario' while answering 'not stated'. Vocabulary review material, never evidence.",
+      "description": "A wording the model noticed for 'scenario' while answering 'not stated', or offered as an answer the closed list does not hold. Vocabulary review material, never evidence.",
       "type": "string"
      },
      "scenario_source": {
@@ -1863,7 +1863,7 @@
       "type": "boolean"
      },
      "parameter_seen": {
-      "description": "A wording the model noticed for 'parameter' while answering 'not stated'. Vocabulary review material, never evidence.",
+      "description": "A wording the model noticed for 'parameter' while answering 'not stated', or offered as an answer the closed list does not hold. Vocabulary review material, never evidence.",
       "type": "string"
      },
      "parameter_source": {
@@ -1949,7 +1949,7 @@
       "type": "boolean"
      },
      "scenario_seen": {
-      "description": "A wording the model noticed for 'scenario' while answering 'not stated'. Vocabulary review material, never evidence.",
+      "description": "A wording the model noticed for 'scenario' while answering 'not stated', or offered as an answer the closed list does not hold. Vocabulary review material, never evidence.",
       "type": "string"
      },
      "scenario_source": {
@@ -2278,7 +2278,7 @@
       "type": "boolean"
      },
      "parameter_seen": {
-      "description": "A wording the model noticed for 'parameter' while answering 'not stated'. Vocabulary review material, never evidence.",
+      "description": "A wording the model noticed for 'parameter' while answering 'not stated', or offered as an answer the closed list does not hold. Vocabulary review material, never evidence.",
       "type": "string"
      },
      "parameter_source": {
@@ -2364,7 +2364,7 @@
       "type": "boolean"
      },
      "scenario_seen": {
-      "description": "A wording the model noticed for 'scenario' while answering 'not stated'. Vocabulary review material, never evidence.",
+      "description": "A wording the model noticed for 'scenario' while answering 'not stated', or offered as an answer the closed list does not hold. Vocabulary review material, never evidence.",
       "type": "string"
      },
      "scenario_source": {
@@ -2510,7 +2510,7 @@
       "type": "boolean"
      },
      "parameter_seen": {
-      "description": "A wording the model noticed for 'parameter' while answering 'not stated'. Vocabulary review material, never evidence.",
+      "description": "A wording the model noticed for 'parameter' while answering 'not stated', or offered as an answer the closed list does not hold. Vocabulary review material, never evidence.",
       "type": "string"
      },
      "parameter_source": {
@@ -2659,7 +2659,7 @@
       "type": "boolean"
      },
      "parameter_seen": {
-      "description": "A wording the model noticed for 'parameter' while answering 'not stated'. Vocabulary review material, never evidence.",
+      "description": "A wording the model noticed for 'parameter' while answering 'not stated', or offered as an answer the closed list does not hold. Vocabulary review material, never evidence.",
       "type": "string"
      },
      "parameter_source": {
@@ -2816,7 +2816,7 @@
       "type": "boolean"
      },
      "parameter_seen": {
-      "description": "A wording the model noticed for 'parameter' while answering 'not stated'. Vocabulary review material, never evidence.",
+      "description": "A wording the model noticed for 'parameter' while answering 'not stated', or offered as an answer the closed list does not hold. Vocabulary review material, never evidence.",
       "type": "string"
      },
      "parameter_source": {
@@ -2973,7 +2973,7 @@
       "type": "boolean"
      },
      "parameter_seen": {
-      "description": "A wording the model noticed for 'parameter' while answering 'not stated'. Vocabulary review material, never evidence.",
+      "description": "A wording the model noticed for 'parameter' while answering 'not stated', or offered as an answer the closed list does not hold. Vocabulary review material, never evidence.",
       "type": "string"
      },
      "parameter_source": {
@@ -3687,6 +3687,7 @@
        "quote_not_in_source",
        "quote_too_short",
        "answer_not_in_quote",
+       "not_an_option",
        "unbacked"
       ]
      },

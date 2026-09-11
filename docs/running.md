@@ -213,7 +213,7 @@ already-written harvest directory, instead of or before harvesting.
 
 - `--print-context-budget` prints the worst-case tokens one harvest
   request needs and exits before contacting a server
-  (`docpipe/extraction/runner.py` lines 4115 to 4118); the same check
+  (`docpipe/extraction/runner.py` lines 4142 to 4145); the same check
   runs automatically before the first document too.
 - `--recheck` needs no model and no index. It reapplies the
   answer-in-quote rule to a harvest on disk, drops any coordinate whose quote no longer
@@ -230,7 +230,7 @@ already-written harvest directory, instead of or before harvesting.
 - `--review`, bounded with `--review-limit N`, needs the model. It reads
   every value nobody can stand behind a second time, over its own
   passage and section, and records only a disagreement as a trust
-  reason (`docpipe/extraction/runner.py` lines 4070 to 4079); see
+  reason (`docpipe/extraction/runner.py` lines 4097 to 4106); see
   [the trust contract](contract/trust.md).
 - `--serialize TTL` needs no harvest and no model, as in stage 8 above,
   and produces or refreshes [the knowledge graph](stages/graph.md).

@@ -141,7 +141,7 @@ REFUSAL_REASONS = [
 # tests/test_extraction_reasons.py holds merge_field to this list: a reason it
 # writes that is not listed here is a check nobody agreed to.
 DROP_REASONS = ["quote_not_in_source", "quote_too_short",
-                "answer_not_in_quote", "unbacked"]
+                "answer_not_in_quote", "not_an_option", "unbacked"]
 
 
 def _owner() -> dict:
@@ -260,7 +260,8 @@ def _slot_properties(name: str, slot, doc: str) -> dict:
         f"{name}_seen": {
             "type": "string",
             "description": f"A wording the model noticed for '{name}' while "
-                           f"answering 'not stated'. Vocabulary review "
+                           f"answering 'not stated', or offered as an answer "
+                           f"the closed list does not hold. Vocabulary review "
                            f"material, never evidence."},
     }
 

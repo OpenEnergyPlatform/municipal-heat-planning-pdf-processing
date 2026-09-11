@@ -15,12 +15,12 @@ a document is read.
 `parameter_state`, `refusal` and `summary` are the three record kinds
 every profile's contract shares. `parameter_state` closes one parameter
 for one document: its `state` and how many `tuple` and `refusal` lines
-it produced (`docpipe/extraction/schema.py:533` to `557`). `refusal`
+it produced (`docpipe/extraction/schema.py:534` to `558`). `refusal`
 records a claim the run did not accept: why it failed, the claim as
-returned, and its source (`docpipe/extraction/schema.py:463` to `491`).
+returned, and its source (`docpipe/extraction/schema.py:464` to `492`).
 `summary`, the file's last line, counts a document's tuples and
 refusals by trust level and by reason
-(`docpipe/extraction/schema.py:492` to `532`). The remaining `##`
+(`docpipe/extraction/schema.py:493` to `533`). The remaining `##`
 sections, one per parameter, are the shapes a `tuple` line can take,
 named `tuple_<uri>` and shown here after the uri.
 
@@ -36,7 +36,7 @@ to `215`, `233` to `238`). The rest belong to the row itself: `kind`, `quote`,
 `tier`, `flags`, `provenance`, `computed`, `compute`, `unit` and
 `unit_raw` (empty for a wording); only the value additionally carries
 `value_target` for a numeric parameter, or `value_raw` and `value_uri`
-for a wording (`docpipe/extraction/schema.py:285` to `356`).
+for a wording (`docpipe/extraction/schema.py:286` to `357`).
 
 Two keys on a coordinate say more than its plain description does.
 `x-question` is the sentence, in German, the model was actually asked
@@ -44,22 +44,22 @@ for that coordinate, so a reader can check the wording without opening
 the profile's prompt; it sits on every axis and on the `parameter`
 coordinate, never on the numeric `value` itself, since which number to
 read is settled by the row request, not a question of its own
-(`docpipe/extraction/schema.py:170`, `:371`). `x-options` appears only
+(`docpipe/extraction/schema.py:170`, `:372`). `x-options` appears only
 where a coordinate answers from a closed list: every class it may
 resolve to, with its ontology uri, its definition and the corpus
 spellings recorded for it, collapsed so a long list does not crowd the
 page, matching the spec both were built from
 (`tests/test_extraction_schema.py::test_every_coordinate_a_row_carries_is_described`).
 `x-kg` is the same spec `kg` block on two different objects: an axis
-that mints its own edge (`docpipe/extraction/schema.py:382`), or the
+that mints its own edge (`docpipe/extraction/schema.py:383`), or the
 row itself rather than the `parameter` coordinate
-(`docpipe/extraction/schema.py:24` to `27`, `:389`).
+(`docpipe/extraction/schema.py:24` to `27`, `:390`).
 
 A tuple's `provenance` names where its `quote` sits: `document_id`,
 `owner_kind` and `owner_id` are always present; `page`,
 `section_number`, `section_title`, `title`, `parent_section`,
 `block_id`, `image`, `rects` and `via` are filled in as the
-source allows (`docpipe/extraction/schema.py:414` to `462`). A
+source allows (`docpipe/extraction/schema.py:415` to `463`). A
 coordinate's `<name>_source` and a refusal's `owner` are the shorter
 `[owner_kind, owner_id]` pair instead
 (`docpipe/extraction/schema.py:147` to `151`).
@@ -67,7 +67,7 @@ coordinate's `<name>_source` and a refusal's `owner` are the shorter
 A tuple section closes with the `allOf` rule: a coordinate is `null`
 unless its own `<name>_state` says `read` or `derived`, one branch of
 the schema's `allOf` array per coordinate (`docpipe/extraction/
-schema.py:268` to `280`). A coordinate never asked and one asked and
+schema.py:269` to `281`). A coordinate never asked and one asked and
 answered `null` differ by type, not merely by convention.
 
 The stamp and the trace close the page, describing the run rather than
@@ -75,11 +75,11 @@ one row. The stamp is `<document>.stamp.json`: whole-run keys (`spec`,
 `model`, `anchors`, `page_text_transcribed`, `extraction/*`,
 `review/*`) beside the `parameter/`, `value/`, `axis/*/*`,
 `slot/parameter` and `question_text/` families, written one per
-question instead (`docpipe/extraction/schema.py:564` to `670`).
+question instead (`docpipe/extraction/schema.py:565` to `671`).
 The owner decided on 2026-09-10 that a stamp rests on the KG/ontology
 parameters alone: `stale` compares only the `parameter/`, `value/`,
 `axis/` and `slot/` families (`QUESTION_KEYS`,
-`docpipe/extraction/runner.py:3416`), and the whole-file sha `spec`
+`docpipe/extraction/runner.py:3443`), and the whole-file sha `spec`
 only for a stamp that carries none of them (`COARSE`, `:3381`;
 `tests/test_extraction_runner.py::test_a_stamp_from_before_the_detail_is_stale_in_all_of_it`).
 `model`, `anchors`, every `extraction/*` prompt, `page_text_transcribed`,
@@ -88,11 +88,11 @@ can place a harvest, and are never compared
 (`tests/test_extraction_runner.py::test_what_the_stamp_records_about_the_document_never_redoes_it`).
 Only the `parameter/`, `value/`, `axis/` and `slot/` families make a
 document eligible for `--force-stale`'s full re-harvest (`stale`,
-`docpipe/extraction/runner.py:3448` to `3485`, `already_done`, `:3499`
+`docpipe/extraction/runner.py:3475` to `3512`, `already_done`, `:3499`
 to `3524`); redoing only the changed question is
 `top_up_file`'s job (`docpipe/extraction/topup.py:284` to `318`). The
 trace is `<document>.trace.jsonl`: eleven event kinds told apart by
 `t`, `plan` through `invalid` in source order
-(`docpipe/extraction/schema.py:680` to `764`), read by
+(`docpipe/extraction/schema.py:681` to `765`), read by
 `scripts/trace_report.py` and, for a cost report, by `trace_costs` in
 `scripts/harvest_compare.py:134` to `153`, never by a resume.

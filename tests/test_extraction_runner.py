@@ -1089,6 +1089,24 @@ def test_an_unreadable_reply_is_sent_back_with_the_reason(monkeypatch):
     assert "JSON" in followup["content"], "the retry must say what was wrong"
 
 
+def test_the_retry_says_what_was_wrong_with_the_reply():
+    """A reply cut off at the ceiling is told to be shorter, a broken one where
+    it broke, and one without any object that it had none. One sentence for
+    all three was one attempt three times."""
+    from types import SimpleNamespace as NS
+    cut = NS(finish_reason="length",
+             message=NS(content='{"fields": {"year": {"ans'))
+    said = runner._unreadable_correction(cut, 6144)
+    assert "abgeschnitten" in said and "6144" in said
+    broken = NS(finish_reason="stop", message=NS(
+        content='{"fields": {"year": {"answers": {"R1" {"value": 2030}}}}}'))
+    said = runner._unreadable_correction(broken, 6144)
+    assert '"R1" {' in said, "it shows the place the syntax broke"
+    assert "abgeschnitten" not in said and "gar kein" not in said
+    none = NS(finish_reason="stop", message=NS(content="Das Jahr ist 2030."))
+    assert "gar kein JSON-Objekt" in runner._unreadable_correction(none, 6144)
+
+
 def test_the_unreadable_diagnostic_shows_the_end_and_marks_the_cut():
     """The tail is the half that matters, and an unmarked cut misleads.
 
@@ -1108,7 +1126,7 @@ def test_the_unreadable_diagnostic_shows_the_end_and_marks_the_cut():
     runner._UNPARSABLE_SHOWN = 0
     line = runner._unparsable(_R())
     assert f"content {len(_M.content)}ch" in line
-    assert "weitere" in line, "the cut has to be marked"
+    assert "more…" in line, "the cut has to be marked"
     assert _M.content[-40:] in line, "the end of the reply has to be visible"
 
 

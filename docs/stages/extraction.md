@@ -124,7 +124,7 @@ request's pair gives no row: its claims are refused as `passage is not of
 this pair` (`rows_from_reply`, `pipeline.py:509`). The gain was measured directly: before the frame
 existed, the year axis alone produced 1,849 refusals against 0 readings,
 since every window after the first excluded the row's own source
-(`runner.py:2942`).
+(`runner.py:2969`).
 
 ### The row request
 
@@ -145,7 +145,7 @@ row (`pipeline.py:544`). A `Row` is created only here, never later. The request 
 a code sandbox, bounded
 to `CODE_ROUNDS` rounds, and a reply cut off at the token ceiling is
 rescued rather than retried, since retrying recovered nothing over one
-pilot (`runner.py:2143`).
+pilot (`runner.py:2177`).
 
 ### The field sweep: three window stages and a budget
 
@@ -162,13 +162,13 @@ overlapping windows (`FIELD_WINDOW` 2, `FIELD_OVERLAP` 1) for up to
 `FIELD_ROUNDS` (4) rounds. **Rest** is the floor: once retrieval has
 nothing new, `rest_of_document` reads the document's own remaining
 sections in order, rotated to start near the open rows, until the
-coordinate closes or the document runs out (`runner.py:2875`). A
+coordinate closes or the document runs out (`runner.py:2902`). A
 coordinate the whole sweep cannot close is `exhausted`, never
 `unstated`: the first is a finding about the run, the second about the
 document. The budget sums to `FIELD_MAX_WINDOWS`
 (24) plus `REST_MAX_WINDOWS` (12) per coordinate, with several
 coordinates batched into one request rather than one request each
-(`runner.py:2597`).
+(`runner.py:2624`).
 
 ### Merging a coordinate
 
@@ -176,14 +176,17 @@ coordinates batched into one request rather than one request each
 holding every answer to the two clauses the value's own quote is held to:
 its cited passage sits verbatim in a shown source, and it contains the
 answer, with a floor of `MIN_QUOTE_CHARS` so that a quote names a place.
-Those are the whole check (`pipeline.py:732-754`;
+Those are the check for a quote (`pipeline.py:773-795`;
 `test_a_coordinate_is_dropped_for_the_agreed_reasons_and_no_other`,
-`tests/test_extraction_reasons.py:111`). Which table the passage belongs
-to, how far from the row it stands and which column of a table it heads
-are the model's reading, not a rule. Failures are recorded separately,
-`unquoted` against `unbacked`, so a retry can name what to fix. A
+`tests/test_extraction_reasons.py:114`). A closed-list coordinate answers a
+third clause too: naming one of the list's own entries, by label, spelling
+or URI, or it is never marked read (`option_named`, `not_an_option`,
+`pipeline.py:740-763`, the owner's rule of 2026-09-11). Which table the
+passage belongs to, how far from the row it stands and which column of a
+table it heads are the model's reading, not a rule. Failures are recorded
+separately, `unquoted` against `unbacked`, so a retry can name what to fix. A
 coordinate already read once is never overwritten by a later window
-(`pipeline.py:688`). A wording naming no token of the option
+(`pipeline.py:705`). A wording naming no token of the option
 it claims is counted `raw_foreign` rather than trusted silently.
 
 ### Folding and verification
@@ -249,7 +252,7 @@ Every tuple, refusal, parameter state and summary line is checked
 against the published schema before it is written:
 `_harvest_validators` builds one `jsonschema` validator per branch from
 `schema.build(spec)["harvest"]`, run by `check_against_schema` inside
-`finish_document` on every call carrying a spec (`runner.py:3618`). A
+`finish_document` on every call carrying a spec (`runner.py:3645`). A
 row the schema refuses is counted
 and logged as an `invalid` trace event, never withheld, since blocking on
 a schema mismatch would turn a documentation defect into a data loss.
@@ -336,7 +339,7 @@ different kind of finding.
 | `unstated` | Answered: the shown passages do not state it |
 | `unanswered` | The field reply never mentioned it |
 | `exhausted` | Still open when the window budget ran out, document unread to the end |
-| `unbacked` | Answered, but no shown passage carried it, or it was another row's |
+| `unbacked` | Answered, but no shown passage carried it, it was another row's, or (a closed list) it named none of the list's entries |
 | `out_of_slice` | Never asked: a gate coordinate put the row outside what this run serializes |
 
 The resume stamp, `<document>.stamp.json`, is a flat dict: `spec` (the
@@ -407,8 +410,8 @@ on.
 At the document level, `finish_document` withholds the stamp entirely,
 forcing a full redo on the next run, when more than half a document's
 planned sources came back from a server it could not reach
-(`UNREACHABLE_LIMIT`, `0.5`, `runner.py:3559`, `:3602`) or when not one
-batch answered at all (`runner.py:3607`); the JSONL file is still
+(`UNREACHABLE_LIMIT`, `0.5`, `runner.py:3586`, `:3629`) or when not one
+batch answered at all (`runner.py:3634`); the JSONL file is still
 written either way, so only a resume, not a byte count, tells the two
 cases apart from a genuinely finished document.
 
@@ -434,7 +437,7 @@ never sends leaves no trace, so the row is offered again later.
   instead (`fields.py:218`).
 - Letting the passage a coordinate was last read in drop out of the
   window after one use, rather than remaining in the window, cost one
-  batch 520 dropped readings against 31 kept (`runner.py:2753`).
+  batch 520 dropped readings against 31 kept (`runner.py:2780`).
 - On the 20-plan draft where the slice gate was measured, of 6,763
   harvested tuples the serializer dropped 1,554 for a quantity the graph
   does not hold and, while the scenario axis still gated a row, 2,510

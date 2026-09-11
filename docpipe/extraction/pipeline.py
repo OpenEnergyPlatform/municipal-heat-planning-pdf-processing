@@ -590,6 +590,23 @@ def _tokens(text: str) -> list:
     return [t for t in _WORD_EDGE.split(fold_label(text)) if t]
 
 
+def option_named(slot, given):
+    """The entry of a closed list an answer names, or None.
+
+    By its label, by any spelling the spec lists for it, or by its URI: the
+    same lookup `verify_tuple` resolves a coordinate with, so an answer taken
+    here is one that resolves there.
+    """
+    if not isinstance(given, str) or not given.strip():
+        return None
+    folded = fold_label(given)
+    for option in slot.options:
+        if given == option.uri or folded in {
+                fold_label(s) for s in (option.label, *option.synonyms)}:
+            return option
+    return None
+
+
 def wording_names_option(slot, given, wording) -> bool:
     """Does `value_raw` name the option the answer chose?
 
@@ -719,6 +736,30 @@ def merge_field(rows: list, sources: list, slot, reply: Optional[dict],
             # can still be required to answer.
             row.claim[f"{slot.name}_state"] = SAID_UNSTATED
             unstated += 1
+            continue
+        if slot.kind == CHOICE and slot.options \
+                and option_named(slot, given) is None:
+            # An answer to a closed list that is not on it. It used to be read
+            # whenever its wording stood in the quote, and the class lookup
+            # behind it came back empty: 171 tuples of corpus_m5 said "read"
+            # with no sector, carrier or scenario at all, a sector answered as
+            # "Teilgebiet" or "Gemeindegebiet". The owner's rule (2026-09-11):
+            # asked again, told why, and never read. The wording stays for the
+            # vocabulary review, as the no-class answer keeps it.
+            noticed = answer.get("value_raw")
+            if not (isinstance(noticed, str) and noticed.strip()):
+                noticed = given if isinstance(given, str) else None
+            if noticed and noticed.strip():
+                row.claim[f"{slot.name}_seen"] = noticed.strip()
+            row.claim[f"{slot.name}_state"] = UNBACKED
+            failed.append({"row": row.label, "why": "not_an_option",
+                           "given": given, "reason": (
+                f"Dein \"value\" {given!r} ist keiner der Einträge aus "
+                f"\"options\". Wähle genau einen Namen daraus, Zeichen für "
+                f"Zeichen abgeschrieben, auch einen mit \"out:\". Passt keiner, "
+                f"obwohl die Passage die Angabe nennt, dann lass \"value\" weg "
+                f"und gib die Bezeichnung in \"value_raw\".")})
+            unbacked += 1
             continue
         quote = answer.get("quote")
         # WHICH source, not whether any: it is written next to the
