@@ -210,7 +210,7 @@ Reading the tables back out is not this package's job.
   and the app's document picker both select `is_current = 1` documents by
   default, so a superseded document is never harvested or shown, even
   when named explicitly; the app labels a row `(aktuell)` or `(alt)`
-  (`docpipe/extraction/runner.py:3781` to `3800`, docstring;
+  (`docpipe/extraction/runner.py:3810` to `3829`, docstring;
   `docpipe/inference/catalog.py:61` to `83`).
 
 ## Configuration

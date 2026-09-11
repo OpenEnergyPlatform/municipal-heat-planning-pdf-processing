@@ -958,16 +958,23 @@ def pair_batches(items: list, pairs: list, pair_plans: list, frame_axes: list,
 
 (batches, rest, added, assumed) for one document with a frame.
 
-A pair is read over every passage that prints it. Its own search and the
-document's search keep `PLAN_TOP` passages each, cut from two rankings.
-A table the document's search found that prints 2045, below the cut of
-the 2045 search, was in no batch at all: not under the pair, whose search
-had not kept it, and not in the rest, which is what prints none of the
-pairs. So every passage any search of the document planned goes to every
-pair it prints. `added` counts the ones a pair's own search had not kept;
-a pair whose own search failed (`None`) is read over those alone.
+A pair is read over every passage that prints it, and over no other. Its
+own search and the document's search keep `PLAN_TOP` passages each, cut
+from two rankings. A table the document's search found that prints 2045,
+below the cut of the 2045 search, was in no batch at all: not under the
+pair, whose search had not kept it, and not in the rest, which is what
+prints none of the pairs. So every passage any search of the document
+planned goes to every pair it prints. `added` counts the ones a pair's own
+search had not kept; a pair whose own search failed (`None`) is read over
+those alone.
 
-`rest` is what the document's search found that prints none of the pairs.
+A passage a pair's own search kept that does not print the pair is not
+read under it: every value from it is refused as another pair's, and on
+corpus_m5 that was 26,990 refusals, 95 percent of all. It goes where the
+passages of no pair go.
+
+`rest` is what any search of the document found that prints none of the
+pairs.
 With a `default` (the profile's FRAME_DEFAULT) that exactly one pair of
 the document matches, a passage of the rest that names no pair at all,
 no scenario of any pair and no year, is read under that pair instead: the

@@ -173,8 +173,10 @@ POOL_TOP = int(os.environ.get("EXTRACT_POOL_TOP", "50"))
 # how well it answers the one sentence this document was asked. The floor
 # stays wired as the COUNTER -- how many tables and figures a bare ranking
 # leaves outside is the number that says whether it has to come back, and it
-# can only be taken while the floor is still there to ask.
-PLAN_TOP = int(os.environ.get("EXTRACT_PLAN_TOP", "50"))
+# can only be taken while the floor is still there to ask. 100 since corpus_m5:
+# at 50 the plans held 40 percent of a document's tables and 15 percent of its
+# figures.
+PLAN_TOP = int(os.environ.get("EXTRACT_PLAN_TOP", "100"))
 # How many rounds the frame search may ask for more passages before it says
 # what it has. Bounded, because it decides the whole harvest: every value is
 # asked for one of its pairs, so a frame that never finished would be a
@@ -1890,19 +1892,28 @@ def _image_part(path: str) -> Optional[dict]:
     return None if url is None else {"type": "image_url", "image_url": {"url": url}}
 
 
+# The evidence a row keeps next to each coordinate: what makes it re-checkable,
+# and nothing that tells a repeat from a new value.
+_EVIDENCE = ("_raw", "_raw_foreign", "_quote", "_source", "_window", "_state",
+             "_seen")
+
+
 def _prior_payload(prior: list) -> list:
     """What the model is told it already has, small enough to send every time.
 
     Coordinates and the value, not the whole verified row: the point is that
-    the model recognises a repeat, and provenance, flags and tier say nothing
-    about that. The newest entries are the ones a neighbouring passage is
-    likely to duplicate, so the tail is what survives the cap.
+    the model recognises a repeat, and provenance, flags, tier and the
+    evidence beside each coordinate say nothing about that. The evidence went
+    along until corpus_m5 measured it: 74 percent of a 24-row block, 13k
+    tokens at the median and past the window at the top, where rows requests
+    came back as 400. The newest entries are the ones a neighbouring passage
+    is likely to duplicate, so the tail is what survives the cap.
     """
     out: list = []
     for row in prior[-PRIOR_MAX:]:
         item = {k: v for k, v in row.items()
                 if k not in ("provenance", "flags", "tier", "compute", "quote")
-                and not k.endswith("_raw") and v is not None}
+                and not k.endswith(_EVIDENCE) and v is not None}
         quote = row.get("quote")
         if isinstance(quote, str):
             item["quote"] = quote[:80]
@@ -2924,28 +2935,44 @@ def make_fieldwise_harvester(image_root: Optional[Path] = None,
     def harvest(batch, prior: Optional[list] = None) -> dict:
         reply = find_rows(batch, prior)
         rows, orphans = rows_from_reply(batch, reply, frame_axes)
-        if rows and batch.frame and frame_axes:
-            # Before anything is asked. The sweep only offers a coordinate
-            # that is still open, so projecting here is what makes the year
-            # sweeper fall away rather than run and find nothing: measured on
-            # M3, the year axis produced 1,849 refusals against 0 readings,
-            # because every later window excluded the row's own source and
-            # only that one could carry the year.
-            written = apply_frame(rows, batch.frame, batch.frame_index,
-                                  frame_axes, batch.sources)
-            if written:
-                log.debug("   frame %s: %d coordinate(s) on %d row(s)",
-                          batch.document_id, written, len(rows))
-        elif rows and batch.frame_default and frame_axes:
-            # A passage that names no pair at all, read like the rest and
-            # written under the document's default pair, cited on the
-            # passage the frame read it in.
-            written = apply_frame(rows, batch.frame_default,
-                                  batch.frame_default_index, frame_axes,
-                                  batch.sources)
-            if written:
-                log.debug("   default pair %s: %d coordinate(s) on %d row(s)",
-                          batch.document_id, written, len(rows))
+
+        def project(group: list, axes: list) -> None:
+            """The pair onto these rows, as far as their parameter has its axes.
+
+            Before anything is asked. The sweep only offers a coordinate that
+            is still open, so projecting here is what makes the year sweeper
+            fall away rather than run and find nothing: measured on M3, the
+            year axis produced 1,849 refusals against 0 readings, because
+            every later window excluded the row's own source and only that one
+            could carry the year.
+
+            Only the frame coordinates the row's parameter has. The pair spans
+            the document, but the planning organisation has no scenario and no
+            year, and 11 of its rows on corpus_m5 carried both, which the
+            schema refuses.
+            """
+            own = {axis.name: axis for axis in axes}
+            slots = [own[slot.name] for slot in frame_axes or ()
+                     if slot.name in own]
+            if not group or not slots:
+                return
+            if batch.frame:
+                written = apply_frame(group, batch.frame, batch.frame_index,
+                                      slots, batch.sources)
+                if written:
+                    log.debug("   frame %s: %d coordinate(s) on %d row(s)",
+                              batch.document_id, written, len(group))
+            elif batch.frame_default:
+                # A passage that names no pair at all, read like the rest and
+                # written under the document's default pair, cited on the
+                # passage the frame read it in.
+                written = apply_frame(group, batch.frame_default,
+                                      batch.frame_default_index, slots,
+                                      batch.sources)
+                if written:
+                    log.debug("   default pair %s: %d coordinate(s) on %d "
+                              "row(s)", batch.document_id, written, len(group))
+
         if not rows:
             # Nothing to sweep: no value in these passages, a value request
             # that died, or every claim refused above. What goes back is what
@@ -3009,6 +3036,7 @@ def make_fieldwise_harvester(image_root: Optional[Path] = None,
                 axes = fields.axis_slots(spec.by_uri[uri])
                 for row in group:
                     slots_of[row.label] = [slot] + axes
+                project(group, axes)
                 # What the spec decides is written before anything is asked,
                 # and before the gate: a row that leaves at the gate still
                 # carries the coordinates that never needed a request, so
@@ -3053,6 +3081,7 @@ def make_fieldwise_harvester(image_root: Optional[Path] = None,
             axes = fields.axis_slots(batch.parameter)
             for row in rows:
                 slots_of[row.label] = axes
+            project(rows, axes)
             for axis in axes:
                 fields.apply_derived(rows, axis)
             axes = [axis for axis in axes if not axis.derive]
@@ -3806,16 +3835,23 @@ def pair_batches(items: list, pairs: list, pair_plans: list, frame_axes: list,
                  max_chars: int = BATCH_CHARS) -> tuple:
     """(batches, rest, added, assumed) for one document with a frame.
 
-    A pair is read over every passage that prints it. Its own search and the
-    document's search keep `PLAN_TOP` passages each, cut from two rankings.
-    A table the document's search found that prints 2045, below the cut of
-    the 2045 search, was in no batch at all: not under the pair, whose search
-    had not kept it, and not in the rest, which is what prints none of the
-    pairs. So every passage any search of the document planned goes to every
-    pair it prints. `added` counts the ones a pair's own search had not kept;
-    a pair whose own search failed (`None`) is read over those alone.
+    A pair is read over every passage that prints it, and over no other. Its
+    own search and the document's search keep `PLAN_TOP` passages each, cut
+    from two rankings. A table the document's search found that prints 2045,
+    below the cut of the 2045 search, was in no batch at all: not under the
+    pair, whose search had not kept it, and not in the rest, which is what
+    prints none of the pairs. So every passage any search of the document
+    planned goes to every pair it prints. `added` counts the ones a pair's own
+    search had not kept; a pair whose own search failed (`None`) is read over
+    those alone.
 
-    `rest` is what the document's search found that prints none of the pairs.
+    A passage a pair's own search kept that does not print the pair is not
+    read under it: every value from it is refused as another pair's, and on
+    corpus_m5 that was 26,990 refusals, 95 percent of all. It goes where the
+    passages of no pair go.
+
+    `rest` is what any search of the document found that prints none of the
+    pairs.
     With a `default` (the profile's FRAME_DEFAULT) that exactly one pair of
     the document matches, a passage of the rest that names no pair at all,
     no scenario of any pair and no year, is read under that pair instead: the
@@ -3833,8 +3869,10 @@ def pair_batches(items: list, pairs: list, pair_plans: list, frame_axes: list,
     batches: list = []
     added = 0
     for pair_index, pair in enumerate(pairs):
-        planned = list((pair_plans[pair_index]
-                        if pair_index < len(pair_plans) else None) or ())
+        planned = [item for item in (pair_plans[pair_index]
+                                     if pair_index < len(pair_plans)
+                                     else None) or ()
+                   if names_pair(item.source, pair, frame_axes)]
         have = {key(item) for item in planned}
         extra = [item for k, item in known.items()
                  if k not in have and names_pair(item.source, pair, frame_axes)]
@@ -3846,7 +3884,7 @@ def pair_batches(items: list, pairs: list, pair_plans: list, frame_axes: list,
             batch.anchors = tuple(anchors[pair_index]
                                   if pair_index < len(anchors) else ())
             batches.append(batch)
-    rest = [item for item in items
+    rest = [item for item in known.values()
             if not any(names_pair(item.source, pair, frame_axes)
                        for pair in pairs)]
     matching = [index for index, pair in enumerate(pairs)

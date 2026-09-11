@@ -550,6 +550,25 @@ def test_the_request_labels_every_source_and_carries_what_we_have():
     assert "unit_raw" not in prior
 
 
+def test_the_prior_carries_the_coordinates_and_none_of_their_evidence():
+    """Every axis' quote, source, window and state rode along in the prior,
+    74 percent of the block on corpus_m5 and past the window at the top: rows
+    requests came back as 400. What a repeat is recognised by is the value,
+    its unit and its coordinates."""
+    from docpipe.extraction.pipeline import Batch
+    batch = Batch(7, SPEC.parameters[0], [_item(_source("erste", owner_id=1))])
+    long = "Tabelle 3: Endenergie nach Sektor und Energieträger " * 8
+    row = {"value": 42005, "unit": "MWh/a", "quote": long,
+           "sector": "OEO_00000214", "sector_raw": "Private Haushalte",
+           "sector_raw_foreign": True, "sector_quote": long,
+           "sector_source": ["table", 5], "sector_window": ["own", 1],
+           "sector_state": "read", "carrier_state": "unstated",
+           "carrier_seen": "Gas H"}
+    [prior] = runner._batch_payload(batch, [row])["prior"]
+    assert prior == {"value": 42005, "unit": "MWh/a", "quote": long[:80],
+                     "sector": "OEO_00000214"}
+
+
 def test_a_reply_without_a_status_is_read_as_partial():
     """The conservative reading of silence: there may be more here. A missing
     status must not be taken as 'exhausted', or a truncated reply would close

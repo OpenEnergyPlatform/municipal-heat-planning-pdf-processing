@@ -227,7 +227,7 @@ passage
 : The stretch of source text a coordinate's or a value's quote is checked
   against, cut at sentence boundaries when a quote has to be rebuilt
   (`docpipe/extraction/verify.py`'s `_sentence_around`). At least
-  `MIN_QUOTE_CHARS` characters, 8 by `docpipe/extraction/verify.py:279`, so
+  `MIN_QUOTE_CHARS` characters, 8 by `docpipe/extraction/verify.py:282`, so
   it identifies a specific place rather than a recurring token. See
   [extraction](stages/extraction.md).
 
