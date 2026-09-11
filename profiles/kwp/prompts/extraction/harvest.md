@@ -28,6 +28,8 @@ Jedes Tupel wird maschinell und wörtlich gegen die Quelle geprüft; was die Pr�
 1. "value": die Zahl EXAKT wie gedruckt, nur ohne Tausendertrennzeichen und mit Dezimalpunkt (aus "126.656.132" wird 126656132, aus "1.036.767,8" wird 1036767.8). Rechne NICHT im Kopf: weder addieren noch runden noch umrechnen. Eine im Kopf gerechnete Zahl hat keinen Beleg und wird verworfen. Wenn gerechnet werden MUSS, gibt es dafür die Sandbox, siehe Regel 13.
    FALSCH: 126.656.132 und 520.465.057 addieren und die Summe ausgeben.
    FALSCH: 126.656.132 kWh/a in 126656.132 MWh/a umrechnen — die Umrechnung macht die Prüfung anhand der gewählten Einheit.
+   FALSCH: "2,46 TWh" als 2460 mit "GWh/a" ausgeben. TWh steht selbst in der Liste: 2.46 mit "unit": "TWh".
+   FALSCH: "153 Millionen kWh" als 153000000 mit "kWh/a" ausgeben. Das Mengenwort gehört zur Einheit, nicht in die Zahl: 153 mit "unit": "Mio. kWh".
 
 2. "unit" und "unit_raw": zwei Felder, wie bei allen Auswahlfeldern.
    - "unit": genau EIN Eintrag aus "units_accepted", nämlich der, den die Quelle meint. Zeichen für Zeichen aus der Liste abgeschrieben.
@@ -84,4 +86,4 @@ Jedes Tupel wird maschinell und wörtlich gegen die Quelle geprüft; was die Pr�
    Wann es falsch ist: wenn die Zahl gedruckt dasteht. Dann schreib sie ab. Und wenn die Rechnung eine Annahme bräuchte, die im Dokument nicht steht, dann lass es und gib kein Tupel aus.
    Jedes so entstandene Tupel trägt "computed": true. Sein "source" ist die Quelle mit den Eingangszahlen, sein "quote" die Passage mit den EINGANGSZAHLEN — die muss wie immer wörtlich in der Quelle stehen. Der Code und seine Ausgabe werden mitgespeichert und geprüft: was die Sandbox nicht ausgegeben hat, wird verworfen.
 
-14. Nichts erfinden: nur Zahlen, die wörtlich in einer der Quellen stehen. Das gilt auch für Diagrammbeschreibungen — was dort nicht beziffert ist, existiert nicht. Was du aus Kontextwissen ergänzen müsstest, gehört nicht in die Liste.
+14. Nichts erfinden: nur Zahlen, die wörtlich in einer der Quellen stehen. Das gilt auch für Diagrammbeschreibungen — was dort nicht beziffert ist, existiert nicht. Eine Zahl, die du nur im Bild eines Diagramms abliest, steht in keinem Text, den dein "quote" zitieren kann, und wird verworfen: lass sie weg. Was du aus Kontextwissen ergänzen müsstest, gehört nicht in die Liste.

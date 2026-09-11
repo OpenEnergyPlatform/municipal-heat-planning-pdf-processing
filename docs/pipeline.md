@@ -306,7 +306,7 @@ per document, so this section documents its stamp on its own.
 written only once `finish_document` decides a harvest actually happened;
 a document is left unstamped, so the next run redoes it, when more than
 half its planned sources came back unreachable or nothing answered at all
-(`UNREACHABLE_LIMIT = 0.5`, `docpipe/extraction/runner.py:3530`). Inside
+(`UNREACHABLE_LIMIT = 0.5`, `docpipe/extraction/runner.py:3559`). Inside
 it:
 
 | Key | What it records | Compared on a redo |
@@ -324,7 +324,7 @@ it:
 
 The owner decided on 2026-09-10 that a stamp rests on the KG/ontology
 parameters alone (`parameter/`, `value/`, `axis/`, `slot/`,
-`docpipe/extraction/runner.py:3387`). The model, the anchors and every
+`docpipe/extraction/runner.py:3416`). The model, the anchors and every
 prompt id are still written into the stamp, so a reader can place a
 harvest, but a reworded prompt or another model no longer makes a
 document stale. The fine keys come from
@@ -332,14 +332,14 @@ document stale. The fine keys come from
 their presence is what licenses ignoring the coarse `spec` key. An earlier
 design hashed the whole spec file as one number, so one new label anywhere
 in it made a whole corpus stale together, about 93 GPU hours to reread
-1,082 documents over one added word (`docpipe/extraction/runner.py:3354`
-to `3357`); the ontology behind the spec is revised repeatedly, so the
+1,082 documents over one added word (`docpipe/extraction/runner.py:3383`
+to `3386`); the ontology behind the spec is revised repeatedly, so the
 same cost would recur each time it is. With one key per parameter, per value list
 and per axis, `stale()` names exactly which question changed and leaves
 the rest of the corpus alone; it checks both directions, so a question
 dropped from the spec counts as changed too, the one case the old
 whole-file hash used to catch that a purely additive scheme would
-otherwise miss (`docpipe/extraction/runner.py:3439` to `3439`). A file
+otherwise miss (`docpipe/extraction/runner.py:3468` to `3468`). A file
 with no stamp at all is read as fully stale, on principle: the opposite
 reading, a missing stamp taken as nothing left to do, had already let a
 run silently skip 165 documents with exit code 0
@@ -381,7 +381,7 @@ refinement, visuals and extraction checks the served model's context size
 before its first document and refuses to start rather than fail midway
 (`docpipe/llm_preflight.py`, called from `docpipe/refinement/
 pipeline.py:165` and `247`, `docpipe/visuals/pipeline.py:501`, and
-`docpipe/extraction/runner.py:4012` and `4081`).
+`docpipe/extraction/runner.py:4050` and `4119`).
 
 Select the profile once, in the environment, before any stage that
 overrides prompts is imported:

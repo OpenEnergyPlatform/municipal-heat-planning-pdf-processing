@@ -181,7 +181,7 @@ python -m docpipe.extraction data/kwp/kwp.db data/kwp/faiss_index.bin data/kwp/e
 `--serialize` switches the run to serialize-only: no harvest, no model.
 It hands the JSONL already in the output directory to the profile's
 `kg.make_serializer` and writes Turtle (`docpipe/extraction/runner.py`
-lines 4362 to 4012); a profile with no `kg.py` is refused. Unlike the
+lines 4541 to 4012); a profile with no `kg.py` is refused. Unlike the
 earlier stages it does not resume: it walks the whole harvest directory
 again on every call (`docpipe/extraction/serialize.py`).
 
@@ -213,7 +213,7 @@ already-written harvest directory, instead of or before harvesting.
 
 - `--print-context-budget` prints the worst-case tokens one harvest
   request needs and exits before contacting a server
-  (`docpipe/extraction/runner.py` lines 4077 to 4080); the same check
+  (`docpipe/extraction/runner.py` lines 4115 to 4118); the same check
   runs automatically before the first document too.
 - `--recheck` needs no model and no index. It reapplies the
   answer-in-quote rule to a harvest on disk, drops any coordinate whose quote no longer
@@ -230,7 +230,7 @@ already-written harvest directory, instead of or before harvesting.
 - `--review`, bounded with `--review-limit N`, needs the model. It reads
   every value nobody can stand behind a second time, over its own
   passage and section, and records only a disagreement as a trust
-  reason (`docpipe/extraction/runner.py` lines 4032 to 4041); see
+  reason (`docpipe/extraction/runner.py` lines 4070 to 4079); see
   [the trust contract](contract/trust.md).
 - `--serialize TTL` needs no harvest and no model, as in stage 8 above,
   and produces or refreshes [the knowledge graph](stages/graph.md).

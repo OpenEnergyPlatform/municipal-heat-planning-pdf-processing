@@ -3150,7 +3150,7 @@
       ]
      },
      "unit": {
-      "description": "The unit, chosen from units_accepted (GWh, GWh/a, MWh, MWh/a, Mrd. kWh, TWh, TWh/a, kWh, kWh/a). A spelling the list does not hold is accepted with the flag unit_spelling.",
+      "description": "The unit, chosen from units_accepted (GWh, GWh/a, MWh, MWh/a, Millionen kWh, Mio. kWh, Mio. kWh/a, Mrd. kWh, TWh, TWh/a, kWh, kWh/a). A spelling the list does not hold is accepted with the flag unit_spelling.",
       "type": "string"
      },
      "unit_raw": {

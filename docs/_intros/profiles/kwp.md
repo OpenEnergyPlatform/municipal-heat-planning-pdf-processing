@@ -86,7 +86,7 @@ on a `value` node in the graph. The fourth, `planning_organisation`, is a
 
 | parameter | value type | unit family | unit target | accepted spellings |
 |---|---|---|---|---|
-| `energy_consumption` | `float` | energy (kWh to TWh) | `OEO_00050008` | 9 |
+| `energy_consumption` | `float` | energy (kWh to TWh) | `OEO_00050008` | 12 |
 | `emission` | `float` | mass, CO2 equivalent | `OEO_00010137` | 42 |
 | `heat_load` | `float` | power (kW to GW) | `OEO_00390001` | 5 |
 | `planning_organisation` | `text` | none | none | none |
@@ -303,7 +303,7 @@ profile, in English here, checked against the core's own list at import
 (`check_prose`, `profiles/kwp/kg.py:478` to `486`). Comments only, never
 triples: MHPKG's shapes are `sh:closed`, and an unanticipated triple
 would invalidate the node it documents (`profiles/kwp/kg.py:496` to
-`645`).
+`695`).
 
 What the serializer refuses, briefly (in full on
 [stages/graph.md](../stages/graph.md)): a row failing the scenario,

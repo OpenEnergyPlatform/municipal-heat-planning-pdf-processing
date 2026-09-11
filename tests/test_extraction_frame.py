@@ -709,7 +709,7 @@ def test_a_passage_that_prints_a_pair_is_read_under_it_whichever_search_found_it
     batches, rest, added, _assumed = runner.pair_batches(
         document_search, pairs, [[only_2030, both], [prose]], slots,
         [("a",), ("b",)])
-    assert read_under(batches) == {0: {1, 3}, 1: {4, 2, 3}}
+    assert read_under(batches) == {0: {1, 3}, 1: {2, 3}}
     assert [item.source.owner_id for item in rest] == [4]
     assert added == 2
     assert {b.anchors for b in batches if b.frame_index == 1} == {("b",)}
@@ -774,6 +774,54 @@ def test_a_passage_of_one_pair_still_gets_that_pair_written():
     apply_frame(rows, _pair_at(2045), 1, _slots(), [only])
     assert rows[0].claim["year"] == 2045
     assert rows[0].claim["year_state"] == fields.READ
+
+
+def test_a_passage_that_prints_no_pair_is_read_in_the_rest_whichever_search_found_it():
+    """A pair's batch holds exactly the passages that print the pair, and a
+    passage any search found that prints none of the pairs is read in the
+    rest. The 2045 search keeps what ranks high for its sentence, and its
+    passages that did not print 2045 gave nothing under that pair but
+    refusals: 26,990 on corpus_m5, 95 percent of all."""
+    slots = _slots()
+    pairs = [_pair_at(2030), _pair_at(2045)]
+    only_2045 = WorkItem(7, None, _source(
+        2, "Tabelle 5: Endenergie im Zielszenario 2045\n| Erdgas | 0 |"))
+    stray = WorkItem(7, None, _source(5, "Die Stadt hat 20.000 Einwohner.",
+                                      kind="section"))
+    batches, rest, added, _assumed = runner.pair_batches(
+        [only_2045], pairs, [[], [only_2045, stray]], slots, [(), ()])
+    assert {(b.frame_index, item.source.owner_id)
+            for b in batches for item in b.items} == {(1, 2)}
+    assert [item.source.owner_id for item in rest] == [5]
+    assert added == 0
+
+
+def test_a_row_gets_only_the_frame_coordinates_its_parameter_has(monkeypatch):
+    """The pair spans the document, and every row of a pair's request was
+    stamped with it. The planning organisation has no scenario axis and no
+    year axis, and 11 of its rows on corpus_m5 carried both, which the schema
+    refuses. A value of a parameter that has them still gets them."""
+    text = ("Tabelle 30: Zielszenario 2045\n| Erdgas | 42.005 MWh/a |\n"
+            "Bearbeitung durch endura kommunal GmbH")
+    reply = {"tuples": [
+        {"source": "Q1", "value": "endura kommunal", "unit": "",
+         "unit_raw": "", "quote": "Bearbeitung durch endura kommunal GmbH"},
+        {"source": "Q1", "value": 42005, "unit": "MWh/a", "unit_raw": "MWh/a",
+         "quote": "| Erdgas | 42.005 MWh/a |"}],
+        "status": "complete", "need_more": []}
+    monkeypatch.setattr(runner, "make_harvester",
+                        lambda *a, **kw: (lambda batch, prior=None: reply))
+    monkeypatch.setattr(runner, "make_field_asker",
+                        lambda image_root=None: (lambda *a, **kw: None))
+    spec = _spec()
+    harvest = runner.make_fieldwise_harvester(spec=spec, slice_gate={},
+                                              frame_axes=_slots(spec))
+    batch = Batch(7, None, [WorkItem(7, None, _source(5, text))])
+    batch.frame = _pair_at(2045)
+    by_value = {t["value"]: t for t in harvest(batch)["tuples"]}
+    organisation, energy = by_value["endura kommunal"], by_value[42005]
+    assert not [k for k in organisation if k.startswith(("scenario", "year"))]
+    assert energy["year"] == 2045 and energy["year_state"] == fields.READ
 
 
 # ---------------------------------------------------------------------------

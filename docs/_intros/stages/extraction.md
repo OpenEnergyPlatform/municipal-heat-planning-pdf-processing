@@ -76,25 +76,25 @@ document, not asked again with everything already found excluded. The
 single call fuses every probe into one ranked
 list rather than concatenating a ranking per probe: over 65 documents and
 15,082 values, concatenation put a value's real source at median rank 77,
-fusion at rank 26 (`runner.py:350`).
+fusion at rank 26 (`runner.py:352`).
 
 ### Anchors
 
 The plan searches not with the spec's query templates but a sentence
 written as a document would state the answer, a HyDE anchor; two
-mechanisms produce them. `document_anchor` (`runner.py:837`) writes the
+mechanisms produce them. `document_anchor` (`runner.py:839`) writes the
 plan's own probe per document and parameter, from the parameter's
 label, description, the document's name and an early caption; recorded,
 never compared, in the stamp as `question_text/<key>`.
 Dropping query templates for it was measured directly: with templates
 included alongside the anchor, a value's real source sat at median rank
 84; without them, rank 26 (`pipeline.py:196`). `plan_document` falls back to
-`queries.expand`'s templates only when no anchor exists. `make_anchors` (`runner.py:1320`) is the second,
+`queries.expand`'s templates only when no anchor exists. `make_anchors` (`runner.py:1322`) is the second,
 corpus-wide mechanism: one set per question the field sweep asks, each
 axis question and the parameter choice, written once per run and cached
 per question. The value itself has no set: the plan searches with the
 one short sentence `document_anchor` writes (`anchor_targets`,
-`runner.py:812`). This set backs the field sweep once a
+`runner.py:814`). This set backs the field sweep once a
 coordinate is not in the value's own passage, and is fingerprinted as
 one `anchors` stamp key.
 
@@ -122,7 +122,7 @@ request's pair gives no row: its claims are refused as `passage is not of
 this pair` (`rows_from_reply`, `pipeline.py:509`). The gain was measured directly: before the frame
 existed, the year axis alone produced 1,849 refusals against 0 readings,
 since every window after the first excluded the row's own source
-(`runner.py:2931`).
+(`runner.py:2942`).
 
 ### The row request
 
@@ -143,7 +143,7 @@ row (`pipeline.py:544`). A `Row` is created only here, never later. The request 
 a code sandbox, bounded
 to `CODE_ROUNDS` rounds, and a reply cut off at the token ceiling is
 rescued rather than retried, since retrying recovered nothing over one
-pilot (`runner.py:2132`).
+pilot (`runner.py:2143`).
 
 ### The field sweep: three window stages and a budget
 
@@ -160,13 +160,13 @@ overlapping windows (`FIELD_WINDOW` 2, `FIELD_OVERLAP` 1) for up to
 `FIELD_ROUNDS` (4) rounds. **Rest** is the floor: once retrieval has
 nothing new, `rest_of_document` reads the document's own remaining
 sections in order, rotated to start near the open rows, until the
-coordinate closes or the document runs out (`runner.py:2864`). A
+coordinate closes or the document runs out (`runner.py:2875`). A
 coordinate the whole sweep cannot close is `exhausted`, never
 `unstated`: the first is a finding about the run, the second about the
 document. The budget sums to `FIELD_MAX_WINDOWS`
 (24) plus `REST_MAX_WINDOWS` (12) per coordinate, with several
 coordinates batched into one request rather than one request each
-(`runner.py:2586`).
+(`runner.py:2597`).
 
 ### Merging a coordinate
 
@@ -195,12 +195,12 @@ not verbatim in its source but the value occurs there
 exactly once, the quote is rebuilt around that occurrence rather than the
 claim refused: on the 16-document pilot, 303 of 377 such refusals were
 repaired this way, against 8 where the value truly was absent
-(`verify.py:291`). A verified tuple's tier comes from its source
+(`verify.py:294`). A verified tuple's tier comes from its source
 alone, not whether the quote could be placed on the page:
 `text_located` for prose, `visual_source` for a table transcription or
 figure description, an uncheckable model reading of a picture. A prose
 quote that could not be placed on the PDF page still keeps the
-`text_located` tier; it only gains a `not_located` flag (`verify.py:443`).
+`text_located` tier; it only gains a `not_located` flag (`verify.py:446`).
 Non-fatal findings are carried as flags: `quote_repaired`, `computed`
 (a sandbox result checked against its own printed output),
 `unit_not_chosen`, `not_located`, `unmapped:<axis>:<wording>`, and, for
@@ -247,7 +247,7 @@ Every tuple, refusal, parameter state and summary line is checked
 against the published schema before it is written:
 `_harvest_validators` builds one `jsonschema` validator per branch from
 `schema.build(spec)["harvest"]`, run by `check_against_schema` inside
-`finish_document` on every call carrying a spec (`runner.py:3589`). A
+`finish_document` on every call carrying a spec (`runner.py:3618`). A
 row the schema refuses is counted
 and logged as an `invalid` trace event, never withheld, since blocking on
 a schema mismatch would turn a documentation defect into a data loss.
@@ -365,7 +365,7 @@ run, `anchors.json` and `query_cache.db`; and, only after `--top-up`,
 | `EXTRACT_FIELDWISE` / `EXTRACT_FIELD_WINDOW` / `_OVERLAP` | env var | `1` / `2` / `1` | `FIELDWISE`: one request per coordinate, not one per whole tuple. `WINDOW`/`OVERLAP`: sources per retrieval-stage window, and how many repeat in the next one | `runner.main`, `runner.make_sweeper` |
 | `EXTRACT_FIELD_ROUNDS` / `EXTRACT_FIELD_ATTEMPTS` | env var | `4` / `3` | Retrieval rounds before falling to the rest stage; retries of the own-stage window when unbackable | `runner.make_sweeper` |
 | `EXTRACT_FIELD_MAX_WINDOWS` / `EXTRACT_REST_MAX_WINDOWS` | env var | `24` / `12` | Own plus retrieval windows, and the rest stage's separate allowance, before a coordinate is exhausted | `runner.make_sweeper` |
-| `EXTRACT_PLAN_TOP` / `EXTRACT_PROSE_TOP` | env var | `50` / `200` | `PLAN_TOP`: the fused top-N cut replacing the older structural-floor plan. `PROSE_TOP`: ceiling on prose sections drawn from, always overriding `plan_document`'s own default of `50` | `runner.main` |
+| `EXTRACT_PLAN_TOP` / `EXTRACT_PROSE_TOP` | env var | `100` / `200` | `PLAN_TOP`: the fused top-N cut replacing the older structural-floor plan; raised from 50 once that cut was measured holding only 40% of a document's tables and 15% of its figures. `PROSE_TOP`: ceiling on prose sections drawn from, always overriding `plan_document`'s own default of `50` | `runner.main` |
 | `EXTRACT_FRAME_ROUNDS` / `_SOURCES` / `EXTRACT_FRAME_YEAR_MIN` / `_MAX` | env var | `3` / `12` / `1990` / `2100` | Rounds and passages per round the frame request may spend; bounds of a calendar year for `years_in_sources`, its deterministic cross-check | `runner.find_frame`, `runner.years_in_sources` |
 | `EXTRACT_CODE_ROUNDS` / `EXTRACT_FIELD_RE_ENTRY` | env var | `2` / `3` | Sandbox rounds the row request may spend on a self-checked value; already-shown passages carried into a coordinate's next field window | `runner.make_harvester`, `runner.make_sweeper` |
 | `EXTRACT_LLM_PARALLEL` / `EXTRACT_PLAN_PARALLEL` / `EXTRACT_FIELD_PARALLEL` | env var | `128` / `8` / `192` | Concurrency caps: LLM requests for the whole run, retrieval-planning threads (FAISS/SQL, separate from the LLM), and field-sweep threads beneath row-request batches | `runner.harvest_batches`, `runner.main`, `runner.make_fieldwise_harvester` |
@@ -405,8 +405,8 @@ on.
 At the document level, `finish_document` withholds the stamp entirely,
 forcing a full redo on the next run, when more than half a document's
 planned sources came back from a server it could not reach
-(`UNREACHABLE_LIMIT`, `0.5`, `runner.py:3530`, `:3573`) or when not one
-batch answered at all (`runner.py:3578`); the JSONL file is still
+(`UNREACHABLE_LIMIT`, `0.5`, `runner.py:3559`, `:3602`) or when not one
+batch answered at all (`runner.py:3607`); the JSONL file is still
 written either way, so only a resume, not a byte count, tells the two
 cases apart from a genuinely finished document.
 
@@ -432,7 +432,7 @@ never sends leaves no trace, so the row is offered again later.
   instead (`fields.py:218`).
 - Letting the passage a coordinate was last read in drop out of the
   window after one use, rather than remaining in the window, cost one
-  batch 520 dropped readings against 31 kept (`runner.py:2742`).
+  batch 520 dropped readings against 31 kept (`runner.py:2753`).
 - On the 20-plan draft where the slice gate was measured, of 6,763
   harvested tuples the serializer dropped 1,554 for a quantity the graph
   does not hold and, while the scenario axis still gated a row, 2,510

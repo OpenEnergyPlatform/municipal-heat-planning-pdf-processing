@@ -25,6 +25,8 @@ Jeder Eintrag wird maschinell und wörtlich gegen die Quelle geprüft; was die P
 1. "value": bei einem Textfeld die Bezeichnung, wie das Dokument sie schreibt, ohne Rechtsform: aus "endura kommunal GmbH" wird "endura kommunal". Sonst die Zahl EXAKT wie gedruckt, nur ohne Tausendertrennzeichen und mit Dezimalpunkt (aus "126.656.132" wird 126656132, aus "1.036.767,8" wird 1036767.8). Rechne NICHT im Kopf: weder addieren noch runden noch umrechnen. Eine im Kopf gerechnete Zahl hat keinen Beleg und wird verworfen. Wenn gerechnet werden MUSS, gibt es dafür die Sandbox, siehe Regel 6.
    FALSCH: 126.656.132 und 520.465.057 addieren und die Summe ausgeben.
    FALSCH: 126.656.132 kWh/a in 126656.132 MWh/a umrechnen — die Umrechnung macht die Prüfung anhand der gewählten Einheit.
+   FALSCH: "2,46 TWh" als 2460 mit "GWh/a" ausgeben. TWh steht selbst in der Liste: 2.46 mit "unit": "TWh".
+   FALSCH: "153 Millionen kWh" als 153000000 mit "kWh/a" ausgeben. Das Mengenwort gehört zur Einheit, nicht in die Zahl: 153 mit "unit": "Mio. kWh".
 
 2. "unit" und "unit_raw":
    - "unit": genau EIN Eintrag aus den "units_accepted" IRGENDEINER der Kennzahlen, nämlich der, den die Quelle meint. Zeichen für Zeichen aus der Liste abgeschrieben. Die Einheit ist oft schon der Hinweis darauf, um welche Kennzahl es geht — deshalb steht sie hier und die Kennzahl selbst nicht.
@@ -54,4 +56,4 @@ Jeder Eintrag wird maschinell und wörtlich gegen die Quelle geprüft; was die P
    Wann es falsch ist: wenn die Zahl gedruckt dasteht. Dann schreib sie ab.
    Jeder so entstandene Eintrag trägt "computed": true, sein "quote" ist die Passage mit den EINGANGSZAHLEN.
 
-7. Nichts erfinden: nur Werte, die wörtlich in einer der Quellen stehen. Das gilt auch für Diagrammbeschreibungen — was dort nicht beziffert ist, existiert nicht.
+7. Nichts erfinden: nur Werte, die wörtlich in einer der Quellen stehen. Das gilt auch für Diagrammbeschreibungen — was dort nicht beziffert ist, existiert nicht. Eine Zahl, die du nur im Bild eines Diagramms abliest, steht in keinem Text, den dein "quote" zitieren kann, und wird verworfen: lass sie weg.

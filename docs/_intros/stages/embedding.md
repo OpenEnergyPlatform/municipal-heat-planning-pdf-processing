@@ -22,7 +22,7 @@ the indirection this package offers is unused overhead there. What does
 call `get_embedder()` is code asking the already-built corpus a question
 after the fact: the retrieval sweep of stage 7 embedding a probe, or a
 batch of probes, against the FAISS index
-(`docpipe/extraction/runner.py:269`, `364`, `1426`), and the inference app
+(`docpipe/extraction/runner.py:271`, `366`, `1428`), and the inference app
 embedding one chat turn's query (`scripts/inference_app/app.py:112` to
 `122`). Both can run on hardware not used for the corpus build: a laptop
 with no GPU pointed at `api`, or a small card that cannot hold an 8B model
@@ -195,7 +195,7 @@ error raised anywhere (`docpipe/chunking/config.py:11` to `14`).
   wraps around `get_embedder()`, five replicas of the model fit on one
   card, a sixth raised a CUDA out-of-memory error, and none of the
   sixteen documents in that pilot completed
-  (`docpipe/extraction/runner.py:269` to `276`, the `embedder()`
+  (`docpipe/extraction/runner.py:271` to `278`, the `embedder()`
   docstring; pinned by
   `test_the_embedder_is_built_once_however_many_threads_ask` below).
 - The `api` backend batches eight texts per request by default

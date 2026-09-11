@@ -94,7 +94,7 @@ run makes the document eligible for a full re-harvest under
 `--force-stale`; `model`, `anchors` and every prompt id are written for
 a reader and never compared, so a reworded prompt or another model
 leaves a harvested corpus current (`stale`,
-`docpipe/extraction/runner.py:3419` to `3456`; `already_done`, `:3499`
+`docpipe/extraction/runner.py:3448` to `3485`; `already_done`, `:3499`
 to `3524`). `top_up_file` redoes
 only the changed question
 (`docpipe/extraction/topup.py:284` to `318`). The trace is read by

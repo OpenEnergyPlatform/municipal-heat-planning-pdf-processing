@@ -67,14 +67,17 @@ def canonical_number(raw) -> Optional[str]:
         return None
     # Mixed separator kinds are unambiguous: the rightmost kind is the
     # decimal mark ('1.234,567' is 1234.567). With one kind only, several
-    # separators are all grouping, and a single one followed by exactly
+    # separators are all grouping, and a single dot followed by exactly
     # 3 digits ('1.234') is grouping — how these documents write thousands.
+    # A single comma is the decimal mark whatever follows it: '3,251 GWh' is
+    # 3.251, and read as 3251 it refused 51 correct values on corpus_m5.
     last_dot, last_comma = s.rfind("."), s.rfind(",")
     decimal_pos = max(last_dot, last_comma)
     if decimal_pos != -1:
         mixed = last_dot != -1 and last_comma != -1
         tail = len(s) - decimal_pos - 1
-        if not mixed and (s.count(s[decimal_pos]) > 1 or tail == 3):
+        if not mixed and (s.count(s[decimal_pos]) > 1
+                          or (tail == 3 and s[decimal_pos] == ".")):
             decimal_pos = -1
     if decimal_pos != -1:
         integer = re.sub(r"[.,]", "", s[:decimal_pos])

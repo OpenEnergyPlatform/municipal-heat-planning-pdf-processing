@@ -53,7 +53,9 @@ def _claim(**overrides):
     ("1.036.767.833", "1036767833"),    # German grouping
     ("1,036,767.8", "1036767.8"),       # international
     ("1.234,5", "1234.5"),              # German decimal
-    ("1.234", "1234"),                  # lone separator + 3 digits = grouping
+    ("1.234", "1234"),                  # lone dot + 3 digits = grouping
+    ("3,251", "3.251"),                 # lone comma + 3 digits = decimal
+    ("40,125", "40.125"),
     ("1.234,567", "1234.567"),          # mixed kinds: rightmost is decimal
     ("1,234.567", "1234.567"),
     ("1.036.767,833", "1036767.833"),   # 3 decimal digits, still decimal
