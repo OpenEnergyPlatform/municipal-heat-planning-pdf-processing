@@ -68,8 +68,9 @@ from . import fields
 from . import trace
 from .pipeline import (Source, WorkItem, apply_frame, batch_uri,
                        build_sweeps, cell_index as pipeline_cell_index,
-                       fold_batch, follow_up, group_items, harvest_document,
-                       merge_field, mark_unanswered, open_rows, plan_document,
+                       drop_repeats, fold_batch, follow_up, group_items,
+                       harvest_document, merge_field, mark_unanswered,
+                       open_rows, plan_document,
                        names_no_pair_at_all, names_pair, refused_upstream, route_claims,
                        rows_from_reply, sweep_key, window_sources,
                        write_report)
@@ -210,6 +211,11 @@ POOL_TOP = int(os.environ.get("EXTRACT_POOL_TOP", "50"))
 # can only be taken while the floor is still there to ask. 100 since corpus_m5:
 # at 50 the plans held 40 percent of a document's tables and 15 percent of its
 # figures.
+# The counter has answered: at 100 the plans held 13 to 40 percent of a
+# document's figures and tables, and 71 percent of every tuple of the run came
+# out of one of them. So a floor is back, as a share of this cap rather than
+# beside it (`VISUAL_SHARE`): the cut stays exactly this wide, and what is cut
+# is decided with the ranking rather than only by it.
 PLAN_TOP = int(os.environ.get("EXTRACT_PLAN_TOP", "100"))
 # How many rounds the frame search may ask for more passages before it says
 # what it has. Bounded, because it decides the whole harvest: every value is
@@ -3141,6 +3147,23 @@ def make_fieldwise_harvester(image_root: Optional[Path] = None,
                      if slot.name in own]
             if not group or not slots:
                 return
+            # A row whose own quote named another pair of the document keeps
+            # that pair. It is written first and separately, so the request's
+            # own pair below never reaches it.
+            rerouted: dict = {}
+            for row in group:
+                if row.pair:
+                    rerouted.setdefault(row.pair_index, []).append(row)
+            for pair_index, rows_of in rerouted.items():
+                written = apply_frame(rows_of, rows_of[0].pair, pair_index,
+                                      slots, batch.sources)
+                if written:
+                    log.debug("   other pair %s: %d coordinate(s) on %d "
+                              "row(s)", batch.document_id, written,
+                              len(rows_of))
+            group = [row for row in group if not row.pair]
+            if not group:
+                return
             if batch.frame:
                 written = apply_frame(group, batch.frame, batch.frame_index,
                                       slots, batch.sources)
@@ -3768,6 +3791,12 @@ def finish_document(report, name: str, out_dir: Path, spec_sha: str,
               if r.get("claim", {}).get("_harvest_failed")]
     if failed:
         log.warning("extraction: %s: %d source(s) never answered", name, len(failed))
+    # Before anything counts them: the same reading written twice is one
+    # reading, and the states and the summary below have to agree with the
+    # file they describe.
+    repeated = drop_repeats(report)
+    if repeated:
+        log.info("extraction: %s: %d repeated row(s) dropped", name, repeated)
     # One line per parameter, whatever it came to. Every other state in the
     # file belongs to a row, so a parameter that produced no row produced no
     # record at all: on Kassel, planning_organisation came back with 0 tuples
@@ -4066,6 +4095,9 @@ def pair_batches(items: list, pairs: list, pair_plans: list, frame_axes: list,
                                  max_chars=max_chars):
             batch.frame = pair
             batch.frame_index = pair_index
+            # Every pair of the document, so a claim whose quote names
+            # another one of them can be filed there instead of refused.
+            batch.pairs = tuple(pairs)
             batch.anchors = tuple(anchors[pair_index]
                                   if pair_index < len(anchors) else ())
             batches.append(batch)

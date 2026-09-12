@@ -937,3 +937,92 @@ def test_a_frame_reply_that_did_not_fit_halves_its_passages(monkeypatch):
     assert [len(s["sources"]) for s in sent] == [2, 1, 1]
     assert out["pairs"][0]["scenario_source"] == "Q2", (
         "the second half's Q1 is the whole window's Q2")
+
+
+# ---------------------------------------------------------------------------
+# A claim whose own quote names another pair of the document belongs there
+# ---------------------------------------------------------------------------
+
+def _both_pairs():
+    """The document's two pairs: Zielszenario 2045 and Zielszenario 2030."""
+    other = runner.frame_pairs(
+        _reply(year=2030, year_quote=_FOREIGN, year_source="Q1"), _slots(),
+        [_source(1, _FOREIGN), _source(2, _HEAD, kind="section")])
+    return (_pair(), other[0])
+
+
+def test_a_claim_from_another_pairs_table_is_filed_under_that_pair():
+    """Measured on corpus_m5: of 120,442 claims refused as another pair's,
+    35,407 were then read under no pair at all -- in GWh/a, MWh/a and
+    t CO2eq/a, the corpus's own units. This passage is titled 2030 and the
+    request asked for 2045, so its values are values of 2030. The title is
+    the same judgement `pair_batches` makes about which requests a passage
+    goes into, asked here of the pairs it was not asked under."""
+    from docpipe.extraction.pipeline import rows_from_reply
+    batch = _two_source_batch()
+    batch.pairs = _both_pairs()
+    rows, orphans = rows_from_reply(batch, _TUPLES, _slots())
+    assert sorted(row.claim["value"] for row in rows) == [17000, 42005]
+    assert orphans == []
+    moved = [row for row in rows if row.pair]
+    assert [row.claim["value"] for row in moved] == [17000]
+    assert moved[0].pair["year"] == 2030 and moved[0].pair_index == 1
+
+
+def test_a_quote_that_names_a_pair_itself_beats_the_title():
+    """A row that prints its own year is a row of that year, whatever the
+    table is called. Asked first, and of the quote alone."""
+    from docpipe.extraction.pipeline import pair_of_claim
+    both = _both_pairs()
+    claim = {"value": 1, "quote": "Zielszenario 2030: 1"}
+    found = pair_of_claim(claim, both, _slots(), taken=both[0])
+    assert found is not None and found[0]["year"] == 2030
+
+
+def test_a_claim_that_names_two_pairs_stays_refused():
+    """Two pairs and no way to tell which -- the quote says as little as the
+    passage did, and a year guessed onto a number is worse than no number."""
+    from docpipe.extraction.pipeline import pair_of_claim
+    both = _both_pairs()
+    claim = {"value": 1, "quote": "Zielszenario 2045 und Zielszenario 2030"}
+    assert pair_of_claim(claim, both, _slots()) is None
+
+
+def test_a_claim_that_names_no_pair_stays_refused():
+    """And the row that carries no quote at all cannot be moved anywhere."""
+    from docpipe.extraction.pipeline import pair_of_claim
+    both = _both_pairs()
+    assert pair_of_claim({"value": 1, "quote": "| Erdgas | 17.000 |"},
+                         both, _slots()) is None
+    assert pair_of_claim({"value": 1}, both, _slots()) is None
+    assert pair_of_claim({"value": 1, "quote": _FOREIGN}, both, _slots(),
+                         taken=both[1]) is None, "the request's own pair"
+
+
+def test_a_moved_claim_is_still_held_to_its_wording():
+    """The move happens where the refusal happened, so everything that was
+    checked before it is checked before it still."""
+    from docpipe.extraction.pipeline import rows_from_reply
+    batch = _two_source_batch()
+    batch.pairs = _both_pairs()
+    invented = {"tuples": [
+        {"source": "Q2", "value": "endura kommunal", "unit": "",
+         "unit_raw": "", "quote": "Tabelle 28: Zielszenario 2030"}]}
+    rows, orphans = rows_from_reply(batch, invented, _slots())
+    assert rows == []
+    assert [o["_why"] for o in orphans] == ["text value not in its quote"]
+
+
+def test_the_title_of_a_table_is_asked_of_the_whole_passage():
+    """`pair_of_source` is the same judgement `pair_batches` makes about which
+    requests a passage belongs in, asked of the pairs it was not asked under.
+    A table with both years in it names two pairs and moves nowhere."""
+    from docpipe.extraction.pipeline import pair_in_text, pair_of_source
+    both = _both_pairs()
+    found = pair_of_source(_source(2, _FOREIGN), both, _slots(), taken=both[0])
+    assert found is not None and found[0]["year"] == 2030 and found[1] == 1
+    ambiguous = _source(3, _OWN + "\n" + _FOREIGN)
+    assert pair_of_source(ambiguous, both, _slots(), taken=None) is None
+    # And the one question both of them ask, of whichever text they were given.
+    assert pair_in_text(both[1], _slots(), _FOREIGN)
+    assert not pair_in_text(both[1], _slots(), "| Erdgas | 17.000 |")

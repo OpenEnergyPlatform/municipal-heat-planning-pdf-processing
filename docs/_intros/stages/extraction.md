@@ -78,6 +78,22 @@ list rather than concatenating a ranking per probe: over 65 documents and
 15,082 values, concatenation put a value's real source at median rank 77,
 fusion at rank 26 (`runner.py:352`).
 
+That single cut is not a plain slice of the ranking either.
+`with_visual_share` (`pipeline.py:178`) holds a share of `top`'s room,
+`VISUAL_SHARE` (env `EXTRACT_VISUAL_SHARE`, default `0.5`,
+`pipeline.py:70`), for figures and tables before prose can fill it,
+pulling the best-ranked ones up into that room when the head of the
+ranking does not already hold its share and putting the result back into
+rank order, so batching and every rank written into the report stay what
+they were. The cap itself does not move and the taken sources stay in
+ranking order; only which of them make the cut does. Measured on
+corpus_m5: figures and tables carried 71% of every tuple in the harvest,
+yet only 13 to 40% of a document's own figures and tables ever reached a
+question at all. Emskirchen showed the model none of its 12 tables,
+Bremen 13 of its 323 figures, Kassel none of its 23 figures, and on the
+30 thinnest documents only 42% of tuples came from an image, against 71%
+everywhere else.
+
 ### Anchors
 
 The plan searches not with the spec's query templates but a sentence
@@ -118,8 +134,22 @@ column per year, is read under each of them, and each request takes its
 own pair's column
 (`test_a_passage_of_several_pairs_is_read_under_each_of_them`,
 `tests/test_extraction_frame.py:650`). A passage that prints none of a
-request's pair gives no row: its claims are refused as `passage is not of
-this pair` (`rows_from_reply`, `pipeline.py:509`). The gain was measured directly: before the frame
+request's pair used to give no row at all: its claims were refused as
+`passage is not of this pair` (`rows_from_reply`, `pipeline.py:509`). Two
+helpers get a look at the claim first now: `pair_of_claim`
+(`pipeline.py:550`) asks the claim's own quote and `pair_of_source`
+(`pipeline.py:577`) asks the whole passage whether exactly one OTHER pair
+of the document is named there; if so the claim becomes a row carrying
+that pair in its own `pair` and `pair_index` fields (`Row`,
+`pipeline.py:456`), for `project` (`runner.py:3130`) to stamp instead of
+the request's own, drawn from `Batch.pairs` (`pipeline.py:134`), set by
+`pair_batches` (`runner.py:4046`). Exactly one, or the claim still stays
+refused. Measured on corpus_m5: of 120,442 claims refused this way, 52.8%
+came back later under the same quote, 17.8% as the same value under
+another quote, and 29.4%, 35,407 values, were never read under any pair
+at all; their units are the corpus's own, GWh/a (7,445), MWh/a (7,016),
+t CO2eq/a (3,836), from tables (14,227), figures (11,869) and prose
+(9,311). The gain from the frame itself was measured directly: before it
 existed, the year axis alone produced 1,849 refusals against 0 readings,
 since every window after the first excluded the row's own source
 (`runner.py:2969`).
@@ -197,7 +227,20 @@ it claims is counted `raw_foreign` rather than trusted silently.
 last check against the spec's closed lists and the literal source text. A
 number is compared digit for digit after `canonical_number` normalises
 locale grouping and decimal marks; a category or text value is compared
-case- and whitespace-folded against its own wording. Where a quote is
+case- and whitespace-folded against its own wording, through `verify.flat`
+(`verify.py:122`). That fold now runs `unicodedata.normalize("NFKC", ...)`
+first and maps the quotation-mark, dash and thin-space variants and the
+soft hyphen onto one spelling each, before the existing whitespace
+collapse: the passage comes out of the PDF and the quote out of the
+model, through two different encoders, and a ligature, a decomposed
+umlaut or „Bestand" against "Bestand" used to read as two different
+sentences. Not a new check: the shape both sides of the one existing
+comparison are brought into. Measured on corpus_m5, before this fold
+existed: 1,458 claims were refused as `quote not found in the source it
+cites` and 17,422 values were downgraded to `unbacked` for exactly this
+gap between two encoders.
+
+Where a quote is
 not verbatim in its source but the value occurs there
 exactly once, the quote is rebuilt around that occurrence rather than the
 claim refused: on the 16-document pilot, 303 of 377 such refusals were
@@ -231,6 +274,18 @@ and reason counts. See [how much of a value the run can stand
 behind](../contract/trust.md) for the full list.
 
 ### The harvest file, the stamp and the trace
+
+Before any of that is computed, `runner.finish_document` calls
+`pipeline.drop_repeats` (`pipeline.py:1447`), which removes a row that
+agrees with an earlier row of the same document in every field but
+`provenance`: the same reading written twice by two different requests
+is one reading, not two, and counting it twice would throw off the
+parameter states and the summary computed next from it. `provenance` is
+left out of the comparison because it is about the writing and not the
+reading; the first of a repeated pair is kept, so the file stays in the
+order the harvest produced. Measured on corpus_m5, which ran with no
+such pass: 1,152 of 62,290 tuples were repeats, in 192 documents, up to
+77 in one plan, and one office name written eleven times.
 
 `pipeline.write_report` writes one document's tuples, refusals, parameter
 states and closing summary to a temp file and only replaces the real
@@ -373,6 +428,7 @@ run, `anchors.json` and `query_cache.db`; and, only after `--top-up`,
 | `EXTRACT_FIELD_ROUNDS` / `EXTRACT_FIELD_ATTEMPTS` | env var | `4` / `3` | Retrieval rounds before falling to the rest stage; retries of the own-stage window when unbackable | `runner.make_sweeper` |
 | `EXTRACT_FIELD_MAX_WINDOWS` / `EXTRACT_REST_MAX_WINDOWS` | env var | `24` / `12` | Own plus retrieval windows, and the rest stage's separate allowance, before a coordinate is exhausted | `runner.make_sweeper` |
 | `EXTRACT_PLAN_TOP` / `EXTRACT_PROSE_TOP` | env var | `100` / `200` | `PLAN_TOP`: the fused top-N cut replacing the older structural-floor plan; raised from 50 once that cut was measured holding only 40% of a document's tables and 15% of its figures. `PROSE_TOP`: ceiling on prose sections drawn from, always overriding `plan_document`'s own default of `50` | `runner.main` |
+| `EXTRACT_VISUAL_SHARE` | env var | `0.5` | Share of the `PLAN_TOP` cut held for figures and tables before prose fills what is left, so the cap does not fall entirely to whichever ranks higher | `pipeline.with_visual_share` |
 | `EXTRACT_FRAME_ROUNDS` / `_SOURCES` / `EXTRACT_FRAME_YEAR_MIN` / `_MAX` | env var | `3` / `12` / `1990` / `2100` | Rounds and passages per round the frame request may spend; bounds of a calendar year for `years_in_sources`, its deterministic cross-check | `runner.find_frame`, `runner.years_in_sources` |
 | `EXTRACT_CODE_ROUNDS` / `EXTRACT_FIELD_RE_ENTRY` | env var | `2` / `3` | Sandbox rounds the row request may spend on a self-checked value; already-shown passages carried into a coordinate's next field window | `runner.make_harvester`, `runner.make_sweeper` |
 | `EXTRACT_LLM_PARALLEL` / `EXTRACT_PLAN_PARALLEL` / `EXTRACT_FIELD_PARALLEL` | env var | `128` / `8` / `192` | Concurrency caps: LLM requests for the whole run, retrieval-planning threads (FAISS/SQL, separate from the LLM), and field-sweep threads beneath row-request batches | `runner.harvest_batches`, `runner.main`, `runner.make_fieldwise_harvester` |
@@ -468,20 +524,31 @@ its projection onto rows: `test_every_half_of_a_pair_quotes_for_itself`,
 `test_a_frame_reading_may_quote_a_heading_anywhere_in_the_plan`,
 `test_a_passage_of_several_pairs_is_read_under_each_of_them`,
 `test_every_row_gets_the_year_of_its_own_pair`,
-`test_a_coordinate_the_row_itself_answered_is_not_overwritten` and
-`test_a_search_that_never_completes_says_exhausted_rather_than_complete`.
+`test_a_coordinate_the_row_itself_answered_is_not_overwritten`,
+`test_a_search_that_never_completes_says_exhausted_rather_than_complete`,
+and, for the claim a request's own pair does not cover,
+`test_a_quote_that_names_a_pair_itself_beats_the_title`,
+`test_a_claim_that_names_two_pairs_stays_refused` and
+`test_a_claim_that_names_no_pair_stays_refused`.
 `tests/test_extraction_verify.py` pins `canonical_number`, quote repair,
-and the evidence tiers. `tests/test_extraction_trust.py` pins the level
+the evidence tiers, and, for the fold `quote_in` and `value_in_quote`
+share, `test_a_ligature_and_a_decomposed_umlaut_are_the_letters_they_are`
+and `test_the_quotation_marks_of_a_plan_are_quotation_marks`.
+`tests/test_extraction_trust.py` pins the level
 cutoffs. `tests/test_extraction_reasons.py` pins that a coordinate is
 dropped for the agreed reasons and no other, that every reason a claim is
 refused for is a published one, and that no closure in the package reads
 a name bound after it. `tests/test_extraction_schema.py` validates
 that a harvest, a stamp and a trace event all conform to the published
-contract. `tests/test_extraction_runner.py`, 78 tests, pins `runner.py`
+contract. `tests/test_extraction_runner.py`, 85 tests, pins `runner.py`
 itself: among them `test_a_document_the_server_never_answered_for_is_not_stamped`,
 `test_a_document_no_reply_ever_came_back_for_is_not_stamped`,
-`test_the_image_root_follows_the_pdf_root` and
-`test_the_context_budget_holds_a_full_window_and_a_crop`.
+`test_the_image_root_follows_the_pdf_root`,
+`test_the_context_budget_holds_a_full_window_and_a_crop`,
+`test_figures_and_tables_keep_their_share_of_the_plan`,
+`test_the_share_is_room_held_and_not_room_promised`,
+`test_what_is_taken_stays_in_the_order_it_was_ranked` and
+`test_the_same_reading_written_twice_is_one_reading`.
 `tests/test_extraction_ranking.py` pins the fused ranking behind the
 retrieval plan: `test_the_structural_floor_is_every_table_and_every_figure`,
 `test_a_table_whose_content_is_gone_is_skipped_and_not_planned_empty`

@@ -83,6 +83,14 @@ def numbers_in(text: str) -> set
 def flat(text: str) -> str
 ```
 
+One shape for both sides of every comparison in this file.
+
+NFKC because a ligature and a decomposed umlaut are the same letters:
+`ﬁ` is `fi` and `u` plus a combining diaeresis is `ü`, and a quote that
+came out of the PDF one way and out of the model the other was read as
+two different sentences. This is not a check, it is the form both sides
+are brought into before the one check that exists runs.
+
 ### quote_in
 
 ```python
