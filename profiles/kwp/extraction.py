@@ -77,4 +77,3 @@ FRAME = ("scenario", "year")
 # neither is the plan's inventory. Owner decision 2026-09-10, after Kassel's
 # Tabelle 3 (CO2 by sector and carrier, no year anywhere) left 35 values
 # without one. Used only when a document has exactly one such pair.
-FRAME_DEFAULT = {"scenario": "status_quo"}

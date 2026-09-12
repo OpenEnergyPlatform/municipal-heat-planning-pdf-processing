@@ -136,11 +136,6 @@ class Batch:
     # the plan's own words, what the request asks for, so the pair reaches
     # the model as a question and not only as a field.
     anchors: tuple = ()
-    # The pair a passage that names no pair at all is read under, and its
-    # index: the profile's FRAME_DEFAULT. The request reads it like the
-    # rest, and the pair is written onto its rows afterwards.
-    frame_default: Optional[dict] = None
-    frame_default_index: int = 0
 
     @property
     def sources(self) -> list:
@@ -593,29 +588,6 @@ def pair_of_source(source, pairs: tuple, slots: list,
     found = [(pair, index) for index, pair in enumerate(pairs)
              if pair is not taken and names_pair(source, pair, slots)]
     return found[0] if len(found) == 1 else None
-
-
-_YEAR_LIKE = re.compile(r"(?<!\d)(?:19|20)\d{2}(?!\d)")
-
-
-def names_no_pair_at_all(source, pairs: list, slots: list) -> bool:
-    """Does this passage print no scenario of any pair and no year at all?
-
-    The one kind of passage a document's default pair is read under: an
-    inventory table that states neither is the plan's inventory. A passage
-    that prints a year, any year, or the scenario of one of the pairs keeps
-    what it says and stays where its year is asked per row.
-    """
-    text = (getattr(source, "text", "") or "")
-    if _YEAR_LIKE.search(text):
-        return False
-    for pair in pairs or ():
-        for slot in slots:
-            if (slot.name != "year" and slot.name in pair
-                    and answer_in_quote(slot, pair[slot.name],
-                                        pair.get(f"{slot.name}_raw"), text)):
-                return False
-    return True
 
 
 def rows_from_reply(batch: Batch, reply: Optional[dict],

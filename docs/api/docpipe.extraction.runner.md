@@ -956,12 +956,12 @@ it was meant to be.
 
 ```python
 def pair_batches(items: list, pairs: list, pair_plans: list, frame_axes: list,
-                 anchors: list, *, default: Optional[dict] = None,
+                 anchors: list, *,
                  max_sources: int = BATCH_SOURCES,
                  max_chars: int = BATCH_CHARS) -> tuple
 ```
 
-(batches, rest, added, assumed) for one document with a frame.
+(batches, rest, added) for one document with a frame.
 
 A pair is read over every passage that prints it, and over no other. Its
 own search and the document's search keep `PLAN_TOP` passages each, cut
@@ -979,12 +979,11 @@ corpus_m5 that was 26,990 refusals, 95 percent of all. It goes where the
 passages of no pair go.
 
 `rest` is what any search of the document found that prints none of the
-pairs.
-With a `default` (the profile's FRAME_DEFAULT) that exactly one pair of
-the document matches, a passage of the rest that names no pair at all,
-no scenario of any pair and no year, is read under that pair instead: the
-owner's rule for an inventory table that states neither, after Kassel's
-Tabelle 3 left 35 values without a year. `assumed` counts those passages.
+pairs. It is read without one, and its year is asked per row against the
+section the passage stands in, which is where a plan writes it. A pair
+chosen for it from outside would be a coordinate with a quote from
+somewhere else, and the owner's rule is that every value says in the plan
+what it refers to.
 
 ### main
 

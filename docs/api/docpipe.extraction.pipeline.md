@@ -108,8 +108,6 @@ Fields:
 - `frame_index: int = 0`
 - `pairs: tuple = ()`: Every pair of the document, in index order. A claim whose own quote names a different one of them is filed under that pair instead of being refused, which is the only use this list has.
 - `anchors: tuple = ()`: The sentences this request's passages were searched with. They say, in the plan's own words, what the request asks for, so the pair reaches the model as a question and not only as a field.
-- `frame_default: Optional[dict] = None`: The pair a passage that names no pair at all is read under, and its index: the profile's FRAME_DEFAULT. The request reads it like the rest, and the pair is written onto its rows afterwards.
-- `frame_default_index: int = 0`
 
 #### Batch.sources
 
@@ -428,19 +426,6 @@ under.
 Exactly one again. A table with four year columns names four pairs and
 says nothing about which row belongs to which, and that is the case the
 request per pair exists for.
-
-### names_no_pair_at_all
-
-```python
-def names_no_pair_at_all(source, pairs: list, slots: list) -> bool
-```
-
-Does this passage print no scenario of any pair and no year at all?
-
-The one kind of passage a document's default pair is read under: an
-inventory table that states neither is the plan's inventory. A passage
-that prints a year, any year, or the scenario of one of the pairs keeps
-what it says and stays where its year is asked per row.
 
 ### rows_from_reply
 
