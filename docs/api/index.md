@@ -54,7 +54,7 @@ is for and what it hands to what; this is the reference.
 - [docpipe.extraction](docpipe.extraction.md): Marks the extraction package as the OBIE stage.
 - [docpipe.extraction.\_\_main\_\_](docpipe.extraction.__main__.md): Allow execution via: python -m docpipe.extraction
 - [docpipe.extraction.fields](docpipe.extraction.fields.md): Computes the deterministic skeleton of a tuple from the spec. (2 classes, 9 functions)
-- [docpipe.extraction.pipeline](docpipe.extraction.pipeline.md): The harvest loop that turns a document's retrieved passages into verified value tuples. (6 classes, 31 functions)
+- [docpipe.extraction.pipeline](docpipe.extraction.pipeline.md): The harvest loop that turns a document's retrieved passages into verified value tuples. (6 classes, 30 functions)
 - [docpipe.extraction.queries](docpipe.extraction.queries.md): Expands a profile's query templates into retrieval probes drawn from the spec. (1 function)
 - [docpipe.extraction.recheck](docpipe.extraction.recheck.md): Reapplies the answer-in-quote rule to a harvest written before the rule existed. (3 functions)
 - [docpipe.extraction.remap](docpipe.extraction.remap.md): Re-resolves a moved or grown vocabulary against a harvest already on disk. (7 functions)

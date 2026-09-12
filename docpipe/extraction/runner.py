@@ -71,7 +71,7 @@ from .pipeline import (Source, WorkItem, apply_frame, batch_uri,
                        drop_repeats, fold_batch, follow_up, group_items,
                        harvest_document, merge_field, mark_unanswered,
                        open_rows, plan_document,
-                       names_no_pair_at_all, names_pair, refused_upstream, route_claims,
+                       names_pair, refused_upstream, route_claims,
                        rows_from_reply, sweep_key, window_sources,
                        write_report)
 from .fields import EXHAUSTED
@@ -3170,16 +3170,6 @@ def make_fieldwise_harvester(image_root: Optional[Path] = None,
                 if written:
                     log.debug("   frame %s: %d coordinate(s) on %d row(s)",
                               batch.document_id, written, len(group))
-            elif batch.frame_default:
-                # A passage that names no pair at all, read like the rest and
-                # written under the document's default pair, cited on the
-                # passage the frame read it in.
-                written = apply_frame(group, batch.frame_default,
-                                      batch.frame_default_index, slots,
-                                      batch.sources)
-                if written:
-                    log.debug("   default pair %s: %d coordinate(s) on %d "
-                              "row(s)", batch.document_id, written, len(group))
 
         if not rows:
             # Nothing to sweep: no value in these passages, a value request
@@ -4044,10 +4034,10 @@ def select_documents(documents: list, wanted: Optional[list]) -> tuple:
 
 
 def pair_batches(items: list, pairs: list, pair_plans: list, frame_axes: list,
-                 anchors: list, *, default: Optional[dict] = None,
+                 anchors: list, *,
                  max_sources: int = BATCH_SOURCES,
                  max_chars: int = BATCH_CHARS) -> tuple:
-    """(batches, rest, added, assumed) for one document with a frame.
+    """(batches, rest, added) for one document with a frame.
 
     A pair is read over every passage that prints it, and over no other. Its
     own search and the document's search keep `PLAN_TOP` passages each, cut
@@ -4065,12 +4055,11 @@ def pair_batches(items: list, pairs: list, pair_plans: list, frame_axes: list,
     passages of no pair go.
 
     `rest` is what any search of the document found that prints none of the
-    pairs.
-    With a `default` (the profile's FRAME_DEFAULT) that exactly one pair of
-    the document matches, a passage of the rest that names no pair at all,
-    no scenario of any pair and no year, is read under that pair instead: the
-    owner's rule for an inventory table that states neither, after Kassel's
-    Tabelle 3 left 35 values without a year. `assumed` counts those passages.
+    pairs. It is read without one, and its year is asked per row against the
+    section the passage stands in, which is where a plan writes it. A pair
+    chosen for it from outside would be a coordinate with a quote from
+    somewhere else, and the owner's rule is that every value says in the plan
+    what it refers to.
     """
     def key(item):
         return (item.source.owner_kind, item.source.owner_id,
@@ -4104,23 +4093,7 @@ def pair_batches(items: list, pairs: list, pair_plans: list, frame_axes: list,
     rest = [item for item in known.values()
             if not any(names_pair(item.source, pair, frame_axes)
                        for pair in pairs)]
-    matching = [index for index, pair in enumerate(pairs)
-                if default and all(pair.get(k) == v for k, v in default.items())]
-    assumed = 0
-    if len(matching) == 1:
-        index = matching[0]
-        bare = [item for item in rest
-                if names_no_pair_at_all(item.source, pairs, frame_axes)]
-        if bare:
-            taken = {id(item) for item in bare}
-            rest = [item for item in rest if id(item) not in taken]
-            for batch in group_items(bare, max_sources=max_sources,
-                                     max_chars=max_chars):
-                batch.frame_default = pairs[index]
-                batch.frame_default_index = index
-                batches.append(batch)
-            assumed = len(bare)
-    return batches, rest, added, assumed
+    return batches, rest, added
 
 
 def main(argv: Optional[list] = None) -> int:
@@ -4320,7 +4293,6 @@ def main(argv: Optional[list] = None) -> int:
     # old shape: every coordinate is asked per row.
     frame_axes = fields.frame_slots(spec, profile.component("extraction",
                                                             "FRAME") or ())
-    frame_default = profile.component("extraction", "FRAME_DEFAULT")
     if frame_axes:
         log.info("extraction: the frame is %s — found once per document, then "
                  "one value request per pair",
@@ -4711,12 +4683,11 @@ def main(argv: Optional[list] = None) -> int:
         owner_of: dict = {}
         for name, items, report in plans:
             found = list(frames.get(name) or ())
-            framed, rest, added, assumed = pair_batches(
+            framed, rest, added = pair_batches(
                 items, found,
                 [pair_items.get((name, i)) for i in range(len(found))],
                 frame_axes,
                 [anchor_texts.get((name, i), ()) for i in range(len(found))],
-                default=frame_default,
                 max_sources=BATCH_SOURCES, max_chars=BATCH_CHARS)
             for batch in framed:
                 batches.append(batch)
@@ -4728,9 +4699,7 @@ def main(argv: Optional[list] = None) -> int:
             if found:
                 log.info("extract: %s: %d pair(s), %d passage(s) print none "
                          "of them, %d read under a pair its own search had "
-                         "not kept, %d name no pair at all and are read "
-                         "under the default pair", name, len(found),
-                         len(rest), added, assumed)
+                         "not kept", name, len(found), len(rest), added)
             for batch in group_items(rest, max_sources=BATCH_SOURCES,
                                      max_chars=BATCH_CHARS):
                 batches.append(batch)

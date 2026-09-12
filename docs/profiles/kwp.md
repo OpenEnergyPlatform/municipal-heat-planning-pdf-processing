@@ -160,12 +160,18 @@ frame existed, the year axis alone produced 1,849 refusals against zero
 readings, because every retrieval window after the first excluded the one
 source that could carry the year.
 
-`FRAME_DEFAULT = {"scenario": "status_quo"}` (`profiles/kwp/extraction.py:80`)
-is the pair a passage is read under when it names no part of any pair the
-frame found, neither a scenario nor a year: an inventory table that never
-states either. It is used only when a document has exactly one such pair,
-an owner decision made after Kassel's Tabelle 3 (CO2 by sector and carrier,
-no year anywhere) left 35 values without one.
+A passage that prints no pair at all is read without one, and its year is
+asked per row against the section it stands in. There used to be a
+`FRAME_DEFAULT` for this case, the pair such a passage was read under, after
+Kassel's Tabelle 3 (CO2 by sector and carrier, no year anywhere) left 35
+values without a year. It is gone. It fired only when exactly one pair of the
+document matched it, which held for 14 percent of plans and never once in the
+corpus_m5 run, 0 of 638 planning calls: a plan states its inventory for one
+base year and mentions a handful of others, so several pairs matched and the
+branch stood down. More than the count, it wrote a year that does not stand in
+the passage, and every value of this corpus says in the plan what it refers
+to. Where it says so is the section around the table, which is the first
+window the field sweep reads.
 
 The slice gate decides, before any other coordinate is asked, whether a
 row belongs in this run's graph at all: `SLICE = {"quantity": None}`
