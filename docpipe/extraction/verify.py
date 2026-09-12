@@ -32,6 +32,7 @@ import re
 from dataclasses import dataclass, field
 from typing import Callable, Optional
 
+from .fields import DERIVED, READ, UNBACKED
 from .spec import Parameter, fold_label, states_a_year
 
 TIER_TEXT = "text_located"
@@ -395,7 +396,18 @@ def verify_tuple(raw: dict, parameter: Parameter, source_text: str, *,
                 resolved[name] = None
             else:
                 try:
-                    resolved[name] = int(given)
+                    # int() truncates: int(2045.7) is 2045, and a year the
+                    # model got wrong by seven tenths was written into the
+                    # graph as a year it never read. An integer axis takes
+                    # integers, and everything else is asked again.
+                    if isinstance(given, bool):
+                        raise ValueError(given)
+                    if isinstance(given, float):
+                        if not given.is_integer():
+                            raise ValueError(given)
+                        resolved[name] = int(given)
+                    else:
+                        resolved[name] = int(str(given).strip())
                 except (TypeError, ValueError):
                     return Refusal(raw, f"axis {name!r}: {given!r} is not an integer")
         else:                                       # enum
@@ -420,7 +432,10 @@ def verify_tuple(raw: dict, parameter: Parameter, source_text: str, *,
         quote = repaired
         flags.append("quote_repaired")
     if not value_in_quote(raw, parameter, quote):
-        if raw.get("computed") and computed_in_output(raw, parameter):
+        # `is True`, not truthy: "computed" is a switch that decides WHICH
+        # evidence check applies, and the string "nein" would have opened the
+        # door it exists to keep shut.
+        if raw.get("computed") is True and computed_in_output(raw, parameter):
             # The document prints the inputs and the sandbox printed the
             # result. Both halves of the evidence are on the tuple.
             flags.append("computed")
@@ -458,6 +473,19 @@ def verify_tuple(raw: dict, parameter: Parameter, source_text: str, *,
 
     out = dict(raw)
     out.update(resolved)
+    # A coordinate whose answer did not survive resolution must not keep the
+    # stamp that says it was read. It did: an empty axis came back as None
+    # while `<name>_state` still said "read", which is a row that claims a
+    # reading and shows no value -- 171 of them in corpus_m5. The evidence
+    # goes with it, because evidence for nothing is what made it look sound.
+    for name, settled in resolved.items():
+        if settled is not None or out.get(f"{name}_state") not in (READ,
+                                                                  DERIVED):
+            continue
+        out[f"{name}_state"] = UNBACKED
+        for suffix in ("_quote", "_source", "_window"):
+            out.pop(f"{name}{suffix}", None)
+        flags.append(f"unbacked:{name}")
     out.update(value_fields)
     out["parameter"] = parameter.uri
     return Verified(tuple=out, tier=tier, flags=flags, rects=rects)

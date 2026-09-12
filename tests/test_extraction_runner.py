@@ -6,7 +6,7 @@ import pytest
 
 from docpipe.extraction import runner
 from docpipe.extraction.pipeline import Source
-from docpipe.extraction.runner import _parameter_payload, _parse_tuples, stale
+from docpipe.extraction.runner import _parameter_payload, _parse_reply, stale
 from docpipe.extraction.spec import load
 
 SPEC = load({"parameters": [{
@@ -23,20 +23,26 @@ SPEC = load({"parameters": [{
 }]})
 
 
-def test_parse_strips_think_blocks_and_fences():
-    raw = ("<think>rechne...</think>```json\n"
-           '{"tuples": [{"value": 1}]}\n```')
-    assert _parse_tuples(raw) == [{"value": 1}]
+@pytest.mark.parametrize("raw", [
+    '<think>rechne...</think>{"tuples": [{"value": 1}]}',
+    '```json\n{"tuples": [{"value": 1}]}\n```',
+    'Gerne! Hier: {"tuples": []} — sonst noch etwas?',
+    '{"tuples": []}{"tuples": [{"value": 1}]}',
+    '{"values": [1, 2]}',
+    "kein JSON",
+])
+def test_a_reply_that_is_not_one_json_object_is_not_read(raw):
+    """Every one of these used to be unwrapped, cut out of its chatter or
+    closed, and the value that came out of it was stamped "read". The
+    softeners are gone (owner's rule, 2026-09-12): the reply is asked again
+    with the cause named, and nothing half-read enters the harvest."""
+    assert _parse_reply(raw) is None
 
 
-def test_parse_finds_the_object_inside_chatter():
-    raw = 'Gerne! Hier: {"tuples": []} — sonst noch etwas?'
-    assert _parse_tuples(raw) == []
-
-
-def test_parse_refuses_a_reply_without_a_tuples_list():
-    assert _parse_tuples('{"values": [1, 2]}') is None
-    assert _parse_tuples("kein JSON") is None
+def test_the_object_that_was_asked_for_is_read():
+    """Surrounding whitespace, and nothing else, is allowed around it."""
+    assert _parse_reply('{"tuples": [{"value": 1}]}')["tuples"] == [{"value": 1}]
+    assert _parse_reply('  {"tuples": []}\n')["tuples"] == []
 
 
 def test_parameter_payload_offers_classes_not_a_flat_label_list():
@@ -638,57 +644,89 @@ def _cut_off(n=3, tail='{"value": 44, "unit": "kWh/a", "quan'):
     return '{"defaults": {"unit": "kWh/a"}, "tuples": [' + whole + ", " + tail
 
 
-def test_the_tuples_written_before_the_cut_are_kept():
-    reply = runner.rescue_reply(_cut_off())
-    assert [t["value"] for t in reply["tuples"]] == [0, 1, 2]
-    assert all(t["unit"] == "kWh/a" for t in reply["tuples"]), (
-        "the defaults block is rescued too")
-    assert reply["status"] == "truncated"
-
-
-def test_the_rescue_survives_a_quote_whose_braces_do_not_balance():
-    """Quotes are lifted verbatim from the plans, and 15 of 1936 sections in
-    the pilot set are BibTeX dumps. A brace counter reads those as structure;
-    only a real JSON scanner knows which brace is evidence."""
-    bib = "@misc{bmj2025, title = {Gesetze / Verordnungen}}"
-    text = ('{"tuples": [' + json.dumps({"value": 1, "quote": bib})
-            + ', ' + json.dumps({"value": 2, "quote": "} allein {"})
-            + ', {"value": 3, "quo')
-    reply = runner.rescue_reply(text)
-    assert [t["value"] for t in reply["tuples"]] == [1, 2]
-    assert reply["tuples"][0]["quote"] == bib
-
-
-def test_the_rescue_survives_escapes_brackets_and_newlines_in_a_quote():
-    quote = ('| Wärmeverbrauch [kWh/a] | 4.605 |\n| --- |\n'
-             r'Er nennt sie "Wärmenetze" und schreibt \| als Trenner')
-    text = ('{"tuples": [' + json.dumps({"value": 1, "quote": quote},
-                                        ensure_ascii=False) + ', {"val')
-    reply = runner.rescue_reply(text)
-    assert reply["tuples"][0]["quote"] == quote
-
-
-def test_a_cut_before_the_first_tuple_is_not_a_rescue():
-    assert runner.rescue_reply('{"defaults": {"unit": "kWh/a"}, "tuples": [{"val') is None
-    assert runner.rescue_reply("kein json") is None
-
-
-def test_the_sources_after_the_cut_stay_countable_holes():
-    """A rescue must not trade a loud hole for a silent one: the model writes
-    in source order, so the loss is always the tail of the batch, and those
-    sources would otherwise read as 'looked at, found nothing'."""
+def test_a_cut_off_batch_is_asked_again_in_halves():
+    """The rescue kept the tuples written before the cut and wrote the
+    passages after it off as holes — half a request in the harvest, and
+    nothing downstream could tell it from one that was read and found
+    nothing. Split instead: every passage is answered for."""
     from docpipe.extraction.pipeline import Batch
     batch = Batch(7, SPEC.parameters[0],
                   [_item(_source("a", owner_id=i)) for i in range(1, 5)])
-    holes = runner._holes(batch, [{"source": "Q1", "value": 1},
-                                  {"source": "Q2", "value": 2}])
-    assert [h["source"] for h in holes] == ["Q3", "Q4"]
-    assert all(h["_harvest_failed"] and h["_cut_off"] for h in holes)
+    asked = []
+
+    def harvest(part, prior, ceiling=None, depth=0):
+        asked.append(len(part.items))
+        return {"tuples": [{"value": len(asked), "source": "Q1"},
+                           {"value": 0, "source": "Q2"}],
+                "status": "complete", "need_more": []}
+
+    out = runner._split_harvest(batch, [], harvest, 4096, 4096,
+                                batch.items[0].source)
+    assert asked == [2, 2], "halved, and both halves asked"
+    assert [t["source"] for t in out["tuples"]] == ["Q1", "Q2", "Q3", "Q4"], (
+        "the second half's Q1 is the whole batch's Q3")
 
 
-def test_a_truncated_reply_is_not_retried(monkeypatch):
+def test_one_passage_that_does_not_fit_gets_more_room_and_then_a_hole():
+    """Nothing to split, so the other lever: more room for the answer, once,
+    and after that the request is a hole that says why rather than a reply
+    that was half read."""
+    from docpipe.extraction.pipeline import Batch
+    batch = Batch(7, SPEC.parameters[0], [_item(_source("a"))])
+    rooms = []
+
+    def harvest(part, prior, ceiling=None, depth=0):
+        rooms.append(ceiling)
+        return {"tuples": [], "status": "complete", "need_more": []}
+
+    assert runner._split_harvest(batch, [], harvest, 4096, 4096,
+                                 batch.items[0].source) is not None
+    assert rooms == [8192]
+    assert runner._split_harvest(batch, [], harvest, 16384, 4096,
+                                 batch.items[0].source) is None
+
+
+def test_the_split_has_a_floor():
+    """Halving is bounded by the number of rows and nothing else, and the
+    field sweep's window budget counts the one call it made, not the tree
+    underneath it. One stuck table of 64 line items was 127 requests that
+    nothing could stop."""
+    from docpipe.extraction.pipeline import Batch
+    batch = Batch(7, SPEC.parameters[0],
+                  [_item(_source("a", owner_id=i)) for i in range(1, 5)])
+
+    parts = []
+
+    def harvest(part, prior, ceiling=None, depth=0):
+        parts.append(len(part.items))
+        return {"tuples": [], "status": "complete", "need_more": []}
+
+    runner._split_harvest(batch, [], harvest, 4096, 4096,
+                          batch.items[0].source, runner.SPLIT_DEPTH)
+    assert parts == [4], "at the floor it asks for more room, it does not halve"
+    assert runner._split_harvest(batch, [], harvest, 16384, 4096,
+                                 batch.items[0].source,
+                                 runner.SPLIT_DEPTH) is None, (
+        "and once that room is spent the request is a hole")
+
+
+def test_a_split_half_is_renumbered_onto_the_whole_request():
+    """A half numbers its passages from Q1 again. Unshifted, every answer of
+    the second half would be checked against the wrong passage — the one way
+    splitting could corrupt what a truncation merely lost."""
+    tuples = [{"source": "Q1", "value": 1}, {"source": "Q2", "value": 2}]
+    assert [t["source"] for t in runner._relabel_sources(tuples, 3)] == [
+        "Q4", "Q5"]
+    pairs = [{"scenario_source": "Q1", "year_source": "Q2"}]
+    assert runner._relabel_sources(pairs, 2)[0] == {"scenario_source": "Q3",
+                                                    "year_source": "Q4"}
+
+
+def test_a_truncated_reply_is_never_read_as_an_answer(monkeypatch):
     """Measured 31 times over one pilot: five attempts, five identical
-    truncations, zero recoveries. The loop must stop after the first."""
+    truncations, zero recoveries — so it is not simply asked again. One
+    passage has nothing to split, so it is asked with more room, twice, and
+    then it is a sentinel that says the answer did not fit."""
     import openai
     attempts = []
 
@@ -719,8 +757,11 @@ def test_a_truncated_reply_is_not_retried(monkeypatch):
 
     harvest = runner.make_harvester(None)
     reply = harvest(_chain(_item(_source("x")))[0], [])
-    assert len(attempts) == 1, f"{len(attempts)} Versuche fuer einen Abbruch"
-    assert [t["value"] for t in reply["tuples"] if "value" in t] == [0, 1, 2]
+    assert [kw["max_tokens"] for kw in attempts] == [4096, 8192, 16384], (
+        "the room is raised, not the same request repeated")
+    assert [t.get("_why") for t in reply["tuples"]] == ["cut_off"]
+    assert not [t for t in reply["tuples"] if "value" in t], (
+        "nothing from a cut-off reply is kept")
 
 
 # What the served model can hold. vLLM reported max_seq_len=32768 for the
@@ -802,22 +843,6 @@ def test_the_computed_switch_can_never_be_shared():
         "tuples": [{"value": 1, "quote": "a"}]}))
     assert "computed" not in reply["tuples"][0]
     assert reply["tuples"][0]["unit"] == "kWh/a"
-
-
-def test_the_holes_are_the_tail_of_the_batch_not_the_unlabelled_sources():
-    """Under the defaults contract `source` is one of the keys stated once
-    for the whole reply, so every rescued tuple carries the same label.
-    Reading it would report five of six sources as never answered, and could
-    never report the one the block names — even when the cut hit it first."""
-    from docpipe.extraction.pipeline import Batch
-    batch = Batch(7, SPEC.parameters[0],
-                  [_item(_source("a", owner_id=i)) for i in range(1, 7)])
-    rescued = runner._parse_reply(json.dumps({
-        "defaults": {"source": "Q3"},
-        "tuples": [{"value": 1, "quote": "a"}, {"value": 2, "quote": "b"}]}))
-    holes = runner._holes(batch, rescued["tuples"])
-    assert [h["source"] for h in holes] == ["Q4", "Q5", "Q6"], (
-        "Q1 to Q3 were reached; the loss is what comes after")
 
 
 # ---------------------------------------------------------------------------
@@ -948,41 +973,21 @@ def test_the_page_rectangles_can_be_switched_off(monkeypatch, tmp_path):
 
 @pytest.mark.parametrize("raw,expect", [
     ('{"a": 1}', {"a": 1}),
-    ('```json\n{"a": 1}\n```', {"a": 1}),
-    # The shapes the greedy {.*} span could not read. Both looked well formed
-    # in the log and were dropped: a second object after the answer, and a
-    # sentence after it that happens to end in a brace.
-    ('{"a": 1}{"b": 2}', {"a": 1}),
-    ('{"a": 1}\nDas war die Antwort (siehe oben) {Ende}', {"a": 1}),
-    ('Hier ist das Ergebnis: {"a": 1} — fertig.', {"a": 1}),
+    ('  {"a": 1}\n', {"a": 1}),
+    # Every shape that used to be unwrapped, closed or cut out of its
+    # surroundings. Each of them produced a value that said "read".
+    ('```json\n{"a": 1}\n```', None),
+    ('{"a": 1}{"b": 2}', None),
+    ('{"a": 1}\nDas war die Antwort (siehe oben) {Ende}', None),
+    ('Hier ist das Ergebnis: {"a": 1} — fertig.', None),
     ('{"a": 1', None),
-    ('gar kein json', None),
+    ("[1, 2]", None),
+    ("gar kein json", None),
 ])
-def test_one_object_is_read_and_trailing_anything_is_not(raw, expect):
+def test_only_the_one_object_that_was_asked_for_is_read(raw, expect):
+    """The owner's rule of 2026-09-12: no JSON repair anywhere. A reply that
+    is not exactly the object asked for is asked again."""
     assert runner._loads_object(raw) == expect
-
-
-@pytest.mark.parametrize("raw,expect", [
-    # The measured shape: five levels open, four closed, finish=stop. All 20
-    # of the unreadable replies the first corpus group showed ended in }]}}.
-    ('{"fields": {"year": {"groups": [{"rows": ["R1"], "value": 2030, '
-     '"quote": "bis 2030"}]}}',
-     {"fields": {"year": {"groups": [{"rows": ["R1"], "value": 2030,
-                                      "quote": "bis 2030"}]}}}),
-    ('{"a": [1, 2', {"a": [1, 2]}),
-    # Brackets inside a quote are text, an escaped quote does not end it.
-    ('{"quote": "Tabelle {3] zeigt", "a": 1', {"quote": "Tabelle {3] zeigt", "a": 1}),
-    ('{"q": "er sagte \\"ja\\"", "n": 1', {"q": 'er sagte "ja"', "n": 1}),
-    # Nothing to close, and nothing invented.
-    ('{"a": 1}', {"a": 1}),
-    ('{"a": "unterminated', None),
-    ('{"a": 1]', None),
-    ('gar kein json', None),
-])
-def test_a_reply_short_of_its_closers_is_closed_when_asked(raw, expect):
-    assert runner._loads_object(raw, close=True) == expect
-    if expect is not None and raw != '{"a": 1}':
-        assert runner._loads_object(raw) is None, "only when asked"
 
 
 def _stub_client(monkeypatch, replies, finish):
@@ -1018,21 +1023,25 @@ def _stub_client(monkeypatch, replies, finish):
     return seen
 
 
-def test_a_stopped_reply_one_brace_short_is_read_on_the_first_attempt(monkeypatch):
-    """1,546 first attempts, 965 second, 947 third: the retry did not help,
-    and every one of those cost the row a window."""
+def test_a_stopped_reply_one_brace_short_is_asked_again_not_closed(monkeypatch):
+    """1,546 of roughly 8,000 replies ended one brace short and were closed
+    for the model. Closing is a guess at what it meant to say, and a wrong
+    guess is a value with a quote behind it. Asked again instead, and the
+    retry carries the place the syntax broke."""
     from docpipe.extraction import fields
     short = '{"fields": {"year": {"answers": {"R1": {"value": 2030}}}}'
     seen = _stub_client(monkeypatch, [short, '{"answers": {}}'], "stop")
     ask = runner.make_field_asker()
     slot = fields.Slot(name="year", kind=fields.NUMBER, question="Welches Jahr?")
     out = ask([], [], slot)
-    assert out == {"fields": {"year": {"answers": {"R1": {"value": 2030}}}}}
-    assert len(seen) == 1, "closed, not retried"
+    assert out == {"answers": {}}
+    assert len(seen) == 2, "asked again, not closed"
+    assert "JSON" in seen[1][-1]["content"]
 
 
 def test_a_reply_cut_off_at_the_ceiling_is_not_closed(monkeypatch):
-    """Cut mid-number, closed, it would pass as complete with a wrong value."""
+    """Cut mid-number, closed, it would pass as complete with a wrong value.
+    One row, so there is nothing to halve and it is simply asked again."""
     from docpipe.extraction import fields
     short = '{"fields": {"year": {"answers": {"R1": {"value": 20'
     seen = _stub_client(monkeypatch, [short, '{"answers": {}}'], "length")
@@ -1089,22 +1098,68 @@ def test_an_unreadable_reply_is_sent_back_with_the_reason(monkeypatch):
     assert "JSON" in followup["content"], "the retry must say what was wrong"
 
 
-def test_the_retry_says_what_was_wrong_with_the_reply():
-    """A reply cut off at the ceiling is told to be shorter, a broken one where
-    it broke, and one without any object that it had none. One sentence for
-    all three was one attempt three times."""
+def test_the_retry_names_the_cause_and_says_what_to_do():
+    """A reply cut off at the ceiling is told to be shorter, a broken one
+    where it broke, one wrapped in prose that the prose has to go, and one
+    missing its list which list. The same sentence for all of them was one
+    attempt three times — and the cause goes into the trace, so a run can
+    say what its retries were spent on."""
     from types import SimpleNamespace as NS
     cut = NS(finish_reason="length",
              message=NS(content='{"fields": {"year": {"ans'))
-    said = runner._unreadable_correction(cut, 6144)
-    assert "abgeschnitten" in said and "6144" in said
+    cause, said = runner._reply_fault(cut, 6144)
+    assert cause == "cut_off" and "abgeschnitten" in said and "6144" in said
     broken = NS(finish_reason="stop", message=NS(
         content='{"fields": {"year": {"answers": {"R1" {"value": 2030}}}}}'))
-    said = runner._unreadable_correction(broken, 6144)
-    assert '"R1" {' in said, "it shows the place the syntax broke"
-    assert "abgeschnitten" not in said and "gar kein" not in said
+    cause, said = runner._reply_fault(broken, 6144)
+    assert cause == "syntax" and '"R1" {' in said
+    assert "abgeschnitten" not in said
     none = NS(finish_reason="stop", message=NS(content="Das Jahr ist 2030."))
-    assert "gar kein JSON-Objekt" in runner._unreadable_correction(none, 6144)
+    assert runner._reply_fault(none, 6144)[0] == "no_object"
+    wrapped = NS(finish_reason="stop",
+                 message=NS(content='Hier: {"tuples": []} — fertig.'))
+    cause, said = runner._reply_fault(wrapped, 6144)
+    assert cause == "outside_text" and "fertig" in said
+    listed = NS(finish_reason="stop", message=NS(content="[1, 2]"))
+    assert runner._reply_fault(listed, 6144)[0] == "not_an_object"
+    missing = NS(finish_reason="stop", message=NS(content='{"values": []}'))
+    assert runner._reply_fault(missing, 6144, key="tuples")[0] == "missing_key"
+    empty = NS(finish_reason="stop", message=NS(content="  "))
+    assert runner._reply_fault(empty, 6144)[0] == "empty"
+
+
+def test_a_field_reply_that_did_not_fit_halves_its_rows(monkeypatch):
+    """A reply cut off at the ceiling used to be closed with the brackets it
+    was missing, and every row past the cut took whatever the last complete
+    field in it happened to say. Now the rows are halved and asked again, so
+    every row gets an answer of its own or none."""
+    from types import SimpleNamespace as NS
+    from docpipe.extraction import fields
+    seen = []
+    queue = iter([('{"answers": {"R1": {"value": 1', "length"),
+                  ('{"answers": {"R1": {"value": 1}}}', "stop"),
+                  ('{"answers": {"R2": {"value": 2}}}', "stop")])
+
+    class _Client:
+        class chat:
+            class completions:
+                @staticmethod
+                def create(**kw):
+                    body, finish = next(queue)
+                    seen.append(json.loads(kw["messages"][-1]["content"]))
+                    return NS(choices=[NS(
+                        message=NS(content=body, reasoning_content=""),
+                        finish_reason=finish)], usage=None)
+
+    monkeypatch.setattr(runner, "_client", lambda: _Client())
+    monkeypatch.setattr(runner.time, "sleep", lambda s: None)
+    rows = [NS(label="R1", claim={"value": 1, "quote": "Zeile 1"}),
+            NS(label="R2", claim={"value": 2, "quote": "Zeile 2"})]
+    slot = fields.Slot(name="year", kind=fields.NUMBER, question="Welches Jahr?")
+    out = runner.make_field_asker()([], rows, slot)
+    assert [[r["id"] for r in sent["rows"]] for sent in seen] == [
+        ["R1", "R2"], ["R1"], ["R2"]]
+    assert out["answers"] == {"R1": {"value": 1}, "R2": {"value": 2}}
 
 
 def test_the_unreadable_diagnostic_shows_the_end_and_marks_the_cut():
@@ -1890,3 +1945,15 @@ def test_a_request_one_token_over_the_window_is_asked_again_with_room(
     assert runner.fitted_max_tokens(_Refused("bad request"), 6144) is None
     no_room = said.replace("26625", "32600")
     assert runner.fitted_max_tokens(_Refused(no_room), 6144) is None
+
+
+def test_the_wait_covers_every_attempt_and_grows_when_the_server_is_gone():
+    """`attempt < MAX_RETRIES` stopped one short of the loop it guarded, so
+    attempts 3, 4 and 5 of every harvest waited not at all — 256 requests of
+    corpus_m5 burned their whole budget inside a few seconds of one outage.
+    A transport failure needs the server to come back, so it waits longer."""
+    assert [runner.retry_wait(a) for a in (1, 2, 3, 4, 5)] == [2, 4, 6, 6, 6]
+    assert [runner.retry_wait(a, True) for a in (1, 2, 3, 4, 5)] == [
+        15, 30, 60, 120, 120]
+    assert sum(runner.retry_wait(a, True) for a in range(1, 5)) == 225, (
+        "four waits over five attempts is what a restarting vLLM needs")

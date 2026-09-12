@@ -66,6 +66,21 @@ Dazu kommt, entschieden am 2026-09-11: eine Antwort auf eine geschlossene
 Liste ist einer ihrer Einträge. Eine Antwort außerhalb der Liste wird mit
 Begründung neu gefragt und nie als gelesen markiert (`not_an_option`).
 
+Und, entschieden am 2026-09-12: kein JSON wird repariert. Weder werden
+Klammern geschlossen noch Codefences oder `<think>`-Blöcke entfernt, noch
+wird ein Objekt aus umgebendem Text herausgeschnitten, noch werden aus einer
+abgeschnittenen Antwort die fertigen Tupel gerettet. Gelesen wird genau ein
+JSON-Objekt. Alles andere wird neu gefragt, und die Rückfrage nennt die
+Ursache (`_reply_fault`: cut_off, empty, no_object, syntax, outside_text,
+missing_key, not_an_object, wrong_shape). Passt eine Antwort nicht in ihr
+Token-Limit, wird die Anfrage geteilt statt die Antwort gerettet: der
+Zeilen-Harvester halbiert seine Passagen, der Feld-Frager seine Zeilen, der
+Rahmen-Frager seine Quellen, und eine einzelne Passage bekommt mehr Platz.
+Bleibt nichts zu teilen, ist das Ergebnis ein Loch mit Grund (`_why:
+cut_off`) und kein halb gelesener Wert. Ein Wert, der die Prüfung nicht
+überlebt, verliert seinen Stempel: `read` wird zu `unbacked`, und Zitat und
+Quelle gehen mit.
+
 Drei Prüfungen darüber hinaus (Belegregel own/local/any, „eine Antwort, zwei
 Spalten", „falsche Spalte") sind ohne Auftrag gebaut worden und haben den
 Kassel-Pilot 12881827 mitgekippt. Deshalb:

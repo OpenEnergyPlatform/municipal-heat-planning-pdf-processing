@@ -32,5 +32,7 @@ Steht ein Feld "candidates" im Objekt, sind das vierstellige Zahlen, die in gena
 
 Steht ein Feld "known" im Objekt, sind das Paare, die schon gefunden wurden. Wiederhole sie nicht, such nach weiteren.
 
+Steht ein Feld "corrections" im Objekt, sind das die Gründe, aus denen Paare deiner letzten Antwort verworfen wurden. Lies jeden und antworte erneut: mit dem Beleg, der gefehlt hat, oder mit dem Schlüssel aus "scenarios", der gepasst hätte. Ein Paar, das du nicht belegen kannst, lässt du weg.
+
 Antworte mit NUR einem JSON-Objekt, kein Markdown, kein Text davor oder danach:
 {"pairs": [{"scenario": "<Schlüssel>", "scenario_raw": "<Wort des Plans>", "scenario_quote": "<Passage>", "scenario_source": "<id>", "year": <Jahr>, "year_quote": "<Passage>", "year_source": "<id>"}], "status": "complete", "need_more": []}

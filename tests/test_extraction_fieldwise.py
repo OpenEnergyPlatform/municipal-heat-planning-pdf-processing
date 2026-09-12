@@ -2127,3 +2127,22 @@ def test_the_sweeper_is_the_one_the_harvest_uses(monkeypatch):
     runner.make_fieldwise_harvester(spec=spec)
     assert seen == [["anchors", "more_sources", "parents",
                      "rest_of_document"]]
+
+
+def test_an_answer_of_the_wrong_kind_is_refused_and_the_model_told(profile):
+    """A year as "2030-2045", a wording as a list. It used to be coerced --
+    int() truncated and str() stringified -- and what reached the graph was a
+    value nobody had read anywhere. Refused now, with the kind that was
+    wanted, so the next attempt differs from this one."""
+    batch, rows, slot = _one_row(profile, kind=fields.NUMBER)
+    if batch is None:
+        pytest.skip("this profile has no number axis")
+    quote = "Im Zieljahr 2030 bis 2045 ist die Versorgung klimaneutral."
+    counts = merge_field(rows, [Source("section", 5, quote, {})], slot,
+                         {"answers": {rows[0].label: {"value": "2030-2045",
+                                                      "quote": quote}}})
+    assert (counts["filled"], counts["unbacked"]) == (0, 1)
+    assert [f["why"] for f in counts["failed"]] == ["wrong_type"]
+    assert "Zahl" in counts["failed"][0]["reason"]
+    assert slot.name not in rows[0].claim
+    assert rows[0].claim[f"{slot.name}_state"] == fields.UNBACKED

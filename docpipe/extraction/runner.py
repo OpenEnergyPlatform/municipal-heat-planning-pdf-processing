@@ -22,9 +22,11 @@ documents, and `document_anchor` writes the one short sentence per parameter
 the document being planned is searched with, which is a cache miss by
 construction.
 
-`make_harvester` and `make_fieldwise_harvester` build the request to the model,
-parse its reply, and rescue the tuples already written when a reply is cut off
-at the token ceiling (`rescue_reply`). `make_sweeper` drives the field-wise
+`make_harvester` and `make_fieldwise_harvester` build the request to the model
+and parse its reply strictly: one JSON object and nothing else. A reply that is
+not that is asked again with the cause named (`_reply_fault`), and one cut off
+at the token ceiling is asked again over half the passages (`_split_harvest`)
+rather than half-read. `make_sweeper` drives the field-wise
 sweep: a coordinate the value's own passage does not answer is asked for again
 over short overlapping windows of the rest of the document (`window_sources`),
 bounded per axis. `find_frame` and `make_frame_asker` read a document's frame,
@@ -85,6 +87,38 @@ LLM_TIMEOUT = int(os.environ.get("LLM_TIMEOUT", "180"))
 TOP_K = int(os.environ.get("EXTRACT_TOP_K", "8"))
 MAX_ROUNDS = int(os.environ.get("EXTRACT_MAX_ROUNDS", "4"))
 MAX_RETRIES = 3
+# How long to wait before asking again, and it is two curves because the two
+# failures are not alike. A reply the model got wrong comes back the moment it
+# is asked again; a server that is not there needs time to come back. The
+# corpus_m5 run had neither: `attempt < MAX_RETRIES` stops one short of the
+# loop it guards, so attempts 3, 4 and 5 of every harvest waited not at all,
+# and 256 requests spent their whole budget inside a few seconds of one
+# outage — 1,152 of that run's 1,156 connection errors fell in its last hour.
+# How often a request may be halved before it is simply refused. Without a
+# floor the recursion is bounded only by the number of rows, and one stuck
+# table of 64 line items becomes a tree of 127 requests that the field
+# sweep's window budget cannot see: it counts the one call it made. Three
+# halvings are eight parts, which is the largest table the corpus has needed.
+SPLIT_DEPTH = int(os.environ.get("EXTRACT_SPLIT_DEPTH", "3"))
+RETRY_WAIT = float(os.environ.get("EXTRACT_RETRY_WAIT", "2"))
+RETRY_WAIT_MAX = float(os.environ.get("EXTRACT_RETRY_WAIT_MAX", "6"))
+TRANSPORT_WAIT = float(os.environ.get("EXTRACT_TRANSPORT_WAIT", "15"))
+TRANSPORT_WAIT_MAX = float(os.environ.get("EXTRACT_TRANSPORT_WAIT_MAX", "120"))
+
+
+def retry_wait(attempt: int, transport: bool = False) -> float:
+    """Seconds to wait before attempt *attempt* + 1.
+
+    *transport* is the request that never reached the server: no HTTP status,
+    no refusal, nothing to read. Doubling from 15 seconds gives a restarting
+    vLLM 225 seconds over five attempts, which is what a model server needs
+    to come back; the model's own mistakes keep the short curve, because
+    waiting longer for those buys nothing.
+    """
+    if transport:
+        return min(TRANSPORT_WAIT * (2 ** max(0, attempt - 1)),
+                   TRANSPORT_WAIT_MAX)
+    return min(RETRY_WAIT * attempt, RETRY_WAIT_MAX)
 # Requests in flight against the server, for the whole run — not per document.
 # vLLM batches continuously: what it can schedule is what it is given, and a
 # handful of requests leaves four H100s idle between tokens. The first pilot
@@ -254,11 +288,6 @@ def window_budget() -> dict:
 # something is and never comes back. Three, because the window itself is two:
 # the re-entry may not become the window.
 FIELD_RE_ENTRY = int(os.environ.get("EXTRACT_FIELD_RE_ENTRY", "3"))
-
-_THINK_RE = re.compile(r"<think>.*?</think>", re.DOTALL)
-_FENCE_OPEN = re.compile(r"^```(?:json)?\s*")
-_FENCE_CLOSE = re.compile(r"\s*```$")
-
 
 # ---------------------------------------------------------------------------
 # Retrieval: probe text -> ranked unseen owners of one document
@@ -882,26 +911,41 @@ def document_anchor(spec: Spec, context: Optional[dict] = None,
                              for k, v in frame.items()
                              if not k.endswith(("_raw", "_quote", "_source"))}
         payload = json.dumps(body, ensure_ascii=False, indent=2)
+        transport = False
+        conversation: list = [{"role": "user", "content": payload}]
+        limit = int(prompt.meta.get("max_tokens", 300))
         for attempt in range(1, MAX_RETRIES + 1):
             try:
                 reply = client.chat.completions.create(
                     model=LLM_MODEL,
                     temperature=float(prompt.meta.get("temperature", 0)),
-                    max_tokens=int(prompt.meta.get("max_tokens", 300)),
+                    max_tokens=limit,
                     messages=[{"role": "system", "content": prompt.text},
-                              {"role": "user", "content": payload}],
+                              *conversation],
                     extra_body={"chat_template_kwargs":
                                 {"enable_thinking": False}},
-                ).choices[0].message.content
-                phrase = ((_loads_object(reply) or {}).get("phrase") or "")
+                ).choices[0]
+                phrase = ((_loads_object(reply.message.content) or {})
+                          .get("phrase") or "")
                 phrase = phrase.strip() if isinstance(phrase, str) else ""
                 if phrase:
                     return parameter.uri, [phrase]
+                # The same retry rule as everywhere else: a reply that could
+                # not be read is asked again WITH the reason. Three silent
+                # tries were three copies of the same reply.
+                cause, correction = _reply_fault(reply, limit)
+                log.warning("phrase %s attempt %d: %s reply",
+                            parameter.uri, attempt, cause)
+                conversation.append({"role": "assistant",
+                                     "content": reply.message.content or ""})
+                conversation.append({"role": "user", "content": correction})
             except Exception as exc:
                 log.warning("phrase %s attempt %d failed: %s",
                             parameter.uri, attempt, exc)
+                transport = not isinstance(
+                    getattr(exc, "status_code", None), int)
             if attempt < MAX_RETRIES:
-                time.sleep(min(2 * attempt, 6))
+                time.sleep(retry_wait(attempt, transport))
         log.warning("phrase %s: no anchor written for this document",
                     parameter.uri)
         return parameter.uri, []
@@ -939,7 +983,8 @@ def years_in_sources(sources, low: int = 0, high: int = 0) -> set:
 
 
 def _frame_payload(sources: list, slots: list, known: Optional[list] = None,
-                   candidates: Optional[list] = None) -> dict:
+                   candidates: Optional[list] = None,
+                   corrections: Optional[list] = None) -> dict:
     """The request body of one frame request.
 
     Sources first, then the answer space of every frame coordinate that has
@@ -976,6 +1021,13 @@ def _frame_payload(sources: list, slots: list, known: Optional[list] = None,
         # in a shown passage and carries the year -- so a candidate that is a
         # megawatt-hour simply comes back unquotable.
         payload["candidates"] = list(candidates)
+    if corrections:
+        # What was wrong with the last answer over these same passages. A
+        # pair that failed its evidence, or named a scenario that is not on
+        # the list, used to disappear without a word -- the model was never
+        # told, and the next window was asked in exactly the same way.
+        payload["corrections"] = [c.get("reason") for c in corrections
+                                  if isinstance(c, dict) and c.get("reason")]
     return payload
 
 
@@ -1027,9 +1079,12 @@ def make_frame_asker(image_root: Optional[Path] = None) -> Callable:
     def ask(sources: list, slots: list, document_id: Optional[int] = None,
             known: Optional[list] = None,
             usage_out: Optional[dict] = None,
-            candidates: Optional[list] = None) -> Optional[dict]:
-        payload = json.dumps(_frame_payload(sources, slots, known, candidates),
-                             ensure_ascii=False, indent=2)
+            candidates: Optional[list] = None,
+            corrections: Optional[list] = None, *,
+            depth: int = 0) -> Optional[dict]:
+        payload = json.dumps(
+            _frame_payload(sources, slots, known, candidates, corrections),
+            ensure_ascii=False, indent=2)
         # The crops ride along, as they do for every other request: a year
         # in a column header and a scenario in a figure caption are often
         # clearer in the picture than in the transcription of it.
@@ -1045,6 +1100,8 @@ def make_frame_asker(image_root: Optional[Path] = None) -> Callable:
                 parts.append(part)
         if len(parts) > 1:
             content = parts
+        transport = False
+        conversation: list = [{"role": "user", "content": content}]
         limit = max_tokens
         for attempt in range(1, MAX_RETRIES + 1):
             started = time.time()
@@ -1053,10 +1110,11 @@ def make_frame_asker(image_root: Optional[Path] = None) -> Callable:
                     model=LLM_MODEL, temperature=temperature,
                     max_tokens=limit,
                     messages=[{"role": "system", "content": prompt.text},
-                              {"role": "user", "content": content}],
+                              *conversation],
                     extra_body={"chat_template_kwargs":
                                 {"enable_thinking": False}},
                 )
+                transport = False
                 _observe_usage(getattr(completion, "usage", None))
                 if usage_out is not None:
                     usage = getattr(completion, "usage", None)
@@ -1066,13 +1124,59 @@ def make_frame_asker(image_root: Optional[Path] = None) -> Callable:
                         usage, "completion_tokens", None)
                     usage_out["ms"] = int((time.time() - started) * 1000)
                     usage_out["attempt"] = attempt
-                parsed = _loads_object(
-                    completion.choices[0].message.content or "")
-                if isinstance(parsed, dict):
+                reply = completion.choices[0]
+                parsed = _loads_object(reply.message.content or "")
+                # WITH its list: a dict that carries no `pairs` is a reply
+                # that answered something else, and returning it made the
+                # window look answered and the plan pairless.
+                if isinstance(parsed, dict) and isinstance(
+                        parsed.get("pairs"), list):
                     return parsed
+                cause, correction = _reply_fault(
+                    reply, limit, key="pairs",
+                    shorter="Antworte mit weniger Paaren und zitiere nur die "
+                            "kurze Stelle, an der das Szenario oder das Jahr "
+                            "steht.")
+                log.warning("frame %s attempt %d: %s reply%s",
+                            document_id, attempt, cause, _unparsable(reply))
+                trace.event("error", document_id, where="frame",
+                            kind="unreadable", cause=cause, attempt=attempt,
+                            finish=getattr(reply, "finish_reason", None))
+                if cause == "cut_off" and len(sources) > 1 \
+                        and depth < SPLIT_DEPTH:
+                    # Fewer passages per request. A pair the frame does not
+                    # have loses every value of that pair, so the half of the
+                    # window that was never answered for is asked rather than
+                    # written off.
+                    cut = len(sources) // 2
+                    merged: dict = {"pairs": [], "status": "complete",
+                                    "need_more": []}
+                    for offset, part in ((0, sources[:cut]),
+                                         (cut, sources[cut:])):
+                        got = ask(part, slots, document_id, known, usage_out,
+                                  candidates, corrections, depth=depth + 1)
+                        if not isinstance(got, dict):
+                            merged["status"] = "incomplete"
+                            continue
+                        merged["pairs"].extend(_relabel_sources(
+                            [p for p in (got.get("pairs") or ())
+                             if isinstance(p, dict)], offset))
+                        if str(got.get("status") or "") != "complete":
+                            merged["status"] = "incomplete"
+                        merged["need_more"].extend(
+                            q for q in (got.get("need_more") or ())
+                            if isinstance(q, str))
+                    trace.event("error", document_id, where="frame",
+                                kind="split", attempt=attempt)
+                    return merged
+                conversation.append({"role": "assistant",
+                                     "content": reply.message.content or ""})
+                conversation.append({"role": "user", "content": correction})
             except Exception as exc:
                 log.warning("frame %s attempt %d failed: %s",
                             document_id, attempt, exc)
+                transport = not isinstance(
+                    getattr(exc, "status_code", None), int)
                 trace.event("error", document_id, where="frame",
                             kind="exception", attempt=attempt,
                             detail=str(exc)[:200])
@@ -1081,29 +1185,43 @@ def make_frame_asker(image_root: Optional[Path] = None) -> Callable:
                     limit = fitted
                     continue
             if attempt < MAX_RETRIES:
-                time.sleep(min(2 * attempt, 6))
+                time.sleep(retry_wait(attempt, transport))
         return None
 
     return ask
 
 
-def frame_pairs(reply: Optional[dict], slots: list, sources: list) -> list:
+def frame_pairs(reply: Optional[dict], slots: list, sources: list,
+                rejected: Optional[list] = None) -> list:
     """The pairs of a reply that carry their own evidence, in order.
 
     Every coordinate is held to what a field answer is held to: its quote sits
-    verbatim in one of the passages that were SHOWN, and the quote contains
-    the answer. Nothing else is checked. A frame reading is
-    document-level by construction -- it is read once, from a caption or a
-    heading, and every row of the document inherits it -- so "is this passage
-    near this row" is not a question about it, and no reading anywhere in
-    the harvest is asked it.
+    verbatim in one of the passages that were SHOWN, the quote contains the
+    answer, and a scenario is one of the keys the request listed. Nothing else
+    is checked. A frame reading is document-level by construction -- it is
+    read once, from a caption or a heading, and every row of the document
+    inherits it -- so "is this passage near this row" is not a question about
+    it, and no reading anywhere in the harvest is asked it.
+
+    *rejected* collects one sentence per pair that did not get through, for
+    `find_frame` to put back in front of the model. Silently dropping them is
+    how a plan ended up with a scenario the ontology has no class for: the
+    pair was refused, nobody said so, and the next window was asked the same
+    question in the same way.
     """
-    from .pipeline import answer_in_quote
+    from .pipeline import answer_in_quote, option_named
     from .verify import quote_in
 
     where = {f"Q{i + 1}": s for i, s in enumerate(sources)}
     out: list = []
     seen: set = set()
+
+    def refuse(reason: str) -> None:
+        # Bounded: the corrections ride in the next prompt, and a reply whose
+        # every pair failed would otherwise pay for itself twice.
+        if rejected is not None and len(rejected) < 6:
+            rejected.append({"reason": reason})
+
     for entry in (reply or {}).get("pairs") or ():
         if not isinstance(entry, dict):
             continue
@@ -1113,9 +1231,11 @@ def frame_pairs(reply: Optional[dict], slots: list, sources: list) -> list:
             if isinstance(given, str):
                 given = given.strip()
             if given is None or given == "":
+                refuse(f'In einem Paar fehlte "{slot.name}".')
                 break
             quote = entry.get(f"{slot.name}_quote")
             if not isinstance(quote, str) or not quote.strip():
+                refuse(f'Zu {slot.name}={given!r} fehlte "{slot.name}_quote".')
                 break
             named = entry.get(f"{slot.name}_source")
             found = where.get(str(named))
@@ -1123,15 +1243,35 @@ def frame_pairs(reply: Optional[dict], slots: list, sources: list) -> list:
                 found = next((s for s in sources
                               if quote_in(s.text or "", quote)), None)
             if found is None:
+                refuse(f"Das Zitat zu {slot.name}={given!r} steht in keiner "
+                       f"der gezeigten Passagen: {quote.strip()[:80]!r}. "
+                       f"Kopiere es Zeichen f\u00fcr Zeichen aus \"sources\".")
                 break
             wording = entry.get(f"{slot.name}_raw")
             wording = wording.strip() if isinstance(wording, str) else None
             if not answer_in_quote(slot, given, wording, quote):
+                refuse(f"{slot.name}={given!r} steht nicht in seinem Zitat "
+                       f"{quote.strip()[:80]!r}. Schreib die Formulierung des "
+                       f"Plans in \"{slot.name}_raw\".")
+                break
+            if slot.kind == fields.CHOICE and slot.options \
+                    and option_named(slot, given) is None:
+                # An answer that is not on the closed list. It used to be
+                # taken as long as its wording stood in the quote, and the
+                # class lookup behind it then came back empty -- 8,944 of
+                # ar6's tuples carry an unmapped scenario label for exactly
+                # this reason. Asked again instead, and told which list.
+                refuse(f"{given!r} ist keiner der Schl\u00fcssel aus "
+                       f'"scenarios". W\u00e4hle genau einen daraus, Zeichen '
+                       f"f\u00fcr Zeichen abgeschrieben, und schreib das Wort "
+                       f'des Plans in "{slot.name}_raw".')
                 break
             if slot.kind == fields.NUMBER:
                 try:
                     given = int(str(given).strip())
                 except (TypeError, ValueError):
+                    refuse(f"{slot.name}={given!r} ist keine ganze "
+                           f"Jahreszahl. Gib das Jahr vierstellig an.")
                     break
             pair[slot.name] = given
             pair[f"{slot.name}_raw"] = wording
@@ -1203,22 +1343,38 @@ def find_frame(sources: list, slots: list, document_id: int, ask: Callable,
                      if tuple(p.get(s.name) for s in slots) not in known)
 
     def one(shown: list, attempt: int, recheck: Optional[list] = None) -> str:
-        usage: dict = {}
-        reply = ask(shown, slots, document_id, pairs, usage, recheck)
-        take(frame_pairs(reply, slots, shown))
-        said = str((reply or {}).get("status") or "").strip()
-        trace.event("frame", document_id, pairs=len(pairs),
-                    scenarios=sorted({str(p.get(slots[0].name))
-                                      for p in pairs}),
-                    years=sorted({p[s.name] for p in pairs for s in number
-                                  if isinstance(p.get(s.name), int)}),
-                    missed=list(recheck or []),
-                    sources=[[s.owner_kind, s.owner_id] for s in shown],
-                    status="complete" if said == "complete" else "exhausted",
-                    attempt=attempt,
-                    prompt_tokens=usage.get("prompt_tokens"),
-                    completion_tokens=usage.get("completion_tokens"),
-                    ms=usage.get("ms", 0))
+        said = "complete"
+        corrections: Optional[list] = None
+        # Two rounds at most over one window: the ask, and one that says what
+        # was wrong with it. The second round is only sent when a pair was
+        # actually refused, so a clean window still costs one request.
+        for extra in range(2):
+            usage: dict = {}
+            rejected: list = []
+            reply = ask(shown, slots, document_id, pairs, usage, recheck,
+                        corrections)
+            take(frame_pairs(reply, slots, shown, rejected))
+            # The conservative reading wins across the rounds: a window whose
+            # first answer said "incomplete" is not finished because the
+            # second one, asked about what was refused, says it is.
+            if str((reply or {}).get("status") or "").strip() != "complete":
+                said = "exhausted"
+            trace.event("frame", document_id, pairs=len(pairs),
+                        scenarios=sorted({str(p.get(slots[0].name))
+                                          for p in pairs}),
+                        years=sorted({p[s.name] for p in pairs for s in number
+                                      if isinstance(p.get(s.name), int)}),
+                        missed=list(recheck or []),
+                        sources=[[s.owner_kind, s.owner_id] for s in shown],
+                        status="complete" if said == "complete" else "exhausted",
+                        attempt=attempt + extra,
+                        rejected=len(rejected),
+                        prompt_tokens=usage.get("prompt_tokens"),
+                        completion_tokens=usage.get("completion_tokens"),
+                        ms=usage.get("ms", 0))
+            if not rejected:
+                break
+            corrections = rejected
         return said
 
     for index, shown in enumerate(windows):
@@ -1358,26 +1514,37 @@ def make_anchors(spec: Spec, client=None, *, store: Optional[Path] = None,
             # would get the same six sentences about the parameter.
             body["question"] = question
         payload = json.dumps(body, ensure_ascii=False, indent=2)
+        transport = False
+        conversation: list = [{"role": "user", "content": payload}]
+        limit = int(prompt.meta.get("max_tokens", 800))
         for attempt in range(1, MAX_RETRIES + 1):
             try:
                 reply = client.chat.completions.create(
                     model=LLM_MODEL,
                     temperature=float(prompt.meta.get("temperature", 0.4)),
-                    max_tokens=int(prompt.meta.get("max_tokens", 800)),
+                    max_tokens=limit,
                     messages=[{"role": "system", "content": prompt.text},
-                              {"role": "user", "content": payload}],
+                              *conversation],
                     extra_body={"chat_template_kwargs": {"enable_thinking": False}},
-                ).choices[0].message.content
-                parsed = _loads_object(reply)
+                ).choices[0]
+                parsed = _loads_object(reply.message.content)
                 anchors = [a.strip() for a in (parsed or {}).get("anchors", ())
                            if isinstance(a, str) and a.strip()]
                 if anchors:
                     return anchor_id, anchors
+                cause, correction = _reply_fault(reply, limit, key="anchors")
+                log.warning("anchors %s attempt %d: %s reply",
+                            anchor_id, attempt, cause)
+                conversation.append({"role": "assistant",
+                                     "content": reply.message.content or ""})
+                conversation.append({"role": "user", "content": correction})
             except Exception as exc:
                 log.warning("anchors %s attempt %d failed: %s",
                             anchor_id, attempt, exc)
+                transport = not isinstance(
+                    getattr(exc, "status_code", None), int)
             if attempt < MAX_RETRIES:
-                time.sleep(min(2 * attempt, 6))
+                time.sleep(retry_wait(attempt, transport))
         log.warning("anchors %s: none generated", anchor_id)
         return anchor_id, []
 
@@ -1548,97 +1715,25 @@ def _client():
                   timeout=LLM_TIMEOUT, max_retries=0)
 
 
-def _close_open_brackets(text: str) -> str:
-    """The closers a reply stopped short of, appended. Delimiters only.
+def _loads_object(raw_text) -> Optional[dict]:
+    """The one JSON object a reply was asked for, or None.
 
-    Measured on the first corpus group under the multi-field request: 1,546
-    of roughly 8,000 five-field replies ended in `}]}}` where `}]}}}` was
-    due. The model closes the last field and forgets the object around them,
-    every time with finish=stop, and told to try again it repeated it 62% and
-    then 98% of the time. No content is added: a bracket inside a string is
-    text, a reply that stops inside a string is left as it is, and a closer
-    that does not match what is open is somebody else's shape.
+    Strict, and that is the point of it. Every softener this used to carry --
+    closing the brackets a reply stopped short of, reading one object out of
+    a longer text, stripping fences and think blocks -- turned a defective
+    answer into a value that then stood in the harvest saying "read" with
+    nothing under it. A reply that is not exactly the object that was asked
+    for is asked again, and the retry says what was wrong with it
+    (`_reply_fault`).
     """
-    start = text.find("{")
-    if start == -1:
-        return text
-    stack: list = []
-    in_string = escaped = False
-    for ch in text[start:]:
-        if in_string:
-            if escaped:
-                escaped = False
-            elif ch == "\\":
-                escaped = True
-            elif ch == '"':
-                in_string = False
-            continue
-        if ch == '"':
-            in_string = True
-        elif ch in "{[":
-            stack.append("}" if ch == "{" else "]")
-        elif ch in "}]":
-            if not stack or stack[-1] != ch:
-                return text
-            stack.pop()
-    if in_string or not stack:
-        return text
-    return text + "".join(reversed(stack))
-
-
-def _loads_object(raw_text: str, close: bool = False) -> Optional[dict]:
-    """The JSON object in a reply, whatever it is wrapped in.
-
-    The fallback used to be a greedy {.*} span, which is the one shape that
-    cannot work: two objects in a row, or a sentence after the answer that
-    happens to end in a brace, and the span covers both and is invalid by
-    construction. Replies that looked perfectly well formed in the log were
-    dropped that way.
-
-    raw_decode instead — it reads ONE object from the first brace and stops,
-    so trailing anything is simply not read. The same decoder rescue_reply
-    uses, and for the same reason: quotes are lifted verbatim out of plans and
-    braces in them do not balance.
-    """
-    text = _THINK_RE.sub("", raw_text or "").strip()
-    text = _FENCE_CLOSE.sub("", _FENCE_OPEN.sub("", text)).strip()
+    text = (raw_text or "").strip()
+    if not text:
+        return None
     try:
         data = json.loads(text)
     except json.JSONDecodeError:
-        start = text.find("{")
-        if start == -1:
-            return None
-        try:
-            data, _end = _DECODER.raw_decode(text, start)
-        except json.JSONDecodeError:
-            # *close* is the caller saying the model stopped on its own: a
-            # reply cut off at the token ceiling may end after a complete
-            # value that is not the whole value, and closed it would pass.
-            closed = _close_open_brackets(text) if close else text
-            if closed == text:
-                return None
-            try:
-                data, _end = _DECODER.raw_decode(closed, start)
-            except json.JSONDecodeError:
-                return None
+        return None
     return data if isinstance(data, dict) else None
-
-
-def _parse_tuples(raw_text: str) -> Optional[list]:
-    text = _THINK_RE.sub("", raw_text or "").strip()
-    text = _FENCE_CLOSE.sub("", _FENCE_OPEN.sub("", text)).strip()
-    try:
-        data = json.loads(text)
-    except json.JSONDecodeError:
-        match = re.search(r"\{.*\}", text, re.DOTALL)
-        if not match:
-            return None
-        try:
-            data = json.loads(match.group(0))
-        except json.JSONDecodeError:
-            return None
-    tuples = data.get("tuples") if isinstance(data, dict) else None
-    return tuples if isinstance(tuples, list) else None
 
 
 # What a `defaults` block may NOT carry. Stated as the exclusion, not as a
@@ -1657,14 +1752,7 @@ NOT_DEFAULTABLE = frozenset({
     "computed", "compute",
 })
 
-_TUPLES_KEY = re.compile(r'"tuples"\s*:\s*\[')
-_DEFAULTS_KEY = re.compile(r'"defaults"\s*:\s*\{')
 _DECODER = json.JSONDecoder()
-
-
-def _strip_wrapping(raw_text: str) -> str:
-    text = _THINK_RE.sub("", raw_text or "").strip()
-    return _FENCE_CLOSE.sub("", _FENCE_OPEN.sub("", text)).strip()
 
 
 def expand_defaults(defaults: Optional[dict], tuples: list) -> list:
@@ -1694,64 +1782,21 @@ def expand_defaults(defaults: Optional[dict], tuples: list) -> list:
     return out
 
 
-def rescue_reply(raw_text: str) -> Optional[dict]:
-    """Every complete tuple in an answer the generation cut short.
-
-    A reply that hits the token ceiling stops mid-key, never on a boundary,
-    so the JSON is unparsable — but the tuples written before the cut are
-    whole, and each of them is quote-checked downstream like any other. The
-    walk uses the standard decoder rather than counting braces, because the
-    quotes are lifted verbatim from the plans and the plans contain BibTeX:
-    15 of 1936 sections in the pilot set are `@misc{...}` dumps, and a
-    quote-sized window of those is almost never brace-balanced. Only a real
-    JSON scanner knows which brace is structure and which is evidence.
-    """
-    text = _strip_wrapping(raw_text)
-    if not text:
-        return None
-    defaults = None
-    head = _DEFAULTS_KEY.search(text)
-    if head is not None:
-        try:
-            obj, _ = _DECODER.raw_decode(text, head.end() - 1)
-            defaults = obj if isinstance(obj, dict) else None
-        except ValueError:
-            defaults = None
-    match = _TUPLES_KEY.search(text)
-    if match is None:
-        return None
-    tuples: list = []
-    pos = match.end()
-    while True:
-        while pos < len(text) and text[pos] in " \t\r\n,":
-            pos += 1
-        if pos >= len(text) or text[pos] != "{":
-            break
-        try:
-            obj, pos = _DECODER.raw_decode(text, pos)
-        except ValueError:
-            break                     # the half-written tail, dropped on purpose
-        if isinstance(obj, dict):
-            tuples.append(obj)
-    if not tuples:
-        return None
-    return {"tuples": expand_defaults(defaults, tuples),
-            "status": "truncated", "need_more": []}
-
-
-def _parse_reply(raw_text: str) -> Optional[dict]:
+def _parse_reply(raw_text) -> Optional[dict]:
     """The whole answer object, not just its tuples.
 
     A batch reply says three things: what it found, whether these passages
-    are exhausted for the parameter, and — when they are not — what sentence
-    to search for next. Only `tuples` decides whether the reply was
+    are exhausted for the parameter, and -- when they are not -- what
+    sentence to search for next. Only `tuples` decides whether the reply was
     understood at all; the other two default to the conservative reading,
     which is "there may be more, but I cannot say where".
     """
-    tuples = _parse_tuples(raw_text)
-    if tuples is None:
+    data = _loads_object(raw_text)
+    if data is None:
         return None
-    data = _loads_object(raw_text) or {}
+    tuples = data.get("tuples")
+    if not isinstance(tuples, list):
+        return None
     status = data.get("status")
     need = data.get("need_more")
     return {"tuples": expand_defaults(data.get("defaults"), tuples),
@@ -1797,50 +1842,135 @@ def _unparsable(reply) -> str:
             f" | reasoning {len(reasoning)}ch: {show(reasoning)}]")
 
 
-def _unreadable_correction(reply, limit: int) -> str:
-    """What was wrong with a reply that could not be read, said to the model.
+# What has to be said back whatever went wrong: the shape that was asked for.
+_SHAPE_RULE = (" Gib NUR das JSON-Objekt aus, in EINER Zeile, ohne Text davor "
+               "oder danach, ohne Codefence, ohne <think>-Block und ohne ein "
+               "zweites Objekt. Anf\u00fchrungszeichen INNERHALB eines Zitats "
+               "m\u00fcssen als \\\" escaped sein \u2014 ist das m\u00fchsam, "
+               "k\u00fcrz das Zitat auf eine Stelle ohne Anf\u00fchrungszeichen.")
 
-    The retry said the same sentence whatever had gone wrong, and a model told
-    nothing specific answers the same way again. A reply cut off at the
-    ceiling has to be shorter, not reformatted; a reply that broke the syntax
-    has to see where it broke.
+
+def _reply_fault(reply, limit: int, *, key: str = "",
+                 shorter: str = "") -> tuple:
+    """(cause, what to tell the model) for a reply that could not be read.
+
+    The retry used to say the same sentence whatever had gone wrong, and a
+    model told nothing specific answers the same way again. The causes need
+    different things: a reply cut off at the ceiling has to be shorter, one
+    wrapped in prose has to drop the prose, one with broken syntax has to see
+    where it broke, and one that is a list or is missing its list has to be
+    told which shape was asked for.
+
+    The cause goes into the trace too, so a run can say what its retries were
+    spent on instead of counting all of them as "unparsable".
     """
     if getattr(reply, "finish_reason", None) == "length":
-        return (f"Deine Antwort wurde nach {limit} Tokens abgeschnitten und ist "
-                "deshalb kein vollständiges JSON-Objekt. Schreib kürzer: fasse "
-                "Zeilen mit derselben Antwort in \"groups\" zusammen und "
-                "zitiere nur die kurze Stelle, an der die Angabe steht.")
+        return "cut_off", (
+            f"Deine Antwort wurde nach {limit} Tokens abgeschnitten und ist "
+            "deshalb kein vollst\u00e4ndiges JSON-Objekt. "
+            + (shorter or "Antworte k\u00fcrzer: zitiere nur die kurze Stelle, "
+                          "an der die Angabe steht."))
     message = getattr(reply, "message", None)
-    text = _THINK_RE.sub("", getattr(message, "content", None) or "")
-    text = _FENCE_CLOSE.sub("", _FENCE_OPEN.sub("", text)).strip()
-    where = ""
-    start = text.find("{")
-    if start == -1:
-        where = " Sie enthielt gar kein JSON-Objekt."
-    else:
+    text = (getattr(message, "content", None) or "").strip()
+    if not text:
+        return "empty", ("Deine Antwort war leer." + _SHAPE_RULE)
+    try:
+        data = json.loads(text)
+    except json.JSONDecodeError as exc:
+        start = text.find("{")
+        if start == -1:
+            return "no_object", ("Deine Antwort enthielt gar kein "
+                                 "JSON-Objekt." + _SHAPE_RULE)
         try:
-            _DECODER.raw_decode(text, start)
-        except json.JSONDecodeError as exc:
+            _obj, end = _DECODER.raw_decode(text, start)
+        except json.JSONDecodeError:
             around = text[max(start, exc.pos - 60):exc.pos + 20]
-            where = (f" Sie bricht bei Zeichen {exc.pos - start} ab "
-                     f"({exc.msg}), an dieser Stelle: {around!r}.")
-    return ("Deine Antwort war kein lesbares JSON-Objekt." + where
-            + " Gib NUR das Objekt aus, in EINER Zeile, ohne Text davor oder "
-            "danach und ohne ein zweites Objekt. Anführungszeichen INNERHALB "
-            "eines Zitats müssen als \\\" escaped sein — ist das mühsam, kürz "
-            "das Zitat auf eine Stelle ohne Anführungszeichen.")
+            return "syntax", (
+                f"Dein JSON bricht bei Zeichen {exc.pos - start} ab "
+                f"({exc.msg}), an dieser Stelle: {around!r}." + _SHAPE_RULE)
+        extra = (text[:start] + text[end:]).strip()
+        return "outside_text", (
+            f"Neben dem JSON-Objekt stand noch Text: {extra[:200]!r}."
+            + _SHAPE_RULE)
+    if not isinstance(data, dict):
+        return "not_an_object", (
+            f"Deine Antwort war eine {type(data).__name__}-Struktur und kein "
+            "JSON-Objekt." + _SHAPE_RULE)
+    if key and not isinstance(data.get(key), list):
+        had = "fehlte" if key not in data else "war keine Liste"
+        return "missing_key", (
+            f'In deiner Antwort {had} "{key}".' + _SHAPE_RULE)
+    return "wrong_shape", ("Deine Antwort hatte nicht die Form, die verlangt "
+                           "war." + _SHAPE_RULE)
+
+
+def _relabel_sources(entries, offset: int, suffix: str = "source"):
+    """A part's Q labels shifted back onto the whole request's numbering.
+
+    A request asked again in halves numbers its passages from Q1, and the
+    second half's Q1 is the whole request's Q4. Unshifted, every answer of
+    that half would be checked against the wrong passage -- which is the one
+    way splitting could corrupt what a truncation merely lost.
+    """
+    if not offset:
+        return entries
+    for entry in entries or ():
+        if not isinstance(entry, dict):
+            continue
+        for key in [k for k in entry
+                    if k == suffix or k.endswith("_" + suffix)]:
+            name = entry.get(key)
+            if isinstance(name, str) and name.startswith("Q") \
+                    and name[1:].strip().isdigit():
+                entry[key] = f"Q{int(name[1:].strip()) + offset}"
+    return entries
+
+
+def _split_harvest(batch, prior, harvest: Callable, limit: int,
+                   ceiling: int, first, depth: int = 0) -> Optional[dict]:
+    """A cut-off batch asked again in pieces, or None when it cannot be.
+
+    Two ways to make an answer fit: fewer passages per request, and -- when a
+    single passage already IS the request -- more room for the answer. The
+    reply that was cut off is not used at all. It was, once: the tuples
+    written before the cut were kept and the passages after it became holes,
+    which put a half-read request into the harvest as if it had been read.
+    """
+    items = list(batch.items)
+    if len(items) > 1 and depth < SPLIT_DEPTH:
+        cut = len(items) // 2
+        log.warning("   harvest %s/%s+%d cut off at %d tokens: asked again "
+                    "as %d and %d passage(s)", first.owner_kind,
+                    first.owner_id, len(items) - 1, limit, cut,
+                    len(items) - cut)
+        merged: dict = {"tuples": [], "status": "complete", "need_more": []}
+        for offset, part in ((0, items[:cut]), (cut, items[cut:])):
+            got = harvest(replace(batch, items=list(part)), prior,
+                          depth=depth + 1)
+            if not isinstance(got, dict):
+                merged["status"] = "partial"
+                continue
+            merged["tuples"].extend(_relabel_sources(
+                [t for t in (got.get("tuples") or ()) if isinstance(t, dict)],
+                offset))
+            if got.get("status") != "complete":
+                merged["status"] = str(got.get("status") or "partial")
+            merged["need_more"].extend(
+                q for q in (got.get("need_more") or ()) if isinstance(q, str))
+        return merged
+    if limit < ceiling * 4:
+        log.warning("   harvest %s/%s cut off at %d tokens: %s, asked again "
+                    "with %d", first.owner_kind, first.owner_id, limit,
+                    "one passage" if len(items) == 1 else "no room to split",
+                    limit * 2)
+        return harvest(batch, prior, ceiling=limit * 2, depth=depth)
+    return None
 
 
 def _parse_action(text) -> Optional[str]:
     """The python the model wants run, or None if it answered instead."""
-    if not isinstance(text, str) or '"action"' not in text:
-        return None
-    try:
-        start, end = text.index("{"), text.rindex("}") + 1
-        obj = json.loads(text[start:end])
-    except (ValueError, json.JSONDecodeError):
-        return None
-    if not isinstance(obj, dict) or obj.get("action") != "python":
+    obj = _loads_object(text)
+    if obj is None or obj.get("action") != "python":
         return None
     code = obj.get("code")
     return code if isinstance(code, str) and code.strip() else None
@@ -2049,34 +2179,6 @@ def log_usage(budget: Optional[int] = None) -> None:
              seen["completion_max"], budget if budget is not None else "-")
 
 
-def _holes(batch, rescued: list) -> list:
-    """Sentinels for the sources a cut-off reply never got to.
-
-    Without this the rescue would trade a loud hole for a silent one. A dead
-    batch writes one sentinel per source, which is exactly how the truncation
-    was measurable in the finished pilots at all; a rescued batch that simply
-    returned fewer tuples would leave the sources after the cut
-    indistinguishable from "read, and there was nothing in them".
-
-    Which sources those are is decided by POSITION, not by the label on the
-    tuples. Under the defaults contract `source` is one of the keys the model
-    is told to state once for the whole reply, so every rescued tuple carries
-    the same label — reading it here would report five of six sources as
-    never answered and could never report the one the block names. The model
-    writes in source order, so the last label it actually reached is the
-    frontier and everything past it is the loss.
-    """
-    labels = {batch.label(i): i for i in range(len(batch.items))}
-    reached = [labels[claim["source"]] for claim in rescued
-               if isinstance(claim, dict)
-               and isinstance(claim.get("source"), str)
-               and claim["source"] in labels]
-    frontier = max(reached) if reached else 0
-    return [{"_harvest_failed": True, "source": batch.label(i),
-             "_cut_off": True}
-            for i in range(frontier + 1, len(batch.items))]
-
-
 def make_harvester(image_root: Optional[Path] = None,
                    prompt_id: str = HARVEST_PROMPT_ID,
                    spec=None) -> Callable:
@@ -2084,7 +2186,7 @@ def make_harvester(image_root: Optional[Path] = None,
 
     The whole-tuple prompt and the field-wise value prompt differ in what they
     ask for and in nothing else: same sources, same crops, same sandbox, same
-    rescue of a reply cut off at the token ceiling. So the prompt is the
+    splitting of a request whose answer did not fit. So the prompt is the
     argument and the loop is shared.
     """
     prompt = prompts.load(prompt_id)
@@ -2096,7 +2198,8 @@ def make_harvester(image_root: Optional[Path] = None,
     # loop, which demands a profile at import time.
     from docpipe.inference import code_exec
 
-    def harvest(batch, prior: Optional[list] = None) -> dict:
+    def harvest(batch, prior: Optional[list] = None, *,
+                ceiling: Optional[int] = None, depth: int = 0) -> dict:
         started = time.time()
         payload = json.dumps(_batch_payload(batch, prior or [], spec),
                              ensure_ascii=False, indent=2)
@@ -2122,7 +2225,14 @@ def make_harvester(image_root: Optional[Path] = None,
         first = batch.items[0].source
         why = ["no_answer"]
         conversation: list = [{"role": "user", "content": content}]
-        limit = max_tokens
+        transport = False
+        # The wait follows the FAILURES, not the turns of the conversation: a
+        # sandbox round is a turn and not a failure, and counting it escalated
+        # the backoff of the next real one.
+        failures = 0
+        # More room than the prompt asks for only when a single passage came
+        # back cut off and there is nothing left to split.
+        limit = ceiling or max_tokens
         # A compute round is a turn of the same conversation, not a retry, so
         # the attempt budget grows with the rounds actually used.
         for attempt in range(1, MAX_RETRIES + CODE_ROUNDS + 1):
@@ -2141,6 +2251,7 @@ def make_harvester(image_root: Optional[Path] = None,
                     # them, HTTP 200 every one.
                     extra_body={"chat_template_kwargs": {"enable_thinking": False}},
                 )
+                transport = False
                 reply = response.choices[0]
                 _observe_usage(getattr(response, "usage", None))
                 # An action object instead of an answer: the model wants the
@@ -2165,33 +2276,6 @@ def make_harvester(image_root: Optional[Path] = None,
                                          "content": _compute_reply(compute[-1])})
                     continue
                 answer = _parse_reply(reply.message.content)
-                if answer is None:
-                    # A reasoning parser puts the chain in reasoning_content
-                    # and leaves content empty when the generation stopped
-                    # inside it. The answer, if there is one, is in there.
-                    answer = _parse_reply(
-                        getattr(reply.message, "reasoning_content", None))
-                if (answer is None
-                        and getattr(reply, "finish_reason", None) == "length"):
-                    # The generation hit the token ceiling. Retrying is
-                    # pointless — measured 31 times over one pilot, five
-                    # attempts each, zero recoveries — and the tuples written
-                    # before the cut are whole. Take them and stop.
-                    answer = rescue_reply(reply.message.content)
-                    if answer is not None:
-                        answer["tuples"].extend(_holes(batch, answer["tuples"]))
-                        log.warning(
-                            "   harvest %s/%s+%d cut off at the token ceiling: "
-                            "%d tuple(s) rescued", first.owner_kind,
-                            first.owner_id, len(batch.items) - 1,
-                            len(answer["tuples"]))
-                    else:
-                        log.warning(
-                            "   harvest %s/%s+%d cut off at the token ceiling "
-                            "before the first tuple%s", first.owner_kind,
-                            first.owner_id, len(batch.items) - 1,
-                            _unparsable(reply))
-                        break
                 if answer is not None:
                     if compute:
                         for t in answer["tuples"]:
@@ -2212,14 +2296,36 @@ def make_harvester(image_root: Optional[Path] = None,
                                     usage, "completion_tokens", None),
                                 ms=int((time.time() - started) * 1000))
                     return answer
-                log.warning("   harvest %s/%s+%d attempt %d: reply carried no "
-                            "'tuples' list%s", first.owner_kind,
-                            first.owner_id, len(batch.items) - 1, attempt,
+                cause, correction = _reply_fault(
+                    reply, limit, key="tuples",
+                    shorter="Antworte mit weniger Tupeln und zitiere nur die "
+                            "kurze Stelle, an der die Zahl steht.")
+                log.warning("   harvest %s/%s+%d attempt %d: %s reply%s",
+                            first.owner_kind, first.owner_id,
+                            len(batch.items) - 1, attempt, cause,
                             _unparsable(reply))
                 trace.event("error", batch.document_id, where=prompt_id,
-                            kind="no_tuples", attempt=attempt,
+                            kind="unreadable", cause=cause, attempt=attempt,
                             owner=[first.owner_kind, first.owner_id],
                             finish=getattr(reply, "finish_reason", None))
+                if cause == "cut_off":
+                    smaller = _split_harvest(batch, prior, harvest, limit,
+                                             max_tokens, first, depth)
+                    if smaller is not None:
+                        trace.event("error", batch.document_id,
+                                    where=prompt_id, kind="split",
+                                    attempt=attempt,
+                                    owner=[first.owner_kind, first.owner_id])
+                        return smaller
+                    # One passage, and the ceiling raised as far as it goes.
+                    # Nothing to split and nothing to shorten, so the request
+                    # is a hole -- named as one, not filled with the half of
+                    # it that arrived.
+                    why[0] = "cut_off"
+                    break
+                conversation.append({"role": "assistant",
+                                     "content": reply.message.content or ""})
+                conversation.append({"role": "user", "content": correction})
             except Exception as exc:
                 log.warning("   harvest %s/%s+%d attempt %d failed: %s",
                             first.owner_kind, first.owner_id,
@@ -2233,6 +2339,7 @@ def make_harvester(image_root: Optional[Path] = None,
                 # not there. That is the case a resume must never mistake for
                 # a harvested document.
                 why[0] = "no_answer" if isinstance(status, int) else "unreachable"
+                transport = not isinstance(status, int)
                 if isinstance(status, int) and 400 <= status < 500 and status != 429:
                     fitted = fitted_max_tokens(exc, limit, prompt_id)
                     if fitted is not None:
@@ -2242,8 +2349,11 @@ def make_harvester(image_root: Optional[Path] = None,
                     # last run spent three tries and eight seconds of sleep on
                     # each over-long section before writing the same sentinel.
                     break
-            if attempt < MAX_RETRIES:
-                time.sleep(min(2 * attempt, 6))
+            # Every attempt but the last, and the loop runs to
+            # MAX_RETRIES + CODE_ROUNDS: the old bound stopped two short of it.
+            failures += 1
+            if attempt < MAX_RETRIES + CODE_ROUNDS:
+                time.sleep(retry_wait(failures, transport))
         # Sources the model never answered for are a hole in the harvest, and
         # holes must be visible: the caller counts these via the sentinel.
         # One per source, so a batch of six that died is six holes, not one.
@@ -2364,11 +2474,10 @@ def keeps_row(slot, answer, allowed) -> bool:
 def make_field_asker(image_root: Optional[Path] = None) -> Callable:
     """ask(batch, rows, slot) -> reply, or None when the field stays unasked.
 
-    No sandbox and no rescue of a truncated reply. A field answer is a choice
-    and a quote, never arithmetic, and a reply cut off in the middle fills
-    fewer rows than it could — which is a gap the harvest can see, because the
-    coordinate is simply empty and counted as empty. That is the difference
-    the whole change is about: what is missing is missing on the record.
+    No sandbox: a field answer is a choice and a quote, never arithmetic. A
+    reply that did not fit its token ceiling is not patched up either — the
+    rows are halved and asked again, so every row is answered under the same
+    evidence rules, and what is still missing is missing on the record.
     """
     prompt = prompts.load(FIELD_PROMPT_ID)
     client = _client()
@@ -2379,7 +2488,8 @@ def make_field_asker(image_root: Optional[Path] = None) -> Callable:
             corrections: Optional[list] = None,
             document_id: Optional[int] = None,
             usage_out: Optional[dict] = None,
-            owner_of: Optional[dict] = None) -> Optional[dict]:
+            owner_of: Optional[dict] = None, *,
+            depth: int = 0) -> Optional[dict]:
         slots = list(slots) if isinstance(slots, (list, tuple)) else [slots]
         name = "+".join(s.name for s in slots)
         payload = json.dumps(_field_payload(shown, rows, slots, corrections,
@@ -2405,6 +2515,7 @@ def make_field_asker(image_root: Optional[Path] = None) -> Callable:
         # A model error is told to the model, the same way a verification
         # failure is. Retrying a malformed reply without saying what was
         # malformed is one attempt three times.
+        transport = False
         conversation: list = [{"role": "user", "content": content}]
         limit = max_tokens
         for attempt in range(1, MAX_RETRIES + 1):
@@ -2416,6 +2527,7 @@ def make_field_asker(image_root: Optional[Path] = None) -> Callable:
                               *conversation],
                     extra_body={"chat_template_kwargs": {"enable_thinking": False}},
                 )
+                transport = False
                 reply = response.choices[0]
                 usage = getattr(response, "usage", None)
                 _observe_usage(usage)
@@ -2429,29 +2541,48 @@ def make_field_asker(image_root: Optional[Path] = None) -> Callable:
                     usage_out["completion_tokens"] = getattr(
                         usage, "completion_tokens", None)
                 answer = _loads_object(reply.message.content)
-                closed = False
-                if answer is None and reply.finish_reason == "stop":
-                    answer = _loads_object(reply.message.content, close=True)
-                    closed = answer is not None
-                if answer is None:
-                    answer = _loads_object(
-                        getattr(reply.message, "reasoning_content", None))
                 if isinstance(answer, dict):
-                    if closed:
-                        # Counted, not hidden: the trace says how often the
-                        # reply had to be closed for it.
-                        trace.event("error", document_id, where="field",
-                                    kind="closed", slot=name, attempt=attempt)
                     return answer
-                log.warning("   field %s attempt %d: unreadable reply%s",
-                            name, attempt, _unparsable(reply))
+                cause, correction = _reply_fault(
+                    reply, limit,
+                    shorter="Fasse Zeilen mit derselben Antwort in \"groups\" "
+                            "zusammen und zitiere nur die kurze Stelle, an "
+                            "der die Angabe steht.")
+                log.warning("   field %s attempt %d: %s reply%s",
+                            name, attempt, cause, _unparsable(reply))
                 trace.event("error", document_id, where="field",
-                            kind="unparsable", slot=name, attempt=attempt,
+                            kind="unreadable", cause=cause, slot=name,
+                            attempt=attempt,
                             finish=getattr(reply, "finish_reason", None))
+                if cause == "cut_off" and len(rows) > 1 \
+                        and depth < SPLIT_DEPTH:
+                    # Half the rows per request, not half an answer. The reply
+                    # used to be closed with the brackets it was missing, and
+                    # every row past the cut then took whatever the last
+                    # complete field in it happened to say.
+                    cut = len(rows) // 2
+                    merged: dict = {"answers": {}, "groups": []}
+                    for part in (rows[:cut], rows[cut:]):
+                        here = {r.label for r in part}
+                        got = ask(shown, part, slots,
+                                  [c for c in (corrections or ())
+                                   if c.get("row") in here],
+                                  document_id, usage_out, owner_of,
+                                  depth=depth + 1)
+                        if not isinstance(got, dict):
+                            continue
+                        if isinstance(got.get("answers"), dict):
+                            merged["answers"].update(got["answers"])
+                        merged["groups"].extend(
+                            g for g in (got.get("groups") or ())
+                            if isinstance(g, dict))
+                    trace.event("error", document_id, where="field",
+                                kind="split", slot=name, attempt=attempt)
+                    return merged if (merged["answers"]
+                                      or merged["groups"]) else None
                 conversation.append({"role": "assistant",
                                      "content": reply.message.content or ""})
-                conversation.append({"role": "user", "content":
-                                     _unreadable_correction(reply, limit)})
+                conversation.append({"role": "user", "content": correction})
             except Exception as exc:
                 log.warning("   field %s attempt %d failed: %s",
                             name, attempt, exc)
@@ -2459,6 +2590,7 @@ def make_field_asker(image_root: Optional[Path] = None) -> Callable:
                 trace.event("error", document_id, where="field",
                             kind="exception", slot=name, attempt=attempt,
                             status=status, detail=str(exc)[:300])
+                transport = not isinstance(status, int)
                 if isinstance(status, int) and 400 <= status < 500 and status != 429:
                     fitted = fitted_max_tokens(exc, limit, f"field {name}")
                     if fitted is not None:
@@ -2466,7 +2598,7 @@ def make_field_asker(image_root: Optional[Path] = None) -> Callable:
                         continue
                     break
             if attempt < MAX_RETRIES:
-                time.sleep(min(2 * attempt, 6))
+                time.sleep(retry_wait(attempt, transport))
         return None
 
     return ask
@@ -2555,6 +2687,7 @@ def make_review_asker(image_root: Optional[Path] = None) -> Callable:
                 parts.append(part)
         if len(parts) > 1:
             content = parts
+        transport = False
         conversation: list = [{"role": "user", "content": content}]
         limit = max_tokens
         for attempt in range(1, MAX_RETRIES + 1):
@@ -2566,25 +2699,29 @@ def make_review_asker(image_root: Optional[Path] = None) -> Callable:
                               *conversation],
                     extra_body={"chat_template_kwargs": {"enable_thinking": False}},
                 )
+                transport = False
                 reply = response.choices[0]
                 _observe_usage(getattr(response, "usage", None))
                 answer = _loads_object(reply.message.content)
-                if answer is None and reply.finish_reason == "stop":
-                    answer = _loads_object(reply.message.content, close=True)
-                if answer is None:
-                    answer = _loads_object(
-                        getattr(reply.message, "reasoning_content", None))
                 if isinstance(answer, dict):
                     return answer
-                log.warning("   review attempt %d: unreadable reply%s",
-                            attempt, _unparsable(reply))
+                # One row and two passages: there is nothing here to split, so
+                # a reply that did not fit is told to quote less rather than
+                # to answer for fewer rows.
+                cause, correction = _reply_fault(
+                    reply, limit,
+                    shorter="Zitiere nur die kurze Stelle, an der die Angabe "
+                            "steht, und lass jedes Feld weg, das die zwei "
+                            "Passagen nicht tragen.")
+                log.warning("   review attempt %d: %s reply%s",
+                            attempt, cause, _unparsable(reply))
                 conversation.append({"role": "assistant",
                                      "content": reply.message.content or ""})
-                conversation.append({"role": "user", "content":
-                                     _unreadable_correction(reply, limit)})
+                conversation.append({"role": "user", "content": correction})
             except Exception as exc:
                 log.warning("   review attempt %d failed: %s", attempt, exc)
                 status = getattr(exc, "status_code", None)
+                transport = not isinstance(status, int)
                 if isinstance(status, int) and 400 <= status < 500 and status != 429:
                     fitted = fitted_max_tokens(exc, limit, "review")
                     if fitted is not None:
@@ -2592,7 +2729,7 @@ def make_review_asker(image_root: Optional[Path] = None) -> Callable:
                         continue
                     break
             if attempt < MAX_RETRIES:
-                time.sleep(min(2 * attempt, 6))
+                time.sleep(retry_wait(attempt, transport))
         return None
 
     return ask
@@ -3801,7 +3938,7 @@ def context_budget(prompt, spec=None) -> int:
 # percentile — measured over the finished pilots' own output, grouped by
 # (owner, parameter). Sizing on the median would truncate half the fat
 # tables; sizing on the maximum would make the batch pointless. The tail past
-# p90 is what rescue_reply is for.
+# p90 is what the split is for: the batch is asked again in halves.
 TUPLES_PER_SOURCE_P90 = 12
 # Characters per output token, from the truncated replies themselves: they
 # stopped at exactly max_tokens, so content length over max_tokens is the

@@ -194,7 +194,7 @@ def test_a_complete_answer_ends_the_search():
     asked = []
 
     def ask(sources, slots, document_id=None, known=None, usage_out=None,
-            candidates=None):
+            candidates=None, corrections=None):
         asked.append(candidates)
         return _reply()
 
@@ -210,7 +210,7 @@ def test_what_the_scan_found_and_the_model_did_not_name_is_asked_once_more():
     rounds = []
 
     def ask(sources, slots, document_id=None, known=None, usage_out=None,
-            candidates=None):
+            candidates=None, corrections=None):
         rounds.append(candidates)
         if candidates:
             return _reply(year=2030, year_quote=_TABLE)
@@ -227,7 +227,7 @@ def test_the_cross_check_never_puts_a_year_in_the_frame_by_itself():
     decided would ask every table in the plan for a year the plan has not
     got."""
     def ask(sources, slots, document_id=None, known=None, usage_out=None,
-            candidates=None):
+            candidates=None, corrections=None):
         return {"pairs": [], "status": "complete", "need_more": []}
 
     pairs, status, missed = runner.find_frame(
@@ -238,7 +238,7 @@ def test_the_cross_check_never_puts_a_year_in_the_frame_by_itself():
 
 def test_a_search_that_never_completes_says_exhausted_rather_than_complete():
     def ask(sources, slots, document_id=None, known=None, usage_out=None,
-            candidates=None):
+            candidates=None, corrections=None):
         return {"pairs": [], "status": "incomplete", "need_more": []}
 
     pairs, status, missed = runner.find_frame(_shown(), _slots(), 7, ask)
@@ -484,7 +484,7 @@ def test_the_frame_reads_every_window_of_the_plan_and_not_a_prefix():
     shown = []
 
     def ask(passages, slots, document_id=None, known=None, usage_out=None,
-            candidates=None):
+            candidates=None, corrections=None):
         shown.append([s.owner_id for s in passages])
         if late in passages:
             return _reply(year=2035,
@@ -524,7 +524,7 @@ def test_the_second_pass_shows_the_passage_the_missed_year_stands_in():
     asked = []
 
     def ask(passages, slots, document_id=None, known=None, usage_out=None,
-            candidates=None):
+            candidates=None, corrections=None):
         asked.append(([s.owner_id for s in passages], candidates))
         if candidates and late in passages:
             return _reply(year=2035,
@@ -866,3 +866,74 @@ def test_one_answer_still_holds_for_rows_of_the_same_column():
                                    "quote": _HEADER}]})
     assert got["filled"] == 2
     assert [row.claim["year"] for row in rows] == [2030, 2030]
+
+
+# ---------------------------------------------------------------------------
+# A pair that does not get through is said so, not dropped in silence
+# ---------------------------------------------------------------------------
+
+def test_a_scenario_that_is_not_on_the_list_is_refused_and_reported():
+    """The frame took a pair whenever its wording stood in its quote, and the
+    class lookup behind it then came back empty: 8,944 of ar6's tuples carry
+    a scenario label nothing maps. Refused now — and the reason is collected,
+    because a pair that vanishes without a word is asked the same way again.
+    """
+    rejected = []
+    assert runner.frame_pairs(_reply(scenario="Wunschpfad"), _slots(),
+                              _shown(), rejected) == []
+    assert rejected and "scenarios" in rejected[0]["reason"]
+
+
+def test_a_year_that_is_not_a_whole_number_is_refused_and_reported():
+    rejected = []
+    shown = [_source(1, "Stand 2045,5"), _source(2, _HEAD, kind="section")]
+    assert runner.frame_pairs(_reply(year="2045,5", year_quote="Stand 2045,5"),
+                              _slots(), shown, rejected) == []
+    assert rejected and "Jahreszahl" in rejected[0]["reason"]
+
+
+def test_a_refused_pair_is_asked_again_with_the_reason():
+    """Collecting the refusals is only half of it. The window is asked once
+    more, with what was wrong, and a model told which list to choose from
+    answers from that list."""
+    asked = []
+
+    def ask(sources, slots, document_id=None, known=None, usage_out=None,
+            candidates=None, corrections=None):
+        asked.append(corrections)
+        return _reply() if corrections else _reply(scenario="Wunschpfad")
+
+    pairs, status, missed = runner.find_frame(_shown(), _slots(), 7, ask)
+    assert asked[0] is None, "the first round has nothing to correct"
+    assert asked[1] and "scenarios" in asked[1][0]["reason"]
+    assert [p["scenario"] for p in pairs] == ["Zielszenario"]
+
+
+def test_a_frame_reply_that_did_not_fit_halves_its_passages(monkeypatch):
+    """A pair the frame does not have loses every value of that pair, so the
+    half of a window that a cut-off reply never answered for is asked rather
+    than written off."""
+    from types import SimpleNamespace as NS
+    sent = []
+    queue = iter([('{"pairs": [', "length"),
+                  ('{"pairs": [], "status": "complete"}', "stop"),
+                  ('{"pairs": [{"scenario": "Zielszenario", '
+                   '"scenario_source": "Q1"}], "status": "complete"}', "stop")])
+
+    class _Client:
+        class chat:
+            class completions:
+                @staticmethod
+                def create(**kw):
+                    body, finish = next(queue)
+                    sent.append(json.loads(kw["messages"][-1]["content"]))
+                    return NS(choices=[NS(
+                        message=NS(content=body, reasoning_content=""),
+                        finish_reason=finish)], usage=None)
+
+    monkeypatch.setattr(runner, "_client", lambda: _Client())
+    monkeypatch.setattr(runner.time, "sleep", lambda s: None)
+    out = runner.make_frame_asker()(_shown(), _slots(), 7)
+    assert [len(s["sources"]) for s in sent] == [2, 1, 1]
+    assert out["pairs"][0]["scenario_source"] == "Q2", (
+        "the second half's Q1 is the whole window's Q2")

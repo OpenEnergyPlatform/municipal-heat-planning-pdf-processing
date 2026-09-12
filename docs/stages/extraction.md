@@ -141,11 +141,15 @@ have accepted, since a table row retyped without its padding is the
 normal case, not the exception, worth 276 of one pilot's refusals
 (`pipeline.py:379`). A
 wording not in its own quote is caught here too, before it becomes a
-row (`pipeline.py:544`). A `Row` is created only here, never later. The request can turn to
-a code sandbox, bounded
-to `CODE_ROUNDS` rounds, and a reply cut off at the token ceiling is
-rescued rather than retried, since retrying recovered nothing over one
-pilot (`runner.py:2177`).
+row (`pipeline.py:544`). A `Row` is created only here, never later. The
+request can turn to a code sandbox, bounded to `CODE_ROUNDS` rounds. A
+reply that will not parse is asked again with the cause named,
+`_reply_fault` (`runner.py:1801`), rather than the same message twice;
+one cut off at the token ceiling is asked again as two halves instead
+of kept half-read, its labels renumbered onto the whole batch,
+`_split_harvest` (`runner.py:1876`). A single passage still too long
+for that gets its own ceiling doubled, up to four times, before it is
+written as a `_why: cut_off` sentinel instead (`runner.py:2250`).
 
 ### The field sweep: three window stages and a budget
 
@@ -475,7 +479,7 @@ dropped for the agreed reasons and no other, that every reason a claim is
 refused for is a published one, and that no closure in the package reads
 a name bound after it. `tests/test_extraction_schema.py` validates
 that a harvest, a stamp and a trace event all conform to the published
-contract. `tests/test_extraction_runner.py`, 79 tests, pins `runner.py`
+contract. `tests/test_extraction_runner.py`, 78 tests, pins `runner.py`
 itself: among them `test_a_document_the_server_never_answered_for_is_not_stamped`,
 `test_a_document_no_reply_ever_came_back_for_is_not_stamped`,
 `test_the_image_root_follows_the_pdf_root` and
@@ -654,9 +658,11 @@ documents, and `document_anchor` writes the one short sentence per parameter
 the document being planned is searched with, which is a cache miss by
 construction.
 
-`make_harvester` and `make_fieldwise_harvester` build the request to the model,
-parse its reply, and rescue the tuples already written when a reply is cut off
-at the token ceiling (`rescue_reply`). `make_sweeper` drives the field-wise
+`make_harvester` and `make_fieldwise_harvester` build the request to the model
+and parse its reply strictly: one JSON object and nothing else. A reply that is
+not that is asked again with the cause named (`_reply_fault`), and one cut off
+at the token ceiling is asked again over half the passages (`_split_harvest`)
+rather than half-read. `make_sweeper` drives the field-wise
 sweep: a coordinate the value's own passage does not answer is asked for again
 over short overlapping windows of the rest of the document (`window_sources`),
 bounded per axis. `find_frame` and `make_frame_asker` read a document's frame,

@@ -128,18 +128,16 @@
     "additionalProperties": false,
     "properties": {
      "claim": {
-      "description": "The claim as the model returned it. A dead-server sentinel carries _harvest_failed with _why, or _cut_off.",
+      "description": "The claim as the model returned it. A sentinel carries _harvest_failed with _why: the server was gone, the model answered nothing, or the reply did not fit and there was nothing left to split.",
       "properties": {
-       "_cut_off": {
-        "const": true
-       },
        "_harvest_failed": {
         "const": true
        },
        "_why": {
         "enum": [
          "unreachable",
-         "no_answer"
+         "no_answer",
+         "cut_off"
         ]
        }
       },
@@ -3267,7 +3265,6 @@
      "rank",
      "origin",
      "kind",
-     "owner",
      "chars",
      "image"
     ],
@@ -3329,6 +3326,9 @@
        "integer",
        "null"
       ]
+     },
+     "rejected": {
+      "type": "integer"
      },
      "scenarios": {
       "items": {
@@ -3688,6 +3688,7 @@
        "quote_too_short",
        "answer_not_in_quote",
        "not_an_option",
+       "wrong_type",
        "unbacked"
       ]
      },
@@ -3710,6 +3711,18 @@
      "attempt": {
       "type": "integer"
      },
+     "cause": {
+      "enum": [
+       "cut_off",
+       "empty",
+       "no_object",
+       "syntax",
+       "outside_text",
+       "missing_key",
+       "not_an_object",
+       "wrong_shape"
+      ]
+     },
      "detail": {
       "type": "string"
      },
@@ -3724,13 +3737,32 @@
      },
      "kind": {
       "enum": [
-       "unparsable",
+       "unreadable",
        "exception",
-       "gave_up"
+       "gave_up",
+       "split"
       ]
      },
      "ms": {
       "type": "integer"
+     },
+     "owner": {
+      "description": "[owner_kind, owner_id]",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "section",
+         "table",
+         "figure"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
      },
      "slot": {
       "type": [
@@ -3775,7 +3807,8 @@
      "why": {
       "enum": [
        "unreachable",
-       "no_answer"
+       "no_answer",
+       "cut_off"
       ]
      }
     },
@@ -3849,7 +3882,6 @@
      "unit",
      "tier",
      "kind",
-     "owner",
      "states"
     ],
     "type": "object"
@@ -3895,8 +3927,7 @@
      "t",
      "doc",
      "parameter",
-     "reason",
-     "owner"
+     "reason"
     ],
     "type": "object"
    },

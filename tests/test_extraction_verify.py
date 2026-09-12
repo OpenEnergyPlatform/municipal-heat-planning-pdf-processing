@@ -504,3 +504,43 @@ def test_a_power_carries_no_period_flag():
     amount = verify_tuple(dict(claim), parameter(), source)
     assert isinstance(amount, Verified), getattr(amount, "reason", amount)
     assert "period:unstated" in amount.flags
+
+
+# ---------------------------------------------------------------------------
+# no stamp beside a value that did not survive
+# ---------------------------------------------------------------------------
+
+def test_a_coordinate_whose_value_is_gone_loses_its_stamp():
+    """171 tuples of corpus_m5 said "read" with no carrier, sector or
+    scenario at all: the axis came back empty, verify nulled it, and the
+    state beside it still said a passage had been read. The evidence goes
+    with the value, because evidence for nothing is what made it look sound.
+    """
+    from docpipe.extraction.fields import READ, UNBACKED
+    out = verify_tuple(_claim(carrier="   ", carrier_state=READ,
+                              carrier_quote="Erdgas | 1.036.767.833",
+                              carrier_source=["table", 5]),
+                       _parameter(), SOURCE)
+    assert isinstance(out, Verified), out
+    assert out.tuple["carrier"] is None
+    assert out.tuple["carrier_state"] == UNBACKED
+    assert "carrier_quote" not in out.tuple and "carrier_source" not in out.tuple
+    assert "unbacked:carrier" in out.flags
+
+
+def test_a_year_is_never_truncated_to_fit_an_integer_axis():
+    """int(2045.7) is 2045: a year the model got wrong by seven tenths went
+    into the graph as a year it had never read."""
+    assert isinstance(verify_tuple(_claim(year=2045.7), _parameter(), SOURCE),
+                      Refusal)
+    assert isinstance(verify_tuple(_claim(year="2020,5"), _parameter(), SOURCE),
+                      Refusal)
+    assert isinstance(verify_tuple(_claim(year=2020.0), _parameter(), SOURCE),
+                      Verified), "a whole number written as a float is one"
+
+
+def test_computed_is_a_switch_that_only_true_flips():
+    """`computed` decides WHICH evidence check applies. Truthy, the string
+    "nein" would have let a value stand that is in no quote at all."""
+    out = verify_tuple(_claim(value=42, computed="nein"), _parameter(), SOURCE)
+    assert isinstance(out, Refusal) and "does not occur" in out.reason
