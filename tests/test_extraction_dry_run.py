@@ -115,22 +115,16 @@ def test_moving_a_key_into_defaults_changes_no_verdict(profile):
                 f"{parameter.uri}: moving {key!r} into defaults changed the tuples")
 
 
-def test_a_truncated_reply_loses_only_what_came_after_the_cut(profile):
-    """The tail of a cut-off reply is a hole, and a hole has to stay
-    countable — the finished pilots were only measurable at all because a
-    dead batch left one sentinel per source."""
+def test_a_truncated_reply_yields_nothing_at_all(profile):
+    """The rescue read the tuples written before the cut and called the rest
+    holes. Nothing of a cut-off reply is read any more: it is asked again
+    over fewer passages, and only what a whole reply says is harvested."""
     _name, spec, _prompt = profile
     batch = _batches(spec)[0]
     whole = json.dumps(_answer(batch.parameter, batch.label(0)),
                        ensure_ascii=False)
     cut = whole[:whole.rindex("}", 0, whole.rindex("}"))]      # mid-last-tuple
-    rescued = runner.rescue_reply(cut)
-    if rescued is None:
-        pytest.skip("the example holds too few tuples to cut between them")
-    holes = runner._holes(batch, rescued["tuples"])
-    assert [h["source"] for h in holes] == [
-        batch.label(i) for i in range(1, len(batch.items))]
-    assert all(h["_harvest_failed"] for h in holes)
+    assert runner._parse_reply(cut) is None
 
 
 def test_the_run_uses_the_server_it_was_given(profile):

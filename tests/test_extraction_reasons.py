@@ -39,7 +39,7 @@ RUNNER = EXTRACTION / "runner.py"
 # the owner on 2026-09-11, an answer to a closed list is one of its entries:
 # one that is not is asked again and never marked read. Nothing else.
 AGREED_DROPS = {"quote_not_in_source", "quote_too_short", "answer_not_in_quote",
-                "not_an_option"}
+                "not_an_option", "wrong_type"}
 
 
 def _tree(path):

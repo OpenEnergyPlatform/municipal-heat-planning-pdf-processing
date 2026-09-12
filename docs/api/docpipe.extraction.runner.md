@@ -25,9 +25,11 @@ documents, and `document_anchor` writes the one short sentence per parameter
 the document being planned is searched with, which is a cache miss by
 construction.
 
-`make_harvester` and `make_fieldwise_harvester` build the request to the model,
-parse its reply, and rescue the tuples already written when a reply is cut off
-at the token ceiling (`rescue_reply`). `make_sweeper` drives the field-wise
+`make_harvester` and `make_fieldwise_harvester` build the request to the model
+and parse its reply strictly: one JSON object and nothing else. A reply that is
+not that is asked again with the cause named (`_reply_fault`), and one cut off
+at the token ceiling is asked again over half the passages (`_split_harvest`)
+rather than half-read. `make_sweeper` drives the field-wise
 sweep: a coordinate the value's own passage does not answer is asked for again
 over short overlapping windows of the rest of the document (`window_sources`),
 bounded per axis. `find_frame` and `make_frame_asker` read a document's frame,
@@ -46,6 +48,20 @@ passes over a harvest already written.
 Author: Felix Vossel
 
 ## Functions
+
+### retry_wait
+
+```python
+def retry_wait(attempt: int, transport: bool = False) -> float
+```
+
+Seconds to wait before attempt *attempt* + 1.
+
+*transport* is the request that never reached the server: no HTTP status,
+no refusal, nothing to read. Doubling from 15 seconds gives a restarting
+vLLM 225 seconds over five attempts, which is what a model server needs
+to come back; the model's own mistakes keep the short curve, because
+waiting longer for those buys nothing.
 
 ### window_budget
 
@@ -409,18 +425,25 @@ answer is.
 ### frame_pairs
 
 ```python
-def frame_pairs(reply: Optional[dict], slots: list, sources: list) -> list
+def frame_pairs(reply: Optional[dict], slots: list, sources: list,
+                rejected: Optional[list] = None) -> list
 ```
 
 The pairs of a reply that carry their own evidence, in order.
 
 Every coordinate is held to what a field answer is held to: its quote sits
-verbatim in one of the passages that were SHOWN, and the quote contains
-the answer. Nothing else is checked. A frame reading is
-document-level by construction -- it is read once, from a caption or a
-heading, and every row of the document inherits it -- so "is this passage
-near this row" is not a question about it, and no reading anywhere in
-the harvest is asked it.
+verbatim in one of the passages that were SHOWN, the quote contains the
+answer, and a scenario is one of the keys the request listed. Nothing else
+is checked. A frame reading is document-level by construction -- it is
+read once, from a caption or a heading, and every row of the document
+inherits it -- so "is this passage near this row" is not a question about
+it, and no reading anywhere in the harvest is asked it.
+
+*rejected* collects one sentence per pair that did not get through, for
+`find_frame` to put back in front of the model. Silently dropping them is
+how a plan ended up with a scenario the ontology has no class for: the
+pair was refused, nobody said so, and the next window was asked the same
+question in the same way.
 
 ### frame_windows
 
@@ -559,23 +582,6 @@ tuples, and rewriting them costs 52% of the whole answer. So the model
 writes them once. A tuple's own key always wins, and a key in
 NOT_DEFAULTABLE is dropped however the model labelled it.
 
-### rescue_reply
-
-```python
-def rescue_reply(raw_text: str) -> Optional[dict]
-```
-
-Every complete tuple in an answer the generation cut short.
-
-A reply that hits the token ceiling stops mid-key, never on a boundary,
-so the JSON is unparsable — but the tuples written before the cut are
-whole, and each of them is quote-checked downstream like any other. The
-walk uses the standard decoder rather than counting braces, because the
-quotes are lifted verbatim from the plans and the plans contain BibTeX:
-15 of 1936 sections in the pilot set are `@misc{...}` dumps, and a
-quote-sized window of those is almost never brace-balanced. Only a real
-JSON scanner knows which brace is structure and which is evidence.
-
 ### log_usage
 
 ```python
@@ -596,7 +602,7 @@ The request loop, for either contract.
 
 The whole-tuple prompt and the field-wise value prompt differ in what they
 ask for and in nothing else: same sources, same crops, same sandbox, same
-rescue of a reply cut off at the token ceiling. So the prompt is the
+splitting of a request whose answer did not fit. So the prompt is the
 argument and the loop is shared.
 
 ### keeps_row
@@ -629,11 +635,10 @@ def make_field_asker(image_root: Optional[Path] = None) -> Callable
 
 ask(batch, rows, slot) -> reply, or None when the field stays unasked.
 
-No sandbox and no rescue of a truncated reply. A field answer is a choice
-and a quote, never arithmetic, and a reply cut off in the middle fills
-fewer rows than it could — which is a gap the harvest can see, because the
-coordinate is simply empty and counted as empty. That is the difference
-the whole change is about: what is missing is missing on the record.
+No sandbox: a field answer is a choice and a quote, never arithmetic. A
+reply that did not fit its token ceiling is not patched up either — the
+rows are halved and asked again, so every row is answered under the same
+evidence rules, and what is still missing is missing on the record.
 
 ### make_review_asker
 

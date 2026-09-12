@@ -43,8 +43,8 @@ from typing import Callable, Optional
 
 from . import queries as queries_mod
 from .spec import Spec, fold_label
-from .fields import (CHOICE, NUMBER, READ, SAID_UNSTATED, UNANSWERED,
-                     UNBACKED, UNSTATED)
+from .fields import (CHOICE, NUMBER, READ, SAID_UNSTATED, TEXT,
+                     UNANSWERED, UNBACKED, UNSTATED)
 from .verify import (MIN_QUOTE_CHARS, Refusal, Verified, canonical_number,
                      flat, numbers_in, quote_in, verify_tuple)
 from .trust import document_summary
@@ -644,6 +644,34 @@ def wording_names_option(slot, given, wording) -> bool:
     return False
 
 
+def _wrong_type(slot, given) -> Optional[str]:
+    """What this slot wanted, when the answer is not of that kind at all.
+
+    None means the answer has the right shape. The string it returns names
+    the kind in the prompt's language, because it goes straight back to the
+    model as the reason its answer was refused.
+    """
+    if slot.kind == NUMBER:
+        if isinstance(given, bool):
+            return "eine ganze Zahl"
+        if isinstance(given, float):
+            return None if given.is_integer() else "eine ganze Zahl"
+        if isinstance(given, int):
+            return None
+        try:
+            # "2045.0" is the same answer as 2045.0 and used to be the only
+            # one of the two that was refused. verify.py reads it the same
+            # way, and two readings of one number is how a coordinate comes
+            # back empty on one path and filled on the other.
+            number = float(str(given).strip().replace(",", "."))
+        except (TypeError, ValueError):
+            return "eine ganze Zahl"
+        return None if number.is_integer() else "eine ganze Zahl"
+    if slot.kind == TEXT and not isinstance(given, str):
+        return "eine Angabe als Text"
+    return None
+
+
 def merge_field(rows: list, sources: list, slot, reply: Optional[dict],
                 *, window: Optional[tuple] = None) -> dict:
     """Fold one field's answers. Returns {"filled", "unquoted", "unbacked"}.
@@ -759,6 +787,19 @@ def merge_field(rows: list, sources: list, slot, reply: Optional[dict],
                 f"Zeichen abgeschrieben, auch einen mit \"out:\". Passt keiner, "
                 f"obwohl die Passage die Angabe nennt, dann lass \"value\" weg "
                 f"und gib die Bezeichnung in \"value_raw\".")})
+            unbacked += 1
+            continue
+        wrong = _wrong_type(slot, given)
+        if wrong is not None:
+            # The right kind of answer in the wrong shape: a year as
+            # "2030-2045", a wording as a list. It used to be coerced --
+            # int() truncated, str() stringified a dict -- and what reached
+            # the graph was a value nobody had read anywhere.
+            row.claim[f"{slot.name}_state"] = UNBACKED
+            failed.append({"row": row.label, "why": "wrong_type",
+                           "given": given, "reason": (
+                f"Dein \"value\" {given!r} ist nicht {wrong}. "
+                f"Antworte mit {wrong}, genau wie die Passage es schreibt.")})
             unbacked += 1
             continue
         quote = answer.get("quote")

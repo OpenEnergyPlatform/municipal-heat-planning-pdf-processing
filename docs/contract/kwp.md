@@ -125,7 +125,7 @@ The spec's uri for the parameter, the same key a tuple carries.
 
 ### `claim`
 
-The claim as the model returned it. A dead-server sentinel carries _harvest_failed with _why, or _cut_off.
+The claim as the model returned it. A sentinel carries _harvest_failed with _why: the server was gone, the model answered nothing, or the reply did not fit and there was nothing left to split.
 
 ### `kind`
 
@@ -1906,12 +1906,12 @@ One event per line; `t` names it and `doc` the document. Read by scripts/trace_r
 
 - `plan`: `chars`, `doc`, `image`, `kind`, `origin`, `owner`, `rank`
 - `anchor`: `doc`, `parameter`, `text`
-- `frame`: `attempt`, `completion_tokens`, `doc`, `missed`, `ms`, `pairs`, `prompt_tokens`, `scenarios`, `sources`, `status`, `years`
+- `frame`: `attempt`, `completion_tokens`, `doc`, `missed`, `ms`, `pairs`, `prompt_tokens`, `rejected`, `scenarios`, `sources`, `status`, `years`
 - `rows`: `attempt`, `completion_tokens`, `doc`, `ms`, `origins`, `prompt`, `prompt_tokens`, `ranks`, `rows`, `sources`, `status`
 - `field`: `anchor`, `attempt`, `completion_tokens`, `doc`, `filled`, `filled_by`, `ms`, `open`, `parameter`, `prompt_tokens`, `raw_foreign`, `raw_missing`, `reply`, `shown`, `slot`, `stage`, `unbacked`, `unbacked_by`, `unquoted`, `unstated`, `window`
 - `sweep`: `anchor`, `asked`, `combed`, `doc`, `exhausted`, `filled`, `raw_foreign`, `raw_missing`, `retried`, `rows`, `slot`, `unbacked`, `unquoted`, `unstated`, `windows`
 - `drop`: `attempt`, `doc`, `field`, `row`, `slot`, `why`, `window`
-- `error`: `attempt`, `detail`, `doc`, `finish`, `kind`, `ms`, `slot`, `sources`, `status`, `where`, `why`
+- `error`: `attempt`, `cause`, `detail`, `doc`, `finish`, `kind`, `ms`, `owner`, `slot`, `sources`, `status`, `where`, `why`
 - `coord`: `doc`, `kind`, `owner`, `parameter`, `states`, `tier`, `unit`, `value`
 - `refusal`: `doc`, `owner`, `parameter`, `reason`
 - `invalid`: `detail`, `doc`, `kind`, `where`, `why`

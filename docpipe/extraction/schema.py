@@ -141,7 +141,8 @@ REFUSAL_REASONS = [
 # tests/test_extraction_reasons.py holds merge_field to this list: a reason it
 # writes that is not listed here is a check nobody agreed to.
 DROP_REASONS = ["quote_not_in_source", "quote_too_short",
-                "answer_not_in_quote", "not_an_option", "unbacked"]
+                "answer_not_in_quote", "not_an_option", "wrong_type",
+                "unbacked"]
 
 
 def _owner() -> dict:
@@ -478,13 +479,15 @@ def harvest_schema(spec) -> dict:
                     "claim": {
                         "type": "object",
                         "description": "The claim as the model returned it. "
-                                       "A dead-server sentinel carries "
-                                       "_harvest_failed with _why, or "
-                                       "_cut_off.",
+                                       "A sentinel carries _harvest_failed "
+                                       "with _why: the server was gone, the "
+                                       "model answered nothing, or the reply "
+                                       "did not fit and there was nothing "
+                                       "left to split.",
                         "properties": {
                             "_harvest_failed": {"const": True},
-                            "_why": {"enum": ["unreachable", "no_answer"]},
-                            "_cut_off": {"const": True}}},
+                            "_why": {"enum": ["unreachable", "no_answer",
+                                              "cut_off"]}}},
                     "owner": _owner(),
                 },
                 "required": ["kind", "parameter", "reason", "claim", "owner"],
@@ -700,6 +703,9 @@ def trace_schema() -> dict:
                   "sources": {"type": "array", "items": owner},
                   "status": {"enum": ["complete", "exhausted"]},
                   "attempt": {"type": "integer"},
+                  # Pairs this round refused for their evidence or for naming
+                  # a scenario off the list, and therefore asked again for.
+                  "rejected": {"type": "integer"},
                   "prompt_tokens": {"type": ["integer", "null"]},
                   "completion_tokens": {"type": ["integer", "null"]},
                   "ms": {"type": "integer"}},
@@ -735,13 +741,21 @@ def trace_schema() -> dict:
                  "row": {"type": "string", "pattern": "^R[0-9]+$"},
                  "why": {"enum": DROP_REASONS}},
         "error": {"where": {"type": "string"},
-                  "kind": {"enum": ["unparsable", "exception", "gave_up"]},
+                  "kind": {"enum": ["unreadable", "exception", "gave_up",
+                                    "split"]},
+                  # WHY a reply could not be read, so a run can say whether
+                  # its retries were spent on answers that were cut off,
+                  # wrapped in prose, or simply broken.
+                  "cause": {"enum": ["cut_off", "empty", "no_object",
+                                     "syntax", "outside_text", "missing_key",
+                                     "not_an_object", "wrong_shape"]},
                   "slot": {"type": ["string", "null"]},
                   "attempt": {"type": "integer"},
                   "finish": {"type": ["string", "null"]},
                   "status": {"type": ["integer", "string", "null"]},
                   "detail": {"type": "string"},
-                  "why": {"enum": ["unreachable", "no_answer"]},
+                  "why": {"enum": ["unreachable", "no_answer", "cut_off"]},
+                  "owner": owner,
                   "sources": {"type": "array", "items": owner},
                   "ms": {"type": "integer"}},
         "coord": {"parameter": {"type": ["string", "null"]}, "value": {},
@@ -768,7 +782,8 @@ def trace_schema() -> dict:
     # the server.
     loose = {"detail", "status", "finish", "why", "sources", "ms", "slot",
              "prompt_tokens", "completion_tokens", "filled_by", "unbacked_by",
-             "field", "raw_missing", "raw_foreign"}
+             "field", "raw_missing", "raw_foreign", "cause", "owner",
+             "rejected"}
     return {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "$id": f"{BASE_ID}/trace-record",
