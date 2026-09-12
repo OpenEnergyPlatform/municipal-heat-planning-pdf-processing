@@ -22,7 +22,7 @@ is for and what it hands to what; this is the reference.
 - [docpipe.artifacts](docpipe.artifacts.md): Names the per-document result files under `<doc>/results/`, in the order the pipeline writes them.
 - [docpipe.captions](docpipe.captions.md): Defines what a caption looks like, and finds where a table's title really sits. (2 functions)
 - [docpipe.dotenv](docpipe.dotenv.md): Populate os.environ from a `.env` file before anything reads it. (1 function)
-- [docpipe.llm_preflight](docpipe.llm_preflight.md): Asks the server what it can do, before the first document. (1 class, 2 functions)
+- [docpipe.llm_preflight](docpipe.llm_preflight.md): Asks the server what it can do, before the first document. (1 class, 6 functions)
 - [docpipe.migrate_artifact_names](docpipe.migrate_artifact_names.md): Rename the per-document artefacts of an already processed tree to the names in ``docpipe.artifacts``. (3 functions)
 - [docpipe.ontology](docpipe.ontology.md): Reads the ontology a spec is written against once and pins it in a snapshot. (18 functions)
 - [docpipe.profile](docpipe.profile.md): A profile is everything a project contributes to the generic pipeline: where its documents come from, what extra tables it needs, which prompts it overrides and which filters its app offers. (2 classes, 5 functions)

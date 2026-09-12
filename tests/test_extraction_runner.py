@@ -764,10 +764,13 @@ def test_a_truncated_reply_is_never_read_as_an_answer(monkeypatch):
         "nothing from a cut-off reply is kept")
 
 
-# What the served model can hold. vLLM reported max_seq_len=32768 for the
-# 122B this stage runs against, and --max-model-len above it is refused at
-# startup — so a budget over this is not a tuning question, it is a run that
-# never begins.
+# What the server is started with, not what the model could hold. The model
+# this stage runs against holds 262,144 tokens natively, and serving that
+# would spend on KV cache what the run wants for parallelism: 128 requests in
+# flight is what makes a corpus finish, and every one of them fits in 32k.
+# A budget over what IS served is not a tuning question, it is a run that
+# never begins — the request is refused mid-run and the document keeps
+# nothing.
 SERVED_WINDOW = 32768
 
 # For the sizing assertion below. A source that yields at all yields 12 tuples
@@ -1126,6 +1129,40 @@ def test_the_retry_names_the_cause_and_says_what_to_do():
     assert runner._reply_fault(missing, 6144, key="tuples")[0] == "missing_key"
     empty = NS(finish_reason="stop", message=NS(content="  "))
     assert runner._reply_fault(empty, 6144)[0] == "empty"
+
+
+def test_a_reply_that_only_thought_is_named_as_that():
+    """Reading the answer back out of reasoning_content was a fallback and is
+    gone. What replaces it is saying so: this is also the one reply that
+    means the server's thinking switch did not take, and calling it "empty"
+    hid that."""
+    from types import SimpleNamespace as NS
+    only = NS(finish_reason="stop",
+              message=NS(content="", reasoning_content="Also, 2030 ist..."))
+    cause, said = runner._reply_fault(only, 6144)
+    assert cause == "reasoning_only" and "Denk nicht vor" in said
+    # Even when the thinking is what ran into the ceiling: shortening the
+    # answer is not the fix, not thinking is.
+    ran_out = NS(finish_reason="length",
+                 message=NS(content="", reasoning_content="Also..."))
+    assert runner._reply_fault(ran_out, 6144)[0] == "reasoning_only"
+
+
+def test_a_reply_that_ran_out_but_parses_is_not_called_cut_off():
+    """`cut_off` came first whatever the reply said, so a well-formed answer
+    of the wrong shape was told to be shorter — which it cannot act on. The
+    cut is only the cause when the reply is unreadable BECAUSE of it."""
+    from types import SimpleNamespace as NS
+    listed = NS(finish_reason="length",
+                message=NS(content="[1, 2]", reasoning_content=""))
+    assert runner._reply_fault(listed, 6144)[0] == "not_an_object"
+    missing = NS(finish_reason="length",
+                 message=NS(content='{"values": []}', reasoning_content=""))
+    assert runner._reply_fault(missing, 6144, key="tuples")[0] == "missing_key"
+    broken = NS(finish_reason="length",
+                message=NS(content='{"tuples": [{"value": 20',
+                           reasoning_content=""))
+    assert runner._reply_fault(broken, 6144)[0] == "cut_off"
 
 
 def test_a_field_reply_that_did_not_fit_halves_its_rows(monkeypatch):

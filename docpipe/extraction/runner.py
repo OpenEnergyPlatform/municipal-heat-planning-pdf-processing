@@ -61,7 +61,7 @@ from pathlib import Path
 from typing import Callable, Optional
 
 from docpipe import prompts
-from docpipe.llm_preflight import assert_serving
+from docpipe.llm_preflight import assert_serving, request_extras
 from docpipe.profile import add_profile_argument, resolve_profile
 
 from . import fields
@@ -82,7 +82,7 @@ log = logging.getLogger(__name__)
 
 LLM_BASE_URL = os.environ.get("LLM_BASE_URL", "http://localhost:8000/v1")
 LLM_API_KEY = os.environ.get("LLM_API_KEY", "EMPTY")
-LLM_MODEL = os.environ.get("LLM_MODEL", "Qwen/Qwen3.5-122B-A10B-FP8")
+LLM_MODEL = os.environ.get("LLM_MODEL", "Qwen/Qwen3.8-Flash-Next-FP8")
 LLM_TIMEOUT = int(os.environ.get("LLM_TIMEOUT", "180"))
 TOP_K = int(os.environ.get("EXTRACT_TOP_K", "8"))
 MAX_ROUNDS = int(os.environ.get("EXTRACT_MAX_ROUNDS", "4"))
@@ -922,8 +922,7 @@ def document_anchor(spec: Spec, context: Optional[dict] = None,
                     max_tokens=limit,
                     messages=[{"role": "system", "content": prompt.text},
                               *conversation],
-                    extra_body={"chat_template_kwargs":
-                                {"enable_thinking": False}},
+                    extra_body=request_extras(),
                 ).choices[0]
                 phrase = ((_loads_object(reply.message.content) or {})
                           .get("phrase") or "")
@@ -1111,8 +1110,7 @@ def make_frame_asker(image_root: Optional[Path] = None) -> Callable:
                     max_tokens=limit,
                     messages=[{"role": "system", "content": prompt.text},
                               *conversation],
-                    extra_body={"chat_template_kwargs":
-                                {"enable_thinking": False}},
+                    extra_body=request_extras(),
                 )
                 transport = False
                 _observe_usage(getattr(completion, "usage", None))
@@ -1525,7 +1523,7 @@ def make_anchors(spec: Spec, client=None, *, store: Optional[Path] = None,
                     max_tokens=limit,
                     messages=[{"role": "system", "content": prompt.text},
                               *conversation],
-                    extra_body={"chat_template_kwargs": {"enable_thinking": False}},
+                    extra_body=request_extras(),
                 ).choices[0]
                 parsed = _loads_object(reply.message.content)
                 anchors = [a.strip() for a in (parsed or {}).get("anchors", ())
@@ -1845,9 +1843,9 @@ def _unparsable(reply) -> str:
 # What has to be said back whatever went wrong: the shape that was asked for.
 _SHAPE_RULE = (" Gib NUR das JSON-Objekt aus, in EINER Zeile, ohne Text davor "
                "oder danach, ohne Codefence, ohne <think>-Block und ohne ein "
-               "zweites Objekt. Anf\u00fchrungszeichen INNERHALB eines Zitats "
-               "m\u00fcssen als \\\" escaped sein \u2014 ist das m\u00fchsam, "
-               "k\u00fcrz das Zitat auf eine Stelle ohne Anf\u00fchrungszeichen.")
+               "zweites Objekt. Anführungszeichen INNERHALB eines Zitats "
+               "müssen als \\\" escaped sein — ist das mühsam, kürz das "
+               "Zitat auf eine Stelle ohne Anführungszeichen.")
 
 
 def _reply_fault(reply, limit: int, *, key: str = "",
@@ -1858,25 +1856,48 @@ def _reply_fault(reply, limit: int, *, key: str = "",
     model told nothing specific answers the same way again. The causes need
     different things: a reply cut off at the ceiling has to be shorter, one
     wrapped in prose has to drop the prose, one with broken syntax has to see
-    where it broke, and one that is a list or is missing its list has to be
-    told which shape was asked for.
+    where it broke, one that spent its turn thinking has to stop thinking,
+    and one missing its list has to be told which list.
 
     The cause goes into the trace too, so a run can say what its retries were
     spent on instead of counting all of them as "unparsable".
     """
-    if getattr(reply, "finish_reason", None) == "length":
+    def cut_off() -> tuple:
         return "cut_off", (
             f"Deine Antwort wurde nach {limit} Tokens abgeschnitten und ist "
-            "deshalb kein vollst\u00e4ndiges JSON-Objekt. "
-            + (shorter or "Antworte k\u00fcrzer: zitiere nur die kurze Stelle, "
-                          "an der die Angabe steht."))
+            "deshalb kein vollständiges JSON-Objekt. "
+            + (shorter or "Antworte kürzer: zitiere nur die kurze Stelle, an "
+                          "der die Angabe steht."))
+
+    ran_out = getattr(reply, "finish_reason", None) == "length"
     message = getattr(reply, "message", None)
-    text = (getattr(message, "content", None) or "").strip()
+    content = getattr(message, "content", None)
+    text = content.strip() if isinstance(content, str) else ""
+    thought = getattr(message, "reasoning_content", None)
+    thought = thought.strip() if isinstance(thought, str) else ""
+    if not text and thought:
+        # The answer went into the think block and the reply itself stayed
+        # empty. Reading it back out of there was a fallback and is gone, so
+        # the model is told instead — and this is also the one reply that
+        # says the server's thinking switch did not take, which is worth
+        # seeing in the trace rather than hiding behind "empty".
+        return "reasoning_only", (
+            "Du hast nur nachgedacht und nichts geantwortet: dein Beitrag "
+            "war leer. Denk nicht vor, sondern gib direkt das Ergebnis aus."
+            + _SHAPE_RULE)
     if not text:
-        return "empty", ("Deine Antwort war leer." + _SHAPE_RULE)
+        return cut_off() if ran_out else (
+            "empty", "Deine Antwort war leer." + _SHAPE_RULE)
     try:
         data = json.loads(text)
     except json.JSONDecodeError as exc:
+        # Only here. A reply that ran into the ceiling is unreadable BECAUSE
+        # it was cut, so its syntax error is the consequence and not the
+        # cause — but a reply that parses and merely has the wrong shape is
+        # not made right by being told it was too long, whatever its
+        # finish_reason says.
+        if ran_out:
+            return cut_off()
         start = text.find("{")
         if start == -1:
             return "no_object", ("Deine Antwort enthielt gar kein "
@@ -2249,7 +2270,7 @@ def make_harvester(image_root: Optional[Path] = None,
                     # the one stage that did not say it, and the pilot lost
                     # 1093 of 16102 harvests to replies with no 'tuples' in
                     # them, HTTP 200 every one.
-                    extra_body={"chat_template_kwargs": {"enable_thinking": False}},
+                    extra_body=request_extras(),
                 )
                 transport = False
                 reply = response.choices[0]
@@ -2525,7 +2546,7 @@ def make_field_asker(image_root: Optional[Path] = None) -> Callable:
                     max_tokens=limit,
                     messages=[{"role": "system", "content": prompt.text},
                               *conversation],
-                    extra_body={"chat_template_kwargs": {"enable_thinking": False}},
+                    extra_body=request_extras(),
                 )
                 transport = False
                 reply = response.choices[0]
@@ -2697,7 +2718,7 @@ def make_review_asker(image_root: Optional[Path] = None) -> Callable:
                     max_tokens=limit,
                     messages=[{"role": "system", "content": prompt.text},
                               *conversation],
-                    extra_body={"chat_template_kwargs": {"enable_thinking": False}},
+                    extra_body=request_extras(),
                 )
                 transport = False
                 reply = response.choices[0]

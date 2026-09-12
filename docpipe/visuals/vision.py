@@ -19,6 +19,8 @@ from pathlib import Path
 
 import openai
 
+from docpipe.llm_preflight import request_extras
+
 from .config import (
     VLM_BASE_URL,
     VLM_MODEL,
@@ -164,7 +166,7 @@ def call_vision(
             # mutated in place is one the caller cannot reason about.
             # Reasoning models must not spend the token budget on a <think>
             # block; that truncates the JSON answer.
-            extra_body: dict = {"chat_template_kwargs": {"enable_thinking": False}}
+            extra_body: dict = request_extras()
             if current_penalty is not None:
                 extra_body["repetition_penalty"] = current_penalty
 
@@ -285,7 +287,7 @@ def call_vision_plain(
             ],
             temperature=temperature,
             max_tokens=max_tokens,
-            extra_body={"chat_template_kwargs": {"enable_thinking": False}},
+            extra_body=request_extras(),
         )
     except Exception as e:
         log.warning("  Plain-text rescue failed for %s: %s", image_path.name, e)

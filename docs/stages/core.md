@@ -450,6 +450,12 @@ Two questions, both answered by `GET {base_url}/models`:
   * does the server serve the model the stage is about to request?
   * is its context at least as large as the worst-case request?
 
+And one thing every stage agrees with the server about before it asks
+anything: `request_extras`, the reasoning settings. They live here because
+they are the same for every stage and because getting them wrong fails the
+same way a window set too small does: hours in, as replies whose JSON was
+truncated by the think block in front of it.
+
 </details>
 
 <details>
