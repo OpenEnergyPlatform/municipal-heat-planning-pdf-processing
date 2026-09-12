@@ -3715,6 +3715,7 @@
       "enum": [
        "cut_off",
        "empty",
+       "reasoning_only",
        "no_object",
        "syntax",
        "outside_text",

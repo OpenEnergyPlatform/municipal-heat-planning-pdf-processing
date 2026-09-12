@@ -112,6 +112,46 @@ def test_preflight_passes_when_the_context_fits():
         assert_serving("http://x/v1", "EMPTY", "m", 20000)   # must not raise
 
 
+def test_the_reasoning_settings_are_one_setting_for_every_stage(monkeypatch):
+    """Thinking off and the smallest effort, in one place. They were six
+    copies of one dict literal, and a model that wants a different switch
+    would have needed six edits and a release."""
+    from docpipe.llm_preflight import request_extras
+    monkeypatch.delenv("LLM_ENABLE_THINKING", raising=False)
+    monkeypatch.delenv("LLM_REASONING_EFFORT", raising=False)
+    assert request_extras() == {"chat_template_kwargs":
+                                {"enable_thinking": False},
+                                "reasoning_effort": "low"}
+    # And both are a restart, not a release: a server that refuses either
+    # refuses every request of the run.
+    monkeypatch.setenv("LLM_REASONING_EFFORT", "off")
+    assert "reasoning_effort" not in request_extras()
+    monkeypatch.setenv("LLM_ENABLE_THINKING", "1")
+    assert request_extras()["chat_template_kwargs"]["enable_thinking"] is True
+
+
+def test_the_preflight_refuses_a_server_that_will_not_take_them(monkeypatch):
+    """Otherwise a refused setting is a 400 per document for as long as the
+    job lives, and the job lives for hours."""
+    from docpipe.llm_preflight import assert_request_extras
+
+    class _Refused(Exception):
+        status_code = 400
+
+    client = _server()
+    client.chat.completions.create.side_effect = _Refused("unknown field")
+    with patch("openai.OpenAI", return_value=client):
+        with pytest.raises(PreflightError) as e:
+            assert_request_extras("http://x/v1", "EMPTY", "m")
+    assert "LLM_REASONING_EFFORT=off" in str(e.value)
+
+    # A server that is merely unreachable is not a refusal: the settings go
+    # out anyway and the run's own retries deal with the outage.
+    client.chat.completions.create.side_effect = OSError("connection refused")
+    with patch("openai.OpenAI", return_value=client):
+        assert_request_extras("http://x/v1", "EMPTY", "m")
+
+
 def test_preflight_reports_an_unreachable_server_as_such():
     client = MagicMock()
     client.models.list.side_effect = OSError("connection refused")

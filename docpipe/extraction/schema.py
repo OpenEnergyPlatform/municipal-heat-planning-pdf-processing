@@ -746,9 +746,10 @@ def trace_schema() -> dict:
                   # WHY a reply could not be read, so a run can say whether
                   # its retries were spent on answers that were cut off,
                   # wrapped in prose, or simply broken.
-                  "cause": {"enum": ["cut_off", "empty", "no_object",
-                                     "syntax", "outside_text", "missing_key",
-                                     "not_an_object", "wrong_shape"]},
+                  "cause": {"enum": ["cut_off", "empty", "reasoning_only",
+                                     "no_object", "syntax", "outside_text",
+                                     "missing_key", "not_an_object",
+                                     "wrong_shape"]},
                   "slot": {"type": ["string", "null"]},
                   "attempt": {"type": "integer"},
                   "finish": {"type": ["string", "null"]},

@@ -40,6 +40,8 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Callable, Optional
 
+from docpipe.llm_preflight import request_extras
+
 from .corrections import apply_corrections
 from .split import SPLIT_MAX_TOKENS, SPLIT_TEMPERATURE, split_oversized
 from .config import (
@@ -295,9 +297,9 @@ def _call_llm(
                 # window handed back refined, so a big window needs a big
                 # answer. The flat 8192 cut the JSON mid-string.
                 max_tokens=reply_tokens(len(user_content.split())),
-                # Reasoning models must not spend the token budget on a <think>
-                # block; that truncates the JSON answer.
-                extra_body={"chat_template_kwargs": {"enable_thinking": False}},
+                # Reasoning models must not spend the token budget on a
+                # <think> block; that truncates the JSON answer.
+                extra_body=request_extras(),
             )
 
             raw_text = response.choices[0].message.content or ""
@@ -789,7 +791,7 @@ def _make_splitter(client) -> Callable[[str, str], str]:
             response_format={"type": "json_object"},
             temperature=SPLIT_TEMPERATURE,
             max_tokens=SPLIT_MAX_TOKENS,
-            extra_body={"chat_template_kwargs": {"enable_thinking": False}},
+            extra_body=request_extras(),
         )
         raw = response.choices[0].message.content or ""
         raw = re.sub(r"<think>.*?</think>", "", raw, flags=re.DOTALL).strip()
