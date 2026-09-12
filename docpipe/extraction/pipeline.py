@@ -34,6 +34,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import re
 import tempfile
 import threading
@@ -59,6 +60,14 @@ BATCH_CHARS = 14000
 # than any ranking does.
 PROSE_TOP = 50
 VISUAL_KINDS = ("table", "figure")
+# How much of the plan's room is held for figures and tables. Measured on
+# corpus_m5: 71 percent of every tuple in the harvest came from one of them,
+# and of a document's figures and tables only 13 to 40 percent ever reached a
+# question at all -- Emskirchen showed the model none of its twelve tables,
+# Bremen thirteen of its 323 figures. The ranking is built from probe
+# sentences and prose answers a sentence better than a chart does, so the cap
+# went to prose while the values sat in the pictures.
+VISUAL_SHARE = float(os.environ.get("EXTRACT_VISUAL_SHARE", "0.5"))
 
 
 @dataclass
@@ -119,6 +128,10 @@ class Batch:
     # which is what takes the coordinate out of the model's hands.
     frame: Optional[dict] = None
     frame_index: int = 0
+    # Every pair of the document, in index order. A claim whose own quote
+    # names a different one of them is filed under that pair instead of being
+    # refused, which is the only use this list has.
+    pairs: tuple = ()
     # The sentences this request's passages were searched with. They say, in
     # the plan's own words, what the request asks for, so the pair reaches
     # the model as a question and not only as a field.
@@ -160,6 +173,36 @@ class DocumentReport:
     # anchors rank. Planned from nothing; it tells a parameter whose
     # passages a cut-off request held from one whose passages were read.
     sources_of: dict = field(default_factory=dict)
+
+
+def with_visual_share(ranked: list, top: int,
+                      share: float = VISUAL_SHARE) -> list:
+    """The top `top` of the ranking, with room held for figures and tables.
+
+    The cap stays exactly what it was: this decides which `top` sources are
+    taken, never how many. If the head of the ranking already holds its share
+    of figures and tables, it is the head. Otherwise the best-ranked ones are
+    pulled up into the reserved seats and prose gives way from the bottom,
+    and the result is put back into ranking order so batching and every rank
+    written into the report stay what they were.
+
+    Held, not guaranteed: a document with four figures contributes four.
+    """
+    if top <= 0 or share <= 0:
+        return ranked[:max(0, top)]
+    head = ranked[:top]
+    visual = [s for s in ranked if s.owner_kind in VISUAL_KINDS]
+    room = min(int(top * share), len(visual))
+    if sum(1 for s in head if s.owner_kind in VISUAL_KINDS) >= room:
+        return head
+    kept = visual[:room]
+    seats = {(s.owner_kind, s.owner_id) for s in kept}
+    rest = [s for s in ranked if (s.owner_kind, s.owner_id) not in seats]
+    order = {(s.owner_kind, s.owner_id): index
+             for index, s in enumerate(ranked)}
+    taken = kept + rest[:max(0, top - len(kept))]
+    return sorted(taken, key=lambda s: order.get((s.owner_kind, s.owner_id),
+                                                 len(ranked)))
 
 
 def plan_document(
@@ -237,7 +280,7 @@ def plan_document(
                 for s in retrieve(own, document_id, set()) or []}
 
     if top is not None:
-        taken = ranked[:max(0, top)]
+        taken = with_visual_share(ranked, max(0, top))
         kept = {(s.owner_kind, s.owner_id) for s in taken}
         known = [s for s in (structure(document_id) if structure else ())
                  if s.owner_kind in VISUAL_KINDS]
@@ -410,6 +453,11 @@ class Row:
     label: str                            # "R1", the id a field answer names
     item_index: int                       # which source of the batch it sits in
     claim: dict = field(default_factory=dict)
+    # The pair this row belongs to, when that is NOT the pair its request
+    # asked for. The request's pair is written by `project`; a row that names
+    # another pair of the same document carries it here and keeps it.
+    pair: Optional[dict] = None
+    pair_index: int = 0
 
 
 def row_label(index: int) -> str:
@@ -467,6 +515,22 @@ def _invented_wording(claim: dict) -> bool:
     return flat(str(wording)).casefold() not in flat(quote).casefold()
 
 
+def pair_in_text(pair: Optional[dict], slots: list, text: str) -> bool:
+    """Does this text print every axis of this pair?
+
+    The one question both callers ask, of two different texts: of the whole
+    passage, to decide which pairs it may be read under, and of a single
+    claim's own quote, to decide which pair that claim belongs to.
+    """
+    for slot in slots:
+        if slot.name not in (pair or {}):
+            return False
+        if not answer_in_quote(slot, pair[slot.name],
+                               pair.get(f"{slot.name}_raw"), text):
+            return False
+    return True
+
+
 def names_pair(source, pair: Optional[dict], slots: list) -> bool:
     """Does this passage print the scenario and the year of this pair?
 
@@ -481,6 +545,54 @@ def names_pair(source, pair: Optional[dict], slots: list) -> bool:
                                pair.get(f"{slot.name}_raw"), text):
             return False
     return True
+
+
+def pair_of_claim(claim: dict, pairs: tuple, slots: list,
+                  taken: Optional[dict] = None) -> Optional[tuple]:
+    """(pair, index) the claim's OWN quote names, or None.
+
+    Measured on corpus_m5: of the 120,442 claims refused as "passage is not of
+    this pair", 35,407 were never read under any pair at all. They are not
+    stray readings — their units are the corpus's own, GWh/a, MWh/a and
+    t CO2eq/a — they are values the model found while answering for one pair
+    in a table that prints several.
+
+    Asked of the quote, not of the passage. The passage is a whole table and
+    prints four years; the quote is the row the value sits in, and a row that
+    prints one year is a row of that year. Nothing new is checked: this is the
+    same `answer_in_quote` the pair's own coordinates are held to.
+
+    Exactly one, or nothing. A quote that satisfies two pairs says which value
+    belongs to which as little as the passage did, and guessing between them
+    would put a year on a number that has not earned it.
+    """
+    quote = claim.get("quote")
+    if not isinstance(quote, str) or not quote.strip() or not slots:
+        return None
+    found = [(pair, index) for index, pair in enumerate(pairs)
+             if pair is not taken and pair_in_text(pair, slots, quote)]
+    return found[0] if len(found) == 1 else None
+
+
+def pair_of_source(source, pairs: tuple, slots: list,
+                   taken: Optional[dict] = None) -> Optional[tuple]:
+    """(pair, index) the whole passage names, or None.
+
+    The second try, for the table of another year: its rows carry no year of
+    their own, the year is in the title, and every value in it is a value of
+    that year. The same judgement `pair_batches` makes when it decides which
+    requests a passage goes into -- asked here of the pairs it was NOT asked
+    under.
+
+    Exactly one again. A table with four year columns names four pairs and
+    says nothing about which row belongs to which, and that is the case the
+    request per pair exists for.
+    """
+    if not slots:
+        return None
+    found = [(pair, index) for index, pair in enumerate(pairs)
+             if pair is not taken and names_pair(source, pair, slots)]
+    return found[0] if len(found) == 1 else None
 
 
 _YEAR_LIKE = re.compile(r"(?<!\d)(?:19|20)\d{2}(?!\d)")
@@ -515,10 +627,16 @@ def rows_from_reply(batch: Batch, reply: Optional[dict],
     nor names any source of the batch is an orphan.
 
     Under a frame, a passage that does not print the request's pair gives no
-    row: `apply_frame` writes the pair onto every row, so the pair has to
-    stand in the passage the row was read from. A passage that prints several
-    pairs, a table with a column per year, is read under each of them, and
-    each request takes the column of its own pair.
+    row of THAT pair: `apply_frame` writes the pair onto every row, so the
+    pair has to stand in the passage the row was read from. A passage that
+    prints several pairs, a table with a column per year, is read under each
+    of them, and each request takes the column of its own pair.
+
+    What such a passage's claims do carry is their own quote, and a quote that
+    prints exactly one other pair of the document is filed under that pair
+    instead of refused (`pair_of_claim`). It used to be dropped: 35,407 values
+    of corpus_m5, better than half the harvest, were refused as another pair's
+    and then read under no pair at all.
 
     A sentinel for a request that never came back is not a claim. It passes
     through untouched, its `_why` included, because the resume reads it there.
@@ -534,11 +652,29 @@ def rows_from_reply(batch: Batch, reply: Optional[dict],
     for item_index, claims in enumerate(routed):
         source = batch.items[item_index].source
         if claims and not names_pair(source, batch.frame, frame_axes or []):
-            # Another pair's passage. Refused here rather than swept: the
-            # coordinates would all be paid for and the row would then be
-            # stamped with a pair its own passage does not print.
-            orphans.extend(dict(claim, _why="passage is not of this pair")
-                           for claim in claims)
+            # Another pair's passage. What the claim's own quote names decides
+            # where it goes: under that pair if it names exactly one, and
+            # refused otherwise, because a row stamped with a pair its quote
+            # does not print is worse than no row.
+            # The passage as a whole is asked once, the quote of each claim
+            # separately: a row that prints its own year beats a title.
+            theirs = pair_of_source(source, batch.pairs, frame_axes or [],
+                                    batch.frame)
+            for claim in claims:
+                if _invented_wording(claim):
+                    orphans.append(dict(claim, _why="text value not in its quote"))
+                    continue
+                elsewhere = pair_of_claim(claim, batch.pairs,
+                                          frame_axes or [], batch.frame)
+                if elsewhere is None:
+                    elsewhere = theirs
+                if elsewhere is None:
+                    orphans.append(dict(claim, _why="passage is not of this pair"))
+                    continue
+                pair, pair_index = elsewhere
+                rows.append(Row(label=row_label(len(rows)),
+                                item_index=item_index, claim=dict(claim),
+                                pair=pair, pair_index=pair_index))
             continue
         for claim in claims:
             if _invented_wording(claim):
@@ -1306,6 +1442,33 @@ def fold_batch(batch: Batch, reply: Optional[dict], report: DocumentReport, *,
     # while having read more than N cannot be used to audit coverage.
     if batch.followed_up:
         report.owners_harvested += len(batch.items)
+
+
+def drop_repeats(report: DocumentReport) -> int:
+    """Remove rows that are another row of this document, written twice.
+
+    Not a check on a value: a row that agrees with another in its parameter,
+    its value, its unit, its quote, its source and every coordinate IS that
+    row, and writing it twice says nothing the first one did not. Measured on
+    corpus_m5, which had no such pass: 1,152 of 62,290 tuples, up to 77 in one
+    plan, and one office name eleven times.
+
+    `provenance` is left out of the comparison because it is about the writing
+    and not about the reading. The first of a repeated pair is the one kept,
+    so the file stays in the order the harvest produced.
+    """
+    seen: set = set()
+    kept: list = []
+    for row in report.tuples:
+        key = json.dumps({k: v for k, v in row.items() if k != "provenance"},
+                         sort_keys=True, ensure_ascii=False, default=str)
+        if key in seen:
+            continue
+        seen.add(key)
+        kept.append(row)
+    dropped = len(report.tuples) - len(kept)
+    report.tuples = kept
+    return dropped
 
 
 def write_report(report: DocumentReport, out_path: Path,

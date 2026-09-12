@@ -1994,3 +1994,65 @@ def test_the_wait_covers_every_attempt_and_grows_when_the_server_is_gone():
         15, 30, 60, 120, 120]
     assert sum(runner.retry_wait(a, True) for a in range(1, 5)) == 225, (
         "four waits over five attempts is what a restarting vLLM needs")
+
+
+# ---------------------------------------------------------------------------
+# Room in the plan for the passages the values are actually in
+# ---------------------------------------------------------------------------
+
+class _Ranked:
+    def __init__(self, kind, owner_id):
+        self.owner_kind = kind
+        self.owner_id = owner_id
+
+
+def _ranking(prose: int, visual: int):
+    """Prose first, as the probe ranking puts it: the probes are sentences."""
+    return ([_Ranked("section", i) for i in range(prose)]
+            + [_Ranked("figure", 1000 + i) for i in range(visual)])
+
+
+def test_figures_and_tables_keep_their_share_of_the_plan():
+    """Measured on corpus_m5: 71 percent of every tuple came from a figure or
+    a table, and only 13 to 40 percent of a document's figures and tables ever
+    reached a question -- Emskirchen showed none of its twelve tables. The
+    ranking is built from sentences and prose answers a sentence better than a
+    chart does, so the cap went to prose while the values sat in the pictures."""
+    from docpipe.extraction.pipeline import with_visual_share
+    taken = with_visual_share(_ranking(100, 60), 10, share=0.5)
+    assert len(taken) == 10, "the cap is what it was"
+    assert sum(1 for s in taken if s.owner_kind == "figure") == 5
+
+
+def test_the_share_is_room_held_and_not_room_promised():
+    """A document with two figures contributes two, and a plan that already
+    holds its share is left exactly as it was."""
+    from docpipe.extraction.pipeline import with_visual_share
+    taken = with_visual_share(_ranking(100, 2), 10, share=0.5)
+    assert [s.owner_id for s in taken[:8]] == list(range(8))
+    assert sum(1 for s in taken if s.owner_kind == "figure") == 2
+    already = _ranking(0, 20)
+    assert with_visual_share(already, 10, share=0.5) == already[:10]
+
+
+def test_what_is_taken_stays_in_the_order_it_was_ranked():
+    """Ranks are written into the report and decide the batching, so pulling
+    a figure into the plan must not move it up the ranking."""
+    from docpipe.extraction.pipeline import with_visual_share
+    taken = with_visual_share(_ranking(100, 60), 10, share=0.5)
+    ids = [(s.owner_kind, s.owner_id) for s in taken]
+    assert ids == sorted(ids, key=lambda k: (k[0] != "section", k[1]))
+
+
+def test_the_same_reading_written_twice_is_one_reading():
+    """corpus_m5 wrote 1,152 of them and nothing took them out again: one
+    office name eleven times, one plan with 77. Everything but provenance is
+    compared, so two rows that differ in any coordinate are two rows."""
+    from docpipe.extraction.pipeline import DocumentReport, drop_repeats
+    report = DocumentReport(document_id=7)
+    row = {"parameter": "p", "value": 17000, "unit": "kWh/a",
+           "quote": "| Erdgas | 17.000 |", "year": 2030}
+    report.tuples = [dict(row), dict(row, provenance={"batch": 2}),
+                     dict(row, year=2045)]
+    assert drop_repeats(report) == 1
+    assert [t["year"] for t in report.tuples] == [2030, 2045]

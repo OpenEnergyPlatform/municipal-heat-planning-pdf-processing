@@ -29,6 +29,7 @@ Author: Felix Vossel
 from __future__ import annotations
 
 import re
+import unicodedata
 from dataclasses import dataclass, field
 from typing import Callable, Optional
 
@@ -104,8 +105,31 @@ def numbers_in(text: str) -> set:
 _BR = re.compile(r"<br\s*/?>", re.I)
 
 
+# Quotation marks and dashes a PDF prints and a model retypes. The model is
+# shown the transcription and writes its quote from it, but the two go through
+# different encoders, and a passage that says „Bestand" against a quote that
+# says "Bestand" is the same sentence twice under two code points.
+_SAME = str.maketrans({
+    "„": '"', "“": '"', "”": '"', "‟": '"',  # „ “ ” ‟
+    "«": '"', "»": '"',                                # « »
+    "‘": "'", "’": "'", "‚": "'", "‛": "'",  # ‘ ’ ‚ ‛
+    "–": "-", "—": "-", "−": "-",                 # – — −
+    " ": " ", " ": " ", " ": " ",                 # the thin spaces
+    "­": "",                                                # the soft hyphen
+})
+
+
 def flat(text: str) -> str:
-    return _WS.sub(" ", _BR.sub(" ", text or "")).strip()
+    """One shape for both sides of every comparison in this file.
+
+    NFKC because a ligature and a decomposed umlaut are the same letters:
+    `ﬁ` is `fi` and `u` plus a combining diaeresis is `ü`, and a quote that
+    came out of the PDF one way and out of the model the other was read as
+    two different sentences. This is not a check, it is the form both sides
+    are brought into before the one check that exists runs.
+    """
+    same = unicodedata.normalize("NFKC", text or "").translate(_SAME)
+    return _WS.sub(" ", _BR.sub(" ", same)).strip()
 
 
 def quote_in(source: str, quote: str) -> bool:

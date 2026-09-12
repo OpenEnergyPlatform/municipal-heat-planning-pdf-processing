@@ -544,3 +544,38 @@ def test_computed_is_a_switch_that_only_true_flips():
     "nein" would have let a value stand that is in no quote at all."""
     out = verify_tuple(_claim(value=42, computed="nein"), _parameter(), SOURCE)
     assert isinstance(out, Refusal) and "does not occur" in out.reason
+
+
+# ---------------------------------------------------------------------------
+# Both sides of the one comparison, in one shape
+# ---------------------------------------------------------------------------
+
+def test_a_ligature_and_a_decomposed_umlaut_are_the_letters_they_are():
+    """The passage comes out of the PDF and the quote out of the model, and
+    the two encode the same letters differently. Nothing is checked here that
+    was not checked before; both sides are brought into one form first."""
+    from docpipe.extraction.verify import quote_in
+    assert quote_in("Die spezi\ufb01sche Kennzahl", "Die spezifische Kennzahl")
+    assert quote_in("Wa\u0308rmebedarf 2030", "Wärmebedarf 2030")
+
+
+def test_the_quotation_marks_of_a_plan_are_quotation_marks():
+    """A German plan prints „Bestand“ and a model retypes "Bestand". One
+    sentence, two code points, and it used to be two sentences."""
+    from docpipe.extraction.verify import quote_in
+    assert quote_in('Das Szenario „Bestand“ 2022', 'Das Szenario "Bestand" 2022')
+    assert quote_in("Zeitraum 2020\u20132030", "Zeitraum 2020-2030")
+
+
+def test_a_soft_hyphen_is_not_a_letter():
+    """A justified column breaks Fernwärme with a soft hyphen the reader never
+    sees and the comparison did."""
+    from docpipe.extraction.verify import quote_in
+    assert quote_in("Fern\u00adwärmenetz 2030", "Fernwärmenetz 2030")
+
+
+def test_normalising_does_not_make_two_different_numbers_one():
+    """It folds how a character is written, never what it says."""
+    from docpipe.extraction.verify import quote_in
+    assert not quote_in("Bedarf 17.000 kWh", "Bedarf 18.000 kWh")
+    assert not quote_in("Zielszenario 2045", "Zielszenario 2030")

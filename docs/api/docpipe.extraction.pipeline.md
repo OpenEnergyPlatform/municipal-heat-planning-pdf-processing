@@ -106,6 +106,7 @@ Fields:
 - `followed_up: bool = False`: True for a batch the model asked for, which the plan never counted.
 - `frame: Optional[dict] = None`: Which of the document's (scenario, year) pairs this request asks for, and its index. The same passages are read once per pair: a table with four year columns is four requests, each one asking for one column, which is what takes the coordinate out of the model's hands.
 - `frame_index: int = 0`
+- `pairs: tuple = ()`: Every pair of the document, in index order. A claim whose own quote names a different one of them is filed under that pair instead of being refused, which is the only use this list has.
 - `anchors: tuple = ()`: The sentences this request's passages were searched with. They say, in the plan's own words, what the request asks for, so the pair reaches the model as a question and not only as a field.
 - `frame_default: Optional[dict] = None`: The pair a passage that names no pair at all is read under, and its index: the profile's FRAME_DEFAULT. The request reads it like the rest, and the pair is written onto its rows afterwards.
 - `frame_default_index: int = 0`
@@ -162,6 +163,8 @@ Fields:
 - `label: str`: "R1", the id a field answer names
 - `item_index: int`: which source of the batch it sits in
 - `claim: dict = field(default_factory=dict)`
+- `pair: Optional[dict] = None`: The pair this row belongs to, when that is NOT the pair its request asked for. The request's pair is written by `project`; a row that names another pair of the same document carries it here and keeps it.
+- `pair_index: int = 0`
 
 ### Sweep
 
@@ -218,6 +221,24 @@ def take_followup(self, sources: list) -> list
 The passages of a follow-up this sweep has not already covered.
 
 ## Functions
+
+### with_visual_share
+
+```python
+def with_visual_share(ranked: list, top: int,
+                      share: float = VISUAL_SHARE) -> list
+```
+
+The top `top` of the ranking, with room held for figures and tables.
+
+The cap stays exactly what it was: this decides which `top` sources are
+taken, never how many. If the head of the ranking already holds its share
+of figures and tables, it is the head. Otherwise the best-ranked ones are
+pulled up into the reserved seats and prose gives way from the bottom,
+and the result is put back into ranking order so batching and every rank
+written into the report stay what they were.
+
+Held, not guaranteed: a document with four figures contributes four.
 
 ### plan_document
 
@@ -342,6 +363,18 @@ year the header's nth cell names.
 None whenever it is not certain: no table row, the value in no cell, or
 the same number in two of them. A wrong column is worse than none.
 
+### pair_in_text
+
+```python
+def pair_in_text(pair: Optional[dict], slots: list, text: str) -> bool
+```
+
+Does this text print every axis of this pair?
+
+The one question both callers ask, of two different texts: of the whole
+passage, to decide which pairs it may be read under, and of a single
+claim's own quote, to decide which pair that claim belongs to.
+
 ### names_pair
 
 ```python
@@ -352,6 +385,49 @@ Does this passage print the scenario and the year of this pair?
 
 The whole passage, not a line of it. Where the year stands is the plan's
 business: a column header, a caption, a sentence above the table.
+
+### pair_of_claim
+
+```python
+def pair_of_claim(claim: dict, pairs: tuple, slots: list,
+                  taken: Optional[dict] = None) -> Optional[tuple]
+```
+
+(pair, index) the claim's OWN quote names, or None.
+
+Measured on corpus_m5: of the 120,442 claims refused as "passage is not of
+this pair", 35,407 were never read under any pair at all. They are not
+stray readings — their units are the corpus's own, GWh/a, MWh/a and
+t CO2eq/a — they are values the model found while answering for one pair
+in a table that prints several.
+
+Asked of the quote, not of the passage. The passage is a whole table and
+prints four years; the quote is the row the value sits in, and a row that
+prints one year is a row of that year. Nothing new is checked: this is the
+same `answer_in_quote` the pair's own coordinates are held to.
+
+Exactly one, or nothing. A quote that satisfies two pairs says which value
+belongs to which as little as the passage did, and guessing between them
+would put a year on a number that has not earned it.
+
+### pair_of_source
+
+```python
+def pair_of_source(source, pairs: tuple, slots: list,
+                   taken: Optional[dict] = None) -> Optional[tuple]
+```
+
+(pair, index) the whole passage names, or None.
+
+The second try, for the table of another year: its rows carry no year of
+their own, the year is in the title, and every value in it is a value of
+that year. The same judgement `pair_batches` makes when it decides which
+requests a passage goes into -- asked here of the pairs it was NOT asked
+under.
+
+Exactly one again. A table with four year columns names four pairs and
+says nothing about which row belongs to which, and that is the case the
+request per pair exists for.
 
 ### names_no_pair_at_all
 
@@ -380,10 +456,16 @@ value belongs to, the label breaks a tie, and a claim that neither quotes
 nor names any source of the batch is an orphan.
 
 Under a frame, a passage that does not print the request's pair gives no
-row: `apply_frame` writes the pair onto every row, so the pair has to
-stand in the passage the row was read from. A passage that prints several
-pairs, a table with a column per year, is read under each of them, and
-each request takes the column of its own pair.
+row of THAT pair: `apply_frame` writes the pair onto every row, so the
+pair has to stand in the passage the row was read from. A passage that
+prints several pairs, a table with a column per year, is read under each
+of them, and each request takes the column of its own pair.
+
+What such a passage's claims do carry is their own quote, and a quote that
+prints exactly one other pair of the document is filed under that pair
+instead of refused (`pair_of_claim`). It used to be dropped: 35,407 values
+of corpus_m5, better than half the harvest, were refused as another pair's
+and then read under no pair at all.
 
 A sentinel for a request that never came back is not a claim. It passes
 through untouched, its `_why` included, because the resume reads it there.
@@ -696,6 +778,24 @@ sweep — it is the model telling us where retrieval was too narrow.
 A claim the harvester already refused keeps the reason it was refused
 for. Verified a second time, 631 of Kassel's claims came out as "claim
 names no parameter of the spec" instead of saying why.
+
+### drop_repeats
+
+```python
+def drop_repeats(report: DocumentReport) -> int
+```
+
+Remove rows that are another row of this document, written twice.
+
+Not a check on a value: a row that agrees with another in its parameter,
+its value, its unit, its quote, its source and every coordinate IS that
+row, and writing it twice says nothing the first one did not. Measured on
+corpus_m5, which had no such pass: 1,152 of 62,290 tuples, up to 77 in one
+plan, and one office name eleven times.
+
+`provenance` is left out of the comparison because it is about the writing
+and not about the reading. The first of a repeated pair is the one kept,
+so the file stays in the order the harvest produced.
 
 ### write_report
 
