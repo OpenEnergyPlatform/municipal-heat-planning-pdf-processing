@@ -863,7 +863,8 @@
          "Elektrizität",
          "Heizungsstrom",
          "Wärmestrom",
-         "Direktstrom"
+         "Direktstrom",
+         "E-Wärme"
         ],
         "uri": "OEO_00000139"
        },
@@ -1472,7 +1473,9 @@
          "Privathaushalte",
          "Wohnen",
          "Wohngebäude",
-         "Haushaltssektor"
+         "Haushaltssektor",
+         "Einfamilienhaus",
+         "Mehrfamilienhaus"
         ],
         "uri": "OEO_00000214"
        },
@@ -1481,7 +1484,9 @@
         "spellings": [
          "Gesamt",
          "alle Sektoren",
-         "insgesamt"
+         "insgesamt",
+         "Gesamtverbrauch",
+         "Gesamtbedarf"
         ],
         "uri": "out:total"
        },
@@ -1493,7 +1498,7 @@
         "uri": "OEO_00000422"
        }
       },
-      "x-question": "Welcher Verbrauchssektor? Die Bezeichnung steht in der Zeilenbeschriftung, im Spaltenkopf oder in der Blocküberschrift DERSELBEN Tabelle: \"Wohnen\" und \"Wohngebäude\" meinen die Klasse Private Haushalte, \"GHD/Kommune\", \"Gewerbe\" und \"wirtschaftlich genutzte Gebäude\" die Klasse GHD. Ein GEBIET ist kein Sektor: \"Gesamtstadt\", \"Stadtgebiet\", \"Gemeinde\" und \"Plangebiet\" sagen, WO die Zahl gilt, nicht für welchen Verbraucher, und sie sind auch keine Summe über die Sektoren. Eine Zeile, die ausdrücklich über alle Sektoren summiert (\"Summe\", \"Gesamt\", \"insgesamt\" als Zeilen- oder Spaltenkopf), ist \"out:total\". Hat die eigene Tabelle keine Sektorspalte und nennt ihr Titel keinen Sektor, dann ist das keine Klasse, sondern eine fehlende Angabe: antworte mit \"out:unstated\"."
+      "x-question": "Welcher Verbrauchssektor? Die Bezeichnung steht in der Zeilenbeschriftung, im Spaltenkopf oder in der Blocküberschrift DERSELBEN Tabelle: \"Wohnen\" und \"Wohngebäude\" meinen die Klasse Private Haushalte, \"GHD/Kommune\", \"Gewerbe\" und \"wirtschaftlich genutzte Gebäude\" die Klasse GHD. Ein GEBIET ist kein Sektor: \"Gesamtstadt\", \"Stadtgebiet\", \"Gemeinde\" und \"Plangebiet\" sagen, WO die Zahl gilt, nicht für welchen Verbraucher, und sie sind auch keine Summe über die Sektoren. Eine Zeile, die ausdrücklich über alle Sektoren summiert (\"Summe\", \"Gesamt\", \"insgesamt\" als Zeilen- oder Spaltenkopf), ist \"out:total\". Ebenso ein Wert, der sich ausdrücklich als Gesamtverbrauch oder Gesamtbedarf aller Verbraucher bezeichnet (\"sinkt der Gesamtverbrauch auf 116.000.000 kWh/a\"). Eine Gesamtleistung von Anlagen (\"24 KWK-Anlagen mit einer Gesamtleistung von 2.797,6 kWth\") ist dagegen keine Summe über Sektoren. \"Einfamilienhaus\" und \"Mehrfamilienhaus\" meinen die Klasse Private Haushalte. Hat die eigene Tabelle keine Sektorspalte und nennt ihr Titel keinen Sektor, dann ist das keine Klasse, sondern eine fehlende Angabe: antworte mit \"out:unstated\"."
      },
      "sector_quote": {
       "description": "The verbatim passage carrying 'sector'. Present exactly when sector_state is 'read'.",
@@ -2336,7 +2341,8 @@
          "Elektrizität",
          "Heizungsstrom",
          "Wärmestrom",
-         "Direktstrom"
+         "Direktstrom",
+         "E-Wärme"
         ],
         "uri": "OEO_00000139"
        },
@@ -2946,7 +2952,9 @@
          "Privathaushalte",
          "Wohnen",
          "Wohngebäude",
-         "Haushaltssektor"
+         "Haushaltssektor",
+         "Einfamilienhaus",
+         "Mehrfamilienhaus"
         ],
         "uri": "OEO_00000214"
        },
@@ -2955,7 +2963,9 @@
         "spellings": [
          "Gesamt",
          "alle Sektoren",
-         "insgesamt"
+         "insgesamt",
+         "Gesamtverbrauch",
+         "Gesamtbedarf"
         ],
         "uri": "out:total"
        },
@@ -2967,7 +2977,7 @@
         "uri": "OEO_00000422"
        }
       },
-      "x-question": "Welcher Verbrauchssektor? Die Bezeichnung steht in der Zeilenbeschriftung, im Spaltenkopf oder in der Blocküberschrift DERSELBEN Tabelle: \"Wohnen\" und \"Wohngebäude\" meinen die Klasse Private Haushalte, \"GHD/Kommune\", \"Gewerbe\" und \"wirtschaftlich genutzte Gebäude\" die Klasse GHD. Ein GEBIET ist kein Sektor: \"Gesamtstadt\", \"Stadtgebiet\", \"Gemeinde\" und \"Plangebiet\" sagen, WO die Zahl gilt, nicht für welchen Verbraucher, und sie sind auch keine Summe über die Sektoren. Eine Zeile, die ausdrücklich über alle Sektoren summiert (\"Summe\", \"Gesamt\", \"insgesamt\" als Zeilen- oder Spaltenkopf), ist \"out:total\". Hat die eigene Tabelle keine Sektorspalte und nennt ihr Titel keinen Sektor, dann ist das keine Klasse, sondern eine fehlende Angabe: antworte mit \"out:unstated\"."
+      "x-question": "Welcher Verbrauchssektor? Die Bezeichnung steht in der Zeilenbeschriftung, im Spaltenkopf oder in der Blocküberschrift DERSELBEN Tabelle: \"Wohnen\" und \"Wohngebäude\" meinen die Klasse Private Haushalte, \"GHD/Kommune\", \"Gewerbe\" und \"wirtschaftlich genutzte Gebäude\" die Klasse GHD. Ein GEBIET ist kein Sektor: \"Gesamtstadt\", \"Stadtgebiet\", \"Gemeinde\" und \"Plangebiet\" sagen, WO die Zahl gilt, nicht für welchen Verbraucher, und sie sind auch keine Summe über die Sektoren. Eine Zeile, die ausdrücklich über alle Sektoren summiert (\"Summe\", \"Gesamt\", \"insgesamt\" als Zeilen- oder Spaltenkopf), ist \"out:total\". Ebenso ein Wert, der sich ausdrücklich als Gesamtverbrauch oder Gesamtbedarf aller Verbraucher bezeichnet (\"sinkt der Gesamtverbrauch auf 116.000.000 kWh/a\"). Eine Gesamtleistung von Anlagen (\"24 KWK-Anlagen mit einer Gesamtleistung von 2.797,6 kWth\") ist dagegen keine Summe über Sektoren. \"Einfamilienhaus\" und \"Mehrfamilienhaus\" meinen die Klasse Private Haushalte. Hat die eigene Tabelle keine Sektorspalte und nennt ihr Titel keinen Sektor, dann ist das keine Klasse, sondern eine fehlende Angabe: antworte mit \"out:unstated\"."
      },
      "sector_quote": {
       "description": "The verbatim passage carrying 'sector'. Present exactly when sector_state is 'read'.",
@@ -3802,7 +3812,8 @@
          "Elektrizität",
          "Heizungsstrom",
          "Wärmestrom",
-         "Direktstrom"
+         "Direktstrom",
+         "E-Wärme"
         ],
         "uri": "OEO_00000139"
        },
@@ -4390,7 +4401,9 @@
          "Privathaushalte",
          "Wohnen",
          "Wohngebäude",
-         "Haushaltssektor"
+         "Haushaltssektor",
+         "Einfamilienhaus",
+         "Mehrfamilienhaus"
         ],
         "uri": "OEO_00000214"
        },
@@ -4399,7 +4412,9 @@
         "spellings": [
          "Gesamt",
          "alle Sektoren",
-         "insgesamt"
+         "insgesamt",
+         "Gesamtverbrauch",
+         "Gesamtbedarf"
         ],
         "uri": "out:total"
        },
@@ -4411,7 +4426,7 @@
         "uri": "OEO_00000422"
        }
       },
-      "x-question": "Welcher Verbrauchssektor? Die Bezeichnung steht in der Zeilenbeschriftung, im Spaltenkopf oder in der Blocküberschrift DERSELBEN Tabelle: \"Wohnen\" und \"Wohngebäude\" meinen die Klasse Private Haushalte, \"GHD/Kommune\", \"Gewerbe\" und \"wirtschaftlich genutzte Gebäude\" die Klasse GHD. Ein GEBIET ist kein Sektor: \"Gesamtstadt\", \"Stadtgebiet\", \"Gemeinde\" und \"Plangebiet\" sagen, WO die Zahl gilt, nicht für welchen Verbraucher, und sie sind auch keine Summe über die Sektoren. Eine Zeile, die ausdrücklich über alle Sektoren summiert (\"Summe\", \"Gesamt\", \"insgesamt\" als Zeilen- oder Spaltenkopf), ist \"out:total\". Hat die eigene Tabelle keine Sektorspalte und nennt ihr Titel keinen Sektor, dann ist das keine Klasse, sondern eine fehlende Angabe: antworte mit \"out:unstated\"."
+      "x-question": "Welcher Verbrauchssektor? Die Bezeichnung steht in der Zeilenbeschriftung, im Spaltenkopf oder in der Blocküberschrift DERSELBEN Tabelle: \"Wohnen\" und \"Wohngebäude\" meinen die Klasse Private Haushalte, \"GHD/Kommune\", \"Gewerbe\" und \"wirtschaftlich genutzte Gebäude\" die Klasse GHD. Ein GEBIET ist kein Sektor: \"Gesamtstadt\", \"Stadtgebiet\", \"Gemeinde\" und \"Plangebiet\" sagen, WO die Zahl gilt, nicht für welchen Verbraucher, und sie sind auch keine Summe über die Sektoren. Eine Zeile, die ausdrücklich über alle Sektoren summiert (\"Summe\", \"Gesamt\", \"insgesamt\" als Zeilen- oder Spaltenkopf), ist \"out:total\". Ebenso ein Wert, der sich ausdrücklich als Gesamtverbrauch oder Gesamtbedarf aller Verbraucher bezeichnet (\"sinkt der Gesamtverbrauch auf 116.000.000 kWh/a\"). Eine Gesamtleistung von Anlagen (\"24 KWK-Anlagen mit einer Gesamtleistung von 2.797,6 kWth\") ist dagegen keine Summe über Sektoren. \"Einfamilienhaus\" und \"Mehrfamilienhaus\" meinen die Klasse Private Haushalte. Hat die eigene Tabelle keine Sektorspalte und nennt ihr Titel keinen Sektor, dann ist das keine Klasse, sondern eine fehlende Angabe: antworte mit \"out:unstated\"."
      },
      "sector_quote": {
       "description": "The verbatim passage carrying 'sector'. Present exactly when sector_state is 'read'.",

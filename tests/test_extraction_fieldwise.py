@@ -26,6 +26,7 @@ from docpipe.extraction.pipeline import (DocumentReport, Source, WorkItem,
                                          fold_batch, group_items,
                                          merge_field, open_rows,
                                          rows_from_reply)
+from docpipe.extraction.pipeline import answer_in_quote as pipeline_answer_in_quote
 from docpipe.extraction.spec import load as load_spec
 
 PROFILES = Path(__file__).resolve().parent.parent / "profiles"
@@ -154,6 +155,47 @@ def test_a_quote_that_does_not_contain_the_answer_is_not_evidence(profile):
         assert "Ziegenkaese" in counts["failed"][0]["reason"],             "the correction has to name what was not found"
         assert slot.name not in rows[0].claim
         return
+
+
+def _quantity_slot():
+    return fields.Slot(name="quantity", kind=fields.CHOICE, options=(
+        fields.Option(label="final energy consumption value", uri="OEO_00050016",
+                      synonyms=("Endenergieverbrauch", "Wärmebedarf")),
+        fields.Option(label="Potenzial", uri="out:potential",
+                      synonyms=("technisches Potenzial",))))
+
+
+def test_a_choice_without_wording_is_found_under_any_of_its_spellings():
+    """The owner's reading of "the answer stands in the quote" (2026-09-13).
+
+    The real classes carry the ontology's English label, and no German plan
+    prints "final energy consumption value". Answered without a wording, the
+    label was the only thing looked for, and corpus_m5 dropped 284,643 quantity
+    answers while 95 percent of the sampled passages said the class in German.
+    """
+    slot = _quantity_slot()
+    quote = "Tabelle 4: Wärmebedarf der Gesamtstadt 2022 in MWh/a"
+    assert pipeline_answer_in_quote(slot, "final energy consumption value",
+                                    None, quote)
+    assert pipeline_answer_in_quote(slot, "OEO_00050016", None, quote), (
+        "a stored row carries the URI, and recheck asks with it")
+    assert not pipeline_answer_in_quote(slot, "Potenzial", None, quote), (
+        "a spelling of ANOTHER option is not evidence for this one")
+    assert not pipeline_answer_in_quote(
+        slot, "final energy consumption value", None,
+        "Tabelle 5: Anteil erneuerbarer Energien 2022"), (
+        "and a quote naming none of them still backs nothing")
+
+
+def test_a_given_wording_is_still_what_the_quote_has_to_carry():
+    """The spellings stand in only where no wording was given. A wording is
+    the model saying which words it read, and those have to be in the quote."""
+    slot = _quantity_slot()
+    quote = "Tabelle 4: Wärmebedarf der Gesamtstadt 2022 in MWh/a"
+    assert not pipeline_answer_in_quote(slot, "final energy consumption value",
+                                        "Endenergieverbrauch", quote)
+    assert pipeline_answer_in_quote(slot, "final energy consumption value",
+                                    "Wärmebedarf", quote)
 
 
 def test_a_group_answer_reaches_every_row_it_names(profile):
@@ -1162,6 +1204,11 @@ def test_the_trace_names_the_field_that_filled_and_the_field_that_dropped(
     assert {d["field"] for d in dropped} == {"sector"}, (
         "and the drop names the coordinate, not the request")
     assert {d["why"] for d in dropped} == {"quote_not_in_source"}
+    assert {(d["given"], d["raw"], d["quote"]) for d in dropped} == {
+        ("Haushalte", "Haushalte",
+         "Diese Passage steht in keiner gezeigten Quelle.")}, (
+        "and it says what was answered, so the next run can tell a wrong "
+        "wording from a wrong quote")
 
 
 def test_a_status_quo_row_is_asked_its_coordinates(monkeypatch):

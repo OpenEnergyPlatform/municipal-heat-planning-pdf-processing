@@ -28,9 +28,15 @@ Regeln:
    - Sonst die Bezeichnung, wörtlich aus der Quelle.
 
 2. "value_raw": IMMER zusätzlich, die Bezeichnung wörtlich so, wie sie in der Quelle steht — die Zeilenbeschriftung, der Spaltenkopf, die Blocküberschrift oder die Caption, aus der du sie hast. Daran wird deine Zuordnung nachträglich geprüft. Bei "year" darf "value_raw" fehlen.
+   "value_raw" ist NIE der Name aus "options", sondern das Wort des Plans. Die Namen der Klassen sind oft englisch und stehen in keinem Wärmeplan.
+   RICHTIG: "value": "final energy consumption value", "value_raw": "Wärmebedarf", "quote": "Tabelle 4: Wärmebedarf der Gesamtstadt 2022 in MWh/a"
+   FALSCH: "value_raw": "final energy consumption value" — das steht in keiner Quelle, und die Antwort fällt durch.
 
 3. "quote": eine wörtliche, zusammenhängende Zeichenkette aus EINER der gezeigten Quellen (mindestens 8 Zeichen), und in der deine Antwort auch wirklich steht. Zeichen für Zeichen kopieren.
-   Das ist FAST NIE die Zeile der Zahl selbst. Der Energieträger steht in der Zeilenbeschriftung, das Jahr im Spaltenkopf oder im Tabellentitel, die Größe (Endenergieverbrauch, Emissionen, Leistung) meist im Spaltenkopf oder im Tabellentitel, das Szenario im Abschnittstitel, das Gebiet in der Caption. Zitier die Stelle, an der die Angabe wirklich steht.
+   Oft ist das NICHT die Zeile der Zahl selbst. Der Energieträger steht in der Zeilenbeschriftung, das Jahr im Spaltenkopf oder im Tabellentitel, die Größe (Endenergieverbrauch, Emissionen, Leistung) meist im Spaltenkopf oder im Tabellentitel, das Szenario im Abschnittstitel, das Gebiet in der Caption. Zitier die Stelle, an der die Angabe wirklich steht.
+   Nennt die Zeile der Zahl die Angabe aber selbst, dann ist sie das richtige Zitat. In Kennzahltabellen steht die Größe in jeder Zeile:
+   RICHTIG für die Größe: "| Endenergieverbrauch Wärmenetze Erdgas in GWh/a | 12,4 |"
+   Eine Überschrift über mehreren Unterzeilen ("Wärmeverbrauch", darunter "davon Heizöl", "davon Erdgas") gilt für jede dieser Unterzeilen.
    Die Zeile nennt unter "source" die Quelle, in der ihre Zahl steht.
    Im Abschnittstext steht bei jedem Platzhalter der Titel dabei: "[p85_tbl0: Tabelle 17: ... 2040]". Dieser Titel gehört zu GENAU dieser einen Tabelle. Trägt die Quelle, die deine Zeile unter "source" nennt, dieselbe "block_id", ist es ihr Titel. Sonst ist es der Titel einer fremden Tabelle, und er datiert deine Zahl nicht, benennt ihr Szenario nicht und sagt nichts über ihr Gebiet.
    RICHTIG für das Jahr einer Zahl aus p85_tbl0: "Tabelle 17: Endenergieverbrauch der Gesamtstadt nach Sektor und Energieträger im Zielszenario 2040"
@@ -58,5 +64,6 @@ Regeln:
 8. "need_more": bekommst du die Angabe aus diesen Passagen nicht, kannst du zusätzlich ein bis drei Sätze angeben, nach denen gesucht werden soll — so, wie sie im Dokument STEHEN würden. Danach wird per Ähnlichkeit gesucht, und was gefunden wird, kommt als nächste Anfrage mit denselben Zeilen.
    RICHTIG: "Die Energiebilanz bezieht sich auf das Bezugsjahr 2021."
    FALSCH: "Bezugsjahr" — zu kurz, findet alles und nichts.
+   Trägt die Spalte oder Zeile einer Zahl statt einer Jahreszahl nur "Status quo", "IST", "Bestand" oder "aktuell", dann steht ihr Jahr meist EINMAL an anderer Stelle im Plan: als Bilanzjahr, Bezugsjahr oder Datenstand der Bestandsanalyse. Steht es in den gezeigten Passagen nicht, antworte "out:unstated" und such mit "need_more" genau danach, etwa "Die Energie- und Treibhausgasbilanz wurde für das Bilanzjahr erstellt." Rate das Jahr nicht aus dem Erscheinungsjahr des Plans.
 
 9. "corrections" (nur bei einer Wiederholung): steht das im Eingabe-Objekt, war deine vorige Antwort für die dort genannten Zeilen nicht belegbar, und der Grund steht dabei. Lies ihn und antworte für GENAU diese Zeilen neu. Zitier eine andere Stelle, oder antworte mit "out:unstated", wenn die Angabe in den gezeigten Passagen wirklich nicht steht. Dieselbe Antwort noch einmal zu schicken hilft nicht, sie fällt genauso durch.

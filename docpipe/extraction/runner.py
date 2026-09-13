@@ -3004,12 +3004,22 @@ def make_sweeper(ask: Callable, *,
                                     "unstated", "raw_missing",
                                     "raw_foreign")})
                     for bad in counts["failed"]:
+                        # What was answered, not only that it failed: the
+                        # corpus_m5 trace counted 284,643 quantity answers
+                        # whose quote did not carry them and could not say
+                        # whether the wording, the quote or the pairing of
+                        # the two was wrong.
+                        quote = bad.get("quote")
                         trace.event("drop", batch.document_id, slot=name,
                                     field=bad.get("field"),
                                     window=sum(spent.values()),
                                     attempt=attempt,
                                     row=bad.get("row"),
-                                    why=bad.get("why") or "unbacked")
+                                    why=bad.get("why") or "unbacked",
+                                    given=bad.get("given"),
+                                    raw=bad.get("raw"),
+                                    quote=(quote[:300] if isinstance(quote, str)
+                                           else None))
                     corrections = counts["failed"]
                     if not corrections:
                         break

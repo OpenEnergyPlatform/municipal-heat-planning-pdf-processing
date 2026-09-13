@@ -474,6 +474,14 @@ A number is compared as a number, a wording as text — the same split
 value_in_quote makes for the value itself, because these are the same
 question asked one level down.
 
+Without a wording, a choice is looked for under every spelling the spec
+lists for the option it names, not only under the label it was answered
+with. The labels of the real classes are the ontology's English ones, and
+"final energy consumption value" stands in no German plan: corpus_m5
+dropped 284,643 quantity answers for not being in their quote while 95
+percent of the sampled passages said "Wärmebedarf" or "Endenergieverbrauch"
+in so many words. The owner agreed to this reading on 2026-09-13.
+
 ### option_named
 
 ```python

@@ -677,11 +677,25 @@ def answer_in_quote(slot, given, wording: Optional[str], quote: str) -> bool:
     A number is compared as a number, a wording as text — the same split
     value_in_quote makes for the value itself, because these are the same
     question asked one level down.
+
+    Without a wording, a choice is looked for under every spelling the spec
+    lists for the option it names, not only under the label it was answered
+    with. The labels of the real classes are the ontology's English ones, and
+    "final energy consumption value" stands in no German plan: corpus_m5
+    dropped 284,643 quantity answers for not being in their quote while 95
+    percent of the sampled passages said "Wärmebedarf" or "Endenergieverbrauch"
+    in so many words. The owner agreed to this reading on 2026-09-13.
     """
     if slot.kind == NUMBER:
         return canonical_number(given) in numbers_in(quote)
-    shown = wording if wording else str(given)
-    return flat(shown).casefold() in flat(quote).casefold()
+    said = flat(quote).casefold()
+    if wording:
+        return flat(wording).casefold() in said
+    option = (option_named(slot, given)
+              if slot.kind == CHOICE and slot.options else None)
+    spellings = ((option.label, *option.synonyms) if option is not None
+                 else (str(given),))
+    return any(flat(s).casefold() in said for s in spellings if s.strip())
 
 
 # Where one word ends and the next begins, for a language that writes ae
@@ -920,7 +934,8 @@ def merge_field(rows: list, sources: list, slot, reply: Optional[dict],
         if found is None:
             row.claim[f"{slot.name}_state"] = UNBACKED
             failed.append({"row": row.label, "why": "quote_not_in_source",
-                           "reason": (
+                           "given": given, "raw": answer.get("value_raw"),
+                           "quote": quote, "reason": (
                 "Dein \"quote\" steht in keiner der gezeigten Quellen. "
                 "Kopiere eine Passage Zeichen für Zeichen aus \"sources\" "
                 "oder aus dem \"quote\" der Zeile selbst.")})
@@ -929,7 +944,8 @@ def merge_field(rows: list, sources: list, slot, reply: Optional[dict],
         if len(quote.strip()) < MIN_QUOTE_CHARS:
             row.claim[f"{slot.name}_state"] = UNBACKED
             failed.append({"row": row.label, "why": "quote_too_short",
-                           "reason": (
+                           "given": given, "raw": answer.get("value_raw"),
+                           "quote": quote, "reason": (
                 f"Dein \"quote\" ist zu kurz, um eine Stelle zu benennen "
                 f"(mindestens {MIN_QUOTE_CHARS} Zeichen). Zitier den ganzen "
                 f"Satz oder die ganze Zeile, in der die Antwort steht.")})
@@ -942,7 +958,8 @@ def merge_field(rows: list, sources: list, slot, reply: Optional[dict],
             row.claim[f"{slot.name}_state"] = UNBACKED
             shown_answer = wording or given
             failed.append({"row": row.label, "why": "answer_not_in_quote",
-                           "given": given, "raw": wording, "reason": (
+                           "given": given, "raw": wording, "quote": quote,
+                           "reason": (
                 f"Dein \"quote\" enthält {shown_answer!r} nicht. Zitier die "
                 f"Stelle, an der es wirklich steht, oder antworte mit "
                 f"\"{UNSTATED}\".")})

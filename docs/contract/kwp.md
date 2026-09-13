@@ -276,7 +276,7 @@ The prompt's own wording:
   - also written: Andere, sonstige Energieträger, Sonstige Wärmequellen, Rest
 - **Steinkohle** → `OEO_00000204`
 - **Strom** → `OEO_00000139` — Electrical energy is a form of energy derived from the potential or kinetic energy of charged particles.
-  - also written: Elektrizität, Heizungsstrom, Wärmestrom, Direktstrom
+  - also written: Elektrizität, Heizungsstrom, Wärmestrom, Direktstrom, E-Wärme
 - **Summe** → `out:total` — Eine Zeile, die ausdrücklich über alle Einträge summiert.
   - also written: Gesamt, Gesamtwert, Gesamtsumme, alle Energieträger, insgesamt
 - **Umweltwärme** → `OEO_00000056` — Ambient thermal energy is thermal energy that is stored in the ambient air, beneath the surface of solid earth or in surface water. It is captured by heat pumps.
@@ -527,7 +527,7 @@ Axis 'sector' of Emissionen. A closed list; an entry beginning 'out:' is a delib
 
 The prompt's own wording:
 
-> Welcher Verbrauchssektor? Die Bezeichnung steht in der Zeilenbeschriftung, im Spaltenkopf oder in der Blocküberschrift DERSELBEN Tabelle: "Wohnen" und "Wohngebäude" meinen die Klasse Private Haushalte, "GHD/Kommune", "Gewerbe" und "wirtschaftlich genutzte Gebäude" die Klasse GHD. Ein GEBIET ist kein Sektor: "Gesamtstadt", "Stadtgebiet", "Gemeinde" und "Plangebiet" sagen, WO die Zahl gilt, nicht für welchen Verbraucher, und sie sind auch keine Summe über die Sektoren. Eine Zeile, die ausdrücklich über alle Sektoren summiert ("Summe", "Gesamt", "insgesamt" als Zeilen- oder Spaltenkopf), ist "out:total". Hat die eigene Tabelle keine Sektorspalte und nennt ihr Titel keinen Sektor, dann ist das keine Klasse, sondern eine fehlende Angabe: antworte mit "out:unstated".
+> Welcher Verbrauchssektor? Die Bezeichnung steht in der Zeilenbeschriftung, im Spaltenkopf oder in der Blocküberschrift DERSELBEN Tabelle: "Wohnen" und "Wohngebäude" meinen die Klasse Private Haushalte, "GHD/Kommune", "Gewerbe" und "wirtschaftlich genutzte Gebäude" die Klasse GHD. Ein GEBIET ist kein Sektor: "Gesamtstadt", "Stadtgebiet", "Gemeinde" und "Plangebiet" sagen, WO die Zahl gilt, nicht für welchen Verbraucher, und sie sind auch keine Summe über die Sektoren. Eine Zeile, die ausdrücklich über alle Sektoren summiert ("Summe", "Gesamt", "insgesamt" als Zeilen- oder Spaltenkopf), ist "out:total". Ebenso ein Wert, der sich ausdrücklich als Gesamtverbrauch oder Gesamtbedarf aller Verbraucher bezeichnet ("sinkt der Gesamtverbrauch auf 116.000.000 kWh/a"). Eine Gesamtleistung von Anlagen ("24 KWK-Anlagen mit einer Gesamtleistung von 2.797,6 kWth") ist dagegen keine Summe über Sektoren. "Einfamilienhaus" und "Mehrfamilienhaus" meinen die Klasse Private Haushalte. Hat die eigene Tabelle keine Sektorspalte und nennt ihr Titel keinen Sektor, dann ist das keine Klasse, sondern eine fehlende Angabe: antworte mit "out:unstated".
 
 <details><summary>What it may answer (6)</summary>
 
@@ -538,9 +538,9 @@ The prompt's own wording:
 - **Landwirtschaft** → `OEO_00010035` — A agriculture, forestry and land use (AFOLU) sector is a sector that covers activities and natural processes from agriculture, forestry, land use and land use change.
   - also written: Land- und Forstwirtschaft
 - **Private Haushalte** → `OEO_00000214` — A household sector is a sector that covers households.
-  - also written: Haushalte, Privathaushalte, Wohnen, Wohngebäude, Haushaltssektor
+  - also written: Haushalte, Privathaushalte, Wohnen, Wohngebäude, Haushaltssektor, Einfamilienhaus, Mehrfamilienhaus
 - **Summe** → `out:total` — Eine Zeile, die ausdrücklich über alle Einträge summiert.
-  - also written: Gesamt, alle Sektoren, insgesamt
+  - also written: Gesamt, alle Sektoren, insgesamt, Gesamtverbrauch, Gesamtbedarf
 - **Verkehr** → `OEO_00000422` — A transport sector is a sector that covers transport of people and/or goods.
   - also written: Verkehrssektor
 
@@ -820,7 +820,7 @@ The prompt's own wording:
   - also written: Andere, sonstige Energieträger, Sonstige Wärmequellen, Rest
 - **Steinkohle** → `OEO_00000204`
 - **Strom** → `OEO_00000139` — Electrical energy is a form of energy derived from the potential or kinetic energy of charged particles.
-  - also written: Elektrizität, Heizungsstrom, Wärmestrom, Direktstrom
+  - also written: Elektrizität, Heizungsstrom, Wärmestrom, Direktstrom, E-Wärme
 - **Summe** → `out:total` — Eine Zeile, die ausdrücklich über alle Einträge summiert.
   - also written: Gesamt, Gesamtwert, Gesamtsumme, alle Energieträger, insgesamt
 - **Umweltwärme** → `OEO_00000056` — Ambient thermal energy is thermal energy that is stored in the ambient air, beneath the surface of solid earth or in surface water. It is captured by heat pumps.
@@ -1071,7 +1071,7 @@ Axis 'sector' of Energieverbrauch. A closed list; an entry beginning 'out:' is a
 
 The prompt's own wording:
 
-> Welcher Verbrauchssektor? Die Bezeichnung steht in der Zeilenbeschriftung, im Spaltenkopf oder in der Blocküberschrift DERSELBEN Tabelle: "Wohnen" und "Wohngebäude" meinen die Klasse Private Haushalte, "GHD/Kommune", "Gewerbe" und "wirtschaftlich genutzte Gebäude" die Klasse GHD. Ein GEBIET ist kein Sektor: "Gesamtstadt", "Stadtgebiet", "Gemeinde" und "Plangebiet" sagen, WO die Zahl gilt, nicht für welchen Verbraucher, und sie sind auch keine Summe über die Sektoren. Eine Zeile, die ausdrücklich über alle Sektoren summiert ("Summe", "Gesamt", "insgesamt" als Zeilen- oder Spaltenkopf), ist "out:total". Hat die eigene Tabelle keine Sektorspalte und nennt ihr Titel keinen Sektor, dann ist das keine Klasse, sondern eine fehlende Angabe: antworte mit "out:unstated".
+> Welcher Verbrauchssektor? Die Bezeichnung steht in der Zeilenbeschriftung, im Spaltenkopf oder in der Blocküberschrift DERSELBEN Tabelle: "Wohnen" und "Wohngebäude" meinen die Klasse Private Haushalte, "GHD/Kommune", "Gewerbe" und "wirtschaftlich genutzte Gebäude" die Klasse GHD. Ein GEBIET ist kein Sektor: "Gesamtstadt", "Stadtgebiet", "Gemeinde" und "Plangebiet" sagen, WO die Zahl gilt, nicht für welchen Verbraucher, und sie sind auch keine Summe über die Sektoren. Eine Zeile, die ausdrücklich über alle Sektoren summiert ("Summe", "Gesamt", "insgesamt" als Zeilen- oder Spaltenkopf), ist "out:total". Ebenso ein Wert, der sich ausdrücklich als Gesamtverbrauch oder Gesamtbedarf aller Verbraucher bezeichnet ("sinkt der Gesamtverbrauch auf 116.000.000 kWh/a"). Eine Gesamtleistung von Anlagen ("24 KWK-Anlagen mit einer Gesamtleistung von 2.797,6 kWth") ist dagegen keine Summe über Sektoren. "Einfamilienhaus" und "Mehrfamilienhaus" meinen die Klasse Private Haushalte. Hat die eigene Tabelle keine Sektorspalte und nennt ihr Titel keinen Sektor, dann ist das keine Klasse, sondern eine fehlende Angabe: antworte mit "out:unstated".
 
 <details><summary>What it may answer (6)</summary>
 
@@ -1082,9 +1082,9 @@ The prompt's own wording:
 - **Landwirtschaft** → `OEO_00010035` — A agriculture, forestry and land use (AFOLU) sector is a sector that covers activities and natural processes from agriculture, forestry, land use and land use change.
   - also written: Land- und Forstwirtschaft
 - **Private Haushalte** → `OEO_00000214` — A household sector is a sector that covers households.
-  - also written: Haushalte, Privathaushalte, Wohnen, Wohngebäude, Haushaltssektor
+  - also written: Haushalte, Privathaushalte, Wohnen, Wohngebäude, Haushaltssektor, Einfamilienhaus, Mehrfamilienhaus
 - **Summe** → `out:total` — Eine Zeile, die ausdrücklich über alle Einträge summiert.
-  - also written: Gesamt, alle Sektoren, insgesamt
+  - also written: Gesamt, alle Sektoren, insgesamt, Gesamtverbrauch, Gesamtbedarf
 - **Verkehr** → `OEO_00000422` — A transport sector is a sector that covers transport of people and/or goods.
   - also written: Verkehrssektor
 
@@ -1362,7 +1362,7 @@ The prompt's own wording:
   - also written: Andere, sonstige Energieträger, Sonstige Wärmequellen, Rest
 - **Steinkohle** → `OEO_00000204`
 - **Strom** → `OEO_00000139` — Electrical energy is a form of energy derived from the potential or kinetic energy of charged particles.
-  - also written: Elektrizität, Heizungsstrom, Wärmestrom, Direktstrom
+  - also written: Elektrizität, Heizungsstrom, Wärmestrom, Direktstrom, E-Wärme
 - **Summe** → `out:total` — Eine Zeile, die ausdrücklich über alle Einträge summiert.
   - also written: Gesamt, Gesamtwert, Gesamtsumme, alle Energieträger, insgesamt
 - **Umweltwärme** → `OEO_00000056` — Ambient thermal energy is thermal energy that is stored in the ambient air, beneath the surface of solid earth or in surface water. It is captured by heat pumps.
@@ -1607,7 +1607,7 @@ Axis 'sector' of Leistung. A closed list; an entry beginning 'out:' is a deliber
 
 The prompt's own wording:
 
-> Welcher Verbrauchssektor? Die Bezeichnung steht in der Zeilenbeschriftung, im Spaltenkopf oder in der Blocküberschrift DERSELBEN Tabelle: "Wohnen" und "Wohngebäude" meinen die Klasse Private Haushalte, "GHD/Kommune", "Gewerbe" und "wirtschaftlich genutzte Gebäude" die Klasse GHD. Ein GEBIET ist kein Sektor: "Gesamtstadt", "Stadtgebiet", "Gemeinde" und "Plangebiet" sagen, WO die Zahl gilt, nicht für welchen Verbraucher, und sie sind auch keine Summe über die Sektoren. Eine Zeile, die ausdrücklich über alle Sektoren summiert ("Summe", "Gesamt", "insgesamt" als Zeilen- oder Spaltenkopf), ist "out:total". Hat die eigene Tabelle keine Sektorspalte und nennt ihr Titel keinen Sektor, dann ist das keine Klasse, sondern eine fehlende Angabe: antworte mit "out:unstated".
+> Welcher Verbrauchssektor? Die Bezeichnung steht in der Zeilenbeschriftung, im Spaltenkopf oder in der Blocküberschrift DERSELBEN Tabelle: "Wohnen" und "Wohngebäude" meinen die Klasse Private Haushalte, "GHD/Kommune", "Gewerbe" und "wirtschaftlich genutzte Gebäude" die Klasse GHD. Ein GEBIET ist kein Sektor: "Gesamtstadt", "Stadtgebiet", "Gemeinde" und "Plangebiet" sagen, WO die Zahl gilt, nicht für welchen Verbraucher, und sie sind auch keine Summe über die Sektoren. Eine Zeile, die ausdrücklich über alle Sektoren summiert ("Summe", "Gesamt", "insgesamt" als Zeilen- oder Spaltenkopf), ist "out:total". Ebenso ein Wert, der sich ausdrücklich als Gesamtverbrauch oder Gesamtbedarf aller Verbraucher bezeichnet ("sinkt der Gesamtverbrauch auf 116.000.000 kWh/a"). Eine Gesamtleistung von Anlagen ("24 KWK-Anlagen mit einer Gesamtleistung von 2.797,6 kWth") ist dagegen keine Summe über Sektoren. "Einfamilienhaus" und "Mehrfamilienhaus" meinen die Klasse Private Haushalte. Hat die eigene Tabelle keine Sektorspalte und nennt ihr Titel keinen Sektor, dann ist das keine Klasse, sondern eine fehlende Angabe: antworte mit "out:unstated".
 
 <details><summary>What it may answer (6)</summary>
 
@@ -1618,9 +1618,9 @@ The prompt's own wording:
 - **Landwirtschaft** → `OEO_00010035` — A agriculture, forestry and land use (AFOLU) sector is a sector that covers activities and natural processes from agriculture, forestry, land use and land use change.
   - also written: Land- und Forstwirtschaft
 - **Private Haushalte** → `OEO_00000214` — A household sector is a sector that covers households.
-  - also written: Haushalte, Privathaushalte, Wohnen, Wohngebäude, Haushaltssektor
+  - also written: Haushalte, Privathaushalte, Wohnen, Wohngebäude, Haushaltssektor, Einfamilienhaus, Mehrfamilienhaus
 - **Summe** → `out:total` — Eine Zeile, die ausdrücklich über alle Einträge summiert.
-  - also written: Gesamt, alle Sektoren, insgesamt
+  - also written: Gesamt, alle Sektoren, insgesamt, Gesamtverbrauch, Gesamtbedarf
 - **Verkehr** → `OEO_00000422` — A transport sector is a sector that covers transport of people and/or goods.
   - also written: Verkehrssektor
 
