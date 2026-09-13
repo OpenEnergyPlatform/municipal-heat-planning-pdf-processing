@@ -808,13 +808,13 @@ def render_profiles_page(doc: str, profiles, intro: str = "") -> str:
 # ---------------------------------------------------------------------------
 # The API reference
 # ---------------------------------------------------------------------------
-# What the reference covers: the packages the chapters describe. One page per
-# module under `docs/api/`, named after its dotted path; a package's
-# `__init__` is the package's own page. Read with `ast` like everything else
-# here, so a signature and a docstring reach the site without the module
-# being imported, and therefore without OpenCV, PyMuPDF or torch.
-API_ROOTS = ("docpipe", "profiles", "scripts/inference_app",
-             "scripts/fileprocessing")
+# What the reference covers: the packages the chapters describe and every
+# tool under `scripts/`, the checks and reports a change or a run is held to
+# included. One page per module under `docs/api/`, named after its dotted
+# path; a package's `__init__` is the package's own page. Read with `ast` like
+# everything else here, so a signature and a docstring reach the site without
+# the module being imported, and therefore without OpenCV, PyMuPDF or torch.
+API_ROOTS = ("docpipe", "profiles", "scripts")
 API_DIR = "api"
 API_INDEX = f"{API_DIR}/index.md"
 API_TITLE = "API reference"

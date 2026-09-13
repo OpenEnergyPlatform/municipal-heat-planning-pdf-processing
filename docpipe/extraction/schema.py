@@ -739,7 +739,12 @@ def trace_schema() -> dict:
                  "window": {"type": "integer"},
                  "attempt": {"type": "integer"},
                  "row": {"type": "string", "pattern": "^R[0-9]+$"},
-                 "why": {"enum": DROP_REASONS}},
+                 "why": {"enum": DROP_REASONS},
+                 # What was answered: the model's value and wording as they
+                 # came back, whatever their type, and the first 300
+                 # characters of the quote it cited.
+                 "given": {}, "raw": {},
+                 "quote": {"type": ["string", "null"], "maxLength": 300}},
         "error": {"where": {"type": "string"},
                   "kind": {"enum": ["unreadable", "exception", "gave_up",
                                     "split"]},
@@ -784,7 +789,7 @@ def trace_schema() -> dict:
     loose = {"detail", "status", "finish", "why", "sources", "ms", "slot",
              "prompt_tokens", "completion_tokens", "filled_by", "unbacked_by",
              "field", "raw_missing", "raw_foreign", "cause", "owner",
-             "rejected"}
+             "rejected", "given", "raw", "quote"}
     return {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "$id": f"{BASE_ID}/trace-record",

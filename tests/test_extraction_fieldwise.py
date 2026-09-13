@@ -1210,6 +1210,15 @@ def test_the_trace_names_the_field_that_filled_and_the_field_that_dropped(
         "and it says what was answered, so the next run can tell a wrong "
         "wording from a wrong quote")
 
+    # And every event it wrote is one the published trace schema describes:
+    # given, raw and quote were added to the drop event without it once.
+    import jsonschema
+    from docpipe.extraction.schema import build
+    validator = jsonschema.Draft202012Validator(build(spec)["trace"])
+    for kind, kw in events:
+        record = {"t": kind, "doc": 7, **kw}
+        assert validator.is_valid(record), (kind, sorted(kw))
+
 
 def test_a_status_quo_row_is_asked_its_coordinates(monkeypatch):
     """The promise: the scenario no longer closes a row, so an inventory value

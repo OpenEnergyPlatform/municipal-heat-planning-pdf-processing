@@ -5458,6 +5458,15 @@
        "null"
       ]
      },
+     "given": {},
+     "quote": {
+      "maxLength": 300,
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "raw": {},
      "row": {
       "pattern": "^R[0-9]+$",
       "type": "string"

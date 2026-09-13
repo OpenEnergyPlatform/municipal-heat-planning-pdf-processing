@@ -1,5 +1,6 @@
 Every public function, class and method of the packages the chapters
-describe, with its signature as written in the code and its docstring.
+describe and of the tools under `scripts/`, with its signature as written
+in the code and its docstring.
 One page per module that has a docstring or a public name, grouped by
 package. A function, class, method or field whose name starts with an
 underscore is left out, `__init__` excepted, and where a module states

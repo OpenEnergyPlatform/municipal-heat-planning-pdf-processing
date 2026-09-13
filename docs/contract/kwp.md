@@ -83,8 +83,8 @@ question instead (`docpipe/extraction/schema.py:565` to `671`).
 The owner decided on 2026-09-10 that a stamp rests on the KG/ontology
 parameters alone: `stale` compares only the `parameter/`, `value/`,
 `axis/` and `slot/` families (`QUESTION_KEYS`,
-`docpipe/extraction/runner.py:3443`), and the whole-file sha `spec`
-only for a stamp that carries none of them (`COARSE`, `:3381`;
+`docpipe/extraction/runner.py:3624`), and the whole-file sha `spec`
+only for a stamp that carries none of them (`COARSE`, `:3618`;
 `tests/test_extraction_runner.py::test_a_stamp_from_before_the_detail_is_stale_in_all_of_it`).
 `model`, `anchors`, every `extraction/*` prompt, `page_text_transcribed`,
 `review/*` and `question_text/*` are written into the stamp so a reader
@@ -92,8 +92,8 @@ can place a harvest, and are never compared
 (`tests/test_extraction_runner.py::test_what_the_stamp_records_about_the_document_never_redoes_it`).
 Only the `parameter/`, `value/`, `axis/` and `slot/` families make a
 document eligible for `--force-stale`'s full re-harvest (`stale`,
-`docpipe/extraction/runner.py:3475` to `3512`, `already_done`, `:3499`
-to `3524`); redoing only the changed question is
+`docpipe/extraction/runner.py:3656` to `3693`, `already_done`, `:3736`
+to `3761`); redoing only the changed question is
 `top_up_file`'s job (`docpipe/extraction/topup.py:284` to `318`). The
 trace is `<document>.trace.jsonl`: eleven event kinds told apart by
 `t`, `plan` through `invalid` in source order
@@ -1910,7 +1910,7 @@ One event per line; `t` names it and `doc` the document. Read by scripts/trace_r
 - `rows`: `attempt`, `completion_tokens`, `doc`, `ms`, `origins`, `prompt`, `prompt_tokens`, `ranks`, `rows`, `sources`, `status`
 - `field`: `anchor`, `attempt`, `completion_tokens`, `doc`, `filled`, `filled_by`, `ms`, `open`, `parameter`, `prompt_tokens`, `raw_foreign`, `raw_missing`, `reply`, `shown`, `slot`, `stage`, `unbacked`, `unbacked_by`, `unquoted`, `unstated`, `window`
 - `sweep`: `anchor`, `asked`, `combed`, `doc`, `exhausted`, `filled`, `raw_foreign`, `raw_missing`, `retried`, `rows`, `slot`, `unbacked`, `unquoted`, `unstated`, `windows`
-- `drop`: `attempt`, `doc`, `field`, `row`, `slot`, `why`, `window`
+- `drop`: `attempt`, `doc`, `field`, `given`, `quote`, `raw`, `row`, `slot`, `why`, `window`
 - `error`: `attempt`, `cause`, `detail`, `doc`, `finish`, `kind`, `ms`, `owner`, `slot`, `sources`, `status`, `where`, `why`
 - `coord`: `doc`, `kind`, `owner`, `parameter`, `states`, `tier`, `unit`, `value`
 - `refusal`: `doc`, `owner`, `parameter`, `reason`

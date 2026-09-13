@@ -212,10 +212,17 @@ its cited passage sits verbatim in a shown source, and it contains the
 answer, with a floor of `MIN_QUOTE_CHARS` so that a quote names a place.
 Those are the check for a quote (`pipeline.py:773-795`;
 `test_a_coordinate_is_dropped_for_the_agreed_reasons_and_no_other`,
-`tests/test_extraction_reasons.py:114`). A closed-list coordinate answers a
-third clause too: naming one of the list's own entries, by label, spelling
-or URI, or it is never marked read (`option_named`, `not_an_option`,
-`pipeline.py:740-763`, the owner's rule of 2026-09-11). Which table the
+`tests/test_extraction_reasons.py:114`). Without its own `value_raw`
+wording, a closed-list answer's quote is checked against every spelling the
+spec lists for the chosen option, not only its label: the real classes
+carry the ontology's English names, which stand in no German plan, and
+corpus_m5 had dropped 284,643 quantity answers on exactly that gap before
+this widened (`answer_in_quote`, `pipeline.py:667`, owner's decision
+2026-09-13); a wording that is given still has to stand in the quote
+itself. A closed-list coordinate answers a third clause too: naming one of
+the list's own entries, by label, spelling or URI, or it is never marked
+read (`option_named`, `not_an_option`, `pipeline.py:715-729`, the owner's
+rule of 2026-09-11). Which table the
 passage belongs to, how far from the row it stands and which column of a
 table it heads are the model's reading, not a rule. Failures are recorded
 separately, `unquoted` against `unbacked`, so a retry can name what to fix. A

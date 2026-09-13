@@ -6,11 +6,11 @@ Generated from `docpipe/extraction/trust.py` and the published schema by `script
 
 Every accepted tuple already passed a minimum check: `verify.py`'s
 `verify_tuple` checks the number against its quote and the quote against a
-shown source (`verify.py:413-463`). The field sweep in
+shown source (`verify.py:329-515`). The field sweep in
 `docpipe/extraction/pipeline.py` holds each coordinate to the same two
 clauses, its quote stands in a shown source and carries the answer, and
 writes the passage's owner onto the row (`merge_field`,
-`pipeline.py:647-834`); a closed-list coordinate is held to a third, naming
+`pipeline.py:797-1000`); a closed-list coordinate is held to a third, naming
 one of the list's own entries, or it is never marked read (`not_an_option`).
 Where in the document that passage
 stands is no check and no grade
@@ -29,7 +29,7 @@ no image involved
 `tests/test_extraction_trust.py:45`). A value drops to `B` for two
 independent reasons: its evidence tier is `verify.TIER_VISUAL`, an owner
 kind outside `verify.TEXT_KINDS` such as a table transcription or a figure
-description (`verify.py:41-42,443-451`;
+description (`verify.py:42-43,482-490`;
 `test_a_reading_out_of_a_picture_is_a_b_and_not_a_warning`,
 `tests/test_extraction_trust.py:51`); or the document had no text layer
 and was transcribed page by page, passed to `trust()` as a `transcribed`
