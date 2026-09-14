@@ -10,14 +10,18 @@ what is genuinely about heat plans: which roots this profile's lists draw
 from, where its ontology files live, and the one rule that is about its own
 carrier axis.
 
-    python -m profiles.kwp.vocabulary --closure oeo-closure.owl \
-        --mhpo mhpo-edit.owl --write
+    python -m profiles.kwp.vocabulary --refresh    # SOURCES, latest, then check
+    python -m profiles.kwp.vocabulary --closure oeo-closure.owl --write
     python -m profiles.kwp.vocabulary --check      # spec against the pin
 
+`--refresh` is what a run calls first. It pulls every source in SOURCES at
+the version upstream currently calls its own, rebuilds vocabulary.json from
+it, writes the lock under data/upstream, and then holds the spec against the
+new snapshot. A spec the current ontology no longer agrees with stops the run.
 The closure itself is not vendored: it is 3.9 MB, it belongs to the ontology
 repository, and what this profile needs from it is a few hundred terms. The
 check runs against the checked-in snapshot and needs neither the file nor
-rdflib, which is what lets it run on the cluster.
+rdflib.
 
 Author: Felix Vossel
 
@@ -34,6 +38,25 @@ def build(closure: Path, mhpo: Path = None) -> dict
 ```python
 def load(path: Path = VOCABULARY_PATH) -> dict
 ```
+
+### refresh
+
+```python
+def refresh(cache: Path = upstream.CACHE) -> dict
+```
+
+Pull SOURCES, rebuild vocabulary.json from them, write the lock.
+
+Returns the records. The snapshot's pin names every source's version, so
+vocabulary.json changes exactly when something upstream did.
+
+### shapes
+
+```python
+def shapes(cache: Path = upstream.CACHE) -> list
+```
+
+The MHPKG shapes of the last refresh; empty if none has run.
 
 ### spec_terms
 

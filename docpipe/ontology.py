@@ -321,6 +321,40 @@ def build(closure: Path, sets: dict, spec_raw: dict, *,
             "disjoint": [list(pair) for pair in disjoint]}
 
 
+def shacl_report(data: Path, shapes: list) -> dict:
+    """A written graph held against SHACL shapes: {conforms, violations, counts, text}.
+
+    The shapes files are parsed into ONE graph first. pyshacl takes repeated
+    `-s` flags and silently uses only the last, so a second shapes file would
+    otherwise not be consulted at all (the schema repository's validate.py
+    was bitten by exactly that). `counts` groups the violations by
+    constraint, shape target and path, most frequent first, so a report of
+    fifty thousand lines can still be read in the log.
+    """
+    import re
+    from pyshacl import validate
+    from rdflib import Graph
+    shapes_graph = Graph()
+    for path in shapes:
+        shapes_graph.parse(str(path), format="turtle")
+    conforms, _results, text = validate(
+        Graph().parse(str(data), format="turtle"),
+        shacl_graph=shapes_graph, advanced=True)
+    counts: collections.Counter = collections.Counter()
+    blocks = text.split("Constraint Violation")[1:]
+    for block in blocks:
+        component = re.search(r"in (\w+)ConstraintComponent", block)
+        path = re.search(r"Result Path: (\S+)", block)
+        # The collection segment of an instance IRI (value, heatplan, ...).
+        # A blank node or a nested result has none and counts as "?".
+        focus = re.search(r"Focus Node: <[^>]*/([^/>]+)/[^/>]*>", block)
+        counts[(component.group(1) if component else "?",
+                path.group(1) if path else "-",
+                focus.group(1) if focus else "?")] += 1
+    return {"conforms": bool(conforms), "violations": len(blocks),
+            "counts": counts.most_common(), "text": text}
+
+
 def serialize(snapshot: dict) -> str:
     return json.dumps(snapshot, ensure_ascii=False, indent=1,
                       sort_keys=True) + "\n"

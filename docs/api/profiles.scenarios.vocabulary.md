@@ -9,8 +9,14 @@ scenario publications: which roots this profile's one static list draws from,
 and the 249 study regions, which come from the OEKG rather than from an
 ontology release and are therefore pinned differently.
 
+    python -m profiles.scenarios.vocabulary --refresh   # needs OEP_API_TOKEN
     python -m profiles.scenarios.vocabulary --closure oeo-closure.owl --write
     python -m profiles.scenarios.vocabulary --check
+
+`--refresh` is what a run calls first: the OEO closure at its latest release
+and the study regions live from the OEKG, then the check. Without
+OEP_API_TOKEN in the environment it stops, because the regions are offered to
+the model and a list nobody pulled is not the OEKG's current one.
 
 Why this profile needed it more than the other one. Its spec names 32 ontology
 identifiers and, before this, exactly zero of them were checked against
@@ -34,6 +40,28 @@ def build(closure: Path) -> dict
 ```python
 def load(path: Path = VOCABULARY_PATH) -> dict
 ```
+
+### merge_regions
+
+```python
+def merge_regions(rows: list, aliases: dict) -> dict
+```
+
+{region IRI: labels} from the live rows and the hand-kept spellings.
+
+The OEKG decides which regions exist. region_aliases.json keeps the
+spellings a document writes that the graph does not carry (both "Cabo
+Verde" and "Cape Verde", say); they come first, in
+their order, and a live label they lack is appended. A region with no
+label from either side cannot be offered to the model and raises.
+
+### refresh
+
+```python
+def refresh(cache: Path = upstream.CACHE) -> dict
+```
+
+Pull SOURCES, write regions.json and vocabulary.json, write the lock.
 
 ### spec_terms
 

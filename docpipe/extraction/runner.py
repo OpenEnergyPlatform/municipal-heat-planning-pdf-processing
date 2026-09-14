@@ -4212,7 +4212,7 @@ def main(argv: Optional[list] = None) -> int:
         if factory is None:
             parser.error(f"profile {profile.name!r} provides no "
                          f"kg.make_serializer (profiles/{profile.name}/kg.py)")
-        from .serialize import run as serialize_run
+        from .serialize import run as serialize_run, validate
         try:
             counts = serialize_run(args.out, args.serialize, factory(args.db))
         except ValueError as exc:
@@ -4220,6 +4220,24 @@ def main(argv: Optional[list] = None) -> int:
             return 1
         log.info("serialize: %d tuple(s) from %d document(s) -> %s",
                  sum(counts.values()), len(counts), args.serialize)
+        # The shapes the last `vocabulary --refresh` pulled. A profile that
+        # names none has nothing to validate against; one that names them
+        # but was never refreshed is told so rather than passed over.
+        shapes = profile.component("vocabulary", "shapes")
+        if shapes is not None:
+            paths = shapes()
+            if paths:
+                # The graph is written by now, and the report must not take
+                # the serialize result with it when the validator fails.
+                try:
+                    validate(args.serialize, paths)
+                except Exception:
+                    log.exception("shacl: validation of %s failed, no report "
+                                  "written", args.serialize)
+            else:
+                log.warning("shacl: no shapes from a refresh, the graph is "
+                            "not validated (python -m profiles.%s.vocabulary "
+                            "--refresh)", profile.name)
         return 0
 
     if args.image_root is None:

@@ -9,6 +9,7 @@ No model, no ontology file, no rdflib: everything below runs against the two
 checked-in snapshots, which is what lets these run without rdflib.
 """
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -102,11 +103,15 @@ def test_the_checked_in_snapshot_answers_its_own_spec(profile):
 def test_the_snapshot_says_which_ontology_and_which_families(profile):
     snapshot = _snapshot(profile)
     pin = snapshot["pin"]
-    assert pin["oeo_version_iri"].endswith("/2.13.0/oeo.owl")
+    # Any release: `vocabulary --refresh` follows upstream, so the number is
+    # not a fact of this repository.
+    assert re.search(r"/releases/\d+\.\d+\.\d+/oeo\.owl$", pin["oeo_version_iri"])
     assert len(pin["oeo_sha256"]) == 64
     # The families it can speak for at all. Without this a term of an
     # ontology no file here covers reads as a term the ontology does not have.
-    assert "OEO" in pin["families"] and "MHPO" not in pin["families"]
+    assert "OEO" in pin["families"]
+    assert ("MHPO" in pin["families"]) == bool(
+        (pin.get("sources") or {}).get("mhpo"))
 
 
 def test_a_family_no_file_covers_is_named_and_not_called_an_error():
@@ -115,6 +120,10 @@ def test_a_family_no_file_covers_is_named_and_not_called_an_error():
     false error that teaches everyone to ignore the real ones; reporting
     nothing would let the gap grow."""
     spec, snapshot = _spec("kwp"), _snapshot("kwp")
+    # Until MHPO has a release, which is when `--refresh` starts pulling it.
+    snapshot = json.loads(json.dumps(snapshot))
+    snapshot["pin"]["families"] = [f for f in snapshot["pin"]["families"]
+                                   if f != "MHPO"]
     assert set(ontology.uncovered(spec, snapshot)) == {"MHPO"}
     assert len(ontology.uncovered(spec, snapshot)["MHPO"]) >= 6
     assert not [p for p in ontology.term_problems(spec, snapshot)
@@ -158,8 +167,9 @@ def test_the_scenarios_snapshot_pins_the_regions_it_offers():
     so."""
     from profiles.scenarios import vocabulary
     snapshot = _snapshot("scenarios")
-    assert snapshot["pin"]["regions_count"] == 249
-    assert len(snapshot["regions"]) == 249
+    regions = json.loads(vocabulary.REGIONS_PATH.read_text(encoding="utf-8"))
+    assert snapshot["pin"]["regions_count"] == len(regions) >= 200
+    assert len(snapshot["regions"]) == len(regions)
     assert vocabulary.region_problems(snapshot) == []
     # A region the pin has and the file lost.
     lost = vocabulary.region_problems(snapshot,

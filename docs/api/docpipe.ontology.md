@@ -125,6 +125,21 @@ The vocabulary snapshot, from the ontology files as they stand.
 `extra` are further files parsed into the same graph (MHPO, say); `base`
 is the IRI prefix whose ontology header carries the version to pin.
 
+### shacl_report
+
+```python
+def shacl_report(data: Path, shapes: list) -> dict
+```
+
+A written graph held against SHACL shapes: {conforms, violations, counts, text}.
+
+The shapes files are parsed into ONE graph first. pyshacl takes repeated
+`-s` flags and silently uses only the last, so a second shapes file would
+otherwise not be consulted at all (the schema repository's validate.py
+was bitten by exactly that). `counts` groups the violations by
+constraint, shape target and path, most frequent first, so a report of
+fifty thousand lines can still be read in the log.
+
 ### serialize
 
 ```python

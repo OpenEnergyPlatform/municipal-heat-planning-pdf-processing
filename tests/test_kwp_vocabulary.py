@@ -30,8 +30,12 @@ def test_the_snapshot_names_the_ontology_it_was_built_from(snapshot):
     """"Which ontology is this spec written against" has to have an answer,
     or a list that drifted and a list that did not look the same."""
     pin = snapshot["pin"]
-    assert pin["oeo_version_iri"].endswith("/releases/2.13.0/oeo.owl")
+    assert "/releases/" in pin["oeo_version_iri"]
     assert len(pin["oeo_sha256"]) == 64
+    # The release the refresh pulled is the one the closure calls itself.
+    if (pin.get("sources") or {}).get("oeo"):
+        release = pin["oeo_version_iri"].split("/releases/")[1].split("/")[0]
+        assert pin["sources"]["oeo"].lstrip("v") == release
     assert int(pin["oeo_version_iri"].split("/releases/")[1].split("/")[0]
                .split(".")[0]) >= 2
 
@@ -41,8 +45,10 @@ def test_the_sets_are_the_ontologys_own_and_not_a_hand_list(snapshot):
     ontology's: "district heat is not an energy carrier" is a fact of the
     closure and not an opinion of this profile."""
     sets = snapshot["sets"]
-    assert len(sets["energy_carrier"]) == 124
-    assert len(sets["sector"]) == 15
+    # The closure and not oeo.owl, whose reasoner-free hierarchy leaves four
+    # carriers under the root. Lower bounds, because the release moves.
+    assert len(sets["energy_carrier"]) >= 100
+    assert len(sets["sector"]) >= 10
     assert sets["aggregation_type"] == ["OEO_00140069", "OEO_00140070",
                                         "OEO_00140071", "OEO_00140072",
                                         "OEO_00140073"]
@@ -75,8 +81,9 @@ def test_every_identifier_of_a_covered_family_is_a_term_of_the_snapshot(
             continue
         assert uri in snapshot["terms"], uri
         assert snapshot["terms"][uri]["label"], uri
-    # And the gap is stated rather than passed over.
-    assert set(ontology.uncovered(SPEC_RAW, snapshot)) == {"MHPO"}
+    # And the gap is stated rather than passed over, until MHPO has a release.
+    if "MHPO" not in families:
+        assert set(ontology.uncovered(SPEC_RAW, snapshot)) == {"MHPO"}
 
 
 def test_the_snapshot_carries_what_kind_of_thing_each_term_is(snapshot):

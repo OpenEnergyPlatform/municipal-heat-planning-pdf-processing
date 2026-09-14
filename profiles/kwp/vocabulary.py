@@ -7,14 +7,18 @@ what is genuinely about heat plans: which roots this profile's lists draw
 from, where its ontology files live, and the one rule that is about its own
 carrier axis.
 
-    python -m profiles.kwp.vocabulary --closure oeo-closure.owl \\
-        --mhpo mhpo-edit.owl --write
+    python -m profiles.kwp.vocabulary --refresh    # SOURCES, latest, then check
+    python -m profiles.kwp.vocabulary --closure oeo-closure.owl --write
     python -m profiles.kwp.vocabulary --check      # spec against the pin
 
+`--refresh` is what a run calls first. It pulls every source in SOURCES at
+the version upstream currently calls its own, rebuilds vocabulary.json from
+it, writes the lock under data/upstream, and then holds the spec against the
+new snapshot. A spec the current ontology no longer agrees with stops the run.
 The closure itself is not vendored: it is 3.9 MB, it belongs to the ontology
 repository, and what this profile needs from it is a few hundred terms. The
 check runs against the checked-in snapshot and needs neither the file nor
-rdflib, which is what lets it run on the cluster.
+rdflib.
 
 Author: Felix Vossel
 """
@@ -28,14 +32,36 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
-from docpipe import ontology                                  # noqa: E402
+from docpipe import ontology, upstream                        # noqa: E402
 
 HERE = Path(__file__).resolve().parent
 VOCABULARY_PATH = HERE / "vocabulary.json"
 SPEC_PATH = HERE / "extraction_spec.json"
+PROFILE = HERE.name
 
 OEO = "https://openenergyplatform.org/ontology/oeo/"
 OBO = "http://purl.obolibrary.org/obo/"
+
+# What this profile is written against, always at upstream's current version.
+# MHPO has no release yet (its VERSION reads 0.0.0 and its only file is OWL
+# functional syntax, which rdflib does not read), so it is declared as the
+# release it will be and skipped until it exists. `reviewed` is the MHPKG
+# commit kg.py was last read against: a newer schema is reported with the
+# files that changed, because kg.py mirrors it by hand.
+SOURCES = {
+    "oeo": {"kind": "release_asset", "repo": "OpenEnergyPlatform/ontology",
+            "asset": "oeo-closure.owl"},
+    "mhpo": {"kind": "release_asset",
+             "repo": "OpenEnergyPlatform/municipal-heat-planning-ontology",
+             "asset": "mhpo.owl", "until_released": True},
+    "mhpkg": {"kind": "repo_files", "repo": "OpenEnergyPlatform/oekg",
+              "ref": "production",
+              "reviewed": "c18860c373eefc0ff38fb7f01a6ff0a230ef1e0d",
+              "files": ["mhpkg/schema/generated/mhpkg_target_scenario.shacl.ttl",
+                        "mhpkg/schema/mhpkg_iri_policy.shacl.ttl",
+                        "mhpkg/schema/mhpkg_target_scenario.yaml",
+                        "mhpkg/schema/mint_slice.py"]},
+}
 
 # The roots each list draws from. A list is only checkable against a set, and
 # a set is only honest if it is the ontology's own: "OEO_00000132 district
@@ -62,6 +88,31 @@ def build(closure: Path, mhpo: Path = None) -> dict:
 
 def load(path: Path = VOCABULARY_PATH) -> dict:
     return ontology.load(path)
+
+
+def refresh(cache: Path = upstream.CACHE) -> dict:
+    """Pull SOURCES, rebuild vocabulary.json from them, write the lock.
+
+    Returns the records. The snapshot's pin names every source's version, so
+    vocabulary.json changes exactly when something upstream did.
+    """
+    records = upstream.fetch(SOURCES, cache)
+    closure = upstream.files(records["oeo"], ".owl")[0]
+    mhpo = next(iter(upstream.files(records["mhpo"])), None)
+    snapshot = build(closure, mhpo)
+    snapshot["pin"]["sources"] = {name: record["version"]
+                                  for name, record in records.items()}
+    with io.open(VOCABULARY_PATH, "w", encoding="utf-8",
+                 newline="\n") as handle:
+        handle.write(ontology.serialize(snapshot))
+    upstream.write_lock(PROFILE, records, cache)
+    return records
+
+
+def shapes(cache: Path = upstream.CACHE) -> list:
+    """The MHPKG shapes of the last refresh; empty if none has run."""
+    return upstream.files((upstream.load_lock(PROFILE, cache) or {})
+                          .get("sources", {}).get("mhpkg"), ".shacl.ttl")
 
 
 def spec_terms(spec_raw: dict) -> dict:
@@ -133,11 +184,28 @@ def main(argv=None) -> int:
     parser.add_argument("--mhpo", type=Path, help="mhpo-edit.owl, for --write")
     parser.add_argument("--write", action="store_true",
                         help="rebuild vocabulary.json from those files")
+    parser.add_argument("--refresh", action="store_true",
+                        help="pull SOURCES at their latest version, rebuild "
+                             "vocabulary.json, then check")
     parser.add_argument("--check", action="store_true",
                         help="hold the spec against the checked-in snapshot")
     args = parser.parse_args(argv)
 
-    if args.write:
+    if args.refresh:
+        before = (load()["pin"] if VOCABULARY_PATH.is_file() else {})
+        try:
+            records = refresh()
+        except upstream.UpstreamError as exc:
+            print(f"refresh failed: {exc}")
+            return 2
+        for name, record in records.items():
+            print(upstream.summary(name, record))
+        after = load()["pin"]
+        if before.get("oeo_version_iri") != after.get("oeo_version_iri"):
+            print(f"oeo: {before.get('oeo_version_iri')} -> "
+                  f"{after.get('oeo_version_iri')}")
+        args.check = True
+    elif args.write:
         if not args.closure or not args.closure.is_file():
             print("--write needs --closure <file>")
             return 2

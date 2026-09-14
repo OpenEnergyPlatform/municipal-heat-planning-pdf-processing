@@ -209,10 +209,14 @@ serializer reads are published field by field at
 [../contract/scenarios.md](../contract/scenarios.md). This profile's own
 half of that audit, `profiles/scenarios/vocabulary.py`, pins 32 ontology
 identifiers named in the spec, plus the 249 OEKG study regions, against
-the same OEO release the kwp profile's own 58-identifier snapshot uses;
-`python -m profiles.scenarios.vocabulary --check` holds a spec run
-against the checked-in `vocabulary.json` (`vocabulary.py`, lines 1 to 20;
-[../stages/graph.md](../stages/graph.md), lines 315 to 317).
+the same OEO release the kwp profile's own 58-identifier snapshot uses.
+`python -m profiles.scenarios.vocabulary --refresh` pulls the OEO
+closure and the live study regions, rewrites `vocabulary.json` and
+`regions.json`, and runs the same check `--check` alone runs against
+the checked-in snapshot; `region_aliases.json` keeps the hand-written
+spellings a document uses that the OEKG's own labels do not, merged in
+ahead of the live ones by `merge_regions` (`vocabulary.py`, lines 1 to
+26; [../stages/graph.md](../stages/graph.md)).
 
 Every IRI is minted under `BASE`, which defaults to
 `https://openenergyplatform.org/ontology/oekg/` and can be overridden by

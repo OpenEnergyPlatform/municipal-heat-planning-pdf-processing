@@ -78,3 +78,25 @@ def run(jsonl_dir: Path, out_path: Path,
     log.info("serialize: %d document(s) with tuples -> %s",
              len(counts), out_path)
     return counts
+
+
+def validate(out_path: Path, shapes: list, top: int = 12) -> dict:
+    """Hold the written graph against the profile's SHACL shapes.
+
+    A report, not a gate: the full text goes next to the graph as
+    `<name>.shacl.txt` and the most frequent kinds of violation go to the
+    log. The graph stays written either way. The harvest is the durable
+    artifact and a graph the shapes reject is still the one to look at.
+    """
+    from docpipe import ontology
+    out_path = Path(out_path)
+    report = ontology.shacl_report(out_path, shapes)
+    text_path = out_path.with_name(out_path.name + ".shacl.txt")
+    text_path.write_text(report["text"], encoding="utf-8")
+    log.info("shacl: %s against %d shapes file(s): conforms=%s, %d "
+             "violation(s) -> %s", out_path.name, len(shapes),
+             report["conforms"], report["violations"], text_path)
+    for (component, path, node), count in report["counts"][:top]:
+        log.info("shacl:   %6d  %s  path %s  on %s", count, component, path,
+                 node)
+    return report

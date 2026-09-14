@@ -17,12 +17,18 @@ declares no `COORDINATE_AXES` or `VALUE_QUERY`, so its file has no
 reader here.
 
 A second, unrelated tool lives here: `docpipe/ontology.py`, with
-`profiles/<name>/vocabulary.py`, reads an external OEO closure file,
-writes a checked-in JSON snapshot of the terms a profile's
+`profiles/<name>/vocabulary.py` and `docpipe/upstream.py`, writes a
+checked-in JSON snapshot of the terms a profile's
 `extraction_spec.json` may reference, and checks the spec's `kg`
-blocks and a serializer's declared edges against it. It is not invoked
-by `--serialize` and produces no graph, auditing the spec ahead of a
-corpus run rather than inspecting Turtle afterward. The two tools do
+blocks and a serializer's declared edges against it. `upstream.py`
+pulls a profile's declared `SOURCES`, the OEO closure among them, at
+whichever version upstream currently calls its own; `vocabulary.py`
+no longer needs a closure file handed to it by hand. Auditing the spec
+stays ahead of a corpus run rather than inspecting Turtle afterward,
+with one exception: where a profile's `vocabulary.shapes()` names
+SHACL files pulled by the last refresh, `--serialize` holds the
+written graph against them and logs a report, never a gate on the
+write. The two tools otherwise do
 not call each other: `vocabulary.py`'s `edges()` imports the profile's
 `kg.py` module directly to read its `EDGES` table, and that import
 alone runs `kg.py`'s own module level calls to `spec.py`'s
@@ -36,7 +42,7 @@ rather than a call the ontology check makes itself.
 | **In** | A document's accepted JSONL tuple lines (`kind == "tuple"`), the profile's SQLite corpus database, and its `extraction_spec.json` `kg` blocks, parsed once at import. |
 | **Out** | One Turtle file per `--serialize` call: a shared prefix header plus one block per document that produced anything (`kwp`'s read back by `kg_route.py`; `scenarios`' by nothing here). |
 | **Resumes on** | Nothing. Every call re walks the harvest and re renders the whole output; a run's dedupe state (which identities are claimed) is never persisted. |
-| **Needs** | No served model and no GPU: a read only SQLite connection and local text; the ontology check also needs `rdflib` and an external OEO closure file, only for `--write`. |
+| **Needs** | No served model and no GPU: a read only SQLite connection and local text; the ontology check also needs `rdflib`. `vocabulary.py --refresh` needs network access to pull `SOURCES`, and, for `scenarios`, `OEP_API_TOKEN`; `--write` needs an external OEO closure file by hand instead. The SHACL report a `kwp` `--serialize` run writes needs `pyshacl`. |
 
 Extraction precedes this stage
 ([Reading the values out](extraction.md)); `kwp`'s output is followed
@@ -167,8 +173,10 @@ closures plus its spec's identifiers to a fixpoint over parents,
 domains and ranges, and writes a pin recording the ontology's version
 IRI, each file's sha256, and which identifier families the files
 cover. `vocabulary.py --write` calls this with an external `--closure`
-file (plus, for `kwp`, `--mhpo`) and overwrites `vocabulary.json`.
-`--check` runs `term_problems` (name absent or deprecated),
+file (plus, for `kwp`, `--mhpo`) and overwrites `vocabulary.json`;
+`--refresh` does the same pull automatically, through `upstream.py`
+(below), and then runs `--check` on what it wrote. `--check` runs
+`term_problems` (name absent or deprecated),
 `kind_problems` (a `kg` predicate the ontology calls a class),
 `edge_problems` (a triple outside its predicate's domain or range),
 `set_problems` (an axis option outside its root), plus `kwp`'s
@@ -179,6 +187,30 @@ spelling is not the term's own, and both end on a summary line naming
 identifiers checked, problems found, and such labels noted. Only
 `scenarios`' `--check` also prints `uncovered` notes, for a family no
 parsed file covers.
+
+### Pulling the sources a profile is written against
+
+`docpipe/upstream.py` resolves each of a profile's `SOURCES` to a
+version and caches it under `data/upstream/<source>/<version>/`: a
+`release_asset` is an asset of the repository's latest GitHub release,
+found from the redirect `github.com/<repo>/releases/latest` gives,
+never the GitHub API; a `repo_files` source is files at a branch
+head, versioned by a digest over their bytes and, where the source
+names a `reviewed` commit, compared against it so a schema `kg.py`
+mirrors by hand is named the moment it moves; a `sparql` source
+queries the OEKG endpoint with a token read from the environment
+variable it names and written nowhere. `write_lock` records every
+source's result in `data/upstream/<profile>.lock.json`.
+
+`vocabulary.py --refresh` pulls `SOURCES`, rebuilds `vocabulary.json`
+from what came back, writes the lock, then runs `--check` against the
+fresh snapshot; a source that cannot be resolved raises and stops the
+refresh before anything is rewritten. `kwp`'s `mhpkg` source also
+carries the MHPKG SHACL files: `vocabulary.py`'s `shapes()` names the
+last refresh's copies, and `--serialize` holds the written Turtle
+against them through `serialize.validate`, which calls
+`ontology.shacl_report` and writes `<ttl>.shacl.txt` beside the graph,
+a report and not a gate.
 
 ## Data model
 
@@ -196,7 +228,9 @@ one evidence node per cited passage. Both carry a single `@prefix`
 header, emitted once per run.
 
 The ontology snapshot both profiles check against is `{pin, sets,
-terms, disjoint}`, plus `regions` for `scenarios`. A declared edge, the
+terms, disjoint}`, plus `regions` for `scenarios`; `pin` carries
+`sources`, one version per entry of `SOURCES`, once a snapshot has
+come from `--refresh`. A declared edge, the
 unit `edge_problems` checks, is `{where, subject, predicate,
 object|datatype, accepted}`: `accepted` lets a serializer name why a
 triple contradicts the pinned domain, for example `scenarios`' `has
@@ -222,10 +256,13 @@ marks a trust line is built from are at
 | `DOCPIPE_PROFILE` | environment variable | unset | Default for `--profile` | `docpipe/profile.py` |
 | `OEKG_ID_BASE` | env var, `scenarios` only | `https://openenergyplatform.org/ontology/oekg/` | Overrides the IRI prefix every node and namespace uses | `profiles/scenarios/kg.py` |
 | `OEKG_EVIDENCE` | env var, `scenarios` only, truthy unless `"0"` | off | Links each passage as an `oekgprov:` node, not a comment; provisional under `sh:closed` OEKG shapes | `profiles/scenarios/kg.py` |
-| `--closure PATH` | flag, `vocabulary.py --write` | required with `--write` | OEO closure file `rdflib` parses; not vendored here | both `vocabulary.py` |
+| `--refresh` | CLI flag | off | Pulls `SOURCES` at their current version, rebuilds the snapshot and the lock, then runs `--check` | both `vocabulary.py` |
+| `--closure PATH` | flag, `vocabulary.py --write` | required with `--write` | OEO closure file `rdflib` parses by hand; not vendored here | both `vocabulary.py` |
 | `--mhpo PATH` | flag, `kwp` `--write` only | none | Extra MHPO ontology file parsed into the same graph | `profiles/kwp/vocabulary.py` |
-| `--write` | CLI flag | off | Rebuilds and overwrites `vocabulary.json` | both `vocabulary.py` |
-| `--check` | CLI flag | off; also runs without `--write` | Holds the spec against the snapshot; exits 1 on any problem | both `vocabulary.py` |
+| `--write` | CLI flag | off | Rebuilds and overwrites `vocabulary.json` from a hand-provided file | both `vocabulary.py` |
+| `--check` | CLI flag | off; also runs without `--write`/`--refresh` | Holds the spec against the snapshot; exits 1 on any problem | both `vocabulary.py` |
+| `OEP_API_TOKEN` | env var, `scenarios` only | unset | Token for the OEKG SPARQL endpoint; `--refresh` stops without it | `profiles/scenarios/vocabulary.py` |
+| `DOCPIPE_UPSTREAM_CACHE` | env var | `data/upstream` | Where `--refresh` caches what it pulls and writes the lock | `docpipe/upstream.py` |
 
 ## Failure modes
 
@@ -251,7 +288,15 @@ marks a trust line is built from are at
 - The ontology checks never raise, and exit 1 only if a problem exists
   (see Method above); `--write` without `--closure` returns exit code
   2, and `--check` against a missing `vocabulary.json` returns exit
-  code 1.
+  code 1. `--refresh` against a source that cannot be resolved, an
+  unset token, no release yet, an unreachable host, prints
+  `refresh failed: ...` and returns exit code 2 before rewriting
+  anything.
+- The SHACL check a `kwp` `--serialize` run makes never raises and
+  never withholds the graph: a profile with no refreshed shapes only
+  logs a warning naming the missing `--refresh`, and a graph the
+  shapes reject is still written, with the violations in
+  `<ttl>.shacl.txt` and the log.
 
 ## Measured behaviour
 
@@ -277,6 +322,9 @@ marks a trust line is built from are at
   pairs, pinned to OEO 2.13.0, against a spec naming 58 identifiers;
   `scenarios`' holds 53 terms and 249 OEKG regions, same release,
   against a spec of 32 (inspected directly; `ontology.spec_terms`).
+  `--refresh` pulls that same release straight from GitHub rather than
+  by hand; neither number is pinned in a test any more, since both
+  move the day upstream does.
 - Over a corpus run the model answered `out:` 1,171 times for a
   wording its document scoped AR6 list could resolve unambiguously,
   347 a character for character match (`profiles/scenarios/kg.py`,
@@ -327,10 +375,18 @@ marks a trust line is built from are at
 
 `docpipe/extraction/serialize.py` is the profile free core walking the
 harvest and choosing a serializer (see Method above); called only from
-`runner.py`'s `--serialize` branch. `docpipe/ontology.py` is the
-profile free snapshot builder and checker (see Method above),
+`runner.py`'s `--serialize` branch. Its `validate` holds a written
+graph against a profile's refreshed SHACL shapes and is the one place
+this stage calls into the ontology tooling. `docpipe/ontology.py` is
+the profile free snapshot builder and checker (see Method above),
 providing the complaint functions both `vocabulary.py` modules compose
-into their own `check`; it never imports a profile.
+into their own `check`, plus `shacl_report`, `serialize.validate`'s own
+call; it never imports a profile. `docpipe/upstream.py` is the
+profile free source puller (see Method above): it resolves a
+profile's `SOURCES` to a version, caches what it fetched, and writes
+the lock both `vocabulary.py --refresh` and
+`scripts/preflight_profiles.py` read back; it never imports a profile
+either.
 
 `profiles/kwp/kg.py` is the `kwp` MHPKG serializer (see Method above),
 plus the `EDGES` table of triples behind no spec parameter; called
@@ -345,8 +401,9 @@ the same way and imported directly by its own `vocabulary.py`; it
 declares no `COORDINATE_AXES` or `VALUE_QUERY` (see Purpose). Each
 profile's `vocabulary.py` is otherwise its half of the ontology
 snapshot: which roots its lists draw from, its own extra check
-(`carrier_problems`, `region_problems`), and the `--write`/`--check`
-CLI, never called from a `--serialize` run.
+(`carrier_problems`, `region_problems`), its own `SOURCES` declaring
+what it is written against, and the `--refresh`/`--write`/`--check`
+CLI; only `kwp`'s also names `shapes()`, read by a `--serialize` run.
 
 `docpipe/extraction/spec.py` parses and validates
 `extraction_spec.json` into typed `Spec`, `Parameter` and `Axis`

@@ -6,8 +6,14 @@ scenario publications: which roots this profile's one static list draws from,
 and the 249 study regions, which come from the OEKG rather than from an
 ontology release and are therefore pinned differently.
 
+    python -m profiles.scenarios.vocabulary --refresh   # needs OEP_API_TOKEN
     python -m profiles.scenarios.vocabulary --closure oeo-closure.owl --write
     python -m profiles.scenarios.vocabulary --check
+
+`--refresh` is what a run calls first: the OEO closure at its latest release
+and the study regions live from the OEKG, then the check. Without
+OEP_API_TOKEN in the environment it stops, because the regions are offered to
+the model and a list nobody pulled is not the OEKG's current one.
 
 Why this profile needed it more than the other one. Its spec names 32 ontology
 identifiers and, before this, exactly zero of them were checked against
@@ -28,12 +34,33 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
-from docpipe import ontology                                  # noqa: E402
+from docpipe import ontology, upstream                        # noqa: E402
 
 HERE = Path(__file__).resolve().parent
 VOCABULARY_PATH = HERE / "vocabulary.json"
 SPEC_PATH = HERE / "extraction_spec.json"
 REGIONS_PATH = HERE / "regions.json"
+ALIASES_PATH = HERE / "region_aliases.json"
+PROFILE = HERE.name
+REGION_BASE = "https://openenergyplatform.org/ontology/oekg/region/"
+
+# Every node under region/, with whatever labels the OEKG gives it. OPTIONAL,
+# because a region the graph uses without a label is still a region, and
+# `merge_regions` says so instead of the query dropping it.
+REGIONS_QUERY = f"""PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+SELECT DISTINCT ?region ?label WHERE {{
+  ?region ?p ?o .
+  FILTER(STRSTARTS(STR(?region), "{REGION_BASE}"))
+  OPTIONAL {{ ?region rdfs:label ?label }}
+}}"""
+
+SOURCES = {
+    "oeo": {"kind": "release_asset", "repo": "OpenEnergyPlatform/ontology",
+            "asset": "oeo-closure.owl"},
+    "regions": {"kind": "sparql",
+                "endpoint": "https://openenergyplatform.org/api/v0/oekg/sparql/",
+                "token_env": "OEP_API_TOKEN", "query": REGIONS_QUERY},
+}
 
 OEO = "https://openenergyplatform.org/ontology/oeo/"
 
@@ -63,6 +90,55 @@ def build(closure: Path) -> dict:
 
 def load(path: Path = VOCABULARY_PATH) -> dict:
     return ontology.load(path)
+
+
+def merge_regions(rows: list, aliases: dict) -> dict:
+    """{region IRI: labels} from the live rows and the hand-kept spellings.
+
+    The OEKG decides which regions exist. region_aliases.json keeps the
+    spellings a document writes that the graph does not carry (both "Cabo
+    Verde" and "Cape Verde", say); they come first, in
+    their order, and a live label they lack is appended. A region with no
+    label from either side cannot be offered to the model and raises.
+    """
+    live: dict = {}
+    for row in rows:
+        iri = row.get("region")
+        if not iri:
+            continue
+        labels = live.setdefault(iri, [])
+        if row.get("label") and row["label"] not in labels:
+            labels.append(row["label"])
+    out = {}
+    for iri in sorted(live):
+        labels = list(aliases.get(iri) or ())
+        labels += [label for label in live[iri] if label not in labels]
+        if not labels:
+            raise upstream.UpstreamError(f"regions: {iri} has no label")
+        out[iri] = labels
+    if not out:
+        raise upstream.UpstreamError("regions: the OEKG returned no region")
+    return out
+
+
+def refresh(cache: Path = upstream.CACHE) -> dict:
+    """Pull SOURCES, write regions.json and vocabulary.json, write the lock."""
+    records = upstream.fetch(SOURCES, cache)
+    rows = json.loads(upstream.files(records["regions"])[0]
+                      .read_text(encoding="utf-8"))
+    aliases = json.loads(ALIASES_PATH.read_text(encoding="utf-8"))
+    regions = merge_regions(rows, aliases)
+    with io.open(REGIONS_PATH, "w", encoding="utf-8", newline="\n") as handle:
+        handle.write(json.dumps(regions, ensure_ascii=False, indent=1,
+                                sort_keys=True) + "\n")
+    snapshot = build(upstream.files(records["oeo"], ".owl")[0])
+    snapshot["pin"]["sources"] = {name: record["version"]
+                                  for name, record in records.items()}
+    with io.open(VOCABULARY_PATH, "w", encoding="utf-8",
+                 newline="\n") as handle:
+        handle.write(ontology.serialize(snapshot))
+    upstream.write_lock(PROFILE, records, cache)
+    return records
 
 
 def spec_terms(spec_raw: dict) -> dict:
@@ -118,11 +194,30 @@ def main(argv=None) -> int:
                         help="the OEO closure (owl/ttl), for --write")
     parser.add_argument("--write", action="store_true",
                         help="rebuild vocabulary.json from that file")
+    parser.add_argument("--refresh", action="store_true",
+                        help="pull SOURCES at their latest version, rebuild "
+                             "regions.json and vocabulary.json, then check")
     parser.add_argument("--check", action="store_true",
                         help="hold the spec against the checked-in snapshot")
     args = parser.parse_args(argv)
 
-    if args.write:
+    if args.refresh:
+        before = (set(json.loads(REGIONS_PATH.read_text(encoding="utf-8")))
+                  if REGIONS_PATH.is_file() else set())
+        try:
+            records = refresh()
+        except upstream.UpstreamError as exc:
+            print(f"refresh failed: {exc}")
+            return 2
+        for name, record in records.items():
+            print(upstream.summary(name, record))
+        after = set(json.loads(REGIONS_PATH.read_text(encoding="utf-8")))
+        for iri in sorted(after - before):
+            print(f"regions: new {iri}")
+        for iri in sorted(before - after):
+            print(f"regions: gone {iri}")
+        args.check = True
+    elif args.write:
         if not args.closure or not args.closure.is_file():
             print("--write needs --closure <file>")
             return 2

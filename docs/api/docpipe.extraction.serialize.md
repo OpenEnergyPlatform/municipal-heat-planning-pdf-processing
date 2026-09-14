@@ -46,4 +46,17 @@ Serialize every document's harvest; returns {name: tuple count}.
 A serializer returning None skips its document (nothing to say is a
 normal outcome, e.g. a plan without a single accepted tuple).
 
+### validate
+
+```python
+def validate(out_path: Path, shapes: list, top: int = 12) -> dict
+```
+
+Hold the written graph against the profile's SHACL shapes.
+
+A report, not a gate: the full text goes next to the graph as
+`<name>.shacl.txt` and the most frequent kinds of violation go to the
+log. The graph stays written either way. The harvest is the durable
+artifact and a graph the shapes reject is still the one to look at.
+
 [Back to the index](../README.md)

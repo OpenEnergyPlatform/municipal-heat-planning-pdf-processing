@@ -266,6 +266,21 @@ def audit(profile: str) -> None:
                   ", ".join(f"{k}_* ({len(v)}x)"
                             for k, v in sorted(open_families.items())),
                   fatal=False)
+            # What the last `vocabulary --refresh` pulled. A source whose
+            # files moved since the commit the profile was reviewed against
+            # is named with the files, because the profile mirrors it by hand.
+            if getattr(module, "SOURCES", None):
+                from docpipe import upstream as _upstream
+                lock = _upstream.load_lock(profile)
+                check(profile, "sources refreshed", lock is not None,
+                      "" if lock else
+                      f"python -m profiles.{profile}.vocabulary --refresh",
+                      fatal=False)
+                moved = [_upstream.summary(name, record) for name, record
+                         in ((lock or {}).get("sources") or {}).items()
+                         if record.get("changed_since_reviewed")]
+                check(profile, "sources unchanged since reviewed", not moved,
+                      "; ".join(moved), fatal=False)
 
     # A coordinate the graph takes has to say what it becomes there. Not
     # every axis does -- some are read for the record and never serialized --

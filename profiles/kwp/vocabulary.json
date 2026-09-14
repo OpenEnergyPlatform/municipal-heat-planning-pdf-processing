@@ -54,7 +54,12 @@
   ],
   "oeo_file": "oeo-closure.owl",
   "oeo_sha256": "df25aa5aec966be79096cb5dc1f09023fc66a99b984c485a24897adb76a99dd4",
-  "oeo_version_iri": "https://openenergyplatform.org/ontology/oeo/releases/2.13.0/oeo.owl"
+  "oeo_version_iri": "https://openenergyplatform.org/ontology/oeo/releases/2.13.0/oeo.owl",
+  "sources": {
+   "mhpkg": "02b73341bddb",
+   "mhpo": null,
+   "oeo": "v2.13.0"
+  }
  },
  "sets": {
   "aggregation_type": [
