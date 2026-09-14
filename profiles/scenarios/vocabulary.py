@@ -107,8 +107,10 @@ def merge_regions(rows: list, aliases: dict) -> dict:
         if not iri:
             continue
         labels = live.setdefault(iri, [])
-        if row.get("label") and row["label"] not in labels:
-            labels.append(row["label"])
+        # The OEKG writes most labels with a trailing space ("Austria ").
+        label = (row.get("label") or "").strip()
+        if label and label not in labels:
+            labels.append(label)
     out = {}
     for iri in sorted(live):
         labels = list(aliases.get(iri) or ())

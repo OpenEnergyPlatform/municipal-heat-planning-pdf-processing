@@ -24,7 +24,11 @@
   "oeo_sha256": "df25aa5aec966be79096cb5dc1f09023fc66a99b984c485a24897adb76a99dd4",
   "oeo_version_iri": "https://openenergyplatform.org/ontology/oeo/releases/2.13.0/oeo.owl",
   "regions_count": 249,
-  "regions_file": "regions.json"
+  "regions_file": "regions.json",
+  "sources": {
+   "oeo": "v2.13.0",
+   "regions": "3e10b43cd976"
+  }
  },
  "regions": [
   "https://openenergyplatform.org/ontology/oekg/region/Afghanistan",

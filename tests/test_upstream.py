@@ -176,6 +176,7 @@ def test_regions_come_from_the_graph_and_keep_the_hand_spellings():
     base = vocabulary.REGION_BASE
     rows = [{"region": base + "CaboVerde", "label": "Cabo Verde"},
             {"region": base + "CaboVerde", "label": "Republic of Cabo Verde"},
+            {"region": base + "Chad", "label": "Chad "},
             {"region": base + "Chad", "label": "Chad"},
             {"region": base + "Atlantis"}]
     aliases = {base + "CaboVerde": ["Cabo Verde", "Cape Verde"],
@@ -198,8 +199,8 @@ def test_the_checked_in_regions_are_what_a_refresh_writes_back():
     from profiles.scenarios import vocabulary
     regions = json.loads(vocabulary.REGIONS_PATH.read_text(encoding="utf-8"))
     aliases = json.loads(vocabulary.ALIASES_PATH.read_text(encoding="utf-8"))
-    rows = [{"region": iri, "label": labels[0]}
-            for iri, labels in regions.items()]
+    rows = [{"region": iri, "label": label}
+            for iri, labels in regions.items() for label in labels]
     assert vocabulary.merge_regions(rows, aliases) == regions
 
 

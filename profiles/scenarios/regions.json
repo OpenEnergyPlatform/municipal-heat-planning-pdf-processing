@@ -4,7 +4,8 @@
  ],
  "https://openenergyplatform.org/ontology/oekg/region/AlandIslands": [
   "Åland Islands",
-  "Aland Islands"
+  "Aland Islands",
+  "land Islands"
  ],
  "https://openenergyplatform.org/ontology/oekg/region/Albania": [
   "Albania"
@@ -182,7 +183,8 @@
  "https://openenergyplatform.org/ontology/oekg/region/CoteDIvoire": [
   "Côte d'Ivoire",
   "Cote d'Ivoire",
-  "Ivory Coast"
+  "Ivory Coast",
+  "Cte d Ivoire"
  ],
  "https://openenergyplatform.org/ontology/oekg/region/Croatia": [
   "Croatia"
@@ -192,7 +194,8 @@
  ],
  "https://openenergyplatform.org/ontology/oekg/region/Curacao": [
   "Curaçao",
-  "Curacao"
+  "Curacao",
+  "Curaao"
  ],
  "https://openenergyplatform.org/ontology/oekg/region/Cyprus": [
   "Cyprus"
@@ -407,7 +410,8 @@
  "https://openenergyplatform.org/ontology/oekg/region/LaoPeoplesDemocraticRepublic": [
   "Laos",
   "Lao People 's Democratic Republic",
-  "Lao People's Democratic Republic"
+  "Lao People's Democratic Republic",
+  "Lao People 's Democratic Republic (the)"
  ],
  "https://openenergyplatform.org/ontology/oekg/region/Latvia": [
   "Latvia"
@@ -599,7 +603,8 @@
  ],
  "https://openenergyplatform.org/ontology/oekg/region/Reunion": [
   "Réunion",
-  "Reunion"
+  "Reunion",
+  "Runion"
  ],
  "https://openenergyplatform.org/ontology/oekg/region/Romania": [
   "Romania"
@@ -614,7 +619,8 @@
  ],
  "https://openenergyplatform.org/ontology/oekg/region/SaintBarthelemy": [
   "Saint Barthélemy",
-  "Saint Barthelemy"
+  "Saint Barthelemy",
+  "Saint Barthlemy"
  ],
  "https://openenergyplatform.org/ontology/oekg/region/SaintHelena": [
   "Saint Helena",
