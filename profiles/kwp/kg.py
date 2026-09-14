@@ -3,10 +3,9 @@ kg.py: Serializes harvested tuples into MHPKG Turtle.
 
 The IRI policy is rebuilt from the schema repo's mint_slice.py and must stay
 a pure function of the data: two runs over the same plan mint byte-identical
-IRIs (tested against their published reference UUIDs). One deliberate
-deviation: the value coordinates include the sector, because our tables carry
-several sectors per carrier/year and the published coordinate list would
-collide them into one node, which was flagged to the schema side.
+IRIs (tested against their published reference UUIDs). The value coordinates
+are the seven mint_slice.py lists: part, quantity, carrier, sector, year,
+aggregation and the sub-area.
 
 Serialized is what the graph can hold: a value whose scenario names one of
 the three plan parts of PARTS, whose scope is the municipality, whose
@@ -445,11 +444,8 @@ def heatplan_iri(db_path: Path, name: str) -> Optional[str]:
 
 
 def _value_iri(heatplan: str, row: dict) -> str:
-    # mint_slice.py's coordinate list plus the sector and the sub-area (see
-    # module docstring); absent coordinates are empty segments so the arity
-    # never varies. The area has to be in here: one plan carries four separate
-    # gas tables, one per heat-network area, and without it they collide onto
-    # one node and the conflict guard drops all four.
+    # mint_slice.py's coordinate list; absent coordinates are empty segments
+    # so the arity never varies.
     # The area names the node only where it IS the identity. For a sub-area
     # it is: one plan carries four separate gas tables, one per heat-network
     # area, and without the name they collide onto one node and the conflict
@@ -615,6 +611,13 @@ def make_serializer(db_path: Path):
     # register-link rename. The first claimant wins, the rest are refused
     # whole, loudly.
     claimed: dict = {}
+    # Organisation IRIs whose node this run has already written. The IRI is
+    # minted over the normalised name, so plans spelling one office
+    # differently share the node, and each writing its own label gave it
+    # several: 12 of 196 in corpus_m5 ("EGS-Plan", "EGS-plan", "egs-plan"),
+    # where the schema's shape allows one. The node is written once, with the
+    # first spelling in harvest order, which serialize.collect keeps sorted.
+    labelled: set = set()
 
     def serializer(name: str, rows: list):
         skipped: dict = {}
@@ -812,15 +815,19 @@ def make_serializer(db_path: Path):
                          f"    a {CLS_YEAR} ;\n"
                          f"    rdfs:label \"{year}\" .\n")
         for iri, label in office_iris.items():
+            if iri in labelled:
+                continue
+            labelled.add(iri)
             parts.append(f"<{iri}>\n"
                          f"    a {CLS_ORGANISATION} ;\n"
                          f"    rdfs:label \"{_ttl_string(label)}\" .\n")
         # Sub-areas exist as nodes and are part of the municipality area. What
-        # is missing is the edge from a VALUE to the area it holds for: MHPO
-        # has `heat plan area` and BFO `part of`, and nothing that relates a
-        # value or a plan to an area (TERM REQUEST 1 in their own schema). So
-        # the area is in the value's identity and in its comment, and the
-        # relation is the term request.
+        # is missing is the edge from a VALUE to the area it holds for: the
+        # schema has no slot for it, and its TERM REQUEST 1 asks for a
+        # different edge, from the plan to the area it plans. So the area is
+        # in the value's identity and in its comment. OEO's `has spatial
+        # region` (OEO_00010378) would fit and is a question to the schema
+        # side.
         for key, label in sorted(areas.items()):
             parts.append(f"<{mint('heatplanarea', f'{ags}|{key}')}>\n"
                          f"    a {CLS_PLAN_AREA} ;\n"
@@ -840,8 +847,8 @@ def make_serializer(db_path: Path):
 #
 # The coordinates a question can fix, in the order the spec asks them. Two
 # real axes are deliberately absent. `spatial_scope` enters a value's identity,
-# but the graph has no edge from a value to its area (TERM REQUEST 1 in the
-# schema), so there is nothing to filter on: a sub-area value and the
+# but the graph has no edge from a value to its area (the schema has no slot
+# for one), so there is nothing to filter on: a sub-area value and the
 # municipality's come back in one list. `aggregation` is returned rather than
 # constrained, so a peak load and an annual total sit in one list with the
 # label telling them apart.

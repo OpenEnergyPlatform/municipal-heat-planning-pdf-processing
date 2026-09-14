@@ -34,7 +34,7 @@ description (`verify.py:42-43,482-490`;
 `tests/test_extraction_trust.py:51`); or the document had no text layer
 and was transcribed page by page, passed to `trust()` as a `transcribed`
 keyword read from the `page_text_transcribed` column
-(`profiles/kwp/kg.py:402-403,538,552`) and capping a row at `B` even with
+(`profiles/kwp/kg.py:401-402,534,548`) and capping a row at `B` even with
 tier `TIER_TEXT` (`trust.py:120-124`;
 `test_the_same_value_from_a_transcribed_plan_never_reaches_a`,
 `tests/test_extraction_trust.py:61`). On the 559 tuples the levels were
@@ -63,7 +63,7 @@ or `unbacked:<axis>` (`trust.py:92-93`). A row's own
 by a profile's own graph serializer resolving two competing readings of
 one coordinate: kwp drops every colliding row before it reaches a trust
 line, scenarios keeps a chosen reading and marks it `conflict`
-(`profiles/kwp/kg.py:691-712`, `profiles/scenarios/kg.py:681-682`; see
+(`profiles/kwp/kg.py:694-715`, `profiles/scenarios/kg.py:681-682`; see
 [graph](../stages/graph.md)). `page_transcribed` never by itself decides
 the level: it caps a value at `B` rather than pushing it to `C`, since a
 page with no text layer is a fact about the source, not about this reading
@@ -101,7 +101,7 @@ up to six marks in a fixed order: `level`, `image_origin` or
 records the image's file name. Each mark's wording is the profile's own:
 the [kwp](../profiles/kwp.md) and [scenarios](../profiles/scenarios.md)
 serializers each state a `TRUST_PROSE` table, both in English
-(`profiles/kwp/kg.py:480-487`, `profiles/scenarios/kg.py:472-479`), and a
+(`profiles/kwp/kg.py:476-483`, `profiles/scenarios/kg.py:472-479`), and a
 profile missing a mark, or wording one that is not on this list, is
 refused at import (`trust.check_prose`, `trust.py:177-189`;
 `test_every_profile_words_every_mark_the_core_can_produce`,

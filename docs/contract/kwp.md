@@ -29,7 +29,7 @@ sections, one per parameter, are the shapes a `tuple` line can take,
 named `tuple_<uri>` and shown here after the uri.
 
 A tuple section opens with how its row becomes a node of MHPKG
-(`profiles/kwp/kg.py:2`, `:33`), then lists one `###` heading per key,
+(`profiles/kwp/kg.py:2`, `:32`), then lists one `###` heading per key,
 sorted alphabetically rather than grouped by coordinate
 (`scripts/build_docs.py:649`). Eight belong to the `parameter`
 coordinate and to every axis: the value, plus seven keys that make it
@@ -607,7 +607,7 @@ The prompt's own wording:
 
 <details><summary>Why</summary>
 
-No relation from a value to its area exists in the schema yet, so a sub_area value is not serialized (TERM REQUEST 1).
+The schema has no relation from a value to its area, so a sub_area value is serialized with the area in its IRI and its comment but without an edge to the area node. Not TERM REQUEST 1, which asks for the plan's area.
 
 </details>
 
@@ -1151,7 +1151,7 @@ The prompt's own wording:
 
 <details><summary>Why</summary>
 
-No relation from a value to its area exists in the schema yet, so a sub_area value is not serialized (TERM REQUEST 1).
+The schema has no relation from a value to its area, so a sub_area value is serialized with the area in its IRI and its comment but without an edge to the area node. Not TERM REQUEST 1, which asks for the plan's area.
 
 </details>
 
@@ -1687,7 +1687,7 @@ The prompt's own wording:
 
 <details><summary>Why</summary>
 
-No relation from a value to its area exists in the schema yet, so a sub_area value is not serialized (TERM REQUEST 1).
+The schema has no relation from a value to its area, so a sub_area value is serialized with the area in its IRI and its comment but without an edge to the area node. Not TERM REQUEST 1, which asks for the plan's area.
 
 </details>
 

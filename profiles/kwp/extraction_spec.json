@@ -625,7 +625,7 @@
                 }
               }
             },
-            "note": "No relation from a value to its area exists in the schema yet, so a sub_area value is not serialized (TERM REQUEST 1)."
+            "note": "The schema has no relation from a value to its area, so a sub_area value is serialized with the area in its IRI and its comment but without an edge to the area node. Not TERM REQUEST 1, which asks for the plan's area."
           }
         }
       },
@@ -1372,7 +1372,7 @@
                 }
               }
             },
-            "note": "No relation from a value to its area exists in the schema yet, so a sub_area value is not serialized (TERM REQUEST 1)."
+            "note": "The schema has no relation from a value to its area, so a sub_area value is serialized with the area in its IRI and its comment but without an edge to the area node. Not TERM REQUEST 1, which asks for the plan's area."
           }
         }
       },
@@ -2026,7 +2026,7 @@
                 }
               }
             },
-            "note": "No relation from a value to its area exists in the schema yet, so a sub_area value is not serialized (TERM REQUEST 1)."
+            "note": "The schema has no relation from a value to its area, so a sub_area value is serialized with the area in its IRI and its comment but without an edge to the area node. Not TERM REQUEST 1, which asks for the plan's area."
           }
         }
       },

@@ -626,6 +626,29 @@ def test_a_name_the_plan_quotes_is_still_one_turtle_literal(tmp_path):
     assert name in labels
 
 
+def test_an_office_two_plans_spell_differently_keeps_one_label(tmp_path):
+    """Both spellings normalise to one IRI, and each plan used to write its
+    own label onto it: 12 of 196 organisations in corpus_m5 carried two or
+    three, where the schema's shape allows one. Parsed as one run's file."""
+    rdflib = pytest.importorskip("rdflib")
+    serializer = kg.make_serializer(_database(tmp_path))
+    office = {"kind": "tuple", "parameter": "planning_organisation"}
+    ttl = "\n".join([
+        serializer("waermeplan_kassel_20240315",
+                   [_row(), {**office, "value": "EGS-Plan GmbH",
+                             "provenance": {"document_id": 857}}]),
+        serializer("waermeplan_ohne_textebene",
+                   [_row(provenance={"document_id": 1082}),
+                    {**office, "value": "egs-plan",
+                     "provenance": {"document_id": 1082}}]),
+    ])
+    graph = rdflib.Graph().parse(data=ttl, format="turtle")
+    iri = rdflib.URIRef(kg.mint("organisation", kg.normalise("EGS-Plan")))
+    assert [str(o) for o in graph.objects(iri, rdflib.RDFS.label)] == ["EGS-Plan"]
+    edge = rdflib.URIRef(kg.expand(kg.P_ORGANISATION))
+    assert len(set(graph.subjects(edge, iri))) == 2
+
+
 def test_an_unnamed_sub_area_is_counted_out(tmp_path):
     """Two unnamed sub-areas are one node and one of them is silently lost."""
     serializer = kg.make_serializer(_database(tmp_path))

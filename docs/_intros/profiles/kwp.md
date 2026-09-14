@@ -124,7 +124,7 @@ carries when a passage genuinely does not state it is `out:unstated`
 (`docpipe/extraction/fields.py:37` to `47`), and a profile's own vocabulary
 rides the same prefix so a serializer can refuse every one of them by
 shape rather than by a second, hand-kept list
-(`profiles/kwp/kg.py:93` to `101`, `is_class`). Most of `quantity`'s own
+(`profiles/kwp/kg.py:92` to `100`, `is_class`). Most of `quantity`'s own
 list is such an entry: a potential rather than a delivered amount, a
 share expressed as a percentage, a per-person or per-area figure, and a
 residual catch-all, so the model can name what a number really is
@@ -242,7 +242,7 @@ asks for by name, in both directions.
 `profiles/kwp/kg.py` turns an accepted harvest into MHPKG Turtle, the
 target graph on the Open Energy Platform. Five namespaces are declared
 once, `rdfs`, `xsd`, `obo`, `mhpo` and `oeo`
-(`profiles/kwp/kg.py:38` to `44`), and every identifier the serializer
+(`profiles/kwp/kg.py:37` to `43`), and every identifier the serializer
 writes is qualified against exactly that header; a predicate whose prefix
 the header does not bind raises rather than silently writing Turtle
 nobody can load (`kg_name`, `docpipe/extraction/spec.py:646` to `662`).
@@ -270,34 +270,41 @@ genuine ontological reasons, and reaching them through a range-bound
 predicate instead once cost 51 of 244 value nodes their carrier edge in
 the kwp pilot (`tests/test_kwp_extraction.py`,
 `test_a_carrier_oeo_does_not_call_a_carrier_keeps_its_edge_and_is_counted`).
-A named sub area is linked `part of` the municipality.
+A named sub area is linked `part of` the municipality. An organisation
+node is written once per run, with the first spelling in harvest
+order, even when a later plan in the same run spells the office
+differently: a run-level `labelled` set in `make_serializer` keeps a
+second `rdfs:label` off the shared node (`profiles/kwp/kg.py:614` to
+`620`, `817` to `823`; `tests/test_kwp_extraction.py`,
+`test_an_office_two_plans_spell_differently_keeps_one_label`).
 
 The IRI base is `https://openenergyplatform.org/id/mhpkg/`
 (`profiles/kwp/kg.py:32`). Every minted collection draws its own UUIDv5
 sub-namespace off that base, and minting always uses UUIDv5 over an
-identifying name, never UUIDv4 (`profiles/kwp/kg.py:342` to `366`,
+identifying name, never UUIDv4 (`profiles/kwp/kg.py:341` to `365`,
 `mint`), so two runs over one document produce byte-identical Turtle
 (`tests/test_kwp_extraction.py`,
 `test_value_minting_matches_the_schema_repo_reference` and
 `test_normalise_and_organisation_minting_match_the_reference`). The plan
 and municipality nodes are not minted at all: their IRIs are built
 directly from the register key, `heatplan/AGS_<ags>_<published>` and
-`municipality/AGS_<ags>` (`profiles/kwp/kg.py:426` to `428`, `687`). A
+`municipality/AGS_<ags>` (`profiles/kwp/kg.py:425` to `427`, `699`). A
 year IRI is likewise unminted, one node per calendar year, keyed by the
-year itself (`profiles/kwp/kg.py:332` to `339`).
+year itself (`profiles/kwp/kg.py:331` to `338`).
 
 A value's identity is a UUIDv5 over its own coordinates joined in order:
 the scenario part's IRI, the quantity class, the carrier and sector
 classes where present, the year, the aggregation, and, only for a named
-sub area, the normalised area wording (`profiles/kwp/kg.py:447` to `472`,
-`_value_iri`). This departs on purpose from the schema repository's own
-published coordinate list, adding the sector, because this corpus carries
-several sectors per carrier and year that list would otherwise collide
-onto one node (`profiles/kwp/kg.py:4` to `9`). The area is left out of a
+sub area, the normalised area wording (`profiles/kwp/kg.py:446` to `468`,
+`_value_iri`). These are the same seven coordinates the schema
+repository's own `mint_slice.py` mints: part, quantity, carrier, sector,
+year, aggregation and the sub-area, so two runs over one document mint
+byte-identical IRIs with no deviation from the published list
+(`profiles/kwp/kg.py:6` to `8`). The area is left out of a
 whole-plan-area value's identity, since one 2040 figure stated under
 three different whole-plan-area wordings on three pages of one plan
 became three indistinguishable nodes before this rule, 129 of 1,294 value
-nodes overall (`profiles/kwp/kg.py:457` to `460`); a named sub area keeps
+nodes overall (`profiles/kwp/kg.py:453` to `456`); a named sub area keeps
 its wording, since one plan can carry several sub-area tables whose
 figures would otherwise collide onto one node instead.
 
@@ -306,10 +313,10 @@ read: the wording and quote, the page and its table, figure or section,
 whether the aggregation was read or derived, and a trust line rendered
 from the same six marks `docpipe/extraction/trust.py` defines for every
 profile, in English here, checked against the core's own list at import
-(`check_prose`, `profiles/kwp/kg.py:478` to `486`). Comments only, never
+(`check_prose`, `profiles/kwp/kg.py:474` to `482`). Comments only, never
 triples: MHPKG's shapes are `sh:closed`, and an unanticipated triple
-would invalidate the node it documents (`profiles/kwp/kg.py:496` to
-`745`).
+would invalidate the node it documents (`profiles/kwp/kg.py:492` to
+`748`).
 
 What the serializer refuses, briefly (in full on
 [stages/graph.md](../stages/graph.md)): a row failing the scenario,
@@ -348,7 +355,7 @@ graph-route hooks at start-up (`docpipe/inference/kg_route.py:52` to `57`,
 (`docpipe/inference/kg_route.py:66` to `78`, the `Hooks` dataclass): a
 SPARQL template (`VALUE_QUERY`), the five axes a question may fix, in
 order, `(scenario, quantity, carrier, sector, year)`
-(`COORDINATE_AXES`, `profiles/kwp/kg.py:831` to `839`), `heatplan_iri`,
+(`COORDINATE_AXES`, `profiles/kwp/kg.py:838` to `846`), `heatplan_iri`,
 `value_bindings`, `label_of`, and the same `TRUST_PROSE` the serializer
 writes with. `spatial_scope` is left out because the graph has no edge
 yet from a value to its area; `aggregation` is left out because the route

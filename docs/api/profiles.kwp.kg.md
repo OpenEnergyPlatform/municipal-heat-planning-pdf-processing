@@ -6,10 +6,9 @@ kg.py: Serializes harvested tuples into MHPKG Turtle.
 
 The IRI policy is rebuilt from the schema repo's mint_slice.py and must stay
 a pure function of the data: two runs over the same plan mint byte-identical
-IRIs (tested against their published reference UUIDs). One deliberate
-deviation: the value coordinates include the sector, because our tables carry
-several sectors per carrier/year and the published coordinate list would
-collide them into one node, which was flagged to the schema side.
+IRIs (tested against their published reference UUIDs). The value coordinates
+are the seven mint_slice.py lists: part, quantity, carrier, sector, year,
+aggregation and the sub-area.
 
 Serialized is what the graph can hold: a value whose scenario names one of
 the three plan parts of PARTS, whose scope is the municipality, whose

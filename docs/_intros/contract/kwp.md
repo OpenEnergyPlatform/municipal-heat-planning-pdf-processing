@@ -25,7 +25,7 @@ sections, one per parameter, are the shapes a `tuple` line can take,
 named `tuple_<uri>` and shown here after the uri.
 
 A tuple section opens with how its row becomes a node of MHPKG
-(`profiles/kwp/kg.py:2`, `:33`), then lists one `###` heading per key,
+(`profiles/kwp/kg.py:2`, `:32`), then lists one `###` heading per key,
 sorted alphabetically rather than grouped by coordinate
 (`scripts/build_docs.py:649`). Eight belong to the `parameter`
 coordinate and to every axis: the value, plus seven keys that make it
