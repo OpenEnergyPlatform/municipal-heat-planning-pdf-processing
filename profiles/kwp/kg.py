@@ -494,6 +494,14 @@ def _ttl_comment(text) -> str:
     return "# " + flat[:400]
 
 
+def _ttl_string(text) -> str:
+    """The inside of a Turtle "..." literal. A plan's own name for a sub-area
+    is printed as the plan quotes it, and corpus_m5 wrote 18 labels like
+    "Eignungsgebiet "Bad Dürrheim Nord"" that stop every Turtle parser."""
+    return (str(text).replace("\\", "\\\\").replace('"', '\\"')
+            .replace("\n", "\\n").replace("\r", "\\r").replace("\t", "\\t"))
+
+
 # Short English labels for the two coordinates that mint no OEO class of
 # their own -- the scenario part and the whole-municipality scope -- and for
 # an axis' `out:` entries, which are deliberate non-classes and so hold no
@@ -686,7 +694,7 @@ def make_serializer(db_path: Path):
         part_iri = {key: f"{BASE}{segment}/AGS_{ags}_{published}"
                     for key, (_cls, segment, _label) in PARTS.items()}
         municipality_iri = f"{BASE}municipality/AGS_{ags}"
-        place = municipality or f"AGS {ags}"
+        place = _ttl_string(municipality or f"AGS {ags}")
 
         values: dict = {}
         conflicted: set = set()
@@ -806,7 +814,7 @@ def make_serializer(db_path: Path):
         for iri, label in office_iris.items():
             parts.append(f"<{iri}>\n"
                          f"    a {CLS_ORGANISATION} ;\n"
-                         f"    rdfs:label \"{label}\" .\n")
+                         f"    rdfs:label \"{_ttl_string(label)}\" .\n")
         # Sub-areas exist as nodes and are part of the municipality area. What
         # is missing is the edge from a VALUE to the area it holds for: MHPO
         # has `heat plan area` and BFO `part of`, and nothing that relates a
@@ -816,7 +824,7 @@ def make_serializer(db_path: Path):
         for key, label in sorted(areas.items()):
             parts.append(f"<{mint('heatplanarea', f'{ags}|{key}')}>\n"
                          f"    a {CLS_PLAN_AREA} ;\n"
-                         f"    rdfs:label \"{label}\" ;\n"
+                         f"    rdfs:label \"{_ttl_string(label)}\" ;\n"
                          f"    {P_PART_OF} <{municipality_iri}> .\n")
         parts.append(f"""\
 <{municipality_iri}>

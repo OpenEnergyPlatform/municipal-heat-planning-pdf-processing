@@ -612,6 +612,20 @@ def test_two_sub_areas_are_two_values_not_one(tmp_path):
     assert f"obo:BFO_0000050 <{kg.BASE}municipality/AGS_06611000>" in ttl
 
 
+def test_a_name_the_plan_quotes_is_still_one_turtle_literal(tmp_path):
+    """corpus_m5 wrote 18 labels like "Eignungsgebiet "Bad Dürrheim Nord"",
+    copied as the plan quotes them, and no Turtle parser read past the first.
+    Parsed here, not grepped: the promise is a file a consumer can load."""
+    rdflib = pytest.importorskip("rdflib")
+    name = 'Eignungsgebiet "Bad Dürrheim Nord" \\ Teil 2'
+    ttl = kg.make_serializer(_database(tmp_path))(
+        "waermeplan_kassel_20240315",
+        [_row(spatial_scope="sub_area", spatial_scope_raw=name)])
+    graph = rdflib.Graph().parse(data=ttl, format="turtle")
+    labels = {str(o) for o in graph.objects(None, rdflib.RDFS.label)}
+    assert name in labels
+
+
 def test_an_unnamed_sub_area_is_counted_out(tmp_path):
     """Two unnamed sub-areas are one node and one of them is silently lost."""
     serializer = kg.make_serializer(_database(tmp_path))
