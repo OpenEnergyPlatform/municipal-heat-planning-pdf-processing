@@ -103,7 +103,7 @@ embedding stage that follows; the model only proposes where to cut, the cut
 itself always happens at a segment boundary (`docpipe/refinement/
 split.py:11` to `12`). The output, `sections_refined.json`, is written
 atomically, so a run killed mid-document leaves the previous refinement
-rather than nothing (`docpipe/refinement/refine.py:1036` to `1040`). Resume
+rather than nothing (`docpipe/refinement/refine.py:1039` to `1043`). Resume
 skips a document once
 that file exists; `--force-stale` redoes only documents whose recorded
 prompt hash no longer matches the profile's current prompts.
@@ -296,7 +296,7 @@ Running `--force` across the db and embed steps together needs one detail
 the two steps cannot each see on their own: a document's old FAISS ids
 have to be read off before the db step's forced delete removes its
 `Embeddings` rows, or the embed step has nothing left naming which vectors
-to evict from the index (`docpipe/chunking/pipeline.py:146` to `147`).
+to evict from the index (`docpipe/chunking/pipeline.py:147` to `148`).
 
 ## The extraction stamp
 
@@ -306,7 +306,7 @@ per document, so this section documents its stamp on its own.
 written only once `finish_document` decides a harvest actually happened;
 a document is left unstamped, so the next run redoes it, when more than
 half its planned sources came back unreachable or nothing answered at all
-(`UNREACHABLE_LIMIT = 0.5`, `docpipe/extraction/runner.py:3586`). Inside
+(`UNREACHABLE_LIMIT = 0.5`, `docpipe/extraction/runner.py:3594`). Inside
 it:
 
 | Key | What it records | Compared on a redo |
@@ -324,7 +324,7 @@ it:
 
 The owner decided on 2026-09-10 that a stamp rests on the KG/ontology
 parameters alone (`parameter/`, `value/`, `axis/`, `slot/`,
-`docpipe/extraction/runner.py:3443`). The model, the anchors and every
+`docpipe/extraction/runner.py:3451`). The model, the anchors and every
 prompt id are still written into the stamp, so a reader can place a
 harvest, but a reworded prompt or another model no longer makes a
 document stale. The fine keys come from
@@ -332,14 +332,14 @@ document stale. The fine keys come from
 their presence is what licenses ignoring the coarse `spec` key. An earlier
 design hashed the whole spec file as one number, so one new label anywhere
 in it made a whole corpus stale together, about 93 GPU hours to reread
-1,082 documents over one added word (`docpipe/extraction/runner.py:3410`
-to `3413`); the ontology behind the spec is revised repeatedly, so the
+1,082 documents over one added word (`docpipe/extraction/runner.py:3418`
+to `3421`); the ontology behind the spec is revised repeatedly, so the
 same cost would recur each time it is. With one key per parameter, per value list
 and per axis, `stale()` names exactly which question changed and leaves
 the rest of the corpus alone; it checks both directions, so a question
 dropped from the spec counts as changed too, the one case the old
 whole-file hash used to catch that a purely additive scheme would
-otherwise miss (`docpipe/extraction/runner.py:3495` to `3495`). A file
+otherwise miss (`docpipe/extraction/runner.py:3503` to `3503`). A file
 with no stamp at all is read as fully stale, on principle: the opposite
 reading, a missing stamp taken as nothing left to do, had already let a
 run silently skip 165 documents with exit code 0
@@ -349,7 +349,7 @@ The review prompt (`extraction/review`) is deliberately left out of
 `PROMPT_IDS` itself, not merely out of the comparison: a review leaves a
 value unchanged, only its `flags` grow, so folding the review prompt's sha
 into every stamp would report the whole corpus stale the day that one
-prompt is edited (`docpipe/extraction/runner.py:146` to `148`).
+prompt is edited (`docpipe/extraction/runner.py:147` to `149`).
 
 Three passes act on a moved key without opening the document again.
 
@@ -380,8 +380,8 @@ after it; the embed half of chunking needs a visible GPU. Each of
 refinement, visuals and extraction checks the served model's context size
 before its first document and refuses to start rather than fail midway
 (`docpipe/llm_preflight.py`, called from `docpipe/refinement/
-pipeline.py:165` and `247`, `docpipe/visuals/pipeline.py:501`, and
-`docpipe/extraction/runner.py:4077` and `4146`).
+pipeline.py:165` and `248`, `docpipe/visuals/pipeline.py:502`, and
+`docpipe/extraction/runner.py:4085` and `4154`).
 
 Select the profile once, in the environment, before any stage that
 overrides prompts is imported:

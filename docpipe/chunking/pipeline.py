@@ -19,6 +19,7 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from typing import Optional
 
+from docpipe import usage
 from docpipe.profile import add_profile_argument, resolve_profile
 
 from .config import (
@@ -344,6 +345,7 @@ def main() -> None:
     )
 
     profile = resolve_profile(args)
+    usage.begin("chunking")
     if profile is not None:
         args.data_dir = args.data_dir or str(profile.processed_dir)
         args.db_path = args.db_path or str(profile.db_path)

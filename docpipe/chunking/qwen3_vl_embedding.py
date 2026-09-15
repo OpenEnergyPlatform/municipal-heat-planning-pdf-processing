@@ -22,9 +22,11 @@ from transformers.utils import TransformersKwargs
 from transformers.cache_utils import Cache
 from qwen_vl_utils.vision_process import process_vision_info
 
+from docpipe import usage
+from docpipe.embedding.config import EMBEDDING_MAX_TOKEN_LENGTH
+
 logger = logging.getLogger(__name__)
 
-MAX_LENGTH = 8192
 IMAGE_BASE_FACTOR = 16
 IMAGE_FACTOR = IMAGE_BASE_FACTOR * 2
 MIN_PIXELS = 4 * IMAGE_FACTOR * IMAGE_FACTOR
@@ -154,7 +156,7 @@ class Qwen3VLEmbedder:
     def __init__(
         self,
         model_name_or_path: str,
-        max_length: int = MAX_LENGTH,
+        max_length: int = EMBEDDING_MAX_TOKEN_LENGTH,
         min_pixels: int = MIN_PIXELS,
         max_pixels: int = MAX_PIXELS,
         total_pixels: int = MAX_TOTAL_PIXELS,
@@ -180,6 +182,7 @@ class Qwen3VLEmbedder:
         self.num_frames = num_frames
         self.max_frames = max_frames
         self.default_instruction = default_instruction
+        self.model_name = model_name_or_path
 
         # bf16 on GPU; fp32 on CPU, where bf16 matmuls are slow/unsupported.
         if torch_dtype is None:
@@ -367,6 +370,9 @@ class Qwen3VLEmbedder:
         ) for ele in inputs]
 
         processed_inputs = self._preprocess_inputs(conversations)
+        # Counted on the CPU copy, before the move, and booked only once the
+        # forward ran: padding is not a token the model was asked to read.
+        tokens = int(processed_inputs["attention_mask"].sum())
         processed_inputs = {
             k: (v.to(device=self.model.device, dtype=self.param_dtype)
                 if torch.is_floating_point(v) else v.to(self.model.device))
@@ -375,6 +381,7 @@ class Qwen3VLEmbedder:
 
         outputs = self.forward(processed_inputs)
         embeddings = self._pooling_last(outputs['last_hidden_state'], outputs['attention_mask'])
+        usage.add(self.model_name, embedding_tokens=tokens, requests=len(inputs))
 
         if normalize:
             embeddings = F.normalize(embeddings, p=2, dim=-1)
@@ -407,7 +414,7 @@ class MultiGPUEmbedder:
     def __init__(
         self,
         model_name_or_path: str,
-        max_length: int = MAX_LENGTH,
+        max_length: int = EMBEDDING_MAX_TOKEN_LENGTH,
         dtype: torch.dtype = torch.bfloat16,
         devices: Optional[List[str]] = None,
         **kwargs,

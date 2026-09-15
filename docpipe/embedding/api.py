@@ -16,6 +16,8 @@ from __future__ import annotations
 import logging
 from typing import Optional, Sequence
 
+from docpipe import usage
+
 from . import config
 
 log = logging.getLogger(__name__)
@@ -51,6 +53,9 @@ class ApiEmbedder:
             batch = texts[start:start + self.batch_size]
             response = self.client().embeddings.create(model=self.model, input=batch)
             out.extend(d.embedding for d in response.data)
+            tokens = getattr(getattr(response, "usage", None), "prompt_tokens", None)
+            if isinstance(tokens, int):
+                usage.add(self.model, embedding_tokens=tokens, requests=len(batch))
         return out
 
     def embed_one(self, item: dict) -> list:

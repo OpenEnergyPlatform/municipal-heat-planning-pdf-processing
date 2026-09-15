@@ -349,7 +349,7 @@ SOURCES = (
            "docpipe/store/documents.py"),
     _stage("stages/core.md", "The parts every stage uses",
            "docpipe/artifacts.py", "docpipe/prompts.py", "docpipe/profile.py",
-           "docpipe/llm_preflight.py", "docpipe/captions.py"),
+           "docpipe/llm_preflight.py", "docpipe/captions.py", "docpipe/usage.py"),
     ("artifacts.md", "What each stage leaves behind",
      (("docpipe/artifacts.py", None),)),
     ("profiles.md", "Profiles", (("docpipe/profile.py", None),)),

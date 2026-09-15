@@ -134,7 +134,7 @@ Embedder for Qwen3-VL model processing text, images, and videos.
 def __init__(
     self,
     model_name_or_path: str,
-    max_length: int = MAX_LENGTH,
+    max_length: int = EMBEDDING_MAX_TOKEN_LENGTH,
     min_pixels: int = MIN_PIXELS,
     max_pixels: int = MAX_PIXELS,
     total_pixels: int = MAX_TOTAL_PIXELS,
@@ -204,7 +204,7 @@ Exposes the same ``process(inputs, normalize=True) -> Tensor`` interface as
 def __init__(
     self,
     model_name_or_path: str,
-    max_length: int = MAX_LENGTH,
+    max_length: int = EMBEDDING_MAX_TOKEN_LENGTH,
     dtype: torch.dtype = torch.bfloat16,
     devices: Optional[List[str]] = None,
     **kwargs,

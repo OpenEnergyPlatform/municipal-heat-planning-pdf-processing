@@ -275,10 +275,10 @@ rewritten (`docpipe/refinement/corrections.py:28-29`).
 Before the check refusing `remove` on a section carrying tables or
 figures existed, eleven plans with no text layer, their section bodies
 placeholder markers only, lost 1270 transcribed tables and figures that
-way (`docpipe/refinement/refine.py:432-434`). Before every section of a
+way (`docpipe/refinement/refine.py:434-436`). Before every section of a
 window carried through by default rather than only what a reply named, a
 reply naming only some of a window's sections cost one book 123 of its
-2697 sections, and another run 237 (`docpipe/refinement/refine.py:159-160`).
+2697 sections, and another run 237 (`docpipe/refinement/refine.py:160-161`).
 
 Before the context-size preflight existed, 42 windows silently kept raw
 text against a server whose `max_model_len` was smaller than a request

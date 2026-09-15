@@ -62,6 +62,7 @@ from pathlib import Path
 from typing import Callable, Optional
 
 from docpipe import prompts
+from docpipe import usage as token_usage
 from docpipe.llm_preflight import assert_serving, request_extras
 from docpipe.profile import add_profile_argument, resolve_profile
 
@@ -957,7 +958,7 @@ def document_anchor(spec: Spec, context: Optional[dict] = None,
         faults = 0
         for attempt in range(1, MAX_RETRIES + 1):
             try:
-                reply = client.chat.completions.create(
+                response = client.chat.completions.create(
                     model=LLM_MODEL,
                     temperature=retry_temperature(
                         float(prompt.meta.get("temperature", 0)), faults),
@@ -965,7 +966,9 @@ def document_anchor(spec: Spec, context: Optional[dict] = None,
                     messages=[{"role": "system", "content": prompt.text},
                               *conversation],
                     extra_body=request_extras(),
-                ).choices[0]
+                )
+                token_usage.reply(response, LLM_MODEL)
+                reply = response.choices[0]
                 phrase = ((_loads_object(reply.message.content) or {})
                           .get("phrase") or "")
                 phrase = phrase.strip() if isinstance(phrase, str) else ""
@@ -1569,7 +1572,7 @@ def make_anchors(spec: Spec, client=None, *, store: Optional[Path] = None,
         faults = 0
         for attempt in range(1, MAX_RETRIES + 1):
             try:
-                reply = client.chat.completions.create(
+                response = client.chat.completions.create(
                     model=LLM_MODEL,
                     temperature=retry_temperature(
                         float(prompt.meta.get("temperature", 0.4)), faults),
@@ -1577,7 +1580,9 @@ def make_anchors(spec: Spec, client=None, *, store: Optional[Path] = None,
                     messages=[{"role": "system", "content": prompt.text},
                               *conversation],
                     extra_body=request_extras(),
-                ).choices[0]
+                )
+                token_usage.reply(response, LLM_MODEL)
+                reply = response.choices[0]
                 parsed = _loads_object(reply.message.content)
                 anchors = [a.strip() for a in (parsed or {}).get("anchors", ())
                            if isinstance(a, str) and a.strip()]
@@ -2234,6 +2239,9 @@ def _observe_usage(usage) -> None:
     completion = getattr(usage, "completion_tokens", None)
     if not isinstance(prompt, int):
         return
+    token_usage.add(LLM_MODEL, input_tokens=prompt,
+                    output_tokens=completion if isinstance(completion, int)
+                    else 0)
     with _USAGE_LOCK:
         _USAGE["n"] += 1
         _USAGE["prompt_sum"] += prompt
@@ -4262,6 +4270,7 @@ def main(argv: Optional[list] = None) -> int:
                         datefmt="%H:%M:%S")
 
     profile = resolve_profile(args)
+    token_usage.begin("extraction")
     if args.recheck:
         raw_spec_path = profile.component("extraction", "SPEC_PATH")
         if raw_spec_path is None:
@@ -4875,6 +4884,7 @@ def main(argv: Optional[list] = None) -> int:
                   "whose every batch came back are written and stamped; a "
                   "resume harvests the rest.", time.time() - started)
         trace.close()
+        token_usage.flush()
         logging.shutdown()
         # Not a return: the field sweeps still waiting on the server run in
         # non-daemon threads, and a normal exit would wait for every one.

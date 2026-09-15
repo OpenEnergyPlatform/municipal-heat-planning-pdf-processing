@@ -19,6 +19,7 @@ from pathlib import Path
 
 import openai
 
+from docpipe import usage
 from docpipe.llm_preflight import request_extras
 
 from .config import (
@@ -178,6 +179,7 @@ def call_vision(
                 max_tokens=max_tokens,
                 extra_body=extra_body or None,
             )
+            usage.reply(response, model)
 
             raw = response.choices[0].message.content or ""
             parsed, error_detail = _parse_json_response(raw)
@@ -292,6 +294,7 @@ def call_vision_plain(
     except Exception as e:
         log.warning("  Plain-text rescue failed for %s: %s", image_path.name, e)
         return None
+    usage.reply(response, model)
 
     raw = response.choices[0].message.content or ""
     text = re.sub(r"<think>.*?</think>", "", raw, flags=re.DOTALL).strip()

@@ -1,8 +1,8 @@
 ## Purpose
 
 `docpipe/artifacts.py`, `docpipe/profile.py`, `docpipe/prompts.py`,
-`docpipe/llm_preflight.py` and `docpipe/captions.py` are the five
-modules this page documents together (`scripts/build_docs.py:349-351`
+`docpipe/llm_preflight.py`, `docpipe/captions.py` and `docpipe/usage.py`
+are the six modules this page documents together (`scripts/build_docs.py:350-352`
 groups them under this page). Each is imported by a different subset of
 preprocessing, refinement, visuals, chunking, extraction and inference;
 only `profile.py` reaches all six (Position in the pipeline, below).
@@ -14,11 +14,12 @@ supplies (`profile.py`), which file carries a stage's prompt and
 whether a result on disk still matches it (`prompts.py`), what a
 file a stage writes is called so the next stage can find it
 (`artifacts.py`), whether the model server a stage is about to call can
-do what is asked (`llm_preflight.py`), and, once a caption-linking rule
+do what is asked (`llm_preflight.py`), once a caption-linking rule
 elsewhere attaches the wrong sentence to a table, where the real title
-sits (`captions.py`).
+sits (`captions.py`), and how many tokens a run spent, summed across
+processes that come and go (`usage.py`).
 
-The five files share a property none of the numbered stages needs: a
+The six files share a property none of the numbered stages needs: a
 profile never appears inside them by name. `docpipe/profile.py` states
 the rule in its own docstring, "The core never imports a profile; it
 receives one" (`docpipe/profile.py:6`), and
@@ -40,7 +41,7 @@ receiving side.
 
 ## Position in the pipeline
 
-None of these five modules sits between an upstream and downstream step;
+None of these six modules sits between an upstream and downstream step;
 each is imported by whichever stage is running, none writes its own
 `results/` file, and none runs from the command line by itself. In
 place of an In/Out table, what each module supplies and who reaches for
@@ -53,12 +54,15 @@ it is:
 | `artifacts.py` | the filename of every per-document result file, spelled out once | preprocessing, refinement, visuals, chunking |
 | `llm_preflight.py` | a check, before a stage's first document, that its server can do what is asked | refinement, visuals, extraction |
 | `captions.py` | the rule for where a table's or figure's real title sits | preprocessing (write time); chunking, inference (read time) |
+| `usage.py` | token/request counting, on once a process calls `begin(stage)` | refinement, visuals, chunking and extraction call `begin()`; every reply or embedding call in those four books through `add()`/`reply()` |
 
-The closest thing any of the five holds to a resume rule is
+The closest thing any of the six holds to a resume rule is
 `prompts.py`'s staleness check (Method). `profile.py` also memoizes
 `profile_value()` in memory for one process, not a resume rule;
 `artifacts.py`, `llm_preflight.py` and `captions.py` keep no state of
-their own.
+their own; `usage.py` keeps counts in memory and periodically flushes
+them, not a resume rule either since a flush always overwrites the same
+row.
 
 ## Method
 
@@ -106,9 +110,9 @@ request, 30 seconds and one retry by default
 the smallest `max_model_len` reported against the tokens the stage
 needs. It runs once per run, before any document, from four call
 sites: refinement's `run()` (`docpipe/refinement/pipeline.py:165`) and
-`main()` (`:247`); visuals (`docpipe/visuals/pipeline.py:501`, skipped
+`main()` (`:248`); visuals (`docpipe/visuals/pipeline.py:502`, skipped
 under `--dry-run`); and extraction's review pass and harvest
-(`docpipe/extraction/runner.py:4163` and `:4232`).
+(`docpipe/extraction/runner.py:4171` and `:4240`).
 
 ### Rendering a prompt for one request
 
@@ -130,6 +134,26 @@ compares that file against today's prompts and returns the ids changed
 `docpipe/refinement/pipeline.py:66` and
 `docpipe/visuals/pipeline.py:122`); a non-empty result decides whether
 `--force-stale` is warranted.
+
+### Counting tokens across a run
+
+`usage.begin(stage)` (`docpipe/usage.py:91-101`) turns counting on for the
+calling process, once; each of the four batch entry points calls it at
+start. From then on, `usage.reply(response, model)` books a chat
+completion's `prompt_tokens`/`completion_tokens` straight off the
+server's own usage block (nothing if the reply carries none), and
+`usage.add(model, ...)` books an embedder's real token count, padding
+excluded. Counts accumulate in memory per model and are written into
+`DOCPIPE_USAGE_DB` (default `data/usage.db`, table `token_usage`, one
+row per `run`/`stage`/`model`) every `FLUSH_SECONDS` (60) while requests
+keep coming back, and once more at exit (`atexit`); a flush always
+writes the same absolute counts, so writing twice never double-counts.
+`python -m docpipe.usage [path]` or `sqlite3 ... "SELECT * FROM
+token_totals"` sums every row by stage and model. A process that never
+calls `begin()` counts nothing: the inference app, the tests, and
+library use are silent by design, as is the 1-token preflight probe in
+`llm_preflight.py`. A database that cannot be written is logged once and
+never stops the run.
 
 ### Resolving a caption while Stage 3 assembles a section
 
@@ -174,7 +198,7 @@ here are the properties a stage reads once resolved:
 `package_dir`, `prompts_dir`, `schema_sql`, and, under `root`
 (`<repo>/data/<name>` unless overridden), `pdf_dir`, `processed_dir`
 (`root/pdf/processed`, refinement's default input,
-`docpipe/refinement/pipeline.py:244`), `db_path` (`<name>.db`) and
+`docpipe/refinement/pipeline.py:245`), `db_path` (`<name>.db`) and
 `index_path` (`faiss_index.bin`) (`docpipe/profile.py:85-121`). `Facet`
 (`docpipe/profile.py:25-29`) is `field`, `label`, `widget`.
 
@@ -208,6 +232,7 @@ placeholder, all come back as `caption`, unchanged
 | `max_retries` (OpenAI client) | hardcoded constant | 1 | preflight retried once before a connection failure is reported | `docpipe/llm_preflight.py:45` |
 | `what` / `flag` (`assert_serving`) | function parameters | `"this stage"` / `"--max-model-len"` | substituted into the error and success log; each call site names itself | `docpipe/llm_preflight.py:58-59` |
 | `_CAPTION_LIMIT` | module constant | 300 characters | caps the length of a title `resolve_title()` returns | `docpipe/captions.py:34` |
+| `DOCPIPE_USAGE_DB` | environment variable | `data/usage.db` | SQLite file the token counts are written to | `docpipe/usage.py:74` |
 
 ## Failure modes
 
@@ -378,3 +403,10 @@ sentence before its placeholder (`resolve_title`). Called from the write
 side while Stage 3 assembles a section, and from the read side both as
 `chunking/database.py`'s one-time backfill and on every read by
 `inference/db.py`.
+
+`usage.py` counts each stage's chat and embedding requests in memory and
+writes them, one row per run/stage/model, into a SQLite file
+(`DOCPIPE_USAGE_DB`, default `data/usage.db`), flushed periodically and
+at exit. Turned on by `begin()` at each of the four call sites in
+Position in the pipeline, above, and booked from every reply and
+embedding call site those four stages make.

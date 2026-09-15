@@ -6,8 +6,8 @@ Generated from `docpipe/artifacts.py` by `scripts/build_docs.py`: the names belo
 
 Preprocessing, refinement, visuals and chunking each run as their own
 command-line invocation (`docpipe/preprocessing/pipeline.py:547`,
-`docpipe/refinement/pipeline.py:263`, `docpipe/visuals/pipeline.py:516`,
-`docpipe/chunking/pipeline.py:369`, each its own `__main__` entry point).
+`docpipe/refinement/pipeline.py:264`, `docpipe/visuals/pipeline.py:517`,
+`docpipe/chunking/pipeline.py:371`, each its own `__main__` entry point).
 Nothing survives between invocations except what a stage writes to disk,
 so the files below let a later run resume or reuse an earlier one's work.
 
@@ -57,7 +57,7 @@ later by chunking's `enrich_page_source`, backfilling a
 only accepted input and writes `sections_refined.json` plus
 `refinement_report.json`, recording what it could not refine
 (`docpipe/refinement/pipeline.py:43-45`, `docpipe/refinement/
-refine.py:1026-1087`). [Reading the pictures](stages/visuals.md) reads
+refine.py:1029-1090`). [Reading the pictures](stages/visuals.md) reads
 the crops left in `images/` together with whichever section text is
 available, preferring `sections_refined.json` over `sections.json`, and
 writes `visuals.json` (`docpipe/visuals/pipeline.py:56-65`).
@@ -95,7 +95,7 @@ not alike: `_load_pages_cache` treats an unreadable
 `sections.json`, `sections_refined.json` and `visuals.json` call
 `json.load` unguarded and raise on a truncated file
 (`docpipe/preprocessing/pipeline.py:49-60`,
-`docpipe/refinement/refine.py:1052-1059`,
+`docpipe/refinement/refine.py:1055-1062`,
 `docpipe/chunking/merge.py:93-99`).
 
 Merge decides whether its cached `document.json` is reusable by

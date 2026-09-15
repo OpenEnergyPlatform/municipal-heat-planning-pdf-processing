@@ -40,6 +40,7 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Callable, Optional
 
+from docpipe import usage
 from docpipe.llm_preflight import request_extras
 
 from .corrections import apply_corrections
@@ -301,6 +302,7 @@ def _call_llm(
                 # <think> block; that truncates the JSON answer.
                 extra_body=request_extras(),
             )
+            usage.reply(response, LLM_MODEL)
 
             raw_text = response.choices[0].message.content or ""
 
@@ -793,6 +795,7 @@ def _make_splitter(client) -> Callable[[str, str], str]:
             max_tokens=SPLIT_MAX_TOKENS,
             extra_body=request_extras(),
         )
+        usage.reply(response, LLM_MODEL)
         raw = response.choices[0].message.content or ""
         raw = re.sub(r"<think>.*?</think>", "", raw, flags=re.DOTALL).strip()
         raw = re.sub(r"^```(?:json)?\s*", "", raw)

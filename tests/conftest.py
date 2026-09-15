@@ -64,6 +64,14 @@ def pytest_configure(config):
             f"report itself -- it reports as failing tests."),
         stacklevel=2)
 
+@pytest.fixture(autouse=True, scope="session")
+def _usage_db_outside_the_repo(tmp_path_factory):
+    """A test that drives a stage's main() starts that stage's token count,
+    and its stubbed replies would be flushed into the real data/usage.db."""
+    os.environ["DOCPIPE_USAGE_DB"] = str(
+        tmp_path_factory.mktemp("usage") / "usage.db")
+
+
 # A stage binds its prompts when it is imported, and prompts belong to a
 # profile — so importing one without a profile is an error, not a default.
 # Tests that care about another profile pass it explicitly.

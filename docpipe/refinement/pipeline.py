@@ -24,7 +24,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Optional
 
-from docpipe import prompts
+from docpipe import prompts, usage
 from docpipe.llm_preflight import assert_serving
 from docpipe.profile import add_profile_argument, resolve_profile
 
@@ -231,6 +231,7 @@ def main() -> None:
     )
 
     profile = resolve_profile(args)
+    usage.begin("refinement")
 
     # Lets the job script derive --max-model-len from the code instead of
     # restating it in a comment that nothing checks.

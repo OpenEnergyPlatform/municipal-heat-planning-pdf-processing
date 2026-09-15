@@ -28,7 +28,7 @@ The GPU stack is optional: nothing refuses to start without one. Stage
 2's layout model and the local embedding backend move to CUDA when
 available and fall back to the CPU otherwise
 (`docpipe/preprocessing/stage2_layout.py` line 108;
-`docpipe/chunking/qwen3_vl_embedding.py` lines 416 to 417). Refinement,
+`docpipe/chunking/qwen3_vl_embedding.py` lines 423 to 424). Refinement,
 visuals and extraction load no model in the pipeline's process: each is
 an HTTP client to an OpenAI-compatible server, so their GPU can run on
 a different machine.
@@ -143,7 +143,7 @@ in sequence; the three positional paths default to the profile's own.
 `--step enrich-bbox`, `--step enrich-page-source` and
 `--step enrich-caption` are additive maintenance passes that backfill
 one column family on an already-built corpus without re-embedding
-(`docpipe/chunking/pipeline.py` lines 314 to 325). `--force` reprocesses:
+(`docpipe/chunking/pipeline.py` lines 315 to 326). `--force` reprocesses:
 merge ignores its modification-time cache, db deletes and reinserts a
 document's rows, embed evicts and re-adds its vectors. The stage writes
 `document.json`, then rows in SQLite and vectors in the FAISS index,
@@ -198,13 +198,14 @@ environment variables setting a stage's server and model defaults.
 | Visuals | `VLM_MODEL` | `Qwen/Qwen3.5-122B-A10B-FP8` | served model name requested | `docpipe/visuals/config.py:43` |
 | Chunking | `EMBEDDING_BACKEND` | `local` | `local`, `api`, or an import path | `docpipe/embedding/config.py:19` |
 | Chunking | `EMBEDDING_MODEL` | `Qwen/Qwen3-VL-Embedding-8B` | HF model id for every embedding | `docpipe/embedding/config.py:21` |
-| Extraction | `LLM_BASE_URL` | `http://localhost:8000/v1` | harvesting model's endpoint | `docpipe/extraction/runner.py:81` |
-| Extraction | `LLM_MODEL` | `Qwen/Qwen3.8-Flash-Next-FP8` | harvesting model's name | `docpipe/extraction/runner.py:86` |
-| Extraction | `EXTRACT_BATCH_SOURCES` | `6` | sources sharing one harvest request | `docpipe/extraction/runner.py:101` |
+| Extraction | `LLM_BASE_URL` | `http://localhost:8000/v1` | harvesting model's endpoint | `docpipe/extraction/runner.py:82` |
+| Extraction | `LLM_MODEL` | `Qwen/Qwen3.8-Flash-Next-FP8` | harvesting model's name | `docpipe/extraction/runner.py:87` |
+| Extraction | `EXTRACT_BATCH_SOURCES` | `6` | sources sharing one harvest request | `docpipe/extraction/runner.py:102` |
 | App | `INFERENCE_DB_PATH` | profile `db_path`, else `data/KWP.db` | SQLite corpus database, opened read-only | `scripts/inference_app/config.py:61` |
 | App | `INFERENCE_INDEX_PATH` | profile `index_path`, else `data/faiss_index.bin` | FAISS index loaded into memory | `scripts/inference_app/config.py:62` |
 | App | `INFERENCE_KG_TTL_PATH` | profile `root/graph.ttl`, else `data/graph.ttl` | Turtle file from `--serialize` | `scripts/inference_app/config.py:66` |
 | App | `CODE_EXEC_URL` | `""` (off) | calculation sandbox endpoint | `docpipe/inference/config.py:64` |
+| Refinement, visuals, chunking, extraction | `DOCPIPE_USAGE_DB` | `data/usage.db` | SQLite file the token/request counts of that process are flushed to | `docpipe/usage.py:74` |
 
 ## The extraction passes
 

@@ -210,7 +210,7 @@ Reading the tables back out is not this package's job.
   and the app's document picker both select `is_current = 1` documents by
   default, so a superseded document is never harvested or shown, even
   when named explicitly; the app labels a row `(aktuell)` or `(alt)`
-  (`docpipe/extraction/runner.py:3923` to `3942`, docstring;
+  (`docpipe/extraction/runner.py:3931` to `3950`, docstring;
   `docpipe/inference/catalog.py:61` to `83`).
 
 ## Configuration
@@ -265,7 +265,7 @@ Reading the tables back out is not this package's job.
   comment and assertion).
 - Two processed directories with no `Documents` row put 1,096 dead
   vectors into the FAISS index in one run
-  (`docpipe/chunking/pipeline.py:225` to `228`, comment). The embed step
+  (`docpipe/chunking/pipeline.py:226` to `229`, comment). The embed step
   now checks for a document id before embedding, instead of writing
   vectors no `Embeddings` row can resolve and repeating that work next
   run (`docpipe/chunking/database.py:849` to `859`, comment).
