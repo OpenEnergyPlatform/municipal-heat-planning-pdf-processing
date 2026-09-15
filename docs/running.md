@@ -74,9 +74,11 @@ needed.
 
 Every push to `production` builds the image in CI
 (`.github/workflows/image.yml`), runs the test suite inside it and publishes
-it as `ghcr.io/openenergyplatform/municipal-heat-planning-pdf-processing`,
-tagged with the commit (12 characters) and the branch. To build and check it
-by hand, from a clean export of one commit, without a GPU or network:
+it as `ghcr.io/openenergyplatform/municipal-heat-planning-pdf-processing` and,
+with the user and token from the `dockerhub` environment (restricted to
+`production`), as `<user>/docpipe` on Docker Hub, both tagged with the commit
+(12 characters) and the branch. To build and check it by hand, from a clean
+export of one commit, without a GPU or network:
 
 ```bash
 podman build -f docker/Containerfile --build-arg REVISION="$(git rev-parse HEAD)" -t docpipe .
