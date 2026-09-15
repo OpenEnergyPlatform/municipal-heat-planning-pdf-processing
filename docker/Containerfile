@@ -1,0 +1,33 @@
+# The whole pipeline in one image: vLLM's own serving image, with docpipe,
+# the profiles, the scripts and the tests baked in on top. Server and stages
+# share one torch and one CUDA. Weights, data, database, index, outputs and
+# tokens stay outside and are mounted or passed at run time.
+#
+# v0.23.0 with CUDA 12.9 serves Qwen3.5-122B-A10B-FP8. The digest pins the
+# tag's multi-arch index, so a moved tag cannot change what gets built.
+ARG BASE=docker.io/vllm/vllm-openai:v0.23.0-cu129-ubuntu2404@sha256:370670abb329811c4c44c5712dbacc1d03a3b1be87c55fe3dfd62ea4a76f506b
+FROM ${BASE}
+
+# The base image starts `vllm serve`. This one starts nothing on its own:
+# every job line says which of server or stage it runs.
+ENTRYPOINT []
+CMD []
+
+WORKDIR /opt/docpipe
+
+COPY requirements.txt docker/install_requirements.py /tmp/docpipe-build/
+RUN python3 /tmp/docpipe-build/install_requirements.py /tmp/docpipe-build/requirements.txt \
+ && rm -rf /tmp/docpipe-build /root/.cache/pip /root/.cache/uv
+
+COPY docpipe/ docpipe/
+COPY profiles/ profiles/
+COPY scripts/ scripts/
+COPY tests/ tests/
+COPY docker/ docker/
+COPY requirements.txt ./
+
+ARG REVISION=unknown
+LABEL org.opencontainers.image.title="docpipe" \
+      org.opencontainers.image.revision="${REVISION}" \
+      org.opencontainers.image.base.name="docker.io/vllm/vllm-openai:v0.23.0-cu129-ubuntu2404"
+RUN echo "${REVISION}" > /opt/docpipe/IMAGE_REVISION

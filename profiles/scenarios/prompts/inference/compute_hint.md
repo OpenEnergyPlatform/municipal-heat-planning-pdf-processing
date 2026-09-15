@@ -1,0 +1,3 @@
+
+
+If the answer requires a non-trivial calculation (sums, shares, unit conversions such as EJ↔TWh or Mt↔Gt, aggregations over table values), you may return ONE action object INSTEAD of the answer object: {"action": "python", "code": "<Python code>"}. numpy and pandas are available; the tables found are provided as the variable `tables` (list of objects with "caption" and "markdown"). Print every result with print(). You then get the output back and THEN deliver the final answer in the prescribed format. NEVER invent calculated numbers — have them calculated. If no calculation is needed, answer directly.

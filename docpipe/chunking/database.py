@@ -1,9 +1,13 @@
 """
-database.py – Insert sections/tables/images from merged data, and write FAISS
-embedding IDs back. Documents themselves are populated by fileprocessing.
+database.py: Inserts sections, tables and images from merged data,
+and writes FAISS embedding ids back to the database.
 
-The DB (schema: data/KWP.db.sql) is the source of truth for what has been
-embedded and for FAISS id allocation.
+Documents themselves are populated by fileprocessing. The database
+is the source of truth for what has been embedded and for FAISS id
+allocation. Its schema lives only in the database file itself,
+readable with `sqlite3 KWP.db .schema`: a checked-in copy of the
+schema was removed because nothing read it, and an unchecked second
+copy would only record what was once true.
 
 Author: Felix Vossel
 """
@@ -11,14 +15,18 @@ from __future__ import annotations
 
 import json
 import logging
+from collections import Counter
 import re
 import sqlite3
+import threading
 from contextlib import closing
 from pathlib import Path
 from typing import Optional
 
+from docpipe.captions import resolve_title
 from .config import (
     DOCUMENT_JSON,
+    PAGE_TRANSCRIPTION_REPORT_JSON,
     SECTIONS_JSON,
     EMBEDDING_TYPE_SECTION_TEXT,
     EMBEDDING_TYPE_SECTION_TITLE,
@@ -99,12 +107,169 @@ def connect(db_path: Path) -> sqlite3.Connection:
     return conn
 
 
+_thread_state = threading.local()
+
+
+def _worker_connection(db_path: Path) -> sqlite3.Connection:
+    """The calling thread's connection to this DB, opened on first use.
+
+    Each prepare worker asks two questions per document back to back, and every
+    one of them used to cost a connect, two PRAGMAs and a close. One slot per
+    thread: pointing at another database replaces the connection rather than
+    piling connections up.
+    """
+    key = str(db_path)
+    cached = getattr(_thread_state, "conn", None)
+    if cached is not None:
+        if cached[0] == key:
+            return cached[1]
+        cached[1].close()
+    conn = connect(db_path)
+    _thread_state.conn = (key, conn)
+    return conn
+
+
 def _ensure_bbox_columns(connection: sqlite3.Connection) -> None:
     """Add the `bbox` column to Segments/Tables/Images on a DB that predates it."""
     for table in ("Segments", "Tables", "Images"):
         cols = {row[1] for row in connection.execute(f'PRAGMA table_info("{table}")')}
         if "bbox" not in cols:
             connection.execute(f'ALTER TABLE "{table}" ADD COLUMN "bbox" TEXT')
+
+
+def _ensure_page_source_column(connection: sqlite3.Connection) -> None:
+    """Add `page_text_transcribed` to Documents on a DB that predates it."""
+    cols = {row[1] for row in connection.execute('PRAGMA table_info("Documents")')}
+    if "page_text_transcribed" not in cols:
+        connection.execute(
+            'ALTER TABLE "Documents" ADD COLUMN "page_text_transcribed" INTEGER')
+
+
+def _ensure_caption_source_column(connection: sqlite3.Connection) -> None:
+    """Add `caption_source` to Tables/Images on a DB that predates it."""
+    for table in ("Tables", "Images"):
+        cols = {row[1] for row in connection.execute(f'PRAGMA table_info("{table}")')}
+        if "caption_source" not in cols:
+            connection.execute(
+                f'ALTER TABLE "{table}" ADD COLUMN "caption_source" TEXT')
+
+
+def enrich_page_source(db_path: Path, root_dir: Path,
+                       *, force: bool = False) -> dict:
+    """Record, per document, how many of its pages the MODEL read.
+
+    Eleven plans of the heat-plan corpus have no PDF text layer. Stage 1
+    renders those pages and a model transcribes them, and from there Stage 2,
+    Stage 3, refinement, chunking and embedding run unchanged and know nothing
+    about where the text came from. The section text of those plans is
+    therefore itself a model reading, and so is every quote verified against
+    it -- a passage can be found, be shown, and still be a transcription of
+    something the page did not say.
+
+    The count already exists: preprocessing writes it per document. It just
+    never reached the database, so nothing downstream could tell the two
+    kinds of plan apart. Additive, no model, one JSON read per directory.
+    """
+    root_dir = Path(root_dir)
+    stats = {"documents": 0, "transcribed": 0, "pages": 0}
+    candidates = sorted(
+        d for d in root_dir.iterdir()
+        if d.is_dir() and (d / PAGE_TRANSCRIPTION_REPORT_JSON).exists())
+    if not candidates:
+        log.warning("enrich-page-source: no transcription report under '%s'.",
+                    root_dir)
+        return stats
+
+    cond = "" if force else " AND page_text_transcribed IS NULL"
+    with closing(connect(db_path)) as conn:
+        _ensure_page_source_column(conn)
+        for pdf_dir in candidates:
+            doc_id = _resolve_document_id(pdf_dir.name, conn)
+            if doc_id is None:
+                continue
+            try:
+                with open(pdf_dir / PAGE_TRANSCRIPTION_REPORT_JSON,
+                          "r", encoding="utf-8") as f:
+                    report = json.load(f)
+            except (OSError, ValueError) as exc:
+                log.warning("enrich-page-source: %s unreadable: %s",
+                            pdf_dir.name, exc)
+                continue
+            pages = int(report.get("pages_transcribed") or 0)
+            changed = conn.execute(
+                "UPDATE Documents SET page_text_transcribed = ? "
+                f"WHERE id = ?{cond}", (pages, doc_id)).rowcount
+            if changed:
+                stats["documents"] += 1
+                stats["pages"] += pages
+                if pages:
+                    stats["transcribed"] += 1
+        conn.commit()
+    log.info("enrich-page-source: %d document(s), %d of them model-read "
+             "(%d page(s))", stats["documents"], stats["transcribed"],
+             stats["pages"])
+    return stats
+
+
+def enrich_caption(db_path: Path, *, force: bool = False) -> dict:
+    """Give every table and figure the sentence that names it. No model.
+
+    Stage 2 links a caption block to a table by distance and, in a plan whose
+    tables carry a rounding footnote, links the footnote: 15 of Kassel's 89
+    tables were captioned "Hinweis: Wegen der Rundung von Zahlenwerten ...".
+    The caption is the only line of a table a model can quote for the table's
+    own year, and 240 of 379 tuples from the twelve titled tables carried a
+    year read off another table's caption.
+
+    Stage 3 settles this at write time now, but the corpus was built before
+    that and re-preprocessing 1.082 plans costs GPU days. The rule is a pure
+    function of the section text and the placeholder, so it runs here over
+    the finished database instead: one pass, no model, additive.
+
+    `caption_source` records what happened to each row -- 'stage' when the
+    stored caption was kept, 'section_text' when it was replaced -- and is
+    the resume marker: without `force` a row that already has it is skipped,
+    so a second run updates nothing.
+
+    What it does not reach is the vectors. A table is embedded as caption +
+    markdown, and that text is built from the merged JSON, not from here, so
+    a row marked 'section_text' is a row whose stored vector still encodes
+    the footnote. It is not a regression -- the vector is the one that was
+    always there -- and what a reader and the model are shown is now right.
+    The vector follows when the plan is preprocessed again, where Stage 3
+    settles the caption before anything is embedded.
+    """
+    stats = {"documents": 0, "tables": 0, "images": 0, "resolved": 0}
+    cond = "" if force else " AND i.caption_source IS NULL"
+    with closing(connect(db_path)) as conn:
+        _ensure_caption_source_column(conn)
+        documents = [row[0] for row in
+                     conn.execute("SELECT id FROM Documents ORDER BY id")]
+        for doc_id in documents:
+            touched = False
+            for table, key in (("Tables", "tables"), ("Images", "images")):
+                rows = conn.execute(
+                    f"SELECT i.id, i.block_id, i.caption, s.content "
+                    f"FROM {table} i JOIN Sections s ON i.section = s.id "
+                    f"WHERE s.document = ?{cond}",
+                    (doc_id,)).fetchall()
+                for row_id, block_id, caption, content in rows:
+                    title = resolve_title(caption, content, block_id)
+                    source = "stage" if title == caption else "section_text"
+                    conn.execute(
+                        f"UPDATE {table} SET caption = ?, caption_source = ? "
+                        f"WHERE id = ?", (title, source, row_id))
+                    stats[key] += 1
+                    if source == "section_text":
+                        stats["resolved"] += 1
+                    touched = True
+            if touched:
+                stats["documents"] += 1
+        conn.commit()
+    log.info("enrich-caption: %d document(s), %d table(s) + %d figure(s) seen, "
+             "%d title(s) taken from the section text", stats["documents"],
+             stats["tables"], stats["images"], stats["resolved"])
+    return stats
 
 
 def _bbox_json(item: dict) -> Optional[str]:
@@ -218,6 +383,10 @@ def _insert_sections(
     """
     Insert all sections (with page provenance), tables and images for one
     document. Sections are numbered by their index in the sections list.
+
+    A section's children go out per statement, not per row: the corpus holds
+    hundreds of thousands of segments and one execute() each is that many
+    round trips into sqlite for nothing.
     """
     # Segments.page / SectionPages.page are FKs to Pages.id, not page numbers.
     page_cache: dict[int, int] = {}
@@ -236,15 +405,18 @@ def _insert_sections(
         section_id = cursor.lastrowid
 
         # SectionPages: the distinct pages this chunk covers.
+        page_rows = []
         for pno in section.get("pages", []) or []:
             pid = _page_id(document_id, pno, connection, page_cache)
             if pid is not None:
-                connection.execute(
-                    "INSERT OR IGNORE INTO SectionPages (section, page) VALUES (?, ?)",
-                    (section_id, pid),
-                )
+                page_rows.append((section_id, pid))
+        connection.executemany(
+            "INSERT OR IGNORE INTO SectionPages (section, page) VALUES (?, ?)",
+            page_rows,
+        )
 
         # Segments: ordered, page-tagged content pieces (fine provenance).
+        segment_rows = []
         for ordinal, seg in enumerate(section.get("segments", []) or []):
             if not isinstance(seg, dict):
                 continue
@@ -254,28 +426,31 @@ def _insert_sections(
             kind = seg.get("kind")
             if kind not in ("text", "table", "figure"):
                 continue
-            connection.execute(
-                "INSERT INTO Segments (section, ordinal, page, kind, ref, text, bbox) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            segment_rows.append(
                 (section_id, ordinal, pid, kind, seg.get("ref"), seg.get("text"),
-                 _bbox_json(seg)),
+                 _bbox_json(seg))
             )
+        connection.executemany(
+            "INSERT INTO Segments (section, ordinal, page, kind, ref, text, bbox) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            segment_rows,
+        )
 
-        for t in section.get("tables", []):
-            connection.execute(
-                "INSERT INTO Tables (section, block_id, path, page_number, caption, markdown, bbox) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?)",
-                (section_id, t.get("id"), t.get("path", ""), t.get("page_number"),
-                 t.get("caption"), t.get("markdown"), _bbox_json(t)),
-            )
+        connection.executemany(
+            "INSERT INTO Tables (section, block_id, path, page_number, caption, markdown, bbox) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            [(section_id, t.get("id"), t.get("path", ""), t.get("page_number"),
+              t.get("caption"), t.get("markdown"), _bbox_json(t))
+             for t in section.get("tables", [])],
+        )
 
-        for fig in section.get("figures", []):
-            connection.execute(
-                "INSERT INTO Images (section, block_id, path, page_number, caption, description, bbox) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?)",
-                (section_id, fig.get("id"), fig.get("path", ""), fig.get("page_number"),
-                 fig.get("caption"), fig.get("description"), _bbox_json(fig)),
-            )
+        connection.executemany(
+            "INSERT INTO Images (section, block_id, path, page_number, caption, description, bbox) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            [(section_id, fig.get("id"), fig.get("path", ""), fig.get("page_number"),
+              fig.get("caption"), fig.get("description"), _bbox_json(fig))
+             for fig in section.get("figures", [])],
+        )
 
 
 def update_database(
@@ -463,31 +638,37 @@ def enrich_bbox(db_path: Path, root_dir: Path, *, force: bool = False) -> dict:
 def get_existing_embeddings(
     db_path: Path,
     pdf_name: str,
+    *,
+    doc_id: Optional[int] = None,
 ) -> set[tuple[str, int, Optional[str]]]:
     """
     Items of this PDF that already have embeddings, as a set of
     (embedding_type, section_index, item_id) — item_id is the table/figure
     block id, None for section-level embeddings. Empty if the doc is unknown.
+
+    Runs on the calling thread's connection. Pass `doc_id` when the caller has
+    already resolved it — the prepare loop asks document_id() first.
     """
     existing: set[tuple[str, int, Optional[str]]] = set()
 
-    with closing(connect(db_path)) as conn:
+    conn = _worker_connection(db_path)
+    if doc_id is None:
         doc_id = _resolve_document_id(pdf_name, conn)
-        if doc_id is None:
-            return existing
+    if doc_id is None:
+        return existing
 
-        for section_number, etype in conn.execute(_EXISTING_SECTION_SQL, (doc_id,)):
-            existing.add((etype, section_number, None))
+    for section_number, etype in conn.execute(_EXISTING_SECTION_SQL, (doc_id,)):
+        existing.add((etype, section_number, None))
 
-        for section_number, block_id, etype in conn.execute(
-            _EXISTING_TABLE_SQL, (doc_id,)
-        ):
-            existing.add((etype, section_number, block_id))
+    for section_number, block_id, etype in conn.execute(
+        _EXISTING_TABLE_SQL, (doc_id,)
+    ):
+        existing.add((etype, section_number, block_id))
 
-        for section_number, block_id, etype in conn.execute(
-            _EXISTING_FIGURE_SQL, (doc_id,)
-        ):
-            existing.add((etype, section_number, block_id))
+    for section_number, block_id, etype in conn.execute(
+        _EXISTING_FIGURE_SQL, (doc_id,)
+    ):
+        existing.add((etype, section_number, block_id))
 
     return existing
 
@@ -527,6 +708,53 @@ def get_document_faiss_ids(db_path: Path, pdf_name: str) -> list[int]:
         return _document_faiss_ids(doc_id, conn)
 
 
+def document_id(db_path: Path, pdf_name: str) -> Optional[int]:
+    """The Documents row id for this processed directory, or None.
+
+    Asked BEFORE embedding: a directory whose document was never registered
+    (renamed in the register, an import that failed, a leftover from an older
+    corpus) produces perfectly good vectors that no row can ever point at.
+
+    Shares the calling thread's connection with get_existing_embeddings, which
+    the prepare loop calls straight afterwards.
+    """
+    return _resolve_document_id(pdf_name, _worker_connection(db_path))
+
+
+def drop_embeddings_missing_from_index(db_path: Path, known_ids) -> int:
+    """Delete Embeddings rows whose vector is not in the index. Returns the count.
+
+    A DB row is written per batch, the index is persisted per flush chunk, so a
+    crash between the two (an OOM kill, a node failure, a timeout) leaves rows
+    pointing at vectors that never reached the file. The next run reads those
+    rows as "already embedded" and skips the item forever: the DB says it is
+    searchable, the index has nothing, and no error is ever raised. Reconciling
+    at startup turns that silent hole into re-work.
+
+    An EMPTY index is not treated as "nothing is embedded" — that is what a
+    mistyped index path looks like, and it would delete every row in the
+    database. It is refused loudly instead.
+    """
+    known = {int(i) for i in known_ids}
+    if not known:
+        log.warning("index holds no vectors — skipping the embedding "
+                    "reconciliation instead of dropping every row")
+        return 0
+    with closing(connect(db_path)) as conn:
+        conn.execute("CREATE TEMP TABLE known_ids (faiss_id INTEGER PRIMARY KEY)")
+        conn.executemany("INSERT OR IGNORE INTO known_ids VALUES (?)",
+                         ((i,) for i in known))
+        dropped = conn.execute(
+            "DELETE FROM Embeddings WHERE faiss_id NOT IN "
+            "(SELECT faiss_id FROM known_ids)").rowcount
+        conn.commit()
+    if dropped:
+        log.warning("%d embedding row(s) had no vector in the index (a crash "
+                    "between the DB write and the index save) — cleared, they "
+                    "will be embedded again", dropped)
+    return int(dropped)
+
+
 def next_faiss_id(db_path: Path) -> int:
     """
     Smallest FAISS id not currently claimed by any Embeddings row.
@@ -542,6 +770,144 @@ def next_faiss_id(db_path: Path) -> int:
     return int(row[0])
 
 
+_EMBEDDING_UPSERT_SQL = (
+    "INSERT INTO Embeddings (faiss_id, embedding_type, owner_kind, owner_id) "
+    "VALUES (?, ?, ?, ?) "
+    "ON CONFLICT(owner_kind, owner_id, embedding_type) "
+    "DO UPDATE SET faiss_id = excluded.faiss_id"
+)
+
+
+class EmbeddingWriter:
+    """Writes FAISS ids for many batches and many documents over one connection.
+
+    Batches are packed by text length and straddle documents freely, so a
+    connection per (batch, document) pair came to roughly one connect, two
+    PRAGMAs and a document lookup per embedding. What a document's rows are
+    called cannot change while it is being embedded, so every lookup here is
+    read once per document and kept.
+    """
+
+    def __init__(self, db_path: Path):
+        self._conn = connect(db_path)
+        self._doc_ids: dict[str, Optional[int]] = {}
+        self._sections: dict[int, dict[int, int]] = {}
+        self._blocks: dict[tuple[int, str], dict[tuple[int, Optional[str]], int]] = {}
+
+    def __enter__(self) -> "EmbeddingWriter":
+        return self
+
+    def __exit__(self, *exc) -> None:
+        self.close()
+
+    def close(self) -> None:
+        self._conn.close()
+
+    def _document_id(self, pdf_name: str) -> Optional[int]:
+        if pdf_name not in self._doc_ids:
+            self._doc_ids[pdf_name] = _resolve_document_id(pdf_name, self._conn)
+        return self._doc_ids[pdf_name]
+
+    def _section_ids(self, doc_id: int) -> dict[int, int]:
+        """section_number → Sections.id, one query for the whole document."""
+        cached = self._sections.get(doc_id)
+        if cached is None:
+            cached = self._sections[doc_id] = dict(self._conn.execute(
+                "SELECT section_number, id FROM Sections WHERE document = ?",
+                (doc_id,),
+            ))
+        return cached
+
+    def _block_ids(self, doc_id: int, table: str) -> dict[tuple[int, Optional[str]], int]:
+        """(Sections.id, block_id) → row id for one document's Tables or Images.
+
+        The subquery keeps this one statement per document however many sections
+        it has; a parameter list would run into SQLite's variable limit.
+        """
+        key = (doc_id, table)
+        cached = self._blocks.get(key)
+        if cached is None:
+            cached = self._blocks[key] = {
+                (section, block_id): row_id
+                for section, block_id, row_id in self._conn.execute(
+                    f"SELECT section, block_id, id FROM {table} WHERE section IN "
+                    "(SELECT id FROM Sections WHERE document = ?)",
+                    (doc_id,),
+                )
+            }
+        return cached
+
+    def write(
+        self,
+        pdf_name: str,
+        records: list[tuple[str, int, Optional[str], int]],
+    ) -> None:
+        """Write one document's share of a batch; see write_embedding_ids_batch."""
+        if not records:
+            return
+
+        doc_id = self._document_id(pdf_name)
+        if doc_id is None:
+            # This return used to be silent, and it cost 1096 vectors on every
+            # single run: the batch is already IN the FAISS index by the time
+            # this is called, so dropping its rows leaves that many vectors
+            # nothing can resolve, and the next run embeds the same document
+            # again. The embed step now skips such documents up front; this
+            # stays as the backstop and says so out loud.
+            log.error(
+                "%s: no Documents row — %d embedding(s) already in the FAISS "
+                "index have no row to hang off and cannot be found again. "
+                "Register the document or remove its processed directory.",
+                pdf_name, len(records))
+            return
+
+        sections = self._section_ids(doc_id)
+        rows: list[tuple] = []
+        unresolved: list[tuple] = []
+
+        for embedding_type, section_index, item_id, faiss_id in records:
+            section_db_id = sections.get(section_index)
+            if section_db_id is None:
+                unresolved.append((embedding_type, item_id))
+                continue
+
+            if embedding_type in _SECTION_TYPES:
+                owner_kind, owner_id = "section", section_db_id
+            elif embedding_type in _TABLE_TYPES:
+                owner_kind = "table"
+                owner_id = self._block_ids(doc_id, "Tables").get(
+                    (section_db_id, item_id))
+            elif embedding_type in _FIGURE_TYPES:
+                owner_kind = "figure"
+                owner_id = self._block_ids(doc_id, "Images").get(
+                    (section_db_id, item_id))
+            else:
+                continue
+
+            if owner_id is None:
+                # The vector is in FAISS but has no row to hang off: a search
+                # can return it and nothing can say what it is. Counted and
+                # reported below rather than skipped in silence.
+                unresolved.append((embedding_type, item_id))
+                continue
+
+            rows.append((faiss_id, embedding_type, owner_kind, owner_id))
+
+        self._conn.executemany(_EMBEDDING_UPSERT_SQL, rows)
+
+        if unresolved:
+            kinds = Counter(t for t, _ in unresolved)
+            log.warning(
+                "%s: %d of %d embeddings have no owner row (%s). Those vectors "
+                "stay in the FAISS index with nothing in the database to "
+                "explain them — a search can return one and get no answer.",
+                pdf_name, len(unresolved), len(records),
+                ", ".join(f"{k}={n}" for k, n in sorted(kinds.items())),
+            )
+
+        self._conn.commit()
+
+
 def write_embedding_ids_batch(
     db_path: Path,
     pdf_name: str,
@@ -551,61 +917,16 @@ def write_embedding_ids_batch(
     Write FAISS embedding ids to the DB in one transaction.
 
     `records` are (embedding_type, section_index, item_id, faiss_id); item_id is
-    the table/figure block id, None for sections. Records whose owner row cannot
-    be resolved are skipped silently.
+    the table/figure block id, None for sections. Records whose owner row
+    cannot be resolved are skipped and counted — the vector is already in the
+    FAISS index, so skipping one means index and database have drifted apart,
+    which is worth a line in the log rather than silence.
+
+    One-shot wrapper. The embed loop keeps a single EmbeddingWriter for the
+    whole chunk instead of reconnecting per batch and document.
     """
     if not records:
         return
 
-    with closing(connect(db_path)) as conn:
-        doc_id = _resolve_document_id(pdf_name, conn)
-        if doc_id is None:
-            return
-
-        section_id_cache: dict[int, Optional[int]] = {}
-
-        def _section_id(section_index: int) -> Optional[int]:
-            if section_index not in section_id_cache:
-                row = conn.execute(
-                    "SELECT id FROM Sections WHERE document = ? AND section_number = ?",
-                    (doc_id, section_index),
-                ).fetchone()
-                section_id_cache[section_index] = row[0] if row else None
-            return section_id_cache[section_index]
-
-        for embedding_type, section_index, item_id, faiss_id in records:
-            section_db_id = _section_id(section_index)
-            if section_db_id is None:
-                continue
-
-            if embedding_type in _SECTION_TYPES:
-                owner_kind, owner_id = "section", section_db_id
-            elif embedding_type in _TABLE_TYPES:
-                owner_kind = "table"
-                row = conn.execute(
-                    "SELECT id FROM Tables WHERE section = ? AND block_id = ?",
-                    (section_db_id, item_id),
-                ).fetchone()
-                owner_id = row[0] if row else None
-            elif embedding_type in _FIGURE_TYPES:
-                owner_kind = "figure"
-                row = conn.execute(
-                    "SELECT id FROM Images WHERE section = ? AND block_id = ?",
-                    (section_db_id, item_id),
-                ).fetchone()
-                owner_id = row[0] if row else None
-            else:
-                continue
-
-            if owner_id is None:
-                continue
-
-            conn.execute(
-                "INSERT INTO Embeddings (faiss_id, embedding_type, owner_kind, owner_id) "
-                "VALUES (?, ?, ?, ?) "
-                "ON CONFLICT(owner_kind, owner_id, embedding_type) "
-                "DO UPDATE SET faiss_id = excluded.faiss_id",
-                (faiss_id, embedding_type, owner_kind, owner_id),
-            )
-
-        conn.commit()
+    with EmbeddingWriter(db_path) as writer:
+        writer.write(pdf_name, records)

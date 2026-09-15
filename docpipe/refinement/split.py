@@ -1,16 +1,29 @@
 """
-split.py – Cutting a section that is too long to be one retrieval chunk.
+split.py: Cuts a section too long to be one retrieval chunk into
+several, each a self-contained citation unit.
 
-A section is one chunk and one vector. Past a certain length that vector stops
-meaning anything in particular, and past the embedding model's token limit the
-tail is not indexed at all. Such a section has to become several.
+A section is one chunk and one vector. Past a certain length that
+vector stops meaning anything in particular, and past the embedding
+model's token limit the tail is not indexed at all, so an oversized
+section has to become several.
 
-The model is never asked to reproduce the text — only to say WHERE it would cut
-and what to call the parts. The cut itself happens mechanically at segment
-boundaries, which is what makes this safe: nothing is rephrased, dropped or
-invented, and each part keeps exactly the pages, tables and figures that belong
-to its own text. It also keeps the call small, since a section long enough to
-need splitting is by definition too long to echo.
+The model is asked only where it would cut and what to call the
+parts, never to reproduce the text. The cut itself happens
+mechanically at segment boundaries, which is what makes it safe:
+nothing is rephrased, dropped or invented, and each part keeps
+exactly the pages, tables and figures that belong to its own text.
+Asking only for an outline also keeps the call small, since a section
+long enough to need splitting is by definition too long to echo.
+When no cut is asked for, or the reply is unusable, a mechanical
+fallback cuts at even word-count intervals instead, dropping a cut
+that would leave a sliver under about 100 words.
+
+A part still over the configured word limit after this pass is cut
+again against a lower target; a single segment carrying the whole
+overflow is first divided into smaller ones so that a boundary exists
+to cut at. A section whose segments no longer reproduce its own
+content, because refinement rewrote it, is left oversized rather than
+cut at a guessed position.
 
 Author: Felix Vossel
 """
@@ -19,11 +32,13 @@ from __future__ import annotations
 import json
 import logging
 import re
+from concurrent.futures import ThreadPoolExecutor
 from typing import Callable, Optional
 
 from docpipe import prompts
 
 from .config import (
+    LLM_NUM_PARALLEL,
     SECTION_MAX_WORDS,
     SECTION_OUTLINE_WORDS,
     SECTION_SPLIT_ENABLE,
@@ -31,6 +46,10 @@ from .config import (
 )
 
 log = logging.getLogger(__name__)
+
+# "nobody has asked the model yet", as against a call that came back with
+# nothing. Only the first may still place a call.
+_UNASKED = object()
 
 _SPLIT = prompts.load("refinement/split")
 SPLIT_PROMPT = _SPLIT.text
@@ -172,11 +191,27 @@ def apply_cuts(section: dict, cuts: list, first_title: Optional[str] = None) -> 
     return parts or [section]
 
 
-def split_section(section: dict, ask: Optional[Callable] = None) -> list:
+def _ask_cuts(section: dict, ask: Callable):
+    """Where the model would cut *section*, as its raw reply; None if it failed.
+
+    The whole blocking part of a split, and it depends on nothing but this one
+    section — which is what lets split_oversized run them together.
+    """
+    try:
+        return ask(prompts.text("refinement/split", target=SECTION_TARGET_WORDS),
+                   f"TITLE: {section.get('title') or ''}\n\nOUTLINE:\n{outline(section)}")
+    except Exception as e:                           # any failure → mechanical
+        log.warning("Split call failed for %r: %s", section.get("title"), e)
+        return None
+
+
+def split_section(section: dict, ask: Optional[Callable] = None,
+                  reply=_UNASKED) -> list:
     """
     Split one oversized section. *ask* takes the rendered prompt and returns the
     model's raw reply; without it (or when the reply is unusable) the section is
-    cut mechanically at even intervals.
+    cut mechanically at even intervals. *reply* hands in an answer fetched
+    earlier (see split_oversized); then *ask* is not called at all.
     """
     if not _rebuild_matches(section):
         log.warning(
@@ -188,15 +223,15 @@ def split_section(section: dict, ask: Optional[Callable] = None) -> list:
 
     n = len(section.get("segments") or [])
     cuts, first_title = [], None
-    if ask is not None:
+    if reply is _UNASKED:
+        reply = _ask_cuts(section, ask) if ask is not None else None
+    if reply is not None:
         try:
-            reply = ask(prompts.text("refinement/split", target=SECTION_TARGET_WORDS),
-                        f"TITLE: {section.get('title') or ''}\n\nOUTLINE:\n{outline(section)}")
             parsed = json.loads(reply) if isinstance(reply, str) else (reply or {})
             cuts = _sanitize(parsed.get("cuts"), n, section)
             first_title = (parsed.get("first_title") or "").strip() or None
         except Exception as e:                       # any failure → mechanical
-            log.warning("Split call failed for %r: %s", section.get("title"), e)
+            log.warning("Split reply unusable for %r: %s", section.get("title"), e)
 
     if not cuts:
         cuts = _sanitize(_even_cuts(section), n, section)
@@ -212,20 +247,120 @@ def split_section(section: dict, ask: Optional[Callable] = None) -> list:
     return parts
 
 
+def _subdivide_segments(section: dict, target: int) -> bool:
+    """Cut text segments longer than *target* into smaller ones, in place.
+
+    Sections are cut at segment boundaries, so a section whose text sits in one
+    long segment has nowhere to be cut and stays oversized however often it is
+    asked — 51 sections in one ar6 run, up to 1409 words against a 1000 limit,
+    and three of those in a window is what the model then had to hand back.
+
+    A text segment's page and kind are unchanged by the cut, so provenance is
+    not lost here; it only gets finer. Placeholders (a table or figure ref)
+    have no text to divide and are left alone.
+    """
+    segments = section.get("segments") or []
+    if not segments:
+        return False
+    out, changed = [], False
+    for seg in segments:
+        words = (seg.get("text") or "").split() if seg.get("kind") == "text" else []
+        if len(words) <= target:
+            out.append(seg)
+            continue
+        for i in range(0, len(words), target):
+            piece = dict(seg)
+            piece["text"] = " ".join(words[i:i + target])
+            out.append(piece)
+        changed = True
+    if changed:
+        section["segments"] = out
+    return changed
+
+
+def _enforce_max(part: dict, max_words: int) -> list:
+    """Cut *part* down until every piece fits *max_words*.
+
+    The model is asked for readable boundaries, not for a bound, and it does
+    return parts over the limit — an 11596-word section came back as 10 parts
+    with one of 2392. Without this, max_words is a suggestion, and any context
+    budget resting on it (config.max_request_tokens) is fiction.
+    """
+    # Aim below the limit, not at it: a cut lands on a segment boundary, so the
+    # piece is the target plus whatever the straddling segment adds.
+    target = min(SECTION_TARGET_WORDS, max(1, max_words // 2))
+    out, queue = [], [part]
+    while queue:
+        piece = queue.pop(0)
+        if not needs_split(piece, max_words):
+            out.append(piece)
+            continue
+        rebuildable = _rebuild_matches(piece)
+        cuts = (_sanitize(_even_cuts(piece, target=target),
+                          len(piece.get("segments") or []), piece)
+                if rebuildable else [])
+        if not cuts and rebuildable and _subdivide_segments(piece, target):
+            # No boundary to cut on because one segment carries the overflow.
+            # Give it boundaries, then ask again.
+            cuts = _sanitize(_even_cuts(piece, target=target),
+                             len(piece.get("segments") or []), piece)
+        if not cuts:
+            # Left only when the segments no longer rebuild the content —
+            # refinement rewrote it, and cutting at a guessed position would
+            # attach text to the wrong page.
+            log.warning(
+                "Section %r stays at %d words (limit %d): its segments no "
+                "longer rebuild its content, so there is no safe cut.",
+                piece.get("title"), word_count(piece.get("content")), max_words)
+            out.append(piece)
+            continue
+        queue.extend(apply_cuts(piece, cuts))
+    return out
+
+
+def _ask_all_cuts(sections: list, ask: Optional[Callable],
+                  max_words: int) -> dict:
+    """Every split call the document needs, at once; replies by section index.
+
+    Asked serially this phase held exactly one request in flight per document,
+    and it runs to completion before the windows are dispatched. A section that
+    cannot be cut along its segments is skipped rather than asked about.
+    """
+    if ask is None:
+        return {}
+    todo = [i for i, s in enumerate(sections)
+            if needs_split(s, max_words) and _rebuild_matches(s)]
+    if not todo:
+        return {}
+    with ThreadPoolExecutor(max_workers=min(LLM_NUM_PARALLEL, len(todo))) as pool:
+        return dict(zip(todo, pool.map(lambda i: _ask_cuts(sections[i], ask), todo)))
+
+
 def split_oversized(sections: list, ask: Optional[Callable] = None,
                     max_words: int = SECTION_MAX_WORDS) -> list:
     """Split every section longer than *max_words*; returns the new list."""
     if not SECTION_SPLIT_ENABLE:
         return sections
-    out, n_split = [], 0
-    for section in sections:
+    replies = _ask_all_cuts(sections, ask, max_words)
+    out, n_split, n_recut = [], 0, 0
+    for i, section in enumerate(sections):
         if needs_split(section, max_words):
-            parts = split_section(section, ask)
+            # The cuts are applied in the original order, so the outcome is the
+            # one the serial version produced.
+            parts = split_section(section, ask, reply=replies.get(i, _UNASKED))
             n_split += len(parts) > 1
-            out.extend(parts)
+            bounded = []
+            for part in parts:
+                pieces = _enforce_max(part, max_words)
+                n_recut += len(pieces) > 1
+                bounded.extend(pieces)
+            out.extend(bounded)
         else:
             out.append(section)
     if n_split:
         log.info("Stage 4: split %d oversized section(s) → %d sections",
                  n_split, len(out))
+    if n_recut:
+        log.info("Stage 4: re-cut %d part(s) the model left over the limit",
+                 n_recut)
     return out

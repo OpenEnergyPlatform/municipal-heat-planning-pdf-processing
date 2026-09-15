@@ -1,4 +1,8 @@
 """Mixed precision and the render prefetch of Stage 2 — no GPU, no model."""
+import conftest
+
+conftest.needs_real("torch")
+
 import threading
 import time
 

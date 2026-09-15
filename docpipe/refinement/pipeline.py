@@ -1,8 +1,15 @@
 """
-pipeline.py – Orchestration of the text-refinement module.
+pipeline.py: Orchestrates the textrefinement stage.
 
-Refines one document directory, or every document subdirectory under a
-processed root (--batch). See ``_build_parser`` for the CLI.
+Refines one document directory, or every document subdirectory under
+a processed root with `--batch`, sending each document's Stage 3
+sections through the LLM refinement pass in refine.py.
+`_build_parser` lists the CLI flags.
+
+Before refining, `assert_serving` (docpipe.llm_preflight) checks that
+the configured LLM server accepts a request of the worst-case size
+this stage can send, so an undersized server is caught before the
+first document rather than mid-run.
 
 Author: Felix Vossel
 """
@@ -17,11 +24,13 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Optional
 
-from docpipe import prompts
+from docpipe import prompts, usage
+from docpipe.llm_preflight import assert_serving
 from docpipe.profile import add_profile_argument, resolve_profile
 
-from .config import (DIR_RESULTS, SECTIONS_REFINED_JSON, PROMPT_IDS,
-                     SECTIONS_JSON)
+from .config import (DIR_RESULTS, LLM_API_KEY, LLM_BASE_URL, LLM_MODEL,
+                     SECTIONS_REFINED_JSON, PROMPT_IDS, SECTIONS_JSON,
+                     max_request_tokens)
 from .refine import run_refine
 
 log = logging.getLogger(__name__)
@@ -150,6 +159,11 @@ def run(
 ) -> Optional[dict] | dict[str, bool]:
     """Entry point: auto-selects single or batch mode."""
     input_path = Path(input_path)
+    # Before the first document, not after the first failure: a server with too
+    # little context rejects requests mid-run, and the affected windows quietly
+    # keep their raw text.
+    assert_serving(LLM_BASE_URL, LLM_API_KEY, LLM_MODEL, max_request_tokens(),
+                   what="refinement")
     if batch:
         return run_batch(input_path, force=force, force_stale=force_stale)
     return run_single(input_path, force=force, force_stale=force_stale)
@@ -193,6 +207,11 @@ Examples:
         "--force", action="store_true",
         help="Re-refine even if %s already exists" % SECTIONS_REFINED_JSON,
     )
+    p.add_argument(
+        "--print-context-budget", action="store_true",
+        help="Print the worst-case tokens one request needs, then exit "
+             "(feed it to the server's --max-model-len)",
+    )
     add_profile_argument(p)
     p.add_argument(
         "--log-level", default="INFO",
@@ -212,12 +231,22 @@ def main() -> None:
     )
 
     profile = resolve_profile(args)
+    usage.begin("refinement")
+
+    # Lets the job script derive --max-model-len from the code instead of
+    # restating it in a comment that nothing checks.
+    if args.print_context_budget:
+        print(max_request_tokens())
+        sys.exit(0)
+
     if args.input is None:
         if profile is None:
             raise SystemExit("give an input path or a --profile to take it from")
         args.input = str(profile.processed_dir)
 
     try:
+        assert_serving(LLM_BASE_URL, LLM_API_KEY, LLM_MODEL,
+                       max_request_tokens(), what="refinement")
         if args.batch:
             results = run_batch(Path(args.input), force=args.force,
                                 force_stale=args.force_stale)

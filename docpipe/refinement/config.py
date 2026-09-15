@@ -11,7 +11,9 @@ from pathlib import Path
 from re import compile
 
 from docpipe import prompts
+from docpipe.profile import active_profile
 from docpipe.artifacts import (DIR_RESULTS,               # noqa: F401  (re-exported)
+                               REFINEMENT_REPORT_JSON,    # output (what failed)
                                SECTIONS_JSON,             # input
                                SECTIONS_REFINED_JSON)     # output
 
@@ -28,7 +30,14 @@ LLM_TIMEOUT  = float(os.environ.get("LLM_TIMEOUT", "180"))
 LLM_NUM_PARALLEL = int(os.environ.get("LLM_NUM_PARALLEL", "8"))
 
 MAX_RETRIES = 4
-WINDOW_SIZE = 3  # sections per LLM call
+
+# Sections per LLM call — the one lever that decides how much context a corpus
+# needs. It had neither an env override nor a profile hook, so a corpus with
+# long sections left only one response: make the server bigger. The profile may
+# say otherwise; without a say, three.
+WINDOW_SIZE = int(os.environ.get(
+    "REFINE_WINDOW_SIZE",
+    (active_profile() and active_profile().component("refinement", "WINDOW_SIZE")) or 3))
 
 # ── Oversized sections ─────────────────────────────────────────────────────
 # A section is one retrieval chunk and one vector. Above SECTION_MAX_WORDS it
@@ -50,15 +59,74 @@ SURROGATES = compile(r"[\uD800-\uDFFF]")
 # ---------------------------------------------------------------------------
 # System prompt for the LLM
 # ---------------------------------------------------------------------------
-PROMPT_IDS = ("refinement/refine", "refinement/split")
+# Ask the model for the changes instead of the whole section. Measured over 60
+# ar6 documents: 28% of sections came back byte-identical, the median section
+# was 99% unchanged, and only 166 of 4887 were real conversions — the stage was
+# paying output tokens, the expensive kind, to retype its own input.
+# Off by default: the two modes use different prompts, so switching marks every
+# cached document stale (correctly — its output came from the other prompt).
+REFINE_RETURN_CORRECTIONS = os.environ.get(
+    "REFINE_RETURN_CORRECTIONS", "0").strip().lower() in ("1", "true", "yes", "on")
 
-_REFINE = prompts.load("refinement/refine")
+# Only the prompt actually in use is versioned, or merely having the second one
+# on disk would count as a change against every stored result.
+PROMPT_IDS = (("refinement/refine_corrections" if REFINE_RETURN_CORRECTIONS
+               else "refinement/refine"), "refinement/split")
+
+# Both spelled out, so the architecture test can still find them by AST.
+_REFINE = (prompts.load("refinement/refine_corrections") if REFINE_RETURN_CORRECTIONS
+           else prompts.load("refinement/refine"))
 SYSTEM_PROMPT = _REFINE.text
 # Sampling belongs to the prompt, so both travel together in the .md front matter.
 LLM_TEMPERATURE = float(os.environ.get("LLM_TEMPERATURE",
                                        _REFINE.meta.get("temperature", 0.1)))
 LLM_MAX_TOKENS = int(os.environ.get("LLM_MAX_TOKENS",
                                     _REFINE.meta.get("max_tokens", 8192)))
+
+# ---------------------------------------------------------------------------
+# Context budget
+# ---------------------------------------------------------------------------
+# What one request can cost the server, so a serving flag can be checked
+# against this number instead of guessed from a comment. Deliberately an
+# over-estimate: too large costs a bit of KV cache, too small costs the run.
+TOKENS_PER_WORD = 3.0
+
+# The reply is the window handed back refined, so it is about as long as the
+# window plus JSON scaffolding — a refined sentence is rarely shorter than the
+# original. A flat max_tokens truncated the answer mid-string on big windows:
+# 24 of 1030 in the ar6 book run, every one "Unterminated string".
+REPLY_HEADROOM = 1.35
+# Ceiling, so one runaway window cannot demand a context nobody has. The
+# preflight checks the server against this, not against the flat default.
+REPLY_TOKENS_CEILING = int(os.environ.get("REFINE_REPLY_CEILING", "16384"))
+
+
+def reply_tokens(user_words: int) -> int:
+    """The max_tokens for one request, from what that request actually asks
+    the model to write. LLM_MAX_TOKENS stays the floor for small windows.
+
+    When the model returns corrections it does not scale at all: the reply is a
+    list of find/replace pairs, so its size follows the number of artefacts and
+    not the length of the section. That is the entire saving. The budget still
+    has to cover a bibliography, which is the one case that writes text out.
+    """
+    if REFINE_RETURN_CORRECTIONS:
+        return LLM_MAX_TOKENS
+    wanted = int(user_words * TOKENS_PER_WORD * REPLY_HEADROOM)
+    return max(LLM_MAX_TOKENS, min(wanted, REPLY_TOKENS_CEILING))
+
+
+def max_request_tokens() -> int:
+    """Worst case for one window: prompt + a full window of maximum-size
+    sections + the largest reply we would ever ask for.
+
+    Rests on split.py holding SECTION_MAX_WORDS on its output. The one case it
+    cannot hold — a single segment longer than the limit — is logged there.
+    """
+    system = len(SYSTEM_PROMPT.split()) * TOKENS_PER_WORD
+    window = WINDOW_SIZE * SECTION_MAX_WORDS * TOKENS_PER_WORD
+    reply = LLM_MAX_TOKENS if REFINE_RETURN_CORRECTIONS else REPLY_TOKENS_CEILING
+    return int(system + window + reply)
 
 # ---------------------------------------------------------------------------
 # Unicode cleaning + atomic JSON I/O

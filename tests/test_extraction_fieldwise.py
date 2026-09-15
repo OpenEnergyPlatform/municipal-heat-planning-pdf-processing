@@ -1,0 +1,2204 @@
+"""The field-wise harvest, with the model stubbed and nothing else.
+
+The defect this replaces was silent by construction. One request asked for a
+whole tuple, every coordinate was nullable, and a coordinate the model skipped
+looked exactly like a coordinate the document does not state. Measured on the
+204-document corpus run: 63.5% of all values carried no year, and on 13% of
+those the year stood in the very quote the model had itself cited.
+
+So the shape is no longer the model's to decide. It comes from the spec, one
+request asks for the values, and one request per coordinate fills them, each
+answer carrying the passage it was read in. What these tests hold to is that
+contract: the skeleton is the spec's, an answer without evidence in its own
+source is not written, and an answer that has it survives the same verifier
+the whole-tuple path used.
+
+No GPU, no database.
+"""
+import json
+from collections import Counter
+from pathlib import Path
+
+import pytest
+
+from docpipe.extraction import fields, runner
+from docpipe.extraction.pipeline import (DocumentReport, Source, WorkItem,
+                                         fold_batch, group_items,
+                                         merge_field, open_rows,
+                                         rows_from_reply)
+from docpipe.extraction.pipeline import answer_in_quote as pipeline_answer_in_quote
+from docpipe.extraction.spec import load as load_spec
+
+PROFILES = Path(__file__).resolve().parent.parent / "profiles"
+
+
+def _profiles():
+    return sorted(p.parent.name for p in PROFILES.glob("*/extraction_spec.json"))
+
+
+@pytest.fixture(params=_profiles())
+def profile(request, monkeypatch):
+    monkeypatch.setenv("DOCPIPE_PROFILE", request.param)
+    spec_file = PROFILES / request.param / "extraction_spec.json"
+    return request.param, load_spec(json.loads(spec_file.read_text(encoding="utf-8")))
+
+
+def _batch(parameter, sources=2):
+    text = (parameter.example or {}).get("source") or ""
+    items = [WorkItem(7, parameter, Source("table", n, text,
+                                           {"document_id": 7, "page": n}))
+             for n in range(sources)]
+    return group_items(items, max_sources=runner.BATCH_SOURCES)[0]
+
+
+def _example_tuples(parameter):
+    """The example's tuples with its defaults folded in, as one flat list."""
+    example = parameter.example or {}
+    defaults = {k: v for k, v in (example.get("defaults") or {}).items()
+                if k != "source"}
+    return [{**defaults, **dict(t)} for t in example["tuples"]]
+
+
+def _value_reply(parameter, label):
+    """What the value request returns: the number, its unit, its quote."""
+    keep = ("value", "value_raw", "unit", "unit_raw", "quote", "computed")
+    return {"tuples": [{**{k: t[k] for k in keep if k in t}, "source": label}
+                       for t in _example_tuples(parameter)],
+            "status": "complete", "need_more": []}
+
+
+def _an_answer(slot, fallback):
+    """A correct answer to this slot: an entry of its list when it has one.
+    An answer off a closed list is never read (owner, 2026-09-11), so a test
+    about quotes, windows or groups has to answer with an entry."""
+    return slot.options[0].label if slot.is_closed else fallback
+
+
+def test_the_skeleton_is_the_specs_and_not_the_models(profile):
+    """Every coordinate the spec declares becomes exactly one question."""
+    _name, spec = profile
+    for parameter in spec.parameters:
+        slots = fields.slots(parameter)
+        assert slots[0].kind == fields.VALUE
+        assert [s.name for s in slots[1:]] == list(parameter.axes), parameter.uri
+        for slot in slots[1:]:
+            axis = parameter.axes[slot.name]
+            if axis.vocabulary:
+                assert slot.is_closed, f"{parameter.uri}.{slot.name}"
+                assert len(slot.options) == len(axis.vocabulary)
+
+
+def test_every_closed_axis_states_its_question(profile):
+    """A field request whose question is blank is a request with no rule in it.
+
+    The rules used to live in one prompt that covered sixteen fields at once,
+    which is precisely how they became skippable. Asking per field only helps
+    if the field brings its rule along.
+    """
+    _name, spec = profile
+    for parameter in spec.parameters:
+        for slot in fields.axis_slots(parameter):
+            assert slot.question and slot.question.strip(), \
+                f"{parameter.uri}.{slot.name} has no question"
+
+
+def test_an_answer_whose_evidence_is_not_in_the_source_is_not_written(profile):
+    """The whole point of a per-field quote: it is checked, like every other."""
+    _name, spec = profile
+    for parameter in spec.parameters:
+        slots = fields.axis_slots(parameter)
+        if not slots:
+            continue
+        batch = _batch(parameter)
+        rows, _ = rows_from_reply(batch, _value_reply(parameter, batch.label(0)))
+        if not rows:
+            continue
+        slot = slots[0]
+        counts = merge_field(rows, batch.sources, slot, {"answers": {
+            rows[0].label: {"value": _an_answer(slot, "was auch immer"),
+                            "quote": "diese Passage steht in keiner Quelle"}}})
+        assert (counts["filled"], counts["unquoted"], counts["unbacked"],
+                counts["unstated"]) == (0, 1, 0, 0)
+        # And the model is told what was wrong, or three attempts are one
+        # attempt three times.
+        assert [c["row"] for c in counts["failed"]] == [rows[0].label]
+        assert "quote" in counts["failed"][0]["reason"]
+        assert slot.name not in rows[0].claim
+        break
+
+
+def test_a_quote_that_does_not_contain_the_answer_is_not_evidence(profile):
+    """The half that was missing, and the one that mattered.
+
+    A passage lifted verbatim out of the source proves the model read
+    something. Only a passage that CONTAINS the answer proves it read this.
+    With the first check alone, 27.6% of the corpus run's years cited a
+    passage with no year in it — a caption reading "Tabelle 1: Bestehende
+    Wärmenetze und Heiz(kraft)werke" was offered as evidence for 1990.
+    """
+    _name, spec = profile
+    for parameter in spec.parameters:
+        slots = fields.axis_slots(parameter)
+        if not slots:
+            continue
+        batch = _batch(parameter)
+        rows, _ = rows_from_reply(batch, _value_reply(parameter, batch.label(0)))
+        if not rows:
+            continue
+        slot, quote = slots[0], rows[0].claim["quote"]
+        assert "Ziegenkaese" not in quote
+        counts = merge_field(rows, batch.sources, slot, {"answers": {
+            rows[0].label: {"value": "Ziegenkaese", "value_raw": "Ziegenkaese",
+                            "quote": quote}}})
+        assert (counts["filled"], counts["unquoted"], counts["unbacked"],
+                counts["unstated"]) == (0, 0, 1, 0)
+        assert "Ziegenkaese" in counts["failed"][0]["reason"],             "the correction has to name what was not found"
+        assert slot.name not in rows[0].claim
+        return
+
+
+def _quantity_slot():
+    return fields.Slot(name="quantity", kind=fields.CHOICE, options=(
+        fields.Option(label="final energy consumption value", uri="OEO_00050016",
+                      synonyms=("Endenergieverbrauch", "Wärmebedarf")),
+        fields.Option(label="Potenzial", uri="out:potential",
+                      synonyms=("technisches Potenzial",))))
+
+
+def test_a_choice_without_wording_is_found_under_any_of_its_spellings():
+    """The owner's reading of "the answer stands in the quote" (2026-09-13).
+
+    The real classes carry the ontology's English label, and no German plan
+    prints "final energy consumption value". Answered without a wording, the
+    label was the only thing looked for, and corpus_m5 dropped 284,643 quantity
+    answers while 95 percent of the sampled passages said the class in German.
+    """
+    slot = _quantity_slot()
+    quote = "Tabelle 4: Wärmebedarf der Gesamtstadt 2022 in MWh/a"
+    assert pipeline_answer_in_quote(slot, "final energy consumption value",
+                                    None, quote)
+    assert pipeline_answer_in_quote(slot, "OEO_00050016", None, quote), (
+        "a stored row carries the URI, and recheck asks with it")
+    assert not pipeline_answer_in_quote(slot, "Potenzial", None, quote), (
+        "a spelling of ANOTHER option is not evidence for this one")
+    assert not pipeline_answer_in_quote(
+        slot, "final energy consumption value", None,
+        "Tabelle 5: Anteil erneuerbarer Energien 2022"), (
+        "and a quote naming none of them still backs nothing")
+
+
+def test_a_given_wording_is_still_what_the_quote_has_to_carry():
+    """The spellings stand in only where no wording was given. A wording is
+    the model saying which words it read, and those have to be in the quote."""
+    slot = _quantity_slot()
+    quote = "Tabelle 4: Wärmebedarf der Gesamtstadt 2022 in MWh/a"
+    assert not pipeline_answer_in_quote(slot, "final energy consumption value",
+                                        "Endenergieverbrauch", quote)
+    assert pipeline_answer_in_quote(slot, "final energy consumption value",
+                                    "Wärmebedarf", quote)
+
+
+def test_a_group_answer_reaches_every_row_it_names(profile):
+    """Thirteen table rows share one caption, and it is sent once."""
+    _name, spec = profile
+    for parameter in spec.parameters:
+        slots = fields.axis_slots(parameter)
+        batch = _batch(parameter)
+        rows, _ = rows_from_reply(batch, _value_reply(parameter, batch.label(0)))
+        if not slots or len(rows) < 2:
+            continue
+        slot, quote = slots[0], rows[0].claim["quote"]
+        # The wording has to stand in the passage, so it is taken FROM it.
+        wording = quote.strip().split()[0]
+        counts = merge_field(rows, batch.sources, slot, {"groups": [
+            {"rows": [r.label for r in rows],
+             "value": _an_answer(slot, "Sammelantwort"),
+             "value_raw": wording, "quote": quote}]})
+        assert counts["filled"] == len(rows)
+        assert all(r.claim[slot.name] == _an_answer(slot, "Sammelantwort")
+                   for r in rows)
+        assert all(r.claim[f"{slot.name}_quote"] == quote for r in rows)
+        return
+
+
+def test_the_example_survives_the_field_wise_round_trip(profile):
+    """Value request, then one request per coordinate, then the same verifier.
+
+    Each field answers with the example's own coordinate and cites the tuple's
+    own quote, which is the one passage we know is verbatim in the source. What
+    comes out has to be what the whole-tuple contract produced, coordinates
+    included — otherwise the change traded a silent gap for a silent loss.
+    """
+    _name, spec = profile
+    for parameter in spec.parameters:
+        batch = _batch(parameter)
+        expected = _example_tuples(parameter)
+        rows, orphans = rows_from_reply(batch, _value_reply(parameter,
+                                                            batch.label(0)))
+        assert not orphans, parameter.uri
+        assert len(rows) == len(expected), parameter.uri
+        text = batch.items[0].source.text
+        backed: set = set()
+        for slot in fields.axis_slots(parameter):
+            answers = {}
+            for row, want in zip(rows, expected):
+                if want.get(slot.name) is None:
+                    continue
+                wording = want.get(f"{slot.name}_raw") or str(want[slot.name])
+                # The passage a real answer would cite: the one in the source
+                # that carries the wording. Where the source carries it
+                # nowhere, the coordinate is meant to be dropped, and the
+                # assertions below hold the rule rather than the outcome.
+                at = text.find(str(wording))
+                quote = (text[max(0, at - 60):at + len(str(wording)) + 60]
+                         if at != -1 else row.claim["quote"])
+                if at != -1:
+                    backed.add(slot.name)
+                answers[row.label] = {"value": want[slot.name],
+                                      "value_raw": wording, "quote": quote}
+            merge_field(rows, batch.sources, slot, {"answers": answers})
+        report = DocumentReport(document_id=7)
+        for row in rows:
+            row.claim["source"] = batch.label(row.item_index)
+        fold_batch(batch, {"tuples": [row.claim for row in rows] + orphans},
+                   report)
+        assert report.tuples, f"{parameter.uri}: nothing survived"
+        assert not report.refusals, \
+            f"{parameter.uri}: {report.refusals[0]['reason']}"
+        for got, want in zip(report.tuples, expected):
+            for name in parameter.axes:
+                if want.get(name) is None:
+                    continue
+                if name in backed:
+                    assert got.get(name) is not None, \
+                        f"{parameter.uri}.{name} lost on the way through"
+                    assert got.get(f"{name}_quote"), \
+                        f"{parameter.uri}.{name} arrived without its own evidence"
+                else:
+                    # The source says it nowhere, so nothing may claim it does.
+                    assert got.get(name) is None, \
+                        f"{parameter.uri}.{name} written without evidence"
+
+
+def test_not_stated_is_an_answer_and_needs_no_passage(profile):
+    """There is no sentence in a document saying a thing is not in it.
+
+    Which is why this is the one answer that carries no evidence, and why the
+    row can be required to answer at all. Leaving a row out used to mean both
+    "the plan does not say" and "I skipped it", and that was 16% to 34% of
+    every coordinate on the 1079-document run.
+    """
+    from docpipe.extraction.pipeline import merge_field as merge
+    _name, spec = profile
+    for parameter in spec.parameters:
+        slots = fields.axis_slots(parameter)
+        if not slots:
+            continue
+        batch = _batch(parameter)
+        rows, _ = rows_from_reply(batch, _value_reply(parameter, batch.label(0)))
+        if not rows:
+            continue
+        slot = slots[0]
+        counts = merge(rows, batch.sources, slot, {"answers": {
+            rows[0].label: {"value": fields.UNSTATED}}})
+        assert counts["unstated"] == 1 and counts["filled"] == 0
+        assert rows[0].claim[f"{slot.name}_state"] == fields.SAID_UNSTATED
+        assert slot.name not in rows[0].claim
+        return
+
+
+def test_every_coordinate_ends_with_a_state_even_when_nothing_answered(profile):
+    """100% of coordinates say what happened to them, or the run cannot be read."""
+    from docpipe.extraction.pipeline import mark_unanswered
+    _name, spec = profile
+    for parameter in spec.parameters:
+        slots = fields.axis_slots(parameter)
+        if not slots:
+            continue
+        batch = _batch(parameter)
+        rows, _ = rows_from_reply(batch, _value_reply(parameter, batch.label(0)))
+        if not rows:
+            continue
+        blank = mark_unanswered(rows, slots)
+        assert blank == len(rows) * len(slots)
+        for row in rows:
+            for slot in slots:
+                assert row.claim[f"{slot.name}_state"] == fields.UNANSWERED
+        return
+
+
+def test_one_window_saying_nothing_here_does_not_end_the_sweep(profile):
+    """"Not in these two passages" is not "not in this plan".
+
+    A row answered out:unstated stays open and goes into the next window. It
+    closes on a reading, or on the document running out — never on the first
+    window that happens not to carry the coordinate.
+    """
+    from docpipe.extraction.pipeline import merge_field as merge, open_rows
+    _name, spec = profile
+    for parameter in spec.parameters:
+        slots = fields.axis_slots(parameter)
+        if not slots:
+            continue
+        batch = _batch(parameter)
+        rows, _ = rows_from_reply(batch, _value_reply(parameter, batch.label(0)))
+        if not rows:
+            continue
+        slot = slots[0]
+        merge(rows, batch.sources, slot,
+              {"answers": {r.label: {"value": fields.UNSTATED} for r in rows}})
+        assert open_rows(rows, slot) == rows, \
+            "a window that said nothing closed the sweep"
+        # A reading in a later window closes it, and cannot be undone by yet
+        # another window that says the coordinate is not in ITS passages.
+        quote = rows[0].claim["quote"]
+        merge(rows, batch.sources, slot, {"answers": {rows[0].label: {
+            "value": _an_answer(slot, "gelesen"),
+            "value_raw": quote.strip().split()[0],
+            "quote": quote}}})
+        assert rows[0] not in open_rows(rows, slot)
+        merge(rows, batch.sources, slot,
+              {"answers": {rows[0].label: {"value": fields.UNSTATED}}})
+        assert rows[0].claim[f"{slot.name}_state"] == fields.READ
+        return
+
+
+def test_a_rows_own_passage_stays_checkable_after_the_window_moves_on(profile):
+    """The row carries its quote into every field request, so citing it is a
+    reading and not an invention.
+
+    Checked against the window alone it stops being one from the second window
+    on, and a correct answer is thrown away for citing the passage the request
+    itself showed. Measured live: one batch logged 520 dropped against 31 read.
+    """
+    from docpipe.extraction.pipeline import merge_field as merge
+    _name, spec = profile
+    for parameter in spec.parameters:
+        slots = fields.axis_slots(parameter)
+        if not slots:
+            continue
+        batch = _batch(parameter)
+        rows, _ = rows_from_reply(batch, _value_reply(parameter, batch.label(0)))
+        if not rows:
+            continue
+        slot, quote = slots[0], rows[0].claim["quote"]
+        far_away = [Source("section", 999, "eine ganz andere Passage", {})]
+        answer = {"answers": {rows[0].label: {
+            "value": _an_answer(slot, "gelesen"),
+            "value_raw": quote.strip().split()[0],
+            "quote": quote}}}
+        assert merge(list(rows), far_away, slot, answer)["unquoted"] == 1
+        assert merge(rows, far_away + batch.sources, slot, answer)["filled"] == 1
+        return
+
+
+def test_a_dropped_answer_is_not_recorded_as_no_answer(profile):
+    """"Said nothing" and "said something it could not back" are two findings.
+
+    And the row stays open either way: a later window can still read it.
+    """
+    from docpipe.extraction.pipeline import merge_field as merge, open_rows
+    _name, spec = profile
+    for parameter in spec.parameters:
+        slots = fields.axis_slots(parameter)
+        if not slots:
+            continue
+        batch = _batch(parameter)
+        rows, _ = rows_from_reply(batch, _value_reply(parameter, batch.label(0)))
+        if not rows:
+            continue
+        slot = slots[0]
+        merge(rows, batch.sources, slot, {"answers": {rows[0].label: {
+            "value": "Ziegenkaese", "value_raw": "Ziegenkaese",
+            "quote": rows[0].claim["quote"]}}})
+        assert rows[0].claim[f"{slot.name}_state"] == fields.UNBACKED
+        assert rows[0] in open_rows(rows, slot), "an unbacked row must stay open"
+        return
+
+
+def test_not_stated_is_in_the_list_the_model_picks_from(profile):
+    """A finite set of correct answers is a choice, and "the passages do not
+    say" is one of them — so it is an entry, not a rule to remember."""
+    _name, spec = profile
+    for parameter in spec.parameters:
+        for slot in fields.axis_slots(parameter):
+            if not slot.options:
+                continue
+            assert fields.UNSTATED in slot.answerable(), \
+                f"{parameter.uri}.{slot.name} offers no way to say it is absent"
+
+
+def test_a_field_request_carries_the_crop_of_what_it_asks_about(profile):
+    """A table's transcription is a model's reading of a picture, and the
+    coordinate asked for is often clearer in the picture than in the reading.
+    The value request has always attached the crops; the field request sent
+    JSON text and nothing else."""
+    import inspect
+    source = inspect.getsource(runner.make_field_asker)
+    assert "_image_part" in source and "ATTACH_IMAGES" in source, \
+        "the field request attaches no crops"
+
+
+def test_running_out_of_budget_is_not_the_same_finding_as_a_silent_plan():
+    """The pair this stage exists to keep apart, one level up.
+
+    "The plan does not say" is a finding about the corpus and belongs in a
+    report. "We stopped looking" is a finding about the run and belongs in a
+    backlog. They must not be the same string.
+    """
+    assert fields.EXHAUSTED != fields.SAID_UNSTATED
+    assert len({fields.READ, fields.SAID_UNSTATED,
+                fields.UNANSWERED, fields.EXHAUSTED}) == 4
+
+
+@pytest.mark.parametrize("size,overlap,expected", [
+    (2, 1, [["a", "b"], ["b", "c"], ["c", "d"]]),
+    (2, 0, [["a", "b"], ["c", "d"]]),
+    (3, 1, [["a", "b", "c"], ["c", "d"]]),
+])
+def test_the_sweep_walks_every_passage_and_never_cuts_a_seam(size, overlap,
+                                                             expected):
+    """Short windows, and no passage falls between two of them.
+
+    The overlap is not decoration: a caption and the table it belongs to are
+    adjacent passages, and the year lives on exactly that seam.
+    """
+    from docpipe.extraction.pipeline import window_sources
+    got = list(window_sources(["a", "b", "c", "d"], size, overlap))
+    assert got == expected
+    assert set(sum(got, [])) == {"a", "b", "c", "d"}
+
+
+TABLE = "| Erdgas | 126.656.132 | 520.465.057 | 1.036.767.833 |"
+
+
+@pytest.mark.parametrize("value,expected", [
+    (126656132, (2, 4)),
+    (520465057, (3, 4)),
+    (1036767833, (4, 4)),
+])
+def test_the_column_a_number_stands_in_is_counted_not_guessed(value, expected):
+    """Three numbers, one quote, three different years. The column tells them
+    apart, and it is derivable from the value and the row it was quoted from."""
+    from docpipe.extraction.pipeline import cell_index
+    assert cell_index(TABLE, value) == expected
+
+
+@pytest.mark.parametrize("quote,value", [
+    ("Der Verbrauch lag bei 126.656.132 kWh/a.", 126656132),   # not a table
+    ("| Erdgas | 4.000 | 4.000 | 8.000 |", 4000),              # twice over
+    (TABLE, 999),                                              # in no cell
+])
+def test_an_uncertain_column_is_left_out_rather_than_guessed(quote, value):
+    """A wrong column would put a value under the wrong year, which is worse
+    than a value with no year at all."""
+    from docpipe.extraction.pipeline import cell_index
+    assert cell_index(quote, value) is None
+
+
+def test_the_field_reply_contract_is_stated_by_every_profiles_prompt(profile):
+    """merge_field parses one shape, and each profile describes it in its own
+    words. A prompt that describes a different one fills nothing and says
+    nothing, so the keys the core reads are checked to be named.
+
+    The prompts stay with the profile on purpose (prompts.py: a prompt names
+    the corpus and the language, and the core knows neither). This is the seam
+    that costs, so it is the seam that is held.
+    """
+    name, _spec = profile
+    text = runner.prompts.load(runner.FIELD_PROMPT_ID).text
+    for key in ("groups", "answers", "rows", "value", "value_raw", "quote"):
+        assert f'"{key}"' in text, f"{name}: field prompt never names {key!r}"
+
+
+def test_both_new_prompts_exist_and_leave_room_for_an_answer(profile):
+    """A field reply is small, but a table of forty rows is not."""
+    name, _spec = profile
+    for prompt_id in (runner.ROWS_PROMPT_ID, runner.FIELD_PROMPT_ID):
+        prompt = runner.prompts.load(prompt_id)
+        assert prompt.text.strip(), f"{name}: {prompt_id} is empty"
+        assert int(prompt.meta.get("max_tokens", 0)) >= 4096, \
+            f"{name}: {prompt_id} leaves no room for a long table"
+
+
+def test_a_wording_offered_with_not_stated_is_kept_for_the_vocabulary_review(profile):
+    """"There is no sector here" and "I found CCS/CCU and it is in no list"
+    are two findings, and they arrive in the same answer shape.
+
+    The wording is not evidence and does not fill the coordinate. It is the
+    only trace of which classes the corpus needs and the spec does not have,
+    and without it both cases are the same empty cell.
+    """
+    from docpipe.extraction.pipeline import merge_field as merge
+    _name, spec = profile
+    for parameter in spec.parameters:
+        slots = fields.axis_slots(parameter)
+        if not slots:
+            continue
+        batch = _batch(parameter)
+        rows, _ = rows_from_reply(batch, _value_reply(parameter, batch.label(0)))
+        if not rows:
+            continue
+        slot = slots[0]
+        merge(rows, batch.sources, slot, {"answers": {rows[0].label: {
+            "value": fields.UNSTATED,
+            "value_raw": "CCS/CCU (Abscheideleistung: 95.000 t/a)",
+            "quote": rows[0].claim["quote"]}}})
+        claim = rows[0].claim
+        assert claim[f"{slot.name}_state"] == fields.SAID_UNSTATED
+        assert slot.name not in claim, "it must not fill the coordinate"
+        assert f"{slot.name}_quote" not in claim, "and it is not evidence"
+        assert claim[f"{slot.name}_seen"].startswith("CCS/CCU")
+        return
+
+
+def test_an_answer_that_is_not_on_the_list_is_never_read(profile):
+    """An answer to a closed list is one of its entries. 171 tuples of
+    corpus_m5 said "read" with no class behind them: the sector was answered
+    "Teilgebiet", its wording stood in the quote, and the lookup that makes it
+    a class came back empty. The owner's rule (2026-09-11): asked again, told
+    why, and never read. An answer that IS an entry, by label, spelling or
+    URI, is read as before."""
+    _name, spec = profile
+    for parameter in spec.parameters:
+        closed = [s for s in fields.axis_slots(parameter) if s.is_closed]
+        if not closed:
+            continue
+        batch = _batch(parameter)
+        rows, _ = rows_from_reply(batch, _value_reply(parameter, batch.label(0)))
+        if not rows:
+            continue
+        slot, quote = closed[0], rows[0].claim["quote"]
+        wording = quote.strip().split()[0]
+        for off in ("Teilgebiet", {"uri": "x"}, ["Teilgebiet"]):
+            row = rows[0]
+            row.claim = {k: v for k, v in row.claim.items()
+                         if not k.startswith(slot.name)}
+            counts = merge_field(rows, batch.sources, slot, {"answers": {
+                row.label: {"value": off, "value_raw": wording,
+                            "quote": quote}}})
+            assert (counts["filled"], counts["unbacked"]) == (0, 1), off
+            assert row.claim[f"{slot.name}_state"] == fields.UNBACKED
+            assert slot.name not in row.claim, "no value written for it"
+            assert f"{slot.name}_quote" not in row.claim
+            assert row.claim[f"{slot.name}_seen"] == wording
+            assert row in open_rows(rows, slot), "it stays open"
+            [bad] = counts["failed"]
+            assert bad["why"] == "not_an_option"
+            assert repr(off) in bad["reason"] and "options" in bad["reason"]
+        option = slot.options[0]
+        for named in (option.label, option.uri, *option.synonyms[:1]):
+            row = rows[0]
+            row.claim = {k: v for k, v in row.claim.items()
+                         if not k.startswith(slot.name)}
+            counts = merge_field(rows, batch.sources, slot, {"answers": {
+                row.label: {"value": named, "value_raw": wording,
+                            "quote": quote}}})
+            assert counts["filled"] == 1, named
+            assert row.claim[f"{slot.name}_state"] == fields.READ
+        return
+    pytest.skip("no profile parameter with a closed axis and an example")
+
+
+def test_an_answer_off_the_list_is_asked_again_with_the_reason(monkeypatch):
+    """The retry is told what was wrong, and a retry that picks an entry is
+    read. One that never does ends unbacked, with no value, and the tuple it
+    leaves passes the published schema, which 171 such rows did not."""
+    pytest.importorskip("jsonschema")
+    spec = load_spec(json.loads(
+        (PROFILES / "kwp" / "extraction_spec.json").read_text(encoding="utf-8")))
+    quote = "| Private Haushalte | Erdgas | 42.005 | MWh/a |"
+    rows_reply = {"tuples": [{"source": "Q1", "value": 42005, "unit": "MWh/a",
+                              "unit_raw": "MWh/a", "quote": quote}],
+                  "status": "complete", "need_more": []}
+    monkeypatch.setattr(runner, "make_harvester",
+                        lambda *a, **kw: (lambda batch, prior=None: rows_reply))
+
+    def harvest_with(pick):
+        told: list = []
+
+        def make_asker(image_root=None):
+            def ask(shown, rows, slots, corrections=None, document_id=None,
+                    usage_out=None, owner_of=None):
+                slots = slots if isinstance(slots, (list, tuple)) else [slots]
+                told.extend(corrections or [])
+                out = {}
+                for slot in slots:
+                    value = (pick(slot, corrections) if slot.name == "sector"
+                             else fields.UNSTATED)
+                    out[slot.name] = {"answers": {r.label: {
+                        "value": value, "value_raw": "Private Haushalte",
+                        "quote": quote} for r in rows}}
+                return {"fields": out}
+            return ask
+
+        monkeypatch.setattr(runner, "make_field_asker", make_asker)
+        batch = group_items([WorkItem(7, None, Source(
+            "table", 1, quote, {"document_id": 7, "page": 1}))],
+            max_sources=runner.BATCH_SOURCES)[0]
+        reply = runner.make_fieldwise_harvester(spec=spec, slice_gate={})(batch)
+        return batch, reply, told
+
+    sector = next(s for s in fields.axis_slots(spec.parameters[0])
+                  if s.name == "sector")
+    batch, reply, told = harvest_with(
+        lambda slot, corrections: (sector.options[0].label if corrections
+                                   else "Teilgebiet"))
+    assert any(c["why"] == "not_an_option" and "Teilgebiet" in c["reason"]
+               for c in told), "the retry says what was wrong"
+    row = reply["tuples"][0]
+    assert row["sector_state"] == fields.READ
+    assert row["sector"] == sector.options[0].label
+
+    batch, reply, told = harvest_with(lambda slot, corrections: "Teilgebiet")
+    row = reply["tuples"][0]
+    assert row["sector_state"] == fields.UNBACKED
+    assert row.get("sector") is None
+    report = DocumentReport(document_id=7)
+    fold_batch(batch, reply, report, spec=spec)
+    assert report.tuples, "the value itself is still kept"
+    assert runner.check_against_schema(report, "stub", spec) == 0
+
+
+# ---------------------------------------------------------------------------
+# The parameter is a coordinate, not a property of the plan
+# ---------------------------------------------------------------------------
+
+def _document_batch(sources=1):
+    """A batch as a document-level plan produces one: no parameter fixed."""
+    items = [WorkItem(7, None, Source("table", n, "| Erdgas | 42.005 | MWh/a |",
+                                      {"document_id": 7, "page": n}))
+             for n in range(sources)]
+    return group_items(items, max_sources=runner.BATCH_SOURCES)[0]
+
+
+def _fieldwise(monkeypatch, spec, rows_reply, answers):
+    """A field-wise harvester whose two model calls are the given stubs.
+
+    `answers` is called with the slot and returns that field's reply, so a
+    test says what the model answers per coordinate and nothing else.
+    """
+    asked = []
+    monkeypatch.setattr(runner, "make_harvester",
+                        lambda *a, **kw: (lambda batch, prior=None: rows_reply))
+
+    def make_asker(image_root=None):
+        def ask(shown, rows, slots, corrections=None, document_id=None,
+                usage_out=None, owner_of=None):
+            slots = slots if isinstance(slots, (list, tuple)) else [slots]
+            for slot in slots:
+                asked.append(slot.name)
+            return {"fields": {slot.name: answers(slot, rows)
+                               for slot in slots}}
+        return ask
+
+    monkeypatch.setattr(runner, "make_field_asker", make_asker)
+    return runner.make_fieldwise_harvester(spec=spec), asked
+
+
+def test_which_quantity_a_number_is_follows_its_unit_and_decides_its_axes(
+        monkeypatch):
+    """The promise: the parameter is not fixed by the plan and not asked for
+    either — the unit settles it, and it decides which coordinates the row has.
+
+    The plan used to fix it, so a table holding a consumption and an emission
+    was retrieved, read and paid for twice: 804 planned sources against 234
+    owners. Asking instead was right about the shape and wrong about the cost:
+    the spec says itself that the unit separates the two parameters, their
+    nine and forty-two spellings share none, and not one of Kassel's 559
+    accepted tuples contradicted its unit. The question cost 322 of 1,043
+    field windows, 30.9 percent."""
+    spec = load_spec(json.loads(
+        (PROFILES / "kwp" / "extraction_spec.json").read_text(encoding="utf-8")))
+    consumption = spec.parameters[0]
+    rows_reply = {"tuples": [{"source": "Q1", "value": 42005, "unit": "MWh/a",
+                              "unit_raw": "MWh/a",
+                              "quote": "| Erdgas | 42.005 | MWh/a |"}],
+                  "status": "complete", "need_more": []}
+
+    harvest, asked = _fieldwise(monkeypatch, spec, rows_reply,
+                                lambda slot, rows: {"answers": {}})
+    reply = harvest(_document_batch())
+
+    assert "parameter" not in asked, "MWh/a settles it, so nothing asks"
+    axes = {s.name for s in fields.asked_slots(consumption)}
+    assert axes <= set(asked), "the axes of the parameter it turned out to be"
+    row = reply["tuples"][0]
+    assert row["parameter"] == consumption.uri, (
+        "and it is stored as the class, not as the label")
+    assert row["parameter_state"] == fields.DERIVED, (
+        "derived, because nothing read it")
+    assert row["parameter_raw"] == "MWh/a", "the wording it was derived from"
+
+
+def test_a_row_whose_quantity_stayed_unread_is_not_given_a_guessed_axis(
+        monkeypatch):
+    """Refusing it later is the point: a row with no parameter has no
+    coordinates to fill, and filling the first parameter's would be a guess
+    written down as a reading.
+
+    The unit here is one no parameter accepts. That used to be swept as a real
+    question and it is not one: `verify._check_value` refuses on the very
+    `unit_factor` lookup `derive_parameter` just failed, so every answer the
+    model could give is already decided against. Measured on the M3 run, 69
+    such rows cost 178 of 853 field requests, 20.9 percent, and the five
+    answers they produced were all refused afterwards. Kassel had three of
+    them, amounts in EUR from a cost table.
+
+    So nothing is asked, and the row keeps a state saying it was never in
+    range rather than one saying we ran out of document."""
+    spec = load_spec(json.loads(
+        (PROFILES / "kwp" / "extraction_spec.json").read_text(encoding="utf-8")))
+    rows_reply = {"tuples": [{"source": "Q1", "value": 42005, "unit": "EUR",
+                              "unit_raw": "EUR",
+                              "quote": "| Erdgas | 42.005 | EUR |"}],
+                  "status": "complete", "need_more": []}
+
+    harvest, asked = _fieldwise(
+        monkeypatch, spec, rows_reply,
+        lambda slot, rows: {"answers": {"R1": {"value": fields.UNSTATED}}})
+    reply = harvest(_document_batch())
+
+    assert asked == [], "not even the parameter question, which has no answer"
+    row = reply["tuples"][0]
+    assert row["parameter_state"] == fields.OUT_OF_SLICE
+    assert not any(k.endswith("_state") and k != "parameter_state" for k in row)
+    # And skipping the question is safe only because every answer it could
+    # have produced is refused anyway, on the same lookup that just failed.
+    # Asserted through the verifier rather than argued in the comment.
+    from docpipe.extraction import verify
+    for parameter in spec.parameters:
+        if not parameter.is_numeric:
+            continue
+        _kept, refusal = verify._check_value(
+            {"value": 42005, "unit": "EUR", "unit_raw": "EUR"}, parameter, [])
+        assert refusal is not None and "EUR" in refusal.reason, parameter.uri
+
+
+def test_a_unit_two_parameters_accept_is_still_a_real_question(monkeypatch):
+    """The other half of the same guard. `derive_parameter` returns None for
+    three situations and only this one is a question the model can answer, so
+    the skip must not swallow it: a spec whose parameters share a unit still
+    gets asked.
+
+    Built here rather than taken from kwp, whose nine energy units and
+    forty-two emission units share not one spelling -- which is why the case
+    never arises there and the sweep looked harmless.
+    """
+    raw = json.loads((PROFILES / "kwp" / "extraction_spec.json")
+                     .read_text(encoding="utf-8"))
+    for parameter in raw["parameters"]:
+        if parameter.get("units_accepted"):
+            parameter["units_accepted"]["GWh"] = 1.0
+    spec = load_spec(raw)
+    assert fields.derive_parameter(spec, {"value": 1, "unit": "GWh"}) is None
+    assert not fields.parameter_undecidable(spec, {"value": 1, "unit": "GWh"})
+
+    rows_reply = {"tuples": [{"source": "Q1", "value": 12, "unit": "GWh",
+                              "unit_raw": "GWh",
+                              "quote": "| Erdgas | 12 | GWh |"}],
+                  "status": "complete", "need_more": []}
+    harvest, asked = _fieldwise(
+        monkeypatch, spec, rows_reply,
+        lambda slot, rows: {"answers": {"R1": {"value": fields.UNSTATED}}})
+    harvest(_document_batch())
+    assert asked == ["parameter"], "two holders, so the model decides"
+
+
+# ---------------------------------------------------------------------------
+# The slice gate
+#
+# The promise: a row that a gate coordinate puts outside the slice is not
+# asked for its remaining axes, and every one of its coordinates still ends
+# with a state. Two clauses, and a third case so the gate cannot be too wide.
+# ---------------------------------------------------------------------------
+
+def _gated(monkeypatch, spec, rows_reply, answers, gate):
+    """Like _fieldwise, but it records WHICH rows each field was asked for."""
+    asked = []
+
+    monkeypatch.setattr(runner, "make_harvester",
+                        lambda *a, **kw: (lambda batch, prior=None: rows_reply))
+
+    def make_asker(image_root=None):
+        def ask(shown, rows, slots, corrections=None, document_id=None,
+                usage_out=None, owner_of=None):
+            slots = slots if isinstance(slots, (list, tuple)) else [slots]
+            labels = sorted(r.label for r in rows)
+            for slot in slots:
+                asked.append((slot.name, labels))
+            return {"fields": {slot.name: answers(slot, rows)
+                               for slot in slots}}
+        return ask
+
+    monkeypatch.setattr(runner, "make_field_asker", make_asker)
+    return runner.make_fieldwise_harvester(spec=spec, slice_gate=gate), asked
+
+
+def _two_row_spec_and_reply():
+    spec = load_spec(json.loads(
+        (PROFILES / "kwp" / "extraction_spec.json").read_text(encoding="utf-8")))
+    rows_reply = {"tuples": [
+        {"source": "Q1", "value": 42005, "unit": "MWh/a", "unit_raw": "MWh/a",
+         "quote": "| Erdgas | 42.005 | MWh/a |"},
+        {"source": "Q1", "value": 99, "unit": "MWh/a", "unit_raw": "MWh/a",
+         "quote": "| Erdgas | 42.005 | MWh/a |"}],
+        "status": "complete", "need_more": []}
+    return spec, rows_reply
+
+
+def _answers_for(spec, quantity_of, scenario_of):
+    consumption = spec.parameters[0]
+    quote = "| Erdgas | 42.005 | MWh/a |"
+
+    def answers(slot, rows):
+        if slot.name == "parameter":
+            return {"answers": {r.label: {"value": consumption.label,
+                                          "value_raw": "MWh/a", "quote": quote}
+                                for r in rows}}
+        if slot.name in ("quantity", "scenario"):
+            picked = quantity_of if slot.name == "quantity" else scenario_of
+            return {"answers": {r.label: {"value": picked.get(r.label),
+                                          "value_raw": "MWh/a", "quote": quote}
+                                for r in rows if picked.get(r.label)}}
+        return {"answers": {}}
+    return answers
+
+
+def test_a_row_outside_the_slice_is_not_asked_for_its_other_axes(monkeypatch):
+    """Measured on 20 plans: of 6,763 harvested tuples the serializer took
+    1,294 and dropped 4,064 for the quantity or the scenario alone — after the
+    run had paid for all seven axes of every one of them."""
+    spec, rows_reply = _two_row_spec_and_reply()
+    answers = _answers_for(
+        spec,
+        quantity_of={"R1": "final energy consumption value", "R2": "Potenzial"},
+        scenario_of={"R1": "Zielszenario", "R2": "Zielszenario"})
+    harvest, asked = _gated(monkeypatch, spec, rows_reply, answers,
+                            {"quantity": None, "scenario": ("target",)})
+    reply = harvest(_document_batch())
+
+    gate_order = [name for name, _rows in asked][:2]
+    assert gate_order == ["quantity", "scenario"], (
+        "the gate is asked first and in order, the parameter came from the unit")
+    after = {name: rows for name, rows in asked[2:]}
+    assert after, "the row that stayed is still asked for its axes"
+    assert all(rows == ["R1"] for rows in after.values()), (
+        "and only that row: R2 fell out at the quantity")
+
+    out = next(t for t in reply["tuples"] if t.get("value") == 99)
+    for axis in fields.asked_slots(spec.parameters[0]):
+        if axis.name in ("quantity", "scenario"):
+            continue
+        assert out.get(f"{axis.name}_state") == fields.OUT_OF_SLICE, (
+            f"{axis.name} was never asked and has to say so")
+    # And what the spec decided is on the row anyway: a coordinate that never
+    # needed a request is not "never asked", and saying so would be a second
+    # kind of silence.
+    assert out.get("aggregation_state") == fields.DERIVED
+    assert out.get("aggregation") == "OEO_00140070"
+
+
+def test_a_scenario_the_slice_does_not_hold_closes_the_row(monkeypatch):
+    """The second gate coordinate, and the bigger one: 2,510 of those 4,064."""
+    spec, rows_reply = _two_row_spec_and_reply()
+    answers = _answers_for(
+        spec,
+        quantity_of={"R1": "final energy consumption value",
+                     "R2": "final energy consumption value"},
+        scenario_of={"R1": "Zielszenario", "R2": "Ist-Zustand"})
+    harvest, asked = _gated(monkeypatch, spec, rows_reply, answers,
+                            {"quantity": None, "scenario": ("target",)})
+    harvest(_document_batch())
+    after = {name: rows for name, rows in asked[3:]}
+    assert after and all(rows == ["R1"] for rows in after.values())
+
+
+def test_an_undecided_gate_coordinate_keeps_the_row(monkeypatch):
+    """The gate must not be a second way to lose values. A coordinate that
+    came back empty is a finding about the passages, not a licence to throw
+    the number away."""
+    spec, rows_reply = _two_row_spec_and_reply()
+    answers = _answers_for(
+        spec,
+        quantity_of={"R1": "final energy consumption value"},   # R2: no answer
+        scenario_of={"R1": "Zielszenario", "R2": "Zielszenario"})
+    harvest, asked = _gated(monkeypatch, spec, rows_reply, answers,
+                            {"quantity": None, "scenario": ("target",)})
+    harvest(_document_batch())
+    after = {name: rows for name, rows in asked[3:]}
+    assert after and all(rows == ["R1", "R2"] for rows in after.values()), (
+        "undecided is not outside")
+
+    # The reply carries the option's LABEL, so the gate has to resolve it.
+    # Reading the profile as if it held German spellings kept every potential
+    # and threw away every target scenario.
+    quantity = next(s for s in fields.axis_slots(spec.parameters[0])
+                    if s.name == "quantity")
+    scenario = next(s for s in fields.axis_slots(spec.parameters[0])
+                    if s.name == "scenario")
+    assert runner.keeps_row(quantity, None, None)
+    assert runner.keeps_row(scenario, "", ("target",))
+    assert runner.keeps_row(scenario, fields.UNSTATED, ("target",))
+    assert not runner.keeps_row(quantity, "Potenzial", None)
+    assert runner.keeps_row(quantity, "final energy consumption value", None)
+    assert runner.keeps_row(scenario, "Zielszenario", ("target",))
+    assert not runner.keeps_row(scenario, "Ist-Zustand", ("target",))
+
+
+def test_the_coordinates_of_a_row_go_out_in_one_request(monkeypatch):
+    """The promise: several fields ride in ONE request, and each is folded and
+    evidenced on its own.
+
+    One field per request was one round trip per coordinate. Measured over 60
+    documents of the corpus run, 2,108 field requests each, which is what made
+    it 82 hours for 1,079 plans."""
+    spec, rows_reply = _two_row_spec_and_reply()
+    consumption = spec.parameters[0]
+    quote = "| Erdgas | 42.005 | MWh/a |"
+    calls = []
+
+    monkeypatch.setattr(runner, "make_harvester",
+                        lambda *a, **kw: (lambda batch, prior=None: rows_reply))
+
+    def make_asker(image_root=None):
+        def ask(shown, rows, slots, corrections=None, document_id=None,
+                usage_out=None, owner_of=None):
+            slots = slots if isinstance(slots, (list, tuple)) else [slots]
+            calls.append([s.name for s in slots])
+            out = {}
+            for slot in slots:
+                if slot.name == "parameter":
+                    value = consumption.label
+                elif slot.name == "quantity":
+                    value = "final energy consumption value"
+                elif slot.name == "scenario":
+                    value = "Zielszenario"
+                elif slot.name == "carrier":
+                    value = "Erdgas"
+                else:
+                    continue
+                out[slot.name] = {"answers": {r.label: {
+                    "value": value, "value_raw": "MWh/a", "quote": quote}
+                    for r in rows}}
+            return {"fields": out}
+        return ask
+
+    monkeypatch.setattr(runner, "make_field_asker", make_asker)
+    harvest = runner.make_fieldwise_harvester(
+        spec=spec, slice_gate={"quantity": None, "scenario": ("target",)})
+    reply = harvest(_document_batch())
+
+    assert len(calls) == 2, (
+        "one for the gate, one for the rest — the parameter came from the "
+        "unit and the aggregation from the spec, not one "
+        "per coordinate: %s" % calls)
+    assert calls[0] == ["quantity", "scenario"]
+    assert len(calls[1]) == len(fields.asked_slots(consumption)) - 2
+
+    # Every field of the one reply is folded on its own.
+    row = reply["tuples"][0]
+    assert row["quantity_state"] == fields.READ
+    assert row["scenario_state"] == fields.READ
+    assert row["carrier_state"] == fields.READ
+    assert row["carrier_quote"] == quote, "and carries its own evidence"
+    # And the two the spec settled carry their own state and their own
+    # wording, so nothing on the row is silent about where it came from.
+    assert row["parameter_state"] == fields.DERIVED
+    assert row["aggregation_state"] == fields.DERIVED
+    assert row["aggregation_raw"] == "MWh/a"
+
+
+# ---------------------------------------------------------------------------
+# What a reading is worth once it exists
+#
+# Four promises, one folding step. A coordinate that was read and backed is
+# final, a four-character quote is not a passage, every reading says where and
+# when it was read, and a choice that arrives without the words it was read
+# from is counted because it can never be re-mapped.
+# ---------------------------------------------------------------------------
+
+def _one_row(profile_pair, kind=None):
+    """A parameter, its batch, one row and a slot of the wanted kind."""
+    _name, spec = profile_pair
+    for parameter in spec.parameters:
+        slots = [s for s in fields.axis_slots(parameter)
+                 if kind is None or s.kind == kind]
+        if not slots:
+            continue
+        batch = _batch(parameter)
+        rows, _ = rows_from_reply(batch, _value_reply(parameter, batch.label(0)))
+        if rows:
+            return batch, rows, slots[0]
+    return None, None, None
+
+
+def test_a_read_coordinate_is_not_overwritten_by_a_later_window(profile):
+    """The promise: a coordinate that was read and backed keeps its value,
+    its wording and its passage, whatever a later window answers.
+
+    Measured on Kassel: table 10 was read as useful energy in a trend scenario
+    in its own window and rewritten to final energy in the target scenario by
+    a later window that showed the appendix. 7 value nodes carried the second
+    reading, 10 more tuples collided with the first and took six identities
+    down with them. The last speaker does not own the coordinate.
+    """
+    batch, rows, slot = _one_row(profile)
+    if batch is None:
+        pytest.skip("this profile has no axes")
+    quote = rows[0].claim["quote"]
+    first = quote.strip().split()[0]
+    answer = _an_answer(slot, "gelesen")
+    merge_field(rows, batch.sources, slot, {"answers": {rows[0].label: {
+        "value": answer, "value_raw": first, "quote": quote}}})
+    assert rows[0].claim[f"{slot.name}_state"] == fields.READ
+
+    later = Source("section", 4242, "Ganz woanders steht gelesen anders.", {})
+    counts = merge_field(rows, [later], slot, {"answers": {rows[0].label: {
+        "value": slot.options[-1].label if slot.is_closed else "anders",
+        "value_raw": "anders",
+        "quote": "Ganz woanders steht gelesen anders."}}})
+    assert rows[0].claim[slot.name] == answer, "a reading is final"
+    assert rows[0].claim[f"{slot.name}_raw"] == first
+    assert rows[0].claim[f"{slot.name}_quote"] == quote
+    assert counts["filled"] == 0, "and the second answer is not counted as one"
+
+
+def test_a_quote_too_short_to_name_a_place_is_not_evidence(profile):
+    """The promise: a passage under MIN_QUOTE_CHARS leaves the coordinate
+    open, whatever else is right about the answer.
+
+    "2030" stands in a heat plan a hundred times over, so it proves the model
+    can read a number and nothing about where it read THIS one. field.md rule
+    3 promises eight characters and only the value quote was ever held to it.
+    Kassel cited the bare year three times.
+    """
+    from docpipe.extraction.verify import MIN_QUOTE_CHARS
+    batch, rows, slot = _one_row(profile)
+    if batch is None:
+        pytest.skip("this profile has no axes")
+    short = "2030"
+    assert len(short) < MIN_QUOTE_CHARS
+    sources = [Source("table", 77, f"| Jahr | {short} |", {})]
+    counts = merge_field(rows, sources, slot, {"answers": {rows[0].label: {
+        "value": _an_answer(slot, short), "value_raw": short,
+        "quote": short}}})
+    assert counts["filled"] == 0
+    assert rows[0].claim[f"{slot.name}_state"] == fields.UNBACKED
+    assert [f["why"] for f in counts["failed"]] == ["quote_too_short"]
+
+    # The same reading in a passage that names a place is taken.
+    long = f"| Endenergie gesamt | {short} | 1.234 |"
+    assert len(long) >= MIN_QUOTE_CHARS
+    counts = merge_field(rows, [Source("table", 77, long, {})],
+                         slot, {"answers": {rows[0].label: {
+                             "value": _an_answer(slot, short),
+                             "value_raw": short, "quote": long}}})
+    assert counts["filled"] == 1
+
+
+def test_every_reading_says_which_passage_and_which_window_it_came_from(profile):
+    """The promise: a read coordinate carries the owner its passage was found
+    in and the window it was read in.
+
+    Whether a reading is local to its row or borrowed from elsewhere in the
+    document is the question the Kassel review could only answer by hand: 370
+    of 455 year readings cited a passage outside the row's own table and its
+    section, and not one of them said so. A boolean "some source had it"
+    cannot be asked that question afterwards.
+    """
+    batch, rows, slot = _one_row(profile)
+    if batch is None:
+        pytest.skip("this profile has no axes")
+    quote = rows[0].claim["quote"]
+    near = Source("section", 4711, f"Im Abschnitt steht: {quote}", {})
+    merge_field(rows, [near], slot, {"answers": {rows[0].label: {
+        "value": _an_answer(slot, "gelesen"),
+            "value_raw": quote.strip().split()[0],
+        "quote": quote}}}, window=("retrieval", 3))
+    assert rows[0].claim[f"{slot.name}_source"] == ["section", 4711]
+    assert rows[0].claim[f"{slot.name}_window"] == ["retrieval", 3]
+
+
+def test_a_choice_without_its_wording_is_counted_as_unmappable(profile):
+    """The promise: a choice read without value_raw is counted, because it can
+    never be re-mapped when the vocabulary moves.
+
+    The URI is all that survives such a reading and the words the model
+    resolved to it are gone, so an alias added later cannot be applied to it
+    offline. That is the difference between minutes of re-mapping and a
+    93-GPU-hour re-harvest of 1,082 plans. The absence of the key is the
+    marker a top-up looks for, so nothing is invented to fill it.
+    """
+    batch, rows, slot = _one_row(profile, kind=fields.CHOICE)
+    if batch is None:
+        pytest.skip("this profile has no choice axis")
+    label = slot.options[0].label
+    quote = f"In der Tabelle steht {label} als Zeilenbeschriftung."
+    counts = merge_field(rows, [Source("table", 5, quote, {})],
+                         slot, {"answers": {rows[0].label: {
+                             "value": label, "quote": quote}}})
+    assert counts["filled"] == 1, "it is still a reading"
+    assert counts["raw_missing"] == 1
+    assert f"{slot.name}_raw" not in rows[0].claim
+
+    # With the wording it is mappable and not counted.
+    batch, rows, slot = _one_row(profile, kind=fields.CHOICE)
+    counts = merge_field(rows, [Source("table", 5, quote, {})],
+                         slot, {"answers": {rows[0].label: {
+                             "value": label, "value_raw": label,
+                             "quote": quote}}})
+    assert counts["raw_missing"] == 0
+    assert rows[0].claim[f"{slot.name}_raw"] == label
+
+
+def test_the_trace_names_the_field_that_filled_and_the_field_that_dropped(
+        monkeypatch):
+    """The promise: a field event says which coordinate filled and which
+    failed, and a drop event names the coordinate it belongs to.
+
+    Five fields answer in one reply. A run that logs
+    "aggregation+carrier+sector+year+spatial_scope: 3 filled, 2 unbacked"
+    cannot say which two were dropped, and on one corpus group 7,738 unbacked
+    and 3,110 unquoted answers were not attributable to any coordinate. The
+    knob that would fix them cannot be found in a number that names five
+    things at once.
+    """
+    spec, rows_reply = _two_row_spec_and_reply()
+    consumption = spec.parameters[0]
+    good = "| Erdgas | 42.005 | MWh/a |"
+
+    def answers(slot, rows):
+        if slot.name == "parameter":
+            return {"answers": {r.label: {"value": consumption.label,
+                                          "value_raw": "MWh/a",
+                                          "quote": good} for r in rows}}
+        if slot.name == "carrier":
+            return {"answers": {r.label: {"value": "Erdgas",
+                                          "value_raw": "Erdgas",
+                                          "quote": good} for r in rows}}
+        if slot.name == "sector":
+            return {"answers": {r.label: {
+                "value": "Haushalte", "value_raw": "Haushalte",
+                "quote": "Diese Passage steht in keiner gezeigten Quelle."}
+                for r in rows}}
+        return {"answers": {}}
+
+    events = []
+    monkeypatch.setattr(runner.trace, "event",
+                        lambda kind, doc, **kw: events.append((kind, kw)))
+    harvest, _asked = _gated(monkeypatch, spec, rows_reply, answers, {})
+    harvest(_document_batch())
+
+    fields_events = [kw for kind, kw in events if kind == "field"
+                     and "carrier" in (kw.get("slot") or "")]
+    assert fields_events, "the axes were asked"
+    first = fields_events[0]
+    assert first["filled_by"].get("carrier") == 2, "carrier read both rows"
+    assert "sector" not in first["filled_by"]
+    assert first["unbacked_by"].get("sector") == 2
+    assert "carrier" not in first["unbacked_by"]
+
+    dropped = [kw for kind, kw in events if kind == "drop"]
+    assert dropped, "a failed coordinate is a drop"
+    assert {d["field"] for d in dropped} == {"sector"}, (
+        "and the drop names the coordinate, not the request")
+    assert {d["why"] for d in dropped} == {"quote_not_in_source"}
+    assert {(d["given"], d["raw"], d["quote"]) for d in dropped} == {
+        ("Haushalte", "Haushalte",
+         "Diese Passage steht in keiner gezeigten Quelle.")}, (
+        "and it says what was answered, so the next run can tell a wrong "
+        "wording from a wrong quote")
+
+    # And every event it wrote is one the published trace schema describes:
+    # given, raw and quote were added to the drop event without it once.
+    import jsonschema
+    from docpipe.extraction.schema import build
+    validator = jsonschema.Draft202012Validator(build(spec)["trace"])
+    for kind, kw in events:
+        record = {"t": kind, "doc": 7, **kw}
+        assert validator.is_valid(record), (kind, sorted(kw))
+
+
+def test_a_status_quo_row_is_asked_its_coordinates(monkeypatch):
+    """The promise: the scenario no longer closes a row, so an inventory value
+    is asked its carrier, sector and year like a target value is.
+
+    It used to close it, and that was the bigger half of the loss: 2,510 of
+    6,763 harvested tuples over 20 plans were dropped for being a status quo,
+    a trend or a potential. MHPO names the inventory analysis and the
+    potential analysis, so those rows have a place in the graph and need
+    their coordinates to reach it.
+    """
+    spec, rows_reply = _two_row_spec_and_reply()
+    answers = _answers_for(
+        spec,
+        quantity_of={"R1": "final energy consumption value",
+                     "R2": "final energy consumption value"},
+        scenario_of={"R1": "Zielszenario", "R2": "Ist-Zustand"})
+    harvest, asked = _gated(monkeypatch, spec, rows_reply, answers,
+                            {"quantity": None})
+    reply = harvest(_document_batch())
+
+    after = {name: rows for name, rows in asked if name not in
+             ("parameter", "quantity", "scenario")}
+    assert after, "the axes behind the gate were asked"
+    assert all(rows == ["R1", "R2"] for rows in after.values()), (
+        "the status quo row is asked too")
+    out = [t for t in reply["tuples"]
+           if t.get(f"carrier_state") == fields.OUT_OF_SLICE]
+    assert not out, "and nothing is stamped out_of_slice for its scenario"
+
+
+def test_the_kwp_gate_holds_only_the_quantity(monkeypatch):
+    """The profile's own choice, not the mechanism's. The gate still exists
+    and still closes a row whose quantity is a deliberate non-class."""
+    from profiles.kwp import extraction as kwp_extraction
+    assert set(kwp_extraction.SLICE) == {"quantity"}
+    assert kwp_extraction.SLICE["quantity"] is None
+
+
+def test_a_wording_its_passage_does_not_carry_never_becomes_a_row(profile):
+    """The promise: a non-numeric value that its own quote does not contain is
+    refused where it arrives, not after every coordinate has been swept for it.
+
+    Measured on Kassel: the office name the prompt's own example suggested was
+    written onto the title page, cost 24 windows and 80.3 seconds of sweeping
+    and reached the graph never. The claim still travels on and is still
+    refused, it just costs nothing now.
+    """
+    _name, spec = profile
+    parameter = spec.parameters[0]
+    batch = _batch(parameter)
+    text = batch.items[0].source.text
+    quote = text[:80]
+    assert len(quote) >= 8
+
+    rows, orphans = rows_from_reply(batch, {"tuples": [
+        {"source": batch.label(0), "value": "Erfundenes Ingenieurbüro",
+         "unit": "", "unit_raw": "", "quote": quote}]})
+    assert rows == [], "no row, so no sweep"
+    assert [o["_why"] for o in orphans] == ["text value not in its quote"]
+
+    # A wording the passage does carry is a reading like any other.
+    word = quote.strip().split()[0]
+    rows, orphans = rows_from_reply(batch, {"tuples": [
+        {"source": batch.label(0), "value": word,
+         "unit": "", "unit_raw": "", "quote": quote}]})
+    assert len(rows) == 1 and not orphans
+
+    # And a number is left to the verifier, which knows the German decimal
+    # mark and repairs a retyped table row. Refusing it here would refuse
+    # claims the verifier would have taken.
+    rows, orphans = rows_from_reply(batch, {"tuples": [
+        {"source": batch.label(0), "value": "1.036.767,8", "unit_raw": "MWh/a",
+         "quote": quote}]})
+    assert len(rows) == 1 and not orphans
+
+
+def test_the_row_prompt_example_names_no_place_this_corpus_contains(profile):
+    """The example is an invitation, and this one was taken: it put a firm
+    named after the city onto the city's own title page. The names in it come
+    from a plan that is not the one being read, and the prompt says so."""
+    name, _spec = profile
+    text = (PROFILES / name / "prompts" / "extraction" / "rows.md").read_text(
+        encoding="utf-8")
+    assert "Kassel Wärme" not in text
+    if name == "kwp":
+        assert "MASCHINELL" in text, "the check is promised where it applies"
+        assert "anderen Plan" in text
+
+
+def test_the_field_prompt_states_the_two_checks_and_no_other(profile):
+    """A field answer is checked for two things: its quote stands in one of
+    the shown sources, and the quote carries the answer. A prompt that
+    promises a third, which source a quote may come from, has the model
+    refuse readings no check refuses."""
+    name, _spec = profile
+    text = (PROFILES / name / "prompts" / "extraction" / "field.md").read_text(
+        encoding="utf-8")
+    assert "EINER der gezeigten Quellen" in text
+    for gone in ("AUS WELCHER Quelle", "Nachbarseite", "erlaubten Quellen",
+                 '"holds"', '"section"'):
+        assert gone not in text, gone
+    if name == "kwp":
+        # The row still says which source is its own, and the two captions
+        # the column rule turns on stay, verbatim from Kassel 349525/349566.
+        assert '"source"' in text and "EIGENEN Tabelle" in text
+        assert "Tabelle 17: Endenergieverbrauch der Gesamtstadt" in text
+        assert "Tabelle 28: Endenergieverbrauch der Gesamtstadt" in text
+        rules = text.split("4. Tabellen mit mehreren")[1]
+        column = rules.split(chr(10) + chr(10))[0]
+        assert "SEKTOR" in column and "JAHR" in column
+    elif name == "scenarios":
+        assert '"source"' in text
+    else:
+        pytest.fail(f"no prompt check listed for profile {name!r}")
+
+
+def test_the_own_window_shows_the_section_a_table_stands_in(monkeypatch):
+    """The promise: the first window a coordinate is asked in holds the table
+    AND the section around it, each section once.
+
+    The own window used to be the batch's tables and nothing else, and the
+    coordinates a table does not carry live one level up. Measured on Kassel,
+    section 349525 appeared in 0 of 1,043 field windows while its three tables
+    were asked for their year 39 times, and 69 tuples from inventory tables
+    came back as target-scenario values because no window ever showed the word
+    for what they are.
+    """
+    spec, rows_reply = _two_row_spec_and_reply()
+    shown_per_window = []
+
+    monkeypatch.setattr(runner, "make_harvester",
+                        lambda *a, **kw: (lambda batch, prior=None: rows_reply))
+
+    def make_asker(image_root=None):
+        def ask(shown, rows, slots, corrections=None, document_id=None,
+                usage_out=None, owner_of=None):
+            shown_per_window.append([(s.owner_kind, s.owner_id) for s in shown])
+            return {"fields": {}}
+        return ask
+
+    monkeypatch.setattr(runner, "make_field_asker", make_asker)
+    section = Source("section", 349525,
+                     "Für das Jahr 2040 ergeben sich die Kennzahlen. "
+                     "Tabelle 17: Endenergieverbrauch im Zielszenario 2040 "
+                     "[p85_tbl0]", {"title": "Zielszenario"})
+    calls = []
+
+    def parents(sources):
+        calls.append(len(sources))
+        return [section]
+
+    harvest = runner.make_fieldwise_harvester(spec=spec, slice_gate={},
+                                              parents=parents)
+    harvest(_document_batch(sources=2))
+
+    assert calls, "the parent was asked for"
+    first = shown_per_window[0]
+    assert ("section", 349525) in first, "the section rides in the first window"
+    assert sum(1 for kind, _ in first if kind == "table") == 2, (
+        "and the tables are still there")
+    assert first.count(("section", 349525)) == 1, "once, not once per table"
+
+
+def test_a_parent_section_is_not_fetched_twice_and_a_long_one_is_cut(tmp_path):
+    """Two tables of one section share one parent, and a section too long for
+    the window is cut around the table's own placeholder rather than dropped:
+    the sentence that dates a table stands next to its placeholder and
+    nowhere else."""
+    import sqlite3
+    from docpipe.extraction.runner import PARENT_CHARS, make_parents, _around
+
+    db = tmp_path / "mini.db"
+    conn = sqlite3.connect(db)
+    filler = "Fülltext. " * 800
+    conn.executescript("""
+        CREATE TABLE Documents (id INTEGER PRIMARY KEY, filename TEXT);
+        CREATE TABLE Sections (id INTEGER PRIMARY KEY, document INTEGER,
+                               section_number INTEGER, title TEXT,
+                               content TEXT, page_number INTEGER);
+        CREATE TABLE Tables (id INTEGER PRIMARY KEY, section INTEGER,
+                             block_id TEXT, caption TEXT, markdown TEXT,
+                             page_number INTEGER, path TEXT);
+        CREATE TABLE Images (id INTEGER PRIMARY KEY, section INTEGER,
+                             block_id TEXT, caption TEXT, description TEXT,
+                             page_number INTEGER, path TEXT);
+    """)
+    conn.execute("INSERT INTO Documents VALUES (7, 'plan.pdf')")
+    conn.execute("INSERT INTO Sections VALUES (5, 7, 1, 'Zielszenario', ?, 86)",
+                 (filler + "Tabelle 17: Verbrauch im Zielszenario 2040 "
+                  "[p85_tbl0]" + filler,))
+    conn.commit()
+    conn.close()
+
+    parents = make_parents(db)
+    sources = [Source("table", n, "| Erdgas | 1 |",
+                      {"parent_section": 5, "block_id": f"p85_tbl{n}"})
+               for n in range(2)]
+    got = parents(sources)
+    assert len(got) == 1, "two tables of one section share one parent"
+    assert len(got[0].text) <= PARENT_CHARS + 200
+    assert "Tabelle 17" in got[0].text, "cut around the placeholder, not off it"
+
+    # A source with no parent asks for nothing, and a section already shown is
+    # not shown again.
+    assert parents([Source("section", 5, "x", {})]) == []
+    assert _around("abcdef", "cd", 4) == "abcd", "no room to centre, so from 0"
+    assert _around("xxxxxxxxNEEDLExxxxxxxx", "NEEDLE", 10) == "xxxxxNEEDL", (
+        "the window opens half a budget before the needle")
+    assert _around("abcdef", "zz", 3) == "abc", "needle absent, head of the text"
+
+
+def test_the_request_says_where_a_source_stands(monkeypatch):
+    """Where a source stands, its page and its block id, is a fact the request
+    carries, not one the model infers from the order."""
+    spec, _reply = _two_row_spec_and_reply()
+    parameter = spec.parameters[0]
+    batch = _batch(parameter)
+    rows, _ = rows_from_reply(batch, _value_reply(parameter, batch.label(0)))
+    table = Source("table", 87457, "| Erdgas | 1 |",
+                   {"page": 86, "block_id": "p85_tbl0", "title": "Tabelle 17"})
+    section = Source("section", 349525, "Für das Jahr 2040 ...",
+                     {"page": 86, "via": "parent", "title": "Zielszenario"})
+    payload = runner._field_payload([table, section], rows,
+                                    fields.asked_slots(parameter))
+    first, second = payload["sources"]
+    assert first["block_id"] == "p85_tbl0" and first["page"] == 86
+    assert second["kind"] == "section" and second["page"] == 86
+
+
+# ---------------------------------------------------------------------------
+# Which source is a row's own, and whether the wording names the class chosen
+#
+# The row says which shown source is its own, so the model finds its table's
+# header and caption without recognising its own quote among five passages.
+# ---------------------------------------------------------------------------
+
+def _row_and_its_neighbours():
+    spec, _rows_reply = _two_row_spec_and_reply()
+    parameter = spec.parameters[0]
+    batch = _batch(parameter)
+    rows, _ = rows_from_reply(batch, _value_reply(parameter, batch.label(0)))
+    own = Source("table", 87457, "| Erdgas | 1 |",
+                 {"page": 86, "block_id": "p85_tbl0", "parent_section": 349525})
+    other = Source("table", 87517, "| Erdgas | 9 |",
+                   {"page": 162, "block_id": "p162_tbl0",
+                    "parent_section": 349566})
+    section = Source("section", 349525,
+                     "Für das Jahr 2040 ergeben sich ... [p85_tbl0: Tabelle 17]",
+                     {"page": 86, "via": "parent"})
+    return parameter, rows, own, other, section
+
+
+def test_the_request_tells_each_row_which_source_is_its_own():
+    """By id, not by position: the own table is the SECOND passage here, and
+    a model that assumed the first would date every row off table 28."""
+    parameter, rows, own, other, section = _row_and_its_neighbours()
+    slots = fields.asked_slots(parameter)
+    payload = runner._field_payload([other, own, section], rows, slots, None,
+                                    {r.label: own for r in rows})
+    assert payload["sources"][1]["block_id"] == "p85_tbl0", "Q2 is the own one"
+    assert [r["source"] for r in payload["rows"]] == ["Q2"] * len(rows)
+
+    # And with no ownership handed over, no source is invented.
+    bare = runner._field_payload([other, own, section], rows, slots)
+    assert all("source" not in r for r in bare["rows"])
+
+
+@pytest.mark.parametrize("given,wording,names", [
+    ("Erdgas", "Erdgas", True),
+    ("Erdgas", "Gas", True),                    # a listed spelling of its own
+    ("Erdgas", "Erdgas (H-Gas)", True),         # among other words
+    ("Erdgas", "Flüssiggas", False),            # "gas" inside a compound
+    ("Erdgas", "Heizöl", False),                # another class' spelling
+    # False until the carrier list held "Klärgas" as a spelling of biogas.
+    # The pin decides it: biogas is defined as "produced by anaerobic
+    # digestion", and natural gas carries a comment excluding exactly these
+    # gases from itself. The 29 Kassel readings were right all along.
+    ("Biogas", "Klärgas", True),
+    ("Holz", "Holzige Festbrennstoffe", False),  # Kassel: 17
+    ("biogener Festbrennstoff", "sonstige biogene Festbrennstoffe", True),
+    # The label is in there as a whole word, and it is still not a wording:
+    # Kassel offered the rounding footnote as `value_raw` 15 times.
+    ("Erdgas", "Hinweis: Wegen der Rundung können beim Summieren der "
+               "Erdgas-Zellenwerte Abweichungen auftreten.", False),
+])
+def test_a_wording_either_names_the_class_it_was_mapped_to_or_it_does_not(
+        given, wording, names):
+    """field.md rule 2 says the wording is what the mapping is checked
+    against. Until now nothing checked it, so a reply could answer "Holz"
+    with the wording "Holzige Festbrennstoffe" and the quote would verify.
+    A wording that IS a listed spelling names its option: which words those
+    are is the spec's to say, and the pinned ontology's to justify."""
+    from docpipe.extraction.pipeline import wording_names_option
+    spec = load_spec(json.loads(
+        (PROFILES / "kwp" / "extraction_spec.json").read_text(encoding="utf-8")))
+    slot = next(s for s in fields.axis_slots(spec.parameters[0])
+                if s.name == "carrier")
+    assert wording_names_option(slot, given, wording) is names
+
+
+def test_a_wording_that_does_not_name_its_class_is_counted_and_kept(profile):
+    """Counted, not refused. Klärgas IS a biogas and the model is allowed to
+    say so; what we have no measurement of is how often it decides wrongly,
+    and one corpus run of this counter is what settles that."""
+    from docpipe.extraction.pipeline import merge_field as merge
+    batch, rows, slot = _one_row(profile, kind=fields.CHOICE)
+    if batch is None or not slot.options:
+        pytest.skip("this profile has no choice axis")
+    own = batch.items[rows[0].item_index].source
+    label = slot.options[0].label
+    passage = f"In der Zeile steht: Unfugwort und {label} nicht."
+    source = Source(own.owner_kind, own.owner_id, passage, own.provenance)
+    counts = merge(rows, [source], slot, {"answers": {rows[0].label: {
+        "value": label, "value_raw": "Unfugwort", "quote": passage}}})
+    assert counts["filled"] == 1, "read, because the quote holds the wording"
+    assert counts["raw_foreign"] == 1
+    assert rows[0].claim[f"{slot.name}_raw_foreign"] is True
+    assert rows[0].claim[slot.name] == label, "the reading itself is kept"
+
+    # The same reading with the class' own word is not flagged.
+    rows[0].claim.pop(f"{slot.name}_state")
+    rows[0].claim.pop(f"{slot.name}_raw_foreign")
+    passage = f"In der Zeile steht: {label}."
+    source = Source(own.owner_kind, own.owner_id, passage, own.provenance)
+    counts = merge(rows, [source], slot, {"answers": {rows[0].label: {
+        "value": label, "value_raw": label, "quote": passage}}})
+    assert (counts["filled"], counts["raw_foreign"]) == (1, 0)
+
+
+def test_the_request_says_what_each_option_means(profile):
+    """field.md rule 7 says "decide by the meaning, the spellings are only
+    examples" and the request never carried a meaning: the model was handed a
+    class identifier and a list of German words. The rule was unfollowable,
+    and which class a number is is the decision the whole tuple hangs on."""
+    name, spec = profile
+    if name != "kwp":
+        pytest.skip("the meanings are the profile's to write")
+    slot = next(s for s in fields.axis_slots(spec.parameters[0])
+                if s.name == "quantity")
+    offered = slot.answerable()
+    assert offered["final energy consumption value"]["bedeutet"].startswith(
+        "A final energy consumption value is")
+    assert "Endenergiebedarf" in \
+        offered["final energy consumption value"]["Schreibweisen"]
+    # "The passages do not state it" is an answer like any other and says so.
+    assert offered[fields.UNSTATED]["bedeutet"]
+    # And every entry the graph does NOT take says what it excludes.
+    assert "Nutzwärme" in offered["Nutzenergie"]["bedeutet"]
+
+
+def test_an_option_list_without_meanings_keeps_the_short_form():
+    """A profile that has written no definition pays nothing for the promise:
+    the payload is what it was."""
+    slot = fields.Slot(name="carrier", kind=fields.CHOICE, question="?",
+                       options=(fields.Option(label="Erdgas", uri="OEO_1",
+                                              synonyms=("Gas",)),))
+    assert slot.answerable() == {
+        "Erdgas": ["Gas"],
+        fields.UNSTATED: ["steht in diesen Passagen nicht"]}
+
+
+# ---------------------------------------------------------------------------
+# The sweep's stages
+#
+# Measured on the M3 acceptance run (2026-09-08, 483 tuples, 853 field
+# requests). Both promises below were broken there and neither had a test.
+# ---------------------------------------------------------------------------
+
+def _sweeping(monkeypatch, spec, rows_reply, *, more=None, rest=None,
+              answer=None):
+    """A harvester whose field asker records the passages it was shown.
+
+    Answers nothing, ever, so every row stays open and the sweep walks all its
+    stages -- which is the only way to see which stages it reaches.
+    """
+    shown_at = []
+    monkeypatch.setattr(runner, "make_harvester",
+                        lambda *a, **kw: (lambda batch, prior=None: rows_reply))
+
+    def make_asker(image_root=None):
+        def ask(shown, rows, slots, corrections=None, document_id=None,
+                usage_out=None, owner_of=None):
+            shown_at.append([s.owner_id for s in shown])
+            if answer is None:
+                return {"fields": {}}
+            slots = slots if isinstance(slots, (list, tuple)) else [slots]
+            return {"fields": {slot.name: answer(slot, rows) for slot in slots}}
+        return ask
+
+    monkeypatch.setattr(runner, "make_field_asker", make_asker)
+    return runner.make_fieldwise_harvester(
+        spec=spec, more_sources=more, rest_of_document=rest), shown_at
+
+
+def _far_source(owner_id):
+    """A section somewhere else in the plan, saying nothing useful."""
+    return Source("section", owner_id, "Nichts hierzu.",
+                  {"document_id": 7, "page": owner_id})
+
+
+def test_a_sweep_that_ran_out_of_budget_still_reads_the_rest_of_the_plan(
+        monkeypatch):
+    """`run` returns False exactly when the budget ran out, and a sweep with
+    budget left has no open rows -- so `combed and still_open(rows)` was never
+    both true, and the rest stage was dead code. 0 of the 70 sweeps of the M3
+    run entered it, and the harvest shows what that cost: 789 coordinates
+    exhausted and not one unstated. The stage exists to keep "we stopped
+    looking" apart from "the plan does not say it", and it never once ran.
+    """
+    spec = load_spec(json.loads(
+        (PROFILES / "kwp" / "extraction_spec.json").read_text(encoding="utf-8")))
+    rows_reply = {"tuples": [{"source": "Q1", "value": 42005, "unit": "MWh/a",
+                              "unit_raw": "MWh/a",
+                              "quote": "| Erdgas | 42.005 | MWh/a |"}],
+                  "status": "complete", "need_more": []}
+
+    asked_rest = []
+    served = []
+
+    def more(document_id, queries, exclude):
+        # Enough passages in one round to make more windows than the budget
+        # allows, so retrieval really runs out. That is the state the old
+        # condition could not survive: `run` returns False, `combed` is False,
+        # and `combed and still_open(rows)` skipped the stage.
+        if served:
+            return []
+        served.extend(_far_source(9000 + n)
+                      for n in range(runner.FIELD_MAX_WINDOWS * 4))
+        return list(served)
+
+    def rest(document_id, exclude, start=None):
+        asked_rest.append(len(exclude))
+        return [_far_source(7001), _far_source(7002)]
+
+    harvest, shown = _sweeping(monkeypatch, spec, rows_reply,
+                               more=more, rest=rest)
+    harvest(_document_batch())
+
+    assert asked_rest, "the rest of the plan was never read"
+    # It really was the exhausted case, not a sweep that had budget left.
+    # By what the window BROUGHT, not by its smallest id: every window from
+    # the second on also carries the re-entry, so the row's own passage 0 is
+    # in all of them and `min` would say they were all the own window.
+    # Retrieval's allowance no longer depends on what the own window spent:
+    # it is FIELD_MAX_WINDOWS minus what own is allowed, not minus what own
+    # used. Before, the same document gave retrieval 21 windows or 23
+    # depending on whether the first one was retried.
+    assert len([w for w in shown if any(x >= 9000 for x in w)])         == runner.FIELD_MAX_WINDOWS - runner.FIELD_ATTEMPTS, shown
+    # And the last stage got its own bounded allowance rather than the
+    # leftovers of a budget retrieval had already spent to the last request.
+    from_rest = [w for w in shown if 7001 in w or 7002 in w]
+    assert from_rest, "no allowance, so the stage ran and asked nothing"
+    assert len(from_rest) <= runner.REST_MAX_WINDOWS, len(from_rest)
+
+
+def _sweep_events(monkeypatch):
+    """Every trace event the sweep writes, as (name, fields)."""
+    from docpipe.extraction import trace
+    events = []
+    monkeypatch.setattr(trace, "event",
+                        lambda name, doc, **kw: events.append((name, kw)))
+    return events
+
+
+def _unbackable(slot, rows):
+    """An answer whose quote is in none of the shown passages, so the own
+    window is asked again and spends its whole allowance."""
+    return {"answers": {row.label: {"value": "Erdgas",
+                                    "quote": "steht in keiner Passage"}
+                        for row in rows}}
+
+
+@pytest.mark.parametrize("answer", [None, _unbackable],
+                         ids=["own answers once", "own retries"])
+def test_the_search_further_out_gets_the_same_allowance_whatever_own_spent(
+        monkeypatch, answer):
+    """Three stages, three allowances. The sweep counted every request against
+    one number, so the retries of the OWN window were paid for out of the
+    search further out: measured on this stub, retrieval got 23 windows when
+    the first answer stood and 21 when it was retried three times, for the
+    same document and the same question."""
+    spec = load_spec(json.loads(
+        (PROFILES / "kwp" / "extraction_spec.json").read_text(encoding="utf-8")))
+    rows_reply = {"tuples": [{"source": "Q1", "value": 42005, "unit": "MWh/a",
+                              "unit_raw": "MWh/a",
+                              "quote": "| Erdgas | 42.005 | MWh/a |"}],
+                  "status": "complete", "need_more": []}
+    served = []
+
+    def more(document_id, queries, exclude):
+        if served:
+            return []
+        served.extend(_far_source(9000 + n)
+                      for n in range(runner.FIELD_MAX_WINDOWS * 4))
+        return list(served)
+
+    def rest(document_id, exclude, start=None):
+        return [_far_source(7000 + n) for n in range(60)]
+
+    events = _sweep_events(monkeypatch)
+    harvest, _shown = _sweeping(monkeypatch, spec, rows_reply, more=more,
+                                rest=rest, answer=answer)
+    harvest(_document_batch())
+
+    stages = Counter(kw["stage"] for name, kw in events if name == "field")
+    assert stages["retrieval"] == (runner.FIELD_MAX_WINDOWS
+                                   - runner.FIELD_ATTEMPTS), stages
+    assert stages["rest"] == runner.REST_MAX_WINDOWS, stages
+
+
+def test_the_last_stage_keeps_its_allowance_when_it_is_larger_than_the_first(
+        monkeypatch):
+    """The rest stage used to take its allowance by writing into the shared
+    counter, max(0, FIELD_MAX_WINDOWS - REST_MAX_WINDOWS), which is the number
+    asked for only while it is the smaller of the two. Raise it above the
+    field budget, which is what a run that wants the whole plan read does, and
+    the expression is 0 and the stage silently gets all 24."""
+    spec = load_spec(json.loads(
+        (PROFILES / "kwp" / "extraction_spec.json").read_text(encoding="utf-8")))
+    rows_reply = {"tuples": [{"source": "Q1", "value": 42005, "unit": "MWh/a",
+                              "unit_raw": "MWh/a",
+                              "quote": "| Erdgas | 42.005 | MWh/a |"}],
+                  "status": "complete", "need_more": []}
+    monkeypatch.setattr(runner, "REST_MAX_WINDOWS",
+                        runner.FIELD_MAX_WINDOWS + 6)
+
+    def rest(document_id, exclude, start=None):
+        # FIELD_WINDOW 2 with FIELD_OVERLAP 1 makes about one window per
+        # passage, so this is more than the raised allowance can spend.
+        return [_far_source(7000 + n)
+                for n in range(runner.REST_MAX_WINDOWS * 3)]
+
+    events = _sweep_events(monkeypatch)
+    harvest, _shown = _sweeping(monkeypatch, spec, rows_reply, rest=rest)
+    harvest(_document_batch())
+
+    stages = Counter(kw["stage"] for name, kw in events if name == "field")
+    assert stages["rest"] == runner.REST_MAX_WINDOWS, stages
+
+
+def test_a_sweep_reports_every_request_it_made(monkeypatch):
+    """windows and asked on the sweep event are what a run is measured by: the
+    acceptance allows 1161 requests per document. Reported off a counter the
+    last stage overwrote, a sweep made 36 requests and reported 24."""
+    spec = load_spec(json.loads(
+        (PROFILES / "kwp" / "extraction_spec.json").read_text(encoding="utf-8")))
+    rows_reply = {"tuples": [{"source": "Q1", "value": 42005, "unit": "MWh/a",
+                              "unit_raw": "MWh/a",
+                              "quote": "| Erdgas | 42.005 | MWh/a |"}],
+                  "status": "complete", "need_more": []}
+    served = []
+
+    def more(document_id, queries, exclude):
+        if served:
+            return []
+        served.extend(_far_source(9000 + n)
+                      for n in range(runner.FIELD_MAX_WINDOWS * 4))
+        return list(served)
+
+    def rest(document_id, exclude, start=None):
+        return [_far_source(7000 + n) for n in range(60)]
+
+    events = _sweep_events(monkeypatch)
+    harvest, _shown = _sweeping(monkeypatch, spec, rows_reply, more=more,
+                                rest=rest)
+    harvest(_document_batch())
+
+    made = Counter(kw["slot"] for name, kw in events if name == "field")
+    sweeps = [kw for name, kw in events if name == "sweep"]
+    assert sweeps, "no sweep was reported at all"
+    for sweep in sweeps:
+        assert sweep["windows"] == made[sweep["slot"]], sweep["slot"]
+        assert sweep["asked"] == made[sweep["slot"]], sweep["slot"]
+
+
+def test_the_window_index_counts_the_whole_sweep(monkeypatch):
+    """The index on a field event is what a reader of the trace joins on. Reset
+    when the last stage began, windows 12 to 23 appeared twice per sweep and
+    the two rows they showed could not be told apart."""
+    spec = load_spec(json.loads(
+        (PROFILES / "kwp" / "extraction_spec.json").read_text(encoding="utf-8")))
+    rows_reply = {"tuples": [{"source": "Q1", "value": 42005, "unit": "MWh/a",
+                              "unit_raw": "MWh/a",
+                              "quote": "| Erdgas | 42.005 | MWh/a |"}],
+                  "status": "complete", "need_more": []}
+    served = []
+
+    def more(document_id, queries, exclude):
+        if served:
+            return []
+        served.extend(_far_source(9000 + n)
+                      for n in range(runner.FIELD_MAX_WINDOWS * 4))
+        return list(served)
+
+    def rest(document_id, exclude, start=None):
+        return [_far_source(7000 + n) for n in range(60)]
+
+    events = _sweep_events(monkeypatch)
+    harvest, _shown = _sweeping(monkeypatch, spec, rows_reply, more=more,
+                                rest=rest)
+    harvest(_document_batch())
+
+    per_slot = {}
+    for name, kw in events:
+        if name == "field":
+            per_slot.setdefault(kw["slot"], []).append((kw["window"],
+                                                        kw["stage"]))
+    assert per_slot
+    for slot, seen in per_slot.items():
+        windows = [w for w, _stage in seen]
+        assert windows == list(range(1, len(windows) + 1)), slot
+        last = [w for w, stage in seen if stage == "rest"]
+        earlier = [w for w, stage in seen if stage != "rest"]
+        assert last and min(last) > max(earlier), slot
+
+
+def test_the_rest_of_a_plan_is_read_from_the_row_outwards(monkeypatch):
+    """Where the last stage starts reading. It began at section 1, the title
+    page of a 249-section plan, for a row standing on page 180, and the
+    allowance ran out long before it came near the row."""
+    spec = load_spec(json.loads(
+        (PROFILES / "kwp" / "extraction_spec.json").read_text(encoding="utf-8")))
+    rows_reply = {"tuples": [{"source": "Q1", "value": 42005, "unit": "MWh/a",
+                              "unit_raw": "MWh/a",
+                              "quote": "| Erdgas | 42.005 | MWh/a |"}],
+                  "status": "complete", "need_more": []}
+    starts = []
+
+    def rest(document_id, exclude, start=None):
+        starts.append(start)
+        return [_far_source(7001)]
+
+    items = [WorkItem(7, None, Source("table", 1, "| Erdgas | 42.005 | MWh/a |",
+                                      {"document_id": 7, "page": 180,
+                                       "section_number": 180}))]
+    batch = group_items(items, max_sources=runner.BATCH_SOURCES)[0]
+    harvest, _shown = _sweeping(monkeypatch, spec, rows_reply, rest=rest)
+    harvest(batch)
+
+    assert starts and set(starts) == {180}, starts
+
+
+def test_own_section_number_is_the_earliest_of_the_rows_own_sections():
+    """One sweep asks for several rows at once, so the start has to be before
+    all of them: the nearest section to one row is the far end of another."""
+    def source(number):
+        provenance = {"document_id": 7}
+        if number is not None:
+            provenance["section_number"] = number
+        return Source("table", 1, "| Erdgas |", provenance)
+
+    assert runner.own_section_number(
+        [source(40), source(12), source(31)]) == 12
+    assert runner.own_section_number([source(40), source(None)]) == 40
+    assert runner.own_section_number([source(None)]) is None
+    assert runner.own_section_number([]) is None
+
+
+def test_reading_the_rest_starts_at_a_section_and_still_reads_them_all(
+        tmp_path):
+    """Rotated, never cut. What this stage promises is that a coordinate left
+    unstated means the whole document was read, and dropping the sections
+    before the row would make that a lie about the part a title page is in."""
+    import sqlite3
+    path = tmp_path / "plans.sqlite"
+    conn = sqlite3.connect(str(path))
+    conn.executescript(
+        "CREATE TABLE Documents (id INTEGER PRIMARY KEY, filename TEXT);"
+        "CREATE TABLE Sections ("
+        " id INTEGER PRIMARY KEY, document INTEGER, section_number INTEGER,"
+        " title TEXT, content TEXT, page_number INTEGER);"
+        "CREATE TABLE Tables ("
+        " id INTEGER PRIMARY KEY, section INTEGER, block_id TEXT,"
+        " caption TEXT, markdown TEXT, page_number INTEGER, path TEXT);"
+        "CREATE TABLE Images ("
+        " id INTEGER PRIMARY KEY, section INTEGER, block_id TEXT,"
+        " caption TEXT, description TEXT, page_number INTEGER, path TEXT);")
+    conn.execute("INSERT INTO Documents (id, filename) VALUES (7, 'plan.pdf')")
+    for n in range(1, 11):
+        conn.execute("INSERT INTO Sections (id, document, section_number, "
+                     "title, content, page_number) VALUES (?, 7, ?, ?, ?, ?)",
+                     (n, n, "Kapitel %d" % n, "Text von Kapitel %d." % n, n))
+    conn.commit()
+
+    conn.close()
+    rest_of_document = runner.make_rest_of_document(path)
+    assert [s.owner_id for s in rest_of_document(7, set(), 7)] == [
+        7, 8, 9, 10, 1, 2, 3, 4, 5, 6]
+    # And without one it reads the document as it stands, from the front.
+    assert [s.owner_id for s in rest_of_document(7, set(), None)] == list(
+        range(1, 11))
+
+
+def test_a_window_is_asked_again_only_where_asking_again_pays(monkeypatch):
+    """A retry of the OWN window filled 4.88 rows on the M3 run, a third of
+    what a fresh own window fills. A retry further out filled 0.10, a seventh
+    of the fresh window it displaces, and 145 of 149 third attempts filled
+    nothing at all. `state["asked"]` counts every attempt against the budget,
+    so out there a retry is a window spent on a question that already failed.
+    """
+    spec = load_spec(json.loads(
+        (PROFILES / "kwp" / "extraction_spec.json").read_text(encoding="utf-8")))
+    rows_reply = {"tuples": [{"source": "Q1", "value": 42005, "unit": "MWh/a",
+                              "unit_raw": "MWh/a",
+                              "quote": "| Erdgas | 42.005 | MWh/a |"}],
+                  "status": "complete", "need_more": []}
+
+    rounds = []
+
+    def more(document_id, queries, exclude):
+        rounds.append(len(rounds))
+        return [_far_source(9100 + len(rounds))] if len(rounds) <= 2 else []
+
+    def unbackable(slot, rows):
+        # An answer whose quote is in none of the shown passages. That is what
+        # makes a window worth asking again -- and what made 334 of the M3
+        # run's 853 requests a repeat of a question that had already failed.
+        return {"answers": {row.label: {"value": "Erdgas",
+                                        "quote": "steht in keiner Passage"}
+                            for row in rows}}
+
+    harvest, shown = _sweeping(monkeypatch, spec, rows_reply, more=more,
+                               answer=unbackable)
+    harvest(_document_batch())
+
+    per_window = Counter(tuple(sorted(w)) for w in shown)
+    # The own window is the one that brought nothing from retrieval. Not
+    # "contains 0": the re-entry puts the row's own passage in front of every
+    # later window too, which is the point of it.
+    own = [n for window, n in per_window.items()
+           if not any(x >= 9100 for x in window)]
+    far = [n for window, n in per_window.items()
+           if any(x >= 9100 for x in window)]
+    assert own and all(n == runner.FIELD_ATTEMPTS for n in own), per_window
+    assert far and all(n == 1 for n in far), per_window
+
+
+def test_the_sweep_starts_again_where_it_last_read_instead_of_striking_it_off(
+        monkeypatch):
+    """The promise: where one coordinate was read, the next window starts there.
+
+    `sweep_field.re_entry` is what does it.
+
+    Every passage a window showed went into `seen` and was never shown again.
+    So the sweep read the sector out of a table and then looked for the
+    aggregation everywhere except that table, which is where the header and
+    the caption that carry it stand.
+
+    Two things are pinned here, because the second is what keeps the first
+    honest: the passage a coordinate was read in rides along afterwards, AND
+    riding along is not progress. The window generator is untouched, so every
+    passage of the pool still gets its own turn, once, in order.
+    """
+    spec = load_spec(json.loads(
+        (PROFILES / "kwp" / "extraction_spec.json").read_text(encoding="utf-8")))
+    rows_reply = {"tuples": [{"source": "Q1", "value": 42005, "unit": "MWh/a",
+                              "unit_raw": "MWh/a",
+                              "quote": "| Erdgas | 42.005 | MWh/a |"}],
+                  "status": "complete", "need_more": []}
+    says = "Die Angaben beziehen sich auf das gesamte Stadtgebiet."
+    pool = [Source("section", 9001, says, {"document_id": 7, "page": 11})]
+    pool += [_far_source(9002 + n) for n in range(5)]
+
+    shown_at = []
+    monkeypatch.setattr(runner, "make_harvester",
+                        lambda *a, **kw: (lambda batch, prior=None: rows_reply))
+
+    served = []
+
+    def more(document_id, queries, exclude):
+        if served:
+            return []
+        served.extend(pool)
+        return list(pool)
+
+    def make_asker(image_root=None):
+        def ask(shown, rows, slots, corrections=None, document_id=None,
+                usage_out=None, owner_of=None):
+            shown_at.append([s.owner_id for s in shown])
+            slots = slots if isinstance(slots, (list, tuple)) else [slots]
+            answered = {}
+            # Answers once, in the window that shows 9001, and only the one
+            # axis. Everything else stays open, which is what keeps the sweep
+            # walking.
+            if any(s.owner_id == 9001 for s in shown):
+                for slot in slots:
+                    if slot.name == "spatial_scope":
+                        answered[slot.name] = {"answers": {
+                            row.label: {"value": "Gemeindegebiet",
+                                        "value_raw": "Stadtgebiet",
+                                        "quote": says} for row in rows}}
+            return {"fields": answered}
+        return ask
+
+    monkeypatch.setattr(runner, "make_field_asker", make_asker)
+    harvest = runner.make_fieldwise_harvester(spec=spec, more_sources=more)
+    out = harvest(_document_batch())
+
+    claim = out["tuples"][0]
+    assert claim["spatial_scope_source"] == ["section", 9001], claim
+    read_in = next(i for i, w in enumerate(shown_at) if 9001 in w)
+    later = shown_at[read_in + 1:]
+    assert later, shown_at
+    assert all(9001 in w for w in later), shown_at
+    # And the row's own passage with it. `merge_field` checks every window
+    # against `batch.sources`, so a quote from it was always backable -- the
+    # model just could not read it any more from the second window on.
+    assert all(0 in w for w in later), shown_at
+
+    # And it cost no window. Each passage of the pool is introduced once and
+    # in the pool's order, so the re-entry rode along rather than taking a
+    # fresh passage's turn -- if it were part of the window, a passage would
+    # be pushed out of the budget or repeated as if it were new.
+    met, order = set(), []
+    for window in shown_at:
+        for owner_id in window:
+            if owner_id not in met:
+                met.add(owner_id)
+                order.append(owner_id)
+    assert order == [0] + [s.owner_id for s in pool], order
+
+    # A window stays a window. The re-entry is capped and deduplicated
+    # against what is already shown, so no passage is shown to the model
+    # twice in one request and the request does not grow with the document.
+    for window in shown_at[1:]:
+        assert len(window) == len(set(window)), window
+        assert len(window) <= runner.FIELD_WINDOW + runner.FIELD_RE_ENTRY, window
+
+
+def test_the_re_entry_is_capped_and_the_passage_that_answered_goes_first(
+        monkeypatch):
+    """The promise: `sweep_field.re_entry` is bounded, and the bound is spent
+    on the passages that earned it.
+
+    Three places want to ride along -- where a coordinate was read, the
+    section the row stands in, and the row's own passage -- and a row that has
+    already answered four coordinates from four places would put the whole
+    document back into every request. So the list is cut, and it is cut from
+    the end: the passage that has already produced an answer for THIS row
+    goes first, the section it stands in next, and the row's own passage last,
+    because that one is checked against `batch.sources` in every window
+    anyway and is the only one of the three that is not lost by being cut.
+    """
+    spec = load_spec(json.loads(
+        (PROFILES / "kwp" / "extraction_spec.json").read_text(encoding="utf-8")))
+    rows_reply = {"tuples": [{"source": "Q1", "value": 42005, "unit": "MWh/a",
+                              "unit_raw": "MWh/a",
+                              "quote": "| Erdgas | 42.005 | MWh/a |"}],
+                  "status": "complete", "need_more": []}
+    where = "Die Angaben beziehen sich auf das gesamte Stadtgebiet."
+    which = "Tabelle 17 zeigt den Zielpfad der Waermeversorgung."
+    said = {"spatial_scope": (9001, "Gemeindegebiet", "Stadtgebiet", where),
+            "scenario": (9002, "Zielszenario", "Zielpfad", which)}
+    # 9001 carries one axis and 9002 the other, and both ride along after.
+    pool = [Source("section", 9001, where, {"document_id": 7, "page": 11}),
+            Source("section", 9002, which, {"document_id": 7, "page": 2})]
+    pool += [_far_source(9003 + n) for n in range(4)]
+    section = Source("section", 500, "Tabelle 17: Nutzwaermebedarf.",
+                     {"document_id": 7, "page": 1})
+    items = [WorkItem(7, None, Source("table", 0, "| Erdgas | 42.005 | MWh/a |",
+                                      {"document_id": 7, "page": 1,
+                                       "parent_section": 500}))]
+    batch = group_items(items, max_sources=runner.BATCH_SOURCES)[0]
+
+    shown_at = []
+    monkeypatch.setattr(runner, "make_harvester",
+                        lambda *a, **kw: (lambda b, prior=None: rows_reply))
+
+    served = []
+
+    def more(document_id, queries, exclude):
+        if served:
+            return []
+        served.extend(pool)
+        return list(pool)
+
+    def make_asker(image_root=None):
+        def ask(shown, rows, slots, corrections=None, document_id=None,
+                usage_out=None, owner_of=None):
+            here = {s.owner_id for s in shown}
+            shown_at.append([s.owner_id for s in shown])
+            slots = slots if isinstance(slots, (list, tuple)) else [slots]
+            answered = {}
+            for slot in slots:
+                spoken = said.get(slot.name)
+                if spoken and spoken[0] in here:
+                    answered[slot.name] = {"answers": {
+                        row.label: {"value": spoken[1], "value_raw": spoken[2],
+                                    "quote": spoken[3]} for row in rows}}
+            return {"fields": answered}
+        return ask
+
+    monkeypatch.setattr(runner, "make_field_asker", make_asker)
+    harvest = runner.make_fieldwise_harvester(
+        spec=spec, more_sources=more, parents=lambda sources: [section])
+    out = harvest(batch)
+
+    claim = out["tuples"][0]
+    assert claim["spatial_scope_source"] == ["section", 9001], claim
+    assert claim["scenario_source"] == ["section", 9002], claim
+    # From the window after the overlap has let go of them, all three ride
+    # along as re-entry: four want to, 9002, 9001, the section 500 and the
+    # row's own passage 0, and three may. 0 is the one that is cut.
+    read_in = next(i for i, w in enumerate(shown_at)
+                   if 9001 in w and 9002 in w)
+    after = shown_at[read_in + 2:]
+    assert after, shown_at
+    for window in after:
+        assert {9001, 9002, 500} <= set(window), window
+        assert 0 not in window, window
+        assert len(window) <= runner.FIELD_WINDOW + runner.FIELD_RE_ENTRY, window
+
+
+# ---------------------------------------------------------------------------
+# One sweep, one budget (WP9, WP12e)
+# ---------------------------------------------------------------------------
+
+def test_the_startup_line_reports_the_three_allowances_and_their_sum(
+        monkeypatch):
+    """The line used to end "at most N window(s) per coordinate" with
+    FIELD_MAX_WINDOWS alone, short by REST_MAX_WINDOWS since the rest
+    allowance landed. The three numbers and their sum come from the one
+    function the sweep itself budgets with."""
+    import inspect
+    monkeypatch.setattr(runner, "FIELD_ATTEMPTS", 3)
+    monkeypatch.setattr(runner, "FIELD_MAX_WINDOWS", 24)
+    monkeypatch.setattr(runner, "REST_MAX_WINDOWS", 12)
+    budget = runner.window_budget()
+    assert budget == {"own": 3, "retrieval": 21, "rest": 12}
+    assert sum(budget.values()) == 36
+    main = inspect.getsource(runner.main)
+    line = main[main.index("swept in windows of"):]
+    line = line[:line.index("window(s) per coordinate")]
+    assert "own" in line and "retrieval" in line and "rest" in line
+    assert "window_budget()" in main[:main.index("swept in windows of")]
+    # And the sweep budgets with the same function: move a constant and the
+    # sweep's own dict moves with it.
+    monkeypatch.setattr(runner, "REST_MAX_WINDOWS", 5)
+    assert runner.window_budget()["rest"] == 5
+    assert "budget = window_budget()" in inspect.getsource(runner.make_sweeper)
+
+
+def test_the_sweeper_is_the_one_the_harvest_uses(monkeypatch):
+    """One sweep, one set of numbers. A second copy of those 300 lines in the
+    top-up would be a second set, and every measurement the sweep has produced
+    is about this one."""
+    spec = load_spec(json.loads(
+        (PROFILES / "kwp" / "extraction_spec.json").read_text(encoding="utf-8")))
+    seen = []
+    real = runner.make_sweeper
+
+    def spy(ask, **kw):
+        seen.append(sorted(kw))
+        return real(ask, **kw)
+
+    monkeypatch.setattr(runner, "make_sweeper", spy)
+    monkeypatch.setattr(runner, "make_field_asker", lambda image_root=None:
+                        (lambda *a, **kw: None))
+    monkeypatch.setattr(runner, "make_harvester",
+                        lambda *a, **kw: (lambda batch, prior=None: {}))
+    runner.make_fieldwise_harvester(spec=spec)
+    assert seen == [["anchors", "more_sources", "parents",
+                     "rest_of_document"]]
+
+
+def test_an_answer_of_the_wrong_kind_is_refused_and_the_model_told(profile):
+    """A year as "2030-2045", a wording as a list. It used to be coerced --
+    int() truncated and str() stringified -- and what reached the graph was a
+    value nobody had read anywhere. Refused now, with the kind that was
+    wanted, so the next attempt differs from this one."""
+    batch, rows, slot = _one_row(profile, kind=fields.NUMBER)
+    if batch is None:
+        pytest.skip("this profile has no number axis")
+    quote = "Im Zieljahr 2030 bis 2045 ist die Versorgung klimaneutral."
+    counts = merge_field(rows, [Source("section", 5, quote, {})], slot,
+                         {"answers": {rows[0].label: {"value": "2030-2045",
+                                                      "quote": quote}}})
+    assert (counts["filled"], counts["unbacked"]) == (0, 1)
+    assert [f["why"] for f in counts["failed"]] == ["wrong_type"]
+    assert "Zahl" in counts["failed"][0]["reason"]
+    assert slot.name not in rows[0].claim
+    assert rows[0].claim[f"{slot.name}_state"] == fields.UNBACKED

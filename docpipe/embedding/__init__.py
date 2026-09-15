@@ -1,23 +1,28 @@
 """
-embedding – One interface, several ways to get a vector.
+__init__.py: Exposes one Embedder interface behind several backends.
 
-    local            the model runs in this process, on this machine's GPU
-    api              an OpenAI-compatible /v1/embeddings endpoint does the work
-    pkg.mod:Klasse   whatever that import path provides
+get_embedder() reads EMBEDDING_BACKEND and returns one of three
+things. "local" loads the model in this process, on this machine's
+GPU (embedding/local.py). "api" calls an OpenAI-compatible
+/v1/embeddings endpoint (embedding/api.py). Anything of the form
+"package.module:attribute" is an import path: the module is imported,
+the named attribute is called with the given keyword arguments, and
+whatever it returns is used as the embedder. Which of the three a
+deployment uses is a matter of configuration, not of code: a laptop
+without a GPU points at an endpoint, a compute node loads the model.
 
-Which one a deployment uses is a matter of EMBEDDING_BACKEND, not of code:
-a laptop without a GPU points at an endpoint, a compute node loads the model.
+The import-path form is the extension point. Loading a model
+quantized, on demand, and freeing the memory again between queries
+depends on one machine's hardware and not on the pipeline, so such an
+implementation lives next to the deployment that needs it rather than
+in this repository. It is named here only by import path; the
+package requires of it only an `embed` method and an `embed_one`
+method. See scripts/inference_app/README.md.
 
-The third form is the extension point. Loading a model quantized, on demand,
-unloading it again between queries — that is a property of one machine's
-hardware, not of the pipeline, and such an implementation has no business
-sitting in this repository. It lives next to the deployment that needs it and
-is named here by import path; all this package requires of it is `embed` and
-`embed_one`. See scripts/inference_app/README.md.
-
-One limitation worth knowing: the OpenAI embeddings API is text-only. Image
-and image+text items (the *_vl embedding types) therefore need a local
-backend, or an endpoint that accepts multimodal input.
+One limitation holds for every deployment: the OpenAI embeddings API
+is text only. Image and image+text items (the *_vl embedding types)
+therefore need a local backend, or an endpoint that accepts
+multimodal input.
 
 Author: Felix Vossel
 """

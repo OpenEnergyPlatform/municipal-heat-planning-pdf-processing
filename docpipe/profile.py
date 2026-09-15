@@ -1,5 +1,5 @@
 """
-profile.py – A profile is everything a project contributes to the generic
+profile.py: A profile is everything a project contributes to the generic
 pipeline: where its documents come from, what extra tables it needs, which
 prompts it overrides and which filters its app offers.
 
@@ -73,6 +73,14 @@ class Profile:
             raise
         return getattr(loaded, attr, None)
 
+    def require(self, module: str, attr: str):
+        """`component`, for the parts the pipeline cannot run without."""
+        value = self.component(module, attr)
+        if value is None:
+            raise LookupError(f"profile {self.name!r} provides no {module}.{attr} "
+                              f"({PROFILES_PACKAGE}/{self.name}/{module}.py)")
+        return value
+
     # -- where the profile's own files live -------------------------------
     @property
     def package_dir(self) -> Path:
@@ -139,6 +147,26 @@ def active_profile() -> Optional[Profile]:
     if not os.environ.get(ENV_VAR):
         return None
     return load_profile()
+
+
+_values: dict = {}
+
+
+def profile_value(module: str, attr: str):
+    """The ambient profile's *attr*, resolved once per profile.
+
+    For the facts about a corpus the core must not invent: which words open a
+    caption, how long a caption gets, how many sections fit one request. A
+    core constant looks harmless until a second corpus arrives and the value
+    is quietly wrong for it — with no error, only worse output.
+    """
+    profile = active_profile()
+    if profile is None:
+        raise LookupError(f"{module}.{attr} needs a profile; set ${ENV_VAR}")
+    key = (profile.name, module, attr)
+    if key not in _values:
+        _values[key] = profile.require(module, attr)
+    return _values[key]
 
 
 def add_profile_argument(parser) -> None:

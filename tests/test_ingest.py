@@ -61,16 +61,77 @@ def test_a_document_is_registered_once(usable, tmp_path):
 
 
 def test_unusable_pdf_leaves_nothing_behind(monkeypatch, tmp_path):
-    monkeypatch.setattr(ingest, "download_pdf", lambda url, d: "scan.pdf")
-    monkeypatch.setattr(ingest.pdf_quality, "check", lambda p: (False, "NO_TEXT"))
-    source = FakeSource([_doc("scan.pdf")])
+    """Garbled text is useless at every later stage — nothing can repair it."""
+    monkeypatch.setattr(ingest, "download_pdf", lambda url, d: "garbled.pdf")
+    monkeypatch.setattr(ingest.pdf_quality, "check",
+                        lambda p: (False, "BROKEN_ENCODING: garbled glyph map"))
+    source = FakeSource([_doc("garbled.pdf")])
     rejected = ingest.ingest(source, tmp_path / "db.sqlite", tmp_path, KWP)
 
-    assert rejected == {"scan.pdf": "NO_TEXT"}
+    assert rejected == {"garbled.pdf": "BROKEN_ENCODING: garbled glyph map"}
     con = sqlite3.connect(tmp_path / "db.sqlite")
     assert con.execute("SELECT COUNT(*) FROM Documents").fetchone()[0] == 0
     assert source.accepted == []            # the profile hook must not have run
     assert (tmp_path / "rejected_pdfs.txt").exists()
+
+
+# ---------------------------------------------------------------------------
+# a scan is a document, not garbage
+# ---------------------------------------------------------------------------
+
+def _scanned(monkeypatch, name="scan.pdf"):
+    monkeypatch.setattr(ingest, "download_pdf", lambda url, d: name)
+    monkeypatch.setattr(ingest, "get_num_pages", lambda fn, d: 10)
+    monkeypatch.setattr(
+        ingest.pdf_quality, "check",
+        lambda p: (False, "NO_TEXT: 40/40 sampled pages empty (100%) – scan "
+                          "without OCR"))
+
+
+def test_a_scan_is_registered_rather_than_refused(monkeypatch, tmp_path):
+    """Eleven complete plans sat outside the corpus because this said no. The
+    pages are there to be read; preprocessing reads them with the model."""
+    _scanned(monkeypatch)
+    source = FakeSource([_doc("scan.pdf")])
+    rejected = ingest.ingest(source, tmp_path / "db.sqlite", tmp_path, KWP)
+
+    assert rejected == {}
+    con = sqlite3.connect(tmp_path / "db.sqlite")
+    assert [r[0] for r in con.execute("SELECT filename FROM Documents")] ==         ["scan.pdf"]
+    assert source.accepted == ["scan.pdf"], "the profile hook has to run too"
+
+
+def test_a_registered_scan_is_named_on_its_own_worklist(monkeypatch, tmp_path):
+    """Registered is not the same as readable. Whoever runs preprocessing next
+    has to know which documents need --transcribe-missing-text, or they become
+    documents of empty sections and refinement deletes them."""
+    _scanned(monkeypatch)
+    ingest.ingest(FakeSource([_doc("scan.pdf")]), tmp_path / "db.sqlite",
+                  tmp_path, KWP)
+
+    line = (tmp_path / "scanned_pdfs.txt").read_text(encoding="utf-8").strip()
+    filename, reason = line.split("\t")
+    assert filename == "scan.pdf"
+    assert reason.startswith("NO_TEXT")
+    assert not (tmp_path / "rejected_pdfs.txt").exists(), "a scan is not a reject"
+
+
+def test_the_scan_worklist_is_cleared_by_a_clean_run(usable, tmp_path):
+    (tmp_path / "scanned_pdfs.txt").write_text("old.pdf\tNO_TEXT\n",
+                                               encoding="utf-8")
+    ingest.ingest(FakeSource([_doc("a.pdf")]), tmp_path / "db.sqlite", usable, KWP)
+    assert not (tmp_path / "scanned_pdfs.txt").exists()
+
+
+def test_only_a_missing_text_layer_gets_the_benefit_of_the_doubt(monkeypatch,
+                                                                 tmp_path):
+    """The seam is the verdict, not the fact that check() said no."""
+    from docpipe.ingest import pdf_quality
+
+    assert pdf_quality.is_missing_text_layer("NO_TEXT: 40/40 sampled pages empty")
+    assert not pdf_quality.is_missing_text_layer("BROKEN_ENCODING: 12 (cid:N)")
+    assert not pdf_quality.is_missing_text_layer("UNREADABLE: no pages")
+    assert not pdf_quality.is_missing_text_layer("")
 
 
 def test_missing_local_file_without_url_is_an_error(tmp_path):

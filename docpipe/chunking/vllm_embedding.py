@@ -27,7 +27,9 @@ from typing import Any, Optional
 
 import torch
 
-from .qwen3_vl_embedding import MAX_LENGTH, MAX_PIXELS, MIN_PIXELS
+from docpipe import usage
+from docpipe.embedding.config import EMBEDDING_MAX_TOKEN_LENGTH
+from .qwen3_vl_embedding import MAX_PIXELS, MIN_PIXELS
 
 log = logging.getLogger(__name__)
 
@@ -39,7 +41,7 @@ class VllmEmbedder:
         self,
         model_name_or_path: str,
         *,
-        max_length: int = MAX_LENGTH,
+        max_length: int = EMBEDDING_MAX_TOKEN_LENGTH,
         min_pixels: int = MIN_PIXELS,
         max_pixels: int = MAX_PIXELS,
         tensor_parallel_size: Optional[int] = None,
@@ -62,6 +64,7 @@ class VllmEmbedder:
         self.min_pixels = min_pixels
         self.max_pixels = max_pixels
         self.default_instruction = default_instruction
+        self.model_name = model_name_or_path
 
         log.info("vLLM pooling runner: dp=%d tp=%d max_len=%d",
                  data_parallel_size, tensor_parallel_size, max_length)
@@ -140,6 +143,9 @@ class VllmEmbedder:
 
         outs = self.llm.embed([self._to_prompt(i) for i in inputs], use_tqdm=False)
         vecs = torch.tensor([o.outputs.embedding for o in outs], dtype=torch.float32)
+        usage.add(self.model_name, requests=len(outs),
+                  embedding_tokens=sum(len(getattr(o, "prompt_token_ids", None) or ())
+                                       for o in outs))
 
         if not normalize:
             return vecs

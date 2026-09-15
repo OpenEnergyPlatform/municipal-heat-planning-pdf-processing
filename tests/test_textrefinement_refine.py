@@ -146,3 +146,120 @@ def test_a_long_answer_is_bounded_before_it_goes_back():
     assert out.startswith("A" * 100)
     assert out.endswith("ENDE")
     assert "characters omitted" in out
+
+
+# ---------------------------------------------------------------------------
+# Saying out loud what the stage threw away
+# ---------------------------------------------------------------------------
+
+def _prose(word: str, n: int = 40) -> str:
+    return " ".join(f"{word}{i}" for i in range(n))
+
+
+def test_the_stage_names_the_sections_it_dropped(caplog):
+    """Two bugs shipped because nothing reported what came out of this stage,
+    and a falling section count is normal here — a book's index is meant to be
+    removed. So the titles are reported and the judgement is left to the
+    reader: 'Index' and a chapter heading read very differently."""
+    from docpipe.refinement.refine import _report_dropped_text
+
+    before = [{"title": "Index", "content": _prose("entry")},
+              {"title": "3.2 Heat demand", "content": _prose("demand")},
+              {"title": "3.3 Supply", "content": _prose("supply")}]
+    with caplog.at_level("INFO"):
+        _report_dropped_text(before, before[1:])
+    text = caplog.text
+    assert "1 section(s) removed entirely" in text
+    assert "'Index'" in text
+    assert "3.2 Heat demand" not in text, "only what is gone is named"
+
+
+def test_an_edited_section_does_not_count_as_dropped(caplog):
+    """The check has to survive the corrections the stage exists to apply."""
+    from docpipe.refinement.refine import _report_dropped_text
+
+    before = [{"title": "A", "content": "Die Wärme- versorgung " + _prose("x")}]
+    after = [{"title": "A", "content": "Die Wärmeversorgung " + _prose("x")}]
+    with caplog.at_level("INFO"):
+        _report_dropped_text(before, after)
+    assert "removed entirely" not in caplog.text
+
+
+def test_the_report_never_breaks_the_run(caplog):
+    """It runs after an hour of GPU time; it may not be the thing that fails."""
+    from docpipe.refinement.refine import _report_dropped_text
+
+    _report_dropped_text([{"content": None}, {}, {"content": ["bibtex"]}],
+                         [None])
+
+
+# ---------------------------------------------------------------------------
+# A refused request is a verdict, not a bad moment
+# ---------------------------------------------------------------------------
+
+class _Refused(Exception):
+    """What the SDK raises on a 4xx: an error carrying the HTTP status."""
+
+    def __init__(self, message, status_code=400):
+        super().__init__(message)
+        self.status_code = status_code
+
+
+_TOO_LONG = ("This model's maximum context length is 32768 tokens, however you "
+             "requested 41210 tokens")
+
+
+@pytest.fixture
+def slept(monkeypatch):
+    """Every sleep _backoff asks for, in seconds."""
+    seconds = []
+    monkeypatch.setattr(s4.time, "sleep", lambda s: seconds.append(s))
+    return seconds
+
+
+def test_an_oversized_window_is_abandoned_not_retried(
+        make_client, seq_responder, slept, caplog):
+    """The window that does not fit does not start fitting: the old loop sent
+    it three more times, unchanged, with ~12 s of backoff in between."""
+    rec = []
+    client = make_client(seq_responder([_Refused(_TOO_LONG)]), recorder=rec)
+
+    with caplog.at_level("ERROR"):
+        result = s4._call_llm([{"title": "3.2 Wärmebedarf", "content": "x"}], client)
+
+    assert result is None
+    assert len(rec) == 1 and slept == []
+
+
+def test_the_abandoned_window_is_named_out_loud(make_client, seq_responder, caplog):
+    """The caller keeps such a window as raw text, which in the output is
+    indistinguishable from a window that needed no change — so the hole exists
+    only if this says so."""
+    client = make_client(seq_responder([_Refused(_TOO_LONG)]))
+
+    with caplog.at_level("ERROR"):
+        s4._call_llm([{"title": "3.2 Wärmebedarf", "content": "x"},
+                      {"title": "3.3 Versorgung", "content": "y"}], client)
+
+    assert "ABANDONED" in caplog.text
+    assert "3.2 Wärmebedarf" in caplog.text and "3.3 Versorgung" in caplog.text
+
+
+def test_any_other_client_error_also_stops_at_once(
+        make_client, seq_responder, slept):
+    rec = []
+    client = make_client(seq_responder([_Refused("unknown parameter", 400)]),
+                         recorder=rec)
+
+    assert s4._call_llm([{"t": 1}], client) is None
+    assert len(rec) == 1 and slept == []
+
+
+@pytest.mark.parametrize("status", [429, 500, 503])
+def test_a_busy_or_broken_server_is_still_retried(
+        make_client, seq_responder, status):
+    """429 and 5xx are the server asking for time, not refusing the request."""
+    client = make_client(seq_responder([_Refused("later", status),
+                                        '{"sections": []}']))
+
+    assert s4._call_llm([{"t": 1}], client) == []

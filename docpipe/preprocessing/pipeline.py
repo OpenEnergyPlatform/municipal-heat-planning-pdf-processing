@@ -1,11 +1,10 @@
 """
-pipeline.py – Orchestration of the PDF preprocessing pipeline (Stages 1-3).
+pipeline.py: Orchestrates the PDF preprocessing pipeline, Stages 1 to 3.
 
-  1. PyMuPDF        → Text blocks (rawdict)
-  2. PP-DocLayoutV3 → Table / image crops + layout labels + caption resolution
-  3. Section assembly → sections.json
-
-LLM-based section refinement lives in ``docpipe.refinement``.
+Stage 1 reads text blocks with PyMuPDF, as rawdict. Stage 2 runs PP-DocLayoutV3
+to detect table and image crops, layout labels, and caption resolution. Stage 3
+assembles sections and writes sections.json. LLM-based section refinement lives
+in docpipe.refinement, not in this module.
 
 Author: Felix Vossel
 """
@@ -22,6 +21,7 @@ from typing import Optional
 from docpipe.profile import add_profile_argument, resolve_profile
 
 from .config import (
+    PAGE_TRANSCRIPTION_REPORT_JSON,
     PAGES_JSON,
     SECTIONS_JSON,
     clean_data,
@@ -71,11 +71,18 @@ def run_single(
     force_reextract: bool = False,
     page_range: Optional[tuple[int, int]] = None,
     column_layout: str = "auto",
+    transcribe_missing_text: bool = False,
+    profile=None,
 ) -> Optional[dict]:
     """
     Processes a single PDF through Stages 1-3; returns the Stage-3 dict, or
     None on failure. Stage 1+2 results are cached in pages.json and
     reused unless *force_reextract*.
+
+    *transcribe_missing_text* sends pages whose text layer is missing to the
+    vision model and uses the reply as their text blocks. Off by default: it is
+    the only part of preprocessing that needs a model server, and a run that
+    does not ask for it must not depend on one.
     """
     output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -86,6 +93,7 @@ def run_single(
 
     # ── Stage 1 + 2 (with cache) ────────────────────────────────────────
     pages: Optional[list[PageData]] = None
+    n_failed = 0
     if not force_reextract:
         pages = _load_pages_cache(output_dir)
 
@@ -118,6 +126,13 @@ def run_single(
     else:
         log.info(f"Stages 1+2: cache loaded ({len(pages)} pages)")
 
+    # ── Optional: text for pages the PDF has no text layer for ──────────
+    # After Stages 1+2, because the media blocks are then known and only the
+    # TEXT layer is missing; before Stage 3, because from there on nothing may
+    # need to know where a page's text came from.
+    if transcribe_missing_text:
+        _fill_missing_page_text(pdf_path, output_dir, pages, profile=profile)
+
     total_text   = sum(
         sum(1 for b in pg.blocks if b.type == "text")  for pg in pages
     )
@@ -135,6 +150,13 @@ def run_single(
     # ── Stage 3: section assembly (with cache) ─────────────────────────────
     stage3_path = output_dir / SECTIONS_JSON
     result: Optional[dict] = None
+    # Stage 1+2 refuse to cache an incomplete extraction, but Stage 3 used to
+    # cache its sections either way — so the next run paid for the re-extraction
+    # and then loaded the sections built from the broken pages anyway.
+    if n_failed and stage3_path.exists():
+        log.warning("%s: dropping the Stage-3 cache, it was built from an "
+                    "incomplete extraction", pdf_path.name)
+        stage3_path.unlink(missing_ok=True)
     if stage3_path.exists() and not force_reextract:
         try:
             with open(stage3_path, encoding="utf-8") as f:
@@ -145,7 +167,8 @@ def run_single(
             result = None
     if result is None:
         sections = build_sections(pages, column_layout)
-        save_output(sections, output_dir)
+        if not n_failed:
+            save_output(sections, output_dir)
         result = clean_data(sections_to_dict(sections))
 
     log.info(
@@ -167,6 +190,8 @@ def run_folder(
     force_reextract: bool = False,
     glob: str = "*.pdf",
     column_layout: str = "auto",
+    transcribe_missing_text: bool = False,
+    profile=None,
 ) -> dict[str, Optional[dict]]:
     """
     Processes all PDFs in *input_dir* sequentially, keyed by path relative to
@@ -216,6 +241,8 @@ def run_folder(
                 model_tuple=model_tuple,
                 force_reextract=force_reextract,
                 column_layout=column_layout,
+                transcribe_missing_text=transcribe_missing_text,
+                profile=profile,
             )
             status = "ok" if result is not None else "error"
         except Exception as e:
@@ -323,6 +350,44 @@ def report_columns(output_dir: Path, top: int = 20) -> dict[str, tuple[int, int]
 # Unified entry point
 # ---------------------------------------------------------------------------
 
+def _fill_missing_page_text(pdf_path, output_dir, pages, *, profile=None) -> dict:
+    """Transcribe the pages with no text layer, and record what that cost.
+
+    Kept out of run_single's body because it is the one part of preprocessing
+    that talks to a model: everything else here is deterministic, and a run
+    that does not ask for this must not need a server to be up.
+    """
+    import json as _json
+
+    from .page_text_fallback import (PAGE_WORKERS, fill_missing_page_text,
+                                     make_page_renderer, make_transcriber)
+
+    if profile is None:
+        from docpipe.profile import resolve_profile as _resolve
+        profile = _resolve(None)
+
+    report = fill_missing_page_text(
+        pages,
+        render=make_page_renderer(pdf_path),
+        transcribe=make_transcriber(profile),
+        workers=PAGE_WORKERS,
+    )
+    # Written even when nothing needed doing: an empty report is
+    # checked-and-clean, a missing one means nobody looked.
+    out = Path(output_dir) / PAGE_TRANSCRIPTION_REPORT_JSON
+    out.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        out.write_text(_json.dumps(report, indent=2), encoding="utf-8")
+    except OSError as e:
+        log.warning("page transcription report not written: %s", e)
+    if report["pages_transcribed"]:
+        # The pages cache is now richer than what Stage 1 could read, and a
+        # later --rebuild-stage3 must see the transcribed text, not the empty
+        # layer it replaced.
+        _save_pages_cache(pages, Path(output_dir))
+    return report
+
+
 def run(
     input_path: str | Path,
     output_dir: str | Path,
@@ -331,6 +396,8 @@ def run(
     glob: str = "*.pdf",
     rebuild_stage3: bool = False,
     column_layout: str = "auto",
+    transcribe_missing_text: bool = False,
+    profile=None,
 ) -> Optional[dict] | dict[str, Optional[dict]]:
     """
     Entry point: dispatches to run_single() or run_folder() depending on
@@ -354,6 +421,8 @@ def run(
             force_reextract=force_reextract,
             glob=glob,
             column_layout=column_layout,
+            transcribe_missing_text=transcribe_missing_text,
+            profile=profile,
         )
     elif input_path.is_file() and input_path.suffix.lower() == ".pdf":
         return run_single(
@@ -362,6 +431,8 @@ def run(
             force_reextract=force_reextract,
             page_range=page_range,
             column_layout=column_layout,
+            transcribe_missing_text=transcribe_missing_text,
+            profile=profile,
         )
     else:
         raise ValueError(f"Input is neither a PDF nor a folder: {input_path}")
@@ -384,6 +455,7 @@ Examples:
   python -m docpipe.preprocessing.pipeline ./pdfs/ ./out --glob "*.pdf"
   python -m docpipe.preprocessing.pipeline doc.pdf ./out --force-reextract
   python -m docpipe.preprocessing.pipeline ./out --rebuild-stage3
+  python -m docpipe.preprocessing.pipeline doc.pdf ./out --transcribe-missing-text
         """,
     )
     p.add_argument("input",  nargs="?", default=None,
@@ -400,6 +472,11 @@ Examples:
                    help="Re-run ONLY Stage 3 over the output dir's cached docs "
                         "(no PDF input, no layout model); rewrites "
                         "%s from %s" % (SECTIONS_JSON, PAGES_JSON))
+    p.add_argument("--transcribe-missing-text", action="store_true",
+                   help="Pages whose PDF has no text layer are read by the "
+                        "vision model and their reply becomes the page's text "
+                        "blocks. Needs the vision server; off by default "
+                        "because nothing else in preprocessing does.")
     p.add_argument("--pages", nargs=2, type=int, metavar=("START", "END"),
                    help="Only process pages START..END, 0-indexed (single PDF only)")
     p.add_argument("--glob", default="*.pdf",
@@ -422,6 +499,14 @@ def main() -> None:
     )
 
     profile = resolve_profile(args)
+    # A rebuild takes no PDF input, so the one path anybody types is the
+    # processed root — as the epilog shows it. Reading it as *input* left the
+    # output on the profile default, which either does not exist (a corpus in
+    # a legacy layout: a job that dies) or is a DIFFERENT corpus that gets
+    # rebuilt instead (a job that succeeds at the wrong thing). Both have
+    # happened. --report-columns below does the same reasoning.
+    if args.rebuild_stage3 and args.input is not None and args.output is None:
+        args.input, args.output = None, args.input
     explicit_output = args.output is not None
     if args.output is None:
         if profile is None:
@@ -450,6 +535,8 @@ def main() -> None:
             glob=args.glob,
             rebuild_stage3=args.rebuild_stage3,
             column_layout=(profile.column_layout if profile else "auto"),
+            transcribe_missing_text=args.transcribe_missing_text,
+            profile=profile,
         )
         sys.exit(0)
     except ValueError as e:

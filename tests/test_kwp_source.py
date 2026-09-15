@@ -1,4 +1,14 @@
 """The KWW source: PDF overrides, ags coercion, metadata, and the quality gate."""
+# `str | None` in a signature is evaluated at import time before 3.10, and
+# this file is collected by whatever python the developer has. The run itself
+# is 3.11, which is exactly why nobody noticed: the file could not be
+# collected at all on 3.9 and took the whole suite down with it.
+from __future__ import annotations
+
+import conftest
+
+conftest.needs_real("fitz")
+
 import sqlite3
 from pathlib import Path
 from urllib.parse import urlparse
@@ -174,10 +184,42 @@ def test_gate_rejects_scan_without_text(tmp_path):
 
 
 def test_gate_rejects_garbled_text(tmp_path):
-    """Symbol soup: enough characters to judge, but no letters and no umlauts."""
+    """Symbol soup on every page: enough characters to judge, and no letters."""
     p = _pdf(tmp_path / "garbled.pdf", 40, text=GARBLE, lines=8)
     ok, reason = pdf_quality.check(p)
     assert not ok and reason.startswith("BROKEN_ENCODING"), reason
+
+
+ENGLISH_TEXT = ("The scenario reaches net-zero emissions by 2050 across all sectors. "
+                "Final energy demand falls while electrification of heat accelerates.")
+NUMBERS = "2018 2019 2020 | 1.2 3.4 -0.8 | 12.5 % 7.1 % 0.3 % | 1 204 3 517 8 012 |"
+
+
+def test_a_statistical_annex_is_not_a_broken_glyph_map(tmp_path):
+    """An outlook that is mostly tables reads as symbol soup in aggregate: the
+    even sample lands in the annex and the letter ratio drops below the bar.
+    A broken glyph map is broken on every page, so one page of ordinary prose
+    acquits the document — this cost the AR6 corpus a readable 318-page report
+    while the rule still said "and no umlauts", which only ever acquitted German.
+    """
+    import fitz
+    doc = fitz.open()
+    for i in range(60):
+        page = doc.new_page()
+        text = ENGLISH_TEXT if i % 12 == 0 else NUMBERS
+        for ln in range(8):
+            page.insert_text((50, 100 + ln * 20), text, fontsize=9)
+    p = tmp_path / "outlook.pdf"
+    doc.save(str(p)); doc.close()
+
+    ok, reason = pdf_quality.check(p)
+
+    assert ok, reason
+
+
+def test_english_prose_passes_without_an_umlaut_in_sight(tmp_path):
+    ok, reason = pdf_quality.check(_pdf(tmp_path / "paper.pdf", 12, text=ENGLISH_TEXT))
+    assert ok, reason
 
 
 def test_gate_rejects_unreadable_file(tmp_path):
@@ -203,14 +245,28 @@ def test_gate_samples_across_the_document(tmp_path):
 
 
 def test_refuses_unusable_pdf(monkeypatch, tmp_path):
-    """A scan raises UnusablePDF and leaves nothing in the DB."""
+    """Garbled text raises UnusablePDF and leaves nothing in the DB."""
+    con = _db()
+    _pdf(tmp_path / "garbled.pdf", 40, text=GARBLE, lines=8)
+    monkeypatch.setattr(ingest, "download_pdf", lambda url, d: "garbled.pdf")
+    with pytest.raises(ingest.UnusablePDF):
+        _process(_row(7654321, "https://kww/x/garbled.pdf"), con, tmp_path)
+    assert con.execute("SELECT COUNT(*) FROM Documents").fetchone()[0] == 0
+    assert con.execute("SELECT COUNT(*) FROM Municipalities").fetchone()[0] == 0
+
+
+def test_a_scan_reaches_the_register_and_its_municipality_with_it(monkeypatch,
+                                                                  tmp_path):
+    """Grevesmühlen and Kronshagen: complete plans, no text layer, refused at
+    the door. The municipality lost its plan AND its register row with it."""
     con = _db()
     _pdf(tmp_path / "scan.pdf", 12, text=None)
     monkeypatch.setattr(ingest, "download_pdf", lambda url, d: "scan.pdf")
-    with pytest.raises(ingest.UnusablePDF):
-        _process(_row(7654321, "https://kww/x/scan.pdf"), con, tmp_path)
-    assert con.execute("SELECT COUNT(*) FROM Documents").fetchone()[0] == 0
-    assert con.execute("SELECT COUNT(*) FROM Municipalities").fetchone()[0] == 0
+
+    _process(_row(7654321, "https://kww/x/scan.pdf"), con, tmp_path)
+
+    assert con.execute("SELECT filename FROM Documents").fetchall() ==         [("scan.pdf",)]
+    assert con.execute("SELECT ags FROM Municipalities").fetchall() == [(7654321,)]
 
 
 # ---------------------------------------------------------------------------
@@ -363,4 +419,29 @@ def test_the_three_pasted_links_are_resolved_by_their_own_plans():
     for ags, fn in owners.items():
         assert keys[fn] == str(ags), "and the real owner keeps its plan"
     # the pin stays as a guard: it names the owner if the paste ever returns
-    assert set(SHARED_FILE_OWNERS.values()) == set(owners)
+    assert set(owners) <= set(SHARED_FILE_OWNERS.values())
+
+
+def test_a_victim_without_a_plan_of_its_own_is_still_named(caplog):
+    """These three each got their own file in the end. Hofstetten (Oberbayern)
+    did not: its KWW row points at the Kinzigtal report and no plan of its own
+    exists, so the entry is all that keeps the coverage honest. The convoy
+    marking on the OTHER row is why nothing warned about it."""
+    from profiles.kwp.config import SHARED_FILE_OWNERS
+    from profiles.kwp.source import group_keys_by_filename
+
+    shared = "waermeplan_hofstetten_20251101.pdf"
+    assert SHARED_FILE_OWNERS[shared] == 8317046
+
+    baden = _row(8317046, "https://k/Waermeplan_Hofstetten_20260401.pdf")
+    baden["Konvoi ID"] = "BW Haslach im Kinzigtal"
+    oberbayern = _row(9181124, "https://k/" + shared)
+    oberbayern["Konvoi ID"] = float("nan")
+
+    with caplog.at_level("WARNING"):
+        keys = group_keys_by_filename([baden, oberbayern])
+    # The override puts Baden on the shared file, so the owner rule decides it.
+    assert keys[shared] == "8317046"
+    assert "no convoy between them" not in caplog.text, (
+        "one member's convoy id silences the warning for the whole file — the "
+        "reason this pairing went unnoticed")

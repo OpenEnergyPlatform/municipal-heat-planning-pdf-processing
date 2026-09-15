@@ -1,9 +1,12 @@
 """
-app.py – Streamlit RAG chat over a docpipe corpus. The only module that imports
-Streamlit.
+app.py: Streamlit RAG chat over a docpipe corpus, the only module in this
+package that imports Streamlit.
 
 What the corpus is about comes from the profile: its catalog supplies the
-labels, the filters and the detail shown for a selected document.
+labels, the filters and the detail shown for a selected document. Answers
+come from the documents alone. The graph route is not offered while no
+corpus graph exists, and `docpipe.inference.kg_route` stays in the core for
+the day it does.
 
 Run:
     DOCPIPE_PROFILE=kwp streamlit run scripts/inference_app/app.py \\
@@ -37,7 +40,8 @@ if _REPO_ROOT not in sys.path:
 import streamlit as st
 
 from docpipe.inference import (
-    answer, catalog, chunker, faiss_store, llm_client, query_cache, request_log,
+    answer, catalog, chunker, compare, faiss_store, kg_route, llm_client,
+    query_cache, request_log,
 )
 from docpipe.inference import config as core_config
 from docpipe.inference import db
@@ -77,6 +81,18 @@ def get_request_log():
 def get_catalog():
     """The profile's catalog, or the generic one if no profile is configured."""
     return catalog.load_catalog(config.PROFILE)
+
+
+@st.cache_resource
+def get_graph():
+    """The graph `--serialize` wrote, and the trust lines above its nodes."""
+    return kg_route.load_graph(config.KG_TTL_PATH)
+
+
+@st.cache_resource
+def get_kg_hooks():
+    """What the profile contributes to the graph route; None without a graph."""
+    return kg_route.hooks(config.PROFILE)
 
 
 # ---------------------------------------------------------------------------
@@ -135,8 +151,47 @@ def run_turn(task: str, image_bytes: bytes | None, image_only: bool,
     )
 
 
+def run_comparison(task: str, documents: list, scopes: list[str],
+                   as_json: bool = False, histories: dict | None = None):
+    """The same question to every selected document, then one comparison.
+
+    No image: an uploaded picture is a query anchor for one document's index,
+    and the same crop searched across five plans anchors four of them to
+    whatever happens to look similar.
+    """
+    with _spinner("Vorbereiten"):
+        index, id_to_pos = get_index()
+    cache_conn = get_cache()
+
+    def _embed(item):
+        key = query_cache.make_key("text", text=item.get("text"))
+        return embed_query(item, cache_conn, key)
+
+    corpus = answer.Corpus(
+        conn=get_db(), index=index, id_to_pos=id_to_pos, embed=_embed,
+        resolve_image=resolve_image_path, log_conn=get_request_log(),
+    )
+    return compare.compare_documents(
+        task, corpus, documents, scopes, as_json=as_json,
+        histories=histories, progress=_spinner,
+    )
 
 
+
+
+def run_kg_turn(task: str, document_id: int) -> dict:
+    """One question to the graph; `answer_from_graph` decides everything."""
+    graph, comments = get_graph()
+    return kg_route.answer_from_graph(
+        task, get_kg_hooks(), graph, comments, db_path=config.DB_PATH,
+        document=db.document_filename(get_db(), document_id),
+        ask=_ask_coordinate)
+
+
+def _ask_coordinate(task: str, slot):
+    """One closed question to the model, over the spec's own list."""
+    return llm_client.choose(get_kg_hooks().prompt, task, slot.question,
+                             slot.answerable() if slot.is_closed else {})
 
 
 def _spinner(label: str):
@@ -182,13 +237,24 @@ def main() -> None:
             st.stop()
 
         by_id = {e.id: e for e in entries}
-        doc_id = st.selectbox(
+        # Several selected = the same question to each, then a comparison over
+        # the answers. Not a joint retrieval: the longest chapter would take
+        # every slot in the top-k and the other documents would look silent.
+        doc_ids = st.multiselect(
             cat.document_noun, options=list(by_id),
             format_func=lambda i: by_id[i].label,
+            default=list(by_id)[:1],
+            max_selections=config.COMPARE_MAX_DOCUMENTS,
+            help="Mehrere Auswahlen: dieselbe Frage geht an jeden Plan einzeln, "
+                 "danach werden nur die Antworten verglichen.",
         )
-        for heading, lines in by_id[doc_id].detail:
-            with st.expander(heading):
-                st.markdown("\n".join(f"- {line}" for line in lines))
+        if not doc_ids:
+            st.warning(f"Bitte mindestens ein {cat.document_noun} wählen.")
+            st.stop()
+        if len(doc_ids) == 1:
+            for heading, lines in by_id[doc_ids[0]].detail:
+                with st.expander(heading):
+                    st.markdown("\n".join(f"- {line}" for line in lines))
         scopes = st.multiselect(
             "Suchbereich", options=config.ALL_SCOPES, default=config.ALL_SCOPES,
             help="Tabellen/Bilder liegen doppelt im Index: „Bild + Beschreibung“ "
@@ -200,17 +266,28 @@ def main() -> None:
         if config.LLM_STUB_MODE:
             st.info("LLM_STUB_MODE aktiv – Antworten sind Platzhalter.")
 
-    # ---- Reset chat when the document changes ----
-    if st.session_state.get("doc_id") != doc_id:
-        st.session_state["doc_id"] = doc_id
+    # ---- Reset chat when the selection changes ----
+    comparing = len(doc_ids) > 1
+    doc_id = doc_ids[0]
+    if st.session_state.get("doc_ids") != doc_ids:
+        st.session_state["doc_ids"] = doc_ids
         st.session_state["chat_history"] = []
-        st.session_state["turns"] = []          # follow-up context resets with the document
+        # Follow-up context resets with the selection, and it is kept per
+        # document: a re-check has to search past what THAT document already
+        # showed, not past what another one did.
+        st.session_state["turns_by_doc"] = {}
 
     history = st.session_state.setdefault("chat_history", [])
 
     # ---- Render history ----
     for msg in history:
         with st.chat_message(msg["role"]):
+            if msg.get("kg_values") is not None:
+                _render_kg(msg["kg_values"])
+                continue
+            if msg.get("rows") is not None:
+                _render_comparison(msg)
+                continue
             if msg["role"] == "assistant":
                 _render_answer(msg["content"], msg.get("as_json", False))
             else:
@@ -219,6 +296,8 @@ def main() -> None:
                 st.caption(f"🔎 Suchanker (Embedding-Phrase): {msg['phrase']}")
             if msg.get("recheck_note"):
                 st.caption(msg["recheck_note"])
+            if msg.get("route_note"):
+                st.caption(msg["route_note"])
             _render_compute(msg.get("compute"))
             for cit in msg.get("citations", []):
                 _render_citation(cit)
@@ -226,7 +305,9 @@ def main() -> None:
     # ---- Optional image upload + mode ----
     # The image and this toggle only change how the *query embedding* is formed;
     # the text task always drives the final question answering.
-    uploaded = st.file_uploader("Optionales Bild zur Anfrage", type=["png", "jpg", "jpeg"])
+    uploaded = (None if comparing else
+                st.file_uploader("Optionales Bild zur Anfrage",
+                                 type=["png", "jpg", "jpeg"]))
     image_only = False
     if uploaded is not None:
         image_only = st.radio(
@@ -251,8 +332,25 @@ def main() -> None:
     with st.chat_message("user"):
         st.markdown(user_text)
 
+    by_doc = st.session_state.setdefault("turns_by_doc", {})
+
+    if comparing:
+        outcome = run_comparison(task, [(i, by_id[i].label) for i in doc_ids],
+                                 scopes, as_json=as_json, histories=by_doc)
+        with st.chat_message("assistant"):
+            _render_comparison(outcome)
+        history.append({"role": "assistant", "content": "", **outcome})
+        for row in outcome["rows"]:
+            _remember(by_doc, row["document_id"], task, row)
+        return
+
+    # The graph route is not offered: there is no corpus graph yet, and a
+    # selector for a source that does not exist is a promise the app cannot
+    # keep. `kg_route` stays in the core for the day the graph is there.
+    route_note = None
+
     result = run_turn(task, image_bytes, image_only, doc_id, scopes, as_json=as_json,
-                      history=st.session_state.get("turns", []))
+                      history=by_doc.get(doc_id, []))
 
     recheck_note = None
     if result.get("recheck"):
@@ -274,10 +372,13 @@ def main() -> None:
                 st.caption(f"🔎 Suchanker (Embedding-Phrase): {result['phrase']}")
             if recheck_note:
                 st.caption(recheck_note)
+            if route_note:
+                st.caption(route_note)
             _render_compute(result.get("compute"))
             history.append({"role": "assistant", "content": reply, "citations": [],
                             "phrase": result.get("phrase"), "as_json": False,
                             "recheck_note": recheck_note,
+                            "route_note": route_note,
                             "compute": result.get("compute", [])})
         else:
             _render_answer(result["answer"], result["as_json"])
@@ -285,6 +386,8 @@ def main() -> None:
                 st.caption(f"🔎 Suchanker (Embedding-Phrase): {result['phrase']}")
             if recheck_note:
                 st.caption(recheck_note)
+            if route_note:
+                st.caption(route_note)
             _render_compute(result.get("compute"))
             # Rendered directly (not inside an expander) so each citation can carry
             # its own "Kontext anzeigen" expander without illegal nesting.
@@ -294,14 +397,21 @@ def main() -> None:
                 "role": "assistant", "content": result["answer"],
                 "citations": result["citations"], "phrase": result.get("phrase"),
                 "as_json": result["as_json"], "recheck_note": recheck_note,
+                "route_note": route_note,
                 "compute": result.get("compute", []),
             })
 
-    # Remember this turn for follow-ups; no document excerpts are retained.
-    # Failed turns too: "schau noch einmal nach" is asked precisely AFTER a
-    # failure, and without the failed question in context the anchor is built
-    # from the literal follow-up words with no referent at all.
-    turns = st.session_state.setdefault("turns", [])
+    _remember(by_doc, doc_id, task, result)
+
+
+def _remember(by_doc: dict, document_id: int, task: str, result: dict) -> None:
+    """Keep this turn as follow-up context for ITS document; no excerpts.
+
+    Failed turns too: "schau noch einmal nach" is asked precisely AFTER a
+    failure, and without the failed question in context the anchor is built
+    from the literal follow-up words with no referent at all.
+    """
+    turns = by_doc.setdefault(document_id, [])
     turns.append({
         "task": task, "phrase": result.get("phrase"),
         "answer": result.get("answer_text") or result.get("answer")
@@ -312,7 +422,76 @@ def main() -> None:
         "examined": result.get("examined", []),
         "recheck": result.get("recheck", False),
     })
-    st.session_state["turns"] = turns[-5:]
+    by_doc[document_id] = turns[-5:]
+
+
+def _render_comparison(outcome: dict) -> None:
+    """The comparison, then every document's own answer and citations.
+
+    The comparison first because it is what was asked for, and each answer in
+    full underneath it because the comparison is the only part of this screen
+    that no citation backs: it was written from the answers alone.
+    """
+    rows = outcome.get("rows") or []
+    if outcome.get("dropped"):
+        st.warning("Nicht abgefragt (Obergrenze %d): %s"
+                   % (config.COMPARE_MAX_DOCUMENTS, ", ".join(outcome["dropped"])))
+    if outcome.get("comparison"):
+        st.markdown(outcome["comparison"])
+        st.caption("⚖️ Vergleich der Antworten, ohne eigene Quellen — die Belege "
+                   "stehen bei den einzelnen Antworten.")
+    elif outcome.get("answered", 0) < 2:
+        st.markdown("Zu wenige belegte Antworten für einen Vergleich.")
+    else:
+        st.markdown("Der Vergleich konnte nicht erzeugt werden; die Antworten "
+                    "der einzelnen Pläne stehen unten.")
+    st.dataframe(
+        [{"Plan": r["label"], "Antwort": compare.summary(r),
+          "Belege": r.get("n_findings", 0)} for r in rows],
+        hide_index=True, use_container_width=True)
+    for row in rows:
+        st.subheader(row["label"])
+        if row.get("answer") is None:
+            st.markdown("Keine belegbare Information in diesem Plan gefunden."
+                        if row.get("n_hits") else
+                        "Keine Treffer im gewählten Suchbereich.")
+        else:
+            _render_answer(row["answer"], outcome.get("as_json", False))
+        if row.get("phrase"):
+            st.caption(f"🔎 Suchanker (Embedding-Phrase): {row['phrase']}")
+        _render_compute(row.get("compute"))
+        for cit in row.get("citations", []):
+            _render_citation(cit)
+
+
+def _render_kg(values: list) -> None:
+    """The graph's values, each under the trust line the serializer wrote.
+
+    The badge is the LAST comment line above the node and the evidence the
+    rest, which is the order evidence_comment writes them in. A C is a
+    warning because the profile's own word for it is a review request.
+    """
+    hooks = get_kg_hooks()
+    for value in values:
+        st.markdown(f"**{value['number']} {hooks.label(value['unit'])}** · "
+                    f"{value['year']} · {hooks.label(value['quantity'])} · "
+                    f"{hooks.label(value['aggregation'])}")
+        # Carrier and sector come back under one predicate; the spec's own
+        # lists say which is which, so the caption names the axis.
+        about = [f"{axis or '?'}: " + ", ".join(hooks.label(iri) for iri in iris)
+                 for axis, iris in kg_route.by_axis(
+                     hooks.spec, hooks.axes, (value.get("abouts") or "").split())]
+        st.caption("🏷 " + " · ".join([value["partLabel"]] + about))
+        level = kg_route.trust_level(value["trust"], hooks.prose)
+        if level == kg_route.LEVEL_C:
+            st.warning(value["trust"])
+        elif level == kg_route.LEVEL_B:
+            st.caption(value["trust"])
+        else:
+            st.markdown(value["trust"])
+        if value.get("evidence"):
+            with st.expander("Beleg anzeigen"):
+                st.markdown("\n".join(f"- {line}" for line in value["evidence"]))
 
 
 def _render_compute(compute: list | None) -> None:

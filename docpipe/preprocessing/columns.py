@@ -1,18 +1,21 @@
 """
-columns.py – Reading order on a page that has more than one text column.
+columns.py: Determines reading order on a page with more than one
+text column.
 
-Sorting blocks top-to-bottom, then left-to-right is right for a single column
-and wrong for two: it reads across the gutter and interleaves the columns line
-by line, which scrambles the text beyond repair downstream.
+Sorting blocks top-to-bottom, then left-to-right is correct for a
+single column and wrong for two: it reads across the gutter and
+interleaves the columns line by line, which scrambles the text
+beyond repair downstream.
 
-So the gutters are found first — the vertical strips text stays out of — and the
-page is then read column by column. Blocks that DO cross a gutter (a full-width
-heading, a wide table) are spanning blocks: they end the columns above them and
-start new ones below, which is exactly how such a page reads.
+Gutters, the vertical strips that text stays out of, are found
+first; the page is then read column by column. A block that crosses
+a gutter (a full-width heading, a wide table) is a spanning block: it
+ends the columns above it and starts new ones below it, matching how
+such a page is read.
 
-The number of columns is not assumed. Two is the common case in a report, but
-slide-style pages run to three or four, and one wrong split there is as bad as
-no split at all.
+The number of columns is not assumed. Two is the common case in a
+report, but slide-style pages run to three or four columns, and a
+wrong split is as bad as no split at all.
 
 Author: Felix Vossel
 """
@@ -106,20 +109,45 @@ def _column_counts(bodies: list, gutters: list) -> list:
     return [len(c) for c in _columns_of(bodies, gutters)]
 
 
-def _shares_a_left_edge(column: list) -> bool:
+def _edge_clusters(column: list) -> list:
+    """Sizes of the column's left-edge groups, largest first.
+
+    Grouped by proximity, not by rounding onto a fixed grid: two lines starting
+    at 306.0 and 306.4 pt are the same edge by eye and by any reasonable
+    tolerance, but round(x / 4) puts them either side of a bucket boundary and
+    calls them two.
     """
-    True when the column's blocks line up on one left edge.
+    edges = sorted(b.bbox[0] for b in column)
+    sizes: list[int] = []
+    start = None
+    for x in edges:
+        if start is None or x - start > COLUMN_ALIGN_TOL_PT:
+            sizes.append(1)
+            start = x
+        else:
+            sizes[-1] += 1
+    return sorted(sizes, reverse=True)
+
+
+def _aligned_like_a_column(column: list) -> bool:
+    """
+    True when the column's blocks line up on one or two left edges.
 
     This is what separates a column of text from the labels scattered around a
     chart: both leave clean vertical gaps, only one of them is typeset.
+
+    Two edges, not one, because a bulleted list is typeset on two: the bullet
+    line and the deeper indent its continuation lines take. Insisting on one
+    edge threw away every page whose column carried a list — on one page of a
+    two-column book, 30 blocks began at the bullet and 11 at the indent, giving
+    0.71 where 0.75 was demanded, and the page was then read straight across the
+    gutter, interleaving the two columns line by line. Scattered chart labels
+    are still rejected: they do not fall into two groups either.
     """
     if not column:
         return False
-    edges: dict = {}
-    for b in column:
-        key = round(b.bbox[0] / COLUMN_ALIGN_TOL_PT)
-        edges[key] = edges.get(key, 0) + 1
-    return max(edges.values()) / len(column) >= COLUMN_MIN_ALIGNED_FRAC
+    sizes = _edge_clusters(column)
+    return sum(sizes[:2]) / len(column) >= COLUMN_MIN_ALIGNED_FRAC
 
 
 def _spans(block, gutters: Sequence) -> bool:
@@ -178,7 +206,7 @@ def find_gutters(blocks: Sequence, page_width: float) -> list:
         return []
     if sum(1 for b in bodies if _spans(b, gutters)) / len(bodies) > COLUMN_MAX_SPAN_FRAC:
         return []
-    if not all(_shares_a_left_edge(c) for c in _columns_of(bodies, gutters)):
+    if not all(_aligned_like_a_column(c) for c in _columns_of(bodies, gutters)):
         return []
     return gutters
 

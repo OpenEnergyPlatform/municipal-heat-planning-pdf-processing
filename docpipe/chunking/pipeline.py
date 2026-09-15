@@ -1,8 +1,10 @@
 """
-pipeline.py – Orchestration of the chunkingandembedding module: merge → db → embed.
+pipeline.py: Orchestrates the chunkingandembedding stage: merge, then
+the database step, then embedding.
 
-CLI:
-  python -m docpipe.chunking /data/processed/ /path/to/KWP.db /path/to/faiss.index
+Runs as a command line module:
+  python -m docpipe.chunking /data/processed/ /path/to/KWP.db
+      /path/to/faiss.index
 
 Author: Felix Vossel
 """
@@ -13,29 +15,38 @@ import json
 import logging
 import sys
 from pathlib import Path
+from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from typing import Optional
 
+from docpipe import usage
 from docpipe.profile import add_profile_argument, resolve_profile
 
 from .config import (
     EMBED_FLUSH_ITEMS,
+    EMBED_PREPARE_AHEAD,
     EMBED_PREPARE_WORKERS,
+    EMBED_SAVE_VECTORS,
     EMBEDDING_MODEL,
     DOCUMENT_JSON,
 )
 from .merge import merge_batch
 from .database import (
     update_database,
+    document_id,
     enrich_bbox,
+    enrich_caption,
+    enrich_page_source,
     get_existing_embeddings,
     clear_embedding_ids,
+    drop_embeddings_missing_from_index,
     get_document_faiss_ids,
     next_faiss_id,
 )
 from .chunking import build_embedding_inputs
 from .embedding import (
     load_or_create_index,
+    index_ids,
     save_index,
     remove_ids_from_index,
     create_embeddings,
@@ -43,6 +54,42 @@ from .embedding import (
 )
 
 log = logging.getLogger(__name__)
+
+
+def peak_rss_gb() -> float:
+    """Peak resident memory of this process in GB, 0.0 where unavailable.
+
+    Logged per flush so a memory trend is visible in the log while it grows.
+    The run this was added for died at 194 GB with nothing in the log but the
+    kill message, which said what happened and nothing about the approach.
+    """
+    try:
+        import resource
+    except ImportError:                      # not POSIX
+        return 0.0
+    peak = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+    # Linux reports KB, macOS bytes.
+    return round(peak / (1024 ** 2 if sys.platform != "darwin" else 1024 ** 3), 1)
+
+
+def prepared_ahead(pool, items, work, ahead=EMBED_PREPARE_AHEAD):
+    """Yield work(item) in order, with at most `ahead` items in flight.
+
+    Executor.map submits EVERY item immediately and makes only the consumption
+    lazy (measured on Python 3.11: after the first result was taken, all
+    500 tasks had already run). With preparation far faster than embedding, the
+    finished results pile up until the whole corpus is resident - a million
+    section texts for 1078 plans, which is what the OOM kill at 194 GB was. A
+    sliding window keeps the overlap that made this a pool and bounds what is
+    resident to a constant.
+    """
+    in_flight: deque = deque()
+    for item in items:
+        in_flight.append(pool.submit(work, item))
+        if len(in_flight) >= ahead:
+            yield in_flight.popleft().result()
+    while in_flight:
+        yield in_flight.popleft().result()
 
 
 def run(
@@ -57,14 +104,29 @@ def run(
     Run the pipeline over the PDF subdirectories of `data_dir`.
 
     `step` limits the run to 'merge', 'db', 'embed' or the standalone
-    'enrich-bbox'; None runs merge → db → embed. `force` ignores caches and
-    clears old embeddings.
+    'enrich-bbox', 'enrich-page-source' or 'enrich-caption'; None runs
+    merge → db → embed (the db step backfills the page source and the
+    captions itself). `force` ignores caches and clears old embeddings.
     """
     data_dir = Path(data_dir)
     db_path = Path(db_path)
     index_path = Path(index_path)
 
     # Standalone maintenance step: never part of the default merge→db→embed run.
+    if step == "enrich-page-source":
+        # Which plans are a reading of a reading. Standalone like enrich-bbox,
+        # and run at the end of the db step too, so a new document carries it
+        # without anyone remembering to ask.
+        enrich_page_source(db_path, data_dir, force=force)
+        return
+
+    if step == "enrich-caption":
+        # The sentence that names a table, taken from the section text where
+        # Stage 2 linked a footnote instead. Pure SQL over the finished
+        # database, so the corpus does not have to be preprocessed again.
+        enrich_caption(db_path, force=force)
+        return
+
     if step == "enrich-bbox":
         sep = "=" * 60
         log.info(sep)
@@ -98,6 +160,15 @@ def run(
         log.info("Step 2: Updating database")
         log.info(sep)
         update_database(db_path, data_dir, force=force)
+        # Which of these documents are a reading of a reading. One JSON read
+        # per directory, no model, and it has to happen here or the eleven
+        # textless plans are indistinguishable from the other 1,071 the
+        # moment they are in the database.
+        enrich_page_source(db_path, data_dir, force=force)
+        # And the title of every table and figure. Stage 3 settles it at write
+        # time, so this finds nothing to do on a freshly preprocessed plan --
+        # it is here for the ones that were processed before it did.
+        enrich_caption(db_path, force=force)
 
     if "embed" in steps:
         sep = "=" * 60
@@ -106,8 +177,18 @@ def run(
         log.info(sep)
 
         index, next_id = load_or_create_index(index_path)
-        # The DB is the id source of truth; index.ntotal alone can reuse an id.
-        next_id = max(next_id, next_faiss_id(db_path))
+        # Every id the index holds, read once: it settles both questions below.
+        held = index_ids(index)
+        # A run that died between a batch's DB write and the chunk's index save
+        # leaves rows whose vector is not in the file. Unreconciled they read as
+        # "already embedded" on the resume and the item is never searchable
+        # again, without a single error line. This is the resume's first act.
+        drop_embeddings_missing_from_index(db_path, held)
+        # The DB is the id source of truth, but an id still living in the index
+        # must not be handed out either: ntotal is a count, not a high-water
+        # mark, and dips below one after an eviction.
+        next_id = max(next_id, next_faiss_id(db_path),
+                      (max(held) + 1) if held else 0)
         embedder = load_embedder(EMBEDDING_MODEL)
 
         candidates = sorted(
@@ -136,9 +217,19 @@ def run(
         # every GPU idle, because all 800 documents were prepared before the
         # first batch was embedded. Prepared in a pool, the work overlaps with
         # the embedding instead of preceding it.
+        unregistered: list = []
+
         def prepare(pdf_dir):
             pdf_name = pdf_dir.name
-            existing = get_existing_embeddings(db_path, pdf_name)
+            doc_id = document_id(db_path, pdf_name)
+            if doc_id is None:
+                # Embedding it would burn GPU time on vectors whose DB write
+                # cannot resolve an owner: they enter the index, nothing points
+                # at them, and the next run does it again. Two such directories
+                # put 1096 dead vectors into the heat-plan index per run.
+                unregistered.append(pdf_name)
+                return []
+            existing = get_existing_embeddings(db_path, pdf_name, doc_id=doc_id)
             with open(pdf_dir / DOCUMENT_JSON, "r", encoding="utf-8") as f:
                 merged_data = json.load(f)
             return [
@@ -153,9 +244,13 @@ def run(
         pending: list = []
         docs_with_inputs = 0
         embedded = 0
+        # The index is one file rewritten whole, so it is saved on vectors
+        # added since the last save — not per chunk, which was a ~16 GB write
+        # every 4096 items with the GPUs waiting for it.
+        saved_ntotal = index.ntotal
 
         with ThreadPoolExecutor(max_workers=EMBED_PREPARE_WORKERS) as pool:
-            for inputs in pool.map(prepare, candidates):
+            for inputs in prepared_ahead(pool, candidates, prepare):
                 if not inputs:
                     continue
                 docs_with_inputs += 1
@@ -164,21 +259,33 @@ def run(
                     embedded += len(pending)
                     next_id = create_embeddings(
                         pending, index, next_id, db_path, embedder=embedder,
-                        index_path=index_path,
                     )
                     pending = []
+                    if index.ntotal - saved_ntotal >= EMBED_SAVE_VECTORS:
+                        save_index(index, index_path)
+                        saved_ntotal = index.ntotal
+                    log.info("%d/%d docs prepared, %d items embedded, "
+                             "peak RSS %.1f GB",
+                             docs_with_inputs, len(candidates), embedded,
+                             peak_rss_gb())
 
         if pending:
             embedded += len(pending)
             next_id = create_embeddings(
                 pending, index, next_id, db_path, embedder=embedder,
-                index_path=index_path,
             )
 
         log.info(
             "Embedded %d new items across %d/%d docs",
             embedded, docs_with_inputs, len(candidates),
         )
+        if unregistered:
+            log.warning(
+                "%d processed director(ies) have no Documents row and were "
+                "skipped: %s. They are output without a corpus entry — either "
+                "register them or remove the directory.",
+                len(unregistered), ", ".join(sorted(unregistered)[:5])
+                + (" …" if len(unregistered) > 5 else ""))
 
         save_index(index, index_path)
         log.info("Embedding complete: %d total vectors in index", index.ntotal)
@@ -206,10 +313,16 @@ Examples:
     p.add_argument("index_path", nargs="?", default=None,
                    help="FAISS index (default: the profile's)")
     p.add_argument(
-        "--step", choices=["merge", "db", "embed", "enrich-bbox"], default=None,
+        "--step", choices=["merge", "db", "embed", "enrich-bbox",
+                           "enrich-page-source", "enrich-caption"], default=None,
         help="Run only a specific step (default: merge, db, embed). "
              "'enrich-bbox' additively backfills segment/table/image bbox from "
-             "re-run Stage-3 outputs without re-embedding (index_path is ignored).",
+             "re-run Stage-3 outputs without re-embedding (index_path is ignored). "
+             "'enrich-page-source' additively backfills how many pages of each "
+             "document a model transcribed, from the preprocessing report. "
+             "'enrich-caption' additively replaces a table/figure caption that "
+             "does not open like one with the sentence before its placeholder "
+             "in the section text (no model, data_dir is ignored).",
     )
     add_profile_argument(p)
     p.add_argument("--force", action="store_true", help="Force re-processing")
@@ -232,6 +345,7 @@ def main() -> None:
     )
 
     profile = resolve_profile(args)
+    usage.begin("chunking")
     if profile is not None:
         args.data_dir = args.data_dir or str(profile.processed_dir)
         args.db_path = args.db_path or str(profile.db_path)

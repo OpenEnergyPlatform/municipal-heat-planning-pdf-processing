@@ -6,6 +6,7 @@ Covers db.py (candidate-faiss-id UNION + content/citation lookup), chunker.py
 key derivation). Streamlit / FAISS / torch paths are exercised on the server,
 not here.
 """
+import json
 import sqlite3
 
 import pytest
@@ -465,34 +466,22 @@ def test_ask_chunk_stub_quote_is_grounded():
 
 
 # ---------------------------------------------------------------------------
-# llm_client.py – search-anchor guard (reject evaluation/refusal phrases)
+# llm_client.py – the search anchor is the sentence the model wrote
 # ---------------------------------------------------------------------------
-def test_non_anchor_detects_refusal_phrase():
+def test_the_search_phrase_is_the_sentence_the_model_wrote(monkeypatch):
+    """No filter on the anchor: none was ever approved, and the answer still
+    comes from the retrieved text under the grounding gate. Only an empty
+    phrase falls back to the task."""
     llm = pytest.importorskip("docpipe.inference.llm_client")
-    # the exact self-contradictory string the gateway produced for an image query
-    assert llm._looks_like_non_anchor(
-        "Abbildung: Keine ähnlichen Diagramme im bereitgestellten Kontext nachweisbar."
-    ) is True
-
-
-@pytest.mark.parametrize("bad", [
-    "Die Information ist nicht enthalten.",
-    "Dazu liegen keine Angaben vor.",
-    "Lässt sich aus dem Kontext nicht ableiten.",
-])
-def test_non_anchor_detects_variants(bad):
-    llm = pytest.importorskip("docpipe.inference.llm_client")
-    assert llm._looks_like_non_anchor(bad) is True
-
-
-@pytest.mark.parametrize("good", [
-    "Abbildung: Gestapeltes Balkendiagramm des jährlichen Wärmebedarfs nach Sektoren in MWh/a.",
-    "Die kommunale Wärmeplanung wurde durch die Musterplan Energie GmbH aus Freiburg erstellt.",
-    "Säulendiagramm der Baualtersklassen der Gebäude im Gemeindegebiet, Anteile in Prozent.",
-])
-def test_non_anchor_passes_real_anchors(good):
-    llm = pytest.importorskip("docpipe.inference.llm_client")
-    assert llm._looks_like_non_anchor(good) is False
+    monkeypatch.setattr(llm, "LLM_STUB_MODE", False)
+    said = {"phrase": "Dazu liegen keine Angaben vor.", "repetition": False}
+    monkeypatch.setattr(llm, "_chat_json", lambda *a, **k: dict(said))
+    assert llm.make_search_phrase("Wer hat den Plan erstellt?") == (
+        "Dazu liegen keine Angaben vor.", False)
+    said["phrase"] = ""
+    assert llm.make_search_phrase("Wer hat den Plan erstellt?") == (
+        "Wer hat den Plan erstellt?", False)
+    assert not hasattr(llm, "_looks_like_non_anchor")
 
 
 # ---------------------------------------------------------------------------
@@ -603,7 +592,7 @@ def test_make_search_phrase_flags_a_recheck(monkeypatch):
     monkeypatch.setattr(llm, "LLM_STUB_MODE", False)
     monkeypatch.setattr(llm, "_chat_json",
                         lambda m, temperature: {"phrase": "Impressum. Auftragnehmer: ...",
-                                                "wiederholung": True})
+                                                "repetition": True})
     hist = [{"task": "Welche Firma hat den Plan erstellt?", "answer": "(keine belegte Antwort gefunden)"}]
 
     phrase, recheck = llm.make_search_phrase("Schau bitte noch einmal nach", history=hist)
@@ -840,3 +829,66 @@ def test_answer_from_sources_no_action_no_compute(monkeypatch):
     out = llm.answer_from_sources("x", [{"index": 0, "source": "s", "text": "t"}])
     assert out["answer"] == "direkt"
     assert out["compute"] == []
+
+
+def test_fetching_a_table_owner_costs_one_statement(corpus):
+    """A harvest fetches over a thousand owners per document off an
+    NFS-hosted database. This used to be four statements per table — the row,
+    then the same Sections row twice, then the document's filename."""
+    conn = db.connect_readonly(corpus)
+    statements = []
+    conn.set_trace_callback(statements.append)
+    content = db.fetch_owner_content(conn, "table", 1)
+    conn.set_trace_callback(None)
+
+    assert content["section_title"] == "Wärmebedarf"
+    assert content["image_path"] == "doc/images/p12_tbl0.png"
+    assert len(statements) == 1, statements
+
+
+def test_compare_answers_keeps_the_answers_when_the_call_fails(monkeypatch):
+    """The per-document answers are grounded and already on screen. A failed
+    comparison must cost the comparison, not the answers."""
+    llm = pytest.importorskip("docpipe.inference.llm_client")
+    monkeypatch.setattr(llm, "LLM_STUB_MODE", False)
+    plans = [{"label": "Kassel", "answer": "1 Prozent."},
+             {"label": "Leipzig", "answer": None}]
+    monkeypatch.setattr(llm, "_chat_json",
+                        lambda m, temperature: {"comparison": "K 1, L nichts."})
+    assert llm.compare_answers("Rate?", plans) == "K 1, L nichts."
+    monkeypatch.setattr(llm, "_chat_json",
+                        lambda m, temperature: (_ for _ in ()).throw(RuntimeError("down")))
+    assert llm.compare_answers("Rate?", plans) is None
+    # An empty comparison is no comparison either.
+    monkeypatch.setattr(llm, "_chat_json", lambda m, temperature: {"comparison": "  "})
+    assert llm.compare_answers("Rate?", plans) is None
+
+
+def test_compare_answers_sends_only_labels_and_answers(monkeypatch):
+    """The one prompt on this screen that no citation backs. What it is handed
+    is the whole guarantee: a source passage in here could become a statement
+    about a plan that never said it."""
+    llm = pytest.importorskip("docpipe.inference.llm_client")
+    monkeypatch.setattr(llm, "LLM_STUB_MODE", False)
+    sent = {}
+
+    def _chat(messages, temperature):
+        sent["text"] = messages[0]["content"]
+        return {"comparison": "V"}
+    monkeypatch.setattr(llm, "_chat_json", _chat)
+    llm.compare_answers("Rate?", [{"label": "Kassel", "answer": "1 Prozent."}])
+    payload = json.loads(sent["text"][len(llm.COMPARE_PROMPT):].strip())
+    assert payload == {"task": "Rate?",
+                       "documents": [{"label": "Kassel", "answer": "1 Prozent."}]}
+
+
+def test_compare_prompt_forbids_inventing_and_computing():
+    """Three failure modes the answers cannot defend against, because the call
+    sees no sources: filling an empty answer, converting a unit, and averaging
+    across plans whose reference years differ."""
+    llm = pytest.importorskip("docpipe.inference.llm_client")
+    text = llm.COMPARE_PROMPT
+    assert "null" in text and "rate nicht" in text
+    assert "Rechne nichts um" in text
+    assert "Bezugsjahre" in text and "vergleiche nicht" in text
+    assert '{"comparison"' in text

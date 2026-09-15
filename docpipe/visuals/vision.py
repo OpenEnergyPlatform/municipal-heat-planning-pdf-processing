@@ -1,8 +1,10 @@
 """
-vision.py – Vision-model interaction layer (OpenAI-compatible API).
+vision.py: Vision model interaction layer over an OpenAI compatible
+API.
 
-Client creation, model availability checks, and the chat-completions call with
-a base64 image + JSON response parsing.
+Creates the client, checks model availability, and makes the chat
+completions call that sends a base64 encoded image and parses the
+JSON response.
 
 Author: Felix Vossel
 """
@@ -16,6 +18,9 @@ import time
 from pathlib import Path
 
 import openai
+
+from docpipe import usage
+from docpipe.llm_preflight import request_extras
 
 from .config import (
     VLM_BASE_URL,
@@ -41,6 +46,23 @@ _RUNAWAY = re.compile(r"(\|[ \t]*){%d,}" % (RUNAWAY_CELL_RUN + 1))
 def looks_runaway(text: str) -> bool:
     """True if *text* carries the empty-cell run that precedes a truncated answer."""
     return bool(_RUNAWAY.search(text))
+
+
+def _http_status(exc: Exception) -> int | None:
+    """The HTTP status behind an API error, if it carries one."""
+    status = getattr(exc, "status_code", None)
+    if status is None:
+        status = getattr(getattr(exc, "response", None), "status_code", None)
+    return status if isinstance(status, int) else None
+
+
+def _is_client_error(status: int | None) -> bool:
+    """True for a status that says THIS request is wrong, not that the server is busy.
+
+    A 4xx (image too large, context exceeded, bad parameter) answers every
+    identical retry identically; 429 and 5xx are worth waiting out.
+    """
+    return status is not None and 400 <= status < 500 and status != 429
 
 
 # ---------------------------------------------------------------------------
@@ -107,7 +129,8 @@ def call_vision(
     create_client(), not *max_retries*.
 
     Returns:
-        Parsed JSON dict, or None if all retries were exhausted.
+        Parsed JSON dict, or None once the retries are exhausted or the server
+        rejects the request itself (a 4xx, which no retry would change).
     """
     # A timeout usually means the model is stuck in a repetition loop, so the
     # penalty is escalated per retry. First attempt: none, to preserve table
@@ -131,6 +154,11 @@ def call_vision(
     messages = list(base_messages)
 
     for attempt in range(1, max_retries + 1):
+        # Waiting is for a server that needs time. A parse failure comes back
+        # 200 OK within the second, so the next attempt starts at once; only a
+        # timeout, a 429 or a 5xx buys the sleep. Page transcription has eight
+        # slots, so an idle one is throughput gone.
+        server_needs_time = False
         try:
             log.debug("  vLLM chat (attempt %d/%d) → %s",
                       attempt, max_retries, image_path.name)
@@ -139,7 +167,7 @@ def call_vision(
             # mutated in place is one the caller cannot reason about.
             # Reasoning models must not spend the token budget on a <think>
             # block; that truncates the JSON answer.
-            extra_body: dict = {"chat_template_kwargs": {"enable_thinking": False}}
+            extra_body: dict = request_extras()
             if current_penalty is not None:
                 extra_body["repetition_penalty"] = current_penalty
 
@@ -151,6 +179,7 @@ def call_vision(
                 max_tokens=max_tokens,
                 extra_body=extra_body or None,
             )
+            usage.reply(response, model)
 
             raw = response.choices[0].message.content or ""
             parsed, error_detail = _parse_json_response(raw)
@@ -198,14 +227,24 @@ def call_vision(
             if current_penalty is not None:
                 log.info("  Setting repetition_penalty=%.1f for next attempt",
                          current_penalty)
+            server_needs_time = True
         except openai.APIError as e:
+            status = _http_status(e)
+            if _is_client_error(status):
+                # The request is what the server refused, not the moment. Three
+                # more of it would be refused the same way.
+                log.error("  vLLM rejected %s (HTTP %d): %s — giving up",
+                          image_path.name, status, e)
+                return None
             log.error("  vLLM APIError (attempt %d/%d): %s", attempt, max_retries, e)
             messages = list(base_messages)
+            server_needs_time = True
         except Exception as e:
             log.error("  Error (attempt %d/%d): %s", attempt, max_retries, e)
             messages = list(base_messages)
+            server_needs_time = True
 
-        if attempt < max_retries:
+        if server_needs_time and attempt < max_retries:
             time.sleep(5 * attempt)
 
     return None
@@ -250,11 +289,12 @@ def call_vision_plain(
             ],
             temperature=temperature,
             max_tokens=max_tokens,
-            extra_body={"chat_template_kwargs": {"enable_thinking": False}},
+            extra_body=request_extras(),
         )
     except Exception as e:
         log.warning("  Plain-text rescue failed for %s: %s", image_path.name, e)
         return None
+    usage.reply(response, model)
 
     raw = response.choices[0].message.content or ""
     text = re.sub(r"<think>.*?</think>", "", raw, flags=re.DOTALL).strip()

@@ -1,8 +1,11 @@
 """
-config.py – Central configuration for the inference_app module.
+config.py: Central configuration for the inference_app module.
 
-Every value is overridable via an environment variable; the defaults are safe
-placeholders.
+Every value is overridable through an environment variable; the defaults
+are safe placeholders. The corpus paths (the database, the FAISS index,
+the image root, the knowledge-graph file) default to the active profile's
+own paths, or to the historical `data/` layout when no profile is set; an
+explicit environment variable overrides both.
 
 Author: Felix Vossel
 """
@@ -17,6 +20,7 @@ from docpipe.embedding.config import (  # noqa: F401
 from docpipe.inference.config import (  # noqa: F401
     ALL_SCOPES, ANSWER_CONTEXT_TOKENS, ANSWER_IMAGE_MAX_SIDE, ANSWER_MAX_IMAGES,
     CODE_EXEC_MAX_ROUNDS, CODE_EXEC_TIMEOUT, CODE_EXEC_TOKEN, CODE_EXEC_URL,
+    COMPARE_MAX_DOCUMENTS,
     FIGURE_EMBEDDING_TYPES, LLM_API_KEY, LLM_BASE_URL, LLM_MAX_RETRIES,
     LLM_MAX_TOKENS, LLM_MODEL, LLM_STUB_MODE, LLM_TEMPERATURE, LLM_TIMEOUT,
     LLM_TOKENIZER_ID, MAX_CHUNK_ATTEMPTS, READOFF_IMAGE_MAX_SIDE, READOFF_MAX_CALLS,
@@ -58,6 +62,8 @@ DB_PATH    = _path("INFERENCE_DB_PATH", lambda p: p.db_path, "data/KWP.db")
 INDEX_PATH = _path("INFERENCE_INDEX_PATH", lambda p: p.index_path, "data/faiss_index.bin")
 # Paths stored in Tables.path / Images.path are resolved against this root.
 IMAGE_ROOT = _path("INFERENCE_IMAGE_ROOT", lambda p: p.processed_dir, "data/pdf/processed")
+# The graph `--serialize` wrote. Missing -> the graph route is not offered.
+KG_TTL_PATH = _path("INFERENCE_KG_TTL_PATH", lambda p: p.root / "graph.ttl", "data/graph.ttl")
 
 # ---------------------------------------------------------------------------
 # Embedding backend

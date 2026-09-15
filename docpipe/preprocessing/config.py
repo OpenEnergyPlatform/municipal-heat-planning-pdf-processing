@@ -11,7 +11,9 @@ from pathlib import Path
 from re import compile
 
 from docpipe.artifacts import (DIR_IMAGES, DIR_RESULTS,   # noqa: F401  (re-exported)
+                               PAGE_TRANSCRIPTION_REPORT_JSON,
                                PAGES_JSON, SECTIONS_JSON)
+from docpipe.profile import profile_value
 
 # ---------------------------------------------------------------------------
 # Rendering
@@ -29,14 +31,6 @@ LAYOUT_DETECT_DPI = 150
 # Stage 1 – Text extraction
 # ---------------------------------------------------------------------------
 TEXT_BLOCK_MIN_CHARS = 3
-
-HYPHEN_EXCEPTIONS = (
-    "und", "oder", "bzw", "etc", "sowie", "als", "wie", "auch", "denn",
-    "noch", "sondern", "doch", "jedoch", "allerdings", "hingegen",
-    "beziehungsweise", "insbesondere", "zum", "zur", "im", "in", "am",
-    "an", "auf", "von", "mit", "für", "über", "unter", "zwischen",
-    "ohne", "gegen", "bis", "durch", "trotz", "wegen", "während",
-)
 
 # ---------------------------------------------------------------------------
 # Stage 2 – Layout detection (PP-DocLayoutV3)
@@ -173,17 +167,23 @@ TITLE_SAME_ROW_OVERLAP_FRACTION = 0.2
 # Maximum distance in points for "nearest text block" caption search.
 CAPTION_MAX_DIST_PT = 60.0
 
-# A caption is a label, not a paragraph. Without this the nearest-text-block
-# fallback below happily adopts a whole paragraph — measured on the corpus, 205
-# captions ran past 40 words, the longest 156 — and since the winning block is
-# REMOVED from the page, that prose disappears from the section text entirely.
-# Real captions sit at 8 words median, 24 at the 99th percentile.
-CAPTION_MAX_WORDS = 45
+# How long a caption gets is a property of the corpus, not of the pipeline: a
+# municipal heat plan sits at 8 words median, an IPCC panel description at 60
+# to 150. The number lived here, measured on the first corpus, and silently
+# cut the second one's captions loose — the winning block is REMOVED from the
+# page, so that prose disappears from the section text entirely.
+def caption_max_words() -> int:
+    return int(profile_value("preprocessing", "CAPTION_MAX_WORDS"))
 
 
 def caption_like(text) -> bool:
     """Is this short enough to be a caption rather than body prose?"""
-    return bool(text) and len(str(text).split()) <= CAPTION_MAX_WORDS
+    return bool(text) and len(str(text).split()) <= caption_max_words()
+
+
+def title_exclude_prefixes() -> tuple:
+    """Caption openers that must never be promoted to a section heading."""
+    return tuple(profile_value("preprocessing", "TITLE_EXCLUDE_PREFIXES"))
 
 
 # A symbol font (Wingdings and friends) puts its glyphs in the Unicode Private
@@ -244,12 +244,6 @@ NMS_OVERLAP_THRESHOLD = 0.5
 MASK_FIGURES_IN_TABLE_CROPS = True
 
 
-TITLE_EXCLUDE_PREFIXES = (
-    "abbildung",
-    "abb.",
-    "tabelle",
-    "tab.",
-)
 
 # Output directories and filenames: see docpipe/artifacts.py, imported above.
 

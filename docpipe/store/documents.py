@@ -1,8 +1,21 @@
 """
-documents.py – The core's writes against the Documents table.
+documents.py: Writes and reads the core's Documents table.
 
-Nothing here knows what a document is about; the project's own fields go into
-DocumentMeta, whose columns the profile defines.
+Nothing here knows what a document is about; a project's own fields
+go into DocumentMeta, whose columns the profile defines. add_document
+inserts a row into Documents and, when metadata is given, upserts the
+matching DocumentMeta row through upsert_document_meta.
+
+link_document_versions marks which document is the current version of
+each group and which it supersedes. Documents that share a group_key
+are versions of the same work; what a group is stays the profile's
+choice (a municipality for heat plans, a DOI for papers). Within a
+group, the document with the newest published date is current
+(is_current = 1); every older document is marked is_current = 0 and
+points at the next-older document through supersedes, which is NULL
+for the oldest. A document with no group_key, or alone in its group,
+stays current with no predecessor. The function is idempotent: it
+recomputes the whole grouping on every call.
 
 Author: Felix Vossel
 """

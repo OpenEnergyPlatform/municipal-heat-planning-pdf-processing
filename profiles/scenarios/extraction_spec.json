@@ -1,0 +1,671 @@
+{
+  "_comment": [
+    "The OEKG shapes ask a scenario bundle, its study report and its scenario",
+    "factsheets for metadata, not for measured quantities. Most fields here are",
+    "therefore text parameters: what is verified is that the string the model",
+    "reports sits literally in the passage it cites, and the passage is located",
+    "on its PDF page. DocumentMeta already holds title, year and doi from the",
+    "crawl, but those come with the crawl's licence; a value that is to be",
+    "published in the graph is extracted from the document itself and carries",
+    "its own evidence. The crawl values become the cross-check, not the source.",
+    "",
+    "Where a finite list of correct answers exists, the model chooses from it",
+    "instead of writing one. Three fields are of that kind:",
+    "  scenario_label   the AR6 scenarios this publication documents (per",
+    "                   document, from DocumentScenarios)",
+    "  scenario_region  the 249 study regions the OEKG uses, narrowed to those",
+    "                   the document names (per document, from regions.json)",
+    "  scenario_type    the 17 classes the OEKG shapes accept for `has scenario",
+    "                   type` (corpus-wide, listed below)",
+    "The first two are marked `vocabulary_dynamic` and filled by",
+    "profiles/scenarios/extraction.py:document_axes before the harvest starts. In every",
+    "case the document's own wording stays on the tuple in `value_raw` or",
+    "`<axis>_raw`, so a choice is never a substitute for the evidence.",
+    "",
+    "The `scenario` axis is dynamic for the same reason and NOT required: the",
+    "AR6 names are run identifiers (EN_INDCi2030_300f) and a publication writes",
+    "'the NDC scenario'. Refusing what the model cannot map would delete the one",
+    "measurement that tells us how far apart those two vocabularies are.",
+    "",
+    "The seventeen scenario classes carry the ontology's own definition, copied verbatim from the pinned release",
+    "openenergyplatform.org/ontology/oeo/releases/2.13.0/oeo.owl, whose closure file has sha256",
+    "df25aa5aec966be79096cb5dc1f09023fc66a99b984c485a24897adb76a99dd4 -- the same pin profiles/kwp/vocabulary.json",
+    "records. The property is IAO_0000115 except where an entry says otherwise in its own note. Nothing",
+    "here holds these strings against that release yet: this profile has no vocabulary snapshot, which is SC4.",
+    "out:not_in_list is not an ontology term, so its meaning is this profile's own words, in the language of",
+    "its prompts."
+  ],
+  "parameter_question": "Um WELCHES Feld handelt es sich bei diesem Wert? Entscheide danach, was die Quelle über ihn sagt: die Beschriftung, die Einheit und die Überschrift des Abschnitts. Zitiere die Stelle, aus der das hervorgeht.",
+  "parameters": [
+    {
+      "uri": "publication_title",
+      "label": "Titel der Publikation",
+      "description": "Der vollständige Titel des Dokuments. In den meisten PDFs ist er die Überschrift des ersten Abschnitts und steht als erste Zeile über der Autorenliste; sonst im Kopf der ersten Seite. Der Wert ist die ganze Titelzeile. Nicht der Kolumnentitel, nicht der Name der Reihe, nicht der Name des Verlags.",
+      "value_type": "text",
+      "example": {
+        "source": "Global Energy and Climate Outlook 2023: Transforming Energy Systems for a Net Zero Future. JRC Science for Policy Report.",
+        "tuples": [
+          {
+            "value": "Global Energy and Climate Outlook 2023: Transforming Energy Systems for a Net Zero Future",
+            "quote": "Global Energy and Climate Outlook 2023: Transforming Energy Systems for a Net Zero Future. JRC Science for Policy Report."
+          }
+        ]
+      },
+      "kg": {
+        "node": "studyreport",
+        "class": "OEO_00020012",
+        "property": {
+          "prefix": "rdfs",
+          "predicate": "label",
+          "label": "label"
+        },
+        "note": "Mints the study report. The title is also the bundle's label when no project name was read, and half of every scenario factsheet's IRI. Mint recipes are prose here, not keys: see the _comment."
+      }
+    },
+    {
+      "uri": "publication_author",
+      "label": "Autorin oder Autor",
+      "description": "Eine einzelne Person, die als Verfasserin oder Verfasser des Dokuments genannt ist. Ein Tupel je Person, in der Schreibweise der Titelseite. Keine Institutionen, keine Herausgeber, keine Danksagungsempfänger.",
+      "value_type": "text",
+      "example": {
+        "source": "Keramidas, K., Fosse, F., Diaz Vazquez, A., Dowling, P., Garaffa, R., Després, J.",
+        "tuples": [
+          {
+            "value": "Keramidas, K.",
+            "quote": "Keramidas, K., Fosse, F., Diaz Vazquez, A., Dowling, P., Garaffa, R., Després, J."
+          },
+          {
+            "value": "Fosse, F.",
+            "quote": "Keramidas, K., Fosse, F., Diaz Vazquez, A., Dowling, P., Garaffa, R., Després, J."
+          }
+        ]
+      },
+      "kg": {
+        "node": "author",
+        "class": "OEO_00000064",
+        "property": {
+          "prefix": "rdfs",
+          "predicate": "label",
+          "label": "label"
+        },
+        "edge_from": {
+          "node": "studyreport",
+          "prefix": "oeo",
+          "predicate": "OEO_00000506",
+          "label": "has author"
+        },
+        "note": "One node per distinct name. Two spellings of one person are one node and keep both passages."
+      }
+    },
+    {
+      "uri": "publication_date",
+      "label": "Erscheinungsjahr",
+      "description": "Das Jahr, in dem das Dokument veröffentlicht wurde, vierstellig und genau so, wie es im Dokument steht — Impressum, Titelseite oder Zitationshinweis. Nicht das Jahr der Daten, nicht ein im Text projiziertes Jahr.",
+      "value_type": "text",
+      "example": {
+        "source": "Publications Office of the European Union, Luxembourg, 2023, doi:10.2760/58255, JRC135619.",
+        "tuples": [
+          {
+            "value": "2023",
+            "quote": "Publications Office of the European Union, Luxembourg, 2023, doi:10.2760/58255, JRC135619."
+          }
+        ]
+      },
+      "kg": {
+        "node": "studyreport",
+        "property": {
+          "prefix": "oeo",
+          "predicate": "OEO_00390096",
+          "label": "has publication date",
+          "datatype": "xsd:dateTime"
+        },
+        "note": "A PDF states a year; the serializer pads it to YYYY-01-01T00:00:00, which the document does not say. The day and the month are the datatype's, not the paper's."
+      }
+    },
+    {
+      "uri": "publication_doi",
+      "label": "DOI",
+      "description": "Der Digital Object Identifier des Dokuments, wie er im Impressum oder im Zitationshinweis steht. Nur die DOI selbst, ohne das Präfix doi: und ohne die URL davor.",
+      "value_type": "text",
+      "example": {
+        "source": "Publications Office of the European Union, Luxembourg, 2023, doi:10.2760/58255, JRC135619.",
+        "tuples": [
+          {
+            "value": "10.2760/58255",
+            "quote": "Publications Office of the European Union, Luxembourg, 2023, doi:10.2760/58255, JRC135619."
+          }
+        ]
+      },
+      "kg": {
+        "node": "studyreport",
+        "property": {
+          "prefix": "oeo",
+          "predicate": "OEO_00390098",
+          "label": "has doi"
+        }
+      }
+    },
+    {
+      "uri": "publication_abstract",
+      "label": "Abstract",
+      "description": "Die Zusammenfassung des Dokuments, wörtlich und vollständig, so wie sie unter der Überschrift Abstract, Summary, Zusammenfassung oder Executive Summary steht. Keine eigene Zusammenfassung schreiben.",
+      "value_type": "text",
+      "example": {
+        "source": "Abstract This report presents the results of the 2023 edition of the Global Energy and Climate Outlook, which assesses the implications of current climate pledges for the global energy system.",
+        "tuples": [
+          {
+            "value": "This report presents the results of the 2023 edition of the Global Energy and Climate Outlook, which assesses the implications of current climate pledges for the global energy system.",
+            "quote": "Abstract This report presents the results of the 2023 edition of the Global Energy and Climate Outlook, which assesses the implications of current climate pledges for the global energy system."
+          }
+        ]
+      },
+      "kg": {
+        "node": "scenariobundle",
+        "property": {
+          "prefix": "dc",
+          "predicate": "abstract"
+        },
+        "note": "On the bundle, not on the report: the shapes carry the study's abstract there."
+      }
+    },
+    {
+      "uri": "study_organisation",
+      "label": "Beteiligte Institution",
+      "description": "Eine Institution, die an der Erstellung des Dokuments beteiligt war: die Affiliation einer Autorin, das herausgebende Institut, die beauftragte Einrichtung. Ein Tupel je Institution, in der Schreibweise des Dokuments.",
+      "value_type": "text",
+      "example": {
+        "source": "European Commission, Joint Research Centre (JRC), Seville, Spain, and Potsdam Institute for Climate Impact Research (PIK).",
+        "tuples": [
+          {
+            "value": "Joint Research Centre",
+            "quote": "European Commission, Joint Research Centre (JRC), Seville, Spain, and Potsdam Institute for Climate Impact Research (PIK)."
+          },
+          {
+            "value": "Potsdam Institute for Climate Impact Research",
+            "quote": "European Commission, Joint Research Centre (JRC), Seville, Spain, and Potsdam Institute for Climate Impact Research (PIK)."
+          }
+        ]
+      },
+      "kg": {
+        "node": "organisation",
+        "class": "OEO_00030022",
+        "property": {
+          "prefix": "rdfs",
+          "predicate": "label",
+          "label": "label"
+        },
+        "edge_from": {
+          "node": "scenariobundle",
+          "prefix": "oeo",
+          "predicate": "OEO_00000510",
+          "label": "has organisation"
+        }
+      }
+    },
+    {
+      "uri": "study_funder",
+      "label": "Fördermittelgeber",
+      "description": "Eine Einrichtung, die die Arbeit finanziert hat, genannt in einem Abschnitt zu Funding, Förderung, Acknowledgements oder Danksagung. Nur wer zahlt, nicht wer inhaltlich beigetragen hat.",
+      "value_type": "text",
+      "example": {
+        "source": "This work was funded by the German Federal Ministry of Education and Research under grant 01LA1809A.",
+        "tuples": [
+          {
+            "value": "German Federal Ministry of Education and Research",
+            "quote": "This work was funded by the German Federal Ministry of Education and Research under grant 01LA1809A."
+          }
+        ]
+      },
+      "kg": {
+        "node": "funder",
+        "class": "OEO_00090001",
+        "property": {
+          "prefix": "rdfs",
+          "predicate": "label",
+          "label": "label"
+        },
+        "edge_from": {
+          "node": "scenariobundle",
+          "prefix": "oeo",
+          "predicate": "OEO_00000509",
+          "label": "has funding source"
+        }
+      }
+    },
+    {
+      "uri": "study_project_name",
+      "label": "Projektname",
+      "description": "Der ausgeschriebene Name des Forschungsprojekts, in dessen Rahmen die Studie oder die Szenarien entstanden sind. Nur wenn das Dokument ein Projekt ausdrücklich als seinen Rahmen nennt, nicht der Titel des Dokuments.",
+      "value_type": "text",
+      "example": {
+        "source": "This report was prepared within the project Enabling Ambitious Climate Policy Assessment (ENGAGE), funded under Horizon 2020.",
+        "tuples": [
+          {
+            "value": "Enabling Ambitious Climate Policy Assessment",
+            "quote": "This report was prepared within the project Enabling Ambitious Climate Policy Assessment (ENGAGE), funded under Horizon 2020."
+          }
+        ]
+      },
+      "kg": {
+        "node": "scenariobundle",
+        "class": "OEO_00020227",
+        "property": {
+          "prefix": "rdfs",
+          "predicate": "label",
+          "label": "label"
+        },
+        "note": "Mints the bundle and labels it. Falls back to the publication title where the document names no project."
+      }
+    },
+    {
+      "uri": "study_acronym",
+      "label": "Projektakronym",
+      "description": "Das Kürzel des Forschungsprojekts, meist in Klammern hinter dem ausgeschriebenen Projektnamen oder als Kopfzeile. Nur das Akronym des Projekts, nicht das eines Modells und nicht das einer Institution.",
+      "value_type": "text",
+      "example": {
+        "source": "This report was prepared within the project Enabling Ambitious Climate Policy Assessment (ENGAGE), funded under Horizon 2020.",
+        "tuples": [
+          {
+            "value": "ENGAGE",
+            "quote": "This report was prepared within the project Enabling Ambitious Climate Policy Assessment (ENGAGE), funded under Horizon 2020."
+          }
+        ]
+      },
+      "kg": {
+        "node": "scenariobundle",
+        "property": {
+          "prefix": "dc",
+          "predicate": "acronym"
+        }
+      }
+    },
+    {
+      "uri": "scenario_label",
+      "label": "Name des Szenarios",
+      "description": "Das Szenario der AR6-Datenbank, das an dieser Stelle beschrieben wird. Waehle es aus value_classes aus; die Klassennamen sind die Lauf-Kennungen der AR6-Datenbank fuer genau diese Publikation. In value_raw traegst du ein, wie das Dokument das Szenario nennt, woertlich. Ein Tupel je Szenario, und zwar fuer JEDES, das die Passage nennt - auch fuer die, die du nicht zuordnen kannst. Nennt das Dokument nur eine Familie ('NPi', 'NDC'), waehlst du 'Szenario-Familie'; steht das Szenario nicht in der AR6-Liste dieser Publikation, waehlst du 'nicht in AR6'. Bist du unsicher, laesst du value weg und traegst die Bezeichnung trotzdem in value_raw ein. Weglassen ist die einzige falsche Antwort.",
+      "value_type": "category",
+      "example": {
+        "source": "We analyse three pathways: the Current Policies scenario (CurPol), the Nationally Determined Contributions scenario (NDC-LTT) and a 1.5C-compatible pathway.",
+        "tuples": [
+          {
+            "value": "EN_NPi2100",
+            "value_raw": "CurPol",
+            "quote": "We analyse three pathways: the Current Policies scenario (CurPol), the Nationally Determined Contributions scenario (NDC-LTT) and a 1.5C-compatible pathway."
+          },
+          {
+            "value": "EN_INDCi2030_1000f",
+            "value_raw": "NDC-LTT",
+            "quote": "We analyse three pathways: the Current Policies scenario (CurPol), the Nationally Determined Contributions scenario (NDC-LTT) and a 1.5C-compatible pathway."
+          },
+          {
+            "value": "Szenario-Familie",
+            "value_raw": "a 1.5C-compatible pathway",
+            "quote": "We analyse three pathways: the Current Policies scenario (CurPol), the Nationally Determined Contributions scenario (NDC-LTT) and a 1.5C-compatible pathway."
+          }
+        ]
+      },
+      "vocabulary_dynamic": true,
+      "kg": {
+        "node": "scenariofactsheet",
+        "class": "OEO_00000365",
+        "property": {
+          "prefix": "rdfs",
+          "predicate": "label",
+          "label": "label"
+        },
+        "also": {
+          "prefix": "dc",
+          "predicate": "acronym"
+        },
+        "note": "The AR6 run name labels the factsheet; the document's own wording is the acronym beside it. With no long name known for a run both carry the same string, which is the usual case in this corpus."
+      }
+    },
+    {
+      "uri": "scenario_type",
+      "label": "Art des Szenarios",
+      "description": "Die Art eines Szenarios, gewaehlt aus value_classes. Das sind die Klassen, die der OEKG fuer dieses Feld zulaesst; die Schreibweisen daneben stammen aus der Ontologie selbst. Nimm die spezifischste Klasse, die der Text belegt: steht dort, dass ein Szenario nur bereits beschlossene Massnahmen enthaelt, ist das 'with existing measures scenario' und nicht blosses 'policy scenario'. Zwei Antworten bedeuten NICHT dasselbe: 'scenario' heisst, der Text sagt nichts Engeres als 'ein Szenario'; 'keine dieser Arten' heisst, der Text nennt sehr wohl eine Art, aber keine der Klassen deckt sie ab. Das zweite ist ein Befund und wird gezaehlt; das erste waere dann eine Behauptung. In value_raw kommt die Formulierung des Dokuments. Ein Tupel je Szenario und Klasse; ein Szenario darf mehrere Klassen tragen, wenn der Text sie belegt.",
+      "value_type": "category",
+      "vocabulary": {
+        "https://openenergyplatform.org/ontology/oeo/OEO_00020309": {
+          "label": "policy scenario",
+          "spellings": [],
+          "definition": "A policy scenario is a scenario in which certain policy instruments or transformative measures and their impacts are assessed."
+        },
+        "https://openenergyplatform.org/ontology/oeo/OEO_00020310": {
+          "label": "without measures scenario",
+          "spellings": [
+            "WOM",
+            "without measures",
+            "WOM scenario"
+          ],
+          "definition": "A without measures scenario (WOM) is a policy scenario that excludes all policy instruments and transformative measures which are planned, adopted or implemented."
+        },
+        "https://openenergyplatform.org/ontology/oeo/OEO_00020311": {
+          "label": "with existing measures scenario",
+          "spellings": [
+            "WEM",
+            "with existing measures",
+            "WEM scenario"
+          ],
+          "definition": "A with existing measures scenario (WEM) is a policy scenario that includes policy instruments and transformative measures that have been adopted and implemented."
+        },
+        "https://openenergyplatform.org/ontology/oeo/OEO_00020312": {
+          "label": "with additional measures scenario",
+          "spellings": [
+            "WAM",
+            "with additional measures",
+            "WAM scenario"
+          ],
+          "definition": "A with additional measures scenario (WAM) is a policy scenario that includes policy instruments and transformative measures which have been adopted and implemented to mitigate climate change or meet energy objectives, as well as policy instruments and transformative measures which are planned for that purpose."
+        },
+        "https://openenergyplatform.org/ontology/oeo/OEO_00020314": {
+          "label": "reference scenario",
+          "spellings": [
+            "reference case"
+          ],
+          "definition": "A reference scenario is a scenario that is used as a reference, e.g. in a scenario comparison. It has the reference role."
+        },
+        "https://openenergyplatform.org/ontology/oeo/OEO_00020247": {
+          "label": "target driven scenario",
+          "spellings": [
+            "normative scenario",
+            "backcasting scenario",
+            "Zielszenario"
+          ],
+          "definition": "A target driven scenario is a scenario that contains certain target constraints/ statements that in a possible future shall be realized. The path how the targets will be met is not predefined in the scenario."
+        },
+        "https://openenergyplatform.org/ontology/oeo/OEO_00020248": {
+          "label": "explorative scenario",
+          "spellings": [
+            "exploratory scenario",
+            "exploratives Szenario"
+          ],
+          "definition": "An explorative scenario is a scenario that contains certain constraints / statements regarding measures that are taken in the near future / today to explore where these measures will lead to in a later future. The later future is not predefined in the scenario."
+        },
+        "https://openenergyplatform.org/ontology/oeo/OEO_00020345": {
+          "label": "sufficiency scenario",
+          "spellings": [],
+          "definition": "A sufficiency scenario is a scenario that comprises sufficiency strategies."
+        },
+        "https://openenergyplatform.org/ontology/oeo/OEO_00020411": {
+          "label": "robust system scenario",
+          "spellings": [
+            "robust investment decision",
+            "robust transformation pathway"
+          ],
+          "definition": "A robust system scenario is an explorative scenario that describes an energy system that is designed to evolve in a robust way."
+        },
+        "https://openenergyplatform.org/ontology/oeo/OEO_00020412": {
+          "label": "statistically robust scenario",
+          "spellings": [],
+          "definition": "A statistically robust scenario is a scenario that is the basis for statistically robust projection data.",
+          "note": "OEO files this one under dc:description instead of IAO_0000115. Two terms of the whole release do, both from issue 1683 / PR 1843. The sentence is the ontology's own and defines the right term."
+        },
+        "https://openenergyplatform.org/ontology/oeo/OEO_00030007": {
+          "label": "climate scenario",
+          "spellings": [
+            "Klimaszenario"
+          ],
+          "definition": "A climate scenario is a scenario that describes a possible future state of a climate system."
+        },
+        "https://openenergyplatform.org/ontology/oeo/OEO_00030008": {
+          "label": "economic scenario",
+          "spellings": [
+            "Wirtschaftsszenario"
+          ],
+          "definition": "An economic scenario is a scenario that describes a possible future state of economic systems."
+        },
+        "https://openenergyplatform.org/ontology/oeo/OEO_00030009": {
+          "label": "emission scenario",
+          "spellings": [
+            "emissions scenario",
+            "Emissionsszenario"
+          ],
+          "definition": "An emission scenario is a scenario that describes a possible emission trajectory."
+        },
+        "https://openenergyplatform.org/ontology/oeo/OEO_00020317": {
+          "label": "greenhouse gas emission scenario",
+          "spellings": [
+            "GHG emission scenario"
+          ],
+          "definition": "A greenhouse gas emission scenario is an emission scenario that describes a possible greenhouse gas emission trajectory."
+        },
+        "https://openenergyplatform.org/ontology/oeo/OEO_00020321": {
+          "label": "CO2 emission scenario",
+          "spellings": [],
+          "definition": "A CO2 emission scenario is an emission scenario that describes a possible CO2 emission trajectory."
+        },
+        "https://openenergyplatform.org/ontology/oeo/OEO_00030010": {
+          "label": "energy scenario",
+          "spellings": [
+            "Energieszenario"
+          ],
+          "definition": "An energy scenario is a scenario that describes a possible future state of an energy system."
+        },
+        "https://openenergyplatform.org/ontology/oeo/OEO_00000364": {
+          "label": "scenario",
+          "spellings": [
+            "Szenario",
+            "narrative",
+            "storyline"
+          ],
+          "definition": "A scenario is an information content entity that contains statements about a possible future development based on a coherent and internally consistent set of assumptions and their motivation."
+        },
+        "out:not_in_list": {
+          "label": "keine dieser Arten",
+          "spellings": [
+            "die Art, die der Text nennt, steht nicht in der Liste"
+          ],
+          "definition": "Der Text nennt eine Art, die keine dieser Klassen trifft. Nicht zu verwechseln damit, dass der Text gar keine Art nennt: das ist die Antwort, dass es in diesen Passagen nicht steht."
+        }
+      },
+      "axes": {
+        "scenario": {
+          "dynamic": true,
+          "required": false,
+          "question": "Auf welches Szenario dieser Publikation bezieht sich der Wert? Die Liste führt die Laufkennungen, die genau diese Publikation in der AR6-Datenbank dokumentiert. Im Text stehen sie fast nie, dort heißt dasselbe Szenario \"Current Policies\" oder \"the NDC scenario\". Nennt das Dokument nur die Familie, ist \"Szenario-Familie\" die richtige Antwort und keine Kennung.",
+          "kg": {
+            "role": "parent",
+            "node": "scenariofactsheet",
+            "class": "OEO_00000365",
+            "linked_by": {
+              "node": "scenariobundle",
+              "prefix": "obo",
+              "predicate": "BFO_0000051",
+              "label": "has part"
+            },
+            "note": "Which factsheet holds the value. Unlike the kwp `parent` axis there is no map from the answer to a container class: the answer IS the identity of a node minted per document from the AR6 run the wording resolves to. A wording that resolves to no run is its own factsheet, and an out: entry is none at all."
+          }
+        }
+      },
+      "example": {
+        "source": "The CurPol scenario includes only those climate policies that had been adopted and implemented by the end of 2021, and reports greenhouse gas emission trajectories to 2100.",
+        "tuples": [
+          {
+            "value": "with existing measures scenario",
+            "value_raw": "includes only those climate policies that had been adopted and implemented",
+            "scenario": "EN_NPi2100",
+            "scenario_raw": "CurPol",
+            "quote": "The CurPol scenario includes only those climate policies that had been adopted and implemented by the end of 2021, and reports greenhouse gas emission trajectories to 2100."
+          },
+          {
+            "value": "greenhouse gas emission scenario",
+            "value_raw": "reports greenhouse gas emission trajectories",
+            "scenario": "EN_NPi2100",
+            "scenario_raw": "CurPol",
+            "quote": "The CurPol scenario includes only those climate policies that had been adopted and implemented by the end of 2021, and reports greenhouse gas emission trajectories to 2100."
+          }
+        ]
+      },
+      "kg": {
+        "node": "scenariofactsheet",
+        "property": {
+          "prefix": "oeo",
+          "predicate": "OEO_00390073",
+          "label": "has scenario type"
+        },
+        "note": "The object is one of the classes the shapes accept, chosen from the list, never written. Every factsheet additionally carries OEO_00020517 IAM scenario, which is not behind a harvested value and stands in the serializer."
+      }
+    },
+    {
+      "uri": "scenario_abstract",
+      "label": "Kurzbeschreibung eines Szenarios",
+      "description": "Die Beschreibung, was ein einzelnes Szenario annimmt oder abbildet, wörtlich aus dem Dokument. Nur wenn sich der Satz eindeutig auf ein benanntes Szenario bezieht, dessen Name in derselben Passage steht.",
+      "value_type": "text",
+      "axes": {
+        "scenario": {
+          "dynamic": true,
+          "required": false,
+          "question": "Auf welches Szenario dieser Publikation bezieht sich der Wert? Die Liste führt die Laufkennungen, die genau diese Publikation in der AR6-Datenbank dokumentiert. Im Text stehen sie fast nie, dort heißt dasselbe Szenario \"Current Policies\" oder \"the NDC scenario\". Nennt das Dokument nur die Familie, ist \"Szenario-Familie\" die richtige Antwort und keine Kennung.",
+          "kg": {
+            "role": "parent",
+            "node": "scenariofactsheet",
+            "class": "OEO_00000365",
+            "linked_by": {
+              "node": "scenariobundle",
+              "prefix": "obo",
+              "predicate": "BFO_0000051",
+              "label": "has part"
+            },
+            "note": "Which factsheet holds the value. Unlike the kwp `parent` axis there is no map from the answer to a container class: the answer IS the identity of a node minted per document from the AR6 run the wording resolves to. A wording that resolves to no run is its own factsheet, and an out: entry is none at all."
+          }
+        }
+      },
+      "example": {
+        "source": "The CurPol scenario assumes that no additional climate policies are introduced beyond those already legislated by the end of 2021.",
+        "tuples": [
+          {
+            "value": "assumes that no additional climate policies are introduced beyond those already legislated by the end of 2021",
+            "scenario_raw": "CurPol",
+            "quote": "The CurPol scenario assumes that no additional climate policies are introduced beyond those already legislated by the end of 2021."
+          }
+        ]
+      },
+      "kg": {
+        "node": "scenariofactsheet",
+        "property": {
+          "prefix": "dc",
+          "predicate": "abstract"
+        }
+      }
+    },
+    {
+      "uri": "scenario_region",
+      "label": "Betrachtete Region eines Szenarios",
+      "description": "Das Land oder Gebiet, das ein Szenario abbildet. Waehle es aus value_classes aus - das sind die Studienregionen des OEKG, gefiltert auf die, die dieses Dokument nennt. Ein Tupel je Angabe. Die Liste kennt nur Laender: fuer ein weltweites Szenario waehlst du 'global', fuer einen Zusammenschluss oder eine Grossregion, die nicht als Land dasteht (EU27, OECD, Asien, R5), 'mehrere Regionen'. Beides sind richtige Antworten und werden ausgewertet - ein einzelnes Land stattdessen zu nennen, waere erfunden. In value_raw traegst du ein, wie das Dokument die Region nennt. Nur Regionen, die als Betrachtungsraum genannt sind, nicht jede erwaehnte.",
+      "value_type": "category",
+      "axes": {
+        "scenario": {
+          "dynamic": true,
+          "required": false,
+          "question": "Auf welches Szenario dieser Publikation bezieht sich der Wert? Die Liste führt die Laufkennungen, die genau diese Publikation in der AR6-Datenbank dokumentiert. Im Text stehen sie fast nie, dort heißt dasselbe Szenario \"Current Policies\" oder \"the NDC scenario\". Nennt das Dokument nur die Familie, ist \"Szenario-Familie\" die richtige Antwort und keine Kennung.",
+          "kg": {
+            "role": "parent",
+            "node": "scenariofactsheet",
+            "class": "OEO_00000365",
+            "linked_by": {
+              "node": "scenariobundle",
+              "prefix": "obo",
+              "predicate": "BFO_0000051",
+              "label": "has part"
+            },
+            "note": "Which factsheet holds the value. Unlike the kwp `parent` axis there is no map from the answer to a container class: the answer IS the identity of a node minted per document from the AR6 run the wording resolves to. A wording that resolves to no run is its own factsheet, and an out: entry is none at all."
+          }
+        }
+      },
+      "example": {
+        "source": "The NDC-LTT scenario covers the EU27, China, India and the United States at national resolution.",
+        "tuples": [
+          {
+            "value": "mehrere Regionen",
+            "value_raw": "the EU27",
+            "scenario": "EN_INDCi2030_1000f",
+            "scenario_raw": "NDC-LTT",
+            "quote": "The NDC-LTT scenario covers the EU27, China, India and the United States at national resolution."
+          },
+          {
+            "value": "China",
+            "value_raw": "China",
+            "scenario": "EN_INDCi2030_1000f",
+            "scenario_raw": "NDC-LTT",
+            "quote": "The NDC-LTT scenario covers the EU27, China, India and the United States at national resolution."
+          },
+          {
+            "value": "India",
+            "value_raw": "India",
+            "scenario": "EN_INDCi2030_1000f",
+            "scenario_raw": "NDC-LTT",
+            "quote": "The NDC-LTT scenario covers the EU27, China, India and the United States at national resolution."
+          },
+          {
+            "value": "United States of America",
+            "value_raw": "the United States",
+            "scenario": "EN_INDCi2030_1000f",
+            "scenario_raw": "NDC-LTT",
+            "quote": "The NDC-LTT scenario covers the EU27, China, India and the United States at national resolution."
+          }
+        ]
+      },
+      "vocabulary_dynamic": true,
+      "kg": {
+        "node": "scenariofactsheet",
+        "property": {
+          "prefix": "oeo",
+          "predicate": "OEO_00010378",
+          "label": "has spatial region"
+        },
+        "note": "The object is an OEKG region individual that already exists over there and is only referenced. A wording the list did not hold mints nothing: writing our own gloss under oekg/region/ would put a 250th region beside the 249 real ones. The predicate is oeo:OEO_00010378 has spatial region and not oeo:OEO_00020220 has study region, although the second says exactly what we mean: its domain is oeo:OEO_00000364 scenario and the subject here is the scenario FACTSHEET, which is not one. has spatial region is its direct parent, domained on information content entity, which the factsheet is."
+      }
+    },
+    {
+      "uri": "scenario_year",
+      "label": "Projiziertes Jahr eines Szenarios",
+      "description": "Ein Jahr, für das ein Szenario Ergebnisse ausweist oder bis zu dem es rechnet, vierstellig und wörtlich aus dem Dokument. Ein Tupel je Jahr. Nicht das Erscheinungsjahr der Publikation und nicht das Basisjahr der Daten.",
+      "value_type": "text",
+      "axes": {
+        "scenario": {
+          "dynamic": true,
+          "required": false,
+          "question": "Auf welches Szenario dieser Publikation bezieht sich der Wert? Die Liste führt die Laufkennungen, die genau diese Publikation in der AR6-Datenbank dokumentiert. Im Text stehen sie fast nie, dort heißt dasselbe Szenario \"Current Policies\" oder \"the NDC scenario\". Nennt das Dokument nur die Familie, ist \"Szenario-Familie\" die richtige Antwort und keine Kennung.",
+          "kg": {
+            "role": "parent",
+            "node": "scenariofactsheet",
+            "class": "OEO_00000365",
+            "linked_by": {
+              "node": "scenariobundle",
+              "prefix": "obo",
+              "predicate": "BFO_0000051",
+              "label": "has part"
+            },
+            "note": "Which factsheet holds the value. Unlike the kwp `parent` axis there is no map from the answer to a container class: the answer IS the identity of a node minted per document from the AR6 run the wording resolves to. A wording that resolves to no run is its own factsheet, and an out: entry is none at all."
+          }
+        }
+      },
+      "example": {
+        "source": "Results for the CurPol scenario are reported for 2030, 2050 and 2070.",
+        "tuples": [
+          {
+            "value": "2030",
+            "scenario_raw": "CurPol",
+            "quote": "Results for the CurPol scenario are reported for 2030, 2050 and 2070."
+          },
+          {
+            "value": "2050",
+            "scenario_raw": "CurPol",
+            "quote": "Results for the CurPol scenario are reported for 2030, 2050 and 2070."
+          }
+        ]
+      },
+      "kg": {
+        "node": "scenariofactsheet",
+        "property": {
+          "prefix": "oeo",
+          "predicate": "OEO_00020440",
+          "label": "has scenario year value",
+          "datatype": "xsd:dateTime"
+        },
+        "note": "One triple per distinct four-digit year on the factsheet, padded to the first of January as the datatype demands."
+      }
+    }
+  ]
+}

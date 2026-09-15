@@ -22,9 +22,11 @@ from transformers.utils import TransformersKwargs
 from transformers.cache_utils import Cache
 from qwen_vl_utils.vision_process import process_vision_info
 
+from docpipe import usage
+from docpipe.embedding.config import EMBEDDING_MAX_TOKEN_LENGTH
+
 logger = logging.getLogger(__name__)
 
-MAX_LENGTH = 8192
 IMAGE_BASE_FACTOR = 16
 IMAGE_FACTOR = IMAGE_BASE_FACTOR * 2
 MIN_PIXELS = 4 * IMAGE_FACTOR * IMAGE_FACTOR
@@ -154,7 +156,7 @@ class Qwen3VLEmbedder:
     def __init__(
         self,
         model_name_or_path: str,
-        max_length: int = MAX_LENGTH,
+        max_length: int = EMBEDDING_MAX_TOKEN_LENGTH,
         min_pixels: int = MIN_PIXELS,
         max_pixels: int = MAX_PIXELS,
         total_pixels: int = MAX_TOTAL_PIXELS,
@@ -180,6 +182,7 @@ class Qwen3VLEmbedder:
         self.num_frames = num_frames
         self.max_frames = max_frames
         self.default_instruction = default_instruction
+        self.model_name = model_name_or_path
 
         # bf16 on GPU; fp32 on CPU, where bf16 matmuls are slow/unsupported.
         if torch_dtype is None:
@@ -367,6 +370,9 @@ class Qwen3VLEmbedder:
         ) for ele in inputs]
 
         processed_inputs = self._preprocess_inputs(conversations)
+        # Counted on the CPU copy, before the move, and booked only once the
+        # forward ran: padding is not a token the model was asked to read.
+        tokens = int(processed_inputs["attention_mask"].sum())
         processed_inputs = {
             k: (v.to(device=self.model.device, dtype=self.param_dtype)
                 if torch.is_floating_point(v) else v.to(self.model.device))
@@ -375,11 +381,23 @@ class Qwen3VLEmbedder:
 
         outputs = self.forward(processed_inputs)
         embeddings = self._pooling_last(outputs['last_hidden_state'], outputs['attention_mask'])
+        usage.add(self.model_name, embedding_tokens=tokens, requests=len(inputs))
 
         if normalize:
             embeddings = F.normalize(embeddings, p=2, dim=-1)
 
         return embeddings
+
+
+def _input_size(item: Dict[str, Any]) -> int:
+    """Rough token cost of one item, for balancing shards.
+
+    Text length stands in for tokens: the ratio is near enough constant
+    within a corpus, and only the ORDER matters here. An image is worth a
+    fixed surcharge because a crop costs far more than its caption.
+    """
+    size = len(item.get("text") or "")
+    return size + (4000 if item.get("image") is not None else 0)
 
 
 class MultiGPUEmbedder:
@@ -396,7 +414,7 @@ class MultiGPUEmbedder:
     def __init__(
         self,
         model_name_or_path: str,
-        max_length: int = MAX_LENGTH,
+        max_length: int = EMBEDDING_MAX_TOKEN_LENGTH,
         dtype: torch.dtype = torch.bfloat16,
         devices: Optional[List[str]] = None,
         **kwargs,
@@ -425,8 +443,17 @@ class MultiGPUEmbedder:
         if n == 1 or len(inputs) <= 1:
             return self.replicas[0].process(inputs, normalize).to("cpu")
 
-        # Replica r handles inputs[r], inputs[r+n], inputs[r+2n], ...
-        shards = [inputs[r::n] for r in range(n)]
+        # Shards are balanced by length, not by position. The processor pads
+        # every shard to its own longest member and the threads join at the
+        # end, so one 16k-token item dealt into a shard of 50-token items pads
+        # that shard to 16k and every other GPU waits for it. Dealing the
+        # longest out first keeps the shard totals close.
+        order = sorted(range(len(inputs)), key=lambda i: _input_size(inputs[i]),
+                       reverse=True)
+        places: List[List[int]] = [[] for _ in range(n)]
+        for rank, i in enumerate(order):
+            places[rank % n].append(i)
+        shards = [[inputs[i] for i in place] for place in places]
         outs: List[Optional[torch.Tensor]] = [None] * n
         errs: List[Optional[BaseException]] = [None] * n
 
@@ -446,14 +473,13 @@ class MultiGPUEmbedder:
             if exc is not None:
                 raise exc
 
-        # Re-interleave: shard r, row k -> original position r + k * n.
+        # Back into the caller's order: one indexed copy per shard instead of
+        # a Python iteration and a separate 4096-element copy per item.
         sample = next(o for o in outs if o is not None)
-        total = len(inputs)
-        result = torch.empty((total, sample.shape[1]), dtype=sample.dtype)
-        for r in range(n):
+        result = torch.empty((len(inputs), sample.shape[1]), dtype=sample.dtype)
+        for r, place in enumerate(places):
             out = outs[r]
             if out is None:
                 continue
-            for k in range(out.shape[0]):
-                result[r + k * n] = out[k]
+            result[torch.tensor(place, dtype=torch.long)] = out
         return result

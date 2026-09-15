@@ -1,8 +1,32 @@
 """
-refine.py – LLM-based section refinement (Stage 4).
+refine.py: Runs Stage 4, the LLM-based refinement of Stage 3
+sections.
 
-Cleans extraction artefacts and titles, drops directory pages, converts
-bibliographies to BibTeX, and merges/splits sections via an LLM.
+The LLM is asked, per window of sections, to clean extraction
+artefacts and titles, drop directory sections, convert bibliographies
+to BibTeX, and merge or split sections; each returned action is
+applied by refine_sections. A section longer than the split threshold
+is cut before windowing (see split.py), since a window has to echo
+every section it carries, and an oversized section could never be
+echoed.
+
+Windows are dispatched in parallel, up to LLM_NUM_PARALLEL requests
+at once, then assembled in the original order, since merging and
+splitting are positional. A request is retried up to MAX_RETRIES
+times, except on a 4xx response, which is not retried because the
+server has refused the request itself. A window that never returns a
+usable reply keeps its original, unrefined text, and is recorded in
+the refinement report written next to the output.
+
+Page provenance travels with the rewritten text: an unchanged window
+reattaches its segments one to one, and a window that split, merged
+or dropped sections is redistributed by which output section's
+tokens a segment's text is found in, or by which output claims a
+table's or figure's block id. A "remove" action is refused when the
+section still carries a table or figure, since those are Stage 2
+artefacts with their own transcriptions and not the model's to
+discard; a section made of nothing but reference markers can
+otherwise look empty to a reader of the text alone.
 
 Author: Felix Vossel
 """
@@ -16,8 +40,13 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Callable, Optional
 
+from docpipe import usage
+from docpipe.llm_preflight import request_extras
+
+from .corrections import apply_corrections
 from .split import SPLIT_MAX_TOKENS, SPLIT_TEMPERATURE, split_oversized
 from .config import (
+    REFINEMENT_REPORT_JSON,
     SECTIONS_JSON,
     SECTIONS_REFINED_JSON,
     LLM_MODEL,
@@ -27,6 +56,8 @@ from .config import (
     LLM_NUM_PARALLEL,
     LLM_TEMPERATURE,
     LLM_MAX_TOKENS,
+    REFINE_RETURN_CORRECTIONS,
+    reply_tokens,
     MAX_RETRIES,
     WINDOW_SIZE,
     SYSTEM_PROMPT,
@@ -66,6 +97,20 @@ def _backoff(attempt: int) -> None:
         time.sleep(min(2 * attempt, 10))
 
 
+def _client_error_status(exc: Exception) -> Optional[int]:
+    """The 4xx behind an API error, if the server refused the request itself.
+
+    429 and 5xx are the server asking for time; a 4xx is this request being
+    wrong, and every identical retry is refused identically.
+    """
+    status = getattr(exc, "status_code", None)
+    if status is None:
+        status = getattr(getattr(exc, "response", None), "status_code", None)
+    if isinstance(status, int) and 400 <= status < 500 and status != 429:
+        return status
+    return None
+
+
 def _strip_table_source_text(sections: list) -> None:
     """Remove the QA-only ``source_text`` field from every table, in place."""
     for sec in sections:
@@ -101,6 +146,84 @@ def _echo(raw_text: str) -> str:
             + raw_text[-_ECHO_TAIL:])
 
 
+def _materialise_corrections(reply: list, window: list) -> list:
+    """Rebuild full sections from an edit-mode reply.
+
+    Everything the model was not asked to change is taken from the ORIGINAL,
+    not from the reply — that is the whole point of asking for edits. A table's
+    id, path and page_number never make the round trip, so they cannot come
+    back altered or missing, which is how they used to be lost.
+
+    A section whose edits do not survive apply_corrections keeps whatever could be
+    verified; nothing is applied on the model's word alone.
+    """
+    # Every section of the window starts as itself and every one of them is
+    # returned. A reply that mentions two of three sections is the ordinary
+    # case, not permission to drop the third: this book lost 123 of its 2697
+    # sections that way, and the 27B run 237. What the reply does supply is
+    # laid over the originals; what it omits stays as it was.
+    built_by_index: dict = {
+        i: {**original, "_action": "keep"} for i, original in enumerate(window)
+    }
+    pending: dict = {}
+    for position, sec in enumerate(reply):
+        if not isinstance(sec, dict):
+            log.warning("   reply %d is not an object, section dropped", position)
+            continue
+        index = sec.get("index", position)
+        if not isinstance(index, int) or not 0 <= index < len(window):
+            log.warning("   reply names index %r, outside this window", index)
+            continue
+        original = window[index]
+        action = sec.get("_action", "keep")
+
+        built = dict(original)
+        built["_action"] = action
+        title = sec.get("title")
+        if isinstance(title, str) and title.strip():
+            built["title"] = title
+
+        captions = sec.get("captions") if isinstance(sec.get("captions"), dict) else {}
+        for key in ("tables", "figures"):
+            items = []
+            for media in (original.get(key) or []):
+                media = dict(media)
+                if media.get("id") in captions:
+                    media["caption"] = captions[media["id"]]
+                items.append(media)
+            built[key] = items
+
+        if action == "replace":
+            # The one real conversion: text becomes a BibTeX array, so it has
+            # to be written out in full.
+            built["content"] = sec.get("content", original.get("content"))
+        else:
+            built["content"] = original.get("content")
+            pending.setdefault(index, []).extend(sec.get("corrections") or [])
+
+        built_by_index[index] = built
+
+    # Pass two: apply the corrections gathered per section.
+    for index, corrections in pending.items():
+        built = built_by_index[index]
+        if built.get("_action") == "replace":
+            continue
+        text, report = apply_corrections(window[index].get("content"), corrections)
+        if report.rejected:
+            # One line per refusal, WITH the string the model quoted. The
+            # previous version logged the reason only, which made refusals
+            # countable and undiagnosable at the same time: 1440 of them in
+            # one run and no way to ask afterwards what they had quoted.
+            for find, reason in report.rejected:
+                log.warning("   section %d: refused (%s): %r",
+                            index, reason, (find or "")[:100])
+            log.warning("   section %d: %d correction(s) applied, %d refused",
+                        index, report.applied, len(report.rejected))
+        built["content"] = text
+
+    return [built_by_index[i] for i in range(len(window))]
+
+
 def _call_llm(
     sections_window: list[dict],
     client,
@@ -111,7 +234,9 @@ def _call_llm(
 
     *prev_context* (the previous window's last section) is passed read-only so
     the model can judge whether the first section is a continuation that should
-    be merged across the window boundary. Retries up to MAX_RETRIES times.
+    be merged across the window boundary. Retries up to MAX_RETRIES times —
+    except on a 4xx, where the window is abandoned at once: the server refused
+    the request itself, so a retry of it is refused too.
 
     Returns:
         Parsed list of section dicts with "_action" fields, or None on failure.
@@ -122,6 +247,15 @@ def _call_llm(
         {k: v for k, v in s.items() if k not in ("segments", "pages")}
         for s in sections_window
     ]
+    if REFINE_RETURN_CORRECTIONS:
+        # The reply carries no text, so it needs a handle back to its section.
+        # Media keeps only id and caption: the model must not restate a path or
+        # a page number it is forbidden to change (and used to drop).
+        for i, sec in enumerate(stripped):
+            sec["index"] = i
+            for key in ("tables", "figures"):
+                sec[key] = [{"id": m.get("id"), "caption": m.get("caption")}
+                            for m in (sec.get(key) or [])]
     user_payload = json.dumps(
         {"sections": stripped},
         ensure_ascii=False,
@@ -160,11 +294,15 @@ def _call_llm(
                 messages=messages,
                 response_format={"type": "json_object"},
                 temperature=LLM_TEMPERATURE,
-                max_tokens=LLM_MAX_TOKENS,
-                # Reasoning models must not spend the token budget on a <think>
-                # block; that truncates the JSON answer.
-                extra_body={"chat_template_kwargs": {"enable_thinking": False}},
+                # Sized to THIS window, not a flat cap: the reply is the
+                # window handed back refined, so a big window needs a big
+                # answer. The flat 8192 cut the JSON mid-string.
+                max_tokens=reply_tokens(len(user_content.split())),
+                # Reasoning models must not spend the token budget on a
+                # <think> block; that truncates the JSON answer.
+                extra_body=request_extras(),
             )
+            usage.reply(response, LLM_MODEL)
 
             raw_text = response.choices[0].message.content or ""
 
@@ -204,6 +342,8 @@ def _call_llm(
                 _backoff(attempt)
                 continue
 
+            if REFINE_RETURN_CORRECTIONS:
+                return _materialise_corrections(parsed["sections"], sections_window)
             return parsed["sections"]
 
         except json.JSONDecodeError as e:
@@ -218,14 +358,27 @@ def _call_llm(
             ]
             _backoff(attempt)
         except Exception as e:
+            status = _client_error_status(e)
+            if status is not None:
+                if "maximum context length" in str(e):
+                    # The window does not fit and will not start fitting. Said
+                    # loudly because the caller keeps such a window as raw text,
+                    # which reads exactly like a window that needed no change.
+                    log.error(
+                        "   Window ABANDONED — it exceeds the model's context "
+                        "and stays unrefined. %d section(s): %s | %s",
+                        len(sections_window),
+                        "; ".join(str(s.get("title") or "?")[:60]
+                                  for s in sections_window),
+                        e,
+                    )
+                else:
+                    log.error("   LLM rejected the request (HTTP %d): %s", status, e)
+                return None
             # Covers connection errors and the request timeout.
             log.error(
                 f"   Attempt {attempt}/{MAX_RETRIES}: LLM request failed: {e}"
             )
-            # Whatever the repair turn added, it no longer fits. Anything but a
-            # fresh start would fail the same way on every remaining attempt.
-            if "maximum context length" in str(e):
-                log.warning("   Context limit hit — retrying without the repair turn")
             messages = list(base_messages)
             _backoff(attempt)
 
@@ -277,8 +430,20 @@ def _apply_actions(
         action = sec.pop("_action", "keep")
 
         if action == "remove":
-            log.debug(f"  Removing section: {sec.get('title', '?')}")
-            continue
+            # A removal may not take tables or figures with it. They are Stage-2
+            # artefacts with their own transcriptions, not the model's to throw
+            # away, and a section whose body is nothing but [pNN_tbl0] markers
+            # looks empty to a reader of the text alone. Eleven plans lost this
+            # way: no text layer, so every section was markers, "remove" looked
+            # right, and 1270 transcribed tables and figures went with them.
+            if sec.get("tables") or sec.get("figures"):
+                log.warning(
+                    "  Refusing to remove '%s': it carries %d table(s) and "
+                    "%d figure(s)", sec.get("title", "?"),
+                    len(sec.get("tables") or []), len(sec.get("figures") or []))
+            else:
+                log.debug(f"  Removing section: {sec.get('title', '?')}")
+                continue
 
         if action == "merge_into_previous":
             target = result[-1] if result else previous_kept
@@ -628,8 +793,9 @@ def _make_splitter(client) -> Callable[[str, str], str]:
             response_format={"type": "json_object"},
             temperature=SPLIT_TEMPERATURE,
             max_tokens=SPLIT_MAX_TOKENS,
-            extra_body={"chat_template_kwargs": {"enable_thinking": False}},
+            extra_body=request_extras(),
         )
+        usage.reply(response, LLM_MODEL)
         raw = response.choices[0].message.content or ""
         raw = re.sub(r"<think>.*?</think>", "", raw, flags=re.DOTALL).strip()
         raw = re.sub(r"^```(?:json)?\s*", "", raw)
@@ -637,13 +803,15 @@ def _make_splitter(client) -> Callable[[str, str], str]:
     return ask
 
 
-def refine_sections(sections: list[dict]) -> list[dict]:
+def refine_sections(sections: list[dict],
+                    report: Optional[dict] = None) -> list[dict]:
     """
     Processes all sections through the LLM in windows of WINDOW_SIZE, dispatched
     in parallel but assembled in order (merge/split semantics are positional).
 
     Mutates *sections* in place (source_text is stripped); returns the refined
-    list.
+    list. When *report* is given, it is filled with what this pass could not
+    refine — see refine_document, which writes it next to the output.
     """
     if not sections:
         return sections
@@ -716,11 +884,26 @@ def refine_sections(sections: list[dict]) -> list[dict]:
     # ── Sequential assembly (order matters for merge_into_previous) ──────
     refined: list[dict] = []
     previous_kept: Optional[dict] = None
+    # A failed window keeps its original text, which is indistinguishable in
+    # the output from a window that needed no change — so the only place this
+    # can be recorded is here, while it happens. Without it, "what is still
+    # unrefined?" can only be guessed at from the output, and a guess
+    # calibrated for one refinement mode reads the other one backwards.
+    failed: list[dict] = []
+
+    def _note_failure(win_idx: int, window: list, reason: str) -> None:
+        failed.append({
+            "window": win_idx + 1,
+            "reason": reason,
+            "sections": [win_idx * WINDOW_SIZE + n for n in range(len(window))],
+            "titles": [str(s.get("title") or "")[:80] for s in window],
+        })
 
     for win_idx in range(total_windows):
         llm_result, window = ordered_results[win_idx]
 
         if llm_result is None:
+            _note_failure(win_idx, window, "no usable reply")
             log.warning(
                 f"  Stage 4: window {win_idx + 1}/{total_windows} failed, "
                 f"keeping originals"
@@ -734,6 +917,7 @@ def refine_sections(sections: list[dict]) -> list[dict]:
             # belongs; drop those before provenance threading.
             llm_result = [s for s in llm_result if isinstance(s, dict)]
             if not llm_result:
+                _note_failure(win_idx, window, "no usable sections")
                 log.warning(
                     f"  Stage 4: window {win_idx + 1}/{total_windows} returned "
                     f"no usable sections, keeping originals"
@@ -768,7 +952,75 @@ def refine_sections(sections: list[dict]) -> list[dict]:
             s["title"] = _normalize_title(s.get("title", ""))
 
     log.info(f"Stage 4: {len(refined)} sections final")
+    _report_dropped_text(sections, refined)
+    if report is not None:
+        report["total_windows"] = total_windows
+        report["failed_windows"] = failed
+        if failed:
+            log.warning("Stage 4: %d of %d window(s) kept their original text",
+                        len(failed), total_windows)
     return refined
+
+
+def _shingles(text: str, width: int = 5) -> set:
+    """Hashes of every *width*-word run, so survival can be tested in O(1).
+
+    Substring search would be the obvious way and is unusable here: 3000
+    sections times 8 probes against seven megabytes of output is hundreds of
+    gigabytes of scanning at the end of a stage that already took an hour.
+    """
+    words = text.split()
+    return {hash(" ".join(words[i:i + width]))
+            for i in range(max(0, len(words) - width + 1))}
+
+
+def _report_dropped_text(before: list, after: list) -> None:
+    """Say which sections did not make it into the output, and how big they were.
+
+    Two bugs got through this stage unnoticed because nothing here said what
+    came out of it. Both were section loss: one dropped any section a reply
+    failed to mention, the other filed corrections under the wrong section.
+    Counts alone hid them, because the count legitimately falls — a book's
+    index and its list of abbreviations are meant to be removed here.
+
+    So this reports the removals in full instead of judging them. A healthy
+    run names its front and back matter, and 'Index', 'A', 'C' in that list
+    reads very differently from a chapter title. The judgement is the
+    reader's; the facts are no longer missing.
+    """
+    try:
+        kept = set()
+        for section in after:
+            kept |= _shingles(_text_of(section))
+        dropped, words = [], 0
+        for section in before:
+            body = _text_of(section)
+            if len(body.split()) < 6:
+                continue
+            probes = list(_shingles(body))[:24]
+            if probes and not any(p in kept for p in probes):
+                dropped.append((len(body.split()), section.get("title") or "?"))
+                words += len(body.split())
+        total = sum(len(_text_of(s).split()) for s in before)
+        log.info("Stage 4: %d words in, %d out (%+.2f%%)", total,
+                 sum(len(_text_of(s).split()) for s in after),
+                 100 * (sum(len(_text_of(s).split()) for s in after) - total)
+                 / max(1, total))
+        if not dropped:
+            return
+        log.info("Stage 4: %d section(s) removed entirely, %d words (%.1f%%); "
+                 "largest: %s", len(dropped), words, 100 * words / max(1, total),
+                 ", ".join(f"{title!r} ({n} words)"
+                           for n, title in sorted(dropped, reverse=True)[:6]))
+    except Exception as exc:                      # a report may never break a run
+        log.debug("Stage 4: could not report dropped text: %s", exc)
+
+
+def _text_of(section: dict) -> str:
+    content = section.get("content")
+    if isinstance(content, list):                 # [LITERATURE] holds BibTeX
+        return "\n".join(str(part) for part in content)
+    return content if isinstance(content, str) else ""
 
 
 # ---------------------------------------------------------------------------
@@ -814,12 +1066,29 @@ def run_refine(output_dir: Path, data: Optional[dict] = None,
     sections = data.get("sections", [])
     log.info(f"Stage 4: {len(sections)} sections loaded")
 
-    refined = refine_sections(sections)
+    report: dict = {}
+    refined = refine_sections(sections, report)
 
     result = {"sections": refined}
     result = clean_data(result)
 
     dump_json_atomic(result, final_path)
     log.info(f"Stage 4: refined output written → {final_path}")
+    _write_report(report, output_dir)
 
     return result
+
+
+def _write_report(report: dict, output_dir: Path) -> None:
+    """The stage's own account of what it could not refine.
+
+    Written on every run, failures or none: an empty list means "this pass
+    checked and nothing failed", while a missing file means "nobody has
+    looked" — a distinction the output files themselves cannot make. Wrapped,
+    because a bookkeeping file must never end a refinement run that produced
+    its actual output a line earlier.
+    """
+    try:
+        dump_json_atomic(report, output_dir / REFINEMENT_REPORT_JSON)
+    except Exception as exc:                       # pragma: no cover - defensive
+        log.warning("Stage 4: could not write the refinement report (%s)", exc)

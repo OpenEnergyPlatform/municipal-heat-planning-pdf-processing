@@ -57,6 +57,23 @@ VLM_TEMPERATURE       = 0.6
 TABLE_VLM_TEMPERATURE = 0.1
 VLM_MAX_TOKENS        = 8192
 
+# ── Context budget ─────────────────────────────────────────────────────────
+# What one request can cost the server, so a serving flag can be checked
+# against this number instead of guessed. Deliberately an over-estimate.
+TOKENS_PER_WORD = 3.0
+# A full-page crop at the resolution this stage sends. An over-estimate: the
+# exact count depends on the model's patch grid, and getting it wrong upwards
+# only costs KV cache, downwards costs the run.
+IMAGE_TOKENS = 4096
+
+
+def max_request_tokens() -> int:
+    """Worst case for one vision request: the longer of the two system
+    prompts + one page image + the reply we ask for."""
+    words = max(len(TABLE_SYSTEM_PROMPT.split()),
+                len(FIGURE_SYSTEM_PROMPT.split()))
+    return int(words * TOKENS_PER_WORD + IMAGE_TOKENS + VLM_MAX_TOKENS)
+
 # ---------------------------------------------------------------------------
 # Runaway detection
 # ---------------------------------------------------------------------------

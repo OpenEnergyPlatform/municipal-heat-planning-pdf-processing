@@ -1,9 +1,16 @@
 """
-schema.py – Build a database from the core schema plus a profile's own.
+schema.py: Builds a database from the core schema plus a profile's
+own schema.
 
-The core tables are the same for every corpus; the profile adds its entities
-and its per-document fields. Both are applied to one connection, in that
-order, so the profile can reference core tables but not the other way round.
+The core tables (Documents, Pages, Sections, SectionPages, Segments,
+Tables, Images, Embeddings) are the same for every corpus. A profile
+adds its own entities and its per-document fields through its own
+schema.sql. apply() runs both scripts against one connection inside
+one transaction, core first and then the profile's, so a profile's
+tables can reference the core tables but not the other way round.
+connect() opens the database file, creating its parent directory and
+applying both schemas if needed, and is idempotent because every
+statement is written IF NOT EXISTS.
 
 Author: Felix Vossel
 """

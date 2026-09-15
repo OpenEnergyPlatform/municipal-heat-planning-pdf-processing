@@ -1,5 +1,12 @@
 """
-process.py – Core processing logic for table and figure enrichment.
+process.py: Core processing logic for table and figure enrichment.
+
+Sends one table or figure image to the vision model, together with
+its section context, and returns a copy of the item carrying the
+model's markdown or description. A table's transcription passes a
+quality gate and gets one retry with a stronger prompt on failure; a
+call that never returns valid JSON falls back to a plain text
+request before the item is marked failed.
 
 Author: Felix Vossel
 """
@@ -172,8 +179,12 @@ def process_table(
         if retry:
             retry_md = retry.get("markdown", "")
             passed2, metrics2 = _assess_table(retry_md, source_text)
-            # Keep the better attempt: prefer one that passes, else higher coverage.
-            if (passed2 and not passed) or metrics2["coverage"] > metrics["coverage"]:
+            # Keep the better attempt: prefer one that passes, else higher
+            # coverage. An unassessable coverage is not "better" - there is
+            # nothing to compare - so it never displaces the first attempt.
+            cov2, cov1 = metrics2["coverage"], metrics["coverage"]
+            if ((passed2 and not passed)
+                    or (cov2 is not None and cov1 is not None and cov2 > cov1)):
                 response, raw_md, passed, metrics = retry, retry_md, passed2, metrics2
 
     # Only collapse stutter rows on the failure path: a passing table may
@@ -197,9 +208,11 @@ def process_table(
     if passed:
         log.info("  ✓ Table %s", table["id"])
     else:
+        cov = metrics["coverage"]
         log.warning(
-            "  ⚠ Table %s low QA (coverage=%.2f duplication=%.2f)",
-            table["id"], metrics["coverage"], metrics["duplication"],
+            "  ⚠ Table %s low QA (coverage=%s duplication=%.2f)",
+            table["id"],
+            "n/a" if cov is None else f"{cov:.2f}", metrics["duplication"],
         )
 
     return result

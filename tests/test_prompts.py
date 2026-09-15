@@ -1,19 +1,24 @@
-"""Prompt loading, overriding and versioning."""
+"""Prompt loading and versioning. A prompt belongs to a profile."""
 import json
 
 import pytest
 
 from docpipe import prompts
-from docpipe.profile import Profile
+from docpipe.profile import Profile, load_profile
 
 
-def test_core_prompts_exist_and_carry_text():
+@pytest.fixture
+def kwp():
+    return load_profile("kwp")
+
+
+def test_a_profile_ships_the_prompts_its_stages_load(kwp):
     for pid in ("refinement/refine", "visuals/table_system", "inference/answer_head"):
-        assert len(prompts.load(pid, use_ambient=False).text) > 50
+        assert len(prompts.load(pid, kwp).text) > 50
 
 
-def test_front_matter_becomes_meta_and_leaves_the_body_alone():
-    p = prompts.load("refinement/refine", use_ambient=False)
+def test_front_matter_becomes_meta_and_leaves_the_body_alone(kwp):
+    p = prompts.load("refinement/refine", kwp)
     assert p.meta["temperature"] == 0.1 and p.meta["max_tokens"] == 8192
     assert not p.text.startswith("---")
 
@@ -23,11 +28,22 @@ def test_body_is_passed_through_byte_for_byte(tmp_path):
     assert prompts.load("refinement/refine", profile).text == "  vorne und hinten  \n\n"
 
 
-def test_profile_overrides_core(tmp_path):
+def test_a_prompt_the_profile_does_not_have_is_an_error(tmp_path):
+    """There is nothing sensible to fall back to: a prompt names the corpus it
+    was written for. Another project's prompt would run, and quietly tell the
+    model it is looking at a document that is not in front of it."""
     profile = _profile_with(tmp_path, "refinement/refine", "eigener Prompt")
+
     assert prompts.load("refinement/refine", profile).text == "eigener Prompt"
-    # a prompt the profile does not override still comes from the core
-    assert len(prompts.load("visuals/table_user", profile).text) > 50
+    with pytest.raises(FileNotFoundError) as exc:
+        prompts.load("visuals/table_user", profile)
+    assert "probe" in str(exc.value) and "visuals/table_user" in str(exc.value)
+
+
+def test_without_a_profile_there_is_no_prompt(monkeypatch):
+    monkeypatch.delenv("DOCPIPE_PROFILE", raising=False)
+    with pytest.raises(LookupError):
+        prompts.load("refinement/refine")
 
 
 def test_render_substitutes_and_catches_typos():
@@ -39,8 +55,8 @@ def test_render_substitutes_and_catches_typos():
         p.render(name="Welt", nmae="Tippfehler")
 
 
-def test_hash_changes_with_the_file(tmp_path):
-    before = prompts.load("refinement/refine", use_ambient=False).sha256
+def test_hash_changes_with_the_file(tmp_path, kwp):
+    before = prompts.load("refinement/refine", kwp).sha256
     profile = _profile_with(tmp_path, "refinement/refine", "anders")
     assert prompts.load("refinement/refine", profile).sha256 != before
 
@@ -53,27 +69,27 @@ def test_stale_reports_changed_and_unversioned_results():
     assert prompts.stale({"a": "1"}, current) == ["b"]      # prompt added later
 
 
-def test_record_then_check_is_clean(tmp_path):
+def test_record_then_check_is_clean(tmp_path, kwp):
     ids = ["refinement/refine"]
-    prompts.record(tmp_path, ids)
+    prompts.record(tmp_path, ids, kwp)
     assert json.loads((tmp_path / prompts.VERSION_FILE).read_text(encoding="utf-8"))
-    assert prompts.check(tmp_path, ids) == []
+    assert prompts.check(tmp_path, ids, kwp) == []
 
 
-def test_check_flags_a_changed_prompt(tmp_path):
+def test_check_flags_a_changed_prompt(tmp_path, kwp):
     ids = ["refinement/refine"]
-    prompts.record(tmp_path, ids)
+    prompts.record(tmp_path, ids, kwp)
     profile = _profile_with(tmp_path / "p", "refinement/refine", "anders")
     assert prompts.check(tmp_path, ids, profile) == ids
 
 
-def test_check_flags_results_without_a_version_file(tmp_path):
-    assert prompts.check(tmp_path, ["refinement/refine"]) == ["refinement/refine"]
+def test_check_flags_results_without_a_version_file(tmp_path, kwp):
+    assert prompts.check(tmp_path, ["refinement/refine"], kwp) == ["refinement/refine"]
 
 
-def test_unusable_prompt_id():
+def test_unusable_prompt_id(kwp):
     with pytest.raises(ValueError):
-        prompts.core_path("ohne_stufe")
+        prompts.path_for("ohne_stufe", kwp)
 
 
 def _profile_with(root, prompt_id, text):

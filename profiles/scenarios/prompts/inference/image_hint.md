@@ -1,0 +1,3 @@
+
+
+The text contains placeholders of the form [p17_img1: Figure 2-3 Final energy demand by sector ...] or [p22_tbl0: Table 4 ...]. They mark a figure or table at exactly that position; the text after them is its caption, not its content. If the detail sought is recognisably IN that figure or table and is not in the running text, you may return ONE action object INSTEAD of the answer object: {"action": "image", "id": "p17_img1"}. You then get the image together with its description and THEN deliver the final answer in the prescribed format. Only request what you really need, and only one placeholder per action. If the detail is already in the text or in the excerpts supplied, answer directly.

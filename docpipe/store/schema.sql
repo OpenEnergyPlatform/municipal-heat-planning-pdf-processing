@@ -28,6 +28,13 @@ CREATE TABLE IF NOT EXISTS "Documents" (
     "filename"    TEXT NOT NULL UNIQUE,
     "published"   TEXT,
     "num_pages"   INTEGER,
+    -- How many of this document's pages a MODEL read rather than the PDF.
+    -- Eleven plans of the heat-plan corpus carry no text layer: their pages
+    -- are rendered and transcribed, and from there everything runs unchanged.
+    -- So their section text is itself a model reading, and so is every quote
+    -- verified against it. NULL means nobody looked, 0 means the PDF had its
+    -- own text.
+    "page_text_transcribed" INTEGER,
     "added"       TEXT,
     "is_current"  INTEGER NOT NULL DEFAULT 1,
     "supersedes"  INTEGER REFERENCES "Documents"("id") ON DELETE SET NULL
@@ -78,26 +85,33 @@ CREATE TABLE IF NOT EXISTS "Segments" (
     UNIQUE("section", "ordinal")
 );
 
+-- `caption_source` says what the caption backfill did with this row:
+-- 'stage' = the caption the preprocessing stages stored was kept,
+-- 'section_text' = it was replaced by the sentence standing before this
+-- item's placeholder in the section text, because the stored one did not
+-- open like a caption. NULL = the backfill has not seen the row.
 CREATE TABLE IF NOT EXISTS "Tables" (
-    "id"          INTEGER PRIMARY KEY AUTOINCREMENT,
-    "section"     INTEGER NOT NULL REFERENCES "Sections"("id") ON DELETE CASCADE,
-    "block_id"    TEXT,
-    "path"        TEXT NOT NULL,
-    "page_number" INTEGER,
-    "caption"     TEXT,
-    "markdown"    TEXT,
-    "bbox"        TEXT   -- JSON [[x0,y0,x1,y1]] region in PDF points
+    "id"             INTEGER PRIMARY KEY AUTOINCREMENT,
+    "section"        INTEGER NOT NULL REFERENCES "Sections"("id") ON DELETE CASCADE,
+    "block_id"       TEXT,
+    "path"           TEXT NOT NULL,
+    "page_number"    INTEGER,
+    "caption"        TEXT,
+    "markdown"       TEXT,
+    "bbox"           TEXT,  -- JSON [[x0,y0,x1,y1]] region in PDF points
+    "caption_source" TEXT   -- stage | section_text
 );
 
 CREATE TABLE IF NOT EXISTS "Images" (
-    "id"          INTEGER PRIMARY KEY AUTOINCREMENT,
-    "section"     INTEGER NOT NULL REFERENCES "Sections"("id") ON DELETE CASCADE,
-    "block_id"    TEXT,
-    "path"        TEXT NOT NULL,
-    "page_number" INTEGER,
-    "caption"     TEXT,
-    "description" TEXT,
-    "bbox"        TEXT   -- JSON [[x0,y0,x1,y1]] region in PDF points
+    "id"             INTEGER PRIMARY KEY AUTOINCREMENT,
+    "section"        INTEGER NOT NULL REFERENCES "Sections"("id") ON DELETE CASCADE,
+    "block_id"       TEXT,
+    "path"           TEXT NOT NULL,
+    "page_number"    INTEGER,
+    "caption"        TEXT,
+    "description"    TEXT,
+    "bbox"           TEXT,  -- JSON [[x0,y0,x1,y1]] region in PDF points
+    "caption_source" TEXT   -- see Tables.caption_source
 );
 
 -- One row per embedded vector. `faiss_id` is the id in the FAISS IDMap index.
