@@ -131,7 +131,7 @@ RENDER_DPI is about a megabyte, and a corpus-wide run would leave gigabytes
 of them behind for nothing. The page is reproducible from the PDF at any
 time, so the transcription is what is worth keeping, not the picture.
 
-$TMPDIR is respected, which on the cluster is the job's own tmpfs.
+$TMPDIR is respected.
 
 ### make_transcriber
 
