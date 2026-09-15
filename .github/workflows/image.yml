@@ -1,6 +1,7 @@
 # The pipeline image (docker/Containerfile) on every push to production:
 # built, its test suite run inside it without network, and only then pushed
-# to ghcr.io as <repository>:<commit> and <repository>:production.
+# as <commit> and production: to Docker Hub as <user>/docpipe, with user and
+# token from the `dockerhub` environment, and to ghcr.io as <repository>.
 name: image
 
 on:
@@ -20,6 +21,9 @@ jobs:
   image:
     runs-on: ubuntu-24.04
     timeout-minutes: 180
+    # Limited to production in the repository settings, so no workflow on
+    # another branch can read the Docker Hub token.
+    environment: dockerhub
     steps:
       # The vLLM base image alone is 12 GB compressed. Docker moves to the
       # runner's larger disk, and the preinstalled toolchains go.
@@ -52,6 +56,25 @@ jobs:
           sys.exit(pytest.main(['tests', '-q', '-p', 'no:cacheprovider',
                                 '--ignore=tests/test_docs_build.py']))
           "
+      # First, because the ghcr.io package cannot be made public.
+      - name: Push to Docker Hub
+        if: ${{ vars.DOCKERHUB_USERNAME != '' }}
+        env:
+          DOCKERHUB_USERNAME: ${{ vars.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: |
+          if [ -z "$DOCKERHUB_TOKEN" ]; then
+            echo "DOCKERHUB_TOKEN is not set, skipping Docker Hub."
+            exit 0
+          fi
+          echo "$DOCKERHUB_TOKEN" \
+            | docker login docker.io -u "$DOCKERHUB_USERNAME" --password-stdin
+          image="docker.io/${DOCKERHUB_USERNAME}/docpipe"
+          for tag in "${GITHUB_SHA::12}" "${GITHUB_REF_NAME}"; do
+            docker tag docpipe:ci "$image:$tag"
+            docker push "$image:$tag"
+          done
+          docker logout docker.io
       - name: Push to ghcr.io
         run: |
           echo "${{ secrets.GITHUB_TOKEN }}" \
