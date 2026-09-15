@@ -1,2 +1,6 @@
 # Auto detect text files and perform LF normalization
 * text=auto
+
+# Run on Linux as they are: bash and podman read a CR as part of the line.
+*.sh text eol=lf
+docker/Containerfile text eol=lf

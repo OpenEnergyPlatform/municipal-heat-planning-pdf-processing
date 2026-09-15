@@ -32,7 +32,6 @@ cuda-pathfinder==1.4.3
 cupy-cuda12x==14.0.1
 cycler==0.12.1
 cymem==2.0.13
-de_core_news_lg @ https://github.com/explosion/spacy-models/releases/download/de_core_news_lg-3.8.0/de_core_news_lg-3.8.0-py3-none-any.whl#sha256=36fda650e476b54d5e87803635e36dadd1e8e034c4b5962088586d684f4c9fed
 decorator==5.2.1
 defusedxml==0.7.1
 dill==0.4.1

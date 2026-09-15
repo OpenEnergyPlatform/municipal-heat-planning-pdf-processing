@@ -49,6 +49,47 @@ lines 2 and 5); only a key not already set is copied in, so an explicit
 variable always wins (`docpipe/dotenv.py` line 45); `.env.example`
 lists what a deployment usually sets.
 
+## Container image
+
+`docker/Containerfile` builds one OCI image for stages 1 to 8, on top of
+`vllm/vllm-openai:v0.23.0-cu129-ubuntu2404`, pinned by digest so a moved tag
+cannot change what gets built (`docker/Containerfile` line 8). The base image
+starts `vllm serve`; this one clears the entrypoint, so every invocation says
+whether it runs the server or a stage (lines 13 to 14). `docpipe/`,
+`profiles/`, `scripts/`, `tests/`, `docker/` and `requirements.txt` are copied
+in under `/opt/docpipe` (lines 22 to 27). Weights (the HF cache), `data/`, the database, the FAISS
+index, outputs and tokens are not baked in: they are mounted or passed at run
+time, through the same environment variables as the venv (see the
+configuration reference below).
+
+`requirements.txt` is installed by `docker/install_requirements.py`, not by
+pip directly (`docker/Containerfile` lines 18 to 20): a package the base image
+already has (torch, its CUDA wheels, transformers, ...) is skipped so the base
+version wins, every base package is passed to pip as a constraint so nothing
+pulled in drags one along, a plain `opencv-python` is installed headless since
+the image carries no libGL, and the build fails if installing anyway changed a
+base package (`docker/install_requirements.py` lines 56 to 72, 82 to 110).
+`tests/test_container_requirements.py` covers that logic directly, no image
+needed.
+
+Every push to `production` builds the image in CI
+(`.github/workflows/image.yml`), runs the test suite inside it and publishes
+it as `ghcr.io/openenergyplatform/municipal-heat-planning-pdf-processing`,
+tagged with the commit (12 characters) and the branch. To build and check it
+by hand, from a clean export of one commit, without a GPU or network:
+
+```bash
+podman build -f docker/Containerfile --build-arg REVISION="$(git rev-parse HEAD)" -t docpipe .
+podman run --rm --network none -e DOCPIPE_PROFILE=kwp docpipe python3 -c "import sys,types,pytest; m=types.ModuleType('tests'); m.__path__=['tests']; sys.modules['tests']=m; sys.exit(pytest.main(['tests','-q','--ignore=tests/test_docs_build.py']))"
+```
+
+`tests` is pinned because the base image ships its own top-level `tests`
+package, which shadows the repo's. To run a stage, mount the data at
+the paths the profile expects, pass the endpoints and tokens as environment
+variables, and set `PYTHONSAFEPATH=1` when the working directory holds another
+copy of the code. The code-exec sandbox is not part of the image. The same
+image runs under Apptainer.
+
 ## Running each stage
 
 Every stage also accepts `--log-level` (`DEBUG`, `INFO`, `WARNING` or
