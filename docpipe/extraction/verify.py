@@ -49,6 +49,8 @@ _WS = re.compile(r"\s+")
 # numbers into one token ('2020 45.000' is two numbers); space-grouped forms
 # ('45 000') are collected separately.
 _NUMBER = re.compile(r"\d(?:[\d.,]*\d)?")
+# DD.MM.YYYY and MM.YYYY: the year at the end of a German date.
+_DATED_YEAR = re.compile(r"(?<![\d.,])(?:\d{1,2}\.){1,2}((?:19|20)\d{2})(?!\d|[.,]\d)")
 _SPACE_GROUPED = re.compile(r"\d{1,3}(?:[   ]\d{3})+(?:[.,]\d+)?")
 
 
@@ -95,6 +97,10 @@ def numbers_in(text: str) -> set:
     found = {canonical_number(m.group(0)) for m in _NUMBER.finditer(text or "")}
     found.update(canonical_number(m.group(0))
                  for m in _SPACE_GROUPED.finditer(text or ""))
+    # The year of a dotted date. "Stand 09.12.2025" is one token to _NUMBER
+    # and reads as the grouped number 09122025, so the 2025 it plainly prints
+    # was not in the quote: 12 years on the corpus_m5 canary were dropped so.
+    found.update(m.group(1) for m in _DATED_YEAR.finditer(text or ""))
     return found
 
 

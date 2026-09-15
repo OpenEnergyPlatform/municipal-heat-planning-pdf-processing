@@ -83,8 +83,8 @@ question instead (`docpipe/extraction/schema.py:565` to `671`).
 The owner decided on 2026-09-10 that a stamp rests on the KG/ontology
 parameters alone: `stale` compares only the `parameter/`, `value/`,
 `axis/` and `slot/` families (`QUESTION_KEYS`,
-`docpipe/extraction/runner.py:3624`), and the whole-file sha `spec`
-only for a stamp that carries none of them (`COARSE`, `:3618`;
+`docpipe/extraction/runner.py:3710`), and the whole-file sha `spec`
+only for a stamp that carries none of them (`COARSE`, `:3704`;
 `tests/test_extraction_runner.py::test_a_stamp_from_before_the_detail_is_stale_in_all_of_it`).
 `model`, `anchors`, every `extraction/*` prompt, `page_text_transcribed`,
 `review/*` and `question_text/*` are written into the stamp so a reader
@@ -92,8 +92,8 @@ can place a harvest, and are never compared
 (`tests/test_extraction_runner.py::test_what_the_stamp_records_about_the_document_never_redoes_it`).
 Only the `parameter/`, `value/`, `axis/` and `slot/` families make a
 document eligible for `--force-stale`'s full re-harvest (`stale`,
-`docpipe/extraction/runner.py:3656` to `3693`, `already_done`, `:3736`
-to `3761`); redoing only the changed question is
+`docpipe/extraction/runner.py:3742` to `3779`, `already_done`, `:3822`
+to `3847`); redoing only the changed question is
 `top_up_file`'s job (`docpipe/extraction/topup.py:284` to `318`). The
 trace is `<document>.trace.jsonl`: eleven event kinds told apart by
 `t`, `plan` through `invalid` in source order

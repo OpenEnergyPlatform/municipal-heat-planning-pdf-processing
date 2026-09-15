@@ -219,7 +219,7 @@ wording of each spec question:
 
 `extraction/rows` and `extraction/field` are the field-wise pair that
 replaces the whole-tuple `extraction/harvest` request by default
-(`EXTRACT_FIELDWISE` defaults to on, `docpipe/extraction/runner.py:189`):
+(`EXTRACT_FIELDWISE` defaults to on, `docpipe/extraction/runner.py:223`):
 one call finds which values a passage states, a second asks each
 coordinate as its own question. `extraction/review` is deliberately
 outside the set the extraction stamp hashes, because a review only ever

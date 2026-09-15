@@ -79,6 +79,16 @@ def test_adjacent_numbers_never_merge_into_one_token():
     assert "45000" in numbers_in("betrug 45 000 MWh im Jahr")
 
 
+def test_the_year_of_a_dotted_date_is_a_number_of_the_quote():
+    """'Stand 09.12.2025' is one token and reads as 09122025; the year it
+    prints was not found, and 12 years on the corpus_m5 canary were dropped."""
+    from docpipe.extraction.verify import numbers_in
+    assert "2025" in numbers_in("Klimafahrplan Stand 09.12.2025, Gesamt 19.685 t")
+    assert "2030" in numbers_in("Fortschreibung 03.2030")
+    assert "19685" in numbers_in("Stand 09.12.2025, Gesamt 19.685 t")
+    assert "2025" not in numbers_in("1.036.767,2025 MWh")
+
+
 # ---------------------------------------------------------------------------
 # the gate
 # ---------------------------------------------------------------------------

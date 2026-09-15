@@ -2056,3 +2056,51 @@ def test_the_same_reading_written_twice_is_one_reading():
                      dict(row, year=2045)]
     assert drop_repeats(report) == 1
     assert [t["year"] for t in report.tuples] == [2030, 2045]
+
+
+def test_a_stop_returns_at_once_and_names_the_documents_left_open():
+    """SIGTERM at the time limit. The run must not wait for the requests still
+    open, and a document with a batch that never came back must be known, or
+    it is written and stamped as if it had been read whole."""
+    import threading
+    from docpipe.extraction.pipeline import WorkItem
+    items = [WorkItem(7, SPEC.parameters[0], _source("a", owner_id=1)),
+             WorkItem(8, SPEC.parameters[0], _source("b", owner_id=2))]
+    batches = runner.group_items(items, max_sources=1)
+    stop, release = threading.Event(), threading.Event()
+
+    def harvest(batch, prior=None):
+        if batch.document_id == 8:
+            stop.set()
+            release.wait(10)           # still waiting on the server
+        return {"tuples": [], "status": "complete", "need_more": []}
+
+    unfinished: set = set()
+    started = time.monotonic()
+    answered = runner.harvest_batches(batches, harvest, workers=2, stop=stop,
+                                      unfinished=unfinished)
+    release.set()
+    assert time.monotonic() - started < 9, "the stop waited for the open request"
+    assert unfinished == {8}
+    assert [b.document_id for b, _ in answered] == [7]
+
+
+def test_sigterm_sets_the_stop_instead_of_killing_the_run():
+    import signal
+    previous = signal.getsignal(signal.SIGTERM)
+    try:
+        runner.install_stop_handler()
+        signal.getsignal(signal.SIGTERM)(signal.SIGTERM, None)
+        assert runner.STOP.is_set()
+    finally:
+        signal.signal(signal.SIGTERM, previous)
+        runner.STOP.clear()
+
+
+def test_each_unreadable_reply_raises_the_temperature_of_the_retry():
+    """At temperature 0 a malformed reply asked again came back byte for byte
+    the same, correction message or not."""
+    assert runner.retry_temperature(0, 0) == 0
+    assert runner.retry_temperature(0, 2) == pytest.approx(
+        2 * runner.RETRY_TEMPERATURE_STEP)
+    assert runner.retry_temperature(0.95, 3) == 1.0

@@ -980,3 +980,23 @@ def test_the_title_of_a_table_is_asked_of_the_whole_passage():
     # And the one question both of them ask, of whichever text they were given.
     assert pair_in_text(both[1], _slots(), _FOREIGN)
     assert not pair_in_text(both[1], _slots(), "| Erdgas | 17.000 |")
+
+
+def test_a_retry_after_an_unreadable_reply_is_sampled_warmer(monkeypatch,
+                                                              make_client):
+    import types
+    sent, replies = [], ['{"pairs": [', json.dumps(_reply())]
+
+    def responder(kwargs):
+        sent.append(kwargs)
+        return types.SimpleNamespace(choices=[types.SimpleNamespace(
+            finish_reason="stop",
+            message=types.SimpleNamespace(content=replies[len(sent) - 1],
+                                          reasoning_content=None))])
+
+    monkeypatch.setattr(runner, "_client", lambda: make_client(responder))
+    monkeypatch.setattr(runner.time, "sleep", lambda *_: None)
+    reply = runner.make_frame_asker()(_shown(), _slots(), 7, None, {})
+    assert reply["pairs"]
+    assert [k["temperature"] for k in sent] == [
+        0, pytest.approx(runner.RETRY_TEMPERATURE_STEP)]

@@ -53,6 +53,7 @@ import json
 import logging
 import os
 import re
+import signal
 import sqlite3
 import threading
 import time
@@ -83,11 +84,44 @@ log = logging.getLogger(__name__)
 
 LLM_BASE_URL = os.environ.get("LLM_BASE_URL", "http://localhost:8000/v1")
 LLM_API_KEY = os.environ.get("LLM_API_KEY", "EMPTY")
-LLM_MODEL = os.environ.get("LLM_MODEL", "Qwen/Qwen3.8-Flash-Next-FP8")
+LLM_MODEL = os.environ.get("LLM_MODEL", "Qwen/Qwen3.5-122B-A10B-FP8")
 LLM_TIMEOUT = int(os.environ.get("LLM_TIMEOUT", "180"))
 TOP_K = int(os.environ.get("EXTRACT_TOP_K", "8"))
 MAX_ROUNDS = int(os.environ.get("EXTRACT_MAX_ROUNDS", "4"))
 MAX_RETRIES = 3
+# A malformed reply asked again at temperature 0 comes back the same, byte for
+# byte, correction message or not: on corpus_m5 field retries
+# repeated their first attempt exactly and all three were lost. Every reply
+# fault raises the temperature of the next attempt by this step.
+RETRY_TEMPERATURE_STEP = float(os.environ.get("EXTRACT_RETRY_TEMPERATURE_STEP",
+                                              "0.1"))
+
+# Set by SIGTERM (a time-limit trap or a manual kill). The run stops
+# taking new work, writes the documents whose every batch came back, and
+# exits without waiting for the requests still open.
+STOP = threading.Event()
+
+
+def retry_temperature(base: float, faults: int) -> float:
+    """The sampling temperature after `faults` unreadable replies."""
+    return min(1.0, base + RETRY_TEMPERATURE_STEP * faults)
+
+
+STOPPED_EXIT = 143
+_hard_exit = os._exit
+
+
+def install_stop_handler() -> None:
+    """SIGTERM sets STOP instead of killing the interpreter mid-group.
+
+    Killed outright, a time-limit stop threw away the whole group in flight,
+    up to 64 documents and hours of work, including every batch that had
+    already come back. Only the main thread can install a handler, so a call
+    from anywhere else leaves the default in place.
+    """
+    if threading.current_thread() is not threading.main_thread():
+        return
+    signal.signal(signal.SIGTERM, lambda *_: STOP.set())
 # How long to wait before asking again, and it is two curves because the two
 # failures are not alike. A reply the model got wrong comes back the moment it
 # is asked again; a server that is not there needs time to come back. The
@@ -920,11 +954,13 @@ def document_anchor(spec: Spec, context: Optional[dict] = None,
         transport = False
         conversation: list = [{"role": "user", "content": payload}]
         limit = int(prompt.meta.get("max_tokens", 300))
+        faults = 0
         for attempt in range(1, MAX_RETRIES + 1):
             try:
                 reply = client.chat.completions.create(
                     model=LLM_MODEL,
-                    temperature=float(prompt.meta.get("temperature", 0)),
+                    temperature=retry_temperature(
+                        float(prompt.meta.get("temperature", 0)), faults),
                     max_tokens=limit,
                     messages=[{"role": "system", "content": prompt.text},
                               *conversation],
@@ -939,6 +975,7 @@ def document_anchor(spec: Spec, context: Optional[dict] = None,
                 # not be read is asked again WITH the reason. Three silent
                 # tries were three copies of the same reply.
                 cause, correction = _reply_fault(reply, limit)
+                faults += 1
                 log.warning("phrase %s attempt %d: %s reply",
                             parameter.uri, attempt, cause)
                 conversation.append({"role": "assistant",
@@ -955,10 +992,15 @@ def document_anchor(spec: Spec, context: Optional[dict] = None,
                     parameter.uri)
         return parameter.uri, []
 
+    # One request per parameter, all at once: in sequence they were four
+    # round trips per document under a plan pool of eight, and planning a
+    # group of 64 plans took half an hour with the GPUs waiting.
+    from concurrent.futures import ThreadPoolExecutor
     out: dict = {}
-    for uri, phrase in map(one, spec.parameters):
-        if phrase:
-            out[uri] = phrase
+    with ThreadPoolExecutor(max_workers=max(len(spec.parameters), 1)) as pool:
+        for uri, phrase in pool.map(one, spec.parameters):
+            if phrase:
+                out[uri] = phrase
     return out
 
 
@@ -1108,11 +1150,13 @@ def make_frame_asker(image_root: Optional[Path] = None) -> Callable:
         transport = False
         conversation: list = [{"role": "user", "content": content}]
         limit = max_tokens
+        faults = 0
         for attempt in range(1, MAX_RETRIES + 1):
             started = time.time()
             try:
                 completion = client.chat.completions.create(
-                    model=LLM_MODEL, temperature=temperature,
+                    model=LLM_MODEL,
+                    temperature=retry_temperature(temperature, faults),
                     max_tokens=limit,
                     messages=[{"role": "system", "content": prompt.text},
                               *conversation],
@@ -1136,6 +1180,7 @@ def make_frame_asker(image_root: Optional[Path] = None) -> Callable:
                 if isinstance(parsed, dict) and isinstance(
                         parsed.get("pairs"), list):
                     return parsed
+                faults += 1
                 cause, correction = _reply_fault(
                     reply, limit, key="pairs",
                     shorter="Antworte mit weniger Paaren und zitiere nur die "
@@ -1521,11 +1566,13 @@ def make_anchors(spec: Spec, client=None, *, store: Optional[Path] = None,
         transport = False
         conversation: list = [{"role": "user", "content": payload}]
         limit = int(prompt.meta.get("max_tokens", 800))
+        faults = 0
         for attempt in range(1, MAX_RETRIES + 1):
             try:
                 reply = client.chat.completions.create(
                     model=LLM_MODEL,
-                    temperature=float(prompt.meta.get("temperature", 0.4)),
+                    temperature=retry_temperature(
+                        float(prompt.meta.get("temperature", 0.4)), faults),
                     max_tokens=limit,
                     messages=[{"role": "system", "content": prompt.text},
                               *conversation],
@@ -1537,6 +1584,7 @@ def make_anchors(spec: Spec, client=None, *, store: Optional[Path] = None,
                 if anchors:
                     return anchor_id, anchors
                 cause, correction = _reply_fault(reply, limit, key="anchors")
+                faults += 1
                 log.warning("anchors %s attempt %d: %s reply",
                             anchor_id, attempt, cause)
                 conversation.append({"role": "assistant",
@@ -2260,12 +2308,14 @@ def make_harvester(image_root: Optional[Path] = None,
         # More room than the prompt asks for only when a single passage came
         # back cut off and there is nothing left to split.
         limit = ceiling or max_tokens
+        faults = 0
         # A compute round is a turn of the same conversation, not a retry, so
         # the attempt budget grows with the rounds actually used.
         for attempt in range(1, MAX_RETRIES + CODE_ROUNDS + 1):
             try:
                 response = client.chat.completions.create(
-                    model=LLM_MODEL, temperature=temperature,
+                    model=LLM_MODEL,
+                    temperature=retry_temperature(temperature, faults),
                     max_tokens=limit,
                     messages=[{"role": "system", "content": prompt.text},
                               *conversation],
@@ -2323,6 +2373,7 @@ def make_harvester(image_root: Optional[Path] = None,
                                     usage, "completion_tokens", None),
                                 ms=int((time.time() - started) * 1000))
                     return answer
+                faults += 1
                 cause, correction = _reply_fault(
                     reply, limit, key="tuples",
                     shorter="Antworte mit weniger Tupeln und zitiere nur die "
@@ -2545,10 +2596,12 @@ def make_field_asker(image_root: Optional[Path] = None) -> Callable:
         transport = False
         conversation: list = [{"role": "user", "content": content}]
         limit = max_tokens
+        faults = 0
         for attempt in range(1, MAX_RETRIES + 1):
             try:
                 response = client.chat.completions.create(
-                    model=LLM_MODEL, temperature=temperature,
+                    model=LLM_MODEL,
+                    temperature=retry_temperature(temperature, faults),
                     max_tokens=limit,
                     messages=[{"role": "system", "content": prompt.text},
                               *conversation],
@@ -2570,6 +2623,7 @@ def make_field_asker(image_root: Optional[Path] = None) -> Callable:
                 answer = _loads_object(reply.message.content)
                 if isinstance(answer, dict):
                     return answer
+                faults += 1
                 cause, correction = _reply_fault(
                     reply, limit,
                     shorter="Fasse Zeilen mit derselben Antwort in \"groups\" "
@@ -2717,10 +2771,12 @@ def make_review_asker(image_root: Optional[Path] = None) -> Callable:
         transport = False
         conversation: list = [{"role": "user", "content": content}]
         limit = max_tokens
+        faults = 0
         for attempt in range(1, MAX_RETRIES + 1):
             try:
                 response = client.chat.completions.create(
-                    model=LLM_MODEL, temperature=temperature,
+                    model=LLM_MODEL,
+                    temperature=retry_temperature(temperature, faults),
                     max_tokens=limit,
                     messages=[{"role": "system", "content": prompt.text},
                               *conversation],
@@ -2735,6 +2791,7 @@ def make_review_asker(image_root: Optional[Path] = None) -> Callable:
                 # One row and two passages: there is nothing here to split, so
                 # a reply that did not fit is told to quote less rather than
                 # to answer for fewer rows.
+                faults += 1
                 cause, correction = _reply_fault(
                     reply, limit,
                     shorter="Zitiere nur die kurze Stelle, an der die Angabe "
@@ -3369,7 +3426,9 @@ def harvest_batches(batches: list, harvest: Callable, *,
                     more_sources: Optional[Callable] = None,
                     verify: Optional[Callable] = None,
                     on_give_up: Optional[Callable] = None,
-                    workers: int = LLM_PARALLEL) -> list:
+                    workers: int = LLM_PARALLEL,
+                    stop: Optional[threading.Event] = None,
+                    unfinished: Optional[set] = None) -> list:
     """Every batch of the whole run in flight at once.
 
     The batch is the unit, not the chain. A chain — one document, one
@@ -3396,6 +3455,13 @@ def harvest_batches(batches: list, harvest: Callable, *,
     the loop went on to the next group each time, so a server that died at
     01:44 was still being asked at 05:14. What the caller does with it is the
     caller's business, but it has to be able to know.
+
+    *stop* ends the harvest early when it is set (SIGTERM): nothing new is
+    submitted, and the call returns at once without waiting for the requests
+    still open. Whenever batches are left behind, by *stop* or by the
+    dead-server cut, the documents they belong to are added to *unfinished*.
+    Such a document has replies for some of its batches and none for the rest,
+    and written it would be stamped as if it had been read whole.
     """
     from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 
@@ -3426,11 +3492,29 @@ def harvest_batches(batches: list, harvest: Callable, *,
     dead_streak = [0]
     give_up = max(64, workers)
 
-    with ThreadPoolExecutor(max_workers=max(workers, 1)) as pool:
+    def leave(pending: dict) -> None:
+        if unfinished is not None:
+            unfinished.update(b.document_id for b in pending.values())
+        for f in list(pending):
+            f.cancel()
+        pending.clear()
+
+    pool = ThreadPoolExecutor(max_workers=max(workers, 1))
+    stopped = False
+    try:
         pending = {pool.submit(one, b): b for b in batches}
         step = max(submitted // 20, 25)
         while pending:
-            done_now, _ = wait(list(pending), return_when=FIRST_COMPLETED)
+            if stop is not None and stop.is_set():
+                log.error("harvest: stopped with %d of %d batches back, %d "
+                          "left open", len(results), submitted, len(pending))
+                leave(pending)
+                stopped = True
+                break
+            # With a timeout, so a stop is seen while every open request is
+            # still waiting on the server.
+            done_now, _ = wait(list(pending), timeout=5,
+                               return_when=FIRST_COMPLETED)
             for future in done_now:
                 batch = pending.pop(future)
                 try:
@@ -3452,9 +3536,7 @@ def harvest_batches(batches: list, harvest: Callable, *,
                         log.error("harvest: %d requests in a row never reached "
                                   "the server — cancelling the remaining %d",
                                   dead_streak[0], len(pending))
-                        for f in list(pending):
-                            f.cancel()
-                        pending.clear()
+                        leave(pending)
                         if on_give_up is not None:
                             on_give_up()
                         break
@@ -3475,6 +3557,10 @@ def harvest_batches(batches: list, harvest: Callable, *,
                     log.info("harvest: %d/%d batches (%.1f/s, %.0f s left)",
                              len(results), submitted, rate,
                              (submitted - len(results)) / max(rate, 1e-6))
+    finally:
+        # After a stop the open requests are not waited for: the process is
+        # about to exit, and a field sweep can hold its thread for minutes.
+        pool.shutdown(wait=not stopped, cancel_futures=stopped)
     return results
 
 
@@ -4624,7 +4710,10 @@ def main(argv: Optional[list] = None) -> int:
     def give_up() -> None:
         server_gone[0] = True
 
+    install_stop_handler()
     for offset in range(0, len(documents), group_size):
+        if STOP.is_set():
+            break
         group = documents[offset:offset + group_size]
 
         # ---- Plan: retrieval and SQL, not one model request ----------------
@@ -4739,10 +4828,14 @@ def main(argv: Optional[list] = None) -> int:
                  len(plans))
 
         # ---- Harvest: all of them, at once ---------------------------------
+        if STOP.is_set():
+            break
+        unfinished: set = set()
         answered = harvest_batches(batches, harvest,
                                    more_sources=more_sources,
                                    verify=accepted_rows, workers=LLM_PARALLEL,
-                                   on_give_up=give_up)
+                                   on_give_up=give_up, stop=STOP,
+                                   unfinished=unfinished)
 
         # ---- Verify and write, document by document ------------------------
         by_document: dict = {}
@@ -4752,7 +4845,12 @@ def main(argv: Optional[list] = None) -> int:
             name = owner_of.get(id(batch)) or document_name.get(batch.document_id)
             by_document.setdefault(name, []).append((batch, reply))
         entries = [(name, report, by_document.get(name, []))
-                   for name, _, report in plans]
+                   for name, _, report in plans
+                   if report.document_id not in unfinished]
+        if unfinished:
+            log.error("extraction: %d document(s) of this group left with "
+                      "batches never harvested — not written, so a resume "
+                      "harvests them again", len(unfinished))
         with ThreadPoolExecutor(max_workers=PLAN_PARALLEL) as pool:
             futures = {pool.submit(verify, e): e[0] for e in entries}
             for future in as_completed(futures):
@@ -4769,6 +4867,19 @@ def main(argv: Optional[list] = None) -> int:
                       min(offset + group_size, len(documents)), len(documents))
             failures += 1
             break
+        if STOP.is_set():
+            break
+
+    if STOP.is_set():
+        log.error("extraction: stopped by SIGTERM after %.0f s. The documents "
+                  "whose every batch came back are written and stamped; a "
+                  "resume harvests the rest.", time.time() - started)
+        trace.close()
+        logging.shutdown()
+        # Not a return: the field sweeps still waiting on the server run in
+        # non-daemon threads, and a normal exit would wait for every one.
+        _hard_exit(STOPPED_EXIT)
+        return STOPPED_EXIT
 
     log_usage(context_budget(prompts.load(HARVEST_PROMPT_ID), spec))
     log.info("extraction: done in %.0f s, %d failure(s)",

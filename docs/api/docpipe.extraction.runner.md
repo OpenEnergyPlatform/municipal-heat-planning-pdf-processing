@@ -49,6 +49,27 @@ Author: Felix Vossel
 
 ## Functions
 
+### retry_temperature
+
+```python
+def retry_temperature(base: float, faults: int) -> float
+```
+
+The sampling temperature after `faults` unreadable replies.
+
+### install_stop_handler
+
+```python
+def install_stop_handler() -> None
+```
+
+SIGTERM sets STOP instead of killing the interpreter mid-group.
+
+Killed outright, a time-limit stop threw away the whole group in flight,
+up to 64 documents and hours of work, including every batch that had
+already come back. Only the main thread can install a handler, so a call
+from anywhere else leaves the default in place.
+
 ### retry_wait
 
 ```python
@@ -715,7 +736,9 @@ def harvest_batches(batches: list, harvest: Callable, *,
                     more_sources: Optional[Callable] = None,
                     verify: Optional[Callable] = None,
                     on_give_up: Optional[Callable] = None,
-                    workers: int = LLM_PARALLEL) -> list
+                    workers: int = LLM_PARALLEL,
+                    stop: Optional[threading.Event] = None,
+                    unfinished: Optional[set] = None) -> list
 ```
 
 Every batch of the whole run in flight at once.
@@ -744,6 +767,13 @@ group is not enough on its own: the cut fired sixteen times in one run and
 the loop went on to the next group each time, so a server that died at
 01:44 was still being asked at 05:14. What the caller does with it is the
 caller's business, but it has to be able to know.
+
+*stop* ends the harvest early when it is set (SIGTERM): nothing new is
+submitted, and the call returns at once without waiting for the requests
+still open. Whenever batches are left behind, by *stop* or by the
+dead-server cut, the documents they belong to are added to *unfinished*.
+Such a document has replies for some of its batches and none for the rest,
+and written it would be stamped as if it had been read whole.
 
 ### make_locate
 

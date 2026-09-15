@@ -78,7 +78,7 @@ document, not asked again with everything already found excluded. The
 single call fuses every probe into one ranked
 list rather than concatenating a ranking per probe: over 65 documents and
 15,082 values, concatenation put a value's real source at median rank 77,
-fusion at rank 26 (`runner.py:352`).
+fusion at rank 26 (`runner.py:386`).
 
 That single cut is not a plain slice of the ranking either.
 `with_visual_share` (`pipeline.py:178`) holds a share of `top`'s room,
@@ -100,19 +100,19 @@ everywhere else.
 
 The plan searches not with the spec's query templates but a sentence
 written as a document would state the answer, a HyDE anchor; two
-mechanisms produce them. `document_anchor` (`runner.py:839`) writes the
+mechanisms produce them. `document_anchor` (`runner.py:873`) writes the
 plan's own probe per document and parameter, from the parameter's
 label, description, the document's name and an early caption; recorded,
 never compared, in the stamp as `question_text/<key>`.
 Dropping query templates for it was measured directly: with templates
 included alongside the anchor, a value's real source sat at median rank
 84; without them, rank 26 (`pipeline.py:196`). `plan_document` falls back to
-`queries.expand`'s templates only when no anchor exists. `make_anchors` (`runner.py:1322`) is the second,
+`queries.expand`'s templates only when no anchor exists. `make_anchors` (`runner.py:1367`) is the second,
 corpus-wide mechanism: one set per question the field sweep asks, each
 axis question and the parameter choice, written once per run and cached
 per question. The value itself has no set: the plan searches with the
 one short sentence `document_anchor` writes (`anchor_targets`,
-`runner.py:814`). This set backs the field sweep once a
+`runner.py:848`). This set backs the field sweep once a
 coordinate is not in the value's own passage, and is fingerprinted as
 one `anchors` stamp key.
 
@@ -143,9 +143,9 @@ helpers get a look at the claim first now: `pair_of_claim`
 (`pipeline.py:577`) asks the whole passage whether exactly one OTHER pair
 of the document is named there; if so the claim becomes a row carrying
 that pair in its own `pair` and `pair_index` fields (`Row`,
-`pipeline.py:456`), for `project` (`runner.py:3130`) to stamp instead of
+`pipeline.py:456`), for `project` (`runner.py:3187`) to stamp instead of
 the request's own, drawn from `Batch.pairs` (`pipeline.py:134`), set by
-`pair_batches` (`runner.py:4046`). Exactly one, or the claim still stays
+`pair_batches` (`runner.py:4132`). Exactly one, or the claim still stays
 refused. Measured on corpus_m5: of 120,442 claims refused this way, 52.8%
 came back later under the same quote, 17.8% as the same value under
 another quote, and 29.4%, 35,407 values, were never read under any pair
@@ -154,7 +154,7 @@ t CO2eq/a (3,836), from tables (14,227), figures (11,869) and prose
 (9,311). The gain from the frame itself was measured directly: before it
 existed, the year axis alone produced 1,849 refusals against 0 readings,
 since every window after the first excluded the row's own source
-(`runner.py:2969`).
+(`runner.py:3026`).
 
 ### The row request
 
@@ -174,12 +174,18 @@ wording not in its own quote is caught here too, before it becomes a
 row (`pipeline.py:544`). A `Row` is created only here, never later. The
 request can turn to a code sandbox, bounded to `CODE_ROUNDS` rounds. A
 reply that will not parse is asked again with the cause named,
-`_reply_fault` (`runner.py:1801`), rather than the same message twice;
-one cut off at the token ceiling is asked again as two halves instead
-of kept half-read, its labels renumbered onto the whole batch,
-`_split_harvest` (`runner.py:1876`). A single passage still too long
-for that gets its own ceiling doubled, up to four times, before it is
-written as a `_why: cut_off` sentinel instead (`runner.py:2250`).
+`_reply_fault` (`runner.py:1849`), rather than the same message twice, and
+with the retried attempt's sampling temperature raised a step: on
+corpus_m5, a field retry asked again at temperature 0
+repeated its first reply byte for byte and lost all three tries. Every
+retry loop of this stage (phrase, frame, anchors, harvest, field and
+review) raises the step, `retry_temperature` (`runner.py:105`, env
+`EXTRACT_RETRY_TEMPERATURE_STEP`, default `0.1`), once per fault and
+capped at `1.0`. One cut off at the token ceiling is asked again as two
+halves instead of kept half-read, its labels renumbered onto the whole
+batch, `_split_harvest` (`runner.py:1924`). A single passage still too
+long for that gets its own ceiling doubled, up to four times, before it
+is written as a `_why: cut_off` sentinel instead (`runner.py:2298`).
 
 ### The field sweep: three window stages and a budget
 
@@ -196,13 +202,13 @@ overlapping windows (`FIELD_WINDOW` 2, `FIELD_OVERLAP` 1) for up to
 `FIELD_ROUNDS` (4) rounds. **Rest** is the floor: once retrieval has
 nothing new, `rest_of_document` reads the document's own remaining
 sections in order, rotated to start near the open rows, until the
-coordinate closes or the document runs out (`runner.py:2902`). A
+coordinate closes or the document runs out (`runner.py:2959`). A
 coordinate the whole sweep cannot close is `exhausted`, never
 `unstated`: the first is a finding about the run, the second about the
 document. The budget sums to `FIELD_MAX_WINDOWS`
 (24) plus `REST_MAX_WINDOWS` (12) per coordinate, with several
 coordinates batched into one request rather than one request each
-(`runner.py:2624`).
+(`runner.py:2678`).
 
 ### Merging a coordinate
 
@@ -237,7 +243,12 @@ last check against the spec's closed lists and the literal source text. A
 number is compared digit for digit after `canonical_number` normalises
 locale grouping and decimal marks; a category or text value is compared
 case- and whitespace-folded against its own wording, through `verify.flat`
-(`verify.py:122`). That fold now runs `unicodedata.normalize("NFKC", ...)`
+(`verify.py:128`). The set of numbers a quote is checked against,
+`numbers_in` (`verify.py:96-104`), also credits the year of a dotted
+German date, "09.12.2025" or "03.2030", since read as one token it is the
+ungrouped number 09122025 and the year it plainly prints would otherwise
+be missing from that set: 12 years were dropped so on the corpus_m5
+canary. That fold now runs `unicodedata.normalize("NFKC", ...)`
 first and maps the quotation-mark, dash and thin-space variants and the
 soft hyphen onto one spelling each, before the existing whitespace
 collapse: the passage comes out of the PDF and the quote out of the
@@ -254,12 +265,12 @@ not verbatim in its source but the value occurs there
 exactly once, the quote is rebuilt around that occurrence rather than the
 claim refused: on the 16-document pilot, 303 of 377 such refusals were
 repaired this way, against 8 where the value truly was absent
-(`verify.py:294`). A verified tuple's tier comes from its source
+(`verify.py:300`). A verified tuple's tier comes from its source
 alone, not whether the quote could be placed on the page:
 `text_located` for prose, `visual_source` for a table transcription or
 figure description, an uncheckable model reading of a picture. A prose
 quote that could not be placed on the PDF page still keeps the
-`text_located` tier; it only gains a `not_located` flag (`verify.py:446`).
+`text_located` tier; it only gains a `not_located` flag (`verify.py:452`).
 Non-fatal findings are carried as flags: `quote_repaired`, `computed`
 (a sandbox result checked against its own printed output),
 `unit_not_chosen`, `not_located`, `unmapped:<axis>:<wording>`, and, for
@@ -318,7 +329,7 @@ Every tuple, refusal, parameter state and summary line is checked
 against the published schema before it is written:
 `_harvest_validators` builds one `jsonschema` validator per branch from
 `schema.build(spec)["harvest"]`, run by `check_against_schema` inside
-`finish_document` on every call carrying a spec (`runner.py:3645`). A
+`finish_document` on every call carrying a spec (`runner.py:3731`). A
 row the schema refuses is counted
 and logged as an `invalid` trace event, never withheld, since blocking on
 a schema mismatch would turn a documentation defect into a data loss.
@@ -442,6 +453,7 @@ run, `anchors.json` and `query_cache.db`; and, only after `--top-up`,
 | `EXTRACT_CODE_ROUNDS` / `EXTRACT_FIELD_RE_ENTRY` | env var | `2` / `3` | Sandbox rounds the row request may spend on a self-checked value; already-shown passages carried into a coordinate's next field window | `runner.make_harvester`, `runner.make_sweeper` |
 | `EXTRACT_LLM_PARALLEL` / `EXTRACT_PLAN_PARALLEL` / `EXTRACT_FIELD_PARALLEL` | env var | `128` / `8` / `192` | Concurrency caps: LLM requests for the whole run, retrieval-planning threads (FAISS/SQL, separate from the LLM), and field-sweep threads beneath row-request batches | `runner.harvest_batches`, `runner.main`, `runner.make_fieldwise_harvester` |
 | `EXTRACT_ATTACH_IMAGES` / `EXTRACT_LOCATE` | env var | `1` / `1` | Off, respectively: no crop attaches to a row, field, frame or review request (no `images/` dir needed), or `make_locate` returns `None`, no quote placed on the page | `runner.py` askers, `runner.make_locate` |
+| `EXTRACT_RETRY_TEMPERATURE_STEP` | env var | `0.1` | Sampling temperature of a retried attempt raised by this step, once per unreadable reply, capped at `1.0`; every retry loop of this stage applies it (phrase, frame, anchors, harvest, field, review) | `runner.retry_temperature` |
 | `EXTRACT_TRACE` | env var | `1` | Off, every trace call returns immediately and no trace file is written | `trace.py` (`ENABLED`) |
 | `--document ID` / `--force` / `--force-stale` | CLI flag (ID repeatable) | none / off / off | `--document` restricts a run to named ids; `--force` redoes every document, `--force-stale` only those `stale` | `runner.main`, `runner.stale` |
 | `--image-root` / `--pdf-root` | CLI flag | profile's processed dir / none | Crop directory for `EXTRACT_ATTACH_IMAGES`, and source PDF directory for `EXTRACT_LOCATE`; `--pdf-root` also backs `--image-root` when absent | `runner.main`, `resolve_image_root`, `make_locate` |
@@ -477,10 +489,29 @@ on.
 At the document level, `finish_document` withholds the stamp entirely,
 forcing a full redo on the next run, when more than half a document's
 planned sources came back from a server it could not reach
-(`UNREACHABLE_LIMIT`, `0.5`, `runner.py:3586`, `:3629`) or when not one
-batch answered at all (`runner.py:3634`); the JSONL file is still
+(`UNREACHABLE_LIMIT`, `0.5`, `runner.py:3672`, `:3715`) or when not one
+batch answered at all (`runner.py:3720`); the JSONL file is still
 written either way, so only a resume, not a byte count, tells the two
 cases apart from a genuinely finished document.
+
+A time limit ends a run the same careful way. `install_stop_handler`
+(`runner.py:114`) puts a SIGTERM handler in place, the job script's
+time-limit trap or a manual kill, that sets `STOP` (`runner.py:102`)
+instead of letting the interpreter die where it stood: killed outright,
+a stop used to throw away a whole group in flight, up to 64 documents
+and hours of work, batches already answered included. `harvest_batches`
+(`stop=`, `unfinished=`, `runner.py:3425`) checks `STOP` between waits and,
+once it is set, submits nothing new and returns at once rather than
+waiting out the requests still open; every document with a batch left
+behind this way, and, as before, one the dead-server cut left behind, is
+added to `unfinished` (`leave`, `runner.py:3495`) and excluded from what
+the group writes and stamps this round, so a resume harvests it whole
+instead of the run stamping it as though every batch had come back. The
+main loop checks `STOP` before planning a new group and again after its
+harvest (`runner.py:4715`, `:4831`, `:4870`); once set, it logs, closes
+the trace and exits hard with `STOPPED_EXIT` (`143`, `runner.py:4873` to
+`4881`) rather than waiting on the field-sweep threads still open, which
+are not daemons and could hold the process for minutes.
 
 Among the four maintenance passes, `--recheck` and `--remap` never call a
 model, so their only failure mode is a coordinate they cannot settle,
@@ -504,7 +535,7 @@ never sends leaves no trace, so the row is offered again later.
   instead (`fields.py:218`).
 - Letting the passage a coordinate was last read in drop out of the
   window after one use, rather than remaining in the window, cost one
-  batch 520 dropped readings against 31 kept (`runner.py:2780`).
+  batch 520 dropped readings against 31 kept (`runner.py:2837`).
 - On the 20-plan draft where the slice gate was measured, of 6,763
   harvested tuples the serializer dropped 1,554 for a quantity the graph
   does not hold and, while the scenario axis still gated a row, 2,510
@@ -541,23 +572,27 @@ and, for the claim a request's own pair does not cover,
 `test_a_claim_that_names_no_pair_stays_refused`.
 `tests/test_extraction_verify.py` pins `canonical_number`, quote repair,
 the evidence tiers, and, for the fold `quote_in` and `value_in_quote`
-share, `test_a_ligature_and_a_decomposed_umlaut_are_the_letters_they_are`
-and `test_the_quotation_marks_of_a_plan_are_quotation_marks`.
+share, `test_a_ligature_and_a_decomposed_umlaut_are_the_letters_they_are`,
+`test_the_quotation_marks_of_a_plan_are_quotation_marks` and
+`test_the_year_of_a_dotted_date_is_a_number_of_the_quote`.
 `tests/test_extraction_trust.py` pins the level
 cutoffs. `tests/test_extraction_reasons.py` pins that a coordinate is
 dropped for the agreed reasons and no other, that every reason a claim is
 refused for is a published one, and that no closure in the package reads
 a name bound after it. `tests/test_extraction_schema.py` validates
 that a harvest, a stamp and a trace event all conform to the published
-contract. `tests/test_extraction_runner.py`, 85 tests, pins `runner.py`
+contract. `tests/test_extraction_runner.py`, 88 tests, pins `runner.py`
 itself: among them `test_a_document_the_server_never_answered_for_is_not_stamped`,
 `test_a_document_no_reply_ever_came_back_for_is_not_stamped`,
 `test_the_image_root_follows_the_pdf_root`,
 `test_the_context_budget_holds_a_full_window_and_a_crop`,
 `test_figures_and_tables_keep_their_share_of_the_plan`,
 `test_the_share_is_room_held_and_not_room_promised`,
-`test_what_is_taken_stays_in_the_order_it_was_ranked` and
-`test_the_same_reading_written_twice_is_one_reading`.
+`test_what_is_taken_stays_in_the_order_it_was_ranked`,
+`test_the_same_reading_written_twice_is_one_reading`,
+`test_a_stop_returns_at_once_and_names_the_documents_left_open`,
+`test_sigterm_sets_the_stop_instead_of_killing_the_run` and
+`test_each_unreadable_reply_raises_the_temperature_of_the_retry`.
 `tests/test_extraction_ranking.py` pins the fused ranking behind the
 retrieval plan: `test_the_structural_floor_is_every_table_and_every_figure`,
 `test_a_table_whose_content_is_gone_is_skipped_and_not_planned_empty`
