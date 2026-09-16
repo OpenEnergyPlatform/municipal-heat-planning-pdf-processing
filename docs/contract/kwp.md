@@ -645,11 +645,92 @@ text_located: the quote sits in the document's own refined text, so it can be ch
 
 ### `unit`
 
-The unit, chosen from units_accepted (Mio. t CO2/a, Mio. t CO2eq, Mio. t CO2eq/a, Mt, Mt/a, Tonnen, Tonnen CO2, Tonnen CO2 im Jahr, Tonnen CO2 jährlich, Tonnen CO2 pro Jahr, Tonnen CO2eq/a, Tonnen CO2äquivalent, Tonnen pro Jahr, Tsd. t, Tsd. t/a, kt, kt CO2 pro Jahr, kt CO2-Äq./a, kt CO2/a, kt CO2eq, kt CO2eq/a, kt/a, kt/a CO2, t, t CO2, t CO2-eq./a, t CO2-eq/a, t CO2-Äq./a, t CO2-Äq/a, t CO2-Äquivalent, t CO2-Äquivalente/a, t CO2/a, t CO2e, t CO2e/a, t CO2eq, t CO2eq/a, t CO2äq, t CO2äq., t/a, t/a CO2eq, tCO2, tCO2/a). A spelling the list does not hold is accepted with the flag unit_spelling.
+The unit: one entry of units_accepted (Mio. t CO2/a, Mio. t CO2eq, Mio. t CO2eq/a, Mt, Mt/a, Tonnen, Tonnen CO2, Tonnen CO2 im Jahr, Tonnen CO2 jährlich, Tonnen CO2 pro Jahr, Tonnen CO2eq/a, Tonnen CO2äquivalent, Tonnen pro Jahr, Tsd. t, Tsd. t/a, kg, kg CO2, kg CO2/a, kg CO2eq, kg CO2eq/a, kg/a, kt, kt CO2 pro Jahr, kt CO2-Äq./a, kt CO2/a, kt CO2eq, kt CO2eq/a, kt/a, kt/a CO2, t, t CO2, t CO2-eq./a, t CO2-eq/a, t CO2-Äq./a, t CO2-Äq/a, t CO2-Äquivalent, t CO2-Äquivalente/a, t CO2/a, t CO2e, t CO2e/a, t CO2eq, t CO2eq/a, t CO2äq, t CO2äq., t/a, t/a CO2eq, tCO2, tCO2/a), read as a coordinate with its own passage. Which entry the document's wording means is the model's reading; the wording itself is never looked up. 
+
+The prompt's own wording:
+
+> Welche Einheit hat diese Zahl? Genau EIN Eintrag aus der Liste, und zwar der, den die Quelle MEINT, nicht der, den sie ähnlich schreibt: "Gigawattstunden" ist GWh, "t CO₂-Äq." ist t CO2eq/a oder t CO2eq, "kWh Hi" und "GWh_th" sind kWh und GWh, "1.700 kg CO2" ist kg CO2 und NICHT t CO2. Ob die Menge je Jahr gilt, sagt oft erst der Satz, der Spaltenkopf oder der Tabellentitel: "450 kWh über das Jahr", "im Jahr 2021" und "pro Jahr" machen aus kWh die Einheit kWh/a; eine Speicherkapazität von 200 kWh bleibt kWh. Rechne nie um und runde nie: die Umrechnung macht die Prüfung anhand des Eintrags. Eine Angabe je Fläche (kWh/m²a, MWh/ha), je Einwohner oder Gebäude (MWh/EW, kWh pro Person), je Kilowattstunde (g CO2/kWh), eine Spitzenleistung von PV-Anlagen (kWp) oder eine elektrische Leistung (kWel) steht in keiner Liste: lass dann "value" weg und gib die Einheit wörtlich in "value_raw". Die Einheit steht in der Zelle, im Spaltenkopf, in der Blocküberschrift ("Endenergieverbrauch [MWh/a]") oder in der Caption; zitiere die Stelle, an der sie wirklich steht.
+
+<details><summary>What it may answer (48)</summary>
+
+- **Mio. t CO2/a** → `Mio. t CO2/a` — Emissionen
+- **Mio. t CO2eq** → `Mio. t CO2eq` — Emissionen
+- **Mio. t CO2eq/a** → `Mio. t CO2eq/a` — Emissionen
+- **Mt** → `Mt` — Emissionen
+- **Mt/a** → `Mt/a` — Emissionen
+- **Tonnen** → `Tonnen` — Emissionen
+- **Tonnen CO2** → `Tonnen CO2` — Emissionen
+- **Tonnen CO2 im Jahr** → `Tonnen CO2 im Jahr` — Emissionen
+- **Tonnen CO2 jährlich** → `Tonnen CO2 jährlich` — Emissionen
+- **Tonnen CO2 pro Jahr** → `Tonnen CO2 pro Jahr` — Emissionen
+- **Tonnen CO2eq/a** → `Tonnen CO2eq/a` — Emissionen
+- **Tonnen CO2äquivalent** → `Tonnen CO2äquivalent` — Emissionen
+- **Tonnen pro Jahr** → `Tonnen pro Jahr` — Emissionen
+- **Tsd. t** → `Tsd. t` — Emissionen
+- **Tsd. t/a** → `Tsd. t/a` — Emissionen
+- **kg** → `kg` — Emissionen
+- **kg CO2** → `kg CO2` — Emissionen
+- **kg CO2/a** → `kg CO2/a` — Emissionen
+- **kg CO2eq** → `kg CO2eq` — Emissionen
+- **kg CO2eq/a** → `kg CO2eq/a` — Emissionen
+- **kg/a** → `kg/a` — Emissionen
+- **kt** → `kt` — Emissionen
+- **kt CO2 pro Jahr** → `kt CO2 pro Jahr` — Emissionen
+- **kt CO2-Äq./a** → `kt CO2-Äq./a` — Emissionen
+- **kt CO2/a** → `kt CO2/a` — Emissionen
+- **kt CO2eq** → `kt CO2eq` — Emissionen
+- **kt CO2eq/a** → `kt CO2eq/a` — Emissionen
+- **kt/a** → `kt/a` — Emissionen
+- **kt/a CO2** → `kt/a CO2` — Emissionen
+- **t** → `t` — Emissionen
+- **t CO2** → `t CO2` — Emissionen
+- **t CO2-eq./a** → `t CO2-eq./a` — Emissionen
+- **t CO2-eq/a** → `t CO2-eq/a` — Emissionen
+- **t CO2-Äq./a** → `t CO2-Äq./a` — Emissionen
+- **t CO2-Äq/a** → `t CO2-Äq/a` — Emissionen
+- **t CO2-Äquivalent** → `t CO2-Äquivalent` — Emissionen
+- **t CO2-Äquivalente/a** → `t CO2-Äquivalente/a` — Emissionen
+- **t CO2/a** → `t CO2/a` — Emissionen
+- **t CO2e** → `t CO2e` — Emissionen
+- **t CO2e/a** → `t CO2e/a` — Emissionen
+- **t CO2eq** → `t CO2eq` — Emissionen
+- **t CO2eq/a** → `t CO2eq/a` — Emissionen
+- **t CO2äq** → `t CO2äq` — Emissionen
+- **t CO2äq.** → `t CO2äq.` — Emissionen
+- **t/a** → `t/a` — Emissionen
+- **t/a CO2eq** → `t/a CO2eq` — Emissionen
+- **tCO2** → `tCO2` — Emissionen
+- **tCO2/a** → `tCO2/a` — Emissionen
+
+</details>
+
+### `unit_quote`
+
+The verbatim passage carrying 'unit'. Present exactly when unit_state is 'read'.
 
 ### `unit_raw`
 
-The unit exactly as the source writes it. This is evidence and is never looked up.
+The document's own wording 'unit' was read from. This is what a later re-mapping onto a changed vocabulary works on, so a choice without it is counted (raw_missing).
+
+### `unit_raw_foreign`
+
+The wording does not name the option chosen for 'unit': the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.
+
+### `unit_seen`
+
+A wording the model noticed for 'unit' while answering 'not stated', or offered as an answer the closed list does not hold. Vocabulary review material, never evidence.
+
+### `unit_source`
+
+Which source the passage for 'unit' was found in. How far that may be from the row is the axis' own rule (own | local | any).
+
+### `unit_state`
+
+How the coordinate 'unit' ended. Always present: a missing key and a refused reading must not look alike.
+
+### `unit_window`
+
+[stage, index] of the window 'unit' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from.
 
 ### `value`
 
@@ -675,7 +756,7 @@ The prompt's own wording:
 
 <details><summary>Why</summary>
 
-The calendar year the aggregation is integrated over, as a node and no longer as a literal. A unit without a per-year marker carries the flag period:annual_in_quote or period:unstated. It was oeo:OEO_00020440 has scenario year value, which is wrong twice: its domain is oeo:OEO_00000365 scenario factsheet, so every value node was typed a factsheet and through it a document, and its declared range is xsd:dateTime while we wrote xsd:integer, which is an ill-typed literal. The pinned release has NO property at all whose domain a quantity value satisfies and whose range is a time, so the year becomes an object: `is about` a node of oeo:OEO_00030033 time step, "a one-dimensional temporal region that has a start time and an ending time". oeo:OEO_00020097 scenario year would be the narrower class and is not used, because it is defined as part of a scenario horizon and the inventory years are not. Cost, stated: the number 2030 is no longer a literal a reasoner can compare; it is the node's IRI, its label, and part of the value's own identity. The term request is a property from quantity value to temporal region, and a way to write a year onto one.
+The calendar year the aggregation is integrated over, as a node and no longer as a literal. A unit entry that names no period carries the flag period:unstated. It was oeo:OEO_00020440 has scenario year value, which is wrong twice: its domain is oeo:OEO_00000365 scenario factsheet, so every value node was typed a factsheet and through it a document, and its declared range is xsd:dateTime while we wrote xsd:integer, which is an ill-typed literal. The pinned release has NO property at all whose domain a quantity value satisfies and whose range is a time, so the year becomes an object: `is about` a node of oeo:OEO_00030033 time step, "a one-dimensional temporal region that has a start time and an ending time". oeo:OEO_00020097 scenario year would be the narrower class and is not used, because it is defined as part of a scenario horizon and the inventory years are not. Cost, stated: the number 2030 is no longer a literal a reasoner can compare; it is the node's IRI, its label, and part of the value's own identity. The term request is a property from quantity value to temporal region, and a way to write a year onto one.
 
 </details>
 
@@ -1189,11 +1270,56 @@ text_located: the quote sits in the document's own refined text, so it can be ch
 
 ### `unit`
 
-The unit, chosen from units_accepted (GWh, GWh/a, MWh, MWh/a, Millionen kWh, Mio. kWh, Mio. kWh/a, Mrd. kWh, TWh, TWh/a, kWh, kWh/a). A spelling the list does not hold is accepted with the flag unit_spelling.
+The unit: one entry of units_accepted (GWh, GWh/a, MWh, MWh/a, Millionen kWh, Mio. kWh, Mio. kWh/a, Mrd. kWh, TWh, TWh/a, kWh, kWh/a), read as a coordinate with its own passage. Which entry the document's wording means is the model's reading; the wording itself is never looked up. 
+
+The prompt's own wording:
+
+> Welche Einheit hat diese Zahl? Genau EIN Eintrag aus der Liste, und zwar der, den die Quelle MEINT, nicht der, den sie ähnlich schreibt: "Gigawattstunden" ist GWh, "t CO₂-Äq." ist t CO2eq/a oder t CO2eq, "kWh Hi" und "GWh_th" sind kWh und GWh, "1.700 kg CO2" ist kg CO2 und NICHT t CO2. Ob die Menge je Jahr gilt, sagt oft erst der Satz, der Spaltenkopf oder der Tabellentitel: "450 kWh über das Jahr", "im Jahr 2021" und "pro Jahr" machen aus kWh die Einheit kWh/a; eine Speicherkapazität von 200 kWh bleibt kWh. Rechne nie um und runde nie: die Umrechnung macht die Prüfung anhand des Eintrags. Eine Angabe je Fläche (kWh/m²a, MWh/ha), je Einwohner oder Gebäude (MWh/EW, kWh pro Person), je Kilowattstunde (g CO2/kWh), eine Spitzenleistung von PV-Anlagen (kWp) oder eine elektrische Leistung (kWel) steht in keiner Liste: lass dann "value" weg und gib die Einheit wörtlich in "value_raw". Die Einheit steht in der Zelle, im Spaltenkopf, in der Blocküberschrift ("Endenergieverbrauch [MWh/a]") oder in der Caption; zitiere die Stelle, an der sie wirklich steht.
+
+<details><summary>What it may answer (12)</summary>
+
+- **GWh** → `GWh` — Energieverbrauch
+- **GWh/a** → `GWh/a` — Energieverbrauch
+- **MWh** → `MWh` — Energieverbrauch
+- **MWh/a** → `MWh/a` — Energieverbrauch
+- **Millionen kWh** → `Millionen kWh` — Energieverbrauch
+- **Mio. kWh** → `Mio. kWh` — Energieverbrauch
+- **Mio. kWh/a** → `Mio. kWh/a` — Energieverbrauch
+- **Mrd. kWh** → `Mrd. kWh` — Energieverbrauch
+- **TWh** → `TWh` — Energieverbrauch
+- **TWh/a** → `TWh/a` — Energieverbrauch
+- **kWh** → `kWh` — Energieverbrauch
+- **kWh/a** → `kWh/a` — Energieverbrauch
+
+</details>
+
+### `unit_quote`
+
+The verbatim passage carrying 'unit'. Present exactly when unit_state is 'read'.
 
 ### `unit_raw`
 
-The unit exactly as the source writes it. This is evidence and is never looked up.
+The document's own wording 'unit' was read from. This is what a later re-mapping onto a changed vocabulary works on, so a choice without it is counted (raw_missing).
+
+### `unit_raw_foreign`
+
+The wording does not name the option chosen for 'unit': the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.
+
+### `unit_seen`
+
+A wording the model noticed for 'unit' while answering 'not stated', or offered as an answer the closed list does not hold. Vocabulary review material, never evidence.
+
+### `unit_source`
+
+Which source the passage for 'unit' was found in. How far that may be from the row is the axis' own rule (own | local | any).
+
+### `unit_state`
+
+How the coordinate 'unit' ended. Always present: a missing key and a refused reading must not look alike.
+
+### `unit_window`
+
+[stage, index] of the window 'unit' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from.
 
 ### `value`
 
@@ -1219,7 +1345,7 @@ The prompt's own wording:
 
 <details><summary>Why</summary>
 
-The calendar year the aggregation is integrated over, as a node and no longer as a literal. A unit without a per-year marker carries the flag period:annual_in_quote or period:unstated. It was oeo:OEO_00020440 has scenario year value, which is wrong twice: its domain is oeo:OEO_00000365 scenario factsheet, so every value node was typed a factsheet and through it a document, and its declared range is xsd:dateTime while we wrote xsd:integer, which is an ill-typed literal. The pinned release has NO property at all whose domain a quantity value satisfies and whose range is a time, so the year becomes an object: `is about` a node of oeo:OEO_00030033 time step, "a one-dimensional temporal region that has a start time and an ending time". oeo:OEO_00020097 scenario year would be the narrower class and is not used, because it is defined as part of a scenario horizon and the inventory years are not. Cost, stated: the number 2030 is no longer a literal a reasoner can compare; it is the node's IRI, its label, and part of the value's own identity. The term request is a property from quantity value to temporal region, and a way to write a year onto one.
+The calendar year the aggregation is integrated over, as a node and no longer as a literal. A unit entry that names no period carries the flag period:unstated. It was oeo:OEO_00020440 has scenario year value, which is wrong twice: its domain is oeo:OEO_00000365 scenario factsheet, so every value node was typed a factsheet and through it a document, and its declared range is xsd:dateTime while we wrote xsd:integer, which is an ill-typed literal. The pinned release has NO property at all whose domain a quantity value satisfies and whose range is a time, so the year becomes an object: `is about` a node of oeo:OEO_00030033 time step, "a one-dimensional temporal region that has a start time and an ending time". oeo:OEO_00020097 scenario year would be the narrower class and is not used, because it is defined as part of a scenario horizon and the inventory years are not. Cost, stated: the number 2030 is no longer a literal a reasoner can compare; it is the node's IRI, its label, and part of the value's own identity. The term request is a property from quantity value to temporal region, and a way to write a year onto one.
 
 </details>
 
@@ -1725,11 +1851,49 @@ text_located: the quote sits in the document's own refined text, so it can be ch
 
 ### `unit`
 
-The unit, chosen from units_accepted (GW, MW, MWth, kW, kWth). A spelling the list does not hold is accepted with the flag unit_spelling.
+The unit: one entry of units_accepted (GW, MW, MWth, kW, kWth), read as a coordinate with its own passage. Which entry the document's wording means is the model's reading; the wording itself is never looked up. 
+
+The prompt's own wording:
+
+> Welche Einheit hat diese Zahl? Genau EIN Eintrag aus der Liste, und zwar der, den die Quelle MEINT, nicht der, den sie ähnlich schreibt: "Gigawattstunden" ist GWh, "t CO₂-Äq." ist t CO2eq/a oder t CO2eq, "kWh Hi" und "GWh_th" sind kWh und GWh, "1.700 kg CO2" ist kg CO2 und NICHT t CO2. Ob die Menge je Jahr gilt, sagt oft erst der Satz, der Spaltenkopf oder der Tabellentitel: "450 kWh über das Jahr", "im Jahr 2021" und "pro Jahr" machen aus kWh die Einheit kWh/a; eine Speicherkapazität von 200 kWh bleibt kWh. Rechne nie um und runde nie: die Umrechnung macht die Prüfung anhand des Eintrags. Eine Angabe je Fläche (kWh/m²a, MWh/ha), je Einwohner oder Gebäude (MWh/EW, kWh pro Person), je Kilowattstunde (g CO2/kWh), eine Spitzenleistung von PV-Anlagen (kWp) oder eine elektrische Leistung (kWel) steht in keiner Liste: lass dann "value" weg und gib die Einheit wörtlich in "value_raw". Die Einheit steht in der Zelle, im Spaltenkopf, in der Blocküberschrift ("Endenergieverbrauch [MWh/a]") oder in der Caption; zitiere die Stelle, an der sie wirklich steht.
+
+<details><summary>What it may answer (5)</summary>
+
+- **GW** → `GW` — Leistung
+- **MW** → `MW` — Leistung
+- **MWth** → `MWth` — Leistung
+- **kW** → `kW` — Leistung
+- **kWth** → `kWth` — Leistung
+
+</details>
+
+### `unit_quote`
+
+The verbatim passage carrying 'unit'. Present exactly when unit_state is 'read'.
 
 ### `unit_raw`
 
-The unit exactly as the source writes it. This is evidence and is never looked up.
+The document's own wording 'unit' was read from. This is what a later re-mapping onto a changed vocabulary works on, so a choice without it is counted (raw_missing).
+
+### `unit_raw_foreign`
+
+The wording does not name the option chosen for 'unit': the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.
+
+### `unit_seen`
+
+A wording the model noticed for 'unit' while answering 'not stated', or offered as an answer the closed list does not hold. Vocabulary review material, never evidence.
+
+### `unit_source`
+
+Which source the passage for 'unit' was found in. How far that may be from the row is the axis' own rule (own | local | any).
+
+### `unit_state`
+
+How the coordinate 'unit' ended. Always present: a missing key and a refused reading must not look alike.
+
+### `unit_window`
+
+[stage, index] of the window 'unit' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from.
 
 ### `value`
 
@@ -1755,7 +1919,7 @@ The prompt's own wording:
 
 <details><summary>Why</summary>
 
-The calendar year the power is stated for, as a node and no longer as a literal. A unit without a per-year marker carries the flag period:annual_in_quote or period:unstated. It was oeo:OEO_00020440 has scenario year value, which is wrong twice: its domain is oeo:OEO_00000365 scenario factsheet, so every value node was typed a factsheet and through it a document, and its declared range is xsd:dateTime while we wrote xsd:integer, which is an ill-typed literal. The pinned release has NO property at all whose domain a quantity value satisfies and whose range is a time, so the year becomes an object: `is about` a node of oeo:OEO_00030033 time step, "a one-dimensional temporal region that has a start time and an ending time". oeo:OEO_00020097 scenario year would be the narrower class and is not used, because it is defined as part of a scenario horizon and the inventory years are not. Cost, stated: the number 2030 is no longer a literal a reasoner can compare; it is the node's IRI, its label, and part of the value's own identity. The term request is a property from quantity value to temporal region, and a way to write a year onto one.
+The calendar year the power is stated for, as a node and no longer as a literal. A unit entry that names no period carries the flag period:unstated. It was oeo:OEO_00020440 has scenario year value, which is wrong twice: its domain is oeo:OEO_00000365 scenario factsheet, so every value node was typed a factsheet and through it a document, and its declared range is xsd:dateTime while we wrote xsd:integer, which is an ill-typed literal. The pinned release has NO property at all whose domain a quantity value satisfies and whose range is a time, so the year becomes an object: `is about` a node of oeo:OEO_00030033 time step, "a one-dimensional temporal region that has a start time and an ending time". oeo:OEO_00020097 scenario year would be the narrower class and is not used, because it is defined as part of a scenario horizon and the inventory years are not. Cost, stated: the number 2030 is no longer a literal a reasoner can compare; it is the node's IRI, its label, and part of the value's own identity. The term request is a property from quantity value to temporal region, and a way to write a year onto one.
 
 </details>
 

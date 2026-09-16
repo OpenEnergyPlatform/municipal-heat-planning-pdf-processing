@@ -1466,7 +1466,10 @@ def test_a_dropped_parameter_is_reported_whole(tmp_path, monkeypatch):
 
     changed = runner.stale(stamp, runner._stamp_current(
         "sha-1", runner.anchors_key(), _spec()))
-    assert set(changed) == {"slot/parameter", "parameter/OEO_00010079",
+    # And the unit key: the unit is asked against every numeric parameter's
+    # list at once, so a parameter gone is a shorter list there as well.
+    assert set(changed) == {"slot/parameter", "slot/unit",
+                            "parameter/OEO_00010079",
                             "axis/OEO_00010079/carrier",
                             "axis/OEO_00010079/year"}, changed
 

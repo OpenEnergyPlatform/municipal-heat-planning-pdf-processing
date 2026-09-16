@@ -112,8 +112,7 @@ PARAMETER_STATE_DOC = {
 # wording half of each is the document's and cannot be enumerated.
 FLAG_PATTERN = (
     r"^(mapped:[a-z_]+:[\s\S]*->[\s\S]*|unmapped:[a-z_]+:[\s\S]*"
-    r"|unit_not_chosen:[\s\S]*|unit_spelling:[\s\S]*"
-    r"|period:(annual_in_quote|unstated)"
+    r"|period:unstated"
     r"|review:(agree|disagree|unbacked)"
     r"|quote_repaired|computed|not_located)$")
 
@@ -321,27 +320,30 @@ def _tuple_schema(spec, parameter) -> dict:
     }
     required = ["kind", "parameter", "parameter_state", "quote", "tier",
                 "provenance", "value"]
+    rules: list = []
     if parameter.is_numeric:
         units = ", ".join(sorted(parameter.units_accepted))
         props["value"] = {
             "type": "number",
             "description": "The number as the document prints it, with the "
                            "grouping removed and a decimal point."}
-        props["unit"] = {
-            "type": "string",
-            "description": f"The unit, chosen from units_accepted ({units}). "
-                           f"A spelling the list does not hold is accepted "
-                           f"with the flag unit_spelling."}
-        props["unit_raw"] = {
-            "type": "string",
-            "description": "The unit exactly as the source writes it. This "
-                           "is evidence and is never looked up."}
+        # A coordinate of its own: one entry of the list, read with its own
+        # passage, the document's spelling beside it in unit_raw. A tuple
+        # only exists with the unit read, so its state is always 'read'.
+        unit_slot = fields.unit_slot(spec, parameter)
+        props.update(_slot_properties(
+            "unit", unit_slot,
+            f"The unit: one entry of units_accepted ({units}), read as a "
+            f"coordinate with its own passage. Which entry the document's "
+            f"wording means is the model's reading; the wording itself is "
+            f"never looked up. "))
         props["value_target"] = {
             "type": "number",
             "description": f"value x factor(unit), in the spec's unit_target "
                            f"{parameter.unit_target}. This is the number the "
                            f"graph carries."}
-        required += ["unit", "unit_raw", "value_target"]
+        required += ["unit", "unit_state", "value_target"]
+        rules.append(_slot_rules("unit", unit_slot))
     else:
         props["value"] = {
             "type": "string", "minLength": 1,
@@ -359,7 +361,6 @@ def _tuple_schema(spec, parameter) -> dict:
         props["unit_raw"] = {"type": "string", "maxLength": 0,
                              "description": "Empty, as unit."}
 
-    rules: list = []
     parameter_slot = fields.parameter_slot(spec)
     props.update(_slot_properties(
         "parameter", parameter_slot,

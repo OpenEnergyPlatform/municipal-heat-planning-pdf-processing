@@ -100,6 +100,42 @@ a finite list, one request, one quote. And it is a real question: a
 passage rarely says "this is an emission", it says "t CO2-Äq", so the
 evidence is the wording that makes it one.
 
+### has_number
+
+```python
+def has_number(claim: dict) -> bool
+```
+
+Is this row's value a number, so that a unit belongs to it?
+
+The same reading `derive_parameter` makes: a wording is a text
+parameter's value and carries no unit, whatever the value request wrote
+beside it.
+
+### unit_slot
+
+```python
+def unit_slot(spec, parameter: Optional[Parameter] = None) -> Optional[Slot]
+```
+
+Which entry of units_accepted a number is in: a choice, with a passage.
+
+A coordinate like the parameter, and asked before it: the value request
+writes the unit as the passage prints it, and which entry that means is a
+reading, not a lookup. "450 kWh über das Jahr" is kWh/a and a storage
+capacity of 200 kWh is kWh; "Gigawattstunden" is GWh; "kWh/m²a", "kWp"
+and "g/kWh" are in no list and the row is refused for saying so. A
+spelling table stood in for this reading once, and measured on 641 plans
+of corpus_m5 it let 3,324 tuples carry an entry their wording
+contradicts.
+
+Every numeric parameter's list at once when no parameter is named,
+because the entry chosen is what settles the parameter
+(`derive_parameter`); beside each entry stands the parameter it belongs
+to, which is the meaning the model decides by. One parameter's list for a
+stored row that already knows its parameter (the schema, a top-up). None
+for a spec without a numeric parameter.
+
 ### asked_slots
 
 ```python

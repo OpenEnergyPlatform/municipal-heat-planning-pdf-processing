@@ -486,13 +486,13 @@ def test_the_site_config_and_the_pages_agree():
 
 def test_the_docs_build_needs_neither_the_corpus_nor_a_gpu():
     """The site is built from Markdown that is already in the tree, so its
-    requirements are three packages and not the project's 213. Pulling in
+    requirements are four packages and not the project's 213. Pulling in
     torch to render a docstring would turn a one-minute build into an hour and
     tie the documentation to a machine with a GPU."""
     wanted = (ROOT / "docs" / "requirements.txt").read_text(encoding="utf-8")
     named = [line.split("==")[0].strip() for line in wanted.splitlines()
              if line.strip() and not line.startswith("#")]
-    assert named == ["sphinx", "myst-parser", "furo"]
+    assert named == ["sphinx", "myst-parser", "furo", "sphinxcontrib-mermaid"]
     config = (ROOT / "docs" / "conf.py").read_text(encoding="utf-8")
     assert "autodoc" not in config.split('"""')[2], "autodoc imports docpipe"
     rtd = (ROOT / ".readthedocs.yaml").read_text(encoding="utf-8")

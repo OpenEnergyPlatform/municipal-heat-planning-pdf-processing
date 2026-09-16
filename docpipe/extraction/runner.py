@@ -74,7 +74,8 @@ from .pipeline import (Source, WorkItem, apply_frame, batch_uri,
                        harvest_document, merge_field, mark_unanswered,
                        open_rows, plan_document,
                        names_pair, refused_upstream, route_claims,
-                       rows_from_reply, sweep_key, window_sources,
+                       option_named, rows_from_reply, sweep_key,
+                       window_sources,
                        write_report)
 from .fields import EXHAUSTED
 from .queries import expand as expand_queries
@@ -225,6 +226,8 @@ FIELDWISE = os.environ.get("EXTRACT_FIELDWISE", "1") != "0"
 # The anchors.json key of the "which quantity is this" question. It belongs to
 # no single parameter, so it cannot be keyed by one.
 PARAMETER_ANCHOR = "#parameter"
+# The same for "which entry of the unit lists is this", asked before it.
+UNIT_ANCHOR = "#unit"
 # How many prose sections a document is planned from. Tables and figures are
 # not capped. Measured over 65 documents: 66% of all values sit in the first
 # 50 ranks of an anchor-only ranking, 80% of them are in a table or a figure
@@ -862,7 +865,8 @@ def anchors_key() -> str:
     carries is already a stamp key of its own -- a parameter's label and
     description in `parameter/<uri>`, an axis' question in
     `axis/<uri>/<name>`, the spec's own question and the parameter list in
-    `slot/parameter` -- and the anchor prompt and the model are stamp keys too
+    `slot/parameter`, the unit question and its lists in `slot/unit` -- and
+    the anchor prompt and the model are stamp keys too
     (`extraction/anchors`, `model`). Hashing the targets in here as well made
     every document in the corpus stale over ONE changed question, which is
     exactly what the per-question keys were written to stop.
@@ -895,7 +899,8 @@ def anchor_targets(spec: Spec) -> list:
     sentence `document_anchor` writes for the document it plans, and a set
     written once for the whole corpus was never searched with.
     """
-    out: list = [(PARAMETER_ANCHOR, "Kennzahl", "", spec.parameter_question)]
+    out: list = [(PARAMETER_ANCHOR, "Kennzahl", "", spec.parameter_question),
+                 (UNIT_ANCHOR, "Einheit", "", spec.unit_question)]
     for parameter in spec.parameters:
         # asked_slots, not axis_slots: an anchor is a sentence to search
         # with, and a coordinate the spec derives is never searched for.
@@ -903,7 +908,8 @@ def anchor_targets(spec: Spec) -> list:
             out.append((anchor_key(parameter.uri, slot.name),
                         f"{parameter.label} / {slot.name}",
                         parameter.description, slot.question))
-    return [t for t in out if t[0] != PARAMETER_ANCHOR or t[3]]
+    return [t for t in out
+            if t[0] not in (PARAMETER_ANCHOR, UNIT_ANCHOR) or t[3]]
 
 
 def document_anchor(spec: Spec, context: Optional[dict] = None,
@@ -2730,6 +2736,10 @@ def _review_payload(row: dict, shown: list, parameter, slots) -> dict:
     unit = row.get("unit_raw") or row.get("unit")
     if unit:
         listed["unit"] = unit
+    if parameter.is_numeric:
+        # The second reading names its unit as one entry too: the first
+        # reading's is compared by factor, and a wording has none.
+        listed["units_accepted"] = sorted(parameter.units_accepted)
     # Which cell of the quoted table row the number sits in. Three numbers
     # under three year columns share one quote, and the column is what tells
     # them apart.
@@ -3259,6 +3269,34 @@ def make_fieldwise_harvester(image_root: Optional[Path] = None,
         jobs: list = []          # (rows, slot, anchor id)
         slots_of: dict = {}      # row label -> the slots that apply to it
 
+        # The unit first, and as a coordinate: one entry of a closed list,
+        # read with its own passage, never looked up from a spelling. The
+        # value request writes the unit as the passage prints it, and which
+        # entry that means is a reading -- "450 kWh über das Jahr" is kWh/a,
+        # a storage capacity of 200 kWh is kWh, "kWh/m²a" and "kWp" are in
+        # no list. A spelling table made that reading until now, and on 641
+        # plans of corpus_m5 it let 3,324 tuples carry an entry their wording
+        # contradicts. Before the parameter, because the entry chosen is what
+        # settles the parameter below. The value request's own entry is
+        # dropped first: it was a choice made beside the number, not a
+        # reading of its own, and left in place it would stand where the
+        # question's answer belongs.
+        unit_slot = fields.unit_slot(spec)
+        with_unit = ([row for row in rows if fields.has_number(row.claim)]
+                     if unit_slot is not None else [])
+        for row in with_unit:
+            row.claim.pop("unit", None)
+        if with_unit:
+            counts[unit_slot.name] = sweep_field(batch, with_unit, unit_slot,
+                                                 UNIT_ANCHOR)
+            for row in with_unit:
+                # As the list spells it. The answer names an option by any
+                # spelling the list folds alike, and the lookups below are
+                # exact.
+                option = option_named(unit_slot, row.claim.get("unit"))
+                if option is not None:
+                    row.claim["unit"] = option.label
+
         if batch.parameter is None:
             # Which quantity each value is comes first, because it decides
             # which coordinates the row even has. One request, one quote, and
@@ -3291,8 +3329,11 @@ def make_fieldwise_harvester(image_root: Optional[Path] = None,
                 wording = row.claim.get("unit_raw") or row.claim.get("unit")
                 if wording:
                     row.claim["parameter_raw"] = wording
-                if row.claim.get("quote"):
-                    row.claim["parameter_quote"] = row.claim["quote"]
+                # The passage the unit was read in: that is where the
+                # wording the parameter follows from stands.
+                quote = row.claim.get("unit_quote") or row.claim.get("quote")
+                if quote:
+                    row.claim["parameter_quote"] = quote
             if undecided:
                 counts[slot.name] = sweep_field(batch, undecided, slot,
                                                 PARAMETER_ANCHOR)
@@ -3361,6 +3402,10 @@ def make_fieldwise_harvester(image_root: Optional[Path] = None,
             if axes:
                 jobs.append((rows, axes,
                              anchor_key(batch.parameter.uri, axes[0].name)))
+        for row in with_unit:
+            # In front of the parameter and the axes, in the order asked, so
+            # a row that never answered is marked on this coordinate too.
+            slots_of[row.label] = [unit_slot] + list(slots_of.get(row.label, []))
 
         futures = {pool.submit(sweep_field, batch, group, group_slots, anchor):
                    "+".join(a.name for a in group_slots)

@@ -40,6 +40,22 @@ in the database and its stamp. [The knowledge graph](graph.md) follows,
 reading only the tuples this stage accepted, never a refusal or the
 spec itself.
 
+One document, from its anchor to its summary row:
+
+```mermaid
+flowchart TD
+    anchor[Anchor: one HyDE sentence per parameter] --> retrieve[Retrieval: one fused ranked source list]
+    retrieve --> rows[Row request: which values exist, per pair]
+    rows --> sweep[Field sweep: one coordinate at a time]
+    sweep --> verify{Verification: quote in passage, answer in quote}
+    verify -->|passes| tuple[Accepted tuple, graded A, B or C]
+    verify -->|fails| refusal[Refusal, with a closed reason]
+    tuple --> harvest[Harvest file: tuples, refusals, parameter states, summary row]
+    refusal --> harvest
+    harvest -. later, on demand .-> review[Review: reread the lowest trust values]
+    harvest -. later, on demand .-> topup[Top up: resweep one stamp-changed coordinate]
+```
+
 ## Method
 
 ### Loading and validating the spec
@@ -55,13 +71,17 @@ parameter carries one of four value types, `spec.VALUE_TYPES`: `float`
 and `int` take a unit, `category` a closed vocabulary, and `text` a
 plain string compared verbatim rather than mapped to a class; `text` is
 the majority type in the scenarios profile, 11 of its 14 parameters
-(`profiles/scenarios/extraction_spec.json`). Unit spellings and vocabulary labels are
-compared after `normalise_unit` or `fold_label`, not as raw strings: on
-the 16-document pilot, 661 findings were refused for their unit and 302
-of them already carried an accepted spelling under another form
-(`spec.py:43`). An axis that still sets an evidence rule is refused at
-load time (`spec.py:293-298`): a coordinate is
-checked for its quote and its answer, wherever the passage stands.
+(`profiles/scenarios/extraction_spec.json`). Vocabulary labels are
+compared after `fold_label`, not as raw strings. A unit is never
+folded: it is read as its own coordinate, against the literal entries
+of `units_accepted` (`fields.unit_slot`), and `Parameter.unit_factor`
+is an exact lookup of the entry chosen, not a spelling match
+(`spec.py:178-187`). A spelling table stood in for that reading once;
+measured on 641 plans of corpus_m5, it let 3,324 tuples carry an entry
+their wording contradicts (`spec.py:41-47`). An axis that still sets
+an evidence rule is refused at load time (`spec.py:268-273`): a
+coordinate is checked for its quote and its answer, wherever the
+passage stands.
 
 ### The retrieval plan
 
@@ -273,8 +293,9 @@ quote that could not be placed on the PDF page still keeps the
 `text_located` tier; it only gains a `not_located` flag (`verify.py:452`).
 Non-fatal findings are carried as flags: `quote_repaired`, `computed`
 (a sandbox result checked against its own printed output),
-`unit_not_chosen`, `not_located`, `unmapped:<axis>:<wording>`, and, for
-an amount over a span, whether the quote states the year it runs over.
+`not_located`, `unmapped:<axis>:<wording>`, and, for an amount over a
+span, `period:unstated` when the entry chosen for the unit names no
+period at all.
 
 ### Trust levels
 
@@ -341,7 +362,18 @@ any run, to confirm a profile's published schema file is current
 
 Four passes act on a harvest already written, without starting a
 document over from its first passage, and they differ in what they cost
-and what they may touch.
+and what they may touch. What changed decides which one applies:
+
+```mermaid
+flowchart TD
+    change[Something changed] --> kind{What changed}
+    kind -->|A vocabulary label or class| remap[remap: pure function of the harvest and spec files, no model]
+    kind -->|One parameter's or one axis's own question| sweepable{Is it one sweepable coordinate}
+    sweepable -->|Yes| topup[top up: resweep only that coordinate, needs the model]
+    sweepable -->|No: a frame axis, a gate, or a dynamic axis with no list| stale[The document stays stale as a whole: the next harvest redoes it]
+    kind -->|A prompt's wording or the served model| noted[Recorded in the stamp, never compared: nothing is forced]
+    kind -->|Only the serializer or the graph mapping| serialize[serialize again: no harvest touched]
+```
 
 | Pass | Needs | May touch | Leaves the stamp |
 |---|---|---|---|
@@ -374,8 +406,10 @@ coordinate: a key naming no coordinate the spec still asks blocks
 outright, and so does one naming a frame axis, since the frame decides
 how many passes a document gets, or, unless allowed, a dynamic axis
 with no per-document list, since sweeping it empty would demote a class
-to a wording (`topup.py:69-103`). `--top-up-key` names only one axis
-coordinate, `axis/<uri>/<name>` (`slot_of`, `topup.py:109-120`); nothing
+to a wording (`topup.py:69-106`). `--top-up-key` names one axis
+coordinate, `axis/<uri>/<name>`, or `slot/unit`, the unit of every
+numeric parameter, swept parameter by parameter since a stored row
+already knows its own (`targets_of`, `topup.py:123-140`); nothing
 sweeps every asked coordinate of every row at once any more. `reopen` strips one coordinate's keys before
 the sweep runs; `restore` puts the old block back unless the fresh
 sweep genuinely improves on it. A row whose passage no longer carries
@@ -421,9 +455,10 @@ different kind of finding.
 
 The resume stamp, `<document>.stamp.json`, is a flat dict: `spec` (the
 whole file's sha; see Method for how it is compared), `slot/parameter`
-(the value question itself), `parameter/<uri>` and, where it has one,
-`value/<uri>` per parameter, `axis/<uri>/<name>` per axis; these are the
-only keys `stale` compares. `model`, `anchors`, one entry per
+(the value question itself), `slot/unit` (the unit question and its
+entries, only where a spec has a numeric parameter), `parameter/<uri>`
+and, where it has one, `value/<uri>` per parameter, `axis/<uri>/<name>`
+per axis; these are the only keys `stale` compares. `model`, `anchors`, one entry per
 `PROMPT_IDS` prompt, `question_text/<key>` and `review/*` are written
 into the stamp too, so a reader can place a harvest, and are never
 compared. A trace event is one JSON
@@ -459,7 +494,7 @@ run, `anchors.json` and `query_cache.db`; and, only after `--top-up`,
 | `--document ID` / `--force` / `--force-stale` | CLI flag (ID repeatable) | none / off / off | `--document` restricts a run to named ids; `--force` redoes every document, `--force-stale` only those `stale` | `runner.main`, `runner.stale` |
 | `--image-root` / `--pdf-root` | CLI flag | profile's processed dir / none | Crop directory for `EXTRACT_ATTACH_IMAGES`, and source PDF directory for `EXTRACT_LOCATE`; `--pdf-root` also backs `--image-root` when absent | `runner.main`, `resolve_image_root`, `make_locate` |
 | `--recheck` / `--remap` / `--keep-stamps` | CLI flag | off | Runs `recheck.run` / `remap.run` over `--out`, no model needed; `--keep-stamps` (recheck only) leaves stamps instead of clearing them | `runner.main`, `recheck.run` |
-| `--top-up` / `--top-up-key KEY` | CLI flag (KEY repeatable) | off / none named | Runs `topup.run`, needing the model and index; `--top-up-key` restricts the changed keys swept to the named axis coordinates | `runner.main`, `topup.actionable` |
+| `--top-up` / `--top-up-key KEY` | CLI flag (KEY repeatable) | off / none named | Runs `topup.run`, needing the model and index; `--top-up-key` restricts the changed keys swept to the named coordinates | `runner.main`, `topup.actionable` |
 | `--review` / `--review-limit N` | CLI flag | off / `0` | Runs `review.run`, one request per level-C value, up to N total | `review.run` |
 | `--serialize TTL` / `--print-context-budget` | CLI flag | none / off | `--serialize`: no harvest, hands `--out` to `serialize.run`, which calls the profile's `kg.make_serializer`. `--print-context-budget`: prints the tokens one harvest request needs, then exits | `serialize.run`, `runner.main` |
 | `SLICE` / `FRAME` | profile hook | none / none (every coordinate per row) | `SLICE`: gate coordinate(s) asked first, a row that fails them never asked its others. `FRAME`: document-level coordinates found once and projected onto every row | `runner.main`, `topup.actionable` |
@@ -467,10 +502,11 @@ run, `anchors.json` and `query_cache.db`; and, only after `--top-up`,
 ## Failure modes
 
 A claim is refused, not silently dropped, whenever `verify.verify_tuple`
-finds a fixed problem: the value is not a number where required, a
-required axis is missing or outside its own list, the quote is missing,
-too short, or not found in its source even after repair, or the value
-does not occur in its own quote. `pipeline.route_claims` refuses a
+finds a fixed problem: the value is not a number where required, its
+unit is not one entry of `units_accepted` (named by the document's own
+wording, `_check_value`), a required axis is missing or outside its own
+list, the quote is missing, too short, or not found in its source even
+after repair, or the value does not occur in its own quote. `pipeline.route_claims` refuses a
 claim before verification when it names no real source and quotes
 nothing found in any of them. A category or axis value the model chose
 that is outside the spec's vocabulary is not refused outright, unless
@@ -533,7 +569,9 @@ never sends leaves no trace, so the row is offered again later.
   tuples contradicted its own unit, yet asking the model to choose the
   parameter anyway cost 322 of 1,043 field windows, 30.9%, and 18.0 of
   187.5 field minutes per plan, before the unit was used to derive it
-  instead (`fields.py:218`).
+  instead: the sweep now asks the unit first, as its own coordinate,
+  and `derive_parameter` settles the parameter from the entry chosen
+  (`fields.py:266-292`).
 - Letting the passage a coordinate was last read in drop out of the
   window after one use, rather than remaining in the window, cost one
   batch 520 dropped readings against 31 kept (`runner.py:2845`).

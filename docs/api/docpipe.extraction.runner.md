@@ -329,7 +329,8 @@ Not the questions, though it used to hash them. Everything a target tuple
 carries is already a stamp key of its own -- a parameter's label and
 description in `parameter/<uri>`, an axis' question in
 `axis/<uri>/<name>`, the spec's own question and the parameter list in
-`slot/parameter` -- and the anchor prompt and the model are stamp keys too
+`slot/parameter`, the unit question and its lists in `slot/unit` -- and
+the anchor prompt and the model are stamp keys too
 (`extraction/anchors`, `model`). Hashing the targets in here as well made
 every document in the corpus stale over ONE changed question, which is
 exactly what the per-question keys were written to stop.

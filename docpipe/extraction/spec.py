@@ -38,53 +38,28 @@ VALUE_TYPES = NUMERIC_TYPES + ("text", "category")
 SCENARIOS = ("status_quo", "trend", "target", "unknown")
 
 
-# One unit, written the way a German planning document happens to write it.
-# The lists in a spec name the unit; these three patterns absorb the spelling.
-# Measured on the 16-document pilot: 661 findings were refused for their unit,
-# and 302 of them carried a unit the spec already accepts under another
-# spelling — a subscript two, "pro Jahr" instead of "/a", "Äquivalent" instead
-# of "eq". Enumerating spellings does not converge; this does.
-_EQUIVALENT = re.compile(r"(?:ä|ae)q(?:uivalent(?:e|en)?|u?i?)\.?"
-                         r"|(?<=co2)\s*[-_ ]?\s*eq", re.I)
+# What an entry of units_accepted says about the period, read off the spec's
+# own spelling and never off a document's. Which entry a document's wording
+# means is a reading, made by the model with its own passage
+# (`fields.unit_slot`): a spelling table stood here once, and measured on 641
+# plans of corpus_m5 it let 3,324 tuples carry an entry their wording
+# contradicts, "kWh/m²a" filed as kWh/a, "kWp" as kW, "g/kWh" as t CO2eq/a,
+# "kg" as t with no factor applied.
 _PER_YEAR = re.compile(r"pro\s*jahr|/\s*jahr|jährlich|jaehrlich|im\s*jahr"
                        r"|p\.?\s?a\.?$", re.I)
-# Punctuation that only ever separates: spaces, dots in "Mio.", the hyphen in
-# "CO2-Äq", the underscore in "t_CO2_äq", brackets, and every dash the corpus
-# uses. A slash is NOT here: "t CO2/a" and "t CO2/Kopf" are different things.
-_SEPARATORS = re.compile(r"[\s.\-_()\[\]‐-―]+")
 # The canonical per-year suffix itself: "MWh/a", "t / a". Not "/ab".
 _PER_A = re.compile(r"/\s*a(?![a-zäöüß])")
 
 
-def normalise_unit(raw) -> str:
-    """One spelling for a unit, so a list of units need not list them all.
+def states_a_year(unit) -> bool:
+    """Does this entry of units_accepted say the amount is per year?
 
-    Conservative on purpose. It removes what only ever separates and unifies
-    the two words German writes many ways, and it touches nothing else: per
-    capita, per square metre and per kilowatt-hour stay distinct from the
-    plain rate, because those are other quantities and accepting them would
-    put a heat demand per square metre into a column of absolute demands.
+    Asked of the entry the model chose, which is the spec's own spelling. The
+    period is part of what the model reads off the passage -- "450 kWh über
+    das Jahr" is kWh/a, a storage capacity of 200 kWh is kWh -- so the entry
+    carries that reading and nothing looks at the passage a second time.
     """
-    s = unicodedata.normalize("NFKC", str(raw)).casefold()
-    s = _EQUIVALENT.sub("eq", s)
-    s = _PER_YEAR.sub("/a", s)
-    s = _SEPARATORS.sub("", s)
-    return re.sub(r"co2e(?!q)", "co2eq", s)
-
-
-def states_a_year(raw) -> bool:
-    """Does this text say the amount is per year?
-
-    The same marker normalise_unit folds into "/a", asked of any text rather
-    than of a unit. It exists because the year on a tuple is not a label but
-    the period the amount is integrated over, and a unit that does not say
-    "per year" leaves that period to the passage: measured on Kassel, 23
-    accepted tuples carried a bare GWh or t, 11 of them in a sentence that
-    says "pro Jahr", and 3 were a storage capacity that is not a rate at all.
-    """
-    text = unicodedata.normalize("NFKC", str(raw)).casefold()
-    # "/a" is what normalise_unit folds the German phrasings INTO, so it is
-    # the one form the regex itself never matches.
+    text = unicodedata.normalize("NFKC", str(unit)).casefold()
     return bool(_PER_YEAR.search(text) or _PER_A.search(text))
 
 
@@ -200,20 +175,15 @@ class Parameter:
     def is_numeric(self) -> bool:
         return self.value_type in NUMERIC_TYPES
 
-    def unit_factor(self, raw) -> Optional[float]:
-        """Factor onto unit_target for a unit as the document writes it.
+    def unit_factor(self, unit) -> Optional[float]:
+        """Factor onto unit_target for one entry of units_accepted, as listed.
 
-        Exact spelling first, so a spec stays in charge of its own list; the
-        normalised form only decides what the list could not have foreseen.
+        Exact and nothing else. Which entry a document's wording means is
+        read by the model with its own passage (`fields.unit_slot`); a
+        spelling table here would be a second reader that nothing checks.
         """
-        if raw in self.units_accepted:
-            return self.units_accepted[raw]
-        if not isinstance(raw, str):
-            return None
-        wanted = normalise_unit(raw)
-        for unit, factor in self.units_accepted.items():
-            if normalise_unit(unit) == wanted:
-                return factor
+        if isinstance(unit, str):
+            return self.units_accepted.get(unit)
         return None
 
     def value_to_uri(self) -> dict:
@@ -235,6 +205,11 @@ class Spec:
     # table once per parameter is how the plan came to be three times the
     # document.
     parameter_question: Optional[str] = None
+    # The one line that asks which entry of units_accepted a number is in. A
+    # coordinate like the parameter, asked before it and with the lists of
+    # every numeric parameter, because the entry is what settles the
+    # parameter. Only a spec with a numeric parameter has a use for it.
+    unit_question: Optional[str] = None
     by_uri: dict = field(default_factory=dict)
 
     def __post_init__(self) -> None:
@@ -357,6 +332,7 @@ def _validate_example(path: str, raw, value_type: str,
     tuples = raw.get("tuples")
     if not isinstance(tuples, list) or not tuples:
         _fail(f"{path}.tuples", "must be a non-empty list")
+    defaults = raw.get("defaults") if isinstance(raw.get("defaults"), dict) else {}
     numeric = value_type in NUMERIC_TYPES
     for i, t in enumerate(tuples):
         if not isinstance(t, dict):
@@ -368,9 +344,12 @@ def _validate_example(path: str, raw, value_type: str,
         elif not isinstance(value, str) or not value.strip():
             _fail(f"{path}.tuples[{i}]",
                   f"a {value_type} parameter needs a non-empty string 'value'")
-        unit = t.get("unit_raw")
-        if unit is not None and unit not in units_accepted:
-            _fail(f"{path}.tuples[{i}].unit_raw",
+        # The entry, not the wording: `unit_raw` is how the snippet writes
+        # the unit and may be anything, `unit` is the choice the example
+        # shows the model making and the verifier holds to the list.
+        unit = t.get("unit", defaults.get("unit"))
+        if numeric and unit is not None and unit not in units_accepted:
+            _fail(f"{path}.tuples[{i}].unit",
                   f"{unit!r} is not in units_accepted")
     return raw
 
@@ -406,18 +385,6 @@ def _validate_parameter(path: str, raw) -> Parameter:
                 not all(isinstance(f, (int, float)) and f > 0 for f in units.values()):
             _fail(f"{path}.units_accepted",
                   "non-empty object of unit string -> positive factor")
-        # Two spellings of one unit are the point; two spellings that mean
-        # different amounts and normalise alike would silently multiply a
-        # value by a thousand, so that is a load error.
-        collisions: dict = {}
-        for unit, factor in units.items():
-            key = normalise_unit(unit)
-            if key in collisions and collisions[key][1] != factor:
-                _fail(f"{path}.units_accepted",
-                      f"{unit!r} and {collisions[key][0]!r} are the same "
-                      f"spelling to the verifier but carry {factor} and "
-                      f"{collisions[key][1]}")
-            collisions[key] = (unit, factor)
         if not isinstance(raw.get("integrated", True), bool):
             _fail(f"{path}.integrated",
                   "true when the unit is an amount over a span, false when "
@@ -504,8 +471,13 @@ def load(source: Union[Path, str, dict]) -> Spec:
     if question is not None and not (isinstance(question, str)
                                      and question.strip()):
         _fail("spec.parameter_question", "must be a non-empty string")
+    unit_question = data.get("unit_question")
+    if unit_question is not None and not (isinstance(unit_question, str)
+                                          and unit_question.strip()):
+        _fail("spec.unit_question", "must be a non-empty string")
     return Spec(parameters=parameters,
-                parameter_question=(question or None))
+                parameter_question=(question or None),
+                unit_question=(unit_question or None))
 
 
 def _digest(parts) -> str:
@@ -615,6 +587,23 @@ def parameter_slot_fingerprint(spec: "Spec") -> str:
     })
 
 
+def unit_slot_fingerprint(spec: "Spec") -> str:
+    """The unit question and the entries it is answered from, "" without any.
+
+    Its own key, like "slot/parameter": the unit is asked once, before the
+    parameter, against every numeric parameter's list at once, so no
+    per-parameter key says that this question moved. A harvest stamped before
+    the question existed has no such key at all, which is what makes it stale
+    in exactly this coordinate and in no other -- the top-up re-reads the
+    unit of every row and leaves the rest of the document as it was.
+    """
+    units = sorted((p.uri, unit) for p in spec.parameters
+                   if p.is_numeric for unit in p.units_accepted)
+    if not units:
+        return ""
+    return _digest({"question": spec.unit_question, "options": units})
+
+
 def fingerprints(spec: "Spec") -> dict:
     """{key: sha} for every question of a spec: parameter, answer space, axis.
 
@@ -630,6 +619,9 @@ def fingerprints(spec: "Spec") -> dict:
     the list it offers would be in no key at all.
     """
     out = {"slot/parameter": parameter_slot_fingerprint(spec)}
+    unit = unit_slot_fingerprint(spec)
+    if unit:
+        out["slot/unit"] = unit
     for parameter in spec.parameters:
         out[f"parameter/{parameter.uri}"] = parameter_fingerprint(parameter)
         value = value_fingerprint(parameter)

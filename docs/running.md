@@ -92,6 +92,17 @@ variables, and set `PYTHONSAFEPATH=1` when the working directory holds another
 copy of the code. The code-exec sandbox is not part of the image. The same
 image runs under Apptainer.
 
+The image, end to end:
+
+```mermaid
+flowchart LR
+    cf[Containerfile: vLLM base image] --> ir[install_requirements.py: skip what the base already has]
+    ir --> bake[docpipe, profiles, scripts, tests baked in]
+    bake --> ci[CI: build, then run the test suite with no network]
+    ci --> push[Push: tagged by commit and branch, to Docker Hub and ghcr.io]
+    push --> run[Run a stage: mount data, pass endpoints and tokens as env vars]
+```
+
 ## Running each stage
 
 Every stage also accepts `--log-level` (`DEBUG`, `INFO`, `WARNING` or
@@ -371,7 +382,7 @@ python scripts/build_docs.py --out docs
 Sphinx then builds the HTML site, warnings promoted to errors:
 `.github/workflows/docs.yml` runs `-W --keep-going -b html docs
 _build/html`, and `nitpicky = True` in `docs/conf.py` turns a broken
-cross-reference into one of those warnings (`docs/conf.py` line 47).
+cross-reference into one of those warnings (`docs/conf.py` line 53).
 Read the Docs installs only `docs/requirements.txt` and builds with the
 same `fail_on_warning: true` (`.readthedocs.yaml`), one version per
 branch and tag (`.github/workflows/docs.yml`, header comment); it never

@@ -59,6 +59,20 @@ def slot_of(spec: Spec, key: str)
 
 "axis/\<uri>/\<name>" -> (parameter, slot), or None.
 
+### targets_of
+
+```python
+def targets_of(spec: Spec, key: str) -> list
+```
+
+[(parameter, slot)] a stamp key names; [] when it names no coordinate.
+
+"axis/\<uri>/\<name>" is one coordinate of one parameter. "slot/unit" is
+the unit of every numeric parameter: one question in the harvest, asked
+before the parameter is known, so one key -- and swept here parameter by
+parameter with that parameter's own list, because a stored row already
+knows its parameter.
+
 ### reopen
 
 ```python

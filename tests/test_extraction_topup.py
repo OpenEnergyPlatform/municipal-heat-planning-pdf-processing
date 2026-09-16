@@ -42,6 +42,8 @@ def _row(**overrides):
     row = {
         "kind": "tuple", "parameter": PARAMETER, "value": 241.0,
         "value_target": 241.0, "unit": "MWh/a", "unit_raw": "MWh/a",
+        "unit_state": fields.READ, "unit_source": ["table", 1],
+        "unit_quote": QUOTE,
         "quote": QUOTE, "tier": "text_located",
         "parameter_state": fields.READ,
         "quantity": "OEO_00050016", "quantity_raw": "Endenergieverbrauch",
@@ -352,9 +354,12 @@ def test_the_passage_a_coordinate_was_read_in_is_shown_again(tmp_path):
     assert ("table", 1) in owners and ("section", 5) in owners
 
 
-def test_a_row_the_re_verification_refuses_keeps_the_reading_it_had(tmp_path):
-    """A required coordinate emptied is a refusal, and a refused row is not a
-    row to write: it keeps what it had and its key stays stale."""
+def test_a_row_the_re_verification_refuses_becomes_the_refusal_it_is(tmp_path):
+    """A required coordinate the re-read cannot back is a refusal, and the
+    row is written as one: the re-read was asked so that the reading it
+    contradicts does not stay in the graph, and keeping the old tuple would
+    keep exactly that. The claim stays beside the reason for the audit, the
+    summary counts it, and the key settles -- every row was accounted for."""
     spec = _spec()
     parameter = spec.by_uri[PARAMETER]
     axis = parameter.axes["sector"]
@@ -367,8 +372,34 @@ def test_a_row_the_re_verification_refuses_keeps_the_reading_it_had(tmp_path):
         sweep=_sweeper({"sector": {"value": "Ein Wort aus keiner Liste",
                                    "raw": "Ein Wort aus keiner Liste",
                                    "quote": QUOTE}})))
-    assert stats["re-verification refused"] == 1
-    assert _rows(path)[0] == before
+    assert stats["refused after re-reading"] == 1
+    after = _rows(path)
+    refusal, summary = after[0], after[-1]
+    assert refusal["kind"] == "refusal" and refusal["parameter"] == PARAMETER
+    assert refusal["reason"].startswith("axis 'sector'")
+    assert refusal["claim"]["value"] == before["value"]
+    assert refusal["owner"] == ["table", 1]
+    assert summary["kind"] == "summary"
+    assert (summary["tuples"], summary["refusals"]) == (0, 1)
+    assert runner.stale(tmp_path / "plan.stamp.json", _stamp()) == []
+
+
+def test_the_unit_top_up_searches_with_the_unit_anchor_set(tmp_path):
+    """The unit's set is written once, under `#unit`, not per parameter: a
+    per-parameter id would find no set and the sweep would search with the
+    question, which is the one sentence no document prints."""
+    calls = []
+    path = _harvest(tmp_path, [_row(), _summary()],
+                    stamp=_stamp(**{"slot/unit": "moved"}))
+    topup.run(tmp_path, SPEC, _stamp(), _deps(
+        sweep=_sweeper({"unit": {"value": "MWh/a", "raw": "MWh p.a.",
+                                 "quote": QUOTE}}, calls)))
+    assert calls and all(c["anchor"] == runner.UNIT_ANCHOR for c in calls)
+    assert [s.name for s in calls[0]["slots"]] == [fields.UNIT]
+    row = _rows(path)[0]
+    assert row["kind"] == "tuple" and row["unit"] == "MWh/a"
+    assert row["unit_raw"] == "MWh p.a."
+    assert runner.stale(tmp_path / "plan.stamp.json", _stamp()) == []
 
 
 def test_the_summary_is_recomputed_from_the_coordinates_that_moved(tmp_path):

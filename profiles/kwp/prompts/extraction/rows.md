@@ -16,7 +16,7 @@ Du bekommst ein JSON-Objekt mit diesen Feldern:
 
 Gib ausschließlich ein JSON-Objekt in dieser Form zurück, in EINER Zeile, OHNE Einrückung:
 
-{"tuples": [{"source": "Q2", "value": 126656132, "unit": "kWh/a", "unit_raw": "kWh/a", "quote": "| Gas H | 126.656.132 | 520.465.057 | 1.036.767.833 |"}, {"source": "Q5", "value": "endura kommunal", "unit": "", "unit_raw": "", "quote": "Bearbeitung durch das Projektkonsortium: endura kommunal GmbH Emmy-Noether-Str. 2 79110 Freiburg"}], "status": "complete", "need_more": []}
+{"tuples": [{"source": "Q2", "value": 126656132, "unit_raw": "kWh/a", "quote": "| Gas H | 126.656.132 | 520.465.057 | 1.036.767.833 |"}, {"source": "Q5", "value": "endura kommunal", "unit_raw": "", "quote": "Bearbeitung durch das Projektkonsortium: endura kommunal GmbH Emmy-Noether-Str. 2 79110 Freiburg"}], "status": "complete", "need_more": []}
 
 Ein Wert pro Eintrag, und innerhalb des Frames vollständig: JEDER Wert des Frames in JEDER Quelle, die zum Frame gehört, bekommt seinen Eintrag, jede Zeile einzeln. Unterscheiden die Spalten einer Tabelle Jahre oder Szenarien, gehört nur die Spalte des Frames dazu: 13 Zeilen mit den Jahresspalten 2022, 2030 und 2045 ergeben im Frame 2030 genau 13 Einträge, alle aus der Spalte 2030. Unterscheiden die Spalten etwas anderes, etwa den Sektor, gehört jede Spalte dazu: 13 Zeilen und 3 Sektorspalten ergeben 39 Einträge. Eine Tabelle eines anderen Jahres ergibt keinen. Eine leere Liste {"tuples": []} ist das richtige Ergebnis, wenn keine der Quellen zum Frame gehört oder keine einen gesuchten Wert enthält.
 
@@ -24,16 +24,13 @@ Jeder Eintrag wird maschinell und wörtlich gegen die Quelle geprüft; was die P
 
 1. "value": bei einem Textfeld die Bezeichnung, wie das Dokument sie schreibt, ohne Rechtsform: aus "endura kommunal GmbH" wird "endura kommunal". Sonst die Zahl EXAKT wie gedruckt, nur ohne Tausendertrennzeichen und mit Dezimalpunkt (aus "126.656.132" wird 126656132, aus "1.036.767,8" wird 1036767.8). Rechne NICHT im Kopf: weder addieren noch runden noch umrechnen. Eine im Kopf gerechnete Zahl hat keinen Beleg und wird verworfen. Wenn gerechnet werden MUSS, gibt es dafür die Sandbox, siehe Regel 6.
    FALSCH: 126.656.132 und 520.465.057 addieren und die Summe ausgeben.
-   FALSCH: 126.656.132 kWh/a in 126656.132 MWh/a umrechnen — die Umrechnung macht die Prüfung anhand der gewählten Einheit.
-   FALSCH: "2,46 TWh" als 2460 mit "GWh/a" ausgeben. TWh steht selbst in der Liste: 2.46 mit "unit": "TWh".
-   FALSCH: "153 Millionen kWh" als 153000000 mit "kWh/a" ausgeben. Das Mengenwort gehört zur Einheit, nicht in die Zahl: 153 mit "unit": "Mio. kWh".
+   FALSCH: 126.656.132 kWh/a in 126656.132 MWh/a umrechnen — die Umrechnung macht die Prüfung anhand der Einheit, die danach bestimmt wird.
+   FALSCH: "2,46 TWh" als 2460 mit "unit_raw": "GWh/a" ausgeben. Die Zahl bleibt 2.46 und "unit_raw" ist "TWh".
+   FALSCH: "153 Millionen kWh" als 153000000 mit "unit_raw": "kWh" ausgeben. Das Mengenwort gehört zur Einheit, nicht in die Zahl: 153 mit "unit_raw": "Millionen kWh".
 
-2. "unit" und "unit_raw":
-   - "unit": genau EIN Eintrag aus den "units_accepted" IRGENDEINER der Kennzahlen, nämlich der, den die Quelle meint. Zeichen für Zeichen aus der Liste abgeschrieben. Die Einheit ist oft schon der Hinweis darauf, um welche Kennzahl es geht — deshalb steht sie hier und die Kennzahl selbst nicht.
-   - "unit_raw": die Einheit EXAKT so, wie sie in der Quelle steht. Steht sie nur im Spaltenkopf, in einer Blocküberschrift wie "Endenergieverbrauch [MWh/a]" oder in der Caption, gilt sie für alle zugehörigen Zellen.
-   Beispiel: Quelle schreibt "t CO₂ eq/a", die Liste führt "t CO2eq/a" — dann "unit": "t CO2eq/a", "unit_raw": "t CO₂ eq/a".
-   Steht in der Quelle eine Einheit, die in keiner der Listen eine Entsprechung hat, lässt du "unit" leer und füllst nur "unit_raw".
-   Nur Zahlen ganz ohne erkennbare Einheit lässt du weg. Bei einem Textfeld bleiben "unit" und "unit_raw" leer — dort gibt es keine.
+2. "unit_raw": die Einheit EXAKT so, wie sie in der Quelle steht, mit allem, was dazugehört ("kWh Hi p.a.", "t CO₂ eq/a", "Millionen kWh"). Steht sie nur im Spaltenkopf, in einer Blocküberschrift wie "Endenergieverbrauch [MWh/a]" oder in der Caption, gilt sie für alle zugehörigen Zellen. Welcher Eintrag der Listen das ist, wird DANACH gefragt, mit eigenem Beleg; hier ordnest du nichts zu und rechnest nichts um. Die "units_accepted" sagen dir nur, welche Art von Zahl gesucht ist.
+   Steht in der Quelle eine Einheit, die in keiner der Listen vorkommt, gib sie trotzdem wörtlich an.
+   Nur Zahlen ganz ohne erkennbare Einheit lässt du weg. Bei einem Textfeld bleibt "unit_raw" leer — dort gibt es keine.
 
 3. "source": die Kennung der Quelle, in der der WERT steht — "Q1", "Q2" und so weiter. Das Feld entscheidet, gegen welchen Text dein "quote" geprüft wird.
 

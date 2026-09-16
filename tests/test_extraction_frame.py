@@ -765,8 +765,26 @@ def test_a_row_gets_only_the_frame_coordinates_its_parameter_has(monkeypatch):
         "status": "complete", "need_more": []}
     monkeypatch.setattr(runner, "make_harvester",
                         lambda *a, **kw: (lambda batch, prior=None: reply))
-    monkeypatch.setattr(runner, "make_field_asker",
-                        lambda image_root=None: (lambda *a, **kw: None))
+
+    def make_asker(image_root=None):
+        def ask(shown, rows, slots, corrections=None, document_id=None,
+                usage_out=None, owner_of=None):
+            # The unit is read for the numeric row, which is what lets it
+            # settle a parameter and reach the frame projection below;
+            # every other field stays unanswered, which this test does not
+            # need.
+            slots = slots if isinstance(slots, (list, tuple)) else [slots]
+            out = {}
+            for slot in slots:
+                if slot.name == fields.UNIT:
+                    out[slot.name] = {"answers": {
+                        r.label: {"value": "MWh/a", "value_raw": "MWh/a",
+                                  "quote": "| Erdgas | 42.005 MWh/a |"}
+                        for r in rows}}
+            return {"fields": out}
+        return ask
+
+    monkeypatch.setattr(runner, "make_field_asker", make_asker)
     spec = _spec()
     harvest = runner.make_fieldwise_harvester(spec=spec, slice_gate={},
                                               frame_axes=_slots(spec))

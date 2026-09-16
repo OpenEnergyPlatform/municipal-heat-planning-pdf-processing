@@ -68,10 +68,10 @@ because nothing after retrieval read a document the rest of the way
 (`docpipe/extraction/runner.py:3141`). The two the sweep skips are kept
 apart from `unstated` for the same reason it exists: asking the parameter
 question anyway on the Kassel run would have cost 322 of 1,043 field
-windows, 30.9 percent (`docpipe/extraction/fields.py:218`); asking the
+windows, 30.9 percent (`docpipe/extraction/fields.py:266`); asking the
 coordinates of a row no parameter could hold, on the M3 acceptance run,
 cost 178 of 853 field requests, 20.9 percent
-(`docpipe/extraction/fields.py:250`); and before the slice gate ran first,
+(`docpipe/extraction/fields.py:295`); and before the slice gate ran first,
 4,064 of 6,763 tuples harvested across 20 plans had all seven axes
 filled in before being dropped for the two gate coordinates
 (`docpipe/extraction/runner.py:3327`). The same split holds past the

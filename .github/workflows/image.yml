@@ -38,7 +38,7 @@ jobs:
           echo '{"data-root": "/mnt/docker"}' | sudo tee /etc/docker/daemon.json
           sudo systemctl start docker
           df -h / /mnt
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Build
         run: >
           docker build -f docker/Containerfile

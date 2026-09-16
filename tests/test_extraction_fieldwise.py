@@ -624,6 +624,15 @@ def test_an_answer_off_the_list_is_asked_again_with_the_reason(monkeypatch):
                 told.extend(corrections or [])
                 out = {}
                 for slot in slots:
+                    if slot.name == fields.UNIT:
+                        # Read from the row itself: MWh/a settles the
+                        # parameter, which is what lets "sector" be asked
+                        # at all below.
+                        out[slot.name] = {"answers": {r.label: {
+                            "value": r.claim.get("unit_raw"),
+                            "value_raw": r.claim.get("unit_raw"),
+                            "quote": r.claim.get("quote")} for r in rows}}
+                        continue
                     value = (pick(slot, corrections) if slot.name == "sector"
                              else fields.UNSTATED)
                     out[slot.name] = {"answers": {r.label: {
@@ -672,11 +681,31 @@ def _document_batch(sources=1):
     return group_items(items, max_sources=runner.BATCH_SOURCES)[0]
 
 
-def _fieldwise(monkeypatch, spec, rows_reply, answers):
+def _generic_unit_answer(row, shown=()):
+    """The unit slot answered from the row itself: every fixture here already
+    carries the entry it wants as `unit_raw`. The quote is cut around that
+    wording in the shown passages, where a table prints its unit in the
+    header and not in the row the value stands in; a passage that does not
+    print it leaves the row's own quote, and the answer fails as it should."""
+    wording = row.claim.get("unit_raw")
+    quote = row.claim.get("quote")
+    for source in shown or ():
+        text = getattr(source, "text", "") or ""
+        at = text.find(str(wording)) if wording else -1
+        if at != -1:
+            quote = text[max(0, at - 60):at + len(str(wording)) + 60]
+            break
+    return {"value": wording, "value_raw": wording, "quote": quote}
+
+
+def _fieldwise(monkeypatch, spec, rows_reply, answers, unit_answer=None):
     """A field-wise harvester whose two model calls are the given stubs.
 
     `answers` is called with the slot and returns that field's reply, so a
-    test says what the model answers per coordinate and nothing else.
+    test says what the model answers per coordinate and nothing else. The
+    unit slot is answered on its own, generically, from the row's own
+    `unit_raw` and quote (`unit_answer`, a row -> answer callback, overrides
+    this for a test that is itself about the unit question).
     """
     asked = []
     monkeypatch.setattr(runner, "make_harvester",
@@ -686,10 +715,17 @@ def _fieldwise(monkeypatch, spec, rows_reply, answers):
         def ask(shown, rows, slots, corrections=None, document_id=None,
                 usage_out=None, owner_of=None):
             slots = slots if isinstance(slots, (list, tuple)) else [slots]
+            out = {}
             for slot in slots:
                 asked.append(slot.name)
-            return {"fields": {slot.name: answers(slot, rows)
-                               for slot in slots}}
+                if slot.name == fields.UNIT:
+                    give = unit_answer or (
+                        lambda r: _generic_unit_answer(r, shown))
+                    out[slot.name] = {"answers": {r.label: give(r)
+                                                  for r in rows}}
+                else:
+                    out[slot.name] = answers(slot, rows)
+            return {"fields": out}
         return ask
 
     monkeypatch.setattr(runner, "make_field_asker", make_asker)
@@ -720,6 +756,7 @@ def test_which_quantity_a_number_is_follows_its_unit_and_decides_its_axes(
                                 lambda slot, rows: {"answers": {}})
     reply = harvest(_document_batch())
 
+    assert asked[0] == fields.UNIT, "the unit is read before anything else"
     assert "parameter" not in asked, "MWh/a settles it, so nothing asks"
     axes = {s.name for s in fields.asked_slots(consumption)}
     assert axes <= set(asked), "the axes of the parameter it turned out to be"
@@ -737,16 +774,19 @@ def test_a_row_whose_quantity_stayed_unread_is_not_given_a_guessed_axis(
     coordinates to fill, and filling the first parameter's would be a guess
     written down as a reading.
 
-    The unit here is one no parameter accepts. That used to be swept as a real
-    question and it is not one: `verify._check_value` refuses on the very
-    `unit_factor` lookup `derive_parameter` just failed, so every answer the
-    model could give is already decided against. Measured on the M3 run, 69
-    such rows cost 178 of 853 field requests, 20.9 percent, and the five
-    answers they produced were all refused afterwards. Kassel had three of
-    them, amounts in EUR from a cost table.
+    The unit here is one no list holds. That used to be swept as a real
+    question and it is not one: the unit question reads no entry (the model
+    leaves `value` out and gives the wording), `parameter_undecidable` is true
+    on the same finding, and `verify._check_value` refuses on the very lookup
+    that just failed, so every answer the parameter question could give is
+    already decided against. Measured on the M3 run, 69 such rows cost 178 of
+    853 field requests, 20.9 percent, and the five answers they produced were
+    all refused afterwards. Kassel had three of them, amounts in EUR from a
+    cost table.
 
-    So nothing is asked, and the row keeps a state saying it was never in
-    range rather than one saying we ran out of document."""
+    So nothing but the unit question is asked, and the row keeps a state
+    saying it was never in range rather than one saying we ran out of
+    document."""
     spec = load_spec(json.loads(
         (PROFILES / "kwp" / "extraction_spec.json").read_text(encoding="utf-8")))
     rows_reply = {"tuples": [{"source": "Q1", "value": 42005, "unit": "EUR",
@@ -756,13 +796,20 @@ def test_a_row_whose_quantity_stayed_unread_is_not_given_a_guessed_axis(
 
     harvest, asked = _fieldwise(
         monkeypatch, spec, rows_reply,
-        lambda slot, rows: {"answers": {"R1": {"value": fields.UNSTATED}}})
+        lambda slot, rows: {"answers": {"R1": {"value": fields.UNSTATED}}},
+        unit_answer=lambda row: {"value_raw": "EUR"})
     reply = harvest(_document_batch())
 
-    assert asked == [], "not even the parameter question, which has no answer"
+    assert asked == [fields.UNIT], (
+        "the unit is read and no entry holds it; not even the parameter "
+        "question, which has no answer")
     row = reply["tuples"][0]
     assert row["parameter_state"] == fields.OUT_OF_SLICE
-    assert not any(k.endswith("_state") and k != "parameter_state" for k in row)
+    assert row["unit_state"] == fields.SAID_UNSTATED
+    assert row["unit_seen"] == "EUR"
+    assert not any(k.endswith("_state")
+                   and k not in ("parameter_state", "unit_state")
+                   for k in row)
     # And skipping the question is safe only because every answer it could
     # have produced is refused anyway, on the same lookup that just failed.
     # Asserted through the verifier rather than argued in the comment.
@@ -794,15 +841,22 @@ def test_a_unit_two_parameters_accept_is_still_a_real_question(monkeypatch):
     assert fields.derive_parameter(spec, {"value": 1, "unit": "GWh"}) is None
     assert not fields.parameter_undecidable(spec, {"value": 1, "unit": "GWh"})
 
+    quote = "| Erdgas | 12 | GWh |"
     rows_reply = {"tuples": [{"source": "Q1", "value": 12, "unit": "GWh",
-                              "unit_raw": "GWh",
-                              "quote": "| Erdgas | 12 | GWh |"}],
+                              "unit_raw": "GWh", "quote": quote}],
                   "status": "complete", "need_more": []}
     harvest, asked = _fieldwise(
         monkeypatch, spec, rows_reply,
         lambda slot, rows: {"answers": {"R1": {"value": fields.UNSTATED}}})
-    harvest(_document_batch())
-    assert asked == ["parameter"], "two holders, so the model decides"
+    # Its own batch, not _document_batch()'s MWh/a table: the unit answer
+    # is read from the row's own quote, and that has to be GWh's.
+    batch = group_items([WorkItem(7, None, Source(
+        "table", 0, quote, {"document_id": 7, "page": 0}))],
+        max_sources=runner.BATCH_SOURCES)[0]
+    harvest(batch)
+    assert asked == [fields.UNIT, "parameter"], (
+        "the unit is read first, GWh among them, and two holders share it, "
+        "so the model still decides")
 
 
 # ---------------------------------------------------------------------------
@@ -813,8 +867,12 @@ def test_a_unit_two_parameters_accept_is_still_a_real_question(monkeypatch):
 # with a state. Two clauses, and a third case so the gate cannot be too wide.
 # ---------------------------------------------------------------------------
 
-def _gated(monkeypatch, spec, rows_reply, answers, gate):
-    """Like _fieldwise, but it records WHICH rows each field was asked for."""
+def _gated(monkeypatch, spec, rows_reply, answers, gate, unit_answer=None):
+    """Like _fieldwise, but it records WHICH rows each field was asked for.
+
+    The unit slot answers itself generically, like _fieldwise's; `answers`
+    is only ever consulted for the other slots.
+    """
     asked = []
 
     monkeypatch.setattr(runner, "make_harvester",
@@ -825,10 +883,17 @@ def _gated(monkeypatch, spec, rows_reply, answers, gate):
                 usage_out=None, owner_of=None):
             slots = slots if isinstance(slots, (list, tuple)) else [slots]
             labels = sorted(r.label for r in rows)
+            out = {}
             for slot in slots:
                 asked.append((slot.name, labels))
-            return {"fields": {slot.name: answers(slot, rows)
-                               for slot in slots}}
+                if slot.name == fields.UNIT:
+                    give = unit_answer or (
+                        lambda r: _generic_unit_answer(r, shown))
+                    out[slot.name] = {"answers": {r.label: give(r)
+                                                  for r in rows}}
+                else:
+                    out[slot.name] = answers(slot, rows)
+            return {"fields": out}
         return ask
 
     monkeypatch.setattr(runner, "make_field_asker", make_asker)
@@ -878,10 +943,11 @@ def test_a_row_outside_the_slice_is_not_asked_for_its_other_axes(monkeypatch):
                             {"quantity": None, "scenario": ("target",)})
     reply = harvest(_document_batch())
 
-    gate_order = [name for name, _rows in asked][:2]
-    assert gate_order == ["quantity", "scenario"], (
-        "the gate is asked first and in order, the parameter came from the unit")
-    after = {name: rows for name, rows in asked[2:]}
+    gate_order = [name for name, _rows in asked][:3]
+    assert gate_order == [fields.UNIT, "quantity", "scenario"], (
+        "the unit is read first, since it decides the parameter, then the "
+        "gate, in order")
+    after = {name: rows for name, rows in asked[3:]}
     assert after, "the row that stayed is still asked for its axes"
     assert all(rows == ["R1"] for rows in after.values()), (
         "and only that row: R2 fell out at the quantity")
@@ -968,7 +1034,9 @@ def test_the_coordinates_of_a_row_go_out_in_one_request(monkeypatch):
             calls.append([s.name for s in slots])
             out = {}
             for slot in slots:
-                if slot.name == "parameter":
+                if slot.name == fields.UNIT:
+                    value = "MWh/a"
+                elif slot.name == "parameter":
                     value = consumption.label
                 elif slot.name == "quantity":
                     value = "final energy consumption value"
@@ -989,12 +1057,13 @@ def test_the_coordinates_of_a_row_go_out_in_one_request(monkeypatch):
         spec=spec, slice_gate={"quantity": None, "scenario": ("target",)})
     reply = harvest(_document_batch())
 
-    assert len(calls) == 2, (
-        "one for the gate, one for the rest — the parameter came from the "
-        "unit and the aggregation from the spec, not one "
-        "per coordinate: %s" % calls)
-    assert calls[0] == ["quantity", "scenario"]
-    assert len(calls[1]) == len(fields.asked_slots(consumption)) - 2
+    assert len(calls) == 3, (
+        "one for the unit, one for the gate, one for the rest — the "
+        "parameter came from the unit and the aggregation from the spec, "
+        "not one per coordinate: %s" % calls)
+    assert calls[0] == [fields.UNIT], "the unit is read before the parameter"
+    assert calls[1] == ["quantity", "scenario"]
+    assert len(calls[2]) == len(fields.asked_slots(consumption)) - 2
 
     # Every field of the one reply is folded on its own.
     row = reply["tuples"][0]
@@ -2001,6 +2070,16 @@ def test_the_sweep_starts_again_where_it_last_read_instead_of_striking_it_off(
             shown_at.append([s.owner_id for s in shown])
             slots = slots if isinstance(slots, (list, tuple)) else [slots]
             answered = {}
+            for slot in slots:
+                if slot.name == fields.UNIT:
+                    # Read at once from the row's own passage, so the unit
+                    # sweep never has to fall back to `more`, which is what
+                    # this test's pool is for.
+                    answered[slot.name] = {"answers": {
+                        row.label: {"value": row.claim.get("unit_raw"),
+                                    "value_raw": row.claim.get("unit_raw"),
+                                    "quote": row.claim.get("quote")}
+                        for row in rows}}
             # Answers once, in the window that shows 9001, and only the one
             # axis. Everything else stays open, which is what keeps the sweep
             # walking.
@@ -2104,6 +2183,16 @@ def test_the_re_entry_is_capped_and_the_passage_that_answered_goes_first(
             slots = slots if isinstance(slots, (list, tuple)) else [slots]
             answered = {}
             for slot in slots:
+                if slot.name == fields.UNIT:
+                    # Read at once, so the unit sweep never touches `more`
+                    # and leaves it whole for the spatial_scope/scenario
+                    # sweep this test is about.
+                    answered[slot.name] = {"answers": {
+                        row.label: {"value": row.claim.get("unit_raw"),
+                                    "value_raw": row.claim.get("unit_raw"),
+                                    "quote": row.claim.get("quote")}
+                        for row in rows}}
+                    continue
                 spoken = said.get(slot.name)
                 if spoken and spoken[0] in here:
                     answered[slot.name] = {"answers": {

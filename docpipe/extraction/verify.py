@@ -167,30 +167,27 @@ def _check_value(raw: dict, parameter: Parameter, flags: list):
     if parameter.is_numeric:
         if not isinstance(value, (int, float)) or isinstance(value, bool):
             return None, Refusal(raw, "value is not a number")
-        # units_accepted is a closed list, so the unit is a choice: the model
-        # picks one and writes the document's own spelling beside it. The
-        # spelling is evidence, never the thing looked up — mapping free text
-        # onto a factor was a table of German spellings that never converged.
+        # units_accepted is a closed list, so the unit is a choice: one entry,
+        # read by the unit question with its own passage, and the document's
+        # own spelling beside it. The spelling is evidence and is never
+        # looked up -- a spelling table stood here once and let 3,324 tuples
+        # of corpus_m5 carry an entry their wording contradicts.
         chosen = raw.get("unit")
         wording = raw.get("unit_raw")
+        wording = (wording.strip() if isinstance(wording, str)
+                   and wording.strip() else None)
         unit = chosen if isinstance(chosen, str) and chosen.strip() else None
-        if unit is None:
-            # No choice made. The spelling is all there is, so it is looked up
-            # and the tuple carries a flag saying the unit was not chosen.
-            unit = wording
-            if parameter.unit_factor(unit) is not None:
-                flags.append(f"unit_not_chosen:{wording}")
         factor = parameter.unit_factor(unit)
         if factor is None:
-            return None, Refusal(raw, f"unit {unit!r} not in units_accepted "
+            # No entry, or one this parameter does not list. The reason names
+            # the wording the document wrote, because that is what a reader
+            # of the refusals is after: which units the plans use that no
+            # list holds.
+            named = wording or raw.get("unit_seen") or unit
+            return None, Refusal(raw, f"unit {named!r} not in units_accepted "
                                       f"({', '.join(parameter.units_accepted)})")
-        if unit not in parameter.units_accepted:
-            # A choice retyped slightly, or a spelling the list does not hold.
-            # Worth a flag, not a refusal: a spelling that keeps turning up
-            # belongs in the list, and the flag is how it gets noticed.
-            flags.append(f"unit_spelling:{unit}")
-        if isinstance(wording, str) and wording.strip() and wording != unit:
-            out["unit_raw"] = wording.strip()
+        if wording and wording != unit:
+            out["unit_raw"] = wording
         out["unit"] = unit
         out["value_target"] = round(float(value) * float(factor), 6)
         return out, None
@@ -474,19 +471,18 @@ def verify_tuple(raw: dict, parameter: Parameter, source_text: str, *,
                                 f"in the quote")
 
     if (parameter.is_numeric and parameter.integrated
-            and not states_a_year(raw.get("unit_raw")
-                                  or raw.get("unit") or "")):
-        # The unit is a plain amount, so what makes it a yearly one is the
-        # passage or nothing. An integral needs the period it runs over, and
-        # a graph that writes a year beside a storage capacity has invented
-        # that period rather than read it.
+            and not states_a_year(value_fields.get("unit") or "")):
+        # The entry the unit question chose is a plain amount. The period is
+        # part of that reading -- a passage saying "über das Jahr" makes the
+        # model choose kWh/a -- so an entry without one says the passage
+        # stated none. An integral needs the period it runs over, and a graph
+        # that writes a year beside a storage capacity has invented it.
         #
         # Only for a parameter whose unit IS an amount over a span. A power
         # has no period to state, so this would fire on every row of it and
         # separate nothing -- and it is read off every flag distribution the
         # reports are built from.
-        flags.append("period:annual_in_quote" if states_a_year(quote)
-                     else "period:unstated")
+        flags.append("period:unstated")
 
     rects = None
     if owner_kind in TEXT_KINDS:
