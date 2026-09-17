@@ -332,6 +332,10 @@ def window_budget() -> dict:
 # something is and never comes back. Three, because the window itself is two:
 # the re-entry may not become the window.
 FIELD_RE_ENTRY = int(os.environ.get("EXTRACT_FIELD_RE_ENTRY", "3"))
+# The most rows one field request answers for. A table of 170 numbers asked in
+# one request is one long answer that ends cut off; 32 rows of one field are
+# about 2,600 answer tokens at the p90 measured on corpus_m5.
+FIELD_ROWS = int(os.environ.get("EXTRACT_FIELD_ROWS", "32"))
 
 # ---------------------------------------------------------------------------
 # Retrieval: probe text -> ranked unseen owners of one document
@@ -1087,35 +1091,57 @@ def _frame_payload(sources: list, slots: list, known: Optional[list] = None,
     return payload
 
 
-# How vLLM words a request whose prompt and completion together do not fit
-# the model's window: "maximum context length is 32768 tokens. However, you
-# requested 6144 output tokens and your prompt contains at least 26625 input
-# tokens".
-_OVERFLOW = re.compile(r"maximum context length is (\d+) tokens.*?"
-                       r"(\d+) input tokens", re.S)
-# What an answer needs at the very least. Less room than this and the request
-# is refused for good, as it was before.
-MIN_ANSWER_TOKENS = 256
+# The server's context window. Read from the server at the start of a run
+# (`set_model_len`); the job serves at least `context_budget`.
+MAX_MODEL_LEN = int(os.environ.get("EXTRACT_MAX_MODEL_LEN", "32768"))
+# Prompt characters per token, set low so a prompt is never estimated short.
+PROMPT_CHARS_PER_TOKEN = 2.62
+# One crop at IMAGE_MAX_SIDE on both sides, one visual token per 28 px square.
+IMAGE_TOKENS = (IMAGE_MAX_SIDE // 28 + 1) ** 2 + 2
+# Room kept free between the estimate and the window.
+ANSWER_MARGIN = 256
+# Less room than this for the answer and the request is not sent.
+MIN_ANSWER_TOKENS = 512
+# Answer tokens one row costs in a field reply: twice the p90 measured on
+# corpus_m5 (29 at the median, 80 at p90), so a chunk's answer fits its room.
+FIELD_ROW_TOKENS = 160
 
 
-def fitted_max_tokens(exc, asked: int, where: str = "") -> Optional[int]:
-    """A completion budget that fits the window this request overflowed, or
-    None when the error is another one or no answer fits.
+def set_model_len(tokens: Optional[int]) -> None:
+    """The window the server reports, when it reports one."""
+    global MAX_MODEL_LEN
+    if tokens:
+        MAX_MODEL_LEN = int(tokens)
 
-    The server names both numbers when it refuses. Measured on Kassel: one
-    field request of 26,625 prompt tokens asked for 6,144 more, was refused
-    for one token over 32,768, and the break on a 4xx wrote its coordinates
-    off. The prompt is what it is, so the room for the answer is what gives.
+
+def prompt_tokens(system: str, conversation: list) -> int:
+    """What a request's system prompt, messages and crops take, estimated high.
+
+    Estimated before sending, so a request is sized to the window instead of
+    shrunk after the server refused it. vLLM's refusal names only a lower
+    bound ("at least N input tokens" is the window minus the requested answer,
+    plus one), and reading that as the prompt shrank the answer by 33 tokens
+    per attempt until the coordinates were written off.
     """
-    match = _OVERFLOW.search(str(exc))
-    if not match:
-        return None
-    room = int(match.group(1)) - int(match.group(2)) - 32
-    if room < MIN_ANSWER_TOKENS or room >= asked:
-        return None
-    log.warning("   %s: %d output token(s) do not fit next to the prompt, "
-                "asked again with %d", where or "request", asked, room)
-    return room
+    chars, images = len(system or ""), 0
+    for message in conversation:
+        content = message.get("content")
+        if isinstance(content, str):
+            chars += len(content)
+            continue
+        for part in content or ():
+            if part.get("type") == "image_url":
+                images += 1
+            else:
+                chars += len(part.get("text") or "")
+    return (int(chars / PROMPT_CHARS_PER_TOKEN) + images * IMAGE_TOKENS
+            + 16 * (len(conversation) + 1))
+
+
+def answer_room(system: str, conversation: list, wanted: int) -> int:
+    """max_tokens for this request: *wanted*, or what the window leaves."""
+    return min(int(wanted), MAX_MODEL_LEN - ANSWER_MARGIN
+               - prompt_tokens(system, conversation))
 
 
 def make_frame_asker(image_root: Optional[Path] = None) -> Callable:
@@ -1158,10 +1184,17 @@ def make_frame_asker(image_root: Optional[Path] = None) -> Callable:
             content = parts
         transport = False
         conversation: list = [{"role": "user", "content": content}]
-        limit = max_tokens
         faults = 0
         for attempt in range(1, MAX_RETRIES + 1):
             started = time.time()
+            limit = answer_room(prompt.text, conversation, max_tokens)
+            if limit < MIN_ANSWER_TOKENS:
+                log.warning("frame %s: the prompt leaves %d answer token(s) in "
+                            "a window of %d -- not sent", document_id, limit,
+                            MAX_MODEL_LEN)
+                trace.event("error", document_id, where="frame",
+                            kind="too_long", attempt=attempt, room=limit)
+                break
             try:
                 completion = client.chat.completions.create(
                     model=LLM_MODEL,
@@ -1238,10 +1271,10 @@ def make_frame_asker(image_root: Optional[Path] = None) -> Callable:
                 trace.event("error", document_id, where="frame",
                             kind="exception", attempt=attempt,
                             detail=str(exc)[:200])
-                fitted = fitted_max_tokens(exc, limit, "frame")
-                if fitted is not None:
-                    limit = fitted
-                    continue
+                status = getattr(exc, "status_code", None)
+                if isinstance(status, int) and 400 <= status < 500 \
+                        and status != 429:
+                    break
             if attempt < MAX_RETRIES:
                 time.sleep(retry_wait(attempt, transport))
         return None
@@ -2321,11 +2354,22 @@ def make_harvester(image_root: Optional[Path] = None,
         failures = 0
         # More room than the prompt asks for only when a single passage came
         # back cut off and there is nothing left to split.
-        limit = ceiling or max_tokens
+        wanted = ceiling or max_tokens
+        limit = wanted
         faults = 0
         # A compute round is a turn of the same conversation, not a retry, so
         # the attempt budget grows with the rounds actually used.
         for attempt in range(1, MAX_RETRIES + CODE_ROUNDS + 1):
+            limit = answer_room(prompt.text, conversation, wanted)
+            if limit < MIN_ANSWER_TOKENS:
+                log.warning("   harvest %s/%s+%d: the prompt leaves %d answer "
+                            "token(s) in a window of %d -- not sent",
+                            first.owner_kind, first.owner_id,
+                            len(batch.items) - 1, limit, MAX_MODEL_LEN)
+                trace.event("error", batch.document_id, where=prompt_id,
+                            kind="too_long", attempt=attempt, room=limit,
+                            owner=[first.owner_kind, first.owner_id])
+                break
             try:
                 response = client.chat.completions.create(
                     model=LLM_MODEL,
@@ -2433,10 +2477,6 @@ def make_harvester(image_root: Optional[Path] = None,
                 why[0] = "no_answer" if isinstance(status, int) else "unreachable"
                 transport = not isinstance(status, int)
                 if isinstance(status, int) and 400 <= status < 500 and status != 429:
-                    fitted = fitted_max_tokens(exc, limit, prompt_id)
-                    if fitted is not None:
-                        limit = fitted
-                        continue
                     # A request the server refuses is refused every time. The
                     # last run spent three tries and eight seconds of sleep on
                     # each over-long section before writing the same sentinel.
@@ -2471,14 +2511,9 @@ def _field_payload(shown: list, rows: list, slots,
                    owner_of: Optional[dict] = None) -> dict:
     """The request body of one field request, over the window shown.
 
-    Several fields at once. One request per field was one round trip per
-    coordinate: measured over 60 documents, 2,108 field requests each, which
-    is what made a corpus run 82 hours. Every field still answers for itself
-    and quotes for itself; only the number of round trips changes.
-
-    Sources first, rows second, the field last. Consecutive windows then share
-    the part of the prefix that did not move, which is what makes asking many
-    short questions cheaper than asking one long one.
+    One field. Sources first, rows second, the field last: the asker sends
+    the sources and their crops ahead of the rest, so the requests for the
+    other fields of the same window share that prefix on the server.
     """
     sources = []
     for index, source in enumerate(shown):
@@ -2563,37 +2598,55 @@ def keeps_row(slot, answer, allowed) -> bool:
     return uri in allowed
 
 
-def make_field_asker(image_root: Optional[Path] = None) -> Callable:
-    """ask(batch, rows, slot) -> reply, or None when the field stays unasked.
+def _merge_field_replies(replies: list) -> Optional[dict]:
+    """The chunk replies of one window as one reply, or None."""
+    got = [reply for reply in replies if isinstance(reply, dict)]
+    if len(got) <= 1:
+        return got[0] if got else None
+    merged: dict = {"fields": {}, "need_more": []}
+    for reply in got:
+        answered = reply.get("fields")
+        for name, answer in (answered.items()
+                             if isinstance(answered, dict) else ()):
+            if not isinstance(answer, dict):
+                continue
+            into = merged["fields"].setdefault(name, {"groups": [],
+                                                     "answers": {}})
+            into["groups"].extend(g for g in (answer.get("groups") or ())
+                                  if isinstance(g, dict))
+            if isinstance(answer.get("answers"), dict):
+                into["answers"].update(answer["answers"])
+        merged["need_more"].extend(q for q in (reply.get("need_more") or ())
+                                   if isinstance(q, str))
+    return merged
 
-    No sandbox: a field answer is a choice and a quote, never arithmetic. A
-    reply that did not fit its token ceiling is not patched up either — the
-    rows are halved and asked again, so every row is answered under the same
-    evidence rules, and what is still missing is missing on the record.
+
+def make_field_asker(image_root: Optional[Path] = None) -> Callable:
+    """ask(shown, rows, slots, ...) -> {"fields": {name: answer}}, or None.
+
+    One coordinate per request, over at most FIELD_ROWS rows. Five coordinates
+    for every row of a batch in one request wanted up to 27,311 prompt tokens
+    and more answer than the window left, and came back refused or cut off;
+    one question about a handful of numbers fits by construction. Several
+    slots are asked one after another, rows in chunks, and the replies merged
+    under the field's name, which is what the sweep folds. A chunk whose
+    prompt leaves too little room for its rows is halved before it is sent.
+
+    No sandbox: a field answer is a choice and a quote, never arithmetic.
     """
     prompt = prompts.load(FIELD_PROMPT_ID)
     client = _client()
     temperature = float(prompt.meta.get("temperature", 0.1))
     max_tokens = int(prompt.meta.get("max_tokens", 4096))
 
-    def ask(shown: list, rows: list, slots,
-            corrections: Optional[list] = None,
-            document_id: Optional[int] = None,
-            usage_out: Optional[dict] = None,
-            owner_of: Optional[dict] = None, *,
-            depth: int = 0) -> Optional[dict]:
-        slots = list(slots) if isinstance(slots, (list, tuple)) else [slots]
-        name = "+".join(s.name for s in slots)
-        payload = json.dumps(_field_payload(shown, rows, slots, corrections,
-                                            owner_of),
-                             ensure_ascii=False, indent=2)
-        # The crops ride along, as they do for the value request. A table's
-        # transcription is a model's reading of a picture, and the coordinate
-        # this asks for — the year in the header, the carrier in the row label
-        # — is often clearer in the picture than in the transcription. The
-        # field request was sending JSON text and nothing else.
-        content: object = payload
-        parts = [{"type": "text", "text": payload}]
+    def content_of(shown, rows, slot, corrections, owner_of) -> list:
+        """The passages and their crops first, the rows and the field last,
+        so requests over the same window share their prefix up to the field."""
+        body = _field_payload(shown, rows, slot, corrections, owner_of)
+        head = json.dumps({"sources": body.pop("sources")},
+                          ensure_ascii=False, indent=2) + "\n"
+        tail = json.dumps(body, ensure_ascii=False, indent=2)
+        parts = [{"type": "text", "text": head}]
         for index, source in enumerate(shown):
             path = source.image_path
             if not (path and ATTACH_IMAGES):
@@ -2602,16 +2655,42 @@ def make_field_asker(image_root: Optional[Path] = None) -> Callable:
             if part is not None:
                 parts.append({"type": "text", "text": f"Bild zu Q{index + 1}:"})
                 parts.append(part)
-        if len(parts) > 1:
-            content = parts
+        if len(parts) == 1:
+            return head + tail
+        parts.append({"type": "text", "text": "\n" + tail})
+        return parts
+
+    def request(shown, rows, slot, corrections, document_id, usage_out,
+                owner_of) -> Optional[dict]:
+        name = slot.name
+        conversation: list = [{"role": "user", "content": content_of(
+            shown, rows, slot, corrections, owner_of)}]
+        needed = min(max_tokens, len(rows) * FIELD_ROW_TOKENS + ANSWER_MARGIN)
+        room = answer_room(prompt.text, conversation, max_tokens)
+        if room < max(needed, MIN_ANSWER_TOKENS):
+            if len(rows) > 1:
+                cut = len(rows) // 2
+                return _merge_field_replies([
+                    request(shown, part, slot,
+                            [c for c in (corrections or ())
+                             if c.get("row") in {r.label for r in part}],
+                            document_id, usage_out, owner_of)
+                    for part in (rows[:cut], rows[cut:])])
+            log.warning("   field %s: the prompt leaves %d answer token(s) in "
+                        "a window of %d -- not sent", name, room,
+                        MAX_MODEL_LEN)
+            trace.event("error", document_id, where="field", kind="too_long",
+                        slot=name, room=room)
+            return None
         # A model error is told to the model, the same way a verification
         # failure is. Retrying a malformed reply without saying what was
         # malformed is one attempt three times.
         transport = False
-        conversation: list = [{"role": "user", "content": content}]
-        limit = max_tokens
         faults = 0
         for attempt in range(1, MAX_RETRIES + 1):
+            limit = answer_room(prompt.text, conversation, max_tokens)
+            if limit < MIN_ANSWER_TOKENS:
+                break
             try:
                 response = client.chat.completions.create(
                     model=LLM_MODEL,
@@ -2626,14 +2705,10 @@ def make_field_asker(image_root: Optional[Path] = None) -> Callable:
                 usage = getattr(response, "usage", None)
                 _observe_usage(usage)
                 if usage_out is not None:
-                    # Per request, not only in the run's total. The field
-                    # requests are the bulk of a document and nothing said how
-                    # much any single one cost, so no ceiling could be set
-                    # from the trace.
-                    usage_out["prompt_tokens"] = getattr(
-                        usage, "prompt_tokens", None)
-                    usage_out["completion_tokens"] = getattr(
-                        usage, "completion_tokens", None)
+                    # Per request, summed over the chunks of one window.
+                    for key in ("prompt_tokens", "completion_tokens"):
+                        usage_out[key] = ((usage_out.get(key) or 0)
+                                          + (getattr(usage, key, None) or 0))
                 answer = _loads_object(reply.message.content)
                 if isinstance(answer, dict):
                     return answer
@@ -2649,32 +2724,6 @@ def make_field_asker(image_root: Optional[Path] = None) -> Callable:
                             kind="unreadable", cause=cause, slot=name,
                             attempt=attempt,
                             finish=getattr(reply, "finish_reason", None))
-                if cause == "cut_off" and len(rows) > 1 \
-                        and depth < SPLIT_DEPTH:
-                    # Half the rows per request, not half an answer. The reply
-                    # used to be closed with the brackets it was missing, and
-                    # every row past the cut then took whatever the last
-                    # complete field in it happened to say.
-                    cut = len(rows) // 2
-                    merged: dict = {"answers": {}, "groups": []}
-                    for part in (rows[:cut], rows[cut:]):
-                        here = {r.label for r in part}
-                        got = ask(shown, part, slots,
-                                  [c for c in (corrections or ())
-                                   if c.get("row") in here],
-                                  document_id, usage_out, owner_of,
-                                  depth=depth + 1)
-                        if not isinstance(got, dict):
-                            continue
-                        if isinstance(got.get("answers"), dict):
-                            merged["answers"].update(got["answers"])
-                        merged["groups"].extend(
-                            g for g in (got.get("groups") or ())
-                            if isinstance(g, dict))
-                    trace.event("error", document_id, where="field",
-                                kind="split", slot=name, attempt=attempt)
-                    return merged if (merged["answers"]
-                                      or merged["groups"]) else None
                 conversation.append({"role": "assistant",
                                      "content": reply.message.content or ""})
                 conversation.append({"role": "user", "content": correction})
@@ -2686,15 +2735,32 @@ def make_field_asker(image_root: Optional[Path] = None) -> Callable:
                             kind="exception", slot=name, attempt=attempt,
                             status=status, detail=str(exc)[:300])
                 transport = not isinstance(status, int)
-                if isinstance(status, int) and 400 <= status < 500 and status != 429:
-                    fitted = fitted_max_tokens(exc, limit, f"field {name}")
-                    if fitted is not None:
-                        limit = fitted
-                        continue
+                if isinstance(status, int) and 400 <= status < 500 \
+                        and status != 429:
                     break
             if attempt < MAX_RETRIES:
                 time.sleep(retry_wait(attempt, transport))
         return None
+
+    def ask(shown: list, rows: list, slots,
+            corrections: Optional[list] = None,
+            document_id: Optional[int] = None,
+            usage_out: Optional[dict] = None,
+            owner_of: Optional[dict] = None) -> Optional[dict]:
+        slots = list(slots) if isinstance(slots, (list, tuple)) else [slots]
+        step = max(1, FIELD_ROWS)
+        chunks = [rows[start:start + step]
+                  for start in range(0, len(rows), step)] or [rows]
+        replies = []
+        for slot in slots:
+            for chunk in chunks:
+                here = {row.label for row in chunk}
+                mine = [c for c in (corrections or ())
+                        if c.get("row") in here
+                        and c.get("field") in (None, slot.name)]
+                replies.append(request(shown, chunk, slot, mine or None,
+                                       document_id, usage_out, owner_of))
+        return _merge_field_replies(replies)
 
     return ask
 
@@ -2788,9 +2854,14 @@ def make_review_asker(image_root: Optional[Path] = None) -> Callable:
             content = parts
         transport = False
         conversation: list = [{"role": "user", "content": content}]
-        limit = max_tokens
         faults = 0
         for attempt in range(1, MAX_RETRIES + 1):
+            limit = answer_room(prompt.text, conversation, max_tokens)
+            if limit < MIN_ANSWER_TOKENS:
+                log.warning("   review: the prompt leaves %d answer token(s) "
+                            "in a window of %d -- not sent", limit,
+                            MAX_MODEL_LEN)
+                break
             try:
                 response = client.chat.completions.create(
                     model=LLM_MODEL,
@@ -2825,10 +2896,6 @@ def make_review_asker(image_root: Optional[Path] = None) -> Callable:
                 status = getattr(exc, "status_code", None)
                 transport = not isinstance(status, int)
                 if isinstance(status, int) and 400 <= status < 500 and status != 429:
-                    fitted = fitted_max_tokens(exc, limit, "review")
-                    if fitted is not None:
-                        limit = fitted
-                        continue
                     break
             if attempt < MAX_RETRIES:
                 time.sleep(retry_wait(attempt, transport))
@@ -2857,13 +2924,12 @@ def make_sweeper(ask: Callable, *,
     anchors = anchors or {}
 
     def sweep_field(batch, rows: list, slots, anchor_id: str = "") -> dict:
-        """Short windows over the document until these coordinates are read.
+        """Short windows over the document until this coordinate is read.
 
-        Several fields in one request. One field per request was one round
-        trip per coordinate: 2,108 of them per document, which is what made a
-        corpus run 82 hours. Each field still answers for itself and quotes
-        for itself, and each is folded on its own, so nothing about the
-        evidence changes.
+        One coordinate per sweep and per request: the harvester runs the
+        sweeps of a row's coordinates side by side, so a coordinate that is
+        read in the value's own passage stops there and does not wait on one
+        that has to look further out.
 
         The value's own passages first, because a carrier usually is in the
         table row it labels. What is still open after that is looked for
@@ -2934,9 +3000,11 @@ def make_sweeper(ask: Callable, *,
             Three places, in this order, and only the ones the window does not
             already show:
 
-            - the passage a coordinate of this row was READ in. It is the one
-              of the three that `seen` makes unreachable forever, and it is
-              the one that has already proved it carries this row's answers.
+            - the passage a coordinate of this row was READ in, by this sweep
+              or by the sweep of another coordinate running beside it. It is
+              the one of the three that `seen` makes unreachable forever, and
+              it is the one that has already proved it carries this row's
+              answers.
             - the section the row's own passage stands in. It is also the only
               one of the three that is in no checked pool from the second
               window on, so an answer quoting the caption of its own table
@@ -2958,9 +3026,12 @@ def make_sweeper(ask: Callable, *,
                 bucket.append(source)
 
             for row in todo:
-                for slot in slots:
-                    where = row.claim.get(f"{slot.name}_source")
-                    if isinstance(where, (list, tuple)) and len(where) == 2:
+                # A copy: the other coordinates' sweeps write into the claim
+                # while this one reads it.
+                for key, where in list(row.claim.items()):
+                    if (key.endswith("_source")
+                            and isinstance(where, (list, tuple))
+                            and len(where) == 2):
                         take(found, (where[0], where[1]))
             for row in todo:
                 own = owner_of.get(row.label)
@@ -3369,15 +3440,15 @@ def make_fieldwise_harvester(image_root: Optional[Path] = None,
                 # the serializer for exactly these two coordinates, after the
                 # run had paid for all seven axes of every one of them.
                 inside = group
-                if gate:
-                    got = sweep_field(batch, inside, gate,
-                                      anchor_key(uri, gate[0].name))
-                    counts["+".join(a.name for a in gate)] = got
-                    for axis in gate:
-                        allowed = (slice_gate or {}).get(axis.name)
-                        inside = [row for row in inside
-                                  if keeps_row(axis, row.claim.get(axis.name),
-                                               allowed)]
+                for axis in gate:
+                    if not inside:
+                        break
+                    counts[axis.name] = sweep_field(
+                        batch, inside, [axis], anchor_key(uri, axis.name))
+                    allowed = (slice_gate or {}).get(axis.name)
+                    inside = [row for row in inside
+                              if keeps_row(axis, row.claim.get(axis.name),
+                                           allowed)]
                 staying = {row.label for row in inside}
                 for row in group:
                     if row.label in staying:
@@ -3385,12 +3456,12 @@ def make_fieldwise_harvester(image_root: Optional[Path] = None,
                     # Never asked, and said so. An empty cell here would be
                     # indistinguishable from a coordinate the model dropped.
                     for axis in axes:
-                        if axis.name not in gated:
-                            row.claim.setdefault(f"{axis.name}_state",
-                                                 fields.OUT_OF_SLICE)
-                rest = [axis for axis in axes if axis.name not in gated]
-                if inside and rest:
-                    jobs.append((inside, rest, anchor_key(uri, rest[0].name)))
+                        row.claim.setdefault(f"{axis.name}_state",
+                                             fields.OUT_OF_SLICE)
+                for axis in axes:
+                    if inside and axis.name not in gated:
+                        jobs.append((inside, [axis],
+                                     anchor_key(uri, axis.name)))
         else:
             axes = fields.axis_slots(batch.parameter)
             for row in rows:
@@ -3398,10 +3469,10 @@ def make_fieldwise_harvester(image_root: Optional[Path] = None,
             project(rows, axes)
             for axis in axes:
                 fields.apply_derived(rows, axis)
-            axes = [axis for axis in axes if not axis.derive]
-            if axes:
-                jobs.append((rows, axes,
-                             anchor_key(batch.parameter.uri, axes[0].name)))
+            for axis in axes:
+                if not axis.derive:
+                    jobs.append((rows, [axis],
+                                 anchor_key(batch.parameter.uri, axis.name)))
         for row in with_unit:
             # In front of the parameter and the axes, in the order asked, so
             # a row that never answered is marked on this coordinate too.
@@ -3475,13 +3546,94 @@ def split_long_sources(items: list, max_chars: int = MAX_SOURCE_CHARS) -> list:
     return out
 
 
+class DeadStreak:
+    """Consecutive replies that never reached the server, across every
+    document in flight: a dead server fails all of them alike, and a document
+    with twenty batches would never see sixty-four of its own in a row."""
+
+    def __init__(self, limit: int):
+        self.limit = limit
+        self._count = 0
+        self._lock = threading.Lock()
+
+    def hit(self) -> bool:
+        with self._lock:
+            self._count += 1
+            return self._count >= self.limit
+
+    def clear(self) -> None:
+        with self._lock:
+            self._count = 0
+
+
+def harvest_documents(documents: list, harvest_document: Callable, *,
+                      in_flight: int, stop=None,
+                      halted: Optional[Callable] = None) -> tuple:
+    """Run *harvest_document(id, filename)* with *in_flight* at a time.
+
+    Not in groups: the moment one document is done the next one starts, so a
+    slow plan holds its own place and nobody else's. A group of sixteen used
+    to wait for its slowest batch, and on corpus_m5 that was a single field
+    request answering alone on four GPUs for half an hour.
+
+    *harvest_document* returns (written, failures). *stop* (SIGTERM) ends the
+    loop at once without waiting for what is open; *halted* only stops new
+    documents from starting, and the open ones are waited for.
+
+    Returns (done, written, failures).
+    """
+    from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
+
+    queue = list(documents)
+    pending: dict = {}
+    done = written = failures = 0
+    started = time.time()
+    in_flight = max(1, int(in_flight))
+
+    def stopping() -> bool:
+        return stop is not None and stop.is_set()
+
+    pool = ThreadPoolExecutor(max_workers=in_flight,
+                              thread_name_prefix="document")
+    try:
+        while queue or pending:
+            while (queue and len(pending) < in_flight and not stopping()
+                   and not (halted is not None and halted())):
+                document_id, filename = queue.pop(0)
+                pending[pool.submit(harvest_document, document_id,
+                                    filename)] = filename
+            if not pending or stopping():
+                break
+            finished, _ = wait(list(pending), timeout=5,
+                               return_when=FIRST_COMPLETED)
+            for future in finished:
+                filename = pending.pop(future)
+                done += 1
+                try:
+                    ok, failed = future.result()
+                    failures += failed
+                    written += 1 if ok else 0
+                except Exception:
+                    failures += 1
+                    log.exception("extraction: %s failed", filename)
+                log.info("extraction: %d/%d document(s) done, %d written, %d "
+                         "in flight, %.0f s", done, len(documents), written,
+                         len(pending), time.time() - started)
+    finally:
+        pool.shutdown(wait=not stopping(), cancel_futures=True)
+    return done, written, failures
+
+
 def harvest_batches(batches: list, harvest: Callable, *,
                     more_sources: Optional[Callable] = None,
                     verify: Optional[Callable] = None,
                     on_give_up: Optional[Callable] = None,
                     workers: int = LLM_PARALLEL,
-                    stop: Optional[threading.Event] = None,
-                    unfinished: Optional[set] = None) -> list:
+                    stop=None,
+                    unfinished: Optional[set] = None,
+                    pool=None,
+                    dead: Optional[DeadStreak] = None,
+                    progress: bool = True) -> list:
     """Every batch of the whole run in flight at once.
 
     The batch is the unit, not the chain. A chain — one document, one
@@ -3515,6 +3667,10 @@ def harvest_batches(batches: list, harvest: Callable, *,
     dead-server cut, the documents they belong to are added to *unfinished*.
     Such a document has replies for some of its batches and none for the rest,
     and written it would be stamped as if it had been read whole.
+
+    *pool* and *dead* are shared when several documents harvest at once: the
+    pool bounds the requests of all of them together, and the streak counts
+    unreachable replies across all of them. Without them the call has its own.
     """
     from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 
@@ -3542,8 +3698,7 @@ def harvest_batches(batches: list, harvest: Callable, *,
     # Measured: 53 minutes of dying on five GPUs. Past this many consecutive
     # unreachable replies the rest is cancelled and the run ends with its
     # documents unstamped, which is what makes a resume possible.
-    dead_streak = [0]
-    give_up = max(64, workers)
+    dead = dead if dead is not None else DeadStreak(max(64, workers))
 
     def leave(pending: dict) -> None:
         if unfinished is not None:
@@ -3552,10 +3707,19 @@ def harvest_batches(batches: list, harvest: Callable, *,
             f.cancel()
         pending.clear()
 
-    pool = ThreadPoolExecutor(max_workers=max(workers, 1))
+    own_pool = pool is None
+    if own_pool:
+        pool = ThreadPoolExecutor(max_workers=max(workers, 1))
     stopped = False
     try:
-        pending = {pool.submit(one, b): b for b in batches}
+        try:
+            pending = {pool.submit(one, b): b for b in batches}
+        except RuntimeError:
+            # The shared pool was shut down by a stop between this document's
+            # last check and its first batch.
+            if unfinished is not None:
+                unfinished.update(b.document_id for b in batches)
+            return results
         step = max(submitted // 20, 25)
         while pending:
             if stop is not None and stop.is_set():
@@ -3584,17 +3748,16 @@ def harvest_batches(batches: list, harvest: Callable, *,
                 results.append((batch, reply))
                 if any(t.get("_why") == "unreachable"
                        for t in reply.get("tuples") or []):
-                    dead_streak[0] += 1
-                    if dead_streak[0] >= give_up:
+                    if dead.hit():
                         log.error("harvest: %d requests in a row never reached "
                                   "the server — cancelling the remaining %d",
-                                  dead_streak[0], len(pending))
+                                  dead.limit, len(pending))
                         leave(pending)
                         if on_give_up is not None:
                             on_give_up()
                         break
                 else:
-                    dead_streak[0] = 0
+                    dead.clear()
                 if sweep is not None and more_sources is not None:
                     # A follow-up joins the pool rather than blocking its
                     # sweep: the passages it brings are new to the whole run,
@@ -3604,7 +3767,7 @@ def harvest_batches(batches: list, harvest: Callable, *,
                                            max_chars=BATCH_CHARS):
                         submitted += 1
                         pending[pool.submit(one, extra)] = extra
-                if len(results) % step == 0 or not pending:
+                if progress and (len(results) % step == 0 or not pending):
                     elapsed = max(time.time() - started, 1e-6)
                     rate = len(results) / elapsed
                     log.info("harvest: %d/%d batches (%.1f/s, %.0f s left)",
@@ -3613,7 +3776,8 @@ def harvest_batches(batches: list, harvest: Callable, *,
     finally:
         # After a stop the open requests are not waited for: the process is
         # about to exit, and a field sweep can hold its thread for minutes.
-        pool.shutdown(wait=not stopped, cancel_futures=stopped)
+        if own_pool:
+            pool.shutdown(wait=not stopped, cancel_futures=stopped)
     return results
 
 
@@ -4405,9 +4569,10 @@ def main(argv: Optional[list] = None) -> int:
                          f"--image-root, or EXTRACT_ATTACH_IMAGES=0 to review "
                          f"from the transcriptions alone")
         review_prompt = prompts.load(REVIEW_PROMPT_ID)
-        assert_serving(LLM_BASE_URL, LLM_API_KEY, LLM_MODEL,
-                       context_budget(review_prompt, spec),
-                       what="extraction review", flag="--max-model-len")
+        set_model_len(assert_serving(LLM_BASE_URL, LLM_API_KEY, LLM_MODEL,
+                                     context_budget(review_prompt, spec),
+                                     what="extraction review",
+                                     flag="--max-model-len"))
         from .review import run as review_run
         wanted = None
         if args.document:
@@ -4473,8 +4638,10 @@ def main(argv: Optional[list] = None) -> int:
     if args.print_context_budget:
         print(required)
         return 0
-    assert_serving(LLM_BASE_URL, LLM_API_KEY, LLM_MODEL, required,
-                   what="extraction", flag="--max-model-len")
+    # The window every request is sized against before it is sent.
+    set_model_len(assert_serving(LLM_BASE_URL, LLM_API_KEY, LLM_MODEL,
+                                 required, what="extraction",
+                                 flag="--max-model-len"))
 
     from concurrent.futures import ThreadPoolExecutor, as_completed
 
@@ -4537,14 +4704,14 @@ def main(argv: Optional[list] = None) -> int:
         log.info("extraction: nothing to harvest")
         return 0
 
-    # Documents are batched in groups only so the plan of a 1000-document run
-    # fits in memory: every group is still one flat batch of requests, which
-    # is the whole point. A pilot is one group.
-    group_size = int(os.environ.get("EXTRACT_BATCH_DOCS", "64"))
+    # How many documents are in flight at once. Not a group: a document that
+    # is written makes room for the next one, so a slow plan holds its own
+    # place and nobody else's.
+    in_flight = max(1, int(os.environ.get("EXTRACT_BATCH_DOCS", "64")))
     log.info("extraction: %d document(s), %d parameter(s), top_k=%d, "
-             "max_rounds=%d, plan_parallel=%d, llm_parallel=%d, group=%d",
+             "max_rounds=%d, plan_parallel=%d, llm_parallel=%d, in_flight=%d",
              len(documents), len(spec.parameters), TOP_K, MAX_ROUNDS,
-             PLAN_PARALLEL, LLM_PARALLEL, group_size)
+             PLAN_PARALLEL, LLM_PARALLEL, in_flight)
 
     # One call per question the field sweep asks, before anything is
     # planned: the anchors depend on the question, not on the document, and a
@@ -4756,173 +4923,145 @@ def main(argv: Optional[list] = None) -> int:
 
     started = time.time()
     failures = 0
-    # Set by the dead-server cut inside harvest_batches. The group still gets
-    # folded and written, because the documents that DID answer are real work,
-    # and the ones that did not stay unstamped and are redone on a resume.
+    # Set by the dead-server cut inside harvest_batches. Documents already
+    # written stay written; the ones in flight are left unstamped and a resume
+    # harvests them again.
     server_gone = [False]
+    halt = threading.Event()
+
+    class Halted:
+        """SIGTERM or a dead server: nothing new starts, open work is left."""
+
+        @staticmethod
+        def is_set() -> bool:
+            return STOP.is_set() or halt.is_set()
 
     def give_up() -> None:
         server_gone[0] = True
+        halt.set()
 
-    install_stop_handler()
-    for offset in range(0, len(documents), group_size):
-        if STOP.is_set():
-            break
-        group = documents[offset:offset + group_size]
+    # Shared by every document in flight: the pool bounds the batches of all
+    # of them together, the streak sees a dead server across all of them.
+    batch_pool = ThreadPoolExecutor(max_workers=max(LLM_PARALLEL, 1),
+                                    thread_name_prefix="batch")
+    # Planning is retrieval on the embedder's card and SQL: PLAN_PARALLEL plans
+    # at a time across all documents, not per document.
+    plan_pool = ThreadPoolExecutor(max_workers=max(PLAN_PARALLEL, 1),
+                                   thread_name_prefix="plan")
+    dead = DeadStreak(max(64, LLM_PARALLEL))
 
-        # ---- Plan: retrieval and SQL, not one model request ----------------
-        plans: list = []
-        with ThreadPoolExecutor(max_workers=PLAN_PARALLEL) as pool:
-            futures = {pool.submit(plan, did, fn): fn for did, fn in group}
-            for future in as_completed(futures):
-                try:
-                    plans.append(future.result())
-                except Exception:
-                    failures += 1
-                    log.exception("extraction: planning %s failed",
-                                  futures[future])
+    def harvest_document(document_id: int, filename: str) -> tuple:
+        """One document from its plan to its file: (written, failures).
+
+        Planned, framed and harvested on its own, its batches in the pool all
+        documents share, and written the moment its last batch is back.
+        """
+        failed = 0
+        name, items, report = plan_pool.submit(plan, document_id,
+                                               filename).result()
         # ---- Frame: which scenarios and which years, once per document --
         # Before any value. Every value request below asks for ONE of these
         # pairs, so the coordinate is never something the model has to decide
         # while it is reading a number.
-        frames: dict = {}
-        if ask_frame is not None and plans:
-            with ThreadPoolExecutor(max_workers=LLM_PARALLEL) as pool:
-                futures = {pool.submit(find_frame,
-                                       [item.source for item in items],
-                                       frame_axes, report.document_id,
-                                       ask_frame, more_sources): name
-                           for name, items, report in plans}
-                for future in as_completed(futures):
-                    name = futures[future]
-                    try:
-                        pairs, status, missed = future.result()
-                    except Exception:
-                        failures += 1
-                        log.exception("extraction: frame %s failed", name)
-                        continue
-                    frames[name] = pairs
-                    if missed:
-                        # A year the deterministic scan found in the very
-                        # passages the model was shown and it did not name.
-                        # Reported, never added: "2045 MWh/a" is year-shaped
-                        # and is not a year.
-                        log.info("extract: %s: frame %d pair(s), %s, %d "
-                                 "year-shaped number(s) not named: %s",
-                                 name, len(pairs), status, len(missed),
-                                 ", ".join(str(y) for y in missed[:8]))
-                    else:
-                        log.info("extract: %s: frame %d pair(s), %s",
-                                 name, len(pairs), status)
+        pairs: list = []
+        if ask_frame is not None:
+            try:
+                pairs, status, missed = find_frame(
+                    [item.source for item in items], frame_axes,
+                    report.document_id, ask_frame, more_sources)
+            except Exception:
+                failed += 1
+                pairs = []
+                log.exception("extraction: frame %s failed", name)
+            else:
+                if missed:
+                    # A year the deterministic scan found in the very passages
+                    # the model was shown and it did not name. Reported, never
+                    # added: "2045 MWh/a" is year-shaped and is not a year.
+                    log.info("extract: %s: frame %d pair(s), %s, %d "
+                             "year-shaped number(s) not named: %s",
+                             name, len(pairs), status, len(missed),
+                             ", ".join(str(y) for y in missed[:8]))
+                else:
+                    log.info("extract: %s: frame %d pair(s), %s",
+                             name, len(pairs), status)
+        pairs = list(pairs or ())
 
         # ---- Plan again, once per pair: the pair is a search, not a label
         # "Nutzwaermebedarf 2040 im Zielszenario" is a sentence the plan can
         # print and the value request for 2040 is asked over what THAT
-        # sentence finds. Reusing one document plan for every pair made the
-        # pair a field in the request and left the search untouched, which is
-        # how a plan with four target years ran with two.
+        # sentence finds.
         pair_items: dict = {}
-        report_of = {name: report for name, _items, report in plans}
-        jobs = [(name, pair_index, pair) for name, _items, _report in plans
-                for pair_index, pair in enumerate(frames.get(name) or ())]
-        if jobs:
-            where = {Path(fn).stem: (did, fn) for did, fn in group}
-            with ThreadPoolExecutor(max_workers=PLAN_PARALLEL) as pool:
-                futures = {pool.submit(plan, *where[name], pair, pair_index):
-                           (name, pair_index)
-                           for name, pair_index, pair in jobs}
-                for future in as_completed(futures):
-                    name, pair_index = futures[future]
-                    try:
-                        _name, items, pair_report = future.result()
-                    except Exception:
-                        failures += 1
-                        log.exception("extraction: planning %s for pair %d "
-                                      "failed", name, pair_index)
-                        continue
-                    pair_items[(name, pair_index)] = items
-                    # The pair's own anchors found passages of their own;
-                    # they are that parameter's too.
-                    for uri, keys in pair_report.sources_of.items():
-                        report_of[name].sources_of.setdefault(
-                            uri, set()).update(keys)
+        if pairs:
+            futures = {plan_pool.submit(plan, document_id, filename, pair,
+                                        pair_index): pair_index
+                       for pair_index, pair in enumerate(pairs)}
+            for future in as_completed(futures):
+                pair_index = futures[future]
+                try:
+                    _name, found, pair_report = future.result()
+                except Exception:
+                    failed += 1
+                    log.exception("extraction: planning %s for pair %d "
+                                  "failed", name, pair_index)
+                    continue
+                pair_items[pair_index] = found
+                # The pair's own anchors found passages of their own; they are
+                # that parameter's too.
+                for uri, keys in pair_report.sources_of.items():
+                    report.sources_of.setdefault(uri, set()).update(keys)
 
-        # Every batch of every document goes into one pool. A batch belongs
-        # to exactly one document, so the replies come back where they can be
-        # folded; nothing about the scheduling depends on that.
-        batches: list = []
-        owner_of: dict = {}
-        for name, items, report in plans:
-            found = list(frames.get(name) or ())
-            framed, rest, added = pair_batches(
-                items, found,
-                [pair_items.get((name, i)) for i in range(len(found))],
-                frame_axes,
-                [anchor_texts.get((name, i), ()) for i in range(len(found))],
-                max_sources=BATCH_SOURCES, max_chars=BATCH_CHARS)
-            for batch in framed:
-                batches.append(batch)
-                owner_of[id(batch)] = name
-            # The rest: what prints none of the pairs. A value the frame
-            # search has no pair for is harvested here without one, and its
-            # year is read per row or ends `unstated`, so a year the search
-            # missed is a countable gap and not a silent loss.
-            if found:
-                log.info("extract: %s: %d pair(s), %d passage(s) print none "
-                         "of them, %d read under a pair its own search had "
-                         "not kept", name, len(found), len(rest), added)
-            for batch in group_items(rest, max_sources=BATCH_SOURCES,
-                                     max_chars=BATCH_CHARS):
-                batches.append(batch)
-                owner_of[id(batch)] = name
-        sources = sum(len(b.items) for b in batches)
-        log.info("extraction: group %d/%d planned — %d batch(es) over %d "
-                 "source(s) in %d document(s)", offset // group_size + 1,
-                 (len(documents) - 1) // group_size + 1, len(batches), sources,
-                 len(plans))
+        framed, rest, added = pair_batches(
+            items, pairs, [pair_items.get(i) for i in range(len(pairs))],
+            frame_axes, [anchor_texts.get((name, i), ())
+                         for i in range(len(pairs))],
+            max_sources=BATCH_SOURCES, max_chars=BATCH_CHARS)
+        # The rest: what prints none of the pairs. A value the frame search has
+        # no pair for is harvested here without one, and its year is read per
+        # row or ends `unstated`, so a year the search missed is a countable
+        # gap and not a silent loss.
+        if pairs:
+            log.info("extract: %s: %d pair(s), %d passage(s) print none of "
+                     "them, %d read under a pair its own search had not kept",
+                     name, len(pairs), len(rest), added)
+        batches = list(framed) + list(group_items(
+            rest, max_sources=BATCH_SOURCES, max_chars=BATCH_CHARS))
+        log.info("extraction: %s planned — %d batch(es) over %d source(s)",
+                 name, len(batches), sum(len(b.items) for b in batches))
+        if Halted.is_set():
+            return False, failed
 
-        # ---- Harvest: all of them, at once ---------------------------------
-        if STOP.is_set():
-            break
         unfinished: set = set()
         answered = harvest_batches(batches, harvest,
                                    more_sources=more_sources,
                                    verify=accepted_rows, workers=LLM_PARALLEL,
-                                   on_give_up=give_up, stop=STOP,
-                                   unfinished=unfinished)
+                                   on_give_up=give_up, stop=Halted,
+                                   unfinished=unfinished, pool=batch_pool,
+                                   dead=dead, progress=False)
+        if report.document_id in unfinished:
+            log.error("extraction: %s left with batches never harvested — not "
+                      "written, so a resume harvests it again", name)
+            return False, failed
+        verify((name, report, answered))
+        return True, failed
 
-        # ---- Verify and write, document by document ------------------------
-        by_document: dict = {}
-        for batch, reply in answered:
-            # A follow-up batch is new since planning, and it belongs to the
-            # document its own sweep does.
-            name = owner_of.get(id(batch)) or document_name.get(batch.document_id)
-            by_document.setdefault(name, []).append((batch, reply))
-        entries = [(name, report, by_document.get(name, []))
-                   for name, _, report in plans
-                   if report.document_id not in unfinished]
-        if unfinished:
-            log.error("extraction: %d document(s) of this group left with "
-                      "batches never harvested — not written, so a resume "
-                      "harvests them again", len(unfinished))
-        with ThreadPoolExecutor(max_workers=PLAN_PARALLEL) as pool:
-            futures = {pool.submit(verify, e): e[0] for e in entries}
-            for future in as_completed(futures):
-                try:
-                    future.result()
-                except Exception:
-                    failures += 1
-                    log.exception("extraction: %s failed", futures[future])
-        if server_gone[0]:
-            log.error("extraction: the model server stopped answering — the "
-                      "run ends here after %d of %d document(s). What was "
-                      "harvested is written and stamped, the rest is not, so "
-                      "a resume picks up where this stopped.",
-                      min(offset + group_size, len(documents)), len(documents))
-            failures += 1
-            break
-        if STOP.is_set():
-            break
+    install_stop_handler()
+    try:
+        done, _written, failed = harvest_documents(
+            documents, harvest_document, in_flight=in_flight, stop=STOP,
+            halted=halt.is_set)
+        failures += failed
+    finally:
+        stopped = STOP.is_set()
+        batch_pool.shutdown(wait=not stopped, cancel_futures=stopped)
+        plan_pool.shutdown(wait=not stopped, cancel_futures=stopped)
+
+    if server_gone[0]:
+        log.error("extraction: the model server stopped answering — the run "
+                  "ends here after %d of %d document(s). What was harvested is "
+                  "written and stamped, the rest is not, so a resume picks up "
+                  "where this stopped.", done, len(documents))
+        failures += 1
 
     if STOP.is_set():
         log.error("extraction: stopped by SIGTERM after %.0f s. The documents "

@@ -226,9 +226,15 @@ coordinate closes or the document runs out (`runner.py:2967`). A
 coordinate the whole sweep cannot close is `exhausted`, never
 `unstated`: the first is a finding about the run, the second about the
 document. The budget sums to `FIELD_MAX_WINDOWS`
-(24) plus `REST_MAX_WINDOWS` (12) per coordinate, with several
-coordinates batched into one request rather than one request each
-(`runner.py:2686`).
+(24) plus `REST_MAX_WINDOWS` (12) per coordinate. Every request now
+asks one coordinate, not several at once: five coordinates for every
+row of a batch in one request wanted up to 27,311 prompt tokens and
+came back refused or cut off (`runner.py:2624`). Its rows are chunked
+to at most `FIELD_ROWS` (32, env `EXTRACT_FIELD_ROWS`), about 2,600
+answer tokens at the measured p90, sized against the server's own
+window before the request is sent rather than shrunk after a refusal,
+`answer_room` (`runner.py:1141`); a chunk still too large for its room
+is halved before it is sent (`runner.py:2670-2684`).
 
 ### Merging a coordinate
 
@@ -480,6 +486,7 @@ run, `anchors.json` and `query_cache.db`; and, only after `--top-up`,
 | Name | Kind | Default | Effect | Where read |
 |---|---|---|---|---|
 | `EXTRACT_FIELDWISE` / `EXTRACT_FIELD_WINDOW` / `_OVERLAP` | env var | `1` / `2` / `1` | `FIELDWISE`: one request per coordinate, not one per whole tuple. `WINDOW`/`OVERLAP`: sources per retrieval-stage window, and how many repeat in the next one | `runner.main`, `runner.make_sweeper` |
+| `EXTRACT_FIELD_ROWS` | env var | `32` | Rows one field request answers at once; a coordinate's open rows are chunked to this many per request, halved again if the chunk still leaves too little room for its answer | `runner.make_field_asker` |
 | `EXTRACT_FIELD_ROUNDS` / `EXTRACT_FIELD_ATTEMPTS` | env var | `4` / `3` | Retrieval rounds before falling to the rest stage; retries of the own-stage window when unbackable | `runner.make_sweeper` |
 | `EXTRACT_FIELD_MAX_WINDOWS` / `EXTRACT_REST_MAX_WINDOWS` | env var | `24` / `12` | Own plus retrieval windows, and the rest stage's separate allowance, before a coordinate is exhausted | `runner.make_sweeper` |
 | `EXTRACT_PLAN_TOP` / `EXTRACT_PROSE_TOP` | env var | `100` / `200` | `PLAN_TOP`: the fused top-N cut replacing the older structural-floor plan; raised from 50 once that cut was measured holding only 40% of a document's tables and 15% of its figures. `PROSE_TOP`: ceiling on prose sections drawn from, always overriding `plan_document`'s own default of `50` | `runner.main` |
@@ -488,7 +495,8 @@ run, `anchors.json` and `query_cache.db`; and, only after `--top-up`,
 | `EXTRACT_CODE_ROUNDS` / `EXTRACT_FIELD_RE_ENTRY` | env var | `2` / `3` | Sandbox rounds the row request may spend on a self-checked value; already-shown passages carried into a coordinate's next field window | `runner.make_harvester`, `runner.make_sweeper` |
 | `EXTRACT_LLM_PARALLEL` / `EXTRACT_PLAN_PARALLEL` / `EXTRACT_FIELD_PARALLEL` | env var | `128` / `8` / `192` | Concurrency caps: LLM requests for the whole run, planning threads (retrieval, SQL and the document's phrase requests, which run in parallel per parameter), and field-sweep threads beneath row-request batches | `runner.harvest_batches`, `runner.main`, `runner.make_fieldwise_harvester` |
 | `EXTRACT_ATTACH_IMAGES` / `EXTRACT_LOCATE` | env var | `1` / `1` | Off, respectively: no crop attaches to a row, field, frame or review request (no `images/` dir needed), or `make_locate` returns `None`, no quote placed on the page | `runner.py` askers, `runner.make_locate` |
-| `EXTRACT_BATCH_DOCS` | env var | `64` | Documents planned, harvested and written together; a group is written only at its end, so this is the work a server failure can cost | `runner.main` |
+| `EXTRACT_BATCH_DOCS` | env var | `64` | Documents kept in flight at once under rolling admission; a finished one is written at once and the next starts, so no document waits on a group | `runner.main`, `runner.harvest_documents` |
+| `EXTRACT_MAX_MODEL_LEN` | env var | `32768` | Fallback context window a request's answer room is sized against; overwritten by `set_model_len` from the server's own preflight report where it gives one | `runner.set_model_len`, `runner.answer_room` |
 | `EXTRACT_RETRY_TEMPERATURE_STEP` | env var | `0.1` | Sampling temperature of a retried attempt raised by this step, once per unreadable reply, capped at `1.0`; every retry loop of this stage applies it (phrase, frame, anchors, harvest, field, review) | `runner.retry_temperature` |
 | `EXTRACT_TRACE` | env var | `1` | Off, every trace call returns immediately and no trace file is written | `trace.py` (`ENABLED`) |
 | `--document ID` / `--force` / `--force-stale` | CLI flag (ID repeatable) | none / off / off | `--document` restricts a run to named ids; `--force` redoes every document, `--force-stale` only those `stale` | `runner.main`, `runner.stale` |
@@ -532,23 +540,22 @@ written either way, so only a resume, not a byte count, tells the two
 cases apart from a genuinely finished document.
 
 A time limit ends a run the same careful way. `install_stop_handler`
-(`runner.py:115`) puts a SIGTERM handler in place, the job script's
-time-limit trap or a manual kill, that sets `STOP` (`runner.py:103`)
-instead of letting the interpreter die where it stood: killed outright,
-a stop used to throw away a whole group in flight, up to 64 documents
-and hours of work, batches already answered included. `harvest_batches`
-(`stop=`, `unfinished=`, `runner.py:3433`) checks `STOP` between waits and,
-once it is set, submits nothing new and returns at once rather than
-waiting out the requests still open; every document with a batch left
-behind this way, and, as before, one the dead-server cut left behind, is
-added to `unfinished` (`leave`, `runner.py:3503`) and excluded from what
-the group writes and stamps this round, so a resume harvests it whole
-instead of the run stamping it as though every batch had come back. The
-main loop checks `STOP` before planning a new group and again after its
-harvest (`runner.py:4724`, `:4840`, `:4879`); once set, it logs, closes
-the trace and exits hard with `STOPPED_EXIT` (`143`, `runner.py:4882` to
-`4891`) rather than waiting on the field-sweep threads still open, which
-are not daemons and could hold the process for minutes.
+(`runner.py:116`) puts a SIGTERM handler in place, the job script's
+time-limit trap or a manual kill, that sets `STOP` (`runner.py:104`)
+instead of letting the interpreter die where it stood. Documents run
+under rolling admission, `harvest_documents` (`runner.py:3569`), at
+most `EXTRACT_BATCH_DOCS` in flight at once, their batches sharing one
+`batch_pool` and one `DeadStreak` (`runner.py:3549`) across every
+document in flight rather than one dead-server count per document. Once
+`STOP` or a dead server sets `Halted` (`runner.py:4932`), no new
+document starts, and a document already in flight leaves its own
+`harvest_batches` call at once instead of waiting out its open
+requests; such a document lands in `unfinished` and is not written, so
+a resume harvests it whole instead of the run stamping it as though
+every batch had come back. Once `STOP` is set the run logs, closes the
+trace and exits hard with `STOPPED_EXIT` (`143`, `runner.py:112`,
+`:5059`) rather than waiting on the field-sweep threads still open,
+which are not daemons and could hold the process for minutes.
 
 Among the four maintenance passes, `--recheck` and `--remap` never call a
 model, so their only failure mode is a coordinate they cannot settle,

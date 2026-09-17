@@ -68,12 +68,13 @@ def serving_limits(base_url: str, api_key: str, timeout: float = 30.0)
 ```python
 def assert_serving(base_url: str, api_key: str, model: str,
                    required_tokens: int, *, what: str = "this stage",
-                   flag: str = "--max-model-len") -> None
+                   flag: str = "--max-model-len") -> Optional[int]
 ```
 
 Raise PreflightError unless *base_url* serves *model* with room for
 *required_tokens*. Logs both numbers on success, so they end up in the
-job's output file where the next person can read them.
+job's output file where the next person can read them. Returns the
+server's window, or None when it does not report one.
 
 ### assert_request_extras
 

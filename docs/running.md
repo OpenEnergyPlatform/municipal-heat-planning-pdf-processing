@@ -255,6 +255,9 @@ environment variables setting a stage's server and model defaults.
 | Extraction | `LLM_BASE_URL` | `http://localhost:8000/v1` | harvesting model's endpoint | `docpipe/extraction/runner.py:82` |
 | Extraction | `LLM_MODEL` | `Qwen/Qwen3.8-Flash-Next-FP8` | harvesting model's name | `docpipe/extraction/runner.py:87` |
 | Extraction | `EXTRACT_BATCH_SOURCES` | `6` | sources sharing one harvest request | `docpipe/extraction/runner.py:102` |
+| Extraction | `EXTRACT_BATCH_DOCS` | `64` | documents kept in flight at once, one written and replaced by the next as soon as it finishes | `docpipe/extraction/runner.py:4698` |
+| Extraction | `EXTRACT_FIELD_ROWS` | `32` | rows one field request answers at once | `docpipe/extraction/runner.py:338` |
+| Extraction | `EXTRACT_MAX_MODEL_LEN` | `32768` | fallback context window, used only where the server's own preflight reports none | `docpipe/extraction/runner.py:1096` |
 | App | `INFERENCE_DB_PATH` | profile `db_path`, else `data/KWP.db` | SQLite corpus database, opened read-only | `scripts/inference_app/config.py:61` |
 | App | `INFERENCE_INDEX_PATH` | profile `index_path`, else `data/faiss_index.bin` | FAISS index loaded into memory | `scripts/inference_app/config.py:62` |
 | App | `INFERENCE_KG_TTL_PATH` | profile `root/graph.ttl`, else `data/graph.ttl` | Turtle file from `--serialize` | `scripts/inference_app/config.py:66` |

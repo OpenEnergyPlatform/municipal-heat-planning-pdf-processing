@@ -175,12 +175,14 @@ def audit(profile: str) -> None:
         check(profile, f"field prompt names {key!r}", f'"{key}"' in field_text)
     # The value request reads a passage once for every quantity at once, so it
     # must be told about all of them and not about one.
-    # The field request asks for several fields at once now, and the reply is
-    # keyed by field name. A prompt still describing one field per request
-    # answers in the old shape, nothing folds, and every coordinate comes back
-    # empty — an entire run of empty tuples with no error anywhere.
-    check(profile, "field prompt knows several fields",
+    # One field per request, and the reply is keyed by the field's name under
+    # "fields". A prompt in the old flat shape answers without that key,
+    # nothing folds, and every coordinate comes back empty — an entire run of
+    # empty tuples with no error anywhere.
+    check(profile, "field prompt keys the reply by field name",
           '"fields"' in field_text and '"field":' not in field_text)
+    check(profile, "field prompt asks one field",
+          "GENAU EIN Feld" in field_text)
 
     rows_text = prompts.load("extraction/rows").text
     check(profile, "rows prompt names 'quantities'", '"quantities"' in rows_text)

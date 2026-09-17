@@ -16,7 +16,9 @@ the whole-tuple path used.
 No GPU, no database.
 """
 import json
+import threading
 from collections import Counter
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -27,7 +29,7 @@ from docpipe.extraction.pipeline import (DocumentReport, Source, WorkItem,
                                          merge_field, open_rows,
                                          rows_from_reply)
 from docpipe.extraction.pipeline import answer_in_quote as pipeline_answer_in_quote
-from docpipe.extraction.spec import load as load_spec
+from docpipe.extraction.spec import Spec, load as load_spec
 
 PROFILES = Path(__file__).resolve().parent.parent / "profiles"
 
@@ -1012,20 +1014,61 @@ def test_an_undecided_gate_coordinate_keeps_the_row(monkeypatch):
     assert not runner.keeps_row(scenario, "Ist-Zustand", ("target",))
 
 
-def test_the_coordinates_of_a_row_go_out_in_one_request(monkeypatch):
-    """The promise: several fields ride in ONE request, and each is folded and
-    evidenced on its own.
+def test_a_row_closed_by_the_first_gate_is_not_asked_the_second(monkeypatch):
+    """The promise: the slice gate's axes are swept one after another, and a
+    row the first one closes never reaches a request for the second — it
+    carries out_of_slice for the coordinate it was never asked, not a state
+    that looks like the model was asked and said nothing.
 
-    One field per request was one round trip per coordinate. Measured over 60
-    documents of the corpus run, 2,108 field requests each, which is what made
-    it 82 hours for 1,079 plans."""
+    Sequential rather than bundled matters here precisely because closing is
+    cheap only if it happens before the next request is sent: a row asked for
+    both gate coordinates in one call would pay for the second regardless of
+    what the first said.
+    """
+    spec, rows_reply = _two_row_spec_and_reply()
+    answers = _answers_for(
+        spec,
+        quantity_of={"R1": "final energy consumption value", "R2": "Potenzial"},
+        scenario_of={"R1": "Zielszenario", "R2": "Zielszenario"})
+    harvest, asked = _gated(monkeypatch, spec, rows_reply, answers,
+                            {"quantity": None, "scenario": ("target",)})
+    reply = harvest(_document_batch())
+
+    scenario_calls = [rows for name, rows in asked if name == "scenario"]
+    assert scenario_calls, "the second gate axis was asked"
+    assert all("R2" not in rows for rows in scenario_calls), (
+        "R2 fell out at the first gate and never reaches a request for the "
+        "second")
+
+    out = next(t for t in reply["tuples"] if t.get("value") == 99)   # R2
+    assert out.get("scenario_state") == fields.OUT_OF_SLICE, (
+        "never asked, and it says so rather than looking like a silent plan")
+    assert out.get("quantity_state") != fields.OUT_OF_SLICE, (
+        "the first gate DID ask R2 — it is the answer, not the asking, "
+        "that closed the row")
+
+
+def test_each_coordinate_of_a_row_goes_out_in_its_own_request(monkeypatch):
+    """The promise: one field per request, never bundled with another.
+
+    Several coordinates riding in one field request wanted more prompt and
+    more answer than the window always leaves, and the field that would have
+    fit shared the fate of the one that did not. One coordinate at a time
+    fits by construction, and each keeps the anchor written for its own
+    question — a request for "carrier" is searched with the carrier anchor,
+    never with the one written for "sector"."""
     spec, rows_reply = _two_row_spec_and_reply()
     consumption = spec.parameters[0]
     quote = "| Erdgas | 42.005 | MWh/a |"
-    calls = []
 
     monkeypatch.setattr(runner, "make_harvester",
                         lambda *a, **kw: (lambda batch, prior=None: rows_reply))
+
+    events = []
+    monkeypatch.setattr(runner.trace, "event",
+                        lambda kind, doc, **kw: events.append((kind, kw)))
+
+    calls = []
 
     def make_asker(image_root=None):
         def ask(shown, rows, slots, corrections=None, document_id=None,
@@ -1057,15 +1100,32 @@ def test_the_coordinates_of_a_row_go_out_in_one_request(monkeypatch):
         spec=spec, slice_gate={"quantity": None, "scenario": ("target",)})
     reply = harvest(_document_batch())
 
-    assert len(calls) == 3, (
-        "one for the unit, one for the gate, one for the rest — the "
-        "parameter came from the unit and the aggregation from the spec, "
-        "not one per coordinate: %s" % calls)
-    assert calls[0] == [fields.UNIT], "the unit is read before the parameter"
-    assert calls[1] == ["quantity", "scenario"]
-    assert len(calls[2]) == len(fields.asked_slots(consumption)) - 2
+    # Every request carries exactly one coordinate: never bundled with a
+    # sibling axis, whatever order the axes end up asked in.
+    assert calls, "the axes were asked"
+    assert all(len(c) == 1 for c in calls), (
+        "a request naming more than one field is a bundle: %s" % calls)
+    names = [c[0] for c in calls]
+    non_gate = {a.name for a in fields.axis_slots(consumption) if not a.derive}
+    assert names[0] == fields.UNIT, "the unit is read before the parameter"
+    assert names[1] == "quantity" and names[2] == "scenario", (
+        "the gate is asked in order, quantity before scenario")
+    assert set(names[3:]) == non_gate - {"quantity", "scenario"}, names
+    assert len(names) == len(non_gate) + 1, (
+        "the parameter came from the unit and the aggregation from the "
+        "spec, so neither is a request of its own: %s" % names)
 
-    # Every field of the one reply is folded on its own.
+    # And each request keeps the anchor written for its own question.
+    field_events = {kw["slot"]: kw["anchor"] for kind, kw in events
+                    if kind == "field"}
+    assert set(field_events) == set(names)
+    for name in non_gate:
+        assert field_events[name] == runner.anchor_key(consumption.uri, name)
+    assert field_events[fields.UNIT] == runner.UNIT_ANCHOR
+    assert len(set(field_events.values())) == len(field_events), (
+        "one coordinate, one anchor — none of them share")
+
+    # Every field of the reply is folded on its own.
     row = reply["tuples"][0]
     assert row["quantity_state"] == fields.READ
     assert row["scenario_state"] == fields.READ
@@ -1226,12 +1286,12 @@ def test_the_trace_names_the_field_that_filled_and_the_field_that_dropped(
     """The promise: a field event says which coordinate filled and which
     failed, and a drop event names the coordinate it belongs to.
 
-    Five fields answer in one reply. A run that logs
-    "aggregation+carrier+sector+year+spatial_scope: 3 filled, 2 unbacked"
-    cannot say which two were dropped, and on one corpus group 7,738 unbacked
-    and 3,110 unquoted answers were not attributable to any coordinate. The
-    knob that would fix them cannot be found in a number that names five
-    things at once.
+    One coordinate answers in one reply now, so its own event is the one
+    place its own filled or unbacked count lives — the promise this guards is
+    that it is still named, so a run's knob still reads "sector: 0 filled, 2
+    unbacked" and not a count with no coordinate on it. On one corpus group
+    7,738 unbacked and 3,110 unquoted answers were not attributable to any
+    coordinate.
     """
     spec, rows_reply = _two_row_spec_and_reply()
     consumption = spec.parameters[0]
@@ -1259,14 +1319,20 @@ def test_the_trace_names_the_field_that_filled_and_the_field_that_dropped(
     harvest, _asked = _gated(monkeypatch, spec, rows_reply, answers, {})
     harvest(_document_batch())
 
-    fields_events = [kw for kind, kw in events if kind == "field"
-                     and "carrier" in (kw.get("slot") or "")]
-    assert fields_events, "the axes were asked"
-    first = fields_events[0]
-    assert first["filled_by"].get("carrier") == 2, "carrier read both rows"
-    assert "sector" not in first["filled_by"]
-    assert first["unbacked_by"].get("sector") == 2
-    assert "carrier" not in first["unbacked_by"]
+    # Carrier and sector are two separate sweeps now, each with its own
+    # trace: what matters is that EACH one's event names only its own
+    # coordinate, not the other's.
+    field_events = {kw["slot"]: kw for kind, kw in events if kind == "field"}
+    assert "carrier" in field_events and "sector" in field_events, field_events
+
+    carrier_event = field_events["carrier"]
+    assert carrier_event["filled_by"] == {"carrier": 2}, "carrier read both rows"
+    assert not carrier_event["unbacked_by"], carrier_event
+
+    sector_event = field_events["sector"]
+    assert not sector_event["filled_by"], sector_event
+    assert sector_event["unbacked_by"] == {"sector": 2}, (
+        "sector's own event names sector, not carrier's finding")
 
     dropped = [kw for kind, kw in events if kind == "drop"]
     assert dropped, "a failed coordinate is a drop"
@@ -1689,6 +1755,78 @@ def _far_source(owner_id):
                   {"document_id": 7, "page": owner_id})
 
 
+def _single_axis_parameter(parameter, *axis_names):
+    """A copy of *parameter* with its axes cut down to just these, and its
+    unit list emptied.
+
+    Every sweep is one axis and one request now (`make_fieldwise_harvester`),
+    so a batch's remaining axes each become their own job in the shared field
+    pool and run beside one another. A test about how ONE coordinate's own
+    sweep walks the document must not also be a test about the five others
+    running concurrently in the same pool: `units_accepted={}` keeps the unit
+    slot from being swept ahead of them too.
+    """
+    return replace(parameter, axes={name: parameter.axes[name]
+                                    for name in axis_names},
+                    units_accepted={})
+
+
+def _single_axis_batch(parameter, sources):
+    """A batch of *sources* (owner_id, text, parent_section) for *parameter*,
+    fixed rather than derived — so only the axes of *parameter* are ever
+    swept, none of the unit/quantity machinery that decides which parameter a
+    row belongs to."""
+    items = [WorkItem(7, parameter, Source(
+        "table", owner_id, text,
+        {"document_id": 7, "page": owner_id + 1,
+         **({"parent_section": parent} if parent is not None else {})}))
+        for owner_id, text, parent in sources]
+    return group_items(items, max_sources=runner.BATCH_SOURCES)[0]
+
+
+def test_the_passage_another_coordinate_was_read_in_rides_along():
+    """Every coordinate is its own sweep, so where the carrier of a row was
+    read is known to the year's sweep only from the row itself. That passage
+    rides in front of the year's later windows, as it did when both were
+    asked in one request: the caption that dates a table sits beside the row
+    label that names its carrier."""
+    from docpipe.extraction.pipeline import Row
+
+    spec = load_spec(json.loads(
+        (PROFILES / "kwp" / "extraction_spec.json").read_text(encoding="utf-8")))
+    parameter = _single_axis_parameter(spec.parameters[0], "year")
+    year = fields.axis_slots(parameter)[0]
+    batch = _single_axis_batch(parameter, [
+        (0, "| Erdgas | 42.005 | MWh/a |", None),
+        (1, "Tabelle 4 nach Energietraegern", None)])
+    row = Row(label="R1", item_index=0,
+              claim={"value": 42005, "quote": "| Erdgas | 42.005 | MWh/a |",
+                     "carrier": "Erdgas", "carrier_state": fields.READ,
+                     "carrier_source": ["table", 1]})
+    pool = [_far_source(9001 + n) for n in range(2)]
+    served = []
+
+    def more(document_id, queries, exclude):
+        if served:
+            return []
+        served.extend(pool)
+        return list(pool)
+
+    shown_at = []
+
+    def ask(shown, rows, slots, corrections=None, document_id=None,
+            usage_out=None, owner_of=None):
+        shown_at.append([s.owner_id for s in shown])
+        return {"fields": {}}
+
+    sweep = runner.make_sweeper(ask, more_sources=more)
+    sweep(batch, [row], [year], "year")
+
+    later = shown_at[1:]
+    assert later, "the sweep went on past the own window"
+    assert all(1 in window for window in later), shown_at
+
+
 def test_a_sweep_that_ran_out_of_budget_still_reads_the_rest_of_the_plan(
         monkeypatch):
     """`run` returns False exactly when the budget ran out, and a sweep with
@@ -2028,29 +2166,31 @@ def test_a_window_is_asked_again_only_where_asking_again_pays(monkeypatch):
 
 def test_the_sweep_starts_again_where_it_last_read_instead_of_striking_it_off(
         monkeypatch):
-    """The promise: where one coordinate was read, the next window starts there.
+    """The promise: a passage a window has already shown is not struck off
+    `seen` for good.
 
-    `sweep_field.re_entry` is what does it.
+    Every passage a window showed used to go into `seen` and never be shown
+    again — so the sweep read the sector out of a table and then looked for
+    the year everywhere except that table, which is where the caption that
+    carries it stands. `sweep_field.re_entry` is what undoes it, and this
+    holds it to a case that survives one coordinate being its own sweep now:
+    the row's own passage plays no further part in `window_sources` once the
+    own window has been asked, and re-entry is what still puts it in front of
+    every later retrieval window, for as long as the row's one coordinate
+    stays open.
 
-    Every passage a window showed went into `seen` and was never shown again.
-    So the sweep read the sector out of a table and then looked for the
-    aggregation everywhere except that table, which is where the header and
-    the caption that carry it stand.
-
-    Two things are pinned here, because the second is what keeps the first
-    honest: the passage a coordinate was read in rides along afterwards, AND
-    riding along is not progress. The window generator is untouched, so every
-    passage of the pool still gets its own turn, once, in order.
+    The window generator is untouched: every passage of the retrieval pool
+    still gets its own turn, once, in order — the re-entry rides in FRONT of
+    the window, it is not part of it.
     """
     spec = load_spec(json.loads(
         (PROFILES / "kwp" / "extraction_spec.json").read_text(encoding="utf-8")))
-    rows_reply = {"tuples": [{"source": "Q1", "value": 42005, "unit": "MWh/a",
-                              "unit_raw": "MWh/a",
+    parameter = _single_axis_parameter(spec.parameters[0], "spatial_scope")
+    spec = Spec(parameters=[parameter])
+    rows_reply = {"tuples": [{"source": "Q1", "value": 42005,
                               "quote": "| Erdgas | 42.005 | MWh/a |"}],
                   "status": "complete", "need_more": []}
-    says = "Die Angaben beziehen sich auf das gesamte Stadtgebiet."
-    pool = [Source("section", 9001, says, {"document_id": 7, "page": 11})]
-    pool += [_far_source(9002 + n) for n in range(5)]
+    pool = [_far_source(9001 + n) for n in range(5)]
 
     shown_at = []
     monkeypatch.setattr(runner, "make_harvester",
@@ -2068,50 +2208,27 @@ def test_the_sweep_starts_again_where_it_last_read_instead_of_striking_it_off(
         def ask(shown, rows, slots, corrections=None, document_id=None,
                 usage_out=None, owner_of=None):
             shown_at.append([s.owner_id for s in shown])
-            slots = slots if isinstance(slots, (list, tuple)) else [slots]
-            answered = {}
-            for slot in slots:
-                if slot.name == fields.UNIT:
-                    # Read at once from the row's own passage, so the unit
-                    # sweep never has to fall back to `more`, which is what
-                    # this test's pool is for.
-                    answered[slot.name] = {"answers": {
-                        row.label: {"value": row.claim.get("unit_raw"),
-                                    "value_raw": row.claim.get("unit_raw"),
-                                    "quote": row.claim.get("quote")}
-                        for row in rows}}
-            # Answers once, in the window that shows 9001, and only the one
-            # axis. Everything else stays open, which is what keeps the sweep
-            # walking.
-            if any(s.owner_id == 9001 for s in shown):
-                for slot in slots:
-                    if slot.name == "spatial_scope":
-                        answered[slot.name] = {"answers": {
-                            row.label: {"value": "Gemeindegebiet",
-                                        "value_raw": "Stadtgebiet",
-                                        "quote": says} for row in rows}}
-            return {"fields": answered}
+            return {"fields": {}}       # never answered: the sweep walks the
+                                        # whole pool instead of stopping early
         return ask
 
     monkeypatch.setattr(runner, "make_field_asker", make_asker)
+    batch = _single_axis_batch(parameter,
+                               [(0, "| Erdgas | 42.005 | MWh/a |", None)])
     harvest = runner.make_fieldwise_harvester(spec=spec, more_sources=more)
-    out = harvest(_document_batch())
+    harvest(batch)
 
-    claim = out["tuples"][0]
-    assert claim["spatial_scope_source"] == ["section", 9001], claim
-    read_in = next(i for i, w in enumerate(shown_at) if 9001 in w)
-    later = shown_at[read_in + 1:]
-    assert later, shown_at
-    assert all(9001 in w for w in later), shown_at
-    # And the row's own passage with it. `merge_field` checks every window
-    # against `batch.sources`, so a quote from it was always backable -- the
-    # model just could not read it any more from the second window on.
-    assert all(0 in w for w in later), shown_at
+    assert shown_at[0] == [0], "the own window shows the row's own passage"
+    later = shown_at[1:]
+    assert later, "the pool was walked further"
+    assert all(0 in w for w in later), (
+        "the row's own passage rides in front of every later window too")
 
-    # And it cost no window. Each passage of the pool is introduced once and
-    # in the pool's order, so the re-entry rode along rather than taking a
-    # fresh passage's turn -- if it were part of the window, a passage would
-    # be pushed out of the budget or repeated as if it were new.
+    # And it costs no window of its own. Each passage of the pool is
+    # introduced once and in the pool's order, so the re-entry rode along
+    # rather than taking a fresh passage's turn -- if it were part of the
+    # window, a passage would be pushed out of the budget or repeated as if
+    # it were new.
     met, order = set(), []
     for window in shown_at:
         for owner_id in window:
@@ -2123,49 +2240,43 @@ def test_the_sweep_starts_again_where_it_last_read_instead_of_striking_it_off(
     # A window stays a window. The re-entry is capped and deduplicated
     # against what is already shown, so no passage is shown to the model
     # twice in one request and the request does not grow with the document.
-    for window in shown_at[1:]:
+    for window in later:
         assert len(window) == len(set(window)), window
         assert len(window) <= runner.FIELD_WINDOW + runner.FIELD_RE_ENTRY, window
 
 
-def test_the_re_entry_is_capped_and_the_passage_that_answered_goes_first(
+def test_the_re_entry_is_capped_and_the_section_outranks_the_rows_own_passage(
         monkeypatch):
     """The promise: `sweep_field.re_entry` is bounded, and the bound is spent
-    on the passages that earned it.
+    on the passages that earn it first.
 
-    Three places want to ride along -- where a coordinate was read, the
-    section the row stands in, and the row's own passage -- and a row that has
-    already answered four coordinates from four places would put the whole
-    document back into every request. So the list is cut, and it is cut from
-    the end: the passage that has already produced an answer for THIS row
-    goes first, the section it stands in next, and the row's own passage last,
-    because that one is checked against `batch.sources` in every window
-    anyway and is the only one of the three that is not lost by being cut.
+    Two places want to ride along for a row that is still open — the section
+    it stands in, and its own passage — and with several such rows open at
+    once there can be more candidates than the cap allows. This pins the
+    order between the two that survives one coordinate being its own sweep:
+    the section goes first, because it is not the row's own passage and
+    would otherwise be lost for good; the row's own passage is cut first when
+    the budget is short, because `merge_field` checks a quote against
+    `batch.sources` in every window regardless of what rides along, so it is
+    the one candidate that is never lost by being cut.
     """
     spec = load_spec(json.loads(
         (PROFILES / "kwp" / "extraction_spec.json").read_text(encoding="utf-8")))
-    rows_reply = {"tuples": [{"source": "Q1", "value": 42005, "unit": "MWh/a",
-                              "unit_raw": "MWh/a",
-                              "quote": "| Erdgas | 42.005 | MWh/a |"}],
-                  "status": "complete", "need_more": []}
-    where = "Die Angaben beziehen sich auf das gesamte Stadtgebiet."
-    which = "Tabelle 17 zeigt den Zielpfad der Waermeversorgung."
-    said = {"spatial_scope": (9001, "Gemeindegebiet", "Stadtgebiet", where),
-            "scenario": (9002, "Zielszenario", "Zielpfad", which)}
-    # 9001 carries one axis and 9002 the other, and both ride along after.
-    pool = [Source("section", 9001, where, {"document_id": 7, "page": 11}),
-            Source("section", 9002, which, {"document_id": 7, "page": 2})]
-    pool += [_far_source(9003 + n) for n in range(4)]
-    section = Source("section", 500, "Tabelle 17: Nutzwaermebedarf.",
-                     {"document_id": 7, "page": 1})
-    items = [WorkItem(7, None, Source("table", 0, "| Erdgas | 42.005 | MWh/a |",
-                                      {"document_id": 7, "page": 1,
-                                       "parent_section": 500}))]
-    batch = group_items(items, max_sources=runner.BATCH_SOURCES)[0]
+    parameter = _single_axis_parameter(spec.parameters[0], "spatial_scope")
+    spec = Spec(parameters=[parameter])
+    rows_reply = {"tuples": [
+        {"source": "Q1", "value": 1, "quote": "| Erdgas | 1 | MWh/a |"},
+        {"source": "Q2", "value": 2, "quote": "| Erdgas | 2 | MWh/a |"}],
+        "status": "complete", "need_more": []}
+    section_500 = Source("section", 500, "Tabelle 17: Nutzwaermebedarf.",
+                         {"document_id": 7, "page": 1})
+    section_501 = Source("section", 501, "Tabelle 28: Nutzwaermebedarf.",
+                         {"document_id": 7, "page": 2})
+    pool = [_far_source(9001 + n) for n in range(4)]
 
     shown_at = []
     monkeypatch.setattr(runner, "make_harvester",
-                        lambda *a, **kw: (lambda b, prior=None: rows_reply))
+                        lambda *a, **kw: (lambda batch, prior=None: rows_reply))
 
     served = []
 
@@ -2178,48 +2289,75 @@ def test_the_re_entry_is_capped_and_the_passage_that_answered_goes_first(
     def make_asker(image_root=None):
         def ask(shown, rows, slots, corrections=None, document_id=None,
                 usage_out=None, owner_of=None):
-            here = {s.owner_id for s in shown}
-            shown_at.append([s.owner_id for s in shown])
-            slots = slots if isinstance(slots, (list, tuple)) else [slots]
-            answered = {}
-            for slot in slots:
-                if slot.name == fields.UNIT:
-                    # Read at once, so the unit sweep never touches `more`
-                    # and leaves it whole for the spatial_scope/scenario
-                    # sweep this test is about.
-                    answered[slot.name] = {"answers": {
-                        row.label: {"value": row.claim.get("unit_raw"),
-                                    "value_raw": row.claim.get("unit_raw"),
-                                    "quote": row.claim.get("quote")}
-                        for row in rows}}
-                    continue
-                spoken = said.get(slot.name)
-                if spoken and spoken[0] in here:
-                    answered[slot.name] = {"answers": {
-                        row.label: {"value": spoken[1], "value_raw": spoken[2],
-                                    "quote": spoken[3]} for row in rows}}
-            return {"fields": answered}
+            shown_at.append([(s.owner_kind, s.owner_id) for s in shown])
+            return {"fields": {}}       # never answered: both rows stay open
         return ask
 
     monkeypatch.setattr(runner, "make_field_asker", make_asker)
+    batch = _single_axis_batch(
+        parameter, [(0, "| Erdgas | 1 | MWh/a |", 500),
+                    (1, "| Erdgas | 2 | MWh/a |", 501)])
     harvest = runner.make_fieldwise_harvester(
-        spec=spec, more_sources=more, parents=lambda sources: [section])
-    out = harvest(batch)
+        spec=spec, more_sources=more,
+        parents=lambda sources: [section_500, section_501])
+    harvest(batch)
 
-    claim = out["tuples"][0]
-    assert claim["spatial_scope_source"] == ["section", 9001], claim
-    assert claim["scenario_source"] == ["section", 9002], claim
-    # From the window after the overlap has let go of them, all three ride
-    # along as re-entry: four want to, 9002, 9001, the section 500 and the
-    # row's own passage 0, and three may. 0 is the one that is cut.
-    read_in = next(i for i, w in enumerate(shown_at)
-                   if 9001 in w and 9002 in w)
-    after = shown_at[read_in + 2:]
-    assert after, shown_at
-    for window in after:
-        assert {9001, 9002, 500} <= set(window), window
-        assert 0 not in window, window
+    later = shown_at[1:]
+    assert later, "the pool was walked further"
+    for window in later:
+        assert ("section", 500) in window and ("section", 501) in window, window
+        assert ("table", 0) in window, "the cap has room for one own passage"
+        assert ("table", 1) not in window, (
+            "and it is R2's, cut because the two sections came first")
         assert len(window) <= runner.FIELD_WINDOW + runner.FIELD_RE_ENTRY, window
+        # The section outranks the row's own passage in the request itself.
+        assert max(window.index(("section", 500)),
+                   window.index(("section", 501))) \
+            < window.index(("table", 0)), window
+
+
+def test_the_axis_sweeps_of_one_batch_run_concurrently(monkeypatch):
+    """The promise: the sweeps of a batch's several coordinates are not asked
+    one after another.
+
+    One field per request replaced one request for a whole tuple, and the
+    concurrency that used to come for free inside that one request has to
+    come from somewhere else now: `make_fieldwise_harvester` runs every
+    axis's sweep as its own job in the shared field pool. Two stubbed asks
+    wait on a barrier that only opens once both are in flight — a chain would
+    leave the second waiting for a partner that never arrives.
+    """
+    spec = load_spec(json.loads(
+        (PROFILES / "kwp" / "extraction_spec.json").read_text(encoding="utf-8")))
+    parameter = _single_axis_parameter(spec.parameters[0], "carrier", "sector")
+    spec = Spec(parameters=[parameter])
+    rows_reply = {"tuples": [{"source": "Q1", "value": 42005,
+                              "quote": "| Erdgas | 42.005 | MWh/a |"}],
+                  "status": "complete", "need_more": []}
+
+    monkeypatch.setattr(runner, "make_harvester",
+                        lambda *a, **kw: (lambda batch, prior=None: rows_reply))
+
+    barrier = threading.Barrier(2)
+
+    def make_asker(image_root=None):
+        def ask(shown, rows, slots, corrections=None, document_id=None,
+                usage_out=None, owner_of=None):
+            try:
+                barrier.wait(timeout=5)
+            except threading.BrokenBarrierError:
+                pass
+            return {"fields": {}}
+        return ask
+
+    monkeypatch.setattr(runner, "make_field_asker", make_asker)
+    batch = _single_axis_batch(parameter,
+                               [(0, "| Erdgas | 42.005 | MWh/a |", None)])
+    harvest = runner.make_fieldwise_harvester(spec=spec)
+    harvest(batch)
+
+    assert not barrier.broken, (
+        "one sweep waited for the other instead of running beside it")
 
 
 # ---------------------------------------------------------------------------
