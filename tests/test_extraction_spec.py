@@ -78,24 +78,16 @@ def test_the_example_is_mandatory():
 
 
 def test_an_example_tuple_with_a_foreign_unit_is_refused():
+    """`unit` is the entry the example shows the model choosing, and it is
+    held to the list; `unit_raw` is how the snippet prints the unit and may
+    be anything, because which entry it means is the model's reading."""
     bad = _minimal()
-    bad["parameters"][0]["example"]["tuples"][0]["unit_raw"] = "PJ"
+    bad["parameters"][0]["example"]["tuples"][0]["unit"] = "PJ"
     with pytest.raises(SpecError, match=r"units_accepted"):
         load(bad)
-
-
-def test_two_spellings_that_normalise_alike_may_not_carry_two_factors():
-    """The guard sat in the branch where units is always empty, so it never ran.
-
-    A numeric parameter is the only kind that carries units, so this is where
-    the check belongs: "kWh / a" and "kWh/a" are one spelling to the verifier,
-    and letting them carry 0.001 and 1000.0 would multiply a value by a million
-    depending on which one the document happened to print.
-    """
-    bad = _minimal()
-    bad["parameters"][0]["units_accepted"]["kWh / a"] = 1000.0
-    with pytest.raises(SpecError, match=r"same spelling to the verifier"):
-        load(bad)
+    wording = _minimal()
+    wording["parameters"][0]["example"]["tuples"][0]["unit_raw"] = "PJ"
+    load(wording)
 
 
 def test_two_spellings_of_one_unit_are_the_point_and_still_load():

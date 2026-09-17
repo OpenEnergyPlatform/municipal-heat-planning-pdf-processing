@@ -102,13 +102,14 @@ def is_numeric(self) -> bool
 #### Parameter.unit_factor
 
 ```python
-def unit_factor(self, raw) -> Optional[float]
+def unit_factor(self, unit) -> Optional[float]
 ```
 
-Factor onto unit_target for a unit as the document writes it.
+Factor onto unit_target for one entry of units_accepted, as listed.
 
-Exact spelling first, so a spec stays in charge of its own list; the
-normalised form only decides what the list could not have foreseen.
+Exact and nothing else. Which entry a document's wording means is
+read by the model with its own passage (`fields.unit_slot`); a
+spelling table here would be a second reader that nothing checks.
 
 #### Parameter.value_to_uri
 
@@ -129,38 +130,23 @@ Fields:
 
 - `parameters: list`
 - `parameter_question: Optional[str] = None`: The one line that asks which parameter a value belongs to. The harvest reads a passage once and finds the numbers in it; WHICH quantity each number is, is a coordinate like any other and is asked for like any other, with its own closed list and its own evidence. Reading the same table once per parameter is how the plan came to be three times the document.
+- `unit_question: Optional[str] = None`: The one line that asks which entry of units_accepted a number is in. A coordinate like the parameter, asked before it and with the lists of every numeric parameter, because the entry is what settles the parameter. Only a spec with a numeric parameter has a use for it.
 - `by_uri: dict = field(default_factory=dict)`
 
 ## Functions
 
-### normalise_unit
-
-```python
-def normalise_unit(raw) -> str
-```
-
-One spelling for a unit, so a list of units need not list them all.
-
-Conservative on purpose. It removes what only ever separates and unifies
-the two words German writes many ways, and it touches nothing else: per
-capita, per square metre and per kilowatt-hour stay distinct from the
-plain rate, because those are other quantities and accepting them would
-put a heat demand per square metre into a column of absolute demands.
-
 ### states_a_year
 
 ```python
-def states_a_year(raw) -> bool
+def states_a_year(unit) -> bool
 ```
 
-Does this text say the amount is per year?
+Does this entry of units_accepted say the amount is per year?
 
-The same marker normalise_unit folds into "/a", asked of any text rather
-than of a unit. It exists because the year on a tuple is not a label but
-the period the amount is integrated over, and a unit that does not say
-"per year" leaves that period to the passage: measured on Kassel, 23
-accepted tuples carried a bare GWh or t, 11 of them in a sentence that
-says "pro Jahr", and 3 were a storage capacity that is not a rate at all.
+Asked of the entry the model chose, which is the spec's own spelling. The
+period is part of what the model reads off the passage -- "450 kWh über
+das Jahr" is kWh/a, a storage capacity of 200 kWh is kWh -- so the entry
+carries that reading and nothing looks at the passage a second time.
 
 ### fold_label
 
@@ -257,6 +243,21 @@ list the model chooses from.
 The uri and the label, because both reach the model. The description does
 not -- it is in `parameter/<uri>` instead, where the question that uses it
 is.
+
+### unit_slot_fingerprint
+
+```python
+def unit_slot_fingerprint(spec: "Spec") -> str
+```
+
+The unit question and the entries it is answered from, "" without any.
+
+Its own key, like "slot/parameter": the unit is asked once, before the
+parameter, against every numeric parameter's list at once, so no
+per-parameter key says that this question moved. A harvest stamped before
+the question existed has no such key at all, which is what makes it stale
+in exactly this coordinate and in no other -- the top-up re-reads the
+unit of every row and leaves the rest of the document as it was.
 
 ### fingerprints
 

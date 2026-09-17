@@ -37,6 +37,18 @@ This package sits downstream of stage 6, the last stage to write under
 `results/` (see [How the parts fit together](../pipeline.md)); it has no
 stage after it in the batch chain, a terminal, on-demand read path.
 
+One turn, start to finish:
+
+```mermaid
+flowchart LR
+    task[Task text] --> anchor[Search anchor: a HyDE sentence]
+    anchor --> embed[Query embedding]
+    embed --> retrieve[Retrieval: FAISS sub-index for the document]
+    retrieve --> batch[Token-budgeted batches]
+    batch --> answer[Grounded answer: quote or image reading]
+    answer --> citation[Citation]
+```
+
 ## Method
 
 ### Building the query item and its search anchor

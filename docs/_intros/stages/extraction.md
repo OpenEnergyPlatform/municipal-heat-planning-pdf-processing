@@ -38,6 +38,22 @@ in the database and its stamp. [The knowledge graph](graph.md) follows,
 reading only the tuples this stage accepted, never a refusal or the
 spec itself.
 
+One document, from its anchor to its summary row:
+
+```mermaid
+flowchart TD
+    anchor[Anchor: one HyDE sentence per parameter] --> retrieve[Retrieval: one fused ranked source list]
+    retrieve --> rows[Row request: which values exist, per pair]
+    rows --> sweep[Field sweep: one coordinate at a time]
+    sweep --> verify{Verification: quote in passage, answer in quote}
+    verify -->|passes| tuple[Accepted tuple, graded A, B or C]
+    verify -->|fails| refusal[Refusal, with a closed reason]
+    tuple --> harvest[Harvest file: tuples, refusals, parameter states, summary row]
+    refusal --> harvest
+    harvest -. later, on demand .-> review[Review: reread the lowest trust values]
+    harvest -. later, on demand .-> topup[Top up: resweep one stamp-changed coordinate]
+```
+
 ## Method
 
 ### Loading and validating the spec
@@ -53,13 +69,17 @@ parameter carries one of four value types, `spec.VALUE_TYPES`: `float`
 and `int` take a unit, `category` a closed vocabulary, and `text` a
 plain string compared verbatim rather than mapped to a class; `text` is
 the majority type in the scenarios profile, 11 of its 14 parameters
-(`profiles/scenarios/extraction_spec.json`). Unit spellings and vocabulary labels are
-compared after `normalise_unit` or `fold_label`, not as raw strings: on
-the 16-document pilot, 661 findings were refused for their unit and 302
-of them already carried an accepted spelling under another form
-(`spec.py:43`). An axis that still sets an evidence rule is refused at
-load time (`spec.py:293-298`): a coordinate is
-checked for its quote and its answer, wherever the passage stands.
+(`profiles/scenarios/extraction_spec.json`). Vocabulary labels are
+compared after `fold_label`, not as raw strings. A unit is never
+folded: it is read as its own coordinate, against the literal entries
+of `units_accepted` (`fields.unit_slot`), and `Parameter.unit_factor`
+is an exact lookup of the entry chosen, not a spelling match
+(`spec.py:178-187`). A spelling table stood in for that reading once;
+measured on 641 plans of corpus_m5, it let 3,324 tuples carry an entry
+their wording contradicts (`spec.py:41-47`). An axis that still sets
+an evidence rule is refused at load time (`spec.py:268-273`): a
+coordinate is checked for its quote and its answer, wherever the
+passage stands.
 
 ### The retrieval plan
 
@@ -204,9 +224,15 @@ coordinate closes or the document runs out (`runner.py:2967`). A
 coordinate the whole sweep cannot close is `exhausted`, never
 `unstated`: the first is a finding about the run, the second about the
 document. The budget sums to `FIELD_MAX_WINDOWS`
-(24) plus `REST_MAX_WINDOWS` (12) per coordinate, with several
-coordinates batched into one request rather than one request each
-(`runner.py:2686`).
+(24) plus `REST_MAX_WINDOWS` (12) per coordinate. Every request now
+asks one coordinate, not several at once: five coordinates for every
+row of a batch in one request wanted up to 27,311 prompt tokens and
+came back refused or cut off (`runner.py:2624`). Its rows are chunked
+to at most `FIELD_ROWS` (32, env `EXTRACT_FIELD_ROWS`), about 2,600
+answer tokens at the measured p90, sized against the server's own
+window before the request is sent rather than shrunk after a refusal,
+`answer_room` (`runner.py:1141`); a chunk still too large for its room
+is halved before it is sent (`runner.py:2670-2684`).
 
 ### Merging a coordinate
 
@@ -271,8 +297,9 @@ quote that could not be placed on the PDF page still keeps the
 `text_located` tier; it only gains a `not_located` flag (`verify.py:452`).
 Non-fatal findings are carried as flags: `quote_repaired`, `computed`
 (a sandbox result checked against its own printed output),
-`unit_not_chosen`, `not_located`, `unmapped:<axis>:<wording>`, and, for
-an amount over a span, whether the quote states the year it runs over.
+`not_located`, `unmapped:<axis>:<wording>`, and, for an amount over a
+span, `period:unstated` when the entry chosen for the unit names no
+period at all.
 
 ### Trust levels
 
@@ -339,7 +366,18 @@ any run, to confirm a profile's published schema file is current
 
 Four passes act on a harvest already written, without starting a
 document over from its first passage, and they differ in what they cost
-and what they may touch.
+and what they may touch. What changed decides which one applies:
+
+```mermaid
+flowchart TD
+    change[Something changed] --> kind{What changed}
+    kind -->|A vocabulary label or class| remap[remap: pure function of the harvest and spec files, no model]
+    kind -->|One parameter's or one axis's own question| sweepable{Is it one sweepable coordinate}
+    sweepable -->|Yes| topup[top up: resweep only that coordinate, needs the model]
+    sweepable -->|No: a frame axis, a gate, or a dynamic axis with no list| stale[The document stays stale as a whole: the next harvest redoes it]
+    kind -->|A prompt's wording or the served model| noted[Recorded in the stamp, never compared: nothing is forced]
+    kind -->|Only the serializer or the graph mapping| serialize[serialize again: no harvest touched]
+```
 
 | Pass | Needs | May touch | Leaves the stamp |
 |---|---|---|---|
@@ -372,8 +410,10 @@ coordinate: a key naming no coordinate the spec still asks blocks
 outright, and so does one naming a frame axis, since the frame decides
 how many passes a document gets, or, unless allowed, a dynamic axis
 with no per-document list, since sweeping it empty would demote a class
-to a wording (`topup.py:69-103`). `--top-up-key` names only one axis
-coordinate, `axis/<uri>/<name>` (`slot_of`, `topup.py:109-120`); nothing
+to a wording (`topup.py:69-106`). `--top-up-key` names one axis
+coordinate, `axis/<uri>/<name>`, or `slot/unit`, the unit of every
+numeric parameter, swept parameter by parameter since a stored row
+already knows its own (`targets_of`, `topup.py:123-140`); nothing
 sweeps every asked coordinate of every row at once any more. `reopen` strips one coordinate's keys before
 the sweep runs; `restore` puts the old block back unless the fresh
 sweep genuinely improves on it. A row whose passage no longer carries
@@ -419,9 +459,10 @@ different kind of finding.
 
 The resume stamp, `<document>.stamp.json`, is a flat dict: `spec` (the
 whole file's sha; see Method for how it is compared), `slot/parameter`
-(the value question itself), `parameter/<uri>` and, where it has one,
-`value/<uri>` per parameter, `axis/<uri>/<name>` per axis; these are the
-only keys `stale` compares. `model`, `anchors`, one entry per
+(the value question itself), `slot/unit` (the unit question and its
+entries, only where a spec has a numeric parameter), `parameter/<uri>`
+and, where it has one, `value/<uri>` per parameter, `axis/<uri>/<name>`
+per axis; these are the only keys `stale` compares. `model`, `anchors`, one entry per
 `PROMPT_IDS` prompt, `question_text/<key>` and `review/*` are written
 into the stamp too, so a reader can place a harvest, and are never
 compared. A trace event is one JSON
@@ -443,6 +484,7 @@ run, `anchors.json` and `query_cache.db`; and, only after `--top-up`,
 | Name | Kind | Default | Effect | Where read |
 |---|---|---|---|---|
 | `EXTRACT_FIELDWISE` / `EXTRACT_FIELD_WINDOW` / `_OVERLAP` | env var | `1` / `2` / `1` | `FIELDWISE`: one request per coordinate, not one per whole tuple. `WINDOW`/`OVERLAP`: sources per retrieval-stage window, and how many repeat in the next one | `runner.main`, `runner.make_sweeper` |
+| `EXTRACT_FIELD_ROWS` | env var | `32` | Rows one field request answers at once; a coordinate's open rows are chunked to this many per request, halved again if the chunk still leaves too little room for its answer | `runner.make_field_asker` |
 | `EXTRACT_FIELD_ROUNDS` / `EXTRACT_FIELD_ATTEMPTS` | env var | `4` / `3` | Retrieval rounds before falling to the rest stage; retries of the own-stage window when unbackable | `runner.make_sweeper` |
 | `EXTRACT_FIELD_MAX_WINDOWS` / `EXTRACT_REST_MAX_WINDOWS` | env var | `24` / `12` | Own plus retrieval windows, and the rest stage's separate allowance, before a coordinate is exhausted | `runner.make_sweeper` |
 | `EXTRACT_PLAN_TOP` / `EXTRACT_PROSE_TOP` | env var | `100` / `200` | `PLAN_TOP`: the fused top-N cut replacing the older structural-floor plan; raised from 50 once that cut was measured holding only 40% of a document's tables and 15% of its figures. `PROSE_TOP`: ceiling on prose sections drawn from, always overriding `plan_document`'s own default of `50` | `runner.main` |
@@ -451,13 +493,14 @@ run, `anchors.json` and `query_cache.db`; and, only after `--top-up`,
 | `EXTRACT_CODE_ROUNDS` / `EXTRACT_FIELD_RE_ENTRY` | env var | `2` / `3` | Sandbox rounds the row request may spend on a self-checked value; already-shown passages carried into a coordinate's next field window | `runner.make_harvester`, `runner.make_sweeper` |
 | `EXTRACT_LLM_PARALLEL` / `EXTRACT_PLAN_PARALLEL` / `EXTRACT_FIELD_PARALLEL` | env var | `128` / `8` / `192` | Concurrency caps: LLM requests for the whole run, planning threads (retrieval, SQL and the document's phrase requests, which run in parallel per parameter), and field-sweep threads beneath row-request batches | `runner.harvest_batches`, `runner.main`, `runner.make_fieldwise_harvester` |
 | `EXTRACT_ATTACH_IMAGES` / `EXTRACT_LOCATE` | env var | `1` / `1` | Off, respectively: no crop attaches to a row, field, frame or review request (no `images/` dir needed), or `make_locate` returns `None`, no quote placed on the page | `runner.py` askers, `runner.make_locate` |
-| `EXTRACT_BATCH_DOCS` | env var | `64` | Documents planned, harvested and written together; a group is written only at its end, so this is the work a server failure can cost | `runner.main` |
+| `EXTRACT_BATCH_DOCS` | env var | `64` | Documents kept in flight at once under rolling admission; a finished one is written at once and the next starts, so no document waits on a group | `runner.main`, `runner.harvest_documents` |
+| `EXTRACT_MAX_MODEL_LEN` | env var | `32768` | Fallback context window a request's answer room is sized against; overwritten by `set_model_len` from the server's own preflight report where it gives one | `runner.set_model_len`, `runner.answer_room` |
 | `EXTRACT_RETRY_TEMPERATURE_STEP` | env var | `0.1` | Sampling temperature of a retried attempt raised by this step, once per unreadable reply, capped at `1.0`; every retry loop of this stage applies it (phrase, frame, anchors, harvest, field, review) | `runner.retry_temperature` |
 | `EXTRACT_TRACE` | env var | `1` | Off, every trace call returns immediately and no trace file is written | `trace.py` (`ENABLED`) |
 | `--document ID` / `--force` / `--force-stale` | CLI flag (ID repeatable) | none / off / off | `--document` restricts a run to named ids; `--force` redoes every document, `--force-stale` only those `stale` | `runner.main`, `runner.stale` |
 | `--image-root` / `--pdf-root` | CLI flag | profile's processed dir / none | Crop directory for `EXTRACT_ATTACH_IMAGES`, and source PDF directory for `EXTRACT_LOCATE`; `--pdf-root` also backs `--image-root` when absent | `runner.main`, `resolve_image_root`, `make_locate` |
 | `--recheck` / `--remap` / `--keep-stamps` | CLI flag | off | Runs `recheck.run` / `remap.run` over `--out`, no model needed; `--keep-stamps` (recheck only) leaves stamps instead of clearing them | `runner.main`, `recheck.run` |
-| `--top-up` / `--top-up-key KEY` | CLI flag (KEY repeatable) | off / none named | Runs `topup.run`, needing the model and index; `--top-up-key` restricts the changed keys swept to the named axis coordinates | `runner.main`, `topup.actionable` |
+| `--top-up` / `--top-up-key KEY` | CLI flag (KEY repeatable) | off / none named | Runs `topup.run`, needing the model and index; `--top-up-key` restricts the changed keys swept to the named coordinates | `runner.main`, `topup.actionable` |
 | `--review` / `--review-limit N` | CLI flag | off / `0` | Runs `review.run`, one request per level-C value, up to N total | `review.run` |
 | `--serialize TTL` / `--print-context-budget` | CLI flag | none / off | `--serialize`: no harvest, hands `--out` to `serialize.run`, which calls the profile's `kg.make_serializer`. `--print-context-budget`: prints the tokens one harvest request needs, then exits | `serialize.run`, `runner.main` |
 | `SLICE` / `FRAME` | profile hook | none / none (every coordinate per row) | `SLICE`: gate coordinate(s) asked first, a row that fails them never asked its others. `FRAME`: document-level coordinates found once and projected onto every row | `runner.main`, `topup.actionable` |
@@ -465,10 +508,11 @@ run, `anchors.json` and `query_cache.db`; and, only after `--top-up`,
 ## Failure modes
 
 A claim is refused, not silently dropped, whenever `verify.verify_tuple`
-finds a fixed problem: the value is not a number where required, a
-required axis is missing or outside its own list, the quote is missing,
-too short, or not found in its source even after repair, or the value
-does not occur in its own quote. `pipeline.route_claims` refuses a
+finds a fixed problem: the value is not a number where required, its
+unit is not one entry of `units_accepted` (named by the document's own
+wording, `_check_value`), a required axis is missing or outside its own
+list, the quote is missing, too short, or not found in its source even
+after repair, or the value does not occur in its own quote. `pipeline.route_claims` refuses a
 claim before verification when it names no real source and quotes
 nothing found in any of them. A category or axis value the model chose
 that is outside the spec's vocabulary is not refused outright, unless
@@ -494,23 +538,22 @@ written either way, so only a resume, not a byte count, tells the two
 cases apart from a genuinely finished document.
 
 A time limit ends a run the same careful way. `install_stop_handler`
-(`runner.py:115`) puts a SIGTERM handler in place, the job script's
-time-limit trap or a manual kill, that sets `STOP` (`runner.py:103`)
-instead of letting the interpreter die where it stood: killed outright,
-a stop used to throw away a whole group in flight, up to 64 documents
-and hours of work, batches already answered included. `harvest_batches`
-(`stop=`, `unfinished=`, `runner.py:3433`) checks `STOP` between waits and,
-once it is set, submits nothing new and returns at once rather than
-waiting out the requests still open; every document with a batch left
-behind this way, and, as before, one the dead-server cut left behind, is
-added to `unfinished` (`leave`, `runner.py:3503`) and excluded from what
-the group writes and stamps this round, so a resume harvests it whole
-instead of the run stamping it as though every batch had come back. The
-main loop checks `STOP` before planning a new group and again after its
-harvest (`runner.py:4724`, `:4840`, `:4879`); once set, it logs, closes
-the trace and exits hard with `STOPPED_EXIT` (`143`, `runner.py:4882` to
-`4891`) rather than waiting on the field-sweep threads still open, which
-are not daemons and could hold the process for minutes.
+(`runner.py:116`) puts a SIGTERM handler in place, the job script's
+time-limit trap or a manual kill, that sets `STOP` (`runner.py:104`)
+instead of letting the interpreter die where it stood. Documents run
+under rolling admission, `harvest_documents` (`runner.py:3569`), at
+most `EXTRACT_BATCH_DOCS` in flight at once, their batches sharing one
+`batch_pool` and one `DeadStreak` (`runner.py:3549`) across every
+document in flight rather than one dead-server count per document. Once
+`STOP` or a dead server sets `Halted` (`runner.py:4932`), no new
+document starts, and a document already in flight leaves its own
+`harvest_batches` call at once instead of waiting out its open
+requests; such a document lands in `unfinished` and is not written, so
+a resume harvests it whole instead of the run stamping it as though
+every batch had come back. Once `STOP` is set the run logs, closes the
+trace and exits hard with `STOPPED_EXIT` (`143`, `runner.py:112`,
+`:5059`) rather than waiting on the field-sweep threads still open,
+which are not daemons and could hold the process for minutes.
 
 Among the four maintenance passes, `--recheck` and `--remap` never call a
 model, so their only failure mode is a coordinate they cannot settle,
@@ -531,7 +574,9 @@ never sends leaves no trace, so the row is offered again later.
   tuples contradicted its own unit, yet asking the model to choose the
   parameter anyway cost 322 of 1,043 field windows, 30.9%, and 18.0 of
   187.5 field minutes per plan, before the unit was used to derive it
-  instead (`fields.py:218`).
+  instead: the sweep now asks the unit first, as its own coordinate,
+  and `derive_parameter` settles the parameter from the entry chosen
+  (`fields.py:266-292`).
 - Letting the passage a coordinate was last read in drop out of the
   window after one use, rather than remaining in the window, cost one
   batch 520 dropped readings against 31 kept (`runner.py:2845`).

@@ -79,22 +79,22 @@ def actionable(changed, spec: Spec, frame_names=(), *, dynamic_ok: bool = True,
     keys, blocked = [], []
     wanted = set(only or ())
     for key in sorted(changed or ()):
-        # `slot_of` is the whole gate and it is narrow on purpose: it answers
-        # only for `axis/<uri>/<name>` naming a coordinate this spec still
-        # asks. `value/<uri>` is the list a row maker answers from and no
-        # sweep ever asks the value slot, so it fails here.
-        got = slot_of(spec, key)
-        if got is None:
+        # `targets_of` is the whole gate and it is narrow on purpose: it
+        # answers only for a key naming a coordinate this spec still asks.
+        # `value/<uri>` is the list a row maker answers from and no sweep
+        # ever asks the value slot, so it fails here.
+        targets = targets_of(spec, key)
+        if not targets:
             blocked.append(key)
             continue
-        parameter, slot = got
-        if slot.name in set(frame_names or ()):
+        if any(slot.name in set(frame_names or ()) for _p, slot in targets):
             # The frame decides how many passes the document gets, so a moved
             # frame coordinate can mean rows this file does not have.
             blocked.append(key)
             continue
-        axis = (parameter.axes or {}).get(slot.name)
-        if not dynamic_ok and getattr(axis, "dynamic", False):
+        if not dynamic_ok and any(
+                getattr((parameter.axes or {}).get(slot.name), "dynamic", False)
+                for parameter, slot in targets):
             # A dynamic list is filled per document, and swept against an
             # empty one the coordinate degrades to a wording: a wording
             # written where a class used to stand is a silent demotion.
@@ -118,6 +118,26 @@ def slot_of(spec: Spec, key: str):
         if slot.name == parts[2]:
             return parameter, slot
     return None
+
+
+def targets_of(spec: Spec, key: str) -> list:
+    """[(parameter, slot)] a stamp key names; [] when it names no coordinate.
+
+    "axis/<uri>/<name>" is one coordinate of one parameter. "slot/unit" is
+    the unit of every numeric parameter: one question in the harvest, asked
+    before the parameter is known, so one key -- and swept here parameter by
+    parameter with that parameter's own list, because a stored row already
+    knows its parameter.
+    """
+    if key == f"slot/{fields.UNIT}":
+        out = []
+        for parameter in spec.parameters:
+            slot = fields.unit_slot(spec, parameter)
+            if slot is not None:
+                out.append((parameter, slot))
+        return out
+    got = slot_of(spec, key)
+    return [got] if got is not None else []
 
 
 def reopen(claim: dict, slot) -> dict:
@@ -219,8 +239,8 @@ def rebuild(rows: list, parameter, sources: dict, carry: list) -> tuple:
 
 
 def _reverify(row: dict, claim: dict, parameter, source,
-              locate: Optional[Callable]) -> Optional[dict]:
-    """The swept claim back through the verifier, or None if it refuses.
+              locate: Optional[Callable]):
+    """The swept claim back through the verifier: the tuple, or its refusal.
 
     The same call `fold_claims` makes, and the provenance is kept rather than
     rebuilt: the rectangles a reader highlights come from a locator that is
@@ -233,7 +253,7 @@ def _reverify(row: dict, claim: dict, parameter, source,
                            owner_kind=source.owner_kind, locate=finder,
                            repair_text=source.body)
     if isinstance(outcome, Refusal):
-        return None
+        return outcome
     out = dict(outcome.tuple)
     out["kind"] = "tuple"
     out["tier"] = outcome.tier
@@ -326,23 +346,26 @@ def top_up_file(path: Path, spec: Spec, current: dict, deps: dict, *,
         return stats
 
     settled = set(keys)
+    demoted: list = []
     for key in keys:
-        parameter, slot = slot_of(doc_spec, key)
-        mine = [r for r in tuples if r.get("parameter") == parameter.uri]
-        if not mine:
-            continue
-        if slot.derive:
-            # No request: the spec decides this coordinate. Reopening is what
-            # makes apply_derived write, because it skips a row that already
-            # carries a state.
-            rows = [Row(row_label(i), 0, r) for i, r in enumerate(mine)]
-            for entry in rows:
-                reopen(entry.claim, slot)
-            stats["derived"] += fields.apply_derived(rows, slot)
-            continue
-        got = _sweep_one(mine, parameter, slot, doc_spec, deps, stats)
-        if not got:
-            settled.discard(key)
+        for parameter, slot in targets_of(doc_spec, key):
+            mine = [r for r in tuples if r.get("parameter") == parameter.uri]
+            if not mine:
+                continue
+            if slot.derive:
+                # No request: the spec decides this coordinate. Reopening is
+                # what makes apply_derived write, because it skips a row that
+                # already carries a state.
+                rows = [Row(row_label(i), 0, r) for i, r in enumerate(mine)]
+                for entry in rows:
+                    reopen(entry.claim, slot)
+                stats["derived"] += fields.apply_derived(rows, slot)
+                continue
+            got, refused = _sweep_one(mine, parameter, slot, doc_spec, deps,
+                                      stats)
+            demoted.extend(refused)
+            if not got:
+                settled.discard(key)
 
     # A row the gate had closed may now stay, and its other coordinates were
     # never asked. They carry `out_of_slice`, which is not a reading and not a
@@ -351,7 +374,15 @@ def top_up_file(path: Path, spec: Spec, current: dict, deps: dict, *,
             tuples, doc_spec, deps.get("slice_gate") or {},
             deps.get("frame_names") or ()):
         stats["closed rows reopened"] += len(mine)
-        _sweep_one(mine, parameter, slot, doc_spec, deps, stats)
+        _got, refused = _sweep_one(mine, parameter, slot, doc_spec, deps,
+                                   stats)
+        demoted.extend(refused)
+    # A refused row is a refusal now, in the file and in the summary. The
+    # line keeps its place: the dict was rewritten where it stands.
+    for row in demoted:
+        if row in tuples:
+            tuples.remove(row)
+            refusals.append(row)
 
     if document_id is not None:
         lines.append({"kind": "summary",
@@ -367,9 +398,19 @@ def top_up_file(path: Path, spec: Spec, current: dict, deps: dict, *,
 
 
 def _sweep_one(rows: list, parameter, slot, doc_spec: Spec, deps: dict,
-               stats: Counter) -> bool:
-    """Re-read one coordinate over these rows. True when every row settled."""
+               stats: Counter) -> tuple:
+    """Re-read one coordinate over these rows.
+
+    (every row settled, the rows the verifier refused afterwards). A refused
+    row was rewritten in place as the refusal it now is: the re-read said the
+    coordinate is not what the tuple carried -- a unit no list holds, a
+    required axis the passages do not state -- and that is the finding, with
+    the claim kept beside the reason for the audit. Keeping the old tuple
+    instead would leave in the graph exactly the reading the re-read was
+    asked to check.
+    """
     slots = [slot]
+    refused: list = []
     owners: list = []
     for row in rows:
         for pair in owners_of(row, slots):
@@ -392,14 +433,18 @@ def _sweep_one(rows: list, parameter, slot, doc_spec: Spec, deps: dict,
             continue
         usable.append(row)
     if not usable:
-        return False
+        return False, refused
 
     own = {(provenance.get("owner_kind"), provenance.get("owner_id"))
            for provenance in ((r.get("provenance") or {}) for r in usable)}
     carry = [pair for pair in owners if pair not in own]
     batches, by_batch = rebuild(usable, parameter, sources, carry)
     from . import runner
-    anchor_id = runner.anchor_key(parameter.uri, slot.name)
+    # The unit's set is written once for all parameters, under its own
+    # key; a per-parameter id would find no set and search with the
+    # question instead.
+    anchor_id = (runner.UNIT_ANCHOR if slot.name == fields.UNIT
+                 else runner.anchor_key(parameter.uri, slot.name))
     for index, batch in enumerate(batches):
         listed = by_batch.get(index) or []
         if not listed:
@@ -420,17 +465,18 @@ def _sweep_one(rows: list, parameter, slot, doc_spec: Spec, deps: dict,
             source = batch.sources[entry.item_index]
             fresh = _reverify(row, entry.claim, parameter, source,
                               deps.get("locate"))
-            if fresh is None:
-                # The re-verification refuses what the sweep produced. The row
-                # keeps the reading it had, which is what it still holds --
-                # nothing has been written to the file yet.
-                stats["re-verification refused"] += 1
-                settled = False
+            if isinstance(fresh, Refusal):
+                stats["refused after re-reading"] += 1
+                row.clear()
+                row.update({"kind": "refusal", "parameter": parameter.uri,
+                            "reason": fresh.reason, "claim": fresh.raw,
+                            "owner": [source.owner_kind, source.owner_id]})
+                refused.append(row)
                 continue
             row.clear()
             row.update(fresh)
             stats["rows"] += 1
-    return settled
+    return settled, refused
 
 
 def run(harvest_dir: Path, spec: Spec, current: dict, deps: dict, *,

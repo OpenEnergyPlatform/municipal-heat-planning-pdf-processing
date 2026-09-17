@@ -1026,6 +1026,17 @@ def _stub_client(monkeypatch, replies, finish):
     return seen
 
 
+def _split_field_content(content):
+    """A field request's content, read back as the two JSON objects
+    `content_of` built it from: the sources first, the rows and the field
+    last. Plain `json.loads` cannot read it whole -- it is two objects
+    written one after the other, not one, so their prefixes can be shared
+    across requests."""
+    decoder = json.JSONDecoder()
+    head, end = decoder.raw_decode(content)
+    return head, json.loads(content[end:])
+
+
 def test_a_stopped_reply_one_brace_short_is_asked_again_not_closed(monkeypatch):
     """1,546 of roughly 8,000 replies ended one brace short and were closed
     for the model. Closing is a guess at what it meant to say, and a wrong
@@ -1165,38 +1176,266 @@ def test_a_reply_that_ran_out_but_parses_is_not_called_cut_off():
     assert runner._reply_fault(broken, 6144)[0] == "cut_off"
 
 
-def test_a_field_reply_that_did_not_fit_halves_its_rows(monkeypatch):
-    """A reply cut off at the ceiling used to be closed with the brackets it
-    was missing, and every row past the cut took whatever the last complete
-    field in it happened to say. Now the rows are halved and asked again, so
-    every row gets an answer of its own or none."""
+def test_rows_go_out_in_chunks_of_field_rows_merged_under_the_field_name(
+        monkeypatch):
+    """More rows than FIELD_ROWS are asked in separate requests, one chunk
+    each, and what comes back is folded under the field's own name -- the
+    shape the sweep reads its answer out of."""
     from types import SimpleNamespace as NS
     from docpipe.extraction import fields
-    seen = []
-    queue = iter([('{"answers": {"R1": {"value": 1', "length"),
-                  ('{"answers": {"R1": {"value": 1}}}', "stop"),
-                  ('{"answers": {"R2": {"value": 2}}}', "stop")])
+
+    monkeypatch.setattr(runner, "FIELD_ROWS", 2)
+    monkeypatch.setattr(runner.time, "sleep", lambda s: None)
+    rows = [NS(label=f"R{i}", claim={"value": i, "quote": "x"})
+            for i in range(4)]
+    slot = fields.Slot(name="year", kind=fields.NUMBER, question="Welches Jahr?")
+    calls = []
 
     class _Client:
         class chat:
             class completions:
                 @staticmethod
                 def create(**kw):
-                    body, finish = next(queue)
-                    seen.append(json.loads(kw["messages"][-1]["content"]))
+                    _head, tail = _split_field_content(
+                        kw["messages"][-1]["content"])
+                    ids = [r["id"] for r in tail["rows"]]
+                    calls.append(ids)
+                    answers = {i: {"value": i} for i in ids}
+                    body = json.dumps({"fields": {"year": {"answers": answers}}})
                     return NS(choices=[NS(
                         message=NS(content=body, reasoning_content=""),
-                        finish_reason=finish)], usage=None)
+                        finish_reason="stop")], usage=None)
+
+    monkeypatch.setattr(runner, "_client", lambda: _Client())
+    out = runner.make_field_asker()([], rows, slot)
+    assert calls == [["R0", "R1"], ["R2", "R3"]], (
+        "two chunks of at most FIELD_ROWS rows, not one request for all four")
+    assert out["fields"]["year"]["answers"] == {
+        "R0": {"value": "R0"}, "R1": {"value": "R1"},
+        "R2": {"value": "R2"}, "R3": {"value": "R3"}}
+
+
+def test_a_chunk_that_does_not_fit_the_window_is_halved_before_it_is_sent(
+        monkeypatch):
+    """A window too small for a chunk's rows halves the chunk before any
+    request goes out -- the lever a cut-off reply used to need a retry for,
+    now taken before the round trip is spent."""
+    from types import SimpleNamespace as NS
+    from docpipe.extraction import fields
+
+    monkeypatch.setattr(runner.prompts, "load", lambda _id: type(
+        "P", (), {"text": "", "meta": {"max_tokens": 4096}})())
+    monkeypatch.setattr(runner.time, "sleep", lambda s: None)
+    rows = [NS(label=f"R{i}", claim={"value": 0, "quote": "x"})
+            for i in range(4)]
+    slot = fields.Slot(name="year", kind=fields.NUMBER, question="Welches Jahr?")
+
+    def tokens_for(n):
+        body = runner._field_payload([], rows[:n], slot)
+        head = json.dumps({"sources": body.pop("sources")},
+                          ensure_ascii=False, indent=2) + "\n"
+        tail = json.dumps(body, ensure_ascii=False, indent=2)
+        return runner.prompt_tokens("", [{"role": "user", "content": head + tail}])
+
+    # Room for a chunk of two rows, and nothing left over for all four.
+    monkeypatch.setattr(runner, "MAX_MODEL_LEN",
+                        tokens_for(2) + runner.ANSWER_MARGIN + 700)
+    calls = []
+
+    class _Client:
+        class chat:
+            class completions:
+                @staticmethod
+                def create(**kw):
+                    _head, tail = _split_field_content(
+                        kw["messages"][-1]["content"])
+                    ids = [r["id"] for r in tail["rows"]]
+                    calls.append(ids)
+                    answers = {i: {"value": i} for i in ids}
+                    body = json.dumps({"fields": {"year": {"answers": answers}}})
+                    return NS(choices=[NS(
+                        message=NS(content=body, reasoning_content=""),
+                        finish_reason="stop")], usage=None)
+
+    monkeypatch.setattr(runner, "_client", lambda: _Client())
+    out = runner.make_field_asker()([], rows, slot)
+    assert calls == [["R0", "R1"], ["R2", "R3"]], (
+        "the whole four rows never went out in one request")
+    assert out["fields"]["year"]["answers"] == {
+        "R0": {"value": "R0"}, "R1": {"value": "R1"},
+        "R2": {"value": "R2"}, "R3": {"value": "R3"}}
+
+
+def test_a_single_row_that_does_not_fit_is_never_sent(monkeypatch):
+    """Nothing left to halve, and the answer would not fit next to the
+    prompt. Not sent -- an unanswered row on the record, not a request the
+    server would have refused."""
+    from types import SimpleNamespace as NS
+    from docpipe.extraction import fields
+
+    monkeypatch.setattr(runner.prompts, "load", lambda _id: type(
+        "P", (), {"text": "", "meta": {"max_tokens": 4096}})())
+    monkeypatch.setattr(runner, "MAX_MODEL_LEN", runner.ANSWER_MARGIN + 10)
+    calls = []
+
+    class _Client:
+        class chat:
+            class completions:
+                @staticmethod
+                def create(**kw):
+                    calls.append(kw)
+                    raise AssertionError("a row that cannot fit must not be sent")
+
+    monkeypatch.setattr(runner, "_client", lambda: _Client())
+    rows = [NS(label="R1", claim={"value": 1, "quote": "x"})]
+    slot = fields.Slot(name="year", kind=fields.NUMBER, question="Welches Jahr?")
+    out = runner.make_field_asker()([], rows, slot)
+    assert out is None
+    assert calls == []
+
+
+def test_a_400_for_a_field_request_is_not_asked_again(monkeypatch):
+    """A 400 is a 400 three times over. Asking again spends a round trip and
+    the retry's sleep on a request the server has already refused."""
+    from docpipe.extraction import fields
+
+    class _Refused(Exception):
+        status_code = 400
+
+    calls = []
+
+    class _Client:
+        class chat:
+            class completions:
+                @staticmethod
+                def create(**kw):
+                    calls.append(1)
+                    raise _Refused("bad request")
 
     monkeypatch.setattr(runner, "_client", lambda: _Client())
     monkeypatch.setattr(runner.time, "sleep", lambda s: None)
-    rows = [NS(label="R1", claim={"value": 1, "quote": "Zeile 1"}),
-            NS(label="R2", claim={"value": 2, "quote": "Zeile 2"})]
+    ask = runner.make_field_asker()
     slot = fields.Slot(name="year", kind=fields.NUMBER, question="Welches Jahr?")
-    out = runner.make_field_asker()([], rows, slot)
-    assert [[r["id"] for r in sent["rows"]] for sent in seen] == [
-        ["R1", "R2"], ["R1"], ["R2"]]
-    assert out["answers"] == {"R1": {"value": 1}, "R2": {"value": 2}}
+    assert ask([], [], slot) is None
+    assert len(calls) == 1, f"{len(calls)} attempt(s) for a 400"
+
+
+def test_max_tokens_sent_equals_the_answer_room(monkeypatch):
+    """The request's own ceiling is exactly what the window leaves for it --
+    never the prompt's flat max_tokens, which is what a request refused for
+    running over the window used to ask for again."""
+    from types import SimpleNamespace as NS
+    from docpipe.extraction import fields
+
+    monkeypatch.setattr(runner, "answer_room",
+                        lambda system, conversation, wanted: 777)
+    seen = []
+
+    class _Client:
+        class chat:
+            class completions:
+                @staticmethod
+                def create(**kw):
+                    seen.append(kw["max_tokens"])
+                    return NS(choices=[NS(
+                        message=NS(content='{"fields": {}}', reasoning_content=""),
+                        finish_reason="stop")], usage=None)
+
+    monkeypatch.setattr(runner, "_client", lambda: _Client())
+    ask = runner.make_field_asker()
+    slot = fields.Slot(name="year", kind=fields.NUMBER, question="Welches Jahr?")
+    ask([], [], slot)
+    assert seen == [777]
+
+
+def test_prompt_tokens_counts_image_parts_at_image_tokens():
+    """A crop costs a fixed number of vision tokens. Estimating it as text
+    would undercount by orders of magnitude, and the window would be sized
+    wrong for every request that carries one."""
+    text_only = [{"role": "user", "content": "x" * 262}]
+    with_image = [{"role": "user", "content": [
+        {"type": "text", "text": "x" * 262},
+        {"type": "image_url", "image_url": {"url": "data:x"}}]}]
+    assert (runner.prompt_tokens("", with_image)
+            - runner.prompt_tokens("", text_only)) == runner.IMAGE_TOKENS
+
+
+def test_set_model_len_ignores_none(monkeypatch):
+    """A server that does not report its window must not zero out the one
+    already in effect -- that would size every later request against
+    nothing."""
+    monkeypatch.setattr(runner, "MAX_MODEL_LEN", 12345)
+    runner.set_model_len(None)
+    assert runner.MAX_MODEL_LEN == 12345
+    runner.set_model_len(9999)
+    assert runner.MAX_MODEL_LEN == 9999
+
+
+def test_the_request_puts_sources_first_crops_between_rows_and_fields_last(
+        monkeypatch):
+    """Consecutive windows share the part of the prefix that did not move:
+    the sources and their crops ahead of the rows and the field being
+    asked."""
+    from types import SimpleNamespace as NS
+    from docpipe.extraction import fields
+
+    monkeypatch.setattr(runner, "_image_part",
+                        lambda path: {"type": "image_url",
+                                     "image_url": {"url": f"data:{path}"}})
+    seen = []
+
+    class _Client:
+        class chat:
+            class completions:
+                @staticmethod
+                def create(**kw):
+                    seen.append(kw["messages"][-1]["content"])
+                    return NS(choices=[NS(
+                        message=NS(content='{"fields": {}}', reasoning_content=""),
+                        finish_reason="stop")], usage=None)
+
+    monkeypatch.setattr(runner, "_client", lambda: _Client())
+    source = _source("Tabelle mit Werten")
+    source.image_path = "crop.png"
+    slot = fields.Slot(name="year", kind=fields.NUMBER, question="Welches Jahr?")
+    runner.make_field_asker()([source], [], slot)
+
+    parts = seen[0]
+    assert isinstance(parts, list), "a crop rides along as its own part"
+    kinds = [p["type"] for p in parts]
+    assert kinds[0] == "text" and '"sources"' in parts[0]["text"]
+    image_at = kinds.index("image_url")
+    assert 0 < image_at < len(parts) - 1, (
+        "the crop sits between the sources and the rows")
+    assert parts[-1]["type"] == "text"
+    assert '"rows"' in parts[-1]["text"] and '"fields"' in parts[-1]["text"]
+
+
+def test_several_slots_are_asked_one_request_per_slot(monkeypatch):
+    """Two coordinates over the same rows are two separate questions -- the
+    model answers one field at a time, never several in one request."""
+    from types import SimpleNamespace as NS
+    from docpipe.extraction import fields
+
+    calls = []
+
+    class _Client:
+        class chat:
+            class completions:
+                @staticmethod
+                def create(**kw):
+                    _head, tail = _split_field_content(
+                        kw["messages"][-1]["content"])
+                    calls.append([f["name"] for f in tail["fields"]])
+                    return NS(choices=[NS(
+                        message=NS(content='{"fields": {}}', reasoning_content=""),
+                        finish_reason="stop")], usage=None)
+
+    monkeypatch.setattr(runner, "_client", lambda: _Client())
+    slots = [fields.Slot(name="year", kind=fields.NUMBER, question="?"),
+             fields.Slot(name="carrier", kind=fields.TEXT, question="?")]
+    runner.make_field_asker()([], [], slots)
+    assert calls == [["year"], ["carrier"]]
 
 
 def test_the_unreadable_diagnostic_shows_the_end_and_marks_the_cut():
@@ -1323,6 +1562,56 @@ def test_the_dead_server_cut_is_visible_outside_the_group():
                                         "need_more": []},
         workers=1, on_give_up=lambda: quiet.append(1))
     assert quiet == []
+
+
+def test_a_shared_pool_is_not_shut_down_when_the_call_is_done():
+    """Several documents in flight share one pool, so their batches queue
+    together; a single harvest_batches call only borrowing it must leave it
+    open for the next document's batches."""
+    from concurrent.futures import ThreadPoolExecutor
+
+    batches = runner.group_items([_item(_source("a"))], max_sources=1)
+    pool = ThreadPoolExecutor(max_workers=2)
+    try:
+        runner.harvest_batches(
+            batches,
+            lambda b, prior=None: {"tuples": [], "status": "complete",
+                                   "need_more": []},
+            workers=2, pool=pool)
+        assert pool.submit(lambda: 1 + 1).result() == 2, (
+            "a pool the call only borrowed must still take work afterwards")
+    finally:
+        pool.shutdown()
+
+
+def test_a_dead_streak_shared_by_two_calls_fires_across_them():
+    """The streak is shared so a run harvesting several documents at once
+    still recognises a dead server: the count must not reset just because
+    the unreachable replies happen to fall on different documents' calls."""
+    from docpipe.extraction.pipeline import Source, WorkItem, group_items
+
+    def unreachable(batch, prior=None):
+        raise ConnectionError("server is gone")
+
+    def batches_of(ids):
+        items = [WorkItem(7, None, Source("table", i, f"| x | {i} |", {}))
+                for i in ids]
+        return list(group_items(items, max_sources=1, max_chars=14000))
+
+    streak = runner.DeadStreak(3)
+    gave_up = []
+    first = runner.harvest_batches(batches_of(range(2)), unreachable,
+                                   workers=1, dead=streak,
+                                   on_give_up=lambda: gave_up.append("a"))
+    assert len(first) == 2 and gave_up == [], (
+        "two of three unreachable replies is not the whole streak yet")
+
+    second = runner.harvest_batches(batches_of(range(2, 6)), unreachable,
+                                    workers=1, dead=streak,
+                                    on_give_up=lambda: gave_up.append("b"))
+    assert gave_up == ["b"], (
+        "the third unreachable reply trips it, wherever it falls")
+    assert len(second) < 4, "and the rest of the second call was cancelled"
 
 
 def test_the_stamp_says_which_question_changed(tmp_path, monkeypatch):
@@ -1466,7 +1755,10 @@ def test_a_dropped_parameter_is_reported_whole(tmp_path, monkeypatch):
 
     changed = runner.stale(stamp, runner._stamp_current(
         "sha-1", runner.anchors_key(), _spec()))
-    assert set(changed) == {"slot/parameter", "parameter/OEO_00010079",
+    # And the unit key: the unit is asked against every numeric parameter's
+    # list at once, so a parameter gone is a shorter list there as well.
+    assert set(changed) == {"slot/parameter", "slot/unit",
+                            "parameter/OEO_00010079",
                             "axis/OEO_00010079/carrier",
                             "axis/OEO_00010079/year"}, changed
 
@@ -1927,61 +2219,6 @@ def test_the_store_says_which_question_each_set_answers(tmp_path, monkeypatch):
     )
     assert stored["questions"][targets[0][0]] \
         == runner.anchor_question_key(targets[0])
-
-
-def test_a_request_one_token_over_the_window_is_asked_again_with_room(
-        monkeypatch):
-    """Measured on Kassel: a field request of 26,625 prompt tokens asked for
-    6,144 more, the server refused it for one token over 32,768, and the
-    break on a 4xx wrote its coordinates off. The server names both numbers,
-    so the answer is given the room that is left, and anything else the
-    server refuses stays refused."""
-    from docpipe.extraction import fields
-
-    class _Refused(Exception):
-        status_code = 400
-
-    said = ("This model's maximum context length is 32768 tokens. However, "
-            "you requested 6144 output tokens and your prompt contains at "
-            "least 26625 input tokens, for a total of at least 32769 tokens. "
-            "Please reduce the length of the input prompt or the number of "
-            "requested output tokens. (parameter=input_tokens, value=26625)")
-    asked = []
-
-    class _Message:
-        content = '{"fields": {}}'
-        reasoning_content = ""
-
-    class _Choice:
-        message = _Message()
-        finish_reason = "stop"
-
-    class _Response:
-        choices = [_Choice()]
-        usage = None
-
-    class _Client:
-        class chat:
-            class completions:
-                @staticmethod
-                def create(**kw):
-                    asked.append(kw["max_tokens"])
-                    if len(asked) == 1:
-                        raise _Refused(said)
-                    return _Response()
-
-    monkeypatch.setattr(runner, "_client", lambda: _Client())
-    monkeypatch.setattr(runner.time, "sleep", lambda s: None)
-    monkeypatch.setattr(runner.prompts, "load", lambda _id: type(
-        "P", (), {"text": "sys", "meta": {"max_tokens": 6144}})())
-    ask = runner.make_field_asker()
-    slot = fields.Slot(name="year", kind=fields.NUMBER, question="?")
-    assert ask([], [], [slot]) == {"fields": {}}
-    assert asked == [6144, 32768 - 26625 - 32]
-
-    assert runner.fitted_max_tokens(_Refused("bad request"), 6144) is None
-    no_room = said.replace("26625", "32600")
-    assert runner.fitted_max_tokens(_Refused(no_room), 6144) is None
 
 
 def test_the_wait_covers_every_attempt_and_grows_when_the_server_is_gone():

@@ -22,7 +22,7 @@ Für jedes Feld:
 - die Antwort selbst unter dem Namen des Feldes,
 - ein Zitat unter `<name>_quote`: mindestens 8 Zeichen, Zeichen für Zeichen aus `Q1` oder `Q2` kopiert, und die Antwort muss DARIN stehen,
 - `<name>_raw`, sobald die Quelle die Sache anders schreibt als die Liste sie nennt: der Wortlaut des Dokuments, Zeichen für Zeichen. Ohne ihn wird das Zitat gegen den Listennamen geprüft, den die Quelle gar nicht schreibt, und die Antwort fällt durch,
-- bei einer Zahl zusätzlich `unit` in der Schreibweise des Dokuments,
+- bei einer Zahl zusätzlich `unit`: genau EIN Eintrag aus `units_accepted` unter `row`, und zwar der, den die Quelle meint (eine Angabe "pro Jahr" macht aus MWh die Einheit MWh/a), dazu `unit_raw` in der Schreibweise des Dokuments. Rechne nie um,
 - bei einer Auswahlliste (`options`) genau ein Schlüssel aus dieser Liste, Zeichen für Zeichen. Erfinde keinen.
 
 Tragen die zwei Passagen ein Feld nicht, dann ist `out:unstated` die richtige Antwort. Das ist ein Ergebnis und kein Fehler, und es ist besser als eine Antwort, für die du kein Zitat aus diesen zwei Passagen hast.
@@ -30,5 +30,5 @@ Tragen die zwei Passagen ein Feld nicht, dann ist `out:unstated` die richtige An
 Gib NUR ein JSON-Objekt aus, in einer Zeile, ohne Text davor oder danach:
 
 ```json
-{"value": 241.0, "unit": "MWh/a", "value_quote": "| Erdgas | 241 | MWh/a |", "carrier": "Erdgas", "carrier_raw": "Gas H", "carrier_quote": "| Gas H | 241 |"}
+{"value": 241.0, "unit": "MWh/a", "unit_raw": "MWh p.a.", "value_quote": "| Erdgas | 241 | MWh p.a. |", "carrier": "Erdgas", "carrier_raw": "Gas H", "carrier_quote": "| Gas H | 241 |"}
 ```

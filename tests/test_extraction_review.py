@@ -152,6 +152,8 @@ def test_the_request_shows_the_rows_own_table_and_its_section_and_nothing_else()
     assert payload["row"]["source"] == "Q1"
     assert payload["row"]["section"] == "Q2"
     assert payload["row"]["value"] == 241.0
+    # The second reading names its unit as one entry, like the first did.
+    assert payload["row"]["units_accepted"] == sorted(parameter.units_accepted)
     assert [f["name"] for f in payload["fields"]] == ["value", "carrier"]
     assert payload["fields"][1]["options"], "a closed list is offered"
 

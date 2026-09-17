@@ -14,6 +14,20 @@ makes sense once several stages are read together.
 The pipeline has ten stages, each a package or an app, connected only by
 the files and the database rows one leaves for the next.
 
+```mermaid
+flowchart LR
+    fp[1 File processing] -->|Documents, DocumentMeta rows| pp[2-3 Preprocessing: layout, structure]
+    pp -->|sections.json| rf[4 Refinement]
+    rf -->|sections_refined.json| vi[5 Visuals]
+    vi -->|visuals.json| ch[6 Chunking, embedding, database]
+    ch -->|SQLite rows, FAISS index| corpus[(Corpus: SQLite and FAISS)]
+    corpus --> ex[7 Extraction]
+    ex -->|harvest JSONL, stamp| gr[8 The graph]
+    gr -->|Turtle| ttl[(graph.ttl)]
+    corpus --> app[Inference and the app]
+    ttl -. optional .-> app
+```
+
 | Stage | Consumes | Produces |
 |---|---|---|
 | [1. File processing](stages/fileprocessing.md) | the profile's document list (an Excel register for `kwp`, a publication crawl index for `scenarios`) | a `Documents` and `DocumentMeta` row per accepted PDF, plus the profile's own tables |
@@ -319,6 +333,7 @@ it:
 | `value/<uri>` | fingerprint of a value's own closed list | yes |
 | `axis/<uri>/<name>` | fingerprint of one axis's question and vocabulary | yes |
 | `slot/parameter` | fingerprint of the value question itself | yes |
+| `slot/unit` | fingerprint of the unit question and every numeric parameter's `units_accepted` | yes |
 | `question_text/<key>` | the sentence this document was actually searched with | never |
 | `review/*` | what a second reading of a value came to | never |
 

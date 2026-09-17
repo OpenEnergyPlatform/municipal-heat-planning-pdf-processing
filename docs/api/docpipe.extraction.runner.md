@@ -47,6 +47,36 @@ passes over a harvest already written.
 
 Author: Felix Vossel
 
+## Classes
+
+### DeadStreak
+
+```python
+class DeadStreak
+```
+
+Consecutive replies that never reached the server, across every
+document in flight: a dead server fails all of them alike, and a document
+with twenty batches would never see sixty-four of its own in a row.
+
+#### DeadStreak.\_\_init\_\_
+
+```python
+def __init__(self, limit: int)
+```
+
+#### DeadStreak.hit
+
+```python
+def hit(self) -> bool
+```
+
+#### DeadStreak.clear
+
+```python
+def clear(self) -> None
+```
+
 ## Functions
 
 ### retry_temperature
@@ -329,7 +359,8 @@ Not the questions, though it used to hash them. Everything a target tuple
 carries is already a stamp key of its own -- a parameter's label and
 description in `parameter/<uri>`, an axis' question in
 `axis/<uri>/<name>`, the spec's own question and the parameter list in
-`slot/parameter` -- and the anchor prompt and the model are stamp keys too
+`slot/parameter`, the unit question and its lists in `slot/unit` -- and
+the anchor prompt and the model are stamp keys too
 (`extraction/anchors`, `model`). Hashing the targets in here as well made
 every document in the corpus stale over ONE changed question, which is
 exactly what the per-question keys were written to stop.
@@ -415,19 +446,35 @@ Reported, never added. "2045 MWh/a" is a year-shaped number and is not a
 year, and a cross-check that decided would put it in the frame and ask
 every table for a year the plan does not have.
 
-### fitted_max_tokens
+### set_model_len
 
 ```python
-def fitted_max_tokens(exc, asked: int, where: str = "") -> Optional[int]
+def set_model_len(tokens: Optional[int]) -> None
 ```
 
-A completion budget that fits the window this request overflowed, or
-None when the error is another one or no answer fits.
+The window the server reports, when it reports one.
 
-The server names both numbers when it refuses. Measured on Kassel: one
-field request of 26,625 prompt tokens asked for 6,144 more, was refused
-for one token over 32,768, and the break on a 4xx wrote its coordinates
-off. The prompt is what it is, so the room for the answer is what gives.
+### prompt_tokens
+
+```python
+def prompt_tokens(system: str, conversation: list) -> int
+```
+
+What a request's system prompt, messages and crops take, estimated high.
+
+Estimated before sending, so a request is sized to the window instead of
+shrunk after the server refused it. vLLM's refusal names only a lower
+bound ("at least N input tokens" is the window minus the requested answer,
+plus one), and reading that as the prompt shrank the answer by 33 tokens
+per attempt until the coordinates were written off.
+
+### answer_room
+
+```python
+def answer_room(system: str, conversation: list, wanted: int) -> int
+```
+
+max_tokens for this request: *wanted*, or what the window leaves.
 
 ### make_frame_asker
 
@@ -654,12 +701,17 @@ that does not ride the out: convention. A tuple names the answers.
 def make_field_asker(image_root: Optional[Path] = None) -> Callable
 ```
 
-ask(batch, rows, slot) -> reply, or None when the field stays unasked.
+ask(shown, rows, slots, ...) -> {"fields": {name: answer}}, or None.
 
-No sandbox: a field answer is a choice and a quote, never arithmetic. A
-reply that did not fit its token ceiling is not patched up either — the
-rows are halved and asked again, so every row is answered under the same
-evidence rules, and what is still missing is missing on the record.
+One coordinate per request, over at most FIELD_ROWS rows. Five coordinates
+for every row of a batch in one request wanted up to 27,311 prompt tokens
+and more answer than the window left, and came back refused or cut off;
+one question about a handful of numbers fits by construction. Several
+slots are asked one after another, rows in chunks, and the replies merged
+under the field's name, which is what the sweep folds. A chunk whose
+prompt leaves too little room for its rows is halved before it is sent.
+
+No sandbox: a field answer is a choice and a quote, never arithmetic.
 
 ### make_review_asker
 
@@ -729,6 +781,27 @@ lost without ever being read. Windows overlap so a number is never cut in
 half at the seam; both windows carry the same owner, so the provenance and
 the dedup that hang off it do not notice the split.
 
+### harvest_documents
+
+```python
+def harvest_documents(documents: list, harvest_document: Callable, *,
+                      in_flight: int, stop=None,
+                      halted: Optional[Callable] = None) -> tuple
+```
+
+Run *harvest_document(id, filename)* with *in_flight* at a time.
+
+Not in groups: the moment one document is done the next one starts, so a
+slow plan holds its own place and nobody else's. A group of sixteen used
+to wait for its slowest batch, and on corpus_m5 that was a single field
+request answering alone on four GPUs for half an hour.
+
+*harvest_document* returns (written, failures). *stop* (SIGTERM) ends the
+loop at once without waiting for what is open; *halted* only stops new
+documents from starting, and the open ones are waited for.
+
+Returns (done, written, failures).
+
 ### harvest_batches
 
 ```python
@@ -737,8 +810,11 @@ def harvest_batches(batches: list, harvest: Callable, *,
                     verify: Optional[Callable] = None,
                     on_give_up: Optional[Callable] = None,
                     workers: int = LLM_PARALLEL,
-                    stop: Optional[threading.Event] = None,
-                    unfinished: Optional[set] = None) -> list
+                    stop=None,
+                    unfinished: Optional[set] = None,
+                    pool=None,
+                    dead: Optional[DeadStreak] = None,
+                    progress: bool = True) -> list
 ```
 
 Every batch of the whole run in flight at once.
@@ -774,6 +850,10 @@ still open. Whenever batches are left behind, by *stop* or by the
 dead-server cut, the documents they belong to are added to *unfinished*.
 Such a document has replies for some of its batches and none for the rest,
 and written it would be stamped as if it had been read whole.
+
+*pool* and *dead* are shared when several documents harvest at once: the
+pool bounds the requests of all of them together, and the streak counts
+unreachable replies across all of them. Without them the call has its own.
 
 ### make_locate
 

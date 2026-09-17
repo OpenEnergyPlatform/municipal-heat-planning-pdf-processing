@@ -72,9 +72,16 @@ def audit(profile: str) -> None:
     shared = sorted({u for i, first in enumerate(numeric)
                      for second in numeric[i + 1:]
                      for u in first.units_accepted
-                     if second.unit_factor(u) is not None})
+                     if u in second.units_accepted})
     check(profile, "units of numeric parameters are disjoint",
           not shared, ", ".join(shared) or f"{len(numeric)} numeric parameter(s)")
+
+    # Which entry of the lists a number is in, is a coordinate of its own and
+    # is asked before the parameter. Without its question the field request
+    # shows the lists and no rule for reading them.
+    check(profile, "the unit question is set",
+          not numeric or bool((spec.unit_question or "").strip()),
+          f"{len(numeric)} numeric parameter(s)")
 
     # A derived coordinate is claimed for every accepted unit of its
     # parameter, so every one of them has to imply it. `integral` is an
@@ -102,7 +109,8 @@ def audit(profile: str) -> None:
     from docpipe.extraction.runner import anchor_key, anchor_targets
     targets = anchor_targets(spec)
     keys = [t[0] for t in targets]
-    wanted = 1 + sum(len(fields.asked_slots(p)) for p in spec.parameters)
+    wanted = (1 + (1 if fields.unit_slot(spec) is not None else 0)
+              + sum(len(fields.asked_slots(p)) for p in spec.parameters))
     check(profile, "one anchor per question",
           len(keys) == len(set(keys)) == wanted, f"{len(keys)} target(s)")
     with_question = [t for t in targets if t[3]]
@@ -167,12 +175,14 @@ def audit(profile: str) -> None:
         check(profile, f"field prompt names {key!r}", f'"{key}"' in field_text)
     # The value request reads a passage once for every quantity at once, so it
     # must be told about all of them and not about one.
-    # The field request asks for several fields at once now, and the reply is
-    # keyed by field name. A prompt still describing one field per request
-    # answers in the old shape, nothing folds, and every coordinate comes back
-    # empty — an entire run of empty tuples with no error anywhere.
-    check(profile, "field prompt knows several fields",
+    # One field per request, and the reply is keyed by the field's name under
+    # "fields". A prompt in the old flat shape answers without that key,
+    # nothing folds, and every coordinate comes back empty — an entire run of
+    # empty tuples with no error anywhere.
+    check(profile, "field prompt keys the reply by field name",
           '"fields"' in field_text and '"field":' not in field_text)
+    check(profile, "field prompt asks one field",
+          "GENAU EIN Feld" in field_text)
 
     rows_text = prompts.load("extraction/rows").text
     check(profile, "rows prompt names 'quantities'", '"quantities"' in rows_text)

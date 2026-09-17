@@ -92,8 +92,8 @@ on a `value` node in the graph. The fourth, `planning_organisation`, is a
 | `planning_organisation` | `text` | none | none | none |
 
 `heat_load` is split from the two amounts purely by unit family, and the
-spec marks it `integrated=False` (`docpipe/extraction/spec.py:181` to
-`187`), the one field that tells a rate apart from an amount stated over
+spec marks it `integrated=False` (`docpipe/extraction/spec.py:156` to
+`162`), the one field that tells a rate apart from an amount stated over
 a span; the other two numeric parameters leave `integrated` at its
 default of true.
 
@@ -136,11 +136,11 @@ rather than asking, carried as the `derived` state
 (`docpipe/extraction/fields.py:67` to `74`; [glossary](../glossary.md)):
 every unit `energy_consumption` or `emission` accepts names a span, so
 their aggregation is always the closed list's integral entry, never asked
-(`docpipe/extraction/spec.py:144` to `154`, `Axis.derive`). Before this was
+(`docpipe/extraction/spec.py:119` to `129`, `Axis.derive`). Before this was
 derived, all 452 aggregation answers the model gave for these two
 parameters over one plan were that same entry every time, evidenced
 only by the unit string the request had itself just handed over
-(`docpipe/extraction/spec.py:149` to `153`). `heat_load`'s aggregation is
+(`docpipe/extraction/spec.py:124` to `126`). `heat_load`'s aggregation is
 not derived, since a watt is not integrated over a span the way a
 watt-hour is: this axis is asked instead, with evidence allowed one page
 away, and a peak load can come back distinct from an average one.
@@ -189,8 +189,9 @@ parts and the graph now serializes all three
 
 Every question a run asks carries its own fingerprint, so a resumed run
 can tell exactly which question changed rather than treating the whole
-spec as one block (`docpipe/extraction/spec.py:618` to `640`,
-`fingerprints`): one key for the parameter-choice question itself, one per
+spec as one block (`docpipe/extraction/spec.py:607` to `632`,
+`fingerprints`): one key for the parameter-choice question itself, one
+for the unit-choice question and the entries it offers, one per
 parameter for its own question, unit list and worked example, one per
 category parameter for its closed list of spellings and definitions, and
 one per axis for its question, type, derive rule and vocabulary. These are what the extraction stamp compares on a rerun,

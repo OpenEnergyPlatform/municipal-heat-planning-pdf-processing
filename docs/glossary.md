@@ -136,7 +136,7 @@ field
 
 flag
 : A non-fatal finding `verify.verify_tuple` appends to a tuple, such as
-  `quote_repaired`, `unit_not_chosen`, or an `unmapped:<axis>:<wording>`
+  `quote_repaired`, `period:unstated`, or an `unmapped:<axis>:<wording>`
   mapping gap. `docpipe/extraction/trust.py`'s `FLAG_REASONS` turns a
   handful of these into trust reasons; see [trust](contract/trust.md).
 

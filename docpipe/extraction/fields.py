@@ -174,6 +174,60 @@ def parameter_slot(spec) -> Slot:
                               for p in spec.parameters))
 
 
+# The coordinate that says which entry of units_accepted a number is in.
+UNIT = "unit"
+
+
+def has_number(claim: dict) -> bool:
+    """Is this row's value a number, so that a unit belongs to it?
+
+    The same reading `derive_parameter` makes: a wording is a text
+    parameter's value and carries no unit, whatever the value request wrote
+    beside it.
+    """
+    from .verify import canonical_number
+    value = claim.get("value")
+    if isinstance(value, bool):
+        return False
+    if isinstance(value, (int, float)):
+        return True
+    return isinstance(value, str) and canonical_number(value) is not None
+
+
+def unit_slot(spec, parameter: Optional[Parameter] = None) -> Optional[Slot]:
+    """Which entry of units_accepted a number is in: a choice, with a passage.
+
+    A coordinate like the parameter, and asked before it: the value request
+    writes the unit as the passage prints it, and which entry that means is a
+    reading, not a lookup. "450 kWh über das Jahr" is kWh/a and a storage
+    capacity of 200 kWh is kWh; "Gigawattstunden" is GWh; "kWh/m²a", "kWp"
+    and "g/kWh" are in no list and the row is refused for saying so. A
+    spelling table stood in for this reading once, and measured on 641 plans
+    of corpus_m5 it let 3,324 tuples carry an entry their wording
+    contradicts.
+
+    Every numeric parameter's list at once when no parameter is named,
+    because the entry chosen is what settles the parameter
+    (`derive_parameter`); beside each entry stands the parameter it belongs
+    to, which is the meaning the model decides by. One parameter's list for a
+    stored row that already knows its parameter (the schema, a top-up). None
+    for a spec without a numeric parameter.
+    """
+    holders = [p for p in spec.parameters
+               if p.is_numeric and (parameter is None or p is parameter)]
+    belongs: dict = {}
+    for holder in holders:
+        for unit in holder.units_accepted:
+            belongs.setdefault(unit, []).append(holder.label)
+    if not belongs:
+        return None
+    return Slot(name=UNIT, kind=CHOICE, required=True,
+                question=spec.unit_question,
+                options=tuple(Option(label=unit, uri=unit,
+                                     definition=", ".join(labels))
+                              for unit, labels in belongs.items()))
+
+
 def asked_slots(parameter: Parameter) -> list:
     """The coordinates a request has to ask for: every axis the spec does not
     already decide."""
@@ -227,11 +281,14 @@ def derive_parameter(spec, claim: dict):
     if isinstance(value, str) and canonical_number(value) is None:
         text = [p for p in spec.parameters if not p.is_numeric]
         return text[0] if len(text) == 1 else None
-    unit = claim.get("unit") or claim.get("unit_raw")
+    # The entry the unit question read, never the wording beside it: the
+    # wording is what the passage prints, and which entry it means was a
+    # question of its own (`unit_slot`).
+    unit = claim.get("unit")
     if not isinstance(unit, str) or not unit.strip():
         return None
     holders = [p for p in spec.parameters
-               if p.is_numeric and p.unit_factor(unit) is not None]
+               if p.is_numeric and unit in p.units_accepted]
     return holders[0] if len(holders) == 1 else None
 
 
@@ -255,11 +312,14 @@ def parameter_undecidable(spec, claim: dict) -> bool:
     if isinstance(value, str) and canonical_number(value) is None:
         # A non-numeric value needs a text parameter, and one is a decision.
         return not [p for p in spec.parameters if not p.is_numeric]
-    unit = claim.get("unit") or claim.get("unit_raw")
+    unit = claim.get("unit")
     if not isinstance(unit, str) or not unit.strip():
+        # The unit question read no entry: the passages do not state one,
+        # or state one no list holds. Either way no parameter can take the
+        # row, and `verify._check_value` refuses it with the wording.
         return True
     return not [p for p in spec.parameters
-                if p.is_numeric and p.unit_factor(unit) is not None]
+                if p.is_numeric and unit in p.units_accepted]
 
 
 def apply_derived(rows: list, slot: Slot) -> int:
@@ -280,8 +340,11 @@ def apply_derived(rows: list, slot: Slot) -> int:
         wording = row.claim.get("unit_raw") or row.claim.get("unit")
         if wording:
             row.claim[f"{slot.name}_raw"] = wording
-        if row.claim.get("quote"):
-            row.claim[f"{slot.name}_quote"] = row.claim["quote"]
+        # The passage the unit was read in, where the unit question read one;
+        # the value's own passage where nothing did (the whole-tuple path).
+        quote = row.claim.get("unit_quote") or row.claim.get("quote")
+        if quote:
+            row.claim[f"{slot.name}_quote"] = quote
         done += 1
     return done
 

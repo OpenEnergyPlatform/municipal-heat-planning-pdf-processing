@@ -17,13 +17,19 @@ project = "municipal heat planning pdf processing"
 author = "Felix Vossel"
 copyright = "2026, Felix Vossel"
 
-extensions = ["myst_parser"]
+extensions = ["myst_parser", "sphinxcontrib.mermaid"]
 
 # The generated pages carry ordinary Markdown links between each other
 # (`../README.md`), because they are also read in the repository. Sphinx
 # resolves those to the built pages.
 myst_enable_extensions = ["colon_fence", "deflist"]
 myst_heading_anchors = 4
+
+# A plain ```mermaid fence is what GitHub itself renders, so the checked-in
+# pages read as diagrams there too; this maps that same fence onto
+# sphinxcontrib-mermaid's directive instead of asking for a second, Sphinx
+# only spelling.
+myst_fence_as_directive = ["mermaid"]
 
 source_suffix = {".md": "markdown"}
 master_doc = "index"

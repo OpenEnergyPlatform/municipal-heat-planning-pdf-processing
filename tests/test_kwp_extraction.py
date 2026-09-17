@@ -1280,11 +1280,11 @@ def test_the_constants_are_reads_and_not_literals():
 
 def test_a_power_is_its_own_parameter_split_by_unit_family():
     """kW against kWh, and nothing else decides it. A row's parameter is
-    derived from its unit, so one Wh spelling in the power list or one W
-    spelling in the consumption list makes both parameters claim the row and
-    the harvest refuses it instead."""
+    derived from the entry the unit question read, so one Wh entry in the
+    power list or one W entry in the consumption list makes both parameters
+    claim the row and the harvest refuses it instead."""
     from docpipe.extraction import fields
-    for unit in ("kW", "MW", "GW", "kWth", "kW_th", "kW th"):
+    for unit in ("kW", "MW", "GW", "kWth", "MWth"):
         got = fields.derive_parameter(SPEC, {"unit": unit})
         assert got is not None and got.uri == "heat_load", unit
     for unit in ("MWh", "GWh", "kWh/a"):

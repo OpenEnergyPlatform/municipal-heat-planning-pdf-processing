@@ -156,15 +156,16 @@ def test_the_unit_is_a_choice_and_the_spelling_is_evidence():
     assert not out.flags, "an exact choice needed no judgement"
 
 
-def test_a_unit_nobody_chose_is_still_read_but_flagged():
-    """The fallback while the fleet learns the new field, and a measurement of
-    how often it is needed: the spelling is looked up and the tuple says so."""
+def test_a_wording_without_a_read_entry_is_refused():
+    """The spelling is evidence and is never looked up: which entry it means
+    was the unit question's to read, with its own passage, and a row that
+    reaches the verifier without one is refused with the wording as the
+    reason. That reason is where a longer list is written from."""
     claim = _claim(unit_raw="kWh pro Jahr")
     claim.pop("unit", None)
     out = verify_tuple(claim, _parameter(), SOURCE)
-    assert isinstance(out, Verified), getattr(out, "reason", out)
-    assert out.tuple["value_target"] == 1036767.833
-    assert "unit_not_chosen:kWh pro Jahr" in out.flags
+    assert isinstance(out, Refusal)
+    assert out.reason.startswith("unit 'kWh pro Jahr' not in units_accepted (")
 
 
 def test_a_unit_of_another_quantity_is_still_refused():
@@ -434,11 +435,13 @@ def test_a_subscript_two_resolves_to_the_class_and_is_not_flagged():
     assert not [f for f in out.flags if f.startswith(("unmapped:", "mapped:"))]
 
 
-def test_a_bare_amount_says_whether_its_quote_makes_it_a_yearly_one():
+def test_a_bare_entry_says_the_passage_stated_no_period():
     """The year on a tuple is not a label, it is the period the amount is
     integrated over (aggregation OEO_00140070, "sum or integral within a time
-    step"). A unit of "GWh" does not say that period, so the passage has to,
-    and a graph that writes a year beside a storage capacity has invented it.
+    step"). The period is part of the unit reading: where the passage says
+    "pro Jahr" the model chooses the yearly entry, so a bare entry of "GWh"
+    says the passage stated none, and a graph that writes a year beside a
+    storage capacity has invented it.
 
     Measured on Kassel: 23 accepted tuples carried a bare GWh or t, 11 of
     them in a sentence saying "pro Jahr", 3 a storage capacity.
@@ -463,11 +466,13 @@ def test_a_bare_amount_says_whether_its_quote_makes_it_a_yearly_one():
     }]}).by_uri["OEO_00050016"]
     source = ("Der Waermeverbrauch betrug pro Jahr rund 1.036.767.833 kWh. "
               "Die Speicherkapazitaet liegt bei 203.458.519 kWh.")
-    annual = verify_tuple(_claim(unit="kWh", unit_raw="kWh", quote=(
+    # The period is part of the unit reading: the model read "pro Jahr" off
+    # the sentence and chose the yearly entry, so there is nothing to flag.
+    annual = verify_tuple(_claim(unit="kWh/a", unit_raw="kWh", quote=(
         "Der Waermeverbrauch betrug pro Jahr rund 1.036.767.833 kWh")),
         parameter, source)
     assert isinstance(annual, Verified), getattr(annual, "reason", annual)
-    assert "period:annual_in_quote" in annual.flags
+    assert not [f for f in annual.flags if f.startswith("period:")]
 
     stock = verify_tuple(_claim(value=203458519, unit="kWh", unit_raw="kWh",
                                 quote=("Die Speicherkapazitaet liegt bei "

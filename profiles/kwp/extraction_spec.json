@@ -15,6 +15,7 @@
     "`quantity` ist NICHT required: was in keine Klasse passt, behaelt seinen",
     "Wortlaut in quantity_raw und wird gezaehlt, statt verworfen zu werden."
   ],
+  "unit_question": "Welche Einheit hat diese Zahl? Genau EIN Eintrag aus der Liste, und zwar der, den die Quelle MEINT, nicht der, den sie ähnlich schreibt: \"Gigawattstunden\" ist GWh, \"t CO₂-Äq.\" ist t CO2eq/a oder t CO2eq, \"kWh Hi\" und \"GWh_th\" sind kWh und GWh, \"1.700 kg CO2\" ist kg CO2 und NICHT t CO2. Ob die Menge je Jahr gilt, sagt oft erst der Satz, der Spaltenkopf oder der Tabellentitel: \"450 kWh über das Jahr\", \"im Jahr 2021\" und \"pro Jahr\" machen aus kWh die Einheit kWh/a; eine Speicherkapazität von 200 kWh bleibt kWh. Rechne nie um und runde nie: die Umrechnung macht die Prüfung anhand des Eintrags. Eine Angabe je Fläche (kWh/m²a, MWh/ha), je Einwohner oder Gebäude (MWh/EW, kWh pro Person), je Kilowattstunde (g CO2/kWh), eine Spitzenleistung von PV-Anlagen (kWp) oder eine elektrische Leistung (kWel) steht in keiner Liste: lass dann \"value\" weg und gib die Einheit wörtlich in \"value_raw\". Die Einheit steht in der Zelle, im Spaltenkopf, in der Blocküberschrift (\"Endenergieverbrauch [MWh/a]\") oder in der Caption; zitiere die Stelle, an der sie wirklich steht.",
   "parameter_question": "Um WELCHE Kennzahl handelt es sich bei dieser Zahl? Entscheide danach, was die Quelle über sie sagt: die Einheit, die Spalten- oder Zeilenbeschriftung und die Tabellen- oder Abschnittsüberschrift. Eine Angabe in t CO2 ist eine Emission, eine Angabe in MWh oder GWh ein Energieverbrauch. Zitiere die Stelle, aus der das hervorgeht. Eine Angabe in kW, MW oder GW ist eine Leistung.",
   "parameters": [
     {
@@ -503,7 +504,7 @@
             "role": "edge",
             "predicate": "IAO_0000136",
             "label": "is about",
-            "note": "The calendar year the aggregation is integrated over, as a node and no longer as a literal. A unit without a per-year marker carries the flag period:annual_in_quote or period:unstated. It was oeo:OEO_00020440 has scenario year value, which is wrong twice: its domain is oeo:OEO_00000365 scenario factsheet, so every value node was typed a factsheet and through it a document, and its declared range is xsd:dateTime while we wrote xsd:integer, which is an ill-typed literal. The pinned release has NO property at all whose domain a quantity value satisfies and whose range is a time, so the year becomes an object: `is about` a node of oeo:OEO_00030033 time step, \"a one-dimensional temporal region that has a start time and an ending time\". oeo:OEO_00020097 scenario year would be the narrower class and is not used, because it is defined as part of a scenario horizon and the inventory years are not. Cost, stated: the number 2030 is no longer a literal a reasoner can compare; it is the node's IRI, its label, and part of the value's own identity. The term request is a property from quantity value to temporal region, and a way to write a year onto one.",
+            "note": "The calendar year the aggregation is integrated over, as a node and no longer as a literal. A unit entry that names no period carries the flag period:unstated. It was oeo:OEO_00020440 has scenario year value, which is wrong twice: its domain is oeo:OEO_00000365 scenario factsheet, so every value node was typed a factsheet and through it a document, and its declared range is xsd:dateTime while we wrote xsd:integer, which is an ill-typed literal. The pinned release has NO property at all whose domain a quantity value satisfies and whose range is a time, so the year becomes an object: `is about` a node of oeo:OEO_00030033 time step, \"a one-dimensional temporal region that has a start time and an ending time\". oeo:OEO_00020097 scenario year would be the narrower class and is not used, because it is defined as part of a scenario horizon and the inventory years are not. Cost, stated: the number 2030 is no longer a literal a reasoner can compare; it is the node's IRI, its label, and part of the value's own identity. The term request is a property from quantity value to temporal region, and a way to write a year onto one.",
             "prefix": "obo",
             "object_class": "OEO_00030033"
           }
@@ -783,7 +784,13 @@
         "Mio. t CO2eq": 1000000.0,
         "Mio. t CO2eq/a": 1000000.0,
         "Mt": 1000000.0,
-        "Mt/a": 1000000.0
+        "Mt/a": 1000000.0,
+        "kg": 0.001,
+        "kg/a": 0.001,
+        "kg CO2": 0.001,
+        "kg CO2/a": 0.001,
+        "kg CO2eq": 0.001,
+        "kg CO2eq/a": 0.001
       },
       "axes": {
         "quantity": {
@@ -1250,7 +1257,7 @@
             "role": "edge",
             "predicate": "IAO_0000136",
             "label": "is about",
-            "note": "The calendar year the aggregation is integrated over, as a node and no longer as a literal. A unit without a per-year marker carries the flag period:annual_in_quote or period:unstated. It was oeo:OEO_00020440 has scenario year value, which is wrong twice: its domain is oeo:OEO_00000365 scenario factsheet, so every value node was typed a factsheet and through it a document, and its declared range is xsd:dateTime while we wrote xsd:integer, which is an ill-typed literal. The pinned release has NO property at all whose domain a quantity value satisfies and whose range is a time, so the year becomes an object: `is about` a node of oeo:OEO_00030033 time step, \"a one-dimensional temporal region that has a start time and an ending time\". oeo:OEO_00020097 scenario year would be the narrower class and is not used, because it is defined as part of a scenario horizon and the inventory years are not. Cost, stated: the number 2030 is no longer a literal a reasoner can compare; it is the node's IRI, its label, and part of the value's own identity. The term request is a property from quantity value to temporal region, and a way to write a year onto one.",
+            "note": "The calendar year the aggregation is integrated over, as a node and no longer as a literal. A unit entry that names no period carries the flag period:unstated. It was oeo:OEO_00020440 has scenario year value, which is wrong twice: its domain is oeo:OEO_00000365 scenario factsheet, so every value node was typed a factsheet and through it a document, and its declared range is xsd:dateTime while we wrote xsd:integer, which is an ill-typed literal. The pinned release has NO property at all whose domain a quantity value satisfies and whose range is a time, so the year becomes an object: `is about` a node of oeo:OEO_00030033 time step, \"a one-dimensional temporal region that has a start time and an ending time\". oeo:OEO_00020097 scenario year would be the narrower class and is not used, because it is defined as part of a scenario horizon and the inventory years are not. Cost, stated: the number 2030 is no longer a literal a reasoner can compare; it is the node's IRI, its label, and part of the value's own identity. The term request is a property from quantity value to temporal region, and a way to write a year onto one.",
             "prefix": "obo",
             "object_class": "OEO_00030033"
           }
@@ -1904,7 +1911,7 @@
             "role": "edge",
             "predicate": "IAO_0000136",
             "label": "is about",
-            "note": "The calendar year the power is stated for, as a node and no longer as a literal. A unit without a per-year marker carries the flag period:annual_in_quote or period:unstated. It was oeo:OEO_00020440 has scenario year value, which is wrong twice: its domain is oeo:OEO_00000365 scenario factsheet, so every value node was typed a factsheet and through it a document, and its declared range is xsd:dateTime while we wrote xsd:integer, which is an ill-typed literal. The pinned release has NO property at all whose domain a quantity value satisfies and whose range is a time, so the year becomes an object: `is about` a node of oeo:OEO_00030033 time step, \"a one-dimensional temporal region that has a start time and an ending time\". oeo:OEO_00020097 scenario year would be the narrower class and is not used, because it is defined as part of a scenario horizon and the inventory years are not. Cost, stated: the number 2030 is no longer a literal a reasoner can compare; it is the node's IRI, its label, and part of the value's own identity. The term request is a property from quantity value to temporal region, and a way to write a year onto one.",
+            "note": "The calendar year the power is stated for, as a node and no longer as a literal. A unit entry that names no period carries the flag period:unstated. It was oeo:OEO_00020440 has scenario year value, which is wrong twice: its domain is oeo:OEO_00000365 scenario factsheet, so every value node was typed a factsheet and through it a document, and its declared range is xsd:dateTime while we wrote xsd:integer, which is an ill-typed literal. The pinned release has NO property at all whose domain a quantity value satisfies and whose range is a time, so the year becomes an object: `is about` a node of oeo:OEO_00030033 time step, \"a one-dimensional temporal region that has a start time and an ending time\". oeo:OEO_00020097 scenario year would be the narrower class and is not used, because it is defined as part of a scenario horizon and the inventory years are not. Cost, stated: the number 2030 is no longer a literal a reasoner can compare; it is the node's IRI, its label, and part of the value's own identity. The term request is a property from quantity value to temporal region, and a way to write a year onto one.",
             "prefix": "obo",
             "object_class": "OEO_00030033"
           }

@@ -92,6 +92,17 @@ variables, and set `PYTHONSAFEPATH=1` when the working directory holds another
 copy of the code. The code-exec sandbox is not part of the image. The same
 image runs under Apptainer.
 
+The image, end to end:
+
+```mermaid
+flowchart LR
+    cf[Containerfile: vLLM base image] --> ir[install_requirements.py: skip what the base already has]
+    ir --> bake[docpipe, profiles, scripts, tests baked in]
+    bake --> ci[CI: build, then run the test suite with no network]
+    ci --> push[Push: tagged by commit and branch, to Docker Hub and ghcr.io]
+    push --> run[Run a stage: mount data, pass endpoints and tokens as env vars]
+```
+
 ## Running each stage
 
 Every stage also accepts `--log-level` (`DEBUG`, `INFO`, `WARNING` or
@@ -244,6 +255,9 @@ environment variables setting a stage's server and model defaults.
 | Extraction | `LLM_BASE_URL` | `http://localhost:8000/v1` | harvesting model's endpoint | `docpipe/extraction/runner.py:82` |
 | Extraction | `LLM_MODEL` | `Qwen/Qwen3.8-Flash-Next-FP8` | harvesting model's name | `docpipe/extraction/runner.py:87` |
 | Extraction | `EXTRACT_BATCH_SOURCES` | `6` | sources sharing one harvest request | `docpipe/extraction/runner.py:102` |
+| Extraction | `EXTRACT_BATCH_DOCS` | `64` | documents kept in flight at once, one written and replaced by the next as soon as it finishes | `docpipe/extraction/runner.py:4698` |
+| Extraction | `EXTRACT_FIELD_ROWS` | `32` | rows one field request answers at once | `docpipe/extraction/runner.py:338` |
+| Extraction | `EXTRACT_MAX_MODEL_LEN` | `32768` | fallback context window, used only where the server's own preflight reports none | `docpipe/extraction/runner.py:1096` |
 | App | `INFERENCE_DB_PATH` | profile `db_path`, else `data/KWP.db` | SQLite corpus database, opened read-only | `scripts/inference_app/config.py:61` |
 | App | `INFERENCE_INDEX_PATH` | profile `index_path`, else `data/faiss_index.bin` | FAISS index loaded into memory | `scripts/inference_app/config.py:62` |
 | App | `INFERENCE_KG_TTL_PATH` | profile `root/graph.ttl`, else `data/graph.ttl` | Turtle file from `--serialize` | `scripts/inference_app/config.py:66` |
@@ -371,7 +385,7 @@ python scripts/build_docs.py --out docs
 Sphinx then builds the HTML site, warnings promoted to errors:
 `.github/workflows/docs.yml` runs `-W --keep-going -b html docs
 _build/html`, and `nitpicky = True` in `docs/conf.py` turns a broken
-cross-reference into one of those warnings (`docs/conf.py` line 47).
+cross-reference into one of those warnings (`docs/conf.py` line 53).
 Read the Docs installs only `docs/requirements.txt` and builds with the
 same `fail_on_warning: true` (`.readthedocs.yaml`), one version per
 branch and tag (`.github/workflows/docs.yml`, header comment); it never
