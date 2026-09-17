@@ -653,6 +653,7 @@ def test_each_no_harvest_mode_reaches_its_own_run(tmp_path, monkeypatch):
     monkeypatch.setattr(runner, "assert_serving",
                         lambda *a, **kw: seen.append(("serving",
                                                       kw.get("what"))))
+    monkeypatch.setattr(runner, "start_limit", lambda: None)
     monkeypatch.setattr(runner, "make_review_asker",
                         lambda image_root=None: (lambda *a, **kw: None))
     monkeypatch.setattr(runner, "make_review_sources",
