@@ -454,6 +454,14 @@ def set_model_len(tokens: Optional[int]) -> None
 
 The window the server reports, when it reports one.
 
+### start_limit
+
+```python
+def start_limit() -> None
+```
+
+Steer the requests by the server's queue unless EXTRACT_LIMIT_ADAPTIVE=0.
+
 ### prompt_tokens
 
 ```python

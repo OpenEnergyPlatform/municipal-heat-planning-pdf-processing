@@ -1114,6 +1114,25 @@ def set_model_len(tokens: Optional[int]) -> None:
         MAX_MODEL_LEN = int(tokens)
 
 
+# The adaptive request limit every client waits in, steered by the server's
+# queue (throttle.py); None while it is off or the server has no /metrics.
+LIMIT = None
+
+
+def start_limit() -> None:
+    """Steer the requests by the server's queue unless EXTRACT_LIMIT_ADAPTIVE=0."""
+    global LIMIT
+    if LIMIT is not None or os.environ.get("EXTRACT_LIMIT_ADAPTIVE",
+                                           "1") == "0":
+        return
+    from . import throttle
+    LIMIT = throttle.start(LLM_BASE_URL)
+    if LIMIT is not None and FIELD_PARALLEL < LIMIT.maximum:
+        log.info("llm limit: EXTRACT_FIELD_PARALLEL=%d opens fewer field "
+                 "requests than EXTRACT_LIMIT_MAX=%d allows", FIELD_PARALLEL,
+                 LIMIT.maximum)
+
+
 def prompt_tokens(system: str, conversation: list) -> int:
     """What a request's system prompt, messages and crops take, estimated high.
 
@@ -1807,8 +1826,12 @@ def make_candidates(conn: sqlite3.Connection,
 def _client():
     """The one OpenAI-compatible client shape this stage uses."""
     from openai import OpenAI
-    return OpenAI(base_url=LLM_BASE_URL, api_key=LLM_API_KEY,
-                  timeout=LLM_TIMEOUT, max_retries=0)
+    client = OpenAI(base_url=LLM_BASE_URL, api_key=LLM_API_KEY,
+                    timeout=LLM_TIMEOUT, max_retries=0)
+    if LIMIT is None:
+        return client
+    from .throttle import Limited
+    return Limited(client, LIMIT)
 
 
 def _loads_object(raw_text) -> Optional[dict]:
@@ -4573,6 +4596,7 @@ def main(argv: Optional[list] = None) -> int:
                                      context_budget(review_prompt, spec),
                                      what="extraction review",
                                      flag="--max-model-len"))
+        start_limit()
         from .review import run as review_run
         wanted = None
         if args.document:
@@ -4642,6 +4666,7 @@ def main(argv: Optional[list] = None) -> int:
     set_model_len(assert_serving(LLM_BASE_URL, LLM_API_KEY, LLM_MODEL,
                                  required, what="extraction",
                                  flag="--max-model-len"))
+    start_limit()
 
     from concurrent.futures import ThreadPoolExecutor, as_completed
 
