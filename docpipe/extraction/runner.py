@@ -1823,6 +1823,64 @@ def make_candidates(conn: sqlite3.Connection,
 # Harvest: one source + one parameter -> the model's claimed tuples
 # ---------------------------------------------------------------------------
 
+# Seconds without any answer from the server before the run ends. A request
+# that finds the server gone fails, waits and asks again, and a batch counts
+# as unreachable only once every one of its requests has given up: when vLLM
+# died on the first corpus run with the adaptive limit, the runner took 78
+# minutes to notice.
+SERVER_DEAD_AFTER = float(os.environ.get("EXTRACT_SERVER_DEAD_AFTER", "180"))
+SERVER_PROBE_EVERY = 15.0
+
+
+def probe_server(base_url: str = None, timeout: float = 10.0) -> bool:
+    """Whether the server answers `GET {base_url}/models` at all.
+
+    Any reply below 500 counts: a server that refuses the key is still there.
+    """
+    import urllib.error
+    import urllib.request
+    request = urllib.request.Request((base_url or LLM_BASE_URL).rstrip("/")
+                                     + "/models")
+    if LLM_API_KEY:
+        request.add_header("Authorization", f"Bearer {LLM_API_KEY}")
+    try:
+        with urllib.request.urlopen(request, timeout=timeout):
+            return True
+    except urllib.error.HTTPError as exc:
+        return exc.code < 500
+    except Exception:
+        return False
+
+
+def watch_server(on_dead: Callable, *, probe: Callable = probe_server,
+                 every: float = SERVER_PROBE_EVERY,
+                 dead_after: float = SERVER_DEAD_AFTER,
+                 clock: Callable = time.monotonic,
+                 sleep: Callable = time.sleep) -> threading.Thread:
+    """A daemon thread that calls *on_dead(seconds)* once the server has not
+    answered for *dead_after* seconds, then stops watching."""
+
+    def watch() -> None:
+        silent_since = None
+        while True:
+            sleep(every)
+            if probe():
+                silent_since = None
+                continue
+            now = clock()
+            if silent_since is None:
+                silent_since = now
+                log.warning("extraction: the model server did not answer the "
+                            "health probe")
+            elif now - silent_since >= dead_after:
+                on_dead(now - silent_since)
+                return
+
+    thread = threading.Thread(target=watch, name="server-watch", daemon=True)
+    thread.start()
+    return thread
+
+
 def _client():
     """The one OpenAI-compatible client shape this stage uses."""
     from openai import OpenAI
@@ -4964,6 +5022,22 @@ def main(argv: Optional[list] = None) -> int:
     def give_up() -> None:
         server_gone[0] = True
         halt.set()
+
+    def server_dead(seconds: float) -> None:
+        """No answer for minutes: nothing in flight can finish any more, so
+        the run ends at once, like a SIGTERM, instead of waiting for every
+        open request to spend its retries on a server that is gone."""
+        give_up()
+        log.error("extraction: the model server stopped answering — no reply "
+                  "for %.0f s, the run ends here. What was harvested is "
+                  "written and stamped, the rest is not, so a resume picks up "
+                  "where this stopped.", seconds)
+        trace.close()
+        token_usage.flush()
+        logging.shutdown()
+        _hard_exit(1)
+
+    watch_server(server_dead)
 
     # Shared by every document in flight: the pool bounds the batches of all
     # of them together, the streak sees a dead server across all of them.

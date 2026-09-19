@@ -644,6 +644,29 @@ Bound to the caller's connection. It used to open its own for every call,
 which on an NFS-backed database is a file open, a header read and a schema
 parse per document and parameter.
 
+### probe_server
+
+```python
+def probe_server(base_url: str = None, timeout: float = 10.0) -> bool
+```
+
+Whether the server answers `GET {base_url}/models` at all.
+
+Any reply below 500 counts: a server that refuses the key is still there.
+
+### watch_server
+
+```python
+def watch_server(on_dead: Callable, *, probe: Callable = probe_server,
+                 every: float = SERVER_PROBE_EVERY,
+                 dead_after: float = SERVER_DEAD_AFTER,
+                 clock: Callable = time.monotonic,
+                 sleep: Callable = time.sleep) -> threading.Thread
+```
+
+A daemon thread that calls *on_dead(seconds)* once the server has not
+answered for *dead_after* seconds, then stops watching.
+
 ### expand_defaults
 
 ```python

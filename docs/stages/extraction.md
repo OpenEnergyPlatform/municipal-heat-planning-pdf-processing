@@ -163,9 +163,9 @@ helpers get a look at the claim first now: `pair_of_claim`
 (`pipeline.py:577`) asks the whole passage whether exactly one OTHER pair
 of the document is named there; if so the claim becomes a row carrying
 that pair in its own `pair` and `pair_index` fields (`Row`,
-`pipeline.py:456`), for `project` (`runner.py:3218`) to stamp instead of
+`pipeline.py:456`), for `project` (`runner.py:3276`) to stamp instead of
 the request's own, drawn from `Batch.pairs` (`pipeline.py:134`), set by
-`pair_batches` (`runner.py:4163`). Exactly one, or the claim still stays
+`pair_batches` (`runner.py:4221`). Exactly one, or the claim still stays
 refused. Measured on corpus_m5: of 120,442 claims refused this way, 52.8%
 came back later under the same quote, 17.8% as the same value under
 another quote, and 29.4%, 35,407 values, were never read under any pair
@@ -174,7 +174,7 @@ t CO2eq/a (3,836), from tables (14,227), figures (11,869) and prose
 (9,311). The gain from the frame itself was measured directly: before it
 existed, the year axis alone produced 1,849 refusals against 0 readings,
 since every window after the first excluded the row's own source
-(`runner.py:3057`).
+(`runner.py:3115`).
 
 ### The row request
 
@@ -194,7 +194,7 @@ wording not in its own quote is caught here too, before it becomes a
 row (`pipeline.py:544`). A `Row` is created only here, never later. The
 request can turn to a code sandbox, bounded to `CODE_ROUNDS` rounds. A
 reply that will not parse is asked again with the cause named,
-`_reply_fault` (`runner.py:1877`), rather than the same message twice, and
+`_reply_fault` (`runner.py:1935`), rather than the same message twice, and
 with the retried attempt's sampling temperature raised a step: on
 corpus_m5, a field retry asked again at temperature 0
 repeated its first reply byte for byte and lost all three tries. Every
@@ -203,9 +203,9 @@ review) raises the step, `retry_temperature` (`runner.py:106`, env
 `EXTRACT_RETRY_TEMPERATURE_STEP`, default `0.1`), once per fault and
 capped at `1.0`. One cut off at the token ceiling is asked again as two
 halves instead of kept half-read, its labels renumbered onto the whole
-batch, `_split_harvest` (`runner.py:1952`). A single passage still too
+batch, `_split_harvest` (`runner.py:2010`). A single passage still too
 long for that gets its own ceiling doubled, up to four times, before it
-is written as a `_why: cut_off` sentinel instead (`runner.py:2329`).
+is written as a `_why: cut_off` sentinel instead (`runner.py:2387`).
 
 ### The field sweep: three window stages and a budget
 
@@ -222,19 +222,19 @@ overlapping windows (`FIELD_WINDOW` 2, `FIELD_OVERLAP` 1) for up to
 `FIELD_ROUNDS` (4) rounds. **Rest** is the floor: once retrieval has
 nothing new, `rest_of_document` reads the document's own remaining
 sections in order, rotated to start near the open rows, until the
-coordinate closes or the document runs out (`runner.py:2990`). A
+coordinate closes or the document runs out (`runner.py:3048`). A
 coordinate the whole sweep cannot close is `exhausted`, never
 `unstated`: the first is a finding about the run, the second about the
 document. The budget sums to `FIELD_MAX_WINDOWS`
 (24) plus `REST_MAX_WINDOWS` (12) per coordinate. Every request now
 asks one coordinate, not several at once: five coordinates for every
 row of a batch in one request wanted up to 27,311 prompt tokens and
-came back refused or cut off (`runner.py:2647`). Its rows are chunked
+came back refused or cut off (`runner.py:2705`). Its rows are chunked
 to at most `FIELD_ROWS` (32, env `EXTRACT_FIELD_ROWS`), about 2,600
 answer tokens at the measured p90, sized against the server's own
 window before the request is sent rather than shrunk after a refusal,
 `answer_room` (`runner.py:1160`); a chunk still too large for its room
-is halved before it is sent (`runner.py:2693-2707`).
+is halved before it is sent (`runner.py:2751-2765`).
 
 ### The adaptive request limit
 
@@ -372,7 +372,7 @@ Every tuple, refusal, parameter state and summary line is checked
 against the published schema before it is written:
 `_harvest_validators` builds one `jsonschema` validator per branch from
 `schema.build(spec)["harvest"]`, run by `check_against_schema` inside
-`finish_document` on every call carrying a spec (`runner.py:3762`). A
+`finish_document` on every call carrying a spec (`runner.py:3820`). A
 row the schema refuses is counted
 and logged as an `invalid` trace event, never withheld, since blocking on
 a schema mismatch would turn a documentation defect into a data loss.
@@ -550,8 +550,8 @@ on.
 At the document level, `finish_document` withholds the stamp entirely,
 forcing a full redo on the next run, when more than half a document's
 planned sources came back from a server it could not reach
-(`UNREACHABLE_LIMIT`, `0.5`, `runner.py:3703`, `:3723`) or when not one
-batch answered at all (`runner.py:3751`); the JSONL file is still
+(`UNREACHABLE_LIMIT`, `0.5`, `runner.py:3761`, `:3723`) or when not one
+batch answered at all (`runner.py:3809`); the JSONL file is still
 written either way, so only a resume, not a byte count, tells the two
 cases apart from a genuinely finished document.
 
@@ -559,11 +559,11 @@ A time limit ends a run the same careful way. `install_stop_handler`
 (`runner.py:116`) puts a SIGTERM handler in place, the job script's
 time-limit trap or a manual kill, that sets `STOP` (`runner.py:104`)
 instead of letting the interpreter die where it stood. Documents run
-under rolling admission, `harvest_documents` (`runner.py:3592`), at
+under rolling admission, `harvest_documents` (`runner.py:3650`), at
 most `EXTRACT_BATCH_DOCS` in flight at once, their batches sharing one
-`batch_pool` and one `DeadStreak` (`runner.py:3572`) across every
+`batch_pool` and one `DeadStreak` (`runner.py:3630`) across every
 document in flight rather than one dead-server count per document. Once
-`STOP` or a dead server sets `Halted` (`runner.py:4957`), no new
+`STOP` or a dead server sets `Halted` (`runner.py:5015`), no new
 document starts, and a document already in flight leaves its own
 `harvest_batches` call at once instead of waiting out its open
 requests; such a document lands in `unfinished` and is not written, so
@@ -597,7 +597,7 @@ never sends leaves no trace, so the row is offered again later.
   (`fields.py:266-292`).
 - Letting the passage a coordinate was last read in drop out of the
   window after one use, rather than remaining in the window, cost one
-  batch 520 dropped readings against 31 kept (`runner.py:2868`).
+  batch 520 dropped readings against 31 kept (`runner.py:2926`).
 - On the 20-plan draft where the slice gate was measured, of 6,763
   harvested tuples the serializer dropped 1,554 for a quantity the graph
   does not hold and, while the scenario axis still gated a row, 2,510
