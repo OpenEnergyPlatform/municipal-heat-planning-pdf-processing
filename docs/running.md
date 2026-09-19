@@ -52,7 +52,7 @@ lists what a deployment usually sets.
 ## Container image
 
 `docker/Containerfile` builds one OCI image for stages 1 to 8, on top of
-`vllm/vllm-openai:v0.23.0-cu129-ubuntu2404`, pinned by digest so a moved tag
+`vllm/vllm-openai:v0.29.0-cu129-ubuntu2404`, pinned by digest so a moved tag
 cannot change what gets built (`docker/Containerfile` line 8). The base image
 starts `vllm serve`; this one clears the entrypoint, so every invocation says
 whether it runs the server or a stage (lines 13 to 14). `docpipe/`,
