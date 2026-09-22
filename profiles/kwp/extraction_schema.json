@@ -663,6 +663,29 @@
       },
       "x-question": "Wie ist der Wert über Zeit oder Raum zusammengefasst? Der Normalfall ist \"integral\", also eine Jahressumme. \"maximum\" bei einer Spitzenlast oder einem Höchstwert, \"arithmetic mean\" bei einem Durchschnitt je Gebäude oder je Jahr, \"instantaneous\" bei einem Momentanwert."
      },
+     "aggregation_link_quote": {
+      "description": "Only with window `base_year`: the passage where the row names the base state ('aggregation_raw'). 'aggregation_quote' is then the frame's passage that prints the number.",
+      "minLength": 8,
+      "type": "string"
+     },
+     "aggregation_link_source": {
+      "description": "Which source 'aggregation_link_quote' was found in.",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "section",
+         "table",
+         "figure"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
      "aggregation_quote": {
       "description": "The verbatim passage carrying 'aggregation'. Present exactly when aggregation_state is 'read'.",
       "minLength": 8,
@@ -703,7 +726,7 @@
       "description": "How the coordinate 'aggregation' ended. Always present: a missing key and a refused reading must not look alike."
      },
      "aggregation_window": {
-      "description": "[stage, index] of the window 'aggregation' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from.",
+      "description": "[stage, index] of the window 'aggregation' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number.",
       "maxItems": 2,
       "minItems": 2,
       "prefixItems": [
@@ -712,7 +735,8 @@
          "own",
          "retrieval",
          "rest",
-         "frame"
+         "frame",
+         "base_year"
         ]
        },
        {
@@ -991,6 +1015,29 @@
       },
       "x-question": "Welcher Energieträger? Die Bezeichnung steht in der Zeilenbeschriftung, im Spaltenkopf oder in der Blocküberschrift, fast nie in der Schreibweise der Klassenliste: \"Gas H\" und \"Erdgas (netzgebunden)\" meinen die Klasse Erdgas, \"Nahwärme\" und \"Wärmenetz\" die Klasse Fernwärme. Eine Summenzeile (\"Summe\", \"Gesamt\", \"alle Energieträger\") ist \"out:total\", eine Restposition (\"Sonstige\", \"Andere\") ist \"out:other\". Passt fachlich weder eine Klasse noch einer dieser Einträge, etwa weil in der Spalte ein Gebäudetyp steht, dann lass die Zeile weg."
      },
+     "carrier_link_quote": {
+      "description": "Only with window `base_year`: the passage where the row names the base state ('carrier_raw'). 'carrier_quote' is then the frame's passage that prints the number.",
+      "minLength": 8,
+      "type": "string"
+     },
+     "carrier_link_source": {
+      "description": "Which source 'carrier_link_quote' was found in.",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "section",
+         "table",
+         "figure"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
      "carrier_quote": {
       "description": "The verbatim passage carrying 'carrier'. Present exactly when carrier_state is 'read'.",
       "minLength": 8,
@@ -1031,7 +1078,7 @@
       "description": "How the coordinate 'carrier' ended. Always present: a missing key and a refused reading must not look alike."
      },
      "carrier_window": {
-      "description": "[stage, index] of the window 'carrier' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from.",
+      "description": "[stage, index] of the window 'carrier' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number.",
       "maxItems": 2,
       "minItems": 2,
       "prefixItems": [
@@ -1040,7 +1087,8 @@
          "own",
          "retrieval",
          "rest",
-         "frame"
+         "frame",
+         "base_year"
         ]
        },
        {
@@ -1076,6 +1124,29 @@
       "description": "Spec parameter: Emissionen.",
       "x-description-source": "Eine im Wärmeplan bilanzierte Emissionsmenge, je Energieträger, Sektor und Jahr. Welche Größe es ist, wählst du in \"quantity\" aus der Liste. Die Ontologie definiert die beiden Klassen so: CO2 emission value ist \"a greenhouse gas emission value that quantifies a CO2 emission rate and has a mass unit\", also reines Kohlendioxid. carbon dioxide equivalent quantity value ist \"the combined effect of all emitted greenhouse gases by giving an equivalent amount of CO2\", also alle Treibhausgase in CO2-Äquivalenten. Die Einheit verrät es meist: t CO2 gegen t CO2-Äq. Die übrigen Einträge der Liste beginnen mit \"out:\": das sind Größen, die der Graph NICHT aufnimmt, etwa eine kumulierte Summe über mehrere Jahre, eine vermiedene Emission oder eine abgeschiedene Menge aus einer CCS-Anlage. Wähle den passenden davon, wenn die Zahl eine davon ist. Das ist ein richtiges Ergebnis, kein Fehler.",
       "x-question": "Um WELCHE Kennzahl handelt es sich bei dieser Zahl? Entscheide danach, was die Quelle über sie sagt: die Einheit, die Spalten- oder Zeilenbeschriftung und die Tabellen- oder Abschnittsüberschrift. Eine Angabe in t CO2 ist eine Emission, eine Angabe in MWh oder GWh ein Energieverbrauch. Zitiere die Stelle, aus der das hervorgeht. Eine Angabe in kW, MW oder GW ist eine Leistung."
+     },
+     "parameter_link_quote": {
+      "description": "Only with window `base_year`: the passage where the row names the base state ('parameter_raw'). 'parameter_quote' is then the frame's passage that prints the number.",
+      "minLength": 8,
+      "type": "string"
+     },
+     "parameter_link_source": {
+      "description": "Which source 'parameter_link_quote' was found in.",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "section",
+         "table",
+         "figure"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
      },
      "parameter_quote": {
       "description": "The verbatim passage carrying 'parameter'. Present exactly when parameter_state is 'read'.",
@@ -1117,7 +1188,7 @@
       "description": "How the coordinate 'parameter' ended. Always present: a missing key and a refused reading must not look alike."
      },
      "parameter_window": {
-      "description": "[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from.",
+      "description": "[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number.",
       "maxItems": 2,
       "minItems": 2,
       "prefixItems": [
@@ -1126,7 +1197,8 @@
          "own",
          "retrieval",
          "rest",
-         "frame"
+         "frame",
+         "base_year"
         ]
        },
        {
@@ -1239,6 +1311,29 @@
       },
       "x-question": "Welche Größe ist diese Zahl? Das ist die wichtigste Entscheidung des Tupels, denn sie bestimmt, als welche Klasse der Wert im Graphen steht. Entscheide nach der Definition der Klasse, nicht nach der Ähnlichkeit der Wörter. \"CO2 emission value\" ist reines Kohlendioxid, \"carbon dioxide equivalent quantity value\" sind alle Treibhausgase, in CO2-Äquivalenten zusammengefasst. Die Einheit verrät es meist: t CO2 gegen t CO2-Äq. Sagt der Plan an anderer Stelle, dass seine Emissionen in CO2-Äquivalenten angegeben sind (\"Die zugehörigen Treibhausgasemissionen - angegeben in Tonnen CO2-Äquivalenten - sind gesondert aufgeführt\"), dann gilt das auch für eine Tabelle, deren Kopfzeile nur \"CO2-Emissionen\" schreibt: der Methodiksatz schlägt die Kopfzeile. Eine kumulierte Emission über mehrere Jahre, eine vermiedene oder eingesparte Emission und eine abgeschiedene Menge sind das Gegenteil einer im Bilanzjahr ausgestoßenen und haben ihre eigenen Einträge."
      },
+     "quantity_link_quote": {
+      "description": "Only with window `base_year`: the passage where the row names the base state ('quantity_raw'). 'quantity_quote' is then the frame's passage that prints the number.",
+      "minLength": 8,
+      "type": "string"
+     },
+     "quantity_link_source": {
+      "description": "Which source 'quantity_link_quote' was found in.",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "section",
+         "table",
+         "figure"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
      "quantity_quote": {
       "description": "The verbatim passage carrying 'quantity'. Present exactly when quantity_state is 'read'.",
       "minLength": 8,
@@ -1279,7 +1374,7 @@
       "description": "How the coordinate 'quantity' ended. Always present: a missing key and a refused reading must not look alike."
      },
      "quantity_window": {
-      "description": "[stage, index] of the window 'quantity' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from.",
+      "description": "[stage, index] of the window 'quantity' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number.",
       "maxItems": 2,
       "minItems": 2,
       "prefixItems": [
@@ -1288,7 +1383,8 @@
          "own",
          "retrieval",
          "rest",
-         "frame"
+         "frame",
+         "base_year"
         ]
        },
        {
@@ -1387,6 +1483,29 @@
       },
       "x-question": "Auf welchen Zustand bezieht sich der Wert? Der Bezug steht selten in der Zeile selbst, sondern im Titel der eigenen Tabelle, in der Abschnittsüberschrift oder in dem Satz, der die Tabelle ankündigt. Bestand heißt: erhoben oder bilanziert für ein vergangenes oder das laufende Jahr. Daran zu erkennen sind Bestandsanalyse, Ist-Zustand, Bilanzjahr, Ausgangslage, Energiebilanz, \"bislang\", \"derzeit\", \"wird verbraucht\", oder ein Jahr vor der Erstellung des Plans im Titel. Ein Satz wie \"wie viel Wärme pro Jahr verbraucht wird und welche Energieträger dafür bislang eingesetzt werden\" ist ein Bestand, auch wenn das Wort Bestandsanalyse nicht fällt. Trendszenario ist die Fortschreibung ohne zusätzliche Maßnahmen. Zielszenario ist der angestrebte Zustand, auch wenn der Plan ihm einen eigenen Namen gibt (\"bei erhöhter Energieeinsparung\", \"Umsetzungsszenario 2\", \"Transformationspfad\"); nennt die Quelle mehrere Zielszenarien nebeneinander, gehört der Name des konkreten in value_raw. Steht in der eigenen Quelle, in ihrem Abschnitt und in dem Satz davor nichts über den Zustand, dann ist das \"out:unstated\" und keine Schätzung."
      },
+     "scenario_link_quote": {
+      "description": "Only with window `base_year`: the passage where the row names the base state ('scenario_raw'). 'scenario_quote' is then the frame's passage that prints the number.",
+      "minLength": 8,
+      "type": "string"
+     },
+     "scenario_link_source": {
+      "description": "Which source 'scenario_link_quote' was found in.",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "section",
+         "table",
+         "figure"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
      "scenario_quote": {
       "description": "The verbatim passage carrying 'scenario'. Present exactly when scenario_state is 'read'.",
       "minLength": 8,
@@ -1427,7 +1546,7 @@
       "description": "How the coordinate 'scenario' ended. Always present: a missing key and a refused reading must not look alike."
      },
      "scenario_window": {
-      "description": "[stage, index] of the window 'scenario' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from.",
+      "description": "[stage, index] of the window 'scenario' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number.",
       "maxItems": 2,
       "minItems": 2,
       "prefixItems": [
@@ -1436,7 +1555,8 @@
          "own",
          "retrieval",
          "rest",
-         "frame"
+         "frame",
+         "base_year"
         ]
        },
        {
@@ -1532,6 +1652,29 @@
       },
       "x-question": "Welcher Verbrauchssektor? Die Bezeichnung steht in der Zeilenbeschriftung, im Spaltenkopf oder in der Blocküberschrift DERSELBEN Tabelle: \"Wohnen\" und \"Wohngebäude\" meinen die Klasse Private Haushalte, \"GHD/Kommune\", \"Gewerbe\" und \"wirtschaftlich genutzte Gebäude\" die Klasse GHD. Ein GEBIET ist kein Sektor: \"Gesamtstadt\", \"Stadtgebiet\", \"Gemeinde\" und \"Plangebiet\" sagen, WO die Zahl gilt, nicht für welchen Verbraucher, und sie sind auch keine Summe über die Sektoren. Eine Zeile, die ausdrücklich über alle Sektoren summiert (\"Summe\", \"Gesamt\", \"insgesamt\" als Zeilen- oder Spaltenkopf), ist \"out:total\". Ebenso ein Wert, der sich ausdrücklich als Gesamtverbrauch oder Gesamtbedarf aller Verbraucher bezeichnet (\"sinkt der Gesamtverbrauch auf 116.000.000 kWh/a\"). Eine Gesamtleistung von Anlagen (\"24 KWK-Anlagen mit einer Gesamtleistung von 2.797,6 kWth\") ist dagegen keine Summe über Sektoren. \"Einfamilienhaus\" und \"Mehrfamilienhaus\" meinen die Klasse Private Haushalte. Hat die eigene Tabelle keine Sektorspalte und nennt ihr Titel keinen Sektor, dann ist das keine Klasse, sondern eine fehlende Angabe: antworte mit \"out:unstated\"."
      },
+     "sector_link_quote": {
+      "description": "Only with window `base_year`: the passage where the row names the base state ('sector_raw'). 'sector_quote' is then the frame's passage that prints the number.",
+      "minLength": 8,
+      "type": "string"
+     },
+     "sector_link_source": {
+      "description": "Which source 'sector_link_quote' was found in.",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "section",
+         "table",
+         "figure"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
      "sector_quote": {
       "description": "The verbatim passage carrying 'sector'. Present exactly when sector_state is 'read'.",
       "minLength": 8,
@@ -1572,7 +1715,7 @@
       "description": "How the coordinate 'sector' ended. Always present: a missing key and a refused reading must not look alike."
      },
      "sector_window": {
-      "description": "[stage, index] of the window 'sector' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from.",
+      "description": "[stage, index] of the window 'sector' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number.",
       "maxItems": 2,
       "minItems": 2,
       "prefixItems": [
@@ -1581,7 +1724,8 @@
          "own",
          "retrieval",
          "rest",
-         "frame"
+         "frame",
+         "base_year"
         ]
        },
        {
@@ -1645,6 +1789,29 @@
       },
       "x-question": "Auf welches Gebiet bezieht sich der Wert? Sieh ZUERST in der Zeile selbst nach: benennt die Zeilenbeschriftung ein Gebiet — einen Quartiersnamen, ein Eignungsgebiet, eine Straße —, dann ist DAS das Gebiet dieser Zeile und die Überschrift gilt für sie nicht. Eine Steckbrief- oder Quartierstabelle hat in jeder Zeile ein anderes Gebiet und in der Überschrift nur den Gemeindenamen; wer dann die Überschrift nimmt, legt vierzig Quartiere auf eine Koordinate. Erst wenn die Zeile kein Gebiet nennt, gilt die Überschrift oder die Caption. Bei einem Teilgebiet gehört sein NAME wörtlich in value_raw (\"Fokusgebiet Eicken\", \"Quartier Nordstadt\", \"Wärmenetzgebiet 3\"), ohne den Namen sind zwei Teilgebiete im Graphen nicht auseinanderzuhalten. Beim ganzen Gemeindegebiet reicht die Klasse."
      },
+     "spatial_scope_link_quote": {
+      "description": "Only with window `base_year`: the passage where the row names the base state ('spatial_scope_raw'). 'spatial_scope_quote' is then the frame's passage that prints the number.",
+      "minLength": 8,
+      "type": "string"
+     },
+     "spatial_scope_link_source": {
+      "description": "Which source 'spatial_scope_link_quote' was found in.",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "section",
+         "table",
+         "figure"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
      "spatial_scope_quote": {
       "description": "The verbatim passage carrying 'spatial_scope'. Present exactly when spatial_scope_state is 'read'.",
       "minLength": 8,
@@ -1685,7 +1852,7 @@
       "description": "How the coordinate 'spatial_scope' ended. Always present: a missing key and a refused reading must not look alike."
      },
      "spatial_scope_window": {
-      "description": "[stage, index] of the window 'spatial_scope' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from.",
+      "description": "[stage, index] of the window 'spatial_scope' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number.",
       "maxItems": 2,
       "minItems": 2,
       "prefixItems": [
@@ -1694,7 +1861,8 @@
          "own",
          "retrieval",
          "rest",
-         "frame"
+         "frame",
+         "base_year"
         ]
        },
        {
@@ -1963,6 +2131,29 @@
       },
       "x-question": "Welche Einheit hat diese Zahl? Genau EIN Eintrag aus der Liste, und zwar der, den die Quelle MEINT, nicht der, den sie ähnlich schreibt: \"Gigawattstunden\" ist GWh, \"t CO₂-Äq.\" ist t CO2eq/a oder t CO2eq, \"kWh Hi\" und \"GWh_th\" sind kWh und GWh, \"1.700 kg CO2\" ist kg CO2 und NICHT t CO2. Ob die Menge je Jahr gilt, sagt oft erst der Satz, der Spaltenkopf oder der Tabellentitel: \"450 kWh über das Jahr\", \"im Jahr 2021\" und \"pro Jahr\" machen aus kWh die Einheit kWh/a; eine Speicherkapazität von 200 kWh bleibt kWh. Rechne nie um und runde nie: die Umrechnung macht die Prüfung anhand des Eintrags. Eine Angabe je Fläche (kWh/m²a, MWh/ha), je Einwohner oder Gebäude (MWh/EW, kWh pro Person), je Kilowattstunde (g CO2/kWh), eine Spitzenleistung von PV-Anlagen (kWp) oder eine elektrische Leistung (kWel) steht in keiner Liste: lass dann \"value\" weg und gib die Einheit wörtlich in \"value_raw\". Die Einheit steht in der Zelle, im Spaltenkopf, in der Blocküberschrift (\"Endenergieverbrauch [MWh/a]\") oder in der Caption; zitiere die Stelle, an der sie wirklich steht."
      },
+     "unit_link_quote": {
+      "description": "Only with window `base_year`: the passage where the row names the base state ('unit_raw'). 'unit_quote' is then the frame's passage that prints the number.",
+      "minLength": 8,
+      "type": "string"
+     },
+     "unit_link_source": {
+      "description": "Which source 'unit_link_quote' was found in.",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "section",
+         "table",
+         "figure"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
      "unit_quote": {
       "description": "The verbatim passage carrying 'unit'. Present exactly when unit_state is 'read'.",
       "minLength": 8,
@@ -2003,7 +2194,7 @@
       "description": "How the coordinate 'unit' ended. Always present: a missing key and a refused reading must not look alike."
      },
      "unit_window": {
-      "description": "[stage, index] of the window 'unit' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from.",
+      "description": "[stage, index] of the window 'unit' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number.",
       "maxItems": 2,
       "minItems": 2,
       "prefixItems": [
@@ -2012,7 +2203,8 @@
          "own",
          "retrieval",
          "rest",
-         "frame"
+         "frame",
+         "base_year"
         ]
        },
        {
@@ -2044,6 +2236,29 @@
        "role": "edge"
       },
       "x-question": "Für welches Kalenderjahr gilt diese Jahressumme? Vierstellig. Das Jahr steht fast nie in der Zeile der Zahl selbst. Sieh in dieser Reihenfolge nach: (1) die Kopfzelle der Spalte, in der die Zahl steht, (2) der Titel der eigenen Tabelle, (3) der Satz, der die Tabelle in ihrem Abschnitt ankündigt (\"Für das Jahr 2040 ergeben sich die in den nachfolgenden Tabellen zusammengestellten Kennzahlen\"), (4) die Überschrift des Abschnitts. Das Jahr im Titel einer ANDEREN Tabelle gilt nicht, auch wenn dieser Titel im selben Abschnitt steht. Nennt die Quelle einen Zeitraum statt eines Jahres (\"Durchschnittswert der Jahre 2022-2024\"), dann gehört das LETZTE Jahr in value und der Zeitraum wörtlich in value_raw."
+     },
+     "year_link_quote": {
+      "description": "Only with window `base_year`: the passage where the row names the base state ('year_raw'). 'year_quote' is then the frame's passage that prints the number.",
+      "minLength": 8,
+      "type": "string"
+     },
+     "year_link_source": {
+      "description": "Which source 'year_link_quote' was found in.",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "section",
+         "table",
+         "figure"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
      },
      "year_quote": {
       "description": "The verbatim passage carrying 'year'. Present exactly when year_state is 'read'.",
@@ -2085,7 +2300,7 @@
       "description": "How the coordinate 'year' ended. Always present: a missing key and a refused reading must not look alike."
      },
      "year_window": {
-      "description": "[stage, index] of the window 'year' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from.",
+      "description": "[stage, index] of the window 'year' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number.",
       "maxItems": 2,
       "minItems": 2,
       "prefixItems": [
@@ -2094,7 +2309,8 @@
          "own",
          "retrieval",
          "rest",
-         "frame"
+         "frame",
+         "base_year"
         ]
        },
        {
@@ -2476,6 +2692,29 @@
       },
       "x-question": "Wie ist der Wert über Zeit oder Raum zusammengefasst? Der Normalfall ist \"integral\", also eine Jahressumme. \"maximum\" bei einer Spitzenlast oder einem Höchstwert, \"arithmetic mean\" bei einem Durchschnitt je Gebäude oder je Jahr, \"instantaneous\" bei einem Momentanwert."
      },
+     "aggregation_link_quote": {
+      "description": "Only with window `base_year`: the passage where the row names the base state ('aggregation_raw'). 'aggregation_quote' is then the frame's passage that prints the number.",
+      "minLength": 8,
+      "type": "string"
+     },
+     "aggregation_link_source": {
+      "description": "Which source 'aggregation_link_quote' was found in.",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "section",
+         "table",
+         "figure"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
      "aggregation_quote": {
       "description": "The verbatim passage carrying 'aggregation'. Present exactly when aggregation_state is 'read'.",
       "minLength": 8,
@@ -2516,7 +2755,7 @@
       "description": "How the coordinate 'aggregation' ended. Always present: a missing key and a refused reading must not look alike."
      },
      "aggregation_window": {
-      "description": "[stage, index] of the window 'aggregation' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from.",
+      "description": "[stage, index] of the window 'aggregation' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number.",
       "maxItems": 2,
       "minItems": 2,
       "prefixItems": [
@@ -2525,7 +2764,8 @@
          "own",
          "retrieval",
          "rest",
-         "frame"
+         "frame",
+         "base_year"
         ]
        },
        {
@@ -2804,6 +3044,29 @@
       },
       "x-question": "Welcher Energieträger? Die Bezeichnung steht in der Zeilenbeschriftung, im Spaltenkopf oder in der Blocküberschrift, fast nie in der Schreibweise der Klassenliste: \"Gas H\" und \"Erdgas (netzgebunden)\" meinen die Klasse Erdgas, \"Nahwärme\" und \"Wärmenetz\" die Klasse Fernwärme. Eine Summenzeile (\"Summe\", \"Gesamt\", \"alle Energieträger\") ist \"out:total\", eine Restposition (\"Sonstige\", \"Andere\") ist \"out:other\". Passt fachlich weder eine Klasse noch einer dieser Einträge, etwa weil in der Spalte ein Gebäudetyp steht, dann lass die Zeile weg."
      },
+     "carrier_link_quote": {
+      "description": "Only with window `base_year`: the passage where the row names the base state ('carrier_raw'). 'carrier_quote' is then the frame's passage that prints the number.",
+      "minLength": 8,
+      "type": "string"
+     },
+     "carrier_link_source": {
+      "description": "Which source 'carrier_link_quote' was found in.",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "section",
+         "table",
+         "figure"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
      "carrier_quote": {
       "description": "The verbatim passage carrying 'carrier'. Present exactly when carrier_state is 'read'.",
       "minLength": 8,
@@ -2844,7 +3107,7 @@
       "description": "How the coordinate 'carrier' ended. Always present: a missing key and a refused reading must not look alike."
      },
      "carrier_window": {
-      "description": "[stage, index] of the window 'carrier' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from.",
+      "description": "[stage, index] of the window 'carrier' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number.",
       "maxItems": 2,
       "minItems": 2,
       "prefixItems": [
@@ -2853,7 +3116,8 @@
          "own",
          "retrieval",
          "rest",
-         "frame"
+         "frame",
+         "base_year"
         ]
        },
        {
@@ -2889,6 +3153,29 @@
       "description": "Spec parameter: Energieverbrauch.",
       "x-description-source": "Eine im Wärmeplan bilanzierte Energiemenge, je Energieträger, Sektor und Jahr. Welche Größe es ist, wählst du in \"quantity\" aus der Liste. Die Ontologie definiert die beiden Klassen so: final energy consumption value ist \"the energy delivered to and consumed by end users\". Darunter fällt BEIDES, was ein deutscher Wärmeplan Verbrauch nennt und was er Bedarf nennt: für ein Zielszenario ist nichts gemessen, jede Zahl ist gerechnet, und die Definition spricht nicht von Messung. Ein Wärmebedarf, ein Endenergiebedarf und ein zu deckender Wärmebedarf sind also diese Klasse. primary energy consumption value ist \"the total consumption of energy in a spatial region excluding the non-energetic use of fuels\", also die Bilanz vor der Umwandlung. Die übrigen Einträge der Liste beginnen mit \"out:\": das sind Größen, die der Graph NICHT aufnimmt. Wähle den passenden davon, wenn die Zahl eine davon ist. Das ist ein richtiges Ergebnis, kein Fehler.",
       "x-question": "Um WELCHE Kennzahl handelt es sich bei dieser Zahl? Entscheide danach, was die Quelle über sie sagt: die Einheit, die Spalten- oder Zeilenbeschriftung und die Tabellen- oder Abschnittsüberschrift. Eine Angabe in t CO2 ist eine Emission, eine Angabe in MWh oder GWh ein Energieverbrauch. Zitiere die Stelle, aus der das hervorgeht. Eine Angabe in kW, MW oder GW ist eine Leistung."
+     },
+     "parameter_link_quote": {
+      "description": "Only with window `base_year`: the passage where the row names the base state ('parameter_raw'). 'parameter_quote' is then the frame's passage that prints the number.",
+      "minLength": 8,
+      "type": "string"
+     },
+     "parameter_link_source": {
+      "description": "Which source 'parameter_link_quote' was found in.",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "section",
+         "table",
+         "figure"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
      },
      "parameter_quote": {
       "description": "The verbatim passage carrying 'parameter'. Present exactly when parameter_state is 'read'.",
@@ -2930,7 +3217,7 @@
       "description": "How the coordinate 'parameter' ended. Always present: a missing key and a refused reading must not look alike."
      },
      "parameter_window": {
-      "description": "[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from.",
+      "description": "[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number.",
       "maxItems": 2,
       "minItems": 2,
       "prefixItems": [
@@ -2939,7 +3226,8 @@
          "own",
          "retrieval",
          "rest",
-         "frame"
+         "frame",
+         "base_year"
         ]
        },
        {
@@ -3053,6 +3341,29 @@
       },
       "x-question": "Welche Größe ist diese Zahl? Das ist die wichtigste Entscheidung des Tupels, denn sie bestimmt, als welche Klasse der Wert im Graphen steht. Entscheide nach der Definition der Klasse, nicht nach der Ähnlichkeit der Wörter. Die Bezeichnung steht in der Zeile, im Spaltenkopf, in der Blocküberschrift oder im Titel der eigenen Tabelle. \"final energy consumption value\" ist definiert als die an Endverbraucher gelieferte und dort verbrauchte Energie. Darunter fällt BEIDES, was ein Plan Verbrauch nennt und was er Bedarf nennt: in einem Szenario ist nichts gemessen, jede Zahl ist gerechnet, und die Definition spricht nicht von Messung. Endenergieverbrauch, Endenergiebedarf, Wärmebedarf und ein zu deckender Wärmebedarf sind also diese Klasse. \"primary energy consumption value\" ist die Bilanz vor der Umwandlung. Nutzwärme, Heizwärme, Raumwärme und Nutzenergie sind dagegen NICHT Endenergie, sondern die Wärme hinter dem Erzeuger: \"out:useful_energy\", auch im Zielszenario. Ein Anteil in Prozent und ein Wert je Fläche oder Kopf sind eigene Einträge und keine Verbrauchsmenge."
      },
+     "quantity_link_quote": {
+      "description": "Only with window `base_year`: the passage where the row names the base state ('quantity_raw'). 'quantity_quote' is then the frame's passage that prints the number.",
+      "minLength": 8,
+      "type": "string"
+     },
+     "quantity_link_source": {
+      "description": "Which source 'quantity_link_quote' was found in.",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "section",
+         "table",
+         "figure"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
      "quantity_quote": {
       "description": "The verbatim passage carrying 'quantity'. Present exactly when quantity_state is 'read'.",
       "minLength": 8,
@@ -3093,7 +3404,7 @@
       "description": "How the coordinate 'quantity' ended. Always present: a missing key and a refused reading must not look alike."
      },
      "quantity_window": {
-      "description": "[stage, index] of the window 'quantity' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from.",
+      "description": "[stage, index] of the window 'quantity' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number.",
       "maxItems": 2,
       "minItems": 2,
       "prefixItems": [
@@ -3102,7 +3413,8 @@
          "own",
          "retrieval",
          "rest",
-         "frame"
+         "frame",
+         "base_year"
         ]
        },
        {
@@ -3201,6 +3513,29 @@
       },
       "x-question": "Auf welchen Zustand bezieht sich der Wert? Der Bezug steht selten in der Zeile selbst, sondern im Titel der eigenen Tabelle, in der Abschnittsüberschrift oder in dem Satz, der die Tabelle ankündigt. Bestand heißt: erhoben oder bilanziert für ein vergangenes oder das laufende Jahr. Daran zu erkennen sind Bestandsanalyse, Ist-Zustand, Bilanzjahr, Ausgangslage, Energiebilanz, \"bislang\", \"derzeit\", \"wird verbraucht\", oder ein Jahr vor der Erstellung des Plans im Titel. Ein Satz wie \"wie viel Wärme pro Jahr verbraucht wird und welche Energieträger dafür bislang eingesetzt werden\" ist ein Bestand, auch wenn das Wort Bestandsanalyse nicht fällt. Trendszenario ist die Fortschreibung ohne zusätzliche Maßnahmen. Zielszenario ist der angestrebte Zustand, auch wenn der Plan ihm einen eigenen Namen gibt (\"bei erhöhter Energieeinsparung\", \"Umsetzungsszenario 2\", \"Transformationspfad\"); nennt die Quelle mehrere Zielszenarien nebeneinander, gehört der Name des konkreten in value_raw. Steht in der eigenen Quelle, in ihrem Abschnitt und in dem Satz davor nichts über den Zustand, dann ist das \"out:unstated\" und keine Schätzung."
      },
+     "scenario_link_quote": {
+      "description": "Only with window `base_year`: the passage where the row names the base state ('scenario_raw'). 'scenario_quote' is then the frame's passage that prints the number.",
+      "minLength": 8,
+      "type": "string"
+     },
+     "scenario_link_source": {
+      "description": "Which source 'scenario_link_quote' was found in.",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "section",
+         "table",
+         "figure"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
      "scenario_quote": {
       "description": "The verbatim passage carrying 'scenario'. Present exactly when scenario_state is 'read'.",
       "minLength": 8,
@@ -3241,7 +3576,7 @@
       "description": "How the coordinate 'scenario' ended. Always present: a missing key and a refused reading must not look alike."
      },
      "scenario_window": {
-      "description": "[stage, index] of the window 'scenario' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from.",
+      "description": "[stage, index] of the window 'scenario' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number.",
       "maxItems": 2,
       "minItems": 2,
       "prefixItems": [
@@ -3250,7 +3585,8 @@
          "own",
          "retrieval",
          "rest",
-         "frame"
+         "frame",
+         "base_year"
         ]
        },
        {
@@ -3346,6 +3682,29 @@
       },
       "x-question": "Welcher Verbrauchssektor? Die Bezeichnung steht in der Zeilenbeschriftung, im Spaltenkopf oder in der Blocküberschrift DERSELBEN Tabelle: \"Wohnen\" und \"Wohngebäude\" meinen die Klasse Private Haushalte, \"GHD/Kommune\", \"Gewerbe\" und \"wirtschaftlich genutzte Gebäude\" die Klasse GHD. Ein GEBIET ist kein Sektor: \"Gesamtstadt\", \"Stadtgebiet\", \"Gemeinde\" und \"Plangebiet\" sagen, WO die Zahl gilt, nicht für welchen Verbraucher, und sie sind auch keine Summe über die Sektoren. Eine Zeile, die ausdrücklich über alle Sektoren summiert (\"Summe\", \"Gesamt\", \"insgesamt\" als Zeilen- oder Spaltenkopf), ist \"out:total\". Ebenso ein Wert, der sich ausdrücklich als Gesamtverbrauch oder Gesamtbedarf aller Verbraucher bezeichnet (\"sinkt der Gesamtverbrauch auf 116.000.000 kWh/a\"). Eine Gesamtleistung von Anlagen (\"24 KWK-Anlagen mit einer Gesamtleistung von 2.797,6 kWth\") ist dagegen keine Summe über Sektoren. \"Einfamilienhaus\" und \"Mehrfamilienhaus\" meinen die Klasse Private Haushalte. Hat die eigene Tabelle keine Sektorspalte und nennt ihr Titel keinen Sektor, dann ist das keine Klasse, sondern eine fehlende Angabe: antworte mit \"out:unstated\"."
      },
+     "sector_link_quote": {
+      "description": "Only with window `base_year`: the passage where the row names the base state ('sector_raw'). 'sector_quote' is then the frame's passage that prints the number.",
+      "minLength": 8,
+      "type": "string"
+     },
+     "sector_link_source": {
+      "description": "Which source 'sector_link_quote' was found in.",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "section",
+         "table",
+         "figure"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
      "sector_quote": {
       "description": "The verbatim passage carrying 'sector'. Present exactly when sector_state is 'read'.",
       "minLength": 8,
@@ -3386,7 +3745,7 @@
       "description": "How the coordinate 'sector' ended. Always present: a missing key and a refused reading must not look alike."
      },
      "sector_window": {
-      "description": "[stage, index] of the window 'sector' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from.",
+      "description": "[stage, index] of the window 'sector' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number.",
       "maxItems": 2,
       "minItems": 2,
       "prefixItems": [
@@ -3395,7 +3754,8 @@
          "own",
          "retrieval",
          "rest",
-         "frame"
+         "frame",
+         "base_year"
         ]
        },
        {
@@ -3459,6 +3819,29 @@
       },
       "x-question": "Auf welches Gebiet bezieht sich der Wert? Sieh ZUERST in der Zeile selbst nach: benennt die Zeilenbeschriftung ein Gebiet — einen Quartiersnamen, ein Eignungsgebiet, eine Straße —, dann ist DAS das Gebiet dieser Zeile und die Überschrift gilt für sie nicht. Eine Steckbrief- oder Quartierstabelle hat in jeder Zeile ein anderes Gebiet und in der Überschrift nur den Gemeindenamen; wer dann die Überschrift nimmt, legt vierzig Quartiere auf eine Koordinate. Erst wenn die Zeile kein Gebiet nennt, gilt die Überschrift oder die Caption. Bei einem Teilgebiet gehört sein NAME wörtlich in value_raw (\"Fokusgebiet Eicken\", \"Quartier Nordstadt\", \"Wärmenetzgebiet 3\"), ohne den Namen sind zwei Teilgebiete im Graphen nicht auseinanderzuhalten. Beim ganzen Gemeindegebiet reicht die Klasse."
      },
+     "spatial_scope_link_quote": {
+      "description": "Only with window `base_year`: the passage where the row names the base state ('spatial_scope_raw'). 'spatial_scope_quote' is then the frame's passage that prints the number.",
+      "minLength": 8,
+      "type": "string"
+     },
+     "spatial_scope_link_source": {
+      "description": "Which source 'spatial_scope_link_quote' was found in.",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "section",
+         "table",
+         "figure"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
      "spatial_scope_quote": {
       "description": "The verbatim passage carrying 'spatial_scope'. Present exactly when spatial_scope_state is 'read'.",
       "minLength": 8,
@@ -3499,7 +3882,7 @@
       "description": "How the coordinate 'spatial_scope' ended. Always present: a missing key and a refused reading must not look alike."
      },
      "spatial_scope_window": {
-      "description": "[stage, index] of the window 'spatial_scope' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from.",
+      "description": "[stage, index] of the window 'spatial_scope' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number.",
       "maxItems": 2,
       "minItems": 2,
       "prefixItems": [
@@ -3508,7 +3891,8 @@
          "own",
          "retrieval",
          "rest",
-         "frame"
+         "frame",
+         "base_year"
         ]
        },
        {
@@ -3597,6 +3981,29 @@
       },
       "x-question": "Welche Einheit hat diese Zahl? Genau EIN Eintrag aus der Liste, und zwar der, den die Quelle MEINT, nicht der, den sie ähnlich schreibt: \"Gigawattstunden\" ist GWh, \"t CO₂-Äq.\" ist t CO2eq/a oder t CO2eq, \"kWh Hi\" und \"GWh_th\" sind kWh und GWh, \"1.700 kg CO2\" ist kg CO2 und NICHT t CO2. Ob die Menge je Jahr gilt, sagt oft erst der Satz, der Spaltenkopf oder der Tabellentitel: \"450 kWh über das Jahr\", \"im Jahr 2021\" und \"pro Jahr\" machen aus kWh die Einheit kWh/a; eine Speicherkapazität von 200 kWh bleibt kWh. Rechne nie um und runde nie: die Umrechnung macht die Prüfung anhand des Eintrags. Eine Angabe je Fläche (kWh/m²a, MWh/ha), je Einwohner oder Gebäude (MWh/EW, kWh pro Person), je Kilowattstunde (g CO2/kWh), eine Spitzenleistung von PV-Anlagen (kWp) oder eine elektrische Leistung (kWel) steht in keiner Liste: lass dann \"value\" weg und gib die Einheit wörtlich in \"value_raw\". Die Einheit steht in der Zelle, im Spaltenkopf, in der Blocküberschrift (\"Endenergieverbrauch [MWh/a]\") oder in der Caption; zitiere die Stelle, an der sie wirklich steht."
      },
+     "unit_link_quote": {
+      "description": "Only with window `base_year`: the passage where the row names the base state ('unit_raw'). 'unit_quote' is then the frame's passage that prints the number.",
+      "minLength": 8,
+      "type": "string"
+     },
+     "unit_link_source": {
+      "description": "Which source 'unit_link_quote' was found in.",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "section",
+         "table",
+         "figure"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
      "unit_quote": {
       "description": "The verbatim passage carrying 'unit'. Present exactly when unit_state is 'read'.",
       "minLength": 8,
@@ -3637,7 +4044,7 @@
       "description": "How the coordinate 'unit' ended. Always present: a missing key and a refused reading must not look alike."
      },
      "unit_window": {
-      "description": "[stage, index] of the window 'unit' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from.",
+      "description": "[stage, index] of the window 'unit' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number.",
       "maxItems": 2,
       "minItems": 2,
       "prefixItems": [
@@ -3646,7 +4053,8 @@
          "own",
          "retrieval",
          "rest",
-         "frame"
+         "frame",
+         "base_year"
         ]
        },
        {
@@ -3678,6 +4086,29 @@
        "role": "edge"
       },
       "x-question": "Für welches Kalenderjahr gilt diese Jahressumme? Vierstellig. Das Jahr steht fast nie in der Zeile der Zahl selbst. Sieh in dieser Reihenfolge nach: (1) die Kopfzelle der Spalte, in der die Zahl steht, (2) der Titel der eigenen Tabelle, (3) der Satz, der die Tabelle in ihrem Abschnitt ankündigt (\"Für das Jahr 2040 ergeben sich die in den nachfolgenden Tabellen zusammengestellten Kennzahlen\"), (4) die Überschrift des Abschnitts. Das Jahr im Titel einer ANDEREN Tabelle gilt nicht, auch wenn dieser Titel im selben Abschnitt steht. Nennt die Quelle einen Zeitraum statt eines Jahres (\"Durchschnittswert der Jahre 2022-2024\"), dann gehört das LETZTE Jahr in value und der Zeitraum wörtlich in value_raw."
+     },
+     "year_link_quote": {
+      "description": "Only with window `base_year`: the passage where the row names the base state ('year_raw'). 'year_quote' is then the frame's passage that prints the number.",
+      "minLength": 8,
+      "type": "string"
+     },
+     "year_link_source": {
+      "description": "Which source 'year_link_quote' was found in.",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "section",
+         "table",
+         "figure"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
      },
      "year_quote": {
       "description": "The verbatim passage carrying 'year'. Present exactly when year_state is 'read'.",
@@ -3719,7 +4150,7 @@
       "description": "How the coordinate 'year' ended. Always present: a missing key and a refused reading must not look alike."
      },
      "year_window": {
-      "description": "[stage, index] of the window 'year' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from.",
+      "description": "[stage, index] of the window 'year' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number.",
       "maxItems": 2,
       "minItems": 2,
       "prefixItems": [
@@ -3728,7 +4159,8 @@
          "own",
          "retrieval",
          "rest",
-         "frame"
+         "frame",
+         "base_year"
         ]
        },
        {
@@ -4102,6 +4534,29 @@
       },
       "x-question": "Wie ist der Wert über Zeit oder Raum zusammengefasst? Bei einer Leistung ist das eine echte Frage und keine Formsache. \"maximum\" bei einer Spitzenlast, einer Höchstlast oder einem Auslegungsfall. \"integral\" bei einer Summe über mehrere Anlagen oder über ein Gebiet, erkennbar an einer Zeile oder Spalte \"Summe\", \"Gesamt\" oder \"insgesamt\". \"arithmetic mean\" bei einem Durchschnitt (\"Ø\", \"mittlere Leistung\"). Die Leistung einer EINZELNEN Anlage ist keines davon: steht in der Quelle, in ihrem Abschnitt und in dem Satz davor nichts über die Zusammenfassung, dann ist das \"out:unstated\" und keine Schätzung."
      },
+     "aggregation_link_quote": {
+      "description": "Only with window `base_year`: the passage where the row names the base state ('aggregation_raw'). 'aggregation_quote' is then the frame's passage that prints the number.",
+      "minLength": 8,
+      "type": "string"
+     },
+     "aggregation_link_source": {
+      "description": "Which source 'aggregation_link_quote' was found in.",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "section",
+         "table",
+         "figure"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
      "aggregation_quote": {
       "description": "The verbatim passage carrying 'aggregation'. Present exactly when aggregation_state is 'read'.",
       "minLength": 8,
@@ -4142,7 +4597,7 @@
       "description": "How the coordinate 'aggregation' ended. Always present: a missing key and a refused reading must not look alike."
      },
      "aggregation_window": {
-      "description": "[stage, index] of the window 'aggregation' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from.",
+      "description": "[stage, index] of the window 'aggregation' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number.",
       "maxItems": 2,
       "minItems": 2,
       "prefixItems": [
@@ -4151,7 +4606,8 @@
          "own",
          "retrieval",
          "rest",
-         "frame"
+         "frame",
+         "base_year"
         ]
        },
        {
@@ -4430,6 +4886,29 @@
       },
       "x-question": "Welcher Energieträger? Die Bezeichnung steht in der Zeilenbeschriftung, im Spaltenkopf oder in der Blocküberschrift, fast nie in der Schreibweise der Klassenliste: \"Gas H\" und \"Erdgas (netzgebunden)\" meinen die Klasse Erdgas, \"Nahwärme\" und \"Wärmenetz\" die Klasse Fernwärme. Eine Summenzeile (\"Summe\", \"Gesamt\", \"alle Energieträger\") ist \"out:total\", eine Restposition (\"Sonstige\", \"Andere\") ist \"out:other\". Passt fachlich weder eine Klasse noch einer dieser Einträge, etwa weil in der Spalte ein Gebäudetyp steht, dann lass die Zeile weg."
      },
+     "carrier_link_quote": {
+      "description": "Only with window `base_year`: the passage where the row names the base state ('carrier_raw'). 'carrier_quote' is then the frame's passage that prints the number.",
+      "minLength": 8,
+      "type": "string"
+     },
+     "carrier_link_source": {
+      "description": "Which source 'carrier_link_quote' was found in.",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "section",
+         "table",
+         "figure"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
      "carrier_quote": {
       "description": "The verbatim passage carrying 'carrier'. Present exactly when carrier_state is 'read'.",
       "minLength": 8,
@@ -4470,7 +4949,7 @@
       "description": "How the coordinate 'carrier' ended. Always present: a missing key and a refused reading must not look alike."
      },
      "carrier_window": {
-      "description": "[stage, index] of the window 'carrier' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from.",
+      "description": "[stage, index] of the window 'carrier' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number.",
       "maxItems": 2,
       "minItems": 2,
       "prefixItems": [
@@ -4479,7 +4958,8 @@
          "own",
          "retrieval",
          "rest",
-         "frame"
+         "frame",
+         "base_year"
         ]
        },
        {
@@ -4515,6 +4995,29 @@
       "description": "Spec parameter: Leistung.",
       "x-description-source": "Eine im Wärmeplan angegebene Leistung, also Energie je Zeit: eine Heizlast, eine Anschlussleistung, eine Netz- oder Erzeugerleistung, die Nennwärmeleistung eines Kessels oder BHKW. Welche Größe es ist, wählst du in \"quantity\" aus der Liste. Die Ontologie definiert die Klasse über ihre Einheit: power value ist \"a quantity value that has a power unit as unit\", also jede Angabe in kW, MW oder GW. Die Einheit trennt diesen Parameter von den anderen: kW gegen kWh. Eine Angabe in kWh, MWh oder GWh ist KEINE Leistung, sondern eine Energiemenge, auch wenn die Zeile das Wort Leistung enthält. Eine ANZAHL (Gebäude, Anlagen, Anschlüsse) ist keine Leistung, hat keine Einheit dieser Liste und bekommt kein Tupel, auch wenn sie in derselben Zeile steht. Die übrigen Einträge der Liste beginnen mit \"out:\": das sind Größen, die der Graph NICHT aufnimmt. Wähle den passenden davon, wenn die Zahl eine davon ist. Das ist ein richtiges Ergebnis, kein Fehler.",
       "x-question": "Um WELCHE Kennzahl handelt es sich bei dieser Zahl? Entscheide danach, was die Quelle über sie sagt: die Einheit, die Spalten- oder Zeilenbeschriftung und die Tabellen- oder Abschnittsüberschrift. Eine Angabe in t CO2 ist eine Emission, eine Angabe in MWh oder GWh ein Energieverbrauch. Zitiere die Stelle, aus der das hervorgeht. Eine Angabe in kW, MW oder GW ist eine Leistung."
+     },
+     "parameter_link_quote": {
+      "description": "Only with window `base_year`: the passage where the row names the base state ('parameter_raw'). 'parameter_quote' is then the frame's passage that prints the number.",
+      "minLength": 8,
+      "type": "string"
+     },
+     "parameter_link_source": {
+      "description": "Which source 'parameter_link_quote' was found in.",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "section",
+         "table",
+         "figure"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
      },
      "parameter_quote": {
       "description": "The verbatim passage carrying 'parameter'. Present exactly when parameter_state is 'read'.",
@@ -4556,7 +5059,7 @@
       "description": "How the coordinate 'parameter' ended. Always present: a missing key and a refused reading must not look alike."
      },
      "parameter_window": {
-      "description": "[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from.",
+      "description": "[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number.",
       "maxItems": 2,
       "minItems": 2,
       "prefixItems": [
@@ -4565,7 +5068,8 @@
          "own",
          "retrieval",
          "rest",
-         "frame"
+         "frame",
+         "base_year"
         ]
        },
        {
@@ -4657,6 +5161,29 @@
       },
       "x-question": "Welche Größe ist diese Zahl? Das ist die wichtigste Entscheidung des Tupels, denn sie bestimmt, als welche Klasse der Wert im Graphen steht. \"power value\" ist definiert als quantity value mit einer Leistungseinheit: eine Heizlast, eine Anschlussleistung, eine Nennwärmeleistung, eine Netz- oder Erzeugerleistung. Die ABGEGEBENE ELEKTRISCHE Leistung derselben Anlage ist \"out:electric\" und nicht dieselbe Klasse: sie steht in einer eigenen Spalte, trägt denselben Energieträger und wäre im Graphen von der Wärmeleistung nicht zu unterscheiden. Gibt die Quelle die Leistung getrennt für Winter und Sommer an, dann ist das \"out:seasonal\" für BEIDE Werte."
      },
+     "quantity_link_quote": {
+      "description": "Only with window `base_year`: the passage where the row names the base state ('quantity_raw'). 'quantity_quote' is then the frame's passage that prints the number.",
+      "minLength": 8,
+      "type": "string"
+     },
+     "quantity_link_source": {
+      "description": "Which source 'quantity_link_quote' was found in.",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "section",
+         "table",
+         "figure"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
      "quantity_quote": {
       "description": "The verbatim passage carrying 'quantity'. Present exactly when quantity_state is 'read'.",
       "minLength": 8,
@@ -4697,7 +5224,7 @@
       "description": "How the coordinate 'quantity' ended. Always present: a missing key and a refused reading must not look alike."
      },
      "quantity_window": {
-      "description": "[stage, index] of the window 'quantity' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from.",
+      "description": "[stage, index] of the window 'quantity' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number.",
       "maxItems": 2,
       "minItems": 2,
       "prefixItems": [
@@ -4706,7 +5233,8 @@
          "own",
          "retrieval",
          "rest",
-         "frame"
+         "frame",
+         "base_year"
         ]
        },
        {
@@ -4805,6 +5333,29 @@
       },
       "x-question": "Auf welchen Zustand bezieht sich der Wert? Der Bezug steht selten in der Zeile selbst, sondern im Titel der eigenen Tabelle, in der Abschnittsüberschrift oder in dem Satz, der die Tabelle ankündigt. Bestand heißt: erhoben oder bilanziert für ein vergangenes oder das laufende Jahr. Daran zu erkennen sind Bestandsanalyse, Ist-Zustand, Bilanzjahr, Ausgangslage, Energiebilanz, \"bislang\", \"derzeit\", \"wird verbraucht\", oder ein Jahr vor der Erstellung des Plans im Titel. Ein Satz wie \"wie viel Wärme pro Jahr verbraucht wird und welche Energieträger dafür bislang eingesetzt werden\" ist ein Bestand, auch wenn das Wort Bestandsanalyse nicht fällt. Trendszenario ist die Fortschreibung ohne zusätzliche Maßnahmen. Zielszenario ist der angestrebte Zustand, auch wenn der Plan ihm einen eigenen Namen gibt (\"bei erhöhter Energieeinsparung\", \"Umsetzungsszenario 2\", \"Transformationspfad\"); nennt die Quelle mehrere Zielszenarien nebeneinander, gehört der Name des konkreten in value_raw. Steht in der eigenen Quelle, in ihrem Abschnitt und in dem Satz davor nichts über den Zustand, dann ist das \"out:unstated\" und keine Schätzung."
      },
+     "scenario_link_quote": {
+      "description": "Only with window `base_year`: the passage where the row names the base state ('scenario_raw'). 'scenario_quote' is then the frame's passage that prints the number.",
+      "minLength": 8,
+      "type": "string"
+     },
+     "scenario_link_source": {
+      "description": "Which source 'scenario_link_quote' was found in.",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "section",
+         "table",
+         "figure"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
      "scenario_quote": {
       "description": "The verbatim passage carrying 'scenario'. Present exactly when scenario_state is 'read'.",
       "minLength": 8,
@@ -4845,7 +5396,7 @@
       "description": "How the coordinate 'scenario' ended. Always present: a missing key and a refused reading must not look alike."
      },
      "scenario_window": {
-      "description": "[stage, index] of the window 'scenario' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from.",
+      "description": "[stage, index] of the window 'scenario' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number.",
       "maxItems": 2,
       "minItems": 2,
       "prefixItems": [
@@ -4854,7 +5405,8 @@
          "own",
          "retrieval",
          "rest",
-         "frame"
+         "frame",
+         "base_year"
         ]
        },
        {
@@ -4950,6 +5502,29 @@
       },
       "x-question": "Welcher Verbrauchssektor? Die Bezeichnung steht in der Zeilenbeschriftung, im Spaltenkopf oder in der Blocküberschrift DERSELBEN Tabelle: \"Wohnen\" und \"Wohngebäude\" meinen die Klasse Private Haushalte, \"GHD/Kommune\", \"Gewerbe\" und \"wirtschaftlich genutzte Gebäude\" die Klasse GHD. Ein GEBIET ist kein Sektor: \"Gesamtstadt\", \"Stadtgebiet\", \"Gemeinde\" und \"Plangebiet\" sagen, WO die Zahl gilt, nicht für welchen Verbraucher, und sie sind auch keine Summe über die Sektoren. Eine Zeile, die ausdrücklich über alle Sektoren summiert (\"Summe\", \"Gesamt\", \"insgesamt\" als Zeilen- oder Spaltenkopf), ist \"out:total\". Ebenso ein Wert, der sich ausdrücklich als Gesamtverbrauch oder Gesamtbedarf aller Verbraucher bezeichnet (\"sinkt der Gesamtverbrauch auf 116.000.000 kWh/a\"). Eine Gesamtleistung von Anlagen (\"24 KWK-Anlagen mit einer Gesamtleistung von 2.797,6 kWth\") ist dagegen keine Summe über Sektoren. \"Einfamilienhaus\" und \"Mehrfamilienhaus\" meinen die Klasse Private Haushalte. Hat die eigene Tabelle keine Sektorspalte und nennt ihr Titel keinen Sektor, dann ist das keine Klasse, sondern eine fehlende Angabe: antworte mit \"out:unstated\"."
      },
+     "sector_link_quote": {
+      "description": "Only with window `base_year`: the passage where the row names the base state ('sector_raw'). 'sector_quote' is then the frame's passage that prints the number.",
+      "minLength": 8,
+      "type": "string"
+     },
+     "sector_link_source": {
+      "description": "Which source 'sector_link_quote' was found in.",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "section",
+         "table",
+         "figure"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
      "sector_quote": {
       "description": "The verbatim passage carrying 'sector'. Present exactly when sector_state is 'read'.",
       "minLength": 8,
@@ -4990,7 +5565,7 @@
       "description": "How the coordinate 'sector' ended. Always present: a missing key and a refused reading must not look alike."
      },
      "sector_window": {
-      "description": "[stage, index] of the window 'sector' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from.",
+      "description": "[stage, index] of the window 'sector' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number.",
       "maxItems": 2,
       "minItems": 2,
       "prefixItems": [
@@ -4999,7 +5574,8 @@
          "own",
          "retrieval",
          "rest",
-         "frame"
+         "frame",
+         "base_year"
         ]
        },
        {
@@ -5063,6 +5639,29 @@
       },
       "x-question": "Auf welches Gebiet bezieht sich der Wert? Sieh ZUERST in der Zeile selbst nach: benennt die Zeilenbeschriftung ein Gebiet — einen Quartiersnamen, ein Eignungsgebiet, eine Straße —, dann ist DAS das Gebiet dieser Zeile und die Überschrift gilt für sie nicht. Eine Steckbrief- oder Quartierstabelle hat in jeder Zeile ein anderes Gebiet und in der Überschrift nur den Gemeindenamen; wer dann die Überschrift nimmt, legt vierzig Quartiere auf eine Koordinate. Erst wenn die Zeile kein Gebiet nennt, gilt die Überschrift oder die Caption. Bei einem Teilgebiet gehört sein NAME wörtlich in value_raw (\"Fokusgebiet Eicken\", \"Quartier Nordstadt\", \"Wärmenetzgebiet 3\"), ohne den Namen sind zwei Teilgebiete im Graphen nicht auseinanderzuhalten. Beim ganzen Gemeindegebiet reicht die Klasse."
      },
+     "spatial_scope_link_quote": {
+      "description": "Only with window `base_year`: the passage where the row names the base state ('spatial_scope_raw'). 'spatial_scope_quote' is then the frame's passage that prints the number.",
+      "minLength": 8,
+      "type": "string"
+     },
+     "spatial_scope_link_source": {
+      "description": "Which source 'spatial_scope_link_quote' was found in.",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "section",
+         "table",
+         "figure"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
      "spatial_scope_quote": {
       "description": "The verbatim passage carrying 'spatial_scope'. Present exactly when spatial_scope_state is 'read'.",
       "minLength": 8,
@@ -5103,7 +5702,7 @@
       "description": "How the coordinate 'spatial_scope' ended. Always present: a missing key and a refused reading must not look alike."
      },
      "spatial_scope_window": {
-      "description": "[stage, index] of the window 'spatial_scope' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from.",
+      "description": "[stage, index] of the window 'spatial_scope' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number.",
       "maxItems": 2,
       "minItems": 2,
       "prefixItems": [
@@ -5112,7 +5711,8 @@
          "own",
          "retrieval",
          "rest",
-         "frame"
+         "frame",
+         "base_year"
         ]
        },
        {
@@ -5166,6 +5766,29 @@
       },
       "x-question": "Welche Einheit hat diese Zahl? Genau EIN Eintrag aus der Liste, und zwar der, den die Quelle MEINT, nicht der, den sie ähnlich schreibt: \"Gigawattstunden\" ist GWh, \"t CO₂-Äq.\" ist t CO2eq/a oder t CO2eq, \"kWh Hi\" und \"GWh_th\" sind kWh und GWh, \"1.700 kg CO2\" ist kg CO2 und NICHT t CO2. Ob die Menge je Jahr gilt, sagt oft erst der Satz, der Spaltenkopf oder der Tabellentitel: \"450 kWh über das Jahr\", \"im Jahr 2021\" und \"pro Jahr\" machen aus kWh die Einheit kWh/a; eine Speicherkapazität von 200 kWh bleibt kWh. Rechne nie um und runde nie: die Umrechnung macht die Prüfung anhand des Eintrags. Eine Angabe je Fläche (kWh/m²a, MWh/ha), je Einwohner oder Gebäude (MWh/EW, kWh pro Person), je Kilowattstunde (g CO2/kWh), eine Spitzenleistung von PV-Anlagen (kWp) oder eine elektrische Leistung (kWel) steht in keiner Liste: lass dann \"value\" weg und gib die Einheit wörtlich in \"value_raw\". Die Einheit steht in der Zelle, im Spaltenkopf, in der Blocküberschrift (\"Endenergieverbrauch [MWh/a]\") oder in der Caption; zitiere die Stelle, an der sie wirklich steht."
      },
+     "unit_link_quote": {
+      "description": "Only with window `base_year`: the passage where the row names the base state ('unit_raw'). 'unit_quote' is then the frame's passage that prints the number.",
+      "minLength": 8,
+      "type": "string"
+     },
+     "unit_link_source": {
+      "description": "Which source 'unit_link_quote' was found in.",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "section",
+         "table",
+         "figure"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
      "unit_quote": {
       "description": "The verbatim passage carrying 'unit'. Present exactly when unit_state is 'read'.",
       "minLength": 8,
@@ -5206,7 +5829,7 @@
       "description": "How the coordinate 'unit' ended. Always present: a missing key and a refused reading must not look alike."
      },
      "unit_window": {
-      "description": "[stage, index] of the window 'unit' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from.",
+      "description": "[stage, index] of the window 'unit' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number.",
       "maxItems": 2,
       "minItems": 2,
       "prefixItems": [
@@ -5215,7 +5838,8 @@
          "own",
          "retrieval",
          "rest",
-         "frame"
+         "frame",
+         "base_year"
         ]
        },
        {
@@ -5247,6 +5871,29 @@
        "role": "edge"
       },
       "x-question": "Für welches Kalenderjahr gilt diese Leistung? Vierstellig. Das Jahr steht fast nie in der Zeile der Zahl selbst. Sieh in dieser Reihenfolge nach: (1) die Kopfzelle der Spalte, in der die Zahl steht, (2) der Titel der eigenen Tabelle, (3) der Satz, der die Tabelle in ihrem Abschnitt ankündigt (\"Für das Jahr 2040 ergeben sich die in den nachfolgenden Tabellen zusammengestellten Kennzahlen\"), (4) die Überschrift des Abschnitts. Das Jahr im Titel einer ANDEREN Tabelle gilt nicht, auch wenn dieser Titel im selben Abschnitt steht. Eine Bestandsanlage trägt das Jahr der Bestandsaufnahme, nicht ihr Baujahr."
+     },
+     "year_link_quote": {
+      "description": "Only with window `base_year`: the passage where the row names the base state ('year_raw'). 'year_quote' is then the frame's passage that prints the number.",
+      "minLength": 8,
+      "type": "string"
+     },
+     "year_link_source": {
+      "description": "Which source 'year_link_quote' was found in.",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "section",
+         "table",
+         "figure"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
      },
      "year_quote": {
       "description": "The verbatim passage carrying 'year'. Present exactly when year_state is 'read'.",
@@ -5288,7 +5935,7 @@
       "description": "How the coordinate 'year' ended. Always present: a missing key and a refused reading must not look alike."
      },
      "year_window": {
-      "description": "[stage, index] of the window 'year' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from.",
+      "description": "[stage, index] of the window 'year' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number.",
       "maxItems": 2,
       "minItems": 2,
       "prefixItems": [
@@ -5297,7 +5944,8 @@
          "own",
          "retrieval",
          "rest",
-         "frame"
+         "frame",
+         "base_year"
         ]
        },
        {
@@ -5383,6 +6031,29 @@
       "x-description-source": "Das Ingenieur-, Planungs- oder Beratungsbüro, das die Wärmeplanung im Auftrag der Kommune erstellt hat. Ein Tupel je Büro, in der Schreibweise des Dokuments, ohne Rechtsform. Zu finden im Impressum, auf der Titelseite, unter Auftragnehmer, Bearbeitung, Erstellt durch oder Verfasser. NICHT die Kommune selbst, die ist die Auftraggeberin. NICHT Fördermittelgeber, Datenlieferanten, Netzbetreiber oder im Text erwähnte Firmen.",
       "x-question": "Um WELCHE Kennzahl handelt es sich bei dieser Zahl? Entscheide danach, was die Quelle über sie sagt: die Einheit, die Spalten- oder Zeilenbeschriftung und die Tabellen- oder Abschnittsüberschrift. Eine Angabe in t CO2 ist eine Emission, eine Angabe in MWh oder GWh ein Energieverbrauch. Zitiere die Stelle, aus der das hervorgeht. Eine Angabe in kW, MW oder GW ist eine Leistung."
      },
+     "parameter_link_quote": {
+      "description": "Only with window `base_year`: the passage where the row names the base state ('parameter_raw'). 'parameter_quote' is then the frame's passage that prints the number.",
+      "minLength": 8,
+      "type": "string"
+     },
+     "parameter_link_source": {
+      "description": "Which source 'parameter_link_quote' was found in.",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "enum": [
+         "section",
+         "table",
+         "figure"
+        ]
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "type": "array"
+     },
      "parameter_quote": {
       "description": "The verbatim passage carrying 'parameter'. Present exactly when parameter_state is 'read'.",
       "minLength": 8,
@@ -5423,7 +6094,7 @@
       "description": "How the coordinate 'parameter' ended. Always present: a missing key and a refused reading must not look alike."
      },
      "parameter_window": {
-      "description": "[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from.",
+      "description": "[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number.",
       "maxItems": 2,
       "minItems": 2,
       "prefixItems": [
@@ -5432,7 +6103,8 @@
          "own",
          "retrieval",
          "rest",
-         "frame"
+         "frame",
+         "base_year"
         ]
        },
        {
@@ -5962,6 +6634,9 @@
      "unstated": {
       "type": "integer"
      },
+     "via_base": {
+      "type": "integer"
+     },
      "window": {
       "type": "integer"
      }
@@ -6030,6 +6705,9 @@
       "type": "integer"
      },
      "unstated": {
+      "type": "integer"
+     },
+     "via_base": {
       "type": "integer"
      },
      "windows": {

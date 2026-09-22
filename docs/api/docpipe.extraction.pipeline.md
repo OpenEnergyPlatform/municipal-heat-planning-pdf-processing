@@ -108,6 +108,7 @@ Fields:
 - `frame_index: int = 0`
 - `pairs: tuple = ()`: Every pair of the document, in index order. A claim whose own quote names a different one of them is filed under that pair instead of being refused, which is the only use this list has.
 - `anchors: tuple = ()`: The sentences this request's passages were searched with. They say, in the plan's own words, what the request asks for, so the pair reaches the model as a question and not only as a field.
+- `bases: tuple = ()`: The document's base years with the frame's quotes (`base_years`), on every batch of the document, framed or not: a passage that says "Basisjahr" prints no pair, and it is exactly the one that needs them.
 
 #### Batch.sources
 
@@ -519,11 +520,45 @@ document's word belongs to a class the spec spells differently. What we
 have no measurement of is how often it decides wrongly, and that is
 exactly what this counter is for.
 
+### base_years
+
+```python
+def base_years(pairs, frame_axes, where: Optional[dict]) -> list
+```
+
+The years the document's frame found for its base state, with proof.
+
+*where* is the profile's `BASE_YEAR`: which values of the other frame
+coordinates make a pair the plan's own state rather than a scenario of it.
+Every such pair was read with a quote that prints its year, so each entry
+here carries that quote and its source: {"axis", "year", "quote",
+"source", "index"}. One entry per year, the first pair that proved it.
+Empty when the profile names no base state or the frame has no number
+coordinate to date it with.
+
+### base_year_named
+
+```python
+def base_year_named(slot, given, wording: Optional[str], quote: str,
+                    bases) -> Optional[dict]
+```
+
+The base year a year answer refers to by the plan's word for it.
+
+A row whose table says "Basisjahr" or "Ist-Zustand" and prints no year
+states its year elsewhere in the plan, once: where the frame read the base
+state. The model is shown those years with their quotes and answers one of
+them, citing the passage that names the state. That answer is backed by
+two passages, each for its own half: the row's quote carries the wording,
+the frame's quote carries the number. Anything else is None, and the
+answer fails as any answer without its number in the quote does.
+
 ### merge_field
 
 ```python
 def merge_field(rows: list, sources: list, slot, reply: Optional[dict],
-                *, window: Optional[tuple] = None) -> dict
+                *, window: Optional[tuple] = None,
+                bases: Optional[list] = None) -> dict
 ```
 
 Fold one field's answers. Returns {"filled", "unquoted", "unbacked"}.
@@ -553,6 +588,12 @@ from the row it stands, and which column of a table it heads are the
 model's reading, not a rule of this function. Every reason a reading is
 dropped for is listed in `schema.DROP_REASONS`, and a test holds this
 function to that list.
+
+*bases* are the document's base years (`base_years`). A year answer whose
+quote carries its wording but not its number is read when the number is
+one of them (owner decision 2026-09-22): the coordinate then cites the
+frame's passage for the year and keeps the row's passage as its link
+(`<axis>_link_quote`, `<axis>_link_source`).
 
 ### line_naming
 

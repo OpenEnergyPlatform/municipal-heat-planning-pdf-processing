@@ -137,7 +137,7 @@ def _harvester(monkeypatch, rows_reply, unit_answer):
 
     def make_asker(image_root=None):
         def ask(shown, rows, slots, corrections=None, document_id=None,
-                usage_out=None, owner_of=None):
+                usage_out=None, owner_of=None, bases=None):
             slots = slots if isinstance(slots, (list, tuple)) else [slots]
             out = {}
             for slot in slots:

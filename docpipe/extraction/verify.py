@@ -509,7 +509,8 @@ def verify_tuple(raw: dict, parameter: Parameter, source_text: str, *,
                                                                   DERIVED):
             continue
         out[f"{name}_state"] = UNBACKED
-        for suffix in ("_quote", "_source", "_window"):
+        for suffix in ("_quote", "_source", "_window", "_link_quote",
+                       "_link_source"):
             out.pop(f"{name}{suffix}", None)
         flags.append(f"unbacked:{name}")
     out.update(value_fields)

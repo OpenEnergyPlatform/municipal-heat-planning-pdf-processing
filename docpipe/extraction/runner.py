@@ -68,7 +68,7 @@ from docpipe.profile import add_profile_argument, resolve_profile
 
 from . import fields
 from . import trace
-from .pipeline import (Source, WorkItem, apply_frame, batch_uri,
+from .pipeline import (Source, WorkItem, apply_frame, base_years, batch_uri,
                        build_sweeps, cell_index as pipeline_cell_index,
                        drop_repeats, fold_batch, follow_up, group_items,
                        harvest_document, merge_field, mark_unanswered,
@@ -2259,7 +2259,7 @@ def _image_part(path: str) -> Optional[dict]:
 # The evidence a row keeps next to each coordinate: what makes it re-checkable,
 # and nothing that tells a repeat from a new value.
 _EVIDENCE = ("_raw", "_raw_foreign", "_quote", "_source", "_window", "_state",
-             "_seen")
+             "_seen", "_link_quote", "_link_source")
 
 
 def _prior_payload(prior: list) -> list:
@@ -2589,7 +2589,8 @@ def make_harvester(image_root: Optional[Path] = None,
 
 def _field_payload(shown: list, rows: list, slots,
                    corrections: Optional[list] = None,
-                   owner_of: Optional[dict] = None) -> dict:
+                   owner_of: Optional[dict] = None,
+                   bases: Optional[list] = None) -> dict:
     """The request body of one field request, over the window shown.
 
     One field. Sources first, rows second, the field last: the asker sends
@@ -2635,12 +2636,22 @@ def _field_payload(shown: list, rows: list, slots,
             entry["column"], entry["columns"] = cell
         listed.append(entry)
     asked = []
+    names = set()
     for slot in ([slots] if not isinstance(slots, (list, tuple)) else slots):
         field = {"name": slot.name, "question": slot.question}
         if slot.options:
             field["options"] = slot.answerable()
         asked.append(field)
-    out = {"sources": sources, "rows": listed, "fields": asked}
+        names.add(slot.name)
+    out = {"sources": sources, "rows": listed}
+    # The plan's base years, where the field asked is the one they date: a
+    # row whose table says "Basisjahr" and prints no year answers one of these
+    # and cites the passage that names the state (`merge_field`).
+    dated = [{"year": b["year"], "quote": b["quote"]}
+             for b in bases or () if b.get("axis") in names]
+    if dated:
+        out["base_years"] = dated
+    out["fields"] = asked
     if corrections:
         # What was wrong with the last answer, per row. A verification failure
         # is information the model can act on, and withholding it turns three
@@ -2702,6 +2713,53 @@ def _merge_field_replies(replies: list) -> Optional[dict]:
     return merged
 
 
+def field_response_format(slot) -> dict:
+    """The shape a reply to one field request can take, as a server grammar.
+
+    The field contract of the prompt, handed to vLLM as a JSON schema so the
+    reply is generated inside it: one object, the asked field under its own
+    name, `groups` and `answers`, and a `value` that is one of the options
+    (UNSTATED included) or, for a number, an integer. 70,395 field replies of
+    corpus_m5 carried text beside the object and were asked again; under the
+    grammar none can. Nothing here is a check: every key stays optional that
+    the prompt leaves optional (`value` may be omitted with a wording, a
+    `quote` is not asked of UNSTATED), and what the reply says is verified by
+    `merge_field` as before.
+    """
+    if slot.kind == fields.CHOICE and slot.options:
+        value = {"enum": list(slot.answerable())}
+    elif slot.kind == fields.NUMBER:
+        value = {"anyOf": [{"type": "integer"},
+                           {"enum": [fields.UNSTATED]}]}
+    else:
+        value = {"type": "string"}
+    said = {"value": value, "value_raw": {"type": "string"},
+            "quote": {"type": "string"}}
+    answer = {"type": "object", "properties": said,
+              "additionalProperties": False}
+    group = {"type": "object",
+             "properties": {"rows": {"type": "array",
+                                     "items": {"type": "string"}},
+                            **said},
+             "required": ["rows"], "additionalProperties": False}
+    field = {"type": "object",
+             "properties": {"groups": {"type": "array", "items": group},
+                            "answers": {"type": "object",
+                                        "additionalProperties": answer}},
+             "additionalProperties": False}
+    schema = {"type": "object",
+              "properties": {
+                  "fields": {"type": "object",
+                             "properties": {slot.name: field},
+                             "required": [slot.name],
+                             "additionalProperties": False},
+                  "need_more": {"type": "array",
+                                "items": {"type": "string"}}},
+              "required": ["fields"], "additionalProperties": False}
+    return {"type": "json_schema",
+            "json_schema": {"name": "field_reply", "schema": schema}}
+
+
 def make_field_asker(image_root: Optional[Path] = None) -> Callable:
     """ask(shown, rows, slots, ...) -> {"fields": {name: answer}}, or None.
 
@@ -2720,10 +2778,12 @@ def make_field_asker(image_root: Optional[Path] = None) -> Callable:
     temperature = float(prompt.meta.get("temperature", 0.1))
     max_tokens = int(prompt.meta.get("max_tokens", 4096))
 
-    def content_of(shown, rows, slot, corrections, owner_of) -> list:
+    def content_of(shown, rows, slot, corrections, owner_of,
+                   bases=None) -> list:
         """The passages and their crops first, the rows and the field last,
         so requests over the same window share their prefix up to the field."""
-        body = _field_payload(shown, rows, slot, corrections, owner_of)
+        body = _field_payload(shown, rows, slot, corrections, owner_of,
+                              bases)
         head = json.dumps({"sources": body.pop("sources")},
                           ensure_ascii=False, indent=2) + "\n"
         tail = json.dumps(body, ensure_ascii=False, indent=2)
@@ -2742,10 +2802,10 @@ def make_field_asker(image_root: Optional[Path] = None) -> Callable:
         return parts
 
     def request(shown, rows, slot, corrections, document_id, usage_out,
-                owner_of) -> Optional[dict]:
+                owner_of, bases=None) -> Optional[dict]:
         name = slot.name
         conversation: list = [{"role": "user", "content": content_of(
-            shown, rows, slot, corrections, owner_of)}]
+            shown, rows, slot, corrections, owner_of, bases)}]
         needed = min(max_tokens, len(rows) * FIELD_ROW_TOKENS + ANSWER_MARGIN)
         room = answer_room(prompt.text, conversation, max_tokens)
         if room < max(needed, MIN_ANSWER_TOKENS):
@@ -2755,7 +2815,7 @@ def make_field_asker(image_root: Optional[Path] = None) -> Callable:
                     request(shown, part, slot,
                             [c for c in (corrections or ())
                              if c.get("row") in {r.label for r in part}],
-                            document_id, usage_out, owner_of)
+                            document_id, usage_out, owner_of, bases)
                     for part in (rows[:cut], rows[cut:])])
             log.warning("   field %s: the prompt leaves %d answer token(s) in "
                         "a window of %d -- not sent", name, room,
@@ -2766,6 +2826,7 @@ def make_field_asker(image_root: Optional[Path] = None) -> Callable:
         # A model error is told to the model, the same way a verification
         # failure is. Retrying a malformed reply without saying what was
         # malformed is one attempt three times.
+        shape = field_response_format(slot)
         transport = False
         faults = 0
         for attempt in range(1, MAX_RETRIES + 1):
@@ -2779,6 +2840,7 @@ def make_field_asker(image_root: Optional[Path] = None) -> Callable:
                     max_tokens=limit,
                     messages=[{"role": "system", "content": prompt.text},
                               *conversation],
+                    response_format=shape,
                     extra_body=request_extras(),
                 )
                 transport = False
@@ -2827,7 +2889,8 @@ def make_field_asker(image_root: Optional[Path] = None) -> Callable:
             corrections: Optional[list] = None,
             document_id: Optional[int] = None,
             usage_out: Optional[dict] = None,
-            owner_of: Optional[dict] = None) -> Optional[dict]:
+            owner_of: Optional[dict] = None,
+            bases: Optional[list] = None) -> Optional[dict]:
         slots = list(slots) if isinstance(slots, (list, tuple)) else [slots]
         step = max(1, FIELD_ROWS)
         chunks = [rows[start:start + step]
@@ -2840,7 +2903,8 @@ def make_field_asker(image_root: Optional[Path] = None) -> Callable:
                         if c.get("row") in here
                         and c.get("field") in (None, slot.name)]
                 replies.append(request(shown, chunk, slot, mine or None,
-                                       document_id, usage_out, owner_of))
+                                       document_id, usage_out, owner_of,
+                                       bases))
         return _merge_field_replies(replies)
 
     return ask
@@ -3039,7 +3103,8 @@ def make_sweeper(ask: Callable, *,
                     for row in rows
                     if 0 <= row.item_index < len(batch.items)}
         totals = {"filled": 0, "unquoted": 0, "unbacked": 0, "unstated": 0,
-                  "raw_missing": 0, "raw_foreign": 0, "retried": 0}
+                  "raw_missing": 0, "raw_foreign": 0, "via_base": 0,
+                  "retried": 0}
         seen = {(i.source.owner_kind, i.source.owner_id) for i in batch.items}
         # Every passage this sweep has already materialised, by key. `seen`
         # answers what must not be FETCHED again; this answers what may be
@@ -3162,7 +3227,8 @@ def make_sweeper(ask: Callable, *,
                     started = time.time()
                     usage: dict = {}
                     state["answer"] = ask(shown, todo, slots, corrections,
-                                          batch.document_id, usage, owner_of)
+                                          batch.document_id, usage, owner_of,
+                                          bases=list(batch.bases))
                     # Checked against the window AND the passages the rows
                     # carry. A row's own quote is shown to the model in the
                     # rows list, so citing it is legitimate — and from the
@@ -3178,7 +3244,7 @@ def make_sweeper(ask: Callable, *,
                         answered = {}
                     counts = {"filled": 0, "unquoted": 0, "unbacked": 0,
                               "unstated": 0, "raw_missing": 0,
-                              "raw_foreign": 0, "failed": []}
+                              "raw_foreign": 0, "via_base": 0, "failed": []}
                     # Which FIELD filled and which failed, not only how many.
                     # Five fields answer in one reply, and a run that logs
                     # "aggregation+carrier+sector+year+spatial_scope: 3 of 5"
@@ -3191,10 +3257,11 @@ def make_sweeper(ask: Callable, *,
                         got = merge_field(rows, list(shown) + batch.sources,
                                           slot, answered.get(slot.name),
                                           window=(state["stage"],
-                                                  sum(spent.values())))
+                                                  sum(spent.values())),
+                                          bases=list(batch.bases))
                         for key in ("filled", "unquoted", "unbacked",
                                     "unstated", "raw_missing",
-                                    "raw_foreign"):
+                                    "raw_foreign", "via_base"):
                             counts[key] += got[key]
                         if got["filled"]:
                             filled_by[slot.name] = got["filled"]
@@ -3205,7 +3272,7 @@ def make_sweeper(ask: Callable, *,
                             counts["failed"].append(dict(bad,
                                                          field=slot.name))
                     for key in ("filled", "unquoted", "unbacked", "unstated",
-                                "raw_missing", "raw_foreign"):
+                                "raw_missing", "raw_foreign", "via_base"):
                         totals[key] += counts[key]
                     totals["retried"] += 1 if attempt else 0
                     # The window this coordinate was asked in, what was shown,
@@ -3229,7 +3296,7 @@ def make_sweeper(ask: Callable, *,
                                 **{k: counts[k] for k in
                                    ("filled", "unquoted", "unbacked",
                                     "unstated", "raw_missing",
-                                    "raw_foreign")})
+                                    "raw_foreign", "via_base")})
                     for bad in counts["failed"]:
                         # What was answered, not only that it failed: the
                         # corpus_m5 trace counted 284,643 quantity answers
@@ -4708,6 +4775,9 @@ def main(argv: Optional[list] = None) -> int:
     # old shape: every coordinate is asked per row.
     frame_axes = fields.frame_slots(spec, profile.component("extraction",
                                                             "FRAME") or ())
+    # Which frame pairs are the plan's own state, so their years date a row
+    # that names the state by word ("Basisjahr") and prints no year.
+    base_state = profile.component("extraction", "BASE_YEAR")
     if frame_axes:
         log.info("extraction: the frame is %s — found once per document, then "
                  "one value request per pair",
@@ -5125,6 +5195,12 @@ def main(argv: Optional[list] = None) -> int:
                      name, len(pairs), len(rest), added)
         batches = list(framed) + list(group_items(
             rest, max_sources=BATCH_SOURCES, max_chars=BATCH_CHARS))
+        bases = tuple(base_years(pairs, frame_axes, base_state))
+        if bases:
+            log.info("extract: %s: base year(s) %s", name,
+                     ", ".join(str(b["year"]) for b in bases))
+        for batch in batches:
+            batch.bases = bases
         log.info("extraction: %s planned — %d batch(es) over %d source(s)",
                  name, len(batches), sum(len(b.items) for b in batches))
         if Halted.is_set():

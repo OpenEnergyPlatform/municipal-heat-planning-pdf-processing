@@ -5,12 +5,12 @@ term, carries a `<name>_state` key beside its value, its raw wording, its
 quote, its source, the window it was read in, and, when `unstated` or a
 closed-list answer names none of its entries, a
 `<name>_seen` key for a wording the model noticed
-(`docpipe/extraction/schema.py:212-266`). The state is one of seven fixed
+(`docpipe/extraction/schema.py:212-280`). The state is one of seven fixed
 strings, defined in `docpipe/extraction/fields.py`. A coordinate with no
 value, and one never asked for, read the same on the row. The state
 distinguishes a coordinate the document never mentions from one a run
 ended before asking about. A coordinate's own value is `null` unless its
-state is `read` or `derived` (`schema.py:269-283`). It is a finding about
+state is `read` or `derived` (`schema.py:283-297`). It is a finding about
 the model, the document, the run, or the run's scope, never about more
 than one of those at once.
 
@@ -22,7 +22,7 @@ decides, such as kwp's `aggregation` coordinate on `energy_consumption` and
 `emission` parameters, derived to `integral`, the only `derive` rules in
 either profile (`profiles/kwp/extraction_spec.json:173,920`). Which
 parameter a row belongs to is a separate decision, `derive_parameter`
-(`fields.py:212-235`), written directly in `runner.py:3277-3290`, not
+(`fields.py:212-235`), written directly in `runner.py:3343-3356`, not
 through `apply_derived`. `out_of_slice` is written the same way: a gate
 coordinate the profile's `SLICE` names has put the row outside what this
 run serializes, or no parameter of the spec could hold it, so none of its
@@ -60,12 +60,12 @@ the run depends on. `unanswered` and `unstated` were the same empty cell
 before the state existed: on the 1079-document run they made up 16 to 34
 percent of every axis, one half a finding about the model and the other
 about the document, with no way after the fact to tell which was which
-(`docpipe/extraction/pipeline.py:1118`). `exhausted` and `unstated` are the
+(`docpipe/extraction/pipeline.py:1219`). `exhausted` and `unstated` are the
 same conflation about a whole run, and the reason the sweep reads past
 retrieval first: before that stage existed, a harvest meant to mark plans
 read to the end wrote 789 `exhausted` against 0 `unstated` on the M3 run,
 because nothing after retrieval read a document the rest of the way
-(`docpipe/extraction/runner.py:3141`). The two the sweep skips are kept
+(`docpipe/extraction/runner.py:3205`). The two the sweep skips are kept
 apart from `unstated` for the same reason it exists: asking the parameter
 question anyway on the Kassel run would have cost 322 of 1,043 field
 windows, 30.9 percent (`docpipe/extraction/fields.py:266`); asking the
@@ -74,7 +74,7 @@ cost 178 of 853 field requests, 20.9 percent
 (`docpipe/extraction/fields.py:295`); and before the slice gate ran first,
 4,064 of 6,763 tuples harvested across 20 plans had all seven axes
 filled in before being dropped for the two gate coordinates
-(`docpipe/extraction/runner.py:3327`). The same split holds past the
+(`docpipe/extraction/runner.py:3393`). The same split holds past the
 coordinate: `docpipe/extraction/trust.py`'s `reasons` counts only
 `exhausted` and `unbacked` as doubt about a reading, and treats every
 other state, `derived`, `unstated` and `out_of_slice`, as a fact about the

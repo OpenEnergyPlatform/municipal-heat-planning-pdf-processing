@@ -72,8 +72,12 @@ def document_context(conn, document_id: int) -> dict:
 # the row's own source and only that one could carry the year.
 FRAME = ("scenario", "year")
 
-# The pair a passage is read under when it names no part of any pair the
-# frame found, no scenario and no year: an inventory table that states
-# neither is the plan's inventory. Owner decision 2026-09-10, after Kassel's
-# Tabelle 3 (CO2 by sector and carrier, no year anywhere) left 35 values
-# without one. Used only when a document has exactly one such pair.
+
+# Which frame pairs are the plan's own state. Their years are the plan's base
+# years, each with the frame's quote that prints it. A row whose table says
+# only "Basisjahr", "Ist-Zustand" or "Bilanzjahr" answers one of them and
+# cites the passage with that word; the number is proven by the frame's
+# passage (owner decision 2026-09-22, the model chooses among them). corpus_m5
+# dropped 127,233 year answers whose wording stood in their quote and whose
+# number did not, "Basisjahr" among the most common.
+BASE_YEAR = {"scenario": "status_quo"}

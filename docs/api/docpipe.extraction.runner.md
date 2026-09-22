@@ -726,6 +726,24 @@ happened to miss.
 *allowed* None means every class the graph takes, which is every entry
 that does not ride the out: convention. A tuple names the answers.
 
+### field_response_format
+
+```python
+def field_response_format(slot) -> dict
+```
+
+The shape a reply to one field request can take, as a server grammar.
+
+The field contract of the prompt, handed to vLLM as a JSON schema so the
+reply is generated inside it: one object, the asked field under its own
+name, `groups` and `answers`, and a `value` that is one of the options
+(UNSTATED included) or, for a number, an integer. 70,395 field replies of
+corpus_m5 carried text beside the object and were asked again; under the
+grammar none can. Nothing here is a check: every key stays optional that
+the prompt leaves optional (`value` may be omitted with a wording, a
+`quote` is not asked of UNSTATED), and what the reply says is verified by
+`merge_field` as before.
+
 ### make_field_asker
 
 ```python

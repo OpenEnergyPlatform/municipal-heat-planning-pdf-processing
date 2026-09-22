@@ -136,6 +136,10 @@ class Batch:
     # the plan's own words, what the request asks for, so the pair reaches
     # the model as a question and not only as a field.
     anchors: tuple = ()
+    # The document's base years with the frame's quotes (`base_years`), on
+    # every batch of the document, framed or not: a passage that says
+    # "Basisjahr" prints no pair, and it is exactly the one that needs them.
+    bases: tuple = ()
 
     @property
     def sources(self) -> list:
@@ -794,8 +798,82 @@ def _wrong_type(slot, given) -> Optional[str]:
     return None
 
 
+def base_years(pairs, frame_axes, where: Optional[dict]) -> list:
+    """The years the document's frame found for its base state, with proof.
+
+    *where* is the profile's `BASE_YEAR`: which values of the other frame
+    coordinates make a pair the plan's own state rather than a scenario of it.
+    Every such pair was read with a quote that prints its year, so each entry
+    here carries that quote and its source: {"axis", "year", "quote",
+    "source", "index"}. One entry per year, the first pair that proved it.
+    Empty when the profile names no base state or the frame has no number
+    coordinate to date it with.
+    """
+    if not where or not pairs:
+        return []
+    dated = [slot for slot in frame_axes or () if slot.kind == NUMBER]
+    if len(dated) != 1:
+        return []
+    axis = dated[0].name
+    by_name = {slot.name: slot for slot in frame_axes}
+
+    def names(name, given, wanted) -> bool:
+        # By the entry an answer resolves to, so a spelling of it counts.
+        slot = by_name.get(name)
+        if slot is not None and slot.kind == CHOICE and slot.options:
+            got, want = option_named(slot, given), option_named(slot, wanted)
+            return got is not None and got is want
+        return given == wanted
+
+    found: list = []
+    seen: set = set()
+    for index, pair in enumerate(pairs):
+        if not isinstance(pair, dict):
+            continue
+        if not all(names(name, pair.get(name), value)
+                   for name, value in where.items()):
+            continue
+        year = pair.get(axis)
+        quote = pair.get(f"{axis}_quote")
+        source = pair.get(f"{axis}_source")
+        if year is None or not quote or not source:
+            continue
+        key = canonical_number(year)
+        if key in seen:
+            continue
+        seen.add(key)
+        found.append({"axis": axis, "year": year, "quote": quote,
+                      "source": list(source), "index": index})
+    return found
+
+
+def base_year_named(slot, given, wording: Optional[str], quote: str,
+                    bases) -> Optional[dict]:
+    """The base year a year answer refers to by the plan's word for it.
+
+    A row whose table says "Basisjahr" or "Ist-Zustand" and prints no year
+    states its year elsewhere in the plan, once: where the frame read the base
+    state. The model is shown those years with their quotes and answers one of
+    them, citing the passage that names the state. That answer is backed by
+    two passages, each for its own half: the row's quote carries the wording,
+    the frame's quote carries the number. Anything else is None, and the
+    answer fails as any answer without its number in the quote does.
+    """
+    if slot.kind != NUMBER or not bases or not wording:
+        return None
+    if flat(wording).casefold() not in flat(quote).casefold():
+        return None
+    number = canonical_number(given)
+    for base in bases:
+        if base.get("axis") == slot.name \
+                and canonical_number(base.get("year")) == number:
+            return base
+    return None
+
+
 def merge_field(rows: list, sources: list, slot, reply: Optional[dict],
-                *, window: Optional[tuple] = None) -> dict:
+                *, window: Optional[tuple] = None,
+                bases: Optional[list] = None) -> dict:
     """Fold one field's answers. Returns {"filled", "unquoted", "unbacked"}.
 
     *window* is (stage, index) and is written next to each coordinate this
@@ -823,6 +901,12 @@ def merge_field(rows: list, sources: list, slot, reply: Optional[dict],
     model's reading, not a rule of this function. Every reason a reading is
     dropped for is listed in `schema.DROP_REASONS`, and a test holds this
     function to that list.
+
+    *bases* are the document's base years (`base_years`). A year answer whose
+    quote carries its wording but not its number is read when the number is
+    one of them (owner decision 2026-09-22): the coordinate then cites the
+    frame's passage for the year and keeps the row's passage as its link
+    (`<axis>_link_quote`, `<axis>_link_source`).
     """
     reply = reply if isinstance(reply, dict) else {}
     pairs: list = []
@@ -839,6 +923,7 @@ def merge_field(rows: list, sources: list, slot, reply: Optional[dict],
             pairs.append((label, group))
     by_label = {row.label: row for row in rows}
     filled = unquoted = unbacked = unstated = raw_missing = raw_foreign = 0
+    via_base = 0
     # Not just how many failed but which, and why. A model that is told "R7:
     # the passage you cited is in none of the sources" can fix R7; a model
     # that is told nothing repeats itself, and the same window is worth
@@ -954,7 +1039,10 @@ def merge_field(rows: list, sources: list, slot, reply: Optional[dict],
         wording = answer.get("value_raw")
         wording = wording.strip() if isinstance(wording, str) and wording.strip() \
             else None
-        if not answer_in_quote(slot, given, wording, quote):
+        backed = answer_in_quote(slot, given, wording, quote)
+        base = None if backed else base_year_named(slot, given, wording,
+                                                   quote, bases)
+        if not backed and base is None:
             row.claim[f"{slot.name}_state"] = UNBACKED
             shown_answer = wording or given
             failed.append({"row": row.label, "why": "answer_not_in_quote",
@@ -990,14 +1078,27 @@ def merge_field(rows: list, sources: list, slot, reply: Optional[dict],
         # The passage this one coordinate was read in, kept next to it. A
         # value and its year are two findings, and a graph that cites one
         # sentence for both is citing the wrong one for at least one of them.
-        row.claim[f"{slot.name}_quote"] = quote
-        row.claim[f"{slot.name}_source"] = [found.owner_kind, found.owner_id]
-        if window is not None:
-            row.claim[f"{slot.name}_window"] = list(window)
+        if base is not None:
+            # The number stands in the frame's passage, the wording in the
+            # row's: each is cited for the half it proves.
+            row.claim[f"{slot.name}_quote"] = base["quote"]
+            row.claim[f"{slot.name}_source"] = list(base["source"])
+            row.claim[f"{slot.name}_window"] = ["base_year", base["index"]]
+            row.claim[f"{slot.name}_link_quote"] = quote
+            row.claim[f"{slot.name}_link_source"] = [found.owner_kind,
+                                                     found.owner_id]
+            via_base += 1
+        else:
+            row.claim[f"{slot.name}_quote"] = quote
+            row.claim[f"{slot.name}_source"] = [found.owner_kind,
+                                                found.owner_id]
+            if window is not None:
+                row.claim[f"{slot.name}_window"] = list(window)
         filled += 1
     return {"filled": filled, "unquoted": unquoted, "unbacked": unbacked,
             "unstated": unstated, "raw_missing": raw_missing,
-            "raw_foreign": raw_foreign, "failed": failed}
+            "raw_foreign": raw_foreign, "via_base": via_base,
+            "failed": failed}
 
 
 
@@ -1250,6 +1351,8 @@ def follow_up(batch: Batch, reply: dict, sweep: Sweep, more_sources: Callable,
                                 max_chars=max_chars)
     for one in extra_batches:
         one.followed_up = True
+        # The document's, not the request's: they hold for every passage.
+        one.bases = batch.bases
     return extra_batches
 
 

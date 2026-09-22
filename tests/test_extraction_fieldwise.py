@@ -621,7 +621,7 @@ def test_an_answer_off_the_list_is_asked_again_with_the_reason(monkeypatch):
 
         def make_asker(image_root=None):
             def ask(shown, rows, slots, corrections=None, document_id=None,
-                    usage_out=None, owner_of=None):
+                    usage_out=None, owner_of=None, bases=None):
                 slots = slots if isinstance(slots, (list, tuple)) else [slots]
                 told.extend(corrections or [])
                 out = {}
@@ -715,7 +715,7 @@ def _fieldwise(monkeypatch, spec, rows_reply, answers, unit_answer=None):
 
     def make_asker(image_root=None):
         def ask(shown, rows, slots, corrections=None, document_id=None,
-                usage_out=None, owner_of=None):
+                usage_out=None, owner_of=None, bases=None):
             slots = slots if isinstance(slots, (list, tuple)) else [slots]
             out = {}
             for slot in slots:
@@ -882,7 +882,7 @@ def _gated(monkeypatch, spec, rows_reply, answers, gate, unit_answer=None):
 
     def make_asker(image_root=None):
         def ask(shown, rows, slots, corrections=None, document_id=None,
-                usage_out=None, owner_of=None):
+                usage_out=None, owner_of=None, bases=None):
             slots = slots if isinstance(slots, (list, tuple)) else [slots]
             labels = sorted(r.label for r in rows)
             out = {}
@@ -1072,7 +1072,7 @@ def test_each_coordinate_of_a_row_goes_out_in_its_own_request(monkeypatch):
 
     def make_asker(image_root=None):
         def ask(shown, rows, slots, corrections=None, document_id=None,
-                usage_out=None, owner_of=None):
+                usage_out=None, owner_of=None, bases=None):
             slots = slots if isinstance(slots, (list, tuple)) else [slots]
             calls.append([s.name for s in slots])
             out = {}
@@ -1490,7 +1490,7 @@ def test_the_own_window_shows_the_section_a_table_stands_in(monkeypatch):
 
     def make_asker(image_root=None):
         def ask(shown, rows, slots, corrections=None, document_id=None,
-                usage_out=None, owner_of=None):
+                usage_out=None, owner_of=None, bases=None):
             shown_per_window.append([(s.owner_kind, s.owner_id) for s in shown])
             return {"fields": {}}
         return ask
@@ -1736,7 +1736,7 @@ def _sweeping(monkeypatch, spec, rows_reply, *, more=None, rest=None,
 
     def make_asker(image_root=None):
         def ask(shown, rows, slots, corrections=None, document_id=None,
-                usage_out=None, owner_of=None):
+                usage_out=None, owner_of=None, bases=None):
             shown_at.append([s.owner_id for s in shown])
             if answer is None:
                 return {"fields": {}}
@@ -1815,7 +1815,7 @@ def test_the_passage_another_coordinate_was_read_in_rides_along():
     shown_at = []
 
     def ask(shown, rows, slots, corrections=None, document_id=None,
-            usage_out=None, owner_of=None):
+            usage_out=None, owner_of=None, bases=None):
         shown_at.append([s.owner_id for s in shown])
         return {"fields": {}}
 
@@ -2206,7 +2206,7 @@ def test_the_sweep_starts_again_where_it_last_read_instead_of_striking_it_off(
 
     def make_asker(image_root=None):
         def ask(shown, rows, slots, corrections=None, document_id=None,
-                usage_out=None, owner_of=None):
+                usage_out=None, owner_of=None, bases=None):
             shown_at.append([s.owner_id for s in shown])
             return {"fields": {}}       # never answered: the sweep walks the
                                         # whole pool instead of stopping early
@@ -2288,7 +2288,7 @@ def test_the_re_entry_is_capped_and_the_section_outranks_the_rows_own_passage(
 
     def make_asker(image_root=None):
         def ask(shown, rows, slots, corrections=None, document_id=None,
-                usage_out=None, owner_of=None):
+                usage_out=None, owner_of=None, bases=None):
             shown_at.append([(s.owner_kind, s.owner_id) for s in shown])
             return {"fields": {}}       # never answered: both rows stay open
         return ask
@@ -2342,7 +2342,7 @@ def test_the_axis_sweeps_of_one_batch_run_concurrently(monkeypatch):
 
     def make_asker(image_root=None):
         def ask(shown, rows, slots, corrections=None, document_id=None,
-                usage_out=None, owner_of=None):
+                usage_out=None, owner_of=None, bases=None):
             try:
                 barrier.wait(timeout=5)
             except threading.BrokenBarrierError:

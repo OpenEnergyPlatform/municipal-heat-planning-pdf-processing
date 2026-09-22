@@ -768,7 +768,7 @@ def test_a_row_gets_only_the_frame_coordinates_its_parameter_has(monkeypatch):
 
     def make_asker(image_root=None):
         def ask(shown, rows, slots, corrections=None, document_id=None,
-                usage_out=None, owner_of=None):
+                usage_out=None, owner_of=None, bases=None):
             # The unit is read for the numeric row, which is what lets it
             # settle a parameter and reach the frame projection below;
             # every other field stays unanswered, which this test does not

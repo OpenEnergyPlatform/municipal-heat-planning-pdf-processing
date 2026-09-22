@@ -89,7 +89,7 @@ passage stands.
 since which quantity a number belongs to is asked as a coordinate later.
 Two rules used to feed it: every table and figure taken whole through the
 `structure` callable, since over 65 documents 12,094 of 15,082 values
-came from one of the two (`pipeline.py:186`); prose ranked and capped at
+came from one of the two (`pipeline.py:190`); prose ranked and capped at
 `prose_top` sections, the half a ranking retains. A newer
 single cut (`top`, `EXTRACT_PLAN_TOP`) replaces both with one fused
 ranking, keeping the structural floor only as a counter of what it would
@@ -101,7 +101,7 @@ list rather than concatenating a ranking per probe: over 65 documents and
 fusion at rank 26 (`runner.py:387`).
 
 That single cut is not a plain slice of the ranking either.
-`with_visual_share` (`pipeline.py:178`) holds a share of `top`'s room,
+`with_visual_share` (`pipeline.py:182`) holds a share of `top`'s room,
 `VISUAL_SHARE` (env `EXTRACT_VISUAL_SHARE`, default `0.5`,
 `pipeline.py:70`), for figures and tables before prose can fill it,
 pulling the best-ranked ones up into that room when the head of the
@@ -126,7 +126,7 @@ label, description, the document's name and an early caption; recorded,
 never compared, in the stamp as `question_text/<key>`.
 Dropping query templates for it was measured directly: with templates
 included alongside the anchor, a value's real source sat at median rank
-84; without them, rank 26 (`pipeline.py:196`). `plan_document` falls back to
+84; without them, rank 26 (`pipeline.py:200`). `plan_document` falls back to
 `queries.expand`'s templates only when no anchor exists. `make_anchors` (`runner.py:1389`) is the second,
 corpus-wide mechanism: one set per question the field sweep asks, each
 axis question and the parameter choice, written once per run and cached
@@ -157,15 +157,15 @@ own pair's column
 (`test_a_passage_of_several_pairs_is_read_under_each_of_them`,
 `tests/test_extraction_frame.py:650`). A passage that prints none of a
 request's pair used to give no row at all: its claims were refused as
-`passage is not of this pair` (`rows_from_reply`, `pipeline.py:509`). Two
+`passage is not of this pair` (`rows_from_reply`, `pipeline.py:513`). Two
 helpers get a look at the claim first now: `pair_of_claim`
-(`pipeline.py:550`) asks the claim's own quote and `pair_of_source`
-(`pipeline.py:577`) asks the whole passage whether exactly one OTHER pair
+(`pipeline.py:554`) asks the claim's own quote and `pair_of_source`
+(`pipeline.py:581`) asks the whole passage whether exactly one OTHER pair
 of the document is named there; if so the claim becomes a row carrying
 that pair in its own `pair` and `pair_index` fields (`Row`,
-`pipeline.py:456`), for `project` (`runner.py:3276`) to stamp instead of
+`pipeline.py:460`), for `project` (`runner.py:3342`) to stamp instead of
 the request's own, drawn from `Batch.pairs` (`pipeline.py:134`), set by
-`pair_batches` (`runner.py:4221`). Exactly one, or the claim still stays
+`pair_batches` (`runner.py:4287`). Exactly one, or the claim still stays
 refused. Measured on corpus_m5: of 120,442 claims refused this way, 52.8%
 came back later under the same quote, 17.8% as the same value under
 another quote, and 29.4%, 35,407 values, were never read under any pair
@@ -174,7 +174,34 @@ t CO2eq/a (3,836), from tables (14,227), figures (11,869) and prose
 (9,311). The gain from the frame itself was measured directly: before it
 existed, the year axis alone produced 1,849 refusals against 0 readings,
 since every window after the first excluded the row's own source
-(`runner.py:3115`).
+(`runner.py:3179`).
+
+### Base years
+
+A row's own table sometimes names no year at all, only the plan's word
+for its own state: "Basisjahr", "Ist-Zustand", "Bilanzjahr". Which frame
+pair is that state is named by the profile, kwp's `BASE_YEAR =
+{"scenario": "status_quo"}` (`profiles/kwp/extraction.py:83`).
+`base_years` (`pipeline.py:801`) reads the document's base year off that
+pair, one entry per year with the frame's own quote and source, and every
+batch of the document carries them as `Batch.bases`, framed or not, since
+a passage naming only "Basisjahr" is exactly the one that needs them
+(`runner.py:5197`, `:5202`).
+
+A year answer whose quote carries this wording but not the number now
+reads (`base_year_named`, `pipeline.py:850`) when the number given is one
+of those base years (owner decision 2026-09-22): the model chooses among
+the plan's own base years rather than the run guessing which one
+"Basisjahr" means. `merge_field` (`pipeline.py:874`) then cites the
+frame's passage for the number, window `["base_year", <pair index>]`, and
+keeps the row's own passage as `<axis>_link_quote`/`<axis>_link_source`.
+Before this reading existed, corpus_m5 dropped 127,233 year answers whose
+wording stood in their quote and whose number did not, "Basisjahr" among
+the most common (`profiles/kwp/extraction.py:80-82`). The year field's
+own request is shown the plan's base years alongside the question,
+`"base_years"` (`runner.py:2650-2653`), and the trace's `field` event
+counts how many of a window's answers came this way, `via_base`
+(`runner.py:3246-3298`).
 
 ### The row request
 
@@ -189,9 +216,9 @@ whitespace-collapsed test verification uses, `quote_in`, not a literal
 substring test: a stricter test would refuse claims verification would
 have accepted, since a table row retyped without its padding is the
 normal case, not the exception, worth 276 of one pilot's refusals
-(`pipeline.py:379`). A
+(`pipeline.py:383`). A
 wording not in its own quote is caught here too, before it becomes a
-row (`pipeline.py:544`). A `Row` is created only here, never later. The
+row (`pipeline.py:548`). A `Row` is created only here, never later. The
 request can turn to a code sandbox, bounded to `CODE_ROUNDS` rounds. A
 reply that will not parse is asked again with the cause named,
 `_reply_fault` (`runner.py:1935`), rather than the same message twice, and
@@ -222,19 +249,34 @@ overlapping windows (`FIELD_WINDOW` 2, `FIELD_OVERLAP` 1) for up to
 `FIELD_ROUNDS` (4) rounds. **Rest** is the floor: once retrieval has
 nothing new, `rest_of_document` reads the document's own remaining
 sections in order, rotated to start near the open rows, until the
-coordinate closes or the document runs out (`runner.py:3048`). A
+coordinate closes or the document runs out (`runner.py:3112`). A
 coordinate the whole sweep cannot close is `exhausted`, never
 `unstated`: the first is a finding about the run, the second about the
 document. The budget sums to `FIELD_MAX_WINDOWS`
 (24) plus `REST_MAX_WINDOWS` (12) per coordinate. Every request now
 asks one coordinate, not several at once: five coordinates for every
 row of a batch in one request wanted up to 27,311 prompt tokens and
-came back refused or cut off (`runner.py:2705`). Its rows are chunked
+came back refused or cut off (`runner.py:2763`). Its rows are chunked
 to at most `FIELD_ROWS` (32, env `EXTRACT_FIELD_ROWS`), about 2,600
 answer tokens at the measured p90, sized against the server's own
 window before the request is sent rather than shrunk after a refusal,
 `answer_room` (`runner.py:1160`); a chunk still too large for its room
-is halved before it is sent (`runner.py:2751-2765`).
+is halved before it is sent (`runner.py:2811-2825`).
+
+### The reply grammar
+
+A field request now goes out with `response_format`, a JSON schema built
+by `field_response_format` (`runner.py:2716`) from the coordinate's own
+contract: the asked field under its own name, `groups` and `answers`, and
+a `value` that is one of the slot's options (`out:unstated` included) or,
+for a number, an integer, nothing beyond that: `additionalProperties:
+False` throughout. vLLM generates the reply inside that shape rather than
+around it, sent on every attempt (`make_field_asker`, `runner.py:2763`,
+`:2843`). Nothing in the grammar is a check: every key stays as optional
+as the field prompt leaves it, and what the reply says is still verified
+by `merge_field` exactly as before. 70,395 field replies of corpus_m5
+carried text beside the object and were asked again for it; under the
+grammar none can.
 
 ### The adaptive request limit
 
@@ -258,24 +300,24 @@ pools alone deciding as before. `EXTRACT_LIMIT_ADAPTIVE=0` turns it off
 holding every answer to the two clauses the value's own quote is held to:
 its cited passage sits verbatim in a shown source, and it contains the
 answer, with a floor of `MIN_QUOTE_CHARS` so that a quote names a place.
-Those are the check for a quote (`pipeline.py:773-795`;
+Those are the check for a quote (`pipeline.py:777-799`;
 `test_a_coordinate_is_dropped_for_the_agreed_reasons_and_no_other`,
 `tests/test_extraction_reasons.py:114`). Without its own `value_raw`
 wording, a closed-list answer's quote is checked against every spelling the
 spec lists for the chosen option, not only its label: the real classes
 carry the ontology's English names, which stand in no German plan, and
 corpus_m5 had dropped 284,643 quantity answers on exactly that gap before
-this widened (`answer_in_quote`, `pipeline.py:667`, owner's decision
+this widened (`answer_in_quote`, `pipeline.py:671`, owner's decision
 2026-09-13); a wording that is given still has to stand in the quote
 itself. A closed-list coordinate answers a third clause too: naming one of
 the list's own entries, by label, spelling or URI, or it is never marked
-read (`option_named`, `not_an_option`, `pipeline.py:715-729`, the owner's
+read (`option_named`, `not_an_option`, `pipeline.py:719-733`, the owner's
 rule of 2026-09-11). Which table the
 passage belongs to, how far from the row it stands and which column of a
 table it heads are the model's reading, not a rule. Failures are recorded
 separately, `unquoted` against `unbacked`, so a retry can name what to fix. A
 coordinate already read once is never overwritten by a later window
-(`pipeline.py:705`). A wording naming no token of the option
+(`pipeline.py:709`). A wording naming no token of the option
 it claims is counted `raw_foreign` rather than trusted silently.
 
 ### Folding and verification
@@ -339,7 +381,7 @@ behind](../contract/trust.md) for the full list.
 ### The harvest file, the stamp and the trace
 
 Before any of that is computed, `runner.finish_document` calls
-`pipeline.drop_repeats` (`pipeline.py:1447`), which removes a row that
+`pipeline.drop_repeats` (`pipeline.py:1550`), which removes a row that
 agrees with an earlier row of the same document in every field but
 `provenance`: the same reading written twice by two different requests
 is one reading, not two, and counting it twice would throw off the
@@ -372,7 +414,7 @@ Every tuple, refusal, parameter state and summary line is checked
 against the published schema before it is written:
 `_harvest_validators` builds one `jsonschema` validator per branch from
 `schema.build(spec)["harvest"]`, run by `check_against_schema` inside
-`finish_document` on every call carrying a spec (`runner.py:3820`). A
+`finish_document` on every call carrying a spec (`runner.py:3886`). A
 row the schema refuses is counted
 and logged as an `invalid` trace event, never withheld, since blocking on
 a schema mismatch would turn a documentation defect into a data loss.
@@ -550,8 +592,8 @@ on.
 At the document level, `finish_document` withholds the stamp entirely,
 forcing a full redo on the next run, when more than half a document's
 planned sources came back from a server it could not reach
-(`UNREACHABLE_LIMIT`, `0.5`, `runner.py:3761`, `:3723`) or when not one
-batch answered at all (`runner.py:3809`); the JSONL file is still
+(`UNREACHABLE_LIMIT`, `0.5`, `runner.py:3827`, `:3789`) or when not one
+batch answered at all (`runner.py:3875`); the JSONL file is still
 written either way, so only a resume, not a byte count, tells the two
 cases apart from a genuinely finished document.
 
@@ -559,18 +601,18 @@ A time limit ends a run the same careful way. `install_stop_handler`
 (`runner.py:116`) puts a SIGTERM handler in place, the job script's
 time-limit trap or a manual kill, that sets `STOP` (`runner.py:104`)
 instead of letting the interpreter die where it stood. Documents run
-under rolling admission, `harvest_documents` (`runner.py:3650`), at
+under rolling admission, `harvest_documents` (`runner.py:3716`), at
 most `EXTRACT_BATCH_DOCS` in flight at once, their batches sharing one
-`batch_pool` and one `DeadStreak` (`runner.py:3630`) across every
+`batch_pool` and one `DeadStreak` (`runner.py:3696`) across every
 document in flight rather than one dead-server count per document. Once
-`STOP` or a dead server sets `Halted` (`runner.py:5015`), no new
+`STOP` or a dead server sets `Halted` (`runner.py:5084`), no new
 document starts, and a document already in flight leaves its own
 `harvest_batches` call at once instead of waiting out its open
 requests; such a document lands in `unfinished` and is not written, so
 a resume harvests it whole instead of the run stamping it as though
 every batch had come back. Once `STOP` is set the run logs, closes the
 trace and exits hard with `STOPPED_EXIT` (`143`, `runner.py:112`,
-`:5059`) rather than waiting on the field-sweep threads still open,
+`:5128`) rather than waiting on the field-sweep threads still open,
 which are not daemons and could hold the process for minutes.
 
 Among the four maintenance passes, `--recheck` and `--remap` never call a
@@ -597,7 +639,7 @@ never sends leaves no trace, so the row is offered again later.
   (`fields.py:266-292`).
 - Letting the passage a coordinate was last read in drop out of the
   window after one use, rather than remaining in the window, cost one
-  batch 520 dropped readings against 31 kept (`runner.py:2926`).
+  batch 520 dropped readings against 31 kept (`runner.py:2990`).
 - On the 20-plan draft where the slice gate was measured, of 6,763
   harvested tuples the serializer dropped 1,554 for a quantity the graph
   does not hold and, while the scenario axis still gated a row, 2,510
