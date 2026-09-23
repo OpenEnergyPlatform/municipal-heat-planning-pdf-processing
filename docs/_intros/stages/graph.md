@@ -74,11 +74,15 @@ branch returns before it is touched.
 ### kwp: gating, identity and rendering the plan
 
 `profiles/kwp/kg.py`'s `serializer` pulls `planning_organisation` rows
-into a normalised `offices` dict; every other row passes a gate:
+into a normalised `offices` dict; every other row passes a gate,
+`quantity` checked first: `quantity` a class in `UNIT_TARGET`,
 `scenario` a key of `PARTS` (`status_quo`, `trend`, `target`),
 `spatial_scope` `municipality` or a named `sub_area`, `year` an `int`,
-`quantity` a class in `UNIT_TARGET`, `aggregation` present and known. A
-row failing any gate is dropped and counted by reason.
+`aggregation` present and known. A row failing any gate is dropped and
+counted by reason; quantity first, so a row closed on it is counted
+`not_a_class:<quantity>` and never reaches the scenario check.
+Before the reorder it counted `scenario_unread` as well, about 37,300 of
+corpus_m5's 42,882, a gate decision reported as a reading failure.
 `_document_identity` resolves a document's AGS and publication date
 from `Documents` and `DocumentMeta`/`Municipalities`; a document whose
 AGS or date does not parse yields `None` and its tuples are skipped
@@ -91,10 +95,19 @@ rather than merged onto it.
 scenario part, quantity, carrier, sector, year and aggregation, plus,
 only for a named `sub_area`, the area wording, left out for a whole
 plan value so several wordings of one fact do not split into separate
-nodes. Two rows minting one IRI with the same target are a repeat,
-counted `duplicate`; with different targets they disagree, both
-dropped, and every later claimant too, counted twice per pair as
-`conflict`. The plan node gets `has part` edges only to parts with a
+nodes. A carrier or sector enters the IRI only where `is_class` calls it
+a real OEO class; a deliberate `out:` answer or an unmapped wording is
+left out exactly like an absent one, so the identity matches what gets
+an edge. `settle` resolves every row minting one identity together: the
+same number twice is one node, marked read twice, counted `duplicate`;
+different numbers under different plan wording (`carrier_raw`/
+`sector_raw`) split into a node per wording, named by it, counted
+`split:wording`; failing that, a reading within `ROUNDING_TOLERANCE`
+(2%) of another loses to the more precise one, counted
+`conflict:rounding`; failing that, the lower trust level loses to the
+higher, counted `conflict:trust`; what none of those settles still
+drops every claimant, counted `conflict`. Each winner's comment states
+what it won over. The plan node gets `has part` edges only to parts with a
 surviving value; all three parts are
 written (docstring stale, naming only target). A value node's type is
 its quantity's OEO class; its carrier, sector and year edges share one
@@ -338,16 +351,26 @@ marks a trust line is built from are at
 ## Verification
 
 - `test_value_minting_matches_the_schema_repo_reference`,
-  `test_both_date_spellings_mint_the_same_iris` and
-  `test_a_carrier_oeo_does_not_call_a_carrier_keeps_its_edge_and_is_counted`:
+  `test_both_date_spellings_mint_the_same_iris`,
+  `test_a_carrier_oeo_does_not_call_a_carrier_keeps_its_edge_and_is_counted`
+  and `test_a_non_class_names_no_node_just_as_an_unstated_coordinate_does`:
   minting is a pure function of a value's coordinates; a
-  `CARRIER_OUTSIDE_ROOT` carrier keeps its edge, counted.
+  `CARRIER_OUTSIDE_ROOT` carrier keeps its edge, counted, and an `out:`
+  or unmapped carrier or sector never enters the identity.
+  `test_the_gate_names_the_quantity_before_the_scenario` holds the
+  quantity gate ahead of the scenario one.
 - `test_every_plan_part_the_ontology_names_is_serialized` and
   `test_a_part_with_no_value_is_neither_a_node_nor_a_has_part_edge`: a
   part gets a node only when it has a value.
-- `test_a_value_conflict_on_one_coordinate_drops_every_claimant` and
-  `test_a_repeat_alone_still_serializes_one_node`: a disagreement drops
-  both claimants; an exact repeat, one node, no conflict.
+- `test_a_value_conflict_on_one_coordinate_drops_every_claimant`,
+  `test_a_repeat_alone_still_serializes_one_node`,
+  `test_a_rounded_reading_loses_to_the_precise_one`,
+  `test_different_wordings_are_different_nodes_named_by_the_wording`,
+  `test_a_lower_trust_grade_loses_the_identity` and
+  `test_what_no_rule_settles_is_still_a_question_for_a_human`: an exact
+  repeat is one node; different plan wording splits into a node each; a
+  rounded reading loses to a precise one and a lower trust level to a
+  higher one; what none of those settles still drops every claimant.
 - `test_a_second_document_claiming_the_same_identity_is_refused` and
   `test_one_heat_plan_comes_out_as_the_published_example`: a stale
   duplicate is refused after the first claimant succeeds, and a full

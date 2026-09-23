@@ -64,7 +64,7 @@ TRUST_LEVEL_DOC = {
 TRUST_REASONS = tuple(
     [f"^{r}$" for r in sorted(FLAG_REASONS.values())]
     + ["^conflict$", "^page_transcribed$",
-       r"^(exhausted|unbacked):[a-z_]+$"])
+       r"^(exhausted|unbacked|unanswered):[a-z_]+$"])
 
 # What a coordinate's state can be, and what each one is a finding ABOUT. The
 # distinction is the whole point of carrying seven of them instead of a null:

@@ -1806,7 +1806,7 @@ def test_the_passage_another_coordinate_was_read_in_rides_along():
     pool = [_far_source(9001 + n) for n in range(2)]
     served = []
 
-    def more(document_id, queries, exclude):
+    def more(document_id, queries, exclude, limit=0):
         if served:
             return []
         served.extend(pool)
@@ -1846,7 +1846,7 @@ def test_a_sweep_that_ran_out_of_budget_still_reads_the_rest_of_the_plan(
     asked_rest = []
     served = []
 
-    def more(document_id, queries, exclude):
+    def more(document_id, queries, exclude, limit=0):
         # Enough passages in one round to make more windows than the budget
         # allows, so retrieval really runs out. That is the state the old
         # condition could not survive: `run` returns False, `combed` is False,
@@ -1916,7 +1916,7 @@ def test_the_search_further_out_gets_the_same_allowance_whatever_own_spent(
                   "status": "complete", "need_more": []}
     served = []
 
-    def more(document_id, queries, exclude):
+    def more(document_id, queries, exclude, limit=0):
         if served:
             return []
         served.extend(_far_source(9000 + n)
@@ -1979,7 +1979,7 @@ def test_a_sweep_reports_every_request_it_made(monkeypatch):
                   "status": "complete", "need_more": []}
     served = []
 
-    def more(document_id, queries, exclude):
+    def more(document_id, queries, exclude, limit=0):
         if served:
             return []
         served.extend(_far_source(9000 + n)
@@ -2014,7 +2014,7 @@ def test_the_window_index_counts_the_whole_sweep(monkeypatch):
                   "status": "complete", "need_more": []}
     served = []
 
-    def more(document_id, queries, exclude):
+    def more(document_id, queries, exclude, limit=0):
         if served:
             return []
         served.extend(_far_source(9000 + n)
@@ -2136,7 +2136,7 @@ def test_a_window_is_asked_again_only_where_asking_again_pays(monkeypatch):
 
     rounds = []
 
-    def more(document_id, queries, exclude):
+    def more(document_id, queries, exclude, limit=0):
         rounds.append(len(rounds))
         return [_far_source(9100 + len(rounds))] if len(rounds) <= 2 else []
 
@@ -2198,7 +2198,7 @@ def test_the_sweep_starts_again_where_it_last_read_instead_of_striking_it_off(
 
     served = []
 
-    def more(document_id, queries, exclude):
+    def more(document_id, queries, exclude, limit=0):
         if served:
             return []
         served.extend(pool)
@@ -2280,7 +2280,7 @@ def test_the_re_entry_is_capped_and_the_section_outranks_the_rows_own_passage(
 
     served = []
 
-    def more(document_id, queries, exclude):
+    def more(document_id, queries, exclude, limit=0):
         if served:
             return []
         served.extend(pool)
@@ -2386,7 +2386,7 @@ def test_the_startup_line_reports_the_three_allowances_and_their_sum(
     # sweep's own dict moves with it.
     monkeypatch.setattr(runner, "REST_MAX_WINDOWS", 5)
     assert runner.window_budget()["rest"] == 5
-    assert "budget = window_budget()" in inspect.getsource(runner.make_sweeper)
+    assert "budget = window_budget(" in inspect.getsource(runner.make_sweeper)
 
 
 def test_the_sweeper_is_the_one_the_harvest_uses(monkeypatch):
@@ -2409,7 +2409,7 @@ def test_the_sweeper_is_the_one_the_harvest_uses(monkeypatch):
                         lambda *a, **kw: (lambda batch, prior=None: {}))
     runner.make_fieldwise_harvester(spec=spec)
     assert seen == [["anchors", "more_sources", "parents",
-                     "rest_of_document"]]
+                     "rest_of_document", "search_share"]]
 
 
 def test_an_answer_of_the_wrong_kind_is_refused_and_the_model_told(profile):
@@ -2429,3 +2429,200 @@ def test_an_answer_of_the_wrong_kind_is_refused_and_the_model_told(profile):
     assert "Zahl" in counts["failed"][0]["reason"]
     assert slot.name not in rows[0].claim
     assert rows[0].claim[f"{slot.name}_state"] == fields.UNBACKED
+
+
+# ---------------------------------------------------------------------------
+# The search asks for what it can show, and a cut sweep says it was cut
+# (audit of corpus_m5, 2026-09-23)
+# ---------------------------------------------------------------------------
+
+def _pool_sweep(monkeypatch, pool, *, share=None, rest_pool=None):
+    """One year sweep over a plan whose search hands back `pool`, as much of
+    it per round as the sweep asks for, and whose remaining sections are
+    `rest_pool`. Answers nothing, so the sweep walks every stage.
+
+    Returns (row, windows shown past the own one, limits the search was
+    asked for)."""
+    from docpipe.extraction.pipeline import Row
+    spec = load_spec(json.loads(
+        (PROFILES / "kwp" / "extraction_spec.json").read_text(encoding="utf-8")))
+    parameter = _single_axis_parameter(spec.parameters[0], "year")
+    year = fields.axis_slots(parameter)[0]
+    batch = _single_axis_batch(parameter,
+                               [(0, "| Erdgas | 42.005 | MWh/a |", None)])
+    row = Row(label="R1", item_index=0,
+              claim={"value": 42005, "quote": "| Erdgas | 42.005 | MWh/a |"})
+    limits = []
+
+    def more(document_id, queries, exclude, limit=0):
+        limits.append(limit)
+        fresh = [s for s in pool if (s.owner_kind, s.owner_id) not in exclude]
+        return fresh[:limit] if limit else fresh
+
+    def rest(document_id, exclude, start=None):
+        return [s for s in (rest_pool or [])
+                if (s.owner_kind, s.owner_id) not in exclude]
+
+    shown_at = []
+
+    def ask(shown, rows, slots, corrections=None, document_id=None,
+            usage_out=None, owner_of=None, bases=None):
+        shown_at.append([s.owner_id for s in shown if s.owner_id >= 9000])
+        return {"fields": {}}
+
+    sweep = runner.make_sweeper(ask, more_sources=more, rest_of_document=rest,
+                                search_share=share)
+    sweep(batch, [row], [year], "year")
+    return row, shown_at[1:], limits
+
+
+def test_a_search_the_budget_cuts_off_ends_exhausted_not_unstated(monkeypatch):
+    """The search was asked without a limit and handed back the whole ranked
+    document. Every passage of it counted as seen, the rest stage found
+    nothing left to read, and a sweep the budget had cut off after two
+    passages ended "unstated": 0 exhausted in 263,997 sweeps of corpus_m5,
+    while 24 windows was where every long sweep stopped."""
+    monkeypatch.setattr(runner, "FIELD_ATTEMPTS", 1)
+    monkeypatch.setattr(runner, "FIELD_MAX_WINDOWS", 3)    # two search windows
+    monkeypatch.setattr(runner, "REST_MAX_WINDOWS", 1)
+    pool = [_far_source(9000 + n) for n in range(12)]
+    row, windows, limits = _pool_sweep(monkeypatch, pool, rest_pool=pool)
+    assert row.claim["year_state"] == fields.EXHAUSTED
+    # Asked for as much as two windows can show, not for the document.
+    assert limits[0] == runner.FIELD_WINDOW * 2
+    # Two search windows, then one of the rest stage over what the search
+    # never showed -- the stage that was dead under the unlimited search.
+    assert len(windows) == 3, windows
+    assert set(windows[2]) - set(windows[0]) - set(windows[1])
+
+
+def test_the_search_windows_share_no_passage(monkeypatch):
+    """The windows further out overlapped by one, which is right for a
+    document read in its own order (a caption and its table are adjacent)
+    and wrong for a relevance-ranked pool, where the neighbour is arbitrary:
+    every passage was shown twice, half of corpus_m5's 1,235,462 search
+    requests were a request spent twice."""
+    monkeypatch.setattr(runner, "FIELD_ATTEMPTS", 1)
+    monkeypatch.setattr(runner, "FIELD_MAX_WINDOWS", 9)
+    pool = [_far_source(9000 + n) for n in range(6)]
+    row, windows, _limits = _pool_sweep(monkeypatch, pool)
+    assert windows == [[9000, 9001], [9002, 9003], [9004, 9005]]
+    # Nothing was cut: the pool ran dry inside the budget.
+    assert row.claim.get("year_state") != fields.EXHAUSTED
+
+
+def test_a_coordinate_the_profile_looks_less_far_for_gets_its_share(
+        monkeypatch):
+    """Under one budget, corpus_m5's sector search filled 4 percent of its
+    392,541 requests and the aggregation's 3 percent of 65,285. The profile
+    names the share, the budget scales the two search stages by it, and the
+    own window is never touched."""
+    monkeypatch.setattr(runner, "FIELD_ATTEMPTS", 1)
+    monkeypatch.setattr(runner, "FIELD_MAX_WINDOWS", 9)
+    monkeypatch.setattr(runner, "REST_MAX_WINDOWS", 6)
+    assert runner.window_budget() == {"own": 1, "retrieval": 8, "rest": 6}
+    assert runner.window_budget(0.5) == {"own": 1, "retrieval": 4, "rest": 3}
+    # At least one window stays, so no stage is skipped outright.
+    assert runner.window_budget(0.01) == {"own": 1, "retrieval": 1, "rest": 1}
+    pool = [_far_source(9000 + n) for n in range(40)]
+    _row, windows, limits = _pool_sweep(monkeypatch, pool,
+                                        share={"year": 0.5})
+    assert limits[0] == runner.FIELD_WINDOW * 4
+    assert len(windows) == 4
+    _row, windows, limits = _pool_sweep(monkeypatch, pool,
+                                        share={"sector": 0.5})
+    assert limits[0] == runner.FIELD_WINDOW * 8, "another coordinate's share"
+    assert len(windows) == 8
+    from profiles.kwp import extraction as kwp
+    assert kwp.SEARCH_SHARE == {"sector": 0.5, "aggregation": 0.5}
+
+
+def test_the_rest_of_a_plan_includes_its_tables_and_figures(tmp_path):
+    """71 percent of corpus_m5's tuples came out of images, and the floor
+    under the sweep read sections only: "the whole document" that left out
+    every table was not the whole document. A section's blocks follow it,
+    in page order, and the rotation and the exclusion apply to them too."""
+    import sqlite3
+    path = tmp_path / "plans.sqlite"
+    conn = sqlite3.connect(str(path))
+    conn.executescript(
+        "CREATE TABLE Documents (id INTEGER PRIMARY KEY, filename TEXT);"
+        "CREATE TABLE Sections ("
+        " id INTEGER PRIMARY KEY, document INTEGER, section_number INTEGER,"
+        " title TEXT, content TEXT, page_number INTEGER);"
+        "CREATE TABLE Tables ("
+        " id INTEGER PRIMARY KEY, section INTEGER, block_id TEXT,"
+        " caption TEXT, markdown TEXT, page_number INTEGER, path TEXT);"
+        "CREATE TABLE Images ("
+        " id INTEGER PRIMARY KEY, section INTEGER, block_id TEXT,"
+        " caption TEXT, description TEXT, page_number INTEGER, path TEXT);")
+    conn.execute("INSERT INTO Documents (id, filename) VALUES (7, 'plan.pdf')")
+    for n in range(1, 5):
+        conn.execute("INSERT INTO Sections (id, document, section_number, "
+                     "title, content, page_number) VALUES (?, 7, ?, ?, ?, ?)",
+                     (n, n, "Kapitel %d" % n, "Text von Kapitel %d." % n, n))
+    conn.execute("INSERT INTO Tables VALUES (21, 2, 'p2_tbl0', 'Tabelle 1',"
+                 " '| Erdgas | 1 |', 2, 'p2_tbl0.png')")
+    conn.execute("INSERT INTO Tables VALUES (22, 2, 'p2_tbl1', 'Tabelle 2',"
+                 " '| Heizoel | 2 |', 2, 'p2_tbl1.png')")
+    conn.execute("INSERT INTO Images VALUES (31, 3, 'p3_fig0', 'Abbildung 1',"
+                 " 'Ein Balkendiagramm.', 3, 'p3_fig0.png')")
+    conn.commit()
+    conn.close()
+    rest_of_document = runner.make_rest_of_document(path)
+    assert [(s.owner_kind, s.owner_id) for s in rest_of_document(7, set())] == [
+        ("section", 1), ("section", 2), ("table", 21), ("table", 22),
+        ("section", 3), ("figure", 31), ("section", 4)]
+    assert [(s.owner_kind, s.owner_id)
+            for s in rest_of_document(7, {("table", 21), ("section", 1)}, 3)] == [
+        ("section", 3), ("figure", 31), ("section", 4),
+        ("section", 2), ("table", 22)]
+
+
+# ---------------------------------------------------------------------------
+# What backs a coordinate (owner decisions 2026-09-23)
+# ---------------------------------------------------------------------------
+
+def test_a_year_is_backed_only_by_its_four_digits_in_one_run():
+    """`numbers_in` reads "2.022 MWh" as the grouped number 2022, right for a
+    magnitude and wrong for a year: an energy figure backed the year it
+    happened to spell. A dated "31.12.2022" still prints its year in one
+    run, and a longer digit run is a different number."""
+    slot = fields.Slot(name="year", kind=fields.NUMBER, question="Welches Jahr?")
+    assert not pipeline_answer_in_quote(
+        slot, 2022, None, "Der Verbrauch lag 2030 bei 2.022 MWh.")
+    assert pipeline_answer_in_quote(slot, 2022, None, "Stand: 31.12.2022")
+    assert pipeline_answer_in_quote(slot, 2022, None, "Bilanzjahr 2022 (IST)")
+    assert pipeline_answer_in_quote(slot, "2022", None, "Bilanzjahr 2022")
+    assert not pipeline_answer_in_quote(slot, 2022, None, "12022 Einwohner")
+    assert not pipeline_answer_in_quote(slot, 2022, None, "20221 Haushalte")
+
+
+def test_a_list_entry_does_not_count_where_a_longer_entry_of_the_list_stands():
+    """"MWh" is in "450 MWh/a", and what the passage states is the other
+    entry: the emission parameter's unit list has 72 such prefix pairs, and
+    a bare "t" was backed by "t CO2eq". The longest entry at the spot wins;
+    the chosen entry's own longer spelling is the same answer and does not
+    shadow it."""
+    slot = fields.Slot(name="unit", kind=fields.CHOICE, question="Einheit?",
+                       options=(
+                           fields.Option(label="MWh", uri="u:MWh"),
+                           fields.Option(label="MWh/a", uri="u:MWh_a",
+                                         synonyms=("MWh pro Jahr",)),
+                           fields.Option(label="t", uri="u:t",
+                                         synonyms=("t CO2",)),
+                           fields.Option(label="t CO2eq", uri="u:tCO2eq")))
+    quote = "| Erdgas | 450 MWh/a |"
+    assert not pipeline_answer_in_quote(slot, "MWh", None, quote)
+    assert not pipeline_answer_in_quote(slot, "MWh", "MWh", quote)
+    assert pipeline_answer_in_quote(slot, "MWh/a", None, quote)
+    assert pipeline_answer_in_quote(slot, "MWh/a", "MWh/a", quote)
+    # A bare one elsewhere in the same quote still counts.
+    assert pipeline_answer_in_quote(slot, "MWh", None,
+                                    "450 MWh/a, davon 12 MWh im Winter")
+    # By the synonym of the longer entry too.
+    assert not pipeline_answer_in_quote(slot, "MWh", None, "450 MWh pro Jahr")
+    # The entry's own longer spelling is the same answer.
+    assert pipeline_answer_in_quote(slot, "t", None, "12 t CO2 im Jahr")
+    assert not pipeline_answer_in_quote(slot, "t", None, "12 t CO2eq im Jahr")
+    assert pipeline_answer_in_quote(slot, "t CO2eq", None, "12 t CO2eq im Jahr")

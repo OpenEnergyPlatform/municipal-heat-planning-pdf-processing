@@ -483,6 +483,22 @@ dropped 284,643 quantity answers for not being in their quote while 95
 percent of the sampled passages said "Wärmebedarf" or "Endenergieverbrauch"
 in so many words. The owner agreed to this reading on 2026-09-13.
 
+### stands_in
+
+```python
+def stands_in(slot, option, spelling: str, said: str) -> bool
+```
+
+Does this spelling stand in the quote where no longer entry of the
+same list stands?
+
+"MWh" is in "450 MWh/a", and what the passage states is the other entry:
+the emission parameter's unit list has 72 such prefix pairs, and a bare
+"t" was backed by "t CO2eq" -- the number stayed right, the flag for a
+missing period went wrong. The longest entry at the spot wins (owner
+decision 2026-09-23). Only ANOTHER option's entry shadows: the chosen
+option's own longer spelling is the same answer.
+
 ### option_named
 
 ```python

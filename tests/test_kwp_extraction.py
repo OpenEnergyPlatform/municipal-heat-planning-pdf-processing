@@ -720,10 +720,13 @@ def test_a_deliberate_non_class_never_becomes_an_oeo_iri(tmp_path):
     `oeo:out:total` they mint an IRI that does not exist, and a corpus run
     put those into 2.2 MB of graph before anyone looked."""
     serializer = kg.make_serializer(_database(tmp_path))
+    # Three different numbers on coordinates the graph cannot tell apart
+    # (a non-class names no node): what keeps them three nodes is the plan's
+    # own wording for each, see `settle`.
     ttl = serializer("waermeplan_kassel_20240315", [
-        _row(sector="out:total", value_target=1.0),
-        _row(sector="unknown", value_target=2.0),
-        _row(carrier="out:other", value_target=3.0),
+        _row(sector="out:total", sector_raw="Gesamt", value_target=1.0),
+        _row(sector="unknown", sector_raw="Sonstige", value_target=2.0),
+        _row(carrier="out:other", carrier_raw="Weitere", value_target=3.0),
     ])
     assert ttl.count("a oeo:OEO_00050016") == 3, "the values themselves stand"
     for bad in ("oeo:out:total", "oeo:unknown", "oeo:out:other"):
@@ -1407,3 +1410,105 @@ def test_a_seasonal_power_leaves_the_graph_named(tmp_path, caplog):
     assert "not_a_class:out:seasonal" in line
     assert "conflict" not in line
     assert ttl.count("oeo:OEO_00050016") >= 1, "the other row still lands"
+
+
+# ---------------------------------------------------------------------------
+# One identity, several readings (owner decisions 2026-09-23)
+# ---------------------------------------------------------------------------
+
+def _serialized(tmp_path, caplog, rows):
+    # A fresh database per call: one test may serialize twice.
+    where = tmp_path / str(len(list(tmp_path.iterdir())))
+    where.mkdir()
+    serializer = kg.make_serializer(_database(where))
+    with caplog.at_level(logging.INFO, logger="profiles.kwp.kg"):
+        ttl = serializer("waermeplan_kassel_20240315", rows)
+    return ttl, " ".join(r.getMessage() for r in caplog.records)
+
+
+def test_a_non_class_names_no_node_just_as_an_unstated_coordinate_does(
+        tmp_path, caplog):
+    """A carrier or sector names the node only where it gets an edge, and the
+    edge writer takes a class and nothing else. `out:total` and an unstated
+    sector both wrote no edge and minted two nodes for one number, the
+    second a silent double count. One node, read twice."""
+    ttl, line = _serialized(tmp_path, caplog,
+                            [_row(sector="out:total"), _row(sector=None)])
+    assert ttl.count("a oeo:OEO_00050016") == 1
+    assert "'duplicate': 1" in line
+    assert "confirmed by a second reading" in ttl
+    # And the formula is still mint_slice.py's: a class in the coordinate
+    # keeps the node apart from the classless one.
+    ttl, _line = _serialized(tmp_path, caplog,
+                             [_row(sector="OEO_00000405"), _row(sector=None)])
+    assert ttl.count("a oeo:OEO_00050016") == 2
+
+
+def test_the_gate_names_the_quantity_before_the_scenario(tmp_path, caplog):
+    """37,333 of corpus_m5's 42,882 skipped rows were counted
+    `scenario_unread`: rows the gate had closed on their quantity, whose
+    scenario was therefore never asked. A gate decision, reported as a
+    reading failure."""
+    ttl, line = _serialized(tmp_path, caplog, [
+        _row(quantity="OEO_00000404", quantity_raw="Potenzial", scenario=None)])
+    assert ttl is None
+    assert "not_a_class:OEO_00000404" in line
+    assert "scenario_unread" not in line
+
+
+def test_a_rounded_reading_loses_to_the_precise_one(tmp_path, caplog):
+    """"rund 1,6 Mio. MWh" in the text beside the table's 1.626.000: one
+    number, and corpus_m5 dropped both sides of 642 such identities. The
+    more precise reading stays and says what it won over."""
+    ttl, line = _serialized(tmp_path, caplog, [
+        _row(value=1600000, value_target=1600.0),
+        _row(value=1626000, value_target=1626.0)])
+    assert ttl.count("a oeo:OEO_00050016") == 1
+    assert '"1626.0"^^xsd:float' in ttl and '"1600.0"' not in ttl
+    assert "Kept over a rounded reading of the same number" in ttl
+    assert "'conflict:rounding': 1" in line
+    assert "'conflict':" not in line
+    # Beyond two percent it is not a rounding.
+    ttl, line = _serialized(tmp_path, caplog, [
+        _row(value=1500000, value_target=1500.0),
+        _row(value=1626000, value_target=1626.0)])
+    assert ttl is None and "'conflict': 2" in line
+
+
+def test_different_wordings_are_different_nodes_named_by_the_wording(
+        tmp_path, caplog):
+    """"Wirtschaftlich genutzte Gebäude" and "Öffentliche Gebäude" are both
+    OEO_00000405 and are not one number. The plan's own words tell them
+    apart, so the words name the node and stand in its comment."""
+    ttl, line = _serialized(tmp_path, caplog, [
+        _row(sector="OEO_00000405", sector_raw="Wirtschaftlich genutzte Gebäude",
+             value_target=100.0),
+        _row(sector="OEO_00000405", sector_raw="Öffentliche Gebäude",
+             value_target=200.0)])
+    assert ttl.count("a oeo:OEO_00050016") == 2
+    assert 'Named by the plan\'s wording: "Öffentliche Gebäude"' in ttl
+    assert "'split:wording': 1" in line
+    assert "'conflict" not in line
+    # Two nodes, two IRIs: the wording is in the identity, not only the
+    # comment.
+    assert len(set(re.findall(r"mhpkg/value/[0-9a-f-]+", ttl))) == 2
+
+
+def test_a_lower_trust_grade_loses_the_identity(tmp_path, caplog):
+    from docpipe.extraction import fields
+    ttl, line = _serialized(tmp_path, caplog, [
+        _row(), _row(value_target=300.0, year_state=fields.EXHAUSTED)])
+    assert ttl.count("a oeo:OEO_00050016") == 1
+    assert '"241.0"^^xsd:float' in ttl
+    assert ("Kept over a reading of the same coordinates with a lower trust "
+            "level") in ttl
+    assert "'conflict:trust': 1" in line
+
+
+def test_what_no_rule_settles_is_still_a_question_for_a_human(
+        tmp_path, caplog):
+    """Same wording, same precision, same grade, different numbers: nothing
+    picks one, and a coin toss is not a reading. Both leave, counted."""
+    ttl, line = _serialized(tmp_path, caplog, [_row(), _row(value_target=300.0)])
+    assert ttl is None
+    assert "'conflict': 2" in line

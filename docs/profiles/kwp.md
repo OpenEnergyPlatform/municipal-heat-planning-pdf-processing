@@ -297,13 +297,16 @@ year itself (`profiles/kwp/kg.py:331` to `338`).
 
 A value's identity is a UUIDv5 over its own coordinates joined in order:
 the scenario part's IRI, the quantity class, the carrier and sector
-classes where present, the year, the aggregation, and, only for a named
-sub area, the normalised area wording (`profiles/kwp/kg.py:446` to `468`,
+classes where they are real OEO classes (`is_class`; a deliberate
+`out:` answer or an unmapped wording is left out exactly like an
+absent one), the year, the aggregation, and, only for a named sub area,
+the normalised area wording (`profiles/kwp/kg.py:446` to `468`,
 `_value_iri`). These are the same seven coordinates the schema
 repository's own `mint_slice.py` mints: part, quantity, carrier, sector,
 year, aggregation and the sub-area, so two runs over one document mint
-byte-identical IRIs with no deviation from the published list
-(`profiles/kwp/kg.py:6` to `8`). The area is left out of a
+byte-identical IRIs with no deviation from the published list, which
+`mint_slice.py` must apply the same carrier and sector rule to keep
+matching (`profiles/kwp/kg.py:6` to `8`). The area is left out of a
 whole-plan-area value's identity, since one 2040 figure stated under
 three different whole-plan-area wordings on three pages of one plan
 became three indistinguishable nodes before this rule, 129 of 1,294 value
@@ -322,13 +325,16 @@ would invalidate the node it documents (`profiles/kwp/kg.py:492` to
 `748`).
 
 What the serializer refuses, briefly (in full on
-[stages/graph.md](../stages/graph.md)): a row failing the scenario,
-spatial scope, year, quantity or aggregation gate; a document with no
-resolvable AGS or date; a second document claiming an already-claimed
-AGS and date pair; two rows at one value identity stating different
-magnitudes, both dropped; and a deliberate `out:` or unstated carrier or
-sector, which writes no class edge though the value node still stands.
-Trust levels and their closed reason list are on
+[stages/graph.md](../stages/graph.md)): a row failing the quantity,
+scenario, spatial scope, year or aggregation gate, quantity checked
+first so a row closed on it is never counted against the scenario too;
+a document with no resolvable AGS or date; a second document claiming
+an already-claimed AGS and date pair; several rows at one value
+identity settled by the plan's own wording, by rounding, or by trust
+level, only what none of those settles still dropping every claimant;
+and a deliberate `out:` or unmapped carrier or sector, which enters
+neither the value's identity nor its edge, though the value node still
+stands. Trust levels and their closed reason list are on
 [contract/trust.md](../contract/trust.md).
 
 ## The chat wording and the graph route

@@ -81,3 +81,13 @@ FRAME = ("scenario", "year")
 # dropped 127,233 year answers whose wording stood in their quote and whose
 # number did not, "Basisjahr" among the most common.
 BASE_YEAR = {"scenario": "status_quo"}
+
+
+# How far past its own passage a coordinate is looked for, as a share of the
+# search budget (FIELD_MAX_WINDOWS, REST_MAX_WINDOWS). Under one budget on
+# corpus_m5, the sector's search filled 4 percent of its 392,541 requests and
+# the aggregation's 3 percent of 65,285; the scope's and the scenario's filled
+# 23 to 25 percent. A coordinate not named here searches with the whole
+# budget. One whose search is cut short ends `exhausted`, never `unstated`
+# (owner decision 2026-09-23).
+SEARCH_SHARE = {"sector": 0.5, "aggregation": 0.5}

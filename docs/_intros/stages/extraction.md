@@ -242,16 +242,25 @@ of values (`fields.py:15`). The sweep walks three stages, each with its own
 allowance rather than a shared pool. **Own** reads
 the value's own sources and the section its table stands in, for up to
 `FIELD_ATTEMPTS` (3) attempts, each retry naming the reason. **Retrieval**
-follows, searching further out with the per-question anchors in short
-overlapping windows (`FIELD_WINDOW` 2, `FIELD_OVERLAP` 1) for up to
-`FIELD_ROUNDS` (4) rounds. **Rest** is the floor: once retrieval has
-nothing new, `rest_of_document` reads the document's own remaining
-sections in order, rotated to start near the open rows, until the
+follows, searching further out with the per-question anchors in short,
+non-overlapping windows (`FIELD_WINDOW` 2) for up to `FIELD_ROUNDS` (4)
+rounds, asking the search for at most as many passages as the windows
+still left can show rather than the whole ranked document, since handed
+over whole it marked every passage seen after one round and left the
+rest stage nothing to read. **Rest** is the floor, its own windows still
+overlapping by `FIELD_OVERLAP` (1): once retrieval has nothing new,
+`rest_of_document` reads the document's own remaining sections in
+order, each followed by its own tables and figures in page order, not
+sections alone, rotated to start near the open rows, until the
 coordinate closes or the document runs out (`runner.py:3112`). A
-coordinate the whole sweep cannot close is `exhausted`, never
-`unstated`: the first is a finding about the run, the second about the
-document. The budget sums to `FIELD_MAX_WINDOWS`
-(24) plus `REST_MAX_WINDOWS` (12) per coordinate. Every request now
+coordinate the search or the rest stage cannot close before its budget
+runs out is `exhausted`, never `unstated`: the first is a finding about
+the run, the second about the document. The budget sums to
+`FIELD_MAX_WINDOWS` (24) plus `REST_MAX_WINDOWS` (12) per coordinate; a
+profile's `SEARCH_SHARE` can scale a named coordinate's retrieval and
+rest allowance by a fraction, at least one window staying either way
+(kwp halves `sector` and `aggregation`,
+`profiles/kwp/extraction.py:93`). Every request now
 asks one coordinate, not several at once: five coordinates for every
 row of a batch in one request wanted up to 27,311 prompt tokens and
 came back refused or cut off (`runner.py:2763`). Its rows are chunked
@@ -307,7 +316,14 @@ carry the ontology's English names, which stand in no German plan, and
 corpus_m5 had dropped 284,643 quantity answers on exactly that gap before
 this widened (`answer_in_quote`, `pipeline.py:671`, owner's decision
 2026-09-13); a wording that is given still has to stand in the quote
-itself. A closed-list coordinate answers a third clause too: naming one of
+itself. A year counts only where its own four digits stand in the quote
+in one run, so "2.022 MWh" no longer backs the year 2022 though a dated
+"31.12.2022" still does; and a spelling counts only where no longer
+entry of another option of the same list stands at that spot, so a bare
+"MWh" is not backed by a passage's "MWh/a", though the chosen option's
+own longer spelling still is (`stands_in`, `pipeline.py:717`, owner's
+decision 2026-09-23). A closed-list coordinate answers a third clause
+too: naming one of
 the list's own entries, by label, spelling or URI, or it is never marked
 read (`option_named`, `not_an_option`, `pipeline.py:719-733`, the owner's
 rule of 2026-09-11). Which table the
@@ -476,7 +492,11 @@ sweeps every asked coordinate of every row at once any more. `reopen` strips one
 the sweep runs; `restore` puts the old block back unless the fresh
 sweep genuinely improves on it. A row whose passage no longer carries
 its stored quote is left untouched, and top-up traces land under their
-own `trace-topup/` directory.
+own `trace-topup/` directory. A re-swept `year` carries base years too:
+`base_years_of` (`topup.py:197`) rebuilds the document's base-year pairs
+from the frame's own readings already sitting in the harvest file and
+hands them to every batch, the same as the main harvest, so a re-swept
+year that names only "Basisjahr" still reads.
 
 `--review` (`review.py`) differs from the other three: it writes only
 `review/prompt` and `review/model`, recorded and never compared, so it
@@ -541,7 +561,8 @@ run, `anchors.json` and `query_cache.db`; and, only after `--top-up`,
 
 | Name | Kind | Default | Effect | Where read |
 |---|---|---|---|---|
-| `EXTRACT_FIELDWISE` / `EXTRACT_FIELD_WINDOW` / `_OVERLAP` | env var | `1` / `2` / `1` | `FIELDWISE`: one request per coordinate, not one per whole tuple. `WINDOW`/`OVERLAP`: sources per retrieval-stage window, and how many repeat in the next one | `runner.main`, `runner.make_sweeper` |
+| `EXTRACT_FIELDWISE` / `EXTRACT_FIELD_WINDOW` / `_OVERLAP` | env var | `1` / `2` / `1` | `FIELDWISE`: one request per coordinate, not one per whole tuple. `WINDOW`: sources per retrieval- or rest-stage window. `OVERLAP`: how many of a rest-stage window repeat in the next one; a retrieval-stage window never repeats one | `runner.main`, `runner.make_sweeper` |
+| `EXTRACT_MAX_RETRIES` / `EXTRACT_RETRY_TIMEOUT` | env var | `3` / `600` | `MAX_RETRIES`: attempts every retry loop of this stage gets per request. `RETRY_TIMEOUT`: client timeout (seconds) a row- or field-request retry gets after a request timed out; one refused at once keeps the client's own timeout instead | `runner.py`, `runner.make_harvester`, `runner.make_field_asker` |
 | `EXTRACT_FIELD_ROWS` | env var | `32` | Rows one field request answers at once; a coordinate's open rows are chunked to this many per request, halved again if the chunk still leaves too little room for its answer | `runner.make_field_asker` |
 | `EXTRACT_FIELD_ROUNDS` / `EXTRACT_FIELD_ATTEMPTS` | env var | `4` / `3` | Retrieval rounds before falling to the rest stage; retries of the own-stage window when unbackable | `runner.make_sweeper` |
 | `EXTRACT_FIELD_MAX_WINDOWS` / `EXTRACT_REST_MAX_WINDOWS` | env var | `24` / `12` | Own plus retrieval windows, and the rest stage's separate allowance, before a coordinate is exhausted | `runner.make_sweeper` |
@@ -551,7 +572,8 @@ run, `anchors.json` and `query_cache.db`; and, only after `--top-up`,
 | `EXTRACT_CODE_ROUNDS` / `EXTRACT_FIELD_RE_ENTRY` | env var | `2` / `3` | Sandbox rounds the row request may spend on a self-checked value; already-shown passages carried into a coordinate's next field window | `runner.make_harvester`, `runner.make_sweeper` |
 | `EXTRACT_LLM_PARALLEL` / `EXTRACT_PLAN_PARALLEL` / `EXTRACT_FIELD_PARALLEL` | env var | `128` / `8` / `192` | Concurrency ceilings the adaptive request limit cannot rise past (see The adaptive request limit): LLM requests for the whole run, planning threads (retrieval, SQL and the document's phrase requests, which run in parallel per parameter), and field-sweep threads beneath row-request batches | `runner.harvest_batches`, `runner.main`, `runner.make_fieldwise_harvester` |
 | `EXTRACT_ATTACH_IMAGES` / `EXTRACT_LOCATE` | env var | `1` / `1` | Off, respectively: no crop attaches to a row, field, frame or review request (no `images/` dir needed), or `make_locate` returns `None`, no quote placed on the page | `runner.py` askers, `runner.make_locate` |
-| `EXTRACT_BATCH_DOCS` | env var | `64` | Documents kept in flight at once under rolling admission; a finished one is written at once and the next starts, so no document waits on a group | `runner.main`, `runner.harvest_documents` |
+| `EXTRACT_LOCATE_CACHE_PAGES` | env var | `512` | Pages of words `make_locate` keeps across documents; a cache hit is a dict lookup and takes no lock, only a miss enters MuPDF under one | `runner.make_locate` |
+| `EXTRACT_BATCH_DOCS` | env var | `64` | Documents kept in flight at once under rolling admission, largest first by section count, filename breaking a tie; a finished one is written at once and the next starts, so no document waits on a group | `runner.main`, `runner.harvest_documents`, `runner._documents` |
 | `EXTRACT_MAX_MODEL_LEN` | env var | `32768` | Fallback context window a request's answer room is sized against; overwritten by `set_model_len` from the server's own preflight report where it gives one | `runner.set_model_len`, `runner.answer_room` |
 | `EXTRACT_RETRY_TEMPERATURE_STEP` | env var | `0.1` | Sampling temperature of a retried attempt raised by this step, once per unreadable reply, capped at `1.0`; every retry loop of this stage applies it (phrase, frame, anchors, harvest, field, review) | `runner.retry_temperature` |
 | `EXTRACT_TRACE` | env var | `1` | Off, every trace call returns immediately and no trace file is written | `trace.py` (`ENABLED`) |
@@ -562,6 +584,7 @@ run, `anchors.json` and `query_cache.db`; and, only after `--top-up`,
 | `--review` / `--review-limit N` | CLI flag | off / `0` | Runs `review.run`, one request per level-C value, up to N total | `review.run` |
 | `--serialize TTL` / `--print-context-budget` | CLI flag | none / off | `--serialize`: no harvest, hands `--out` to `serialize.run`, which calls the profile's `kg.make_serializer`. `--print-context-budget`: prints the tokens one harvest request needs, then exits | `serialize.run`, `runner.main` |
 | `SLICE` / `FRAME` | profile hook | none / none (every coordinate per row) | `SLICE`: gate coordinate(s) asked first, a row that fails them never asked its others. `FRAME`: document-level coordinates found once and projected onto every row | `runner.main`, `topup.actionable` |
+| `SEARCH_SHARE` | profile hook | none (every coordinate gets the whole budget) | Fraction of the retrieval and rest allowance a named coordinate gets; kwp halves `sector` and `aggregation`. At least one window stays per stage | `runner.make_sweeper` |
 
 ## Failure modes
 
@@ -602,7 +625,10 @@ instead of letting the interpreter die where it stood. Documents run
 under rolling admission, `harvest_documents` (`runner.py:3716`), at
 most `EXTRACT_BATCH_DOCS` in flight at once, their batches sharing one
 `batch_pool` and one `DeadStreak` (`runner.py:3696`) across every
-document in flight rather than one dead-server count per document. Once
+document in flight and, now, across the field sweep's own requests too,
+rather than a separate dead-server count per document or per pool: the
+run gives up once `max(64, EXTRACT_LLM_PARALLEL)` requests in a row
+never reached the server. Once
 `STOP` or a dead server sets `Halted` (`runner.py:5084`), no new
 document starts, and a document already in flight leaves its own
 `harvest_batches` call at once instead of waiting out its open

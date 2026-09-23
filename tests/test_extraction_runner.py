@@ -2341,3 +2341,166 @@ def test_each_unreadable_reply_raises_the_temperature_of_the_retry():
     assert runner.retry_temperature(0, 2) == pytest.approx(
         2 * runner.RETRY_TEMPERATURE_STEP)
     assert runner.retry_temperature(0.95, 3) == 1.0
+
+import inspect
+
+
+# ---------------------------------------------------------------------------
+# Run robustness (audit of corpus_m5, 2026-09-23)
+# ---------------------------------------------------------------------------
+
+def _client_that(monkeypatch, errors, reply='{"answers": {}}'):
+    """A client whose create raises each of `errors` in turn and then
+    answers `reply`; every create's keyword arguments are recorded."""
+    calls = []
+    queue = list(errors)
+
+    class _Msg:
+        def __init__(self, content):
+            self.content = content
+            self.reasoning_content = ""
+
+    class _Choice:
+        def __init__(self, content):
+            self.message = _Msg(content)
+            self.finish_reason = "stop"
+
+    class _Resp:
+        def __init__(self, content):
+            self.choices = [_Choice(content)]
+            self.usage = None
+
+    class _Client:
+        class chat:
+            class completions:
+                @staticmethod
+                def create(**kw):
+                    calls.append(kw)
+                    if queue:
+                        raise queue.pop(0)
+                    return _Resp(reply)
+
+    monkeypatch.setattr(runner, "_client", lambda: _Client())
+    monkeypatch.setattr(runner.time, "sleep", lambda s: None)
+    return calls
+
+
+def _timeout(_monkeypatch=None):
+    from conftest import api_error
+    return api_error("timed out", timeout=True)
+
+
+def _refused(_monkeypatch=None):
+    from conftest import api_error
+    return api_error("no server", connection=True)
+
+
+def test_a_retry_after_a_timeout_waits_less_than_the_first_attempt(monkeypatch):
+    """A request the server never answered in its 1,800 s was retried with
+    the same 1,800 s: three attempts held a worker for 90 minutes on one
+    window. The retry gets the shorter budget; a connection refused at once
+    is not a timeout and keeps the client's own."""
+    from docpipe.extraction import fields
+    slot = fields.Slot(name="year", kind=fields.NUMBER, question="Welches Jahr?")
+    calls = _client_that(monkeypatch, [_timeout(monkeypatch)])
+    assert runner.make_field_asker()([], [], slot) == {"answers": {}}
+    assert "timeout" not in calls[0]
+    assert calls[1]["timeout"] == runner.RETRY_TIMEOUT
+    calls = _client_that(monkeypatch, [_refused(monkeypatch)])
+    assert runner.make_field_asker()([], [], slot) == {"answers": {}}
+    assert all("timeout" not in kw for kw in calls)
+    # The rows harvester walks the same path.
+    assert "RETRY_TIMEOUT" in inspect.getsource(runner.make_harvester)
+
+
+def test_the_field_pool_gives_up_on_a_dead_server_like_the_rows_pool(
+        monkeypatch):
+    """The rows pool has always had the streak; the field pool, 192 threads
+    of it, went on spending its retries against a server that was gone."""
+    from docpipe.extraction import fields
+    slot = fields.Slot(name="year", kind=fields.NUMBER, question="Welches Jahr?")
+    gave_up = []
+    dead = runner.DeadStreak(2)
+
+    def asker():
+        # The asker takes its client when it is made, so one per stubbed
+        # client; the streak is the run's and outlives them all.
+        return runner.make_field_asker(
+            dead=dead, on_give_up=lambda: gave_up.append(True))
+
+    calls = _client_that(monkeypatch, [_refused(monkeypatch)
+                                       for _ in range(runner.MAX_RETRIES)])
+    # No reply, as for any request that got nothing: the sweep goes on, and
+    # it is the streak that ends the run.
+    assert asker()([], [], slot) is None
+    assert len(calls) == runner.MAX_RETRIES
+    assert gave_up == [], "one request short of the streak"
+    calls = _client_that(monkeypatch, [_refused(monkeypatch)
+                                       for _ in range(runner.MAX_RETRIES)])
+    assert asker()([], [], slot) is None
+    assert gave_up == [True]
+    # An answer clears the streak.
+    dead = runner.DeadStreak(2)
+    gave_up = []
+    calls = _client_that(monkeypatch, [_refused(monkeypatch)])
+    assert asker()([], [], slot) == {"answers": {}}
+    assert not dead.hit(), "cleared by the answer, so this is the first miss"
+
+
+def test_the_retry_count_and_the_retry_timeout_are_run_settings():
+    """MAX_RETRIES was a constant: a run against a server that answers
+    slowly could not trade retries for throughput without a code change."""
+    import os
+    source = inspect.getsource(runner)
+    assert 'MAX_RETRIES = int(os.environ.get("EXTRACT_MAX_RETRIES"' in source
+    assert 'RETRY_TIMEOUT = int(os.environ.get("EXTRACT_RETRY_TIMEOUT"' in source
+    assert runner.MAX_RETRIES == int(os.environ.get("EXTRACT_MAX_RETRIES", "3"))
+    assert runner.RETRY_TIMEOUT == int(
+        os.environ.get("EXTRACT_RETRY_TIMEOUT", "600"))
+
+
+def test_documents_come_largest_first():
+    """Admission is bounded and a document lasts as long as its slowest
+    sweep. In filename order the tail of a run belonged to whichever plans
+    sort last: one long plan alone on four cards for hours."""
+    import sqlite3
+    conn = sqlite3.connect(":memory:")
+    conn.executescript(
+        "CREATE TABLE Documents (id INTEGER PRIMARY KEY, filename TEXT,"
+        " is_current INTEGER);"
+        "CREATE TABLE Sections (id INTEGER PRIMARY KEY, document INTEGER);")
+    conn.executemany("INSERT INTO Documents VALUES (?, ?, 1)",
+                     [(1, "a.pdf"), (2, "b.pdf"), (3, "c.pdf"), (4, "d.pdf")])
+    conn.execute("INSERT INTO Documents VALUES (5, 'old.pdf', 0)")
+    conn.executemany("INSERT INTO Sections (document) VALUES (?)",
+                     [(1,)] * 2 + [(2,)] * 5 + [(3,)] * 2 + [(5,)] * 9)
+    conn.commit()
+    assert runner._documents(conn) == [
+        (2, "b.pdf"), (1, "a.pdf"), (3, "c.pdf"), (4, "d.pdf")]
+
+
+def test_a_page_is_laid_out_once_for_every_quote_on_it(tmp_path, monkeypatch):
+    """Sixty-four documents finish together and every located quote used to
+    queue behind whichever miss was laying out a page. A hit is a dict
+    lookup; only a miss enters MuPDF."""
+    import sqlite3
+    from docpipe.inference import pdf_locate
+    laid_out = []
+    monkeypatch.setattr(pdf_locate, "page_words",
+                        lambda path, page: laid_out.append(page) or ["w"])
+    monkeypatch.setattr(pdf_locate, "rects_from_words",
+                        lambda words, quote: [[0, 0, 1, 1]])
+    monkeypatch.delenv("EXTRACT_LOCATE", raising=False)
+    db = tmp_path / "plans.sqlite"
+    conn = sqlite3.connect(str(db))
+    conn.executescript("CREATE TABLE Documents (id INTEGER PRIMARY KEY,"
+                       " filename TEXT);"
+                       "INSERT INTO Documents VALUES (7, 'plan.pdf');")
+    conn.commit()
+    conn.close()
+    (tmp_path / "plan.pdf").write_bytes(b"%PDF-1.4")
+    locate = runner.make_locate(db, tmp_path)
+    source = Source("table", 1, "| Erdgas |", {"document_id": 7, "page": 3})
+    assert locate(source, "Erdgas") == [[0, 0, 1, 1]]
+    assert locate(source, "Erdgas 2022") == [[0, 0, 1, 1]]
+    assert laid_out == [3]

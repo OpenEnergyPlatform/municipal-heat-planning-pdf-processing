@@ -691,15 +691,57 @@ def answer_in_quote(slot, given, wording: Optional[str], quote: str) -> bool:
     in so many words. The owner agreed to this reading on 2026-09-13.
     """
     if slot.kind == NUMBER:
-        return canonical_number(given) in numbers_in(quote)
+        wanted = canonical_number(given)
+        if wanted is None:
+            return False
+        if wanted.isdigit():
+            # Its digits in one run. `numbers_in` reads "2.022 MWh" as the
+            # grouped 2022, right for a magnitude and wrong for a year: an
+            # energy figure backed the year it happened to spell. A dated
+            # "31.12.2022" still prints its year in one run (owner decision
+            # 2026-09-23).
+            return re.search(rf"(?<!\d){re.escape(wanted)}(?!\d)",
+                             flat(quote)) is not None
+        return wanted in numbers_in(quote)
     said = flat(quote).casefold()
-    if wording:
-        return flat(wording).casefold() in said
     option = (option_named(slot, given)
               if slot.kind == CHOICE and slot.options else None)
+    if wording:
+        return stands_in(slot, option, flat(wording).casefold(), said)
     spellings = ((option.label, *option.synonyms) if option is not None
                  else (str(given),))
-    return any(flat(s).casefold() in said for s in spellings if s.strip())
+    return any(stands_in(slot, option, flat(s).casefold(), said)
+               for s in spellings if s.strip())
+
+
+def stands_in(slot, option, spelling: str, said: str) -> bool:
+    """Does this spelling stand in the quote where no longer entry of the
+    same list stands?
+
+    "MWh" is in "450 MWh/a", and what the passage states is the other entry:
+    the emission parameter's unit list has 72 such prefix pairs, and a bare
+    "t" was backed by "t CO2eq" -- the number stayed right, the flag for a
+    missing period went wrong. The longest entry at the spot wins (owner
+    decision 2026-09-23). Only ANOTHER option's entry shadows: the chosen
+    option's own longer spelling is the same answer.
+    """
+    if not spelling:
+        return False
+    longer = []
+    if option is not None and slot.options:
+        for other in slot.options:
+            if other is option:
+                continue
+            for s in (other.label, *other.synonyms):
+                s = flat(s).casefold()
+                if len(s) > len(spelling) and s.startswith(spelling):
+                    longer.append(s)
+    at = said.find(spelling)
+    while at != -1:
+        if not any(said.startswith(s, at) for s in longer):
+            return True
+        at = said.find(spelling, at + 1)
+    return False
 
 
 # Where one word ends and the next begins, for a language that writes ae

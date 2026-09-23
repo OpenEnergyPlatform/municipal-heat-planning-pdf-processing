@@ -815,3 +815,54 @@ def test_a_topped_up_document_is_current_and_an_untouched_one_is_not(
     assert after["sector_raw"] == "Haushalte"
     assert after["sector"] != _row()["sector"]
     assert runner.stale(tmp_path / "offen.stamp.json", current) == [f"value/{PARAMETER}"],         "the document the pass had to skip is still stale"
+
+
+# ---------------------------------------------------------------------------
+# A re-sweep of the year knows the plan's base years (audit 2026-09-23)
+# ---------------------------------------------------------------------------
+
+def test_the_base_years_are_rebuilt_from_the_frames_own_readings():
+    """The harvest read a "Basisjahr" column against the frame's base years;
+    the top-up rebuilt its batches without them and could not. The pairs are
+    recoverable from the file: every row the frame dated carries the pair's
+    index in its window, with the quote and source the year was read by."""
+    frame = fields.frame_slots(SPEC, ("scenario", "year"))
+    tuples = [
+        _row(scenario="status_quo", scenario_window=["frame", 0],
+             year=2022, year_quote="Bilanzjahr 2022",
+             year_source=["section", 5], year_window=["frame", 0]),
+        # The same pair on a second row: one entry.
+        _row(scenario="status_quo", scenario_window=["frame", 0],
+             year=2022, year_quote="Bilanzjahr 2022",
+             year_source=["section", 5], year_window=["frame", 0]),
+        # A scenario of the plan, not its own state.
+        _row(scenario="target", scenario_window=["frame", 1],
+             year=2040, year_quote="Zielszenario 2040",
+             year_source=["section", 6], year_window=["frame", 1]),
+        # Read in the sweep, not by the frame: not a base year.
+        _row(scenario="status_quo", scenario_window=["own", 1],
+             year=2019, year_quote="Stand 2019",
+             year_source=["table", 1], year_window=["own", 1]),
+    ]
+    got = topup.base_years_of(tuples, frame, {"scenario": "status_quo"})
+    assert [(b["year"], b["quote"], b["source"], b["index"]) for b in got] == [
+        (2022, "Bilanzjahr 2022", ["section", 5], 0)]
+    assert topup.base_years_of(tuples, frame, None) == ()
+    assert topup.base_years_of(tuples, None, {"scenario": "status_quo"}) == ()
+
+
+def test_a_re_sweep_hands_the_base_years_to_every_batch(tmp_path):
+    calls = []
+    path = _harvest(tmp_path, [
+        _row(scenario="status_quo", scenario_window=["frame", 0],
+             year=2022, year_quote="Bilanzjahr 2022",
+             year_source=["section", 5], year_window=["frame", 0]),
+        _summary()], stamp=_stamp(**{f"axis/{PARAMETER}/sector": "moved"}))
+    frame = fields.frame_slots(SPEC, ("scenario", "year"))
+    topup.run(tmp_path, SPEC, _stamp(), _deps(
+        sweep=_sweeper({"sector": {"value": "Haushalte", "raw": "Haushalte"}},
+                       calls),
+        frame_axes=frame, base_state={"scenario": "status_quo"}))
+    assert calls, "the coordinate was swept"
+    assert [b["year"] for b in calls[0]["batch"].bases] == [2022]
+    assert _rows(path)[0]["sector_raw"] == "Haushalte"

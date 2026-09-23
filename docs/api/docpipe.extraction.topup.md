@@ -110,6 +110,22 @@ The second half is what lets the sweep offer a coordinate the passage it
 was last read in: the re-entry rule works off the sources of the batch,
 and a passage nobody put in the batch cannot be offered.
 
+### base_years_of
+
+```python
+def base_years_of(tuples: list, frame_axes, base_state) -> tuple
+```
+
+The document's base years, rebuilt from the frame's own readings.
+
+The harvest wrote each pair onto its rows with the window ["frame", i],
+so the pairs are recoverable from the file: one per index, from the first
+row that carries it, with the quote and source the year was read by.
+Without them a re-swept year that says "Basisjahr" and prints no number
+cannot be read (`pipeline.base_year_named`): the main harvest could and
+this pass could not, which would cost the full run this pass exists to
+spare.
+
 ### rebuild
 
 ```python

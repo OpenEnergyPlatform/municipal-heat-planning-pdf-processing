@@ -40,7 +40,8 @@ from pathlib import Path
 from typing import Callable, Optional
 
 from . import fields
-from .pipeline import (Row, WorkItem, group_items, mark_unanswered, row_label)
+from .pipeline import (Row, WorkItem, base_years, group_items,
+                       mark_unanswered, row_label)
 from .remap import stamp_forward, stamp_path_of
 from .spec import Spec
 from .trust import document_summary
@@ -191,6 +192,40 @@ def owners_of(row: dict, slots: list) -> list:
             if pair not in out:
                 out.append(pair)
     return out
+
+
+def base_years_of(tuples: list, frame_axes, base_state) -> tuple:
+    """The document's base years, rebuilt from the frame's own readings.
+
+    The harvest wrote each pair onto its rows with the window ["frame", i],
+    so the pairs are recoverable from the file: one per index, from the first
+    row that carries it, with the quote and source the year was read by.
+    Without them a re-swept year that says "Basisjahr" and prints no number
+    cannot be read (`pipeline.base_year_named`): the main harvest could and
+    this pass could not, which would cost the full run this pass exists to
+    spare.
+    """
+    if not frame_axes or not base_state:
+        return ()
+    names = [slot.name for slot in frame_axes]
+    pairs: dict = {}
+    for row in tuples:
+        windows = [row.get(f"{name}_window") for name in names]
+        if not all(isinstance(w, (list, tuple)) and len(w) == 2
+                   and w[0] == "frame" for w in windows):
+            continue
+        index = windows[0][1]
+        if not isinstance(index, int) or index in pairs:
+            continue
+        pair = {}
+        for name in names:
+            for suffix in ("", "_raw", "_quote", "_source"):
+                pair[f"{name}{suffix}"] = row.get(f"{name}{suffix}")
+        pairs[index] = pair
+    if not pairs:
+        return ()
+    ordered = [pairs.get(i) for i in range(max(pairs) + 1)]
+    return tuple(base_years(ordered, frame_axes, base_state))
 
 
 def rebuild(rows: list, parameter, sources: dict, carry: list) -> tuple:
@@ -347,6 +382,8 @@ def top_up_file(path: Path, spec: Spec, current: dict, deps: dict, *,
 
     settled = set(keys)
     demoted: list = []
+    bases = base_years_of(tuples, deps.get("frame_axes"),
+                          deps.get("base_state"))
     for key in keys:
         for parameter, slot in targets_of(doc_spec, key):
             mine = [r for r in tuples if r.get("parameter") == parameter.uri]
@@ -362,7 +399,7 @@ def top_up_file(path: Path, spec: Spec, current: dict, deps: dict, *,
                 stats["derived"] += fields.apply_derived(rows, slot)
                 continue
             got, refused = _sweep_one(mine, parameter, slot, doc_spec, deps,
-                                      stats)
+                                      stats, bases=bases)
             demoted.extend(refused)
             if not got:
                 settled.discard(key)
@@ -375,7 +412,7 @@ def top_up_file(path: Path, spec: Spec, current: dict, deps: dict, *,
             deps.get("frame_names") or ()):
         stats["closed rows reopened"] += len(mine)
         _got, refused = _sweep_one(mine, parameter, slot, doc_spec, deps,
-                                   stats)
+                                   stats, bases=bases)
         demoted.extend(refused)
     # A refused row is a refusal now, in the file and in the summary. The
     # line keeps its place: the dict was rewritten where it stands.
@@ -398,7 +435,7 @@ def top_up_file(path: Path, spec: Spec, current: dict, deps: dict, *,
 
 
 def _sweep_one(rows: list, parameter, slot, doc_spec: Spec, deps: dict,
-               stats: Counter) -> tuple:
+               stats: Counter, bases: tuple = ()) -> tuple:
     """Re-read one coordinate over these rows.
 
     (every row settled, the rows the verifier refused afterwards). A refused
@@ -439,6 +476,9 @@ def _sweep_one(rows: list, parameter, slot, doc_spec: Spec, deps: dict,
            for provenance in ((r.get("provenance") or {}) for r in usable)}
     carry = [pair for pair in owners if pair not in own]
     batches, by_batch = rebuild(usable, parameter, sources, carry)
+    for batch in batches:
+        # The document's, not the request's: they hold for every passage.
+        batch.bases = tuple(bases)
     from . import runner
     # The unit's set is written once for all parameters, under its own
     # key; a per-parameter id would find no set and search with the

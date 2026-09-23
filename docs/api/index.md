@@ -57,7 +57,7 @@ is for and what it hands to what; this is the reference.
 - [docpipe.extraction](docpipe.extraction.md): Marks the extraction package as the OBIE stage.
 - [docpipe.extraction.\_\_main\_\_](docpipe.extraction.__main__.md): Allow execution via: python -m docpipe.extraction
 - [docpipe.extraction.fields](docpipe.extraction.fields.md): Computes the deterministic skeleton of a tuple from the spec. (2 classes, 11 functions)
-- [docpipe.extraction.pipeline](docpipe.extraction.pipeline.md): The harvest loop that turns a document's retrieved passages into verified value tuples. (6 classes, 32 functions)
+- [docpipe.extraction.pipeline](docpipe.extraction.pipeline.md): The harvest loop that turns a document's retrieved passages into verified value tuples. (6 classes, 33 functions)
 - [docpipe.extraction.queries](docpipe.extraction.queries.md): Expands a profile's query templates into retrieval probes drawn from the spec. (1 function)
 - [docpipe.extraction.recheck](docpipe.extraction.recheck.md): Reapplies the answer-in-quote rule to a harvest written before the rule existed. (3 functions)
 - [docpipe.extraction.remap](docpipe.extraction.remap.md): Re-resolves a moved or grown vocabulary against a harvest already on disk. (7 functions)
@@ -67,7 +67,7 @@ is for and what it hands to what; this is the reference.
 - [docpipe.extraction.serialize](docpipe.extraction.serialize.md): Turns a document harvest into the profile's target graph. (3 functions)
 - [docpipe.extraction.spec](docpipe.extraction.spec.md): The contract between a profile's ontology knowledge and the core. (4 classes, 10 functions)
 - [docpipe.extraction.throttle](docpipe.extraction.throttle.md): How many model requests the harvest keeps open, steered by the server's own queue. (5 classes, 2 functions)
-- [docpipe.extraction.topup](docpipe.extraction.topup.md): Re-reads the one coordinate a stamp names as moved, instead of the whole document. (10 functions)
+- [docpipe.extraction.topup](docpipe.extraction.topup.md): Re-reads the one coordinate a stamp names as moved, instead of the whole document. (11 functions)
 - [docpipe.extraction.trace](docpipe.extraction.trace.md): Records what the harvest did as one JSON event per line, so it can be counted after the run. (4 functions)
 - [docpipe.extraction.trust](docpipe.extraction.trust.md): Grades every harvested value by how far the run can stand behind it. (7 functions)
 - [docpipe.extraction.verify](docpipe.extraction.verify.md): Checks a claimed tuple against the spec and the source text before it is written to the harvest. (2 classes, 7 functions)
@@ -146,7 +146,7 @@ is for and what it hands to what; this is the reference.
 - [profiles.kwp.config](profiles.kwp.config.md): Constants for the fileprocessing module. (1 function)
 - [profiles.kwp.extraction](profiles.kwp.extraction.md): Extraction stage wiring: the kwp spec, the slice gate, the frame, and what a plan says about itself. (1 function)
 - [profiles.kwp.inference](profiles.kwp.inference.md): What the answer loop says around the kwp prompts.
-- [profiles.kwp.kg](profiles.kwp.kg.md): Serializes harvested tuples into MHPKG Turtle. (14 functions)
+- [profiles.kwp.kg](profiles.kwp.kg.md): Serializes harvested tuples into MHPKG Turtle. (16 functions)
 - [profiles.kwp.migrate_convoy_group_keys](profiles.kwp.migrate_convoy_group_keys.md): Regroup convoy documents by their smallest ags. (4 functions)
 - [profiles.kwp.migrate_profile_split](profiles.kwp.migrate_profile_split.md): Bring a pre-refactoring KWP.db up to the core schema. (5 functions)
 - [profiles.kwp.preprocessing](profiles.kwp.preprocessing.md): What text extraction has to know about German.

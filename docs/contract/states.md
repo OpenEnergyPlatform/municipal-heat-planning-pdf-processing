@@ -79,10 +79,10 @@ cost 178 of 853 field requests, 20.9 percent
 4,064 of 6,763 tuples harvested across 20 plans had all seven axes
 filled in before being dropped for the two gate coordinates
 (`docpipe/extraction/runner.py:3393`). The same split holds past the
-coordinate: `docpipe/extraction/trust.py`'s `reasons` counts only
-`exhausted` and `unbacked` as doubt about a reading, and treats every
-other state, `derived`, `unstated` and `out_of_slice`, as a fact about the
-document or the run's scope, not about the value itself.
+coordinate: `docpipe/extraction/trust.py`'s `reasons` counts
+`exhausted`, `unbacked` and `unanswered` as doubt about a reading, and
+treats every other state, `derived`, `unstated` and `out_of_slice`, as a
+fact about the document or the run's scope, not about the value itself.
 [Trust](trust.md) grades a tuple from exactly that split.
 
 | constant | value | what it says |

@@ -312,7 +312,7 @@
          "pattern": "^page_transcribed$"
         },
         {
-         "pattern": "^(exhausted|unbacked):[a-z_]+$"
+         "pattern": "^(exhausted|unbacked|unanswered):[a-z_]+$"
         }
        ]
       },

@@ -38,6 +38,7 @@ Jeder Eintrag wird maschinell und wörtlich gegen die Quelle geprüft; was die P
    FALSCH: "Erdgas: 126656132 kWh/a" — umformatiert, steht so nicht in der Quelle.
    RICHTIG: "| Erdgas | 126.656.132 | 520.465.057 | 1.036.767.833 |"
    Steht dieselbe Zahl mehrfach in derselben Zeile, zitier die ganze Zeile: welche Spalte gemeint ist, wird im nächsten Schritt geklärt.
+   Nennt ein Satz mehrere Zahlen für mehrere Jahre oder Szenarien ("1.769.800 MWh für 2020, 1.483.300 MWh für das Trendszenario 2045"), dann zitier nur den Teil mit DEINER Zahl und dem, was sie datiert: "1.769.800 MWh für 2020". Der ganze Satz nennt auch die anderen, und die Zahl bekommt dann ein fremdes Jahr oder Szenario.
 
 5. "status" und "need_more":
    - "complete": alles, was diese Quellen zum Frame an Zahlen hergeben, steht in "tuples". Auch dann, wenn "tuples" leer ist. Das ist der Normalfall.

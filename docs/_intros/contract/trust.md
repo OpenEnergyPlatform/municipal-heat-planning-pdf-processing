@@ -37,9 +37,9 @@ tier `TIER_TEXT` (`trust.py:120-124`;
 cut at, 527 came out of a table or figure image, so image origin alone is
 not a warning (`trust.py:39-41`).
 
-A value falls to `C` only when something else is off: an `unbacked` or
-`exhausted` coordinate, a repaired quote, a computed number, or a
-contested identity (`reasons`, `trust.py:77-107`;
+A value falls to `C` only when something else is off: an `unbacked`,
+`exhausted` or `unanswered` coordinate, a repaired quote, a computed
+number, or a contested identity (`reasons`, `trust.py:77-107`;
 `test_every_doubt_the_harvest_records_lowers_the_level`,
 `tests/test_extraction_trust.py:91`;
 `test_a_contested_identity_is_a_c_even_with_everything_else_right`,
@@ -52,8 +52,8 @@ make (`trust.py:28-31`).
 
 Every `C` carries at least one reason, and the reasons form a closed list:
 a reason nobody can enumerate is a reason nobody can count
-(`trust.py:24-26`). A coordinate contributes `exhausted:<axis>`
-or `unbacked:<axis>` (`trust.py:92-93`). A row's own
+(`trust.py:24-26`). A coordinate contributes `exhausted:<axis>`,
+`unbacked:<axis>` or `unanswered:<axis>` (`trust.py:92-93`). A row's own
 `flags` contribute `repaired`, `computed`, `not_located` or
 `review:disagree` (`FLAG_REASONS`, `trust.py:72-74`). `conflict` is added
 by a profile's own graph serializer resolving two competing readings of

@@ -123,6 +123,9 @@ class _StubAPIError(Exception):
 class _StubAPITimeoutError(_StubAPIError):
     pass
 
+class _StubAPIConnectionError(_StubAPIError):
+    pass
+
 
 class _DummyOpenAI:  # constructible vLLM client stand-in (never called under test)
     def __init__(self, *args, **kwargs):
@@ -138,11 +141,15 @@ _ensure_stub("openai", attrs={
     "OpenAI": _DummyOpenAI,
     "APIError": _StubAPIError,
     "APITimeoutError": _StubAPITimeoutError,
+    "APIConnectionError": _StubAPIConnectionError,
 })
 
 
-def api_error(message="boom", timeout=False):
+def api_error(message="boom", timeout=False, connection=False):
     """An `openai` error, built the way the INSTALLED openai wants it.
+
+    *timeout* is the request the server never answered in its budget,
+    *connection* the one it refused at once; the runner tells them apart.
 
     The stub above takes a message and nothing else. The real library's
     `APIError.__init__` takes `(message, request, *, body)` and raises
@@ -152,9 +159,12 @@ def api_error(message="boom", timeout=False):
     library is the one the run happens on, and this failed there and nowhere
     else for as long as the suite was only ever run here.
     """
-    kind = _real_openai().APITimeoutError if timeout else _real_openai().APIError
+    openai = _real_openai()
+    kind = (openai.APITimeoutError if timeout
+            else openai.APIConnectionError if connection else openai.APIError)
     for build in (lambda: kind(message, request=None, body=None),
                   lambda: kind(request=None),
+                  lambda: kind(message=message, request=None),
                   lambda: kind(message)):
         try:
             return build()

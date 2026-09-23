@@ -90,7 +90,12 @@ LLM_MODEL = os.environ.get("LLM_MODEL", "Qwen/Qwen3.5-122B-A10B-FP8")
 LLM_TIMEOUT = int(os.environ.get("LLM_TIMEOUT", "180"))
 TOP_K = int(os.environ.get("EXTRACT_TOP_K", "8"))
 MAX_ROUNDS = int(os.environ.get("EXTRACT_MAX_ROUNDS", "4"))
-MAX_RETRIES = 3
+MAX_RETRIES = int(os.environ.get("EXTRACT_MAX_RETRIES", "3"))
+# What a retry may take after a request timed out. The first attempt keeps
+# LLM_TIMEOUT, which is sized for a slow but working generation; a request the
+# server did not answer in that time is unlikely to differ on its repeat, and
+# three full timeouts held one field thread for 91 minutes.
+RETRY_TIMEOUT = int(os.environ.get("EXTRACT_RETRY_TIMEOUT", "600"))
 # A malformed reply asked again at temperature 0 comes back the same, byte for
 # byte, correction message or not: on corpus_m5 field retries
 # repeated their first attempt exactly and all three were lost. Every reply
@@ -197,6 +202,8 @@ IMAGE_MAX_SIDE = int(os.environ.get("EXTRACT_IMAGE_MAX_SIDE", "1280"))
 # A section can run over a page break; how many of its pages to try before
 # giving up on placing the quote.
 LOCATE_MAX_PAGES = int(os.environ.get("EXTRACT_LOCATE_MAX_PAGES", "3"))
+# Pages whose words stay in memory for the locator, across documents.
+LOCATE_CACHE_PAGES = int(os.environ.get("EXTRACT_LOCATE_CACHE_PAGES", "512"))
 
 HARVEST_PROMPT_ID = "extraction/harvest"
 QUERIES_PROMPT_ID = "extraction/queries"
@@ -314,17 +321,25 @@ FIELD_ATTEMPTS = int(os.environ.get("EXTRACT_FIELD_ATTEMPTS", "3"))
 REST_MAX_WINDOWS = int(os.environ.get("EXTRACT_REST_MAX_WINDOWS", "12"))
 
 
-def window_budget() -> dict:
+def window_budget(share: float = 1.0) -> dict:
     """{stage: windows} for one coordinate's sweep, own then retrieval then
     rest. Read at call time so a test that moves one constant moves this.
 
     The sum is FIELD_MAX_WINDOWS + REST_MAX_WINDOWS. `own` can never bind --
     one window, and the attempt loop already stops at FIELD_ATTEMPTS -- and
     is written here so the three numbers add up in one place instead of two.
+
+    *share* scales the two search stages for a coordinate the profile says
+    to look for less far (`SEARCH_SHARE`): under one budget, corpus_m5's
+    sector search filled 4 percent of its 392,541 requests where the scope's
+    filled 25 percent. At least one window stays, so no stage is skipped.
     """
-    return {"own": FIELD_ATTEMPTS,
-            "retrieval": max(0, FIELD_MAX_WINDOWS - FIELD_ATTEMPTS),
-            "rest": REST_MAX_WINDOWS}
+    retrieval = max(0, FIELD_MAX_WINDOWS - FIELD_ATTEMPTS)
+    rest = REST_MAX_WINDOWS
+    if share < 1.0:
+        retrieval = max(1, round(retrieval * share)) if retrieval else 0
+        rest = max(1, round(rest * share)) if rest else 0
+    return {"own": FIELD_ATTEMPTS, "retrieval": retrieval, "rest": rest}
 # How many already-read passages ride along at the front of a window. Where
 # one coordinate of a row was read, the next one is usually a few lines away
 # — and today that passage went into `seen` after the window that showed it
@@ -450,8 +465,12 @@ def make_retrieve(conn: sqlite3.Connection, index, id_to_pos: dict,
     # sixteen times over — four parameters by four rounds.
     document: list = [None, None]         # document_id, prepared
     search: list = [None, None]           # probe key, (scores, positions)
+    default_limit = limit
 
-    def retrieve(probes: list, document_id: int, exclude: set) -> list:
+    def retrieve(probes: list, document_id: int, exclude: set,
+                 limit: Optional[int] = None) -> list:
+        """*limit* per call overrides the one given at construction: the
+        sweep asks for as many passages as its remaining windows can show."""
         if document[0] != document_id:
             document[:] = [document_id, faiss_store.prepare_document(
                 conn, index, id_to_pos, document_id, all_types)]
@@ -462,7 +481,8 @@ def make_retrieve(conn: sqlite3.Connection, index, id_to_pos: dict,
                 document[1], [embed(p) for p in probes])]
         scores, positions = search[1]
         hits = faiss_store.fuse_prepared(
-            conn, document[1], scores, positions, limit,
+            conn, document[1], scores, positions,
+            default_limit if limit is None else limit,
             content_fetcher=content_fetcher, exclude=exclude, probes=probes,
             per_probe_top=per_probe_top)
         return [_source_of(hit) for hit in hits]
@@ -717,6 +737,10 @@ def make_rest_of_document(db_path: Path) -> Callable:
     the row would make that a lie about the part a title page stands in. A
     coordinate is far more often a few sections from its own row than on page
     one, and the budget runs out long before the wrap comes round.
+
+    A section's tables and figures follow it, in page order. The floor read
+    sections only, and 71 percent of corpus_m5's tuples came out of images:
+    "the whole document" that left out every table was not the whole document.
     """
     local = threading.local()
 
@@ -734,6 +758,14 @@ def make_rest_of_document(db_path: Path) -> Callable:
             order = [(int(r[0]), r[1]) for r in conn.execute(
                 "SELECT id, section_number FROM Sections WHERE document = ? "
                 "ORDER BY COALESCE(section_number, id)", (document_id,))]
+            blocks: dict = {}
+            for kind, table in (("table", "Tables"), ("figure", "Images")):
+                for r in conn.execute(
+                        f"SELECT o.id, o.section FROM {table} o "
+                        f"JOIN Sections s ON o.section = s.id "
+                        f"WHERE s.document = ? ORDER BY o.page_number, o.id",
+                        (document_id,)):
+                    blocks.setdefault(int(r[1]), []).append((kind, int(r[0])))
         except Exception as exc:
             log.warning("   sections of document %s unreadable: %s",
                         document_id, exc)
@@ -742,16 +774,18 @@ def make_rest_of_document(db_path: Path) -> Callable:
             at = next((i for i, (_id, number) in enumerate(order)
                        if number is not None and number >= start), 0)
             order = order[at:] + order[:at]
-        ids = [section_id for section_id, _number in order]
+        owners = [(kind, owner_id) for section_id, _number in order
+                  for kind, owner_id in ([("section", section_id)]
+                                         + blocks.get(section_id, []))]
         out: list = []
-        for section_id in ids:
-            if ("section", section_id) in exclude:
+        for kind, owner_id in owners:
+            if (kind, owner_id) in exclude:
                 continue
-            hit = fetch(conn, "section", section_id)
+            hit = fetch(conn, kind, owner_id)
             if hit is None:
                 continue
-            out.append(_source_of({**hit, "owner_kind": "section",
-                                   "owner_id": section_id}, via="comb"))
+            out.append(_source_of({**hit, "owner_kind": kind,
+                                   "owner_id": owner_id}, via="comb"))
         return out
 
     return rest_of_document
@@ -770,6 +804,13 @@ def make_more_sources(db_path: Path, index, id_to_pos: dict,
     are embedded on the spot. That is the whole cost of the round trip, and
     it only happens when the model says the passages it was given are not
     enough.
+
+    *limit* bounds what one call hands back. The ranking covers the whole
+    document, and handed over whole it marked every passage of the plan as
+    seen after the first round: the stage that reads the rest in order then
+    found nothing left, and a sweep whose budget had cut the ranked list
+    ended "unstated" instead of "exhausted". corpus_m5 wrote 0 exhausted
+    coordinates in 263,997 sweeps that way. 0 means no bound.
     """
     from docpipe.inference import query_cache
 
@@ -781,15 +822,21 @@ def make_more_sources(db_path: Path, index, id_to_pos: dict,
             local.conn.row_factory = sqlite3.Row
             local.cache = query_cache.connect(cache_path, create=False)
             local.fetch = make_content_fetcher()
-        return local.conn, local.cache, local.fetch
+            # One per thread, so the document's sub-index and the score
+            # matrix survive from one round to the next; built per call they
+            # were rebuilt for every round of every coordinate.
+            local.retrieve = make_retrieve(local.conn, index, id_to_pos,
+                                           local.cache, local.fetch)
+        return local.retrieve
 
-    def more_sources(document_id: int, queries: list, exclude: set) -> list:
-        conn, cache, fetch = connections()
-        retrieve = make_retrieve(conn, index, id_to_pos, cache, fetch)
+    def more_sources(document_id: int, queries: list, exclude: set,
+                     limit: int = 0) -> list:
+        retrieve = connections()
         found: list = []
         taken = set(exclude)
         try:
-            for source in retrieve(list(queries)[:4], document_id, taken):
+            for source in retrieve(list(queries)[:4], document_id, taken,
+                                   limit=limit):
                 key = (source.owner_kind, source.owner_id)
                 if key in taken:
                     continue
@@ -2429,6 +2476,7 @@ def make_harvester(image_root: Optional[Path] = None,
         why = ["no_answer"]
         conversation: list = [{"role": "user", "content": content}]
         transport = False
+        timed_out = False
         # The wait follows the FAILURES, not the turns of the conversation: a
         # sandbox round is a turn and not a failure, and counting it escalated
         # the backoff of the next real one.
@@ -2466,6 +2514,7 @@ def make_harvester(image_root: Optional[Path] = None,
                     # 1093 of 16102 harvests to replies with no 'tuples' in
                     # them, HTTP 200 every one.
                     extra_body=request_extras(),
+                    **({"timeout": RETRY_TIMEOUT} if timed_out else {}),
                 )
                 transport = False
                 reply = response.choices[0]
@@ -2557,6 +2606,7 @@ def make_harvester(image_root: Optional[Path] = None,
                 # a harvested document.
                 why[0] = "no_answer" if isinstance(status, int) else "unreachable"
                 transport = not isinstance(status, int)
+                timed_out = _timed_out(exc)
                 if isinstance(status, int) and 400 <= status < 500 and status != 429:
                     # A request the server refuses is refused every time. The
                     # last run spent three tries and eight seconds of sleep on
@@ -2760,8 +2810,25 @@ def field_response_format(slot) -> dict:
             "json_schema": {"name": "field_reply", "schema": schema}}
 
 
-def make_field_asker(image_root: Optional[Path] = None) -> Callable:
+def _timed_out(exc: BaseException) -> bool:
+    """A request the server never answered within its budget, as opposed to a
+    connection it refused at once: only the first is worth a shorter retry."""
+    try:
+        import openai
+    except ImportError:                     # pragma: no cover - always installed
+        return False
+    return isinstance(exc, openai.APITimeoutError)
+
+
+def make_field_asker(image_root: Optional[Path] = None, *,
+                     dead=None, on_give_up: Optional[Callable] = None
+                     ) -> Callable:
     """ask(shown, rows, slots, ...) -> {"fields": {name: answer}}, or None.
+
+    *dead* is the run's DeadStreak: the rows pool has always had one, the
+    field pool none, so a server that went away was found by every one of its
+    192 threads separately, each spending its own retries. *on_give_up* is
+    called once when the streak fires.
 
     One coordinate per request, over at most FIELD_ROWS rows. Five coordinates
     for every row of a batch in one request wanted up to 27,311 prompt tokens
@@ -2828,6 +2895,7 @@ def make_field_asker(image_root: Optional[Path] = None) -> Callable:
         # malformed is one attempt three times.
         shape = field_response_format(slot)
         transport = False
+        timed_out = False
         faults = 0
         for attempt in range(1, MAX_RETRIES + 1):
             limit = answer_room(prompt.text, conversation, max_tokens)
@@ -2842,8 +2910,11 @@ def make_field_asker(image_root: Optional[Path] = None) -> Callable:
                               *conversation],
                     response_format=shape,
                     extra_body=request_extras(),
+                    **({"timeout": RETRY_TIMEOUT} if timed_out else {}),
                 )
                 transport = False
+                if dead is not None:
+                    dead.clear()
                 reply = response.choices[0]
                 usage = getattr(response, "usage", None)
                 _observe_usage(usage)
@@ -2878,11 +2949,17 @@ def make_field_asker(image_root: Optional[Path] = None) -> Callable:
                             kind="exception", slot=name, attempt=attempt,
                             status=status, detail=str(exc)[:300])
                 transport = not isinstance(status, int)
+                timed_out = _timed_out(exc)
                 if isinstance(status, int) and 400 <= status < 500 \
                         and status != 429:
                     break
             if attempt < MAX_RETRIES:
                 time.sleep(retry_wait(attempt, transport))
+        if transport and dead is not None and dead.hit():
+            log.error("field: %d requests in a row never reached the server "
+                      "-- the run gives up", dead.limit)
+            if on_give_up is not None:
+                on_give_up()
         return None
 
     def ask(shown: list, rows: list, slots,
@@ -3053,7 +3130,8 @@ def make_sweeper(ask: Callable, *,
                  more_sources: Optional[Callable] = None,
                  rest_of_document: Optional[Callable] = None,
                  parents: Optional[Callable] = None,
-                 anchors: Optional[dict] = None) -> Callable:
+                 anchors: Optional[dict] = None,
+                 search_share: Optional[dict] = None) -> Callable:
     """sweep_field(batch, rows, slots, anchor_id) -> what the sweep came to.
 
     Lifted out of the harvester so a pass that re-reads ONE coordinate of an
@@ -3064,9 +3142,11 @@ def make_sweeper(ask: Callable, *,
 
     Its five dependencies are exactly what it closed over inside the
     harvester: the asker, and the three ways of finding more passages plus
-    the anchor sets that seed them.
+    the anchor sets that seed them. *search_share* is the profile's
+    `SEARCH_SHARE`: {coordinate: fraction of the search budget}.
     """
     anchors = anchors or {}
+    search_share = search_share or {}
 
     def sweep_field(batch, rows: list, slots, anchor_id: str = "") -> dict:
         """Short windows over the document until this coordinate is read.
@@ -3125,7 +3205,8 @@ def make_sweeper(ask: Callable, *,
         #     the rest allowance above the field one and it becomes 0, and the
         #     stage silently gets the whole budget.
         #
-        budget = window_budget()
+        budget = window_budget(min(search_share.get(slot.name, 1.0)
+                                   for slot in slots))
         spent = {stage: 0 for stage in budget}
         state = {"answer": None, "stage": "own"}
 
@@ -3346,13 +3427,28 @@ def make_sweeper(ask: Callable, *,
                 probes = [slot.question for slot in slots if slot.question]
             probes += [q for q in (state["answer"] or {}).get("need_more") or []
                        if isinstance(q, str) and len(q) > 20]
-            fresh = more_sources(batch.document_id, probes, set(seen)) or []
+            # As many passages as the windows left can show, and no more.
+            # The ranking covers the whole plan, and handed over whole it
+            # marked every passage as seen after one round: the rest stage
+            # then found nothing to read and a sweep the budget had cut off
+            # ended "unstated". No budget left is not a combed document.
+            left = budget["retrieval"] - spent["retrieval"]
+            if left <= 0:
+                combed = False
+                break
+            fresh = more_sources(batch.document_id, probes, set(seen),
+                                 FIELD_WINDOW * left) or []
             if not fresh:
                 break
             for source in fresh:
                 seen.add((source.owner_kind, source.owner_id))
                 held[(source.owner_kind, source.owner_id)] = source
-            combed = run(window_sources(fresh, FIELD_WINDOW, FIELD_OVERLAP))
+            # No overlap: the pool is ranked by relevance, so neighbours in
+            # it are not neighbours in the plan, and a passage shown twice
+            # was a request spent twice -- half of corpus_m5's 1,235,462
+            # search requests. The overlap is the rest stage's, whose pool
+            # is in document order and whose seam a caption sits on.
+            combed = run(window_sources(fresh, FIELD_WINDOW, 0))
 
         open_now = still_open(rows)
         if open_now and rest_of_document is not None:
@@ -3380,7 +3476,11 @@ def make_sweeper(ask: Callable, *,
             for source in rest:
                 held[(source.owner_kind, source.owner_id)] = source
             state["stage"] = "rest"
-            combed = run(window_sources(rest, FIELD_WINDOW, FIELD_OVERLAP))
+            # Nothing left means every passage of the plan was shown, and
+            # that is what "combed" says. An empty run said it too, once,
+            # about a plan the budget had cut off after two passages.
+            combed = (run(window_sources(rest, FIELD_WINDOW, FIELD_OVERLAP))
+                      if rest else True)
 
         stranded = 0
         if not combed:
@@ -3407,7 +3507,10 @@ def make_fieldwise_harvester(image_root: Optional[Path] = None,
                              spec=None, anchors: Optional[dict] = None,
                              slice_gate: Optional[dict] = None,
                              parents: Optional[Callable] = None,
-                             frame_axes: Optional[list] = None
+                             frame_axes: Optional[list] = None,
+                             search_share: Optional[dict] = None,
+                             dead=None,
+                             on_give_up: Optional[Callable] = None
                              ) -> Callable:
     """A harvest(batch, prior) that asks per field and answers like the old one.
 
@@ -3418,14 +3521,18 @@ def make_fieldwise_harvester(image_root: Optional[Path] = None,
     from concurrent.futures import ThreadPoolExecutor, as_completed
 
     find_rows = make_harvester(image_root, prompt_id=ROWS_PROMPT_ID, spec=spec)
-    ask = make_field_asker(image_root)
+    # Only what was given: a stub asker without the streak still fits.
+    ask = make_field_asker(image_root, **{k: v for k, v in
+                           (('dead', dead), ('on_give_up', on_give_up))
+                           if v is not None})
     anchors = anchors or {}
     pool = ThreadPoolExecutor(max_workers=FIELD_PARALLEL,
                               thread_name_prefix="field")
 
     sweep_field = make_sweeper(ask, more_sources=more_sources,
                                rest_of_document=rest_of_document,
-                               parents=parents, anchors=anchors)
+                               parents=parents, anchors=anchors,
+                               search_share=search_share)
 
     def harvest(batch, prior: Optional[list] = None) -> dict:
         reply = find_rows(batch, prior)
@@ -3953,10 +4060,31 @@ def make_locate(db_path: Path, pdf_root: Optional[Path]) -> Optional[Callable]:
     # for every single one of them — a file open, an xref parse and a page
     # layout per quote, over NFS. Bounded, so a corpus run cannot grow into
     # them: a page's words are some tens of kilobytes.
-    words_of = functools.lru_cache(maxsize=512)(page_words)
     lock = threading.Lock()
     documents: dict = {}
     section_pages: dict = {}
+    # (pdf path, page) -> words. Bounded: a page's words are some tens of
+    # kilobytes. Not an lru_cache, because that cannot say whether a key is
+    # in it without calling through, and the call is what needs the lock.
+    pages: dict = {}
+
+    def words_of(pdf_path, page: int) -> list:
+        """A hit is a dict lookup and waits for nobody. Only a miss enters
+        MuPDF, under the lock, and checks again first: sixty-four documents
+        finish together, and every hit of theirs used to queue behind
+        whichever miss was laying out a page."""
+        key = (str(pdf_path), page)
+        words = pages.get(key)
+        if words is not None:
+            return words
+        with lock:
+            words = pages.get(key)
+            if words is None:
+                words = page_words(pdf_path, page)
+                if len(pages) >= LOCATE_CACHE_PAGES:
+                    pages.pop(next(iter(pages)))
+                pages[key] = words
+        return words
 
     def _lookup(document_id: int, owner_kind: str, owner_id: int) -> tuple:
         with lock:
@@ -4010,14 +4138,12 @@ def make_locate(db_path: Path, pdf_root: Optional[Path]) -> Optional[Callable]:
         candidates = ([int(first_page)] if first_page else []) + \
                      [p for p in pages if p != first_page]
         for page in candidates[:LOCATE_MAX_PAGES]:
-            # Under the lock, because this is where MuPDF is entered. The lock
+            # MuPDF is entered inside words_of, under the lock. The lock once
             # guarded the two dicts and not the library, so eight verification
             # threads opened and laid out PDFs at once; a corpus run died of
             # "stack smashing detected" after 204 documents, taking the rest
-            # of its group with it. The lru_cache means most calls here are a
-            # dict lookup anyway.
-            with lock:
-                words = words_of(pdf_path, page)
+            # of its group with it.
+            words = words_of(pdf_path, page)
             rects = rects_from_words(words, quote)
             if rects:
                 return rects
@@ -4473,10 +4599,21 @@ def fit_batch_sources(prompt, spec, wanted: int = BATCH_SOURCES) -> int:
 
 
 def _documents(conn: sqlite3.Connection) -> list:
+    """Every current document, the largest first.
+
+    Admission is bounded (EXTRACT_BATCH_DOCS in flight) and a document lasts
+    as long as its slowest sweep's chain of windows, which is sequential by
+    design. Read in filename order, the tail of a run belonged to whichever
+    plans sort last: one long plan alone on four cards for hours while the
+    pools sat idle. Largest first is the makespan order under bounded
+    concurrency; the filename breaks ties so the order is stable.
+    """
     return [(int(r[0]), str(r[1]))
             for r in conn.execute(
-                "SELECT id, filename FROM Documents WHERE is_current = 1 "
-                "ORDER BY filename")]
+                "SELECT d.id, d.filename FROM Documents d "
+                "LEFT JOIN Sections s ON s.document = d.id "
+                "WHERE d.is_current = 1 GROUP BY d.id, d.filename "
+                "ORDER BY COUNT(s.id) DESC, d.filename")]
 
 
 def select_documents(documents: list, wanted: Optional[list]) -> tuple:
@@ -4778,6 +4915,7 @@ def main(argv: Optional[list] = None) -> int:
     # Which frame pairs are the plan's own state, so their years date a row
     # that names the state by word ("Basisjahr") and prints no year.
     base_state = profile.component("extraction", "BASE_YEAR")
+    search_share = profile.component("extraction", "SEARCH_SHARE") or {}
     if frame_axes:
         log.info("extraction: the frame is %s — found once per document, then "
                  "one value request per pair",
@@ -4833,6 +4971,11 @@ def main(argv: Optional[list] = None) -> int:
                  FIELD_WINDOW, FIELD_OVERLAP, LLM_PARALLEL, FIELD_PARALLEL,
                  budget["own"], budget["retrieval"], budget["rest"],
                  sum(budget.values()))
+        shares = profile.component("extraction", "SEARCH_SHARE") or {}
+        if shares:
+            log.info("extraction: search share per coordinate: %s",
+                     ", ".join(f"{name} {share:g}"
+                               for name, share in sorted(shares.items())))
     else:
         log.info("extraction: one request per tuple (EXTRACT_FIELDWISE=0)")
     locate = make_locate(args.db, args.pdf_root)
@@ -4915,10 +5058,13 @@ def main(argv: Optional[list] = None) -> int:
                     make_field_asker(args.image_root),
                     more_sources=more_sources,
                     rest_of_document=make_rest_of_document(args.db),
-                    parents=make_parents(args.db), anchors=anchors),
+                    parents=make_parents(args.db), anchors=anchors,
+                    search_share=search_share),
                  "owner_sources": make_owner_sources(args.db),
                  "document_spec": document_spec,
                  "frame_names": frame_names,
+                 "frame_axes": frame_axes,
+                 "base_state": base_state,
                  "dynamic_ok": document_axes is not None,
                  "slice_gate": slice_gate,
                  "locate": locate},
@@ -4931,16 +5077,6 @@ def main(argv: Optional[list] = None) -> int:
                  stats["stamps carried forward"], stats["blocked"])
         return 0
 
-    # After more_sources, because the field sweep uses it: a coordinate that
-    # is not in the value's own passage is looked for further out in the same
-    # document. OpenAI client is thread-safe.
-    harvest = (make_fieldwise_harvester(args.image_root, more_sources,
-                                        make_rest_of_document(args.db),
-                                        spec=spec, anchors=anchors,
-                                        slice_gate=slice_gate,
-                                        parents=make_parents(args.db),
-                                        frame_axes=frame_axes)
-               if FIELDWISE else make_harvester(args.image_root, spec=spec))
     ask_frame = make_frame_asker(args.image_root) if frame_axes else None
 
     # The sentences each pair was searched with, by (document, pair index),
@@ -5118,6 +5254,19 @@ def main(argv: Optional[list] = None) -> int:
     plan_pool = ThreadPoolExecutor(max_workers=max(PLAN_PARALLEL, 1),
                                    thread_name_prefix="plan")
     dead = DeadStreak(max(64, LLM_PARALLEL))
+    # After more_sources, because the field sweep uses it: a coordinate that
+    # is not in the value's own passage is looked for further out in the same
+    # document. After the streak and the give-up, because the field pool
+    # shares them with the rows pool. OpenAI client is thread-safe.
+    harvest = (make_fieldwise_harvester(args.image_root, more_sources,
+                                        make_rest_of_document(args.db),
+                                        spec=spec, anchors=anchors,
+                                        slice_gate=slice_gate,
+                                        parents=make_parents(args.db),
+                                        frame_axes=frame_axes,
+                                        search_share=search_share,
+                                        dead=dead, on_give_up=give_up)
+               if FIELDWISE else make_harvester(args.image_root, spec=spec))
 
     def harvest_document(document_id: int, filename: str) -> tuple:
         """One document from its plan to its file: (written, failures).

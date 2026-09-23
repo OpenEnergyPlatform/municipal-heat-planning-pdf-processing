@@ -117,7 +117,7 @@ waiting longer for those buys nothing.
 ### window_budget
 
 ```python
-def window_budget() -> dict
+def window_budget(share: float = 1.0) -> dict
 ```
 
 {stage: windows} for one coordinate's sweep, own then retrieval then
@@ -126,6 +126,11 @@ rest. Read at call time so a test that moves one constant moves this.
 The sum is FIELD_MAX_WINDOWS + REST_MAX_WINDOWS. `own` can never bind --
 one window, and the attempt loop already stops at FIELD_ATTEMPTS -- and
 is written here so the three numbers add up in one place instead of two.
+
+*share* scales the two search stages for a coordinate the profile says
+to look for less far (`SEARCH_SHARE`): under one budget, corpus_m5's
+sector search filled 4 percent of its 392,541 requests where the scope's
+filled 25 percent. At least one window stays, so no stage is skipped.
 
 ### embedder
 
@@ -298,6 +303,10 @@ the row would make that a lie about the part a title page stands in. A
 coordinate is far more often a few sections from its own row than on page
 one, and the budget runs out long before the wrap comes round.
 
+A section's tables and figures follow it, in page order. The floor read
+sections only, and 71 percent of corpus_m5's tuples came out of images:
+"the whole document" that left out every table was not the whole document.
+
 ### make_more_sources
 
 ```python
@@ -316,6 +325,13 @@ Queries the model invents are one-offs, so they miss the primed cache and
 are embedded on the spot. That is the whole cost of the round trip, and
 it only happens when the model says the passages it was given are not
 enough.
+
+*limit* bounds what one call hands back. The ranking covers the whole
+document, and handed over whole it marked every passage of the plan as
+seen after the first round: the stage that reads the rest in order then
+found nothing left, and a sweep whose budget had cut the ranked list
+ended "unstated" instead of "exhausted". corpus_m5 wrote 0 exhausted
+coordinates in 263,997 sweeps that way. 0 means no bound.
 
 ### fill_dynamic_axes
 
@@ -747,10 +763,17 @@ the prompt leaves optional (`value` may be omitted with a wording, a
 ### make_field_asker
 
 ```python
-def make_field_asker(image_root: Optional[Path] = None) -> Callable
+def make_field_asker(image_root: Optional[Path] = None, *,
+                     dead=None, on_give_up: Optional[Callable] = None
+                     ) -> Callable
 ```
 
 ask(shown, rows, slots, ...) -> {"fields": {name: answer}}, or None.
+
+*dead* is the run's DeadStreak: the rows pool has always had one, the
+field pool none, so a server that went away was found by every one of its
+192 threads separately, each spending its own retries. *on_give_up* is
+called once when the streak fires.
 
 One coordinate per request, over at most FIELD_ROWS rows. Five coordinates
 for every row of a batch in one request wanted up to 27,311 prompt tokens
@@ -782,7 +805,8 @@ def make_sweeper(ask: Callable, *,
                  more_sources: Optional[Callable] = None,
                  rest_of_document: Optional[Callable] = None,
                  parents: Optional[Callable] = None,
-                 anchors: Optional[dict] = None) -> Callable
+                 anchors: Optional[dict] = None,
+                 search_share: Optional[dict] = None) -> Callable
 ```
 
 sweep_field(batch, rows, slots, anchor_id) -> what the sweep came to.
@@ -795,7 +819,8 @@ about this one.
 
 Its five dependencies are exactly what it closed over inside the
 harvester: the asker, and the three ways of finding more passages plus
-the anchor sets that seed them.
+the anchor sets that seed them. *search_share* is the profile's
+`SEARCH_SHARE`: {coordinate: fraction of the search budget}.
 
 ### make_fieldwise_harvester
 
@@ -806,7 +831,10 @@ def make_fieldwise_harvester(image_root: Optional[Path] = None,
                              spec=None, anchors: Optional[dict] = None,
                              slice_gate: Optional[dict] = None,
                              parents: Optional[Callable] = None,
-                             frame_axes: Optional[list] = None
+                             frame_axes: Optional[list] = None,
+                             search_share: Optional[dict] = None,
+                             dead=None,
+                             on_give_up: Optional[Callable] = None
                              ) -> Callable
 ```
 

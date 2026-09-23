@@ -46,7 +46,7 @@ from __future__ import annotations
 
 from typing import Optional
 
-from .fields import EXHAUSTED, READ, SAID_UNSTATED, UNBACKED
+from .fields import EXHAUSTED, READ, SAID_UNSTATED, UNANSWERED, UNBACKED
 from .verify import TIER_TEXT
 
 LEVEL_A = "A"
@@ -89,7 +89,9 @@ def reasons(row: dict, *, conflict: bool = False,
         # because the row left at the gate: none of those is a doubt
         # about the reading. The last three are findings about the
         # document or about this run's scope, recorded as such elsewhere.
-        if state in (EXHAUSTED, UNBACKED):
+        # Unanswered is one about the run, like exhausted: the request came
+        # back without this row, and nothing read the coordinate.
+        if state in (EXHAUSTED, UNBACKED, UNANSWERED):
             found.append(f"{state}:{key[:-len('_state')]}")
     for flag in row.get("flags") or []:
         reason = FLAG_REASONS.get(flag)
