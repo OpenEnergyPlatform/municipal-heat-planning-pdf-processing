@@ -59,6 +59,13 @@ table gives this profile's own answer.
 | The graph | `kg.py` | `make_serializer` | OEKG Turtle, the trust wording |
 | The answer app | `inference.py`, `prompts/inference/*.md` | `PHRASES`, `READOFF_MARKER`, `READOFF_NOTE`, 15 prompt ids | the English chat wording and the answer loop's own prompts |
 
+Extraction's `rows` and `field` prompts hold a value's quote to the
+piece that carries it, a clause, a list entry, one table cell, not the
+whole paragraph: an author list gives one quote per name, and a
+title's quote is the title itself. Quoting the whole block for every
+author used to make the reply to a crowded title page grow past the
+token limit and lose the title, authors, DOI and date together.
+
 ## Per-document choice lists: dynamic axes and dynamic values
 
 A spec parameter or axis is ordinarily a fixed, corpus-wide list: every

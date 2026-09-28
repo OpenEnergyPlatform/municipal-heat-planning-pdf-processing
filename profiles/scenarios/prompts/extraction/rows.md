@@ -14,11 +14,11 @@ Du bekommst ein JSON-Objekt mit diesen Feldern:
 
 Gib ausschließlich ein JSON-Objekt in dieser Form zurück, in EINER Zeile, ohne Einrückung:
 
-{"tuples": [{"source": "Q1", "value": "Keramidas, K.", "quote": "Keramidas, K., Fosse, F., Diaz Vazquez, A., Dowling, P."}], "status": "complete", "need_more": []}
+{"tuples": [{"source": "Q1", "value": "Keramidas, K.", "quote": "Keramidas, K.,"}], "status": "complete", "need_more": []}
 
-Ein Wert darf so lang sein wie eine ganze Zeile. Beim Titel ist er es fast immer, und dann füllt "value" die "quote" bis auf den Rest der Zeile aus — das ist die richtige Antwort und kein Fehler:
+Ein Wert darf so lang sein wie eine ganze Zeile. Beim Titel ist er es fast immer, und dann ist "quote" der Titel selbst, genau so lang wie "value" — das ist die richtige Antwort und kein Fehler:
 
-{"tuples": [{"source": "Q1", "value": "Carbon dioxide removal technologies are not born equal", "quote": "Carbon dioxide removal technologies are not born equal OPEN ACCESS Jessica Strefler, Nico Bauer, Florian Humpenöder"}], "status": "complete", "need_more": []}
+{"tuples": [{"source": "Q1", "value": "Carbon dioxide removal technologies are not born equal", "quote": "Carbon dioxide removal technologies are not born equal"}], "status": "complete", "need_more": []}
 
 Felder mit einer Auswahlliste tragen zusätzlich "value_raw":
 
@@ -37,9 +37,9 @@ Jeder Eintrag wird maschinell und wörtlich gegen die Quelle geprüft; was die P
    FALSCH: "Keramidas K." zu "Kimon Keramidas" ergänzen.
    FALSCH: einen Titel weglassen, weil er lang ist oder wie eine Überschrift aussieht. Eine Überschrift ist genau die Form, in der ein Titel dasteht.
 
-2. "source" und "quote": "source" ist die Kennung der Quelle, in der der Wert steht — "Q1", "Q2" und so weiter; sie entscheidet, gegen welchen Text geprüft wird. "quote" ist eine wörtliche, zusammenhängende Zeichenkette aus dem Text GENAU DIESER Quelle (mindestens 8 Zeichen), die den Wert exakt enthält. Nicht aus zwei Quellen zusammensetzen. Am besten der ganze Satz oder die ganze Zeile. Die Überschrift einer Quelle steht am Anfang ihres "text" und ist zitierbar wie jede andere Zeile. JEDER Eintrag trägt "source".
+2. "source" und "quote": "source" ist die Kennung der Quelle, in der der Wert steht — "Q1", "Q2" und so weiter; sie entscheidet, gegen welchen Text geprüft wird. "quote" ist eine wörtliche, zusammenhängende Zeichenkette aus dem Text GENAU DIESER Quelle (mindestens 8 Zeichen), die den Wert exakt enthält. Nicht aus zwei Quellen zusammensetzen. Zitier nur das Stück, das DEINEN Wert trägt: den Satzteil, den Listeneintrag, die Tabellenzelle mit ihrer Beschriftung, nicht den ganzen Absatz und nicht die ganze Liste. Schreib es Zeichen für Zeichen ab, auch Zahlen, die mitten im Text stehen, etwa Zeilennummern eines Manuskripts („Horizon 311 2020“) oder Fußnotenzeichen („Riahi1,2*“): sie gehören zur Zeichenkette, und ohne sie steht das Zitat nicht in der Quelle. Die Überschrift einer Quelle steht am Anfang ihres "text" und ist zitierbar wie jede andere Zeile. JEDER Eintrag trägt "source".
 
-3. Ein Eintrag je Wert. Eine Autorenliste mit sechs Namen ergibt sechs Einträge, alle mit derselben "quote". Eine Publikation hat genau einen Titel, genau ein Erscheinungsjahr und höchstens eine DOI — steht dort mehr als eines, nimm das, was für DIESES Dokument gilt, nicht das einer zitierten Arbeit.
+3. Ein Eintrag je Wert. Eine Autorenliste mit sechs Namen ergibt sechs Einträge, jeder mit seinem eigenen kurzen Zitat: dem Namen, wie er dort steht, samt der Zeichen, die direkt daran hängen, also "Keywan Riahi1,2*" und nicht die ganze Namenszeile. Dasselbe gilt für Institute, Geldgeber und Projekte. Die ganze Liste in jedem Eintrag zu wiederholen, macht die Antwort so lang, dass sie abgeschnitten wird und alle Einträge verloren gehen. Eine Publikation hat genau einen Titel, genau ein Erscheinungsjahr und höchstens eine DOI — steht dort mehr als eines, nimm das, was für DIESES Dokument gilt, nicht das einer zitierten Arbeit.
 
 4. Zitate sind keine Fundstellen. Ein Literaturverzeichnis, eine Fußnote und ein Verweis im Fließtext nennen Titel, Autoren, Jahre und DOIs ANDERER Arbeiten. Aus solchen Stellen extrahierst du nichts. Erkennbar sind sie an der Umgebung: eine nummerierte oder alphabetische Liste von Quellen, ein "et al.", eine Jahreszahl in Klammern hinter einem Namen, ein Abschnitt mit der Überschrift References, Bibliography oder Literatur.
    Die Vorderseite ist keine solche Stelle: dort steht die Publikation selbst, nicht eine, auf die sie verweist.

@@ -26,7 +26,7 @@ Regeln:
 
 2. "value_raw": IMMER zusätzlich, der Name so, wie das Dokument ihn schreibt — "Current Policies", "the NDC scenario", "unser 1,5-Grad-Pfad". Daran wird deine Zuordnung nachträglich geprüft. "das erste Szenario" ist kein Name aus dem Dokument und keine gültige Antwort.
 
-3. "quote": eine wörtliche, zusammenhängende Zeichenkette aus EINER der gezeigten Quellen (mindestens 8 Zeichen), und in der der Name aus "value_raw" steht. Zeichen für Zeichen kopieren. Erfundene Passagen werden verworfen, und mit ihnen die Antwort.
+3. "quote": eine wörtliche, zusammenhängende Zeichenkette aus EINER der gezeigten Quellen (mindestens 8 Zeichen), und in der der Name aus "value_raw" steht. Kurz halten: der Satzteil, der die Antwort trägt, nicht der ganze Absatz. Zeichen für Zeichen kopieren, auch Zahlen, die mitten im Text stehen, etwa Zeilennummern eines Manuskripts („Horizon 311 2020“): sie gehören zur Zeichenkette. Erfundene oder geglättete Passagen werden verworfen, und mit ihnen die Antwort.
 
 4. Die Kennungen sind Lauf-Kennungen wie "EN_INDCi2030_300f". Im Text stehen sie fast nie; dort heißt dasselbe Szenario "Current Policies", "the NDC scenario" oder "unser 1,5-Grad-Pfad". Genau diese Zuordnung ist deine Aufgabe: die Beschreibung im Text mit der Kennung zusammenbringen. Anhaltspunkte sind das Ambitionsniveau, das Zieljahr, das Klimaziel und die Reihenfolge, in der die Publikation ihre Szenarien einführt.
 

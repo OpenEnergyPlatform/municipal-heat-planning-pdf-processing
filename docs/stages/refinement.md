@@ -10,7 +10,12 @@ pass is the kind of defect a fixed rule cannot resolve reliably: a caption
 on the wrong table, a heading split across a page break into two
 sections, an unstructured bibliography, an ALL-CAPS title. Stage 4
 hands each document's sections to an LLM, in windows, to resolve those
-cases (`docpipe/refinement/refine.py`).
+cases (`docpipe/refinement/refine.py`). The same call also cleans
+text-level artefacts: broken hyphenation, leaked headers and footers,
+garbled Unicode. The scenarios profile's prompt adds one case by
+example, a preprint's line numbers landing inside a sentence: a number
+counting up line after line is removed, one the sentence itself states
+stays.
 
 Stage 4 also enforces the size limit the embedding step needs: a
 retrieval chunk is one section and one vector, so a section long enough
