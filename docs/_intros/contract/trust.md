@@ -59,7 +59,7 @@ a reason nobody can enumerate is a reason nobody can count
 by a profile's own graph serializer resolving two competing readings of
 one coordinate: kwp drops every colliding row before it reaches a trust
 line, scenarios keeps a chosen reading and marks it `conflict`
-(`profiles/kwp/kg.py:694-715`, `profiles/scenarios/kg.py:681-682`; see
+(`profiles/kwp/kg.py:694-715`, `profiles/scenarios/kg.py:688-689`; see
 [graph](../stages/graph.md)). `page_transcribed` never by itself decides
 the level: it caps a value at `B` rather than pushing it to `C`, since a
 page with no text layer is a fact about the source, not about this reading
@@ -97,7 +97,7 @@ up to six marks in a fixed order: `level`, `image_origin` or
 records the image's file name. Each mark's wording is the profile's own:
 the [kwp](../profiles/kwp.md) and [scenarios](../profiles/scenarios.md)
 serializers each state a `TRUST_PROSE` table, both in English
-(`profiles/kwp/kg.py:476-483`, `profiles/scenarios/kg.py:472-479`), and a
+(`profiles/kwp/kg.py:476-483`, `profiles/scenarios/kg.py:473-480`), and a
 profile missing a mark, or wording one that is not on this list, is
 refused at import (`trust.check_prose`, `trust.py:177-189`;
 `test_every_profile_words_every_mark_the_core_can_produce`,

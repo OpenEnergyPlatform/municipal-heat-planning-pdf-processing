@@ -29,7 +29,7 @@ Two profiles ship. `kwp` covers German municipal heat plans, a corpus of
 values go into MHPKG on the Open Energy Platform. `scenarios` covers the
 literature the IIASA AR6 scenario database cites
 (`profiles/scenarios/profile.py:1`), a 164-document harvest
-(`profiles/scenarios/kg.py:790`), and answers in English; its values go
+(`profiles/scenarios/kg.py:799`), and answers in English; its values go
 into OEKG on the same platform. Each has its own
 page, [kwp](profiles/kwp.md) and [scenarios](profiles/scenarios.md), for
 what its own modules do beyond the interface points here.
@@ -162,7 +162,7 @@ shipped profile provides.
 
 | | `kwp` | `scenarios` |
 |---|---|---|
-| Corpus | German municipal heat plans, 801 documents (`profiles/kwp/profile.py:10`) | the AR6 scenario literature, a 164-document harvest (`profiles/scenarios/kg.py:790`) |
+| Corpus | German municipal heat plans, 801 documents (`profiles/kwp/profile.py:10`) | the AR6 scenario literature, a 164-document harvest (`profiles/scenarios/kg.py:799`) |
 | Target graph | MHPKG, Open Energy Platform | OEKG, Open Energy Platform |
 | `source_language` / `answer_language` | de / de | en / en |
 | `document_noun` | "Wärmeplan" | "Publikation" |

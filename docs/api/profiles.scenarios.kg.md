@@ -162,4 +162,16 @@ def make_serializer(db_path: Path)
 
 (document name, accepted tuple rows) -> TTL string or None.
 
+### make_study_reader
+
+```python
+def make_study_reader(db_path: Path)
+```
+
+(document name, accepted tuple rows) -> study dict or None.
+
+What the serializer decided for one document, without the Turtle: the
+bundle, its one study report and its scenarios, each value as the graph
+carries it. A document with no title has no study, as it has no graph.
+
 [Back to the index](../README.md)

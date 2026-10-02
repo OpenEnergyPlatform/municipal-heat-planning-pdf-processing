@@ -171,7 +171,11 @@ number; it is counted `unplaceable`, keyed by state, since without it
 the gap read as zero. Evidence for a triple is a flattened comment, or,
 with `OEKG_EVIDENCE`
 on, a linked `oekgprov:ExtractionEvidence` node; either way the
-rendered trust line follows it.
+rendered trust line follows it. That reading lives in `_make_builder`, which
+`make_serializer` and `make_study_reader` share; the second hands the same
+document as plain data to `profiles/scenarios/oekg_api.py`, a dry run of the
+OEKG scenario-bundle API that sends nothing, described on
+[the scenarios profile](../profiles/scenarios.md).
 
 ### Checking a spec against the ontology
 

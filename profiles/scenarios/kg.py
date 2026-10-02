@@ -75,6 +75,7 @@ PREFIXES = """@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
 @prefix oeo:  <https://openenergyplatform.org/ontology/oeo/> .
 @prefix oekgprov: <https://openenergyplatform.org/ontology/oekg/provenance/> .
 """
+OEO_BASE = "https://openenergyplatform.org/ontology/oeo/"
 
 
 _SPEC = json.loads(
@@ -153,7 +154,7 @@ P_ORGANISATION = _edge("study_organisation")   # has organisation
 P_FUNDER = _edge("study_funder")               # has funding source
 P_HAS_PART = _linked_by()                      # has part
 P_SCENARIO_TYPE = _property("scenario_type")   # has scenario type
-P_STUDY_REGION = _property("scenario_region")  # has study region
+P_STUDY_REGION = _property("scenario_region")  # has spatial region
 P_SCENARIO_YEAR = _property("scenario_year")   # has scenario year value
 
 # The two a factsheet writes. They spell the same as the bundle's, and they
@@ -566,16 +567,22 @@ def _evidence(subject: str, predicate: str, row: dict, document: str) -> tuple:
             NL.join(node) + NL)
 
 
-def make_serializer(db_path: Path):
-    """(document name, accepted tuple rows) -> TTL string or None."""
-    header_pending = [True]
+def _make_builder(db_path: Path):
+    """(document name, accepted tuple rows) -> (TTL body, study) or None.
+
+    One reading of a document's harvest and two things written from it: the
+    Turtle, and `study`, the same decisions as plain data. The second is for
+    a writer that is not Turtle (oekg_api.py builds the platform's request
+    body from it). Both come out of one pass, so which title won, which
+    spellings are one author and which rows are one scenario is decided once.
+    """
     # A preprint and its journal version share a title, so they mint the same
     # study report and the same bundle. The single-valued triples are then
     # written twice into one file, with two dates and two abstracts on one
     # subject, and each document's own log says "1 report, 1 bundle".
     minted: dict = {}
 
-    def serializer(name: str, rows: list):
+    def build(name: str, rows: list):
         by_param: dict = {}
         for row in rows:
             by_param.setdefault(row.get("parameter"), []).append(row)
@@ -738,22 +745,23 @@ def make_serializer(db_path: Path):
             for row in by_param.get(key, ()):
                 groups.setdefault(normalise(row["value"]),
                                   (row["value"], []))[1].append(row)
-            links, nodes = [], []
+            links, nodes, labels = [], [], []
             for label, sources in groups.values():
                 iri = mint(collection, label)
                 links.append(f"<{iri}>")
+                labels.append(label)
                 block = [f"<{iri}>", f"    a oeo:{cls} ;"]
                 block += evidence_for(iri, P_LABEL, sources)
                 block.append(f"    {P_LABEL} {literal(label)} .")
                 nodes.append(NL.join(block) + NL)
-            return links, nodes
+            return links, nodes, labels
 
-        author_links, author_nodes = entities("publication_author", "author",
-                                              CLS_AUTHOR)
-        org_links, org_nodes = entities("study_organisation", "organisation",
-                                        CLS_ORGANISATION)
-        funder_links, funder_nodes = entities("study_funder", "funder",
-                                              CLS_FUNDER)
+        author_links, author_nodes, author_labels = entities(
+            "publication_author", "author", CLS_AUTHOR)
+        org_links, org_nodes, org_labels = entities(
+            "study_organisation", "organisation", CLS_ORGANISATION)
+        funder_links, funder_nodes, funder_labels = entities(
+            "study_funder", "funder", CLS_FUNDER)
 
         # ---- the study report ---------------------------------------------
         pub: list = [f"<{report}>", f"    a oeo:{CLS_REPORT} ;",
@@ -764,6 +772,7 @@ def make_serializer(db_path: Path):
         if author_links:
             pub.append(f"    {P_AUTHOR} " +
                        " ,\n        ".join(author_links) + " ;")
+        stamp = ""
         if chosen.get("publication_date"):
             stamp = _publication_date(chosen["publication_date"])
             if stamp:
@@ -827,6 +836,7 @@ def make_serializer(db_path: Path):
 
         scenario_links: list = []
         scenario_nodes: list = []
+        scenarios: list = []
         unplaced: list = []
         for norm, (ident, label) in wanted.items():
             if known and norm not in known:
@@ -856,6 +866,7 @@ def make_serializer(db_path: Path):
             block.append(f"    {P_SCENARIO_TYPE} oeo:{IAM_SCENARIO} ;")
 
             described = rows_for("scenario_abstract", scenario=norm)
+            best = None
             if described:
                 best, _ = _pick_one(described)
                 block += evidence_for(iri, P_SCENARIO_ABSTRACT,
@@ -892,6 +903,12 @@ def make_serializer(db_path: Path):
                              f'"{year}-01-01T00:00:00"^^xsd:dateTime ;')
             block[-1] = block[-1].rstrip(" ;") + " ."
             scenario_nodes.append(NL.join(block) + NL)
+            scenarios.append({
+                "label": known.get(norm, ident), "acronym": label or ident,
+                "abstract": best,
+                "types": list(types) + [OEO_BASE + IAM_SCENARIO],
+                "regions": list(regions),
+                "years": [f"{year}-01-01T00:00:00" for year in years]})
 
         # ---- the bundle -----------------------------------------------------
         std: list = [f"<{bundle}>", f"    a oeo:{CLS_BUNDLE} ;",
@@ -934,10 +951,50 @@ def make_serializer(db_path: Path):
         parts = [NL.join(pub) + NL, NL.join(std) + NL]
         parts += scenario_nodes + author_nodes + org_nodes + funder_nodes
         parts += evidence_nodes
-        body = NL.join(parts)
+        study = {
+            "document": name,
+            "bundle": {"label": chosen.get("study_project_name") or title,
+                       "acronym": chosen.get("study_acronym"),
+                       "abstract": chosen.get("publication_abstract"),
+                       "organisations": org_labels, "funders": funder_labels},
+            "report": {"label": title, "authors": author_labels,
+                       "publication_date": stamp or None,
+                       "doi": chosen.get("publication_doi")},
+            "scenarios": scenarios,
+        }
+        return NL.join(parts), study
+
+    return build
+
+
+def make_serializer(db_path: Path):
+    """(document name, accepted tuple rows) -> TTL string or None."""
+    build = _make_builder(db_path)
+    header_pending = [True]
+
+    def serializer(name: str, rows: list):
+        built = build(name, rows)
+        if built is None:
+            return None
         if header_pending[0]:
             header_pending[0] = False
-            return PREFIXES + "\n" + body
-        return body
+            return PREFIXES + "\n" + built[0]
+        return built[0]
 
     return serializer
+
+
+def make_study_reader(db_path: Path):
+    """(document name, accepted tuple rows) -> study dict or None.
+
+    What the serializer decided for one document, without the Turtle: the
+    bundle, its one study report and its scenarios, each value as the graph
+    carries it. A document with no title has no study, as it has no graph.
+    """
+    build = _make_builder(db_path)
+
+    def reader(name: str, rows: list):
+        built = build(name, rows)
+        return built[1] if built else None
+
+    return reader
