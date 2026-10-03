@@ -416,6 +416,79 @@ def test_the_context_budget_holds_a_full_window_and_a_crop():
     assert budget > 1200, "the crop counts too"
 
 
+def test_the_context_budget_counts_every_list_a_reading_request_carries():
+    """A request planned for no parameter sends every parameter's class
+    lists at once. The budget measured the widest single parameter, and a
+    profile with four lists outgrew it without a number changing."""
+    from docpipe.extraction.spec import load as load_spec
+
+    class Prompt:
+        text = "wort " * 500
+        meta = {"max_tokens": 4096}
+
+    def spec(lists: int):
+        classes = {f"https://example.org/c{n}": [f"class number {n}"]
+                   for n in range(200)}
+        example = {"source": "The study covers class number 1 in full.",
+                   "tuples": [{"value": "class number 1",
+                               "quote": "The study covers class number 1 in "
+                                        "full."}]}
+        return load_spec({"parameters": [
+            {"uri": f"tag_{index}", "label": f"Tag {index}",
+             "description": "One of the classes the study is tagged with, "
+                            "chosen from the list.",
+             "value_type": "category", "vocabulary": classes,
+             "example": example} for index in range(lists)]})
+
+    one, four = spec(1), spec(4)
+    grown = runner.context_budget(Prompt(), four) \
+        - runner.context_budget(Prompt(), one)
+    carried = len(json.dumps(runner._quantities_payload(four))) \
+        - len(json.dumps(runner._quantities_payload(one)))
+    assert carried > 10000, "the fixture has to carry real lists"
+    # A single parameter rides with its example, which the list of all of
+    # them leaves out: that is the thousand characters of slack.
+    assert grown >= (carried - 1000) // 3, (
+        "three more lists in every reading request, and the budget did not "
+        "grow by them")
+
+
+def test_the_context_budget_counts_the_widest_single_parameter():
+    """The other shape of a request: planned for one parameter, it carries
+    that parameter whole, with the class list of every axis. The list of all
+    parameters leaves the axes out, so a budget measured on it alone would
+    undersize the request for a parameter whose axis is the long list."""
+    from docpipe.extraction.spec import load as load_spec
+
+    class Prompt:
+        text = "wort " * 500
+        meta = {"max_tokens": 4096}
+
+    def spec(classes: int):
+        kinds = {f"https://example.org/c{n}": [f"class number {n}"]
+                 for n in range(classes)}
+        quote = "The measure of class number 1 is a new grid."
+        return load_spec({"parameters": [
+            {"uri": "measure", "label": "Measure",
+             "description": "A measure, of one of the kinds in the list.",
+             "value_type": "text", "axes": {"kind": {"vocabulary": kinds}},
+             "example": {"source": quote, "tuples": [
+                 {"value": "a new grid", "kind": "class number 1",
+                  "quote": quote}]}}]})
+
+    short, long = spec(200), spec(600)
+    assert runner._quantities_payload(short) \
+        == runner._quantities_payload(long), "the axis is in neither"
+    grown = runner.context_budget(Prompt(), long) \
+        - runner.context_budget(Prompt(), short)
+    carried = len(json.dumps(runner._parameter_payload(long.parameters[0]))) \
+        - len(json.dumps(runner._parameter_payload(short.parameters[0])))
+    assert carried > 8000, "the fixture has to carry a real list"
+    assert grown >= carried // 3 - 1, (
+        "four hundred more classes on an axis, and the budget did not grow "
+        "by them")
+
+
 def test_a_refused_request_is_not_retried(monkeypatch):
     """A 400 is a 400 three times over. The last run spent three tries and
     eight seconds of sleep on every over-long section."""
@@ -764,14 +837,21 @@ def test_a_truncated_reply_is_never_read_as_an_answer(monkeypatch):
         "nothing from a cut-off reply is kept")
 
 
-# What the server is started with, not what the model could hold. The model
-# this stage runs against holds 262,144 tokens natively, and serving that
-# would spend on KV cache what the run wants for parallelism: 128 requests in
-# flight is what makes a corpus finish, and every one of them fits in 32k.
-# A budget over what IS served is not a tuning question, it is a run that
-# never begins — the request is refused mid-run and the document keeps
-# nothing.
+# What the server is started with at least, not what the model could hold.
+# The model this stage runs against holds 262,144 tokens natively, and serving
+# that would spend on KV cache what the run wants for parallelism: 128
+# requests in flight is what makes a corpus finish. The job serves the larger
+# of this and the profile's own budget, so a budget above it is a wider
+# window and fewer requests in flight, not a refused request.
 SERVED_WINDOW = 32768
+# The widest window a profile may ask the job to serve. Decided 2026-10-03
+# for the scenarios profile, whose reading requests carry the platform's four
+# class lists: a quarter above the usual window is the price of offering the
+# lists whole, and beyond it the lists would have to be cut instead.
+WINDOW_CEILING = 40960
+# The profile whose corpus is large enough that the window is its throughput.
+# It stays inside the usual one.
+WITHIN_SERVED = ("kwp",)
 
 # For the sizing assertion below. A source that yields at all yields 12 tuples
 # at the 90th percentile, measured over the finished pilots. Characters per
@@ -801,14 +881,17 @@ def test_every_profile_fits_the_window_it_will_be_served(monkeypatch):
     """The test that was missing. max_tokens lives in a prompt's frontmatter
     and BATCH_SOURCES lives in this module, and until a pilot burned five GPUs
     nothing had ever compared them. The job script serves
-    max(context_budget, 32768) as --max-model-len, so a budget over the
-    model's own ceiling is a server that refuses to start."""
+    max(context_budget, 32768) as --max-model-len, so a budget that grows
+    unnoticed is a window that grows unnoticed, and a run that loses the
+    parallelism it was sized for."""
     monkeypatch.setenv("DOCPIPE_PROFILE", "kwp")
     checked = 0
     for name, spec, prompt in _profile_specs():
         budget = runner.context_budget(prompt, spec)
-        assert budget <= SERVED_WINDOW, (
-            f"{name}: budget {budget} over the {SERVED_WINDOW} the model holds")
+        limit = SERVED_WINDOW if name in WITHIN_SERVED else WINDOW_CEILING
+        assert budget <= limit, (
+            f"{name}: budget {budget} over the {limit} this profile may ask "
+            f"the job to serve")
         assert budget > int(prompt.meta["max_tokens"]), (
             f"{name}: the answer cannot be the whole request")
         checked += 1

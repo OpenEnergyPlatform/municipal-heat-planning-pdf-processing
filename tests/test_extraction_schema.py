@@ -13,6 +13,7 @@ out of the Turtle rather than out of a second copy of the list.
 No model, no GPU.
 """
 import json
+import re
 from pathlib import Path
 
 import jsonschema
@@ -449,9 +450,13 @@ def test_no_description_of_the_harvest_is_shaped_like_one_corpus():
     blob = (PROFILES / "scenarios" / "extraction_schema.json").read_text(
         encoding="utf-8")
     schema = json.loads(blob)
-    for kwp_shaped in ("heat plan", "AGS", "the plan's", "transcribed plan",
-                       "about the plan", "x-description-de"):
-        assert kwp_shaped not in blob, kwp_shaped
+    # An ontology's own definition of a sector says "heat plants", which is
+    # not a sentence about heat plans. Only that word is let through: a
+    # match as a whole word would miss "heat plans" and "heat planning".
+    for kwp_shaped in ("heat plan(?!t)", "AGS", "the plan's",
+                       "transcribed plan", "about the plan",
+                       "x-description-de"):
+        assert not re.search(kwp_shaped, blob), kwp_shaped
     # And the one occurrence that legitimately stays: a planned source is a
     # trace record kind, the same word in both profiles.
     kinds = {(r.get("properties") or {}).get("t", {}).get("const")

@@ -68,7 +68,7 @@ partway through a batch. A
 parameter carries one of four value types, `spec.VALUE_TYPES`: `float`
 and `int` take a unit, `category` a closed vocabulary, and `text` a
 plain string compared verbatim rather than mapped to a class; `text` is
-the majority type in the scenarios profile, 11 of its 14 parameters
+the majority type in the scenarios profile, 11 of its 18 parameters
 (`profiles/scenarios/extraction_spec.json`). Vocabulary labels are
 compared after `fold_label`, not as raw strings. A unit is never
 folded: it is read as its own coordinate, against the literal entries
@@ -586,6 +586,18 @@ run, `anchors.json` and `query_cache.db`; and, only after `--top-up`,
 | `SLICE` / `FRAME` | profile hook | none / none (every coordinate per row) | `SLICE`: gate coordinate(s) asked first, a row that fails them never asked its others. `FRAME`: document-level coordinates found once and projected onto every row | `runner.main`, `topup.actionable` |
 | `SEARCH_SHARE` | profile hook | none (every coordinate gets the whole budget) | Fraction of the retrieval and rest allowance a named coordinate gets; kwp halves `sector` and `aggregation`. At least one window stays per stage | `runner.make_sweeper` |
 
+The context budget (`runner.context_budget`, printed by
+`--print-context-budget`) is the tokens one request needs at worst. Its
+payload term is the larger of the widest single parameter, which a
+request planned for one parameter carries whole, and all parameters'
+class lists together, which a request planned for no parameter carries at
+once. A profile with several long lists, as scenarios has, can therefore
+need a window above the 32768 that `EXTRACT_MAX_MODEL_LEN` falls back to,
+and the model is then served with the larger of the budget and 32768.
+`tests/test_extraction_runner.py` states the ceiling a profile may ask
+for, 40960, and keeps kwp within 32768
+(`test_every_profile_fits_the_window_it_will_be_served`).
+
 ## Failure modes
 
 A claim is refused, not silently dropped, whenever `verify.verify_tuple`
@@ -709,11 +721,13 @@ dropped for the agreed reasons and no other, that every reason a claim is
 refused for is a published one, and that no closure in the package reads
 a name bound after it. `tests/test_extraction_schema.py` validates
 that a harvest, a stamp and a trace event all conform to the published
-contract. `tests/test_extraction_runner.py`, 88 tests, pins `runner.py`
+contract. `tests/test_extraction_runner.py`, 118 tests, pins `runner.py`
 itself: among them `test_a_document_the_server_never_answered_for_is_not_stamped`,
 `test_a_document_no_reply_ever_came_back_for_is_not_stamped`,
 `test_the_image_root_follows_the_pdf_root`,
 `test_the_context_budget_holds_a_full_window_and_a_crop`,
+`test_the_context_budget_counts_every_list_a_reading_request_carries`,
+`test_the_context_budget_counts_the_widest_single_parameter`,
 `test_figures_and_tables_keep_their_share_of_the_plan`,
 `test_the_share_is_room_held_and_not_room_promised`,
 `test_what_is_taken_stays_in_the_order_it_was_ranked`,

@@ -140,8 +140,8 @@ else the pinned vocabulary's label, else the identifier itself.
 
 `profiles/scenarios/kg.py`'s `serializer` groups rows by parameter and
 counts every `out:` answer, and every unresolved
-`scenario_label`/`scenario_region`/`scenario_type` row, into
-`out_of_graph`, logged but never written. For fields the OEKG shapes
+`scenario_label`/`scenario_region`/`scenario_type` or bundle tag row,
+into `out_of_graph`, logged but never written. For fields the OEKG shapes
 allow at most once, `_pick_one` ranks readings, dropping a substring
 candidate first, then by vote count, location and length; the rest
 are `contested`. A document with no `publication_title` is skipped
@@ -160,6 +160,9 @@ identity entirely.
 The study report IRI is minted from the title, the bundle IRI from
 `study_project_name` or the title; a second document reusing either
 IRI is logged, not refused, its triples landing on the shared subject.
+The bundle also takes one triple for each tag entry the model picked off
+the shapes' lists (`BUNDLE_TAGS`), and none for an `out:` entry or an
+unmapped wording, which are counted.
 One factsheet is minted per resolved identity: `rdfs:label` is the AR6
 database's own spelling when known, `dc:acronym` the document's own; a
 matched study region is referenced by its existing OEKG IRI, never
@@ -337,8 +340,8 @@ marks a trust line is built from are at
   docstring).
 - The checked-in `kwp` snapshot holds 335 terms, 6 sets and 10 disjoint
   pairs, pinned to OEO 2.13.0, against a spec naming 58 identifiers;
-  `scenarios`' holds 53 terms and 249 OEKG regions, same release,
-  against a spec of 32 (inspected directly; `ontology.spec_terms`).
+  `scenarios`' holds 322 terms and 249 OEKG regions, same release,
+  against a spec of 280 (inspected directly; `ontology.spec_terms`).
   `--refresh` pulls that same release straight from GitHub rather than
   by hand; neither number is pinned in a test any more, since both
   move the day upstream does.

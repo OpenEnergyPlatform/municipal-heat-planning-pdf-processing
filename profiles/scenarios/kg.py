@@ -206,6 +206,14 @@ SINGLE = ("publication_title", "publication_date", "publication_doi",
 SCENARIO_FIELDS = tuple(
     parameter["uri"] for parameter in _SPEC["parameters"]
     if "scenario" in (parameter.get("axes") or {}))
+# The tags of a bundle: what the study is about, which sectors and
+# technologies it covers, which sector division it follows. Each is an entry
+# of a list the shapes fix, so the object is an IRI the model chose and never
+# a string it wrote. Read from the spec, for the reason SCENARIO_FIELDS is.
+BUNDLE_TAGS = tuple(
+    parameter["uri"] for parameter in _SPEC["parameters"]
+    if parameter.get("value_type") == "category"
+    and (parameter.get("kg") or {}).get("node") == "scenariobundle")
 # What the shapes demand at least once (sh:minCount 1). A document missing one
 # of these produces a node that will fail validation, so it is reported.
 REQUIRED = ("publication_title", "publication_date", "publication_author")
@@ -597,7 +605,8 @@ def _make_builder(db_path: Path):
             for field in ("value_uri", "scenario"):
                 if str(row.get(field) or "").startswith(NOT_IN_GRAPH):
                     out_of_graph[row[field]] += 1
-        for key in ("scenario_label", "scenario_region", "scenario_type"):
+        for key in ("scenario_label", "scenario_region",
+                    "scenario_type") + BUNDLE_TAGS:
             for row in by_param.get(key, ()):
                 if not row.get("value_uri"):
                     # Verified, quoted, located — and it reaches no triple,
@@ -929,6 +938,19 @@ def _make_builder(db_path: Path):
         if funder_links:
             std.append(f"    {P_FUNDER} " +
                        " ,\n        ".join(funder_links) + " ;")
+        # Only an entry the model picked off the list is written, as with a
+        # scenario type: an out: entry and a wording the list did not hold
+        # are counted above and reach no triple.
+        tags: dict = {}
+        for key in BUNDLE_TAGS:
+            picked: dict = {}
+            for row in by_param.get(key, ()):
+                if in_graph(row.get("value_uri")):
+                    picked.setdefault(row["value_uri"], []).append(row)
+            for tag_iri, sources in picked.items():
+                std += evidence_for(bundle, _property(key), sources)
+                std.append(f"    {_property(key)} <{tag_iri}> ;")
+            tags[key] = list(picked)
         for part in [f"<{report}>"] + scenario_links:
             std.append(f"    {P_HAS_PART} {part} ;")
         std[-1] = std[-1].rstrip(" ;") + " ."
@@ -956,7 +978,8 @@ def _make_builder(db_path: Path):
             "bundle": {"label": chosen.get("study_project_name") or title,
                        "acronym": chosen.get("study_acronym"),
                        "abstract": chosen.get("publication_abstract"),
-                       "organisations": org_labels, "funders": funder_labels},
+                       "organisations": org_labels, "funders": funder_labels,
+                       "tags": tags},
             "report": {"label": title, "authors": author_labels,
                        "publication_date": stamp or None,
                        "doi": chosen.get("publication_doi")},

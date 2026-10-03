@@ -155,8 +155,13 @@ def test_the_answer_budget_and_the_batch_size_agree(profile):
     five GPUs on the disagreement."""
     name, spec, prompt = profile
     budget = runner.context_budget(prompt, spec)
-    assert budget <= 32768, (
-        f"{name}: a request needs {budget} tokens, more than the model holds")
+    # The job serves the larger of the budget and 32768. kwp stays inside
+    # that; a profile above it widens the window, up to the ceiling
+    # test_extraction_runner.py states.
+    limit = 32768 if name == "kwp" else 40960
+    assert budget <= limit, (
+        f"{name}: a request needs {budget} tokens, more than the {limit} "
+        f"this profile may ask the job to serve")
     assert runner.fit_batch_sources(prompt, spec) >= 1, (
         f"{name}: max_tokens cannot answer for even one source")
 

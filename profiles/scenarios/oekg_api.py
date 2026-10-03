@@ -6,7 +6,7 @@ The platform takes a scenario bundle as one JSON body
 (`POST /api/v0/scenario-bundles/`), mints every identifier itself and holds
 the assembled bundle against the OEKG shapes before it writes anything. A
 create is judged strictly, so one missing value refuses the whole bundle.
-This module builds that body for every document of a harvest, from the same
+This module builds that body for every bundle of a harvest, from the same
 reading kg.py writes its Turtle from, and holds it against the two things
 the platform holds it against:
 
@@ -25,10 +25,21 @@ reads the platform's public bundle list, a GET, to say which acronyms are
 taken: the acronym is unique over there and the only way to find a bundle
 again, because no identifier of ours is accepted.
 
-Two findings are about the harvest and not about one body. Documents that
-name the same acronym cannot both be created. Documents whose bundle has
-the same label are one node in the Turtle, which mints the bundle from its
-label, and would be several bundles of one study as requests.
+A body is not the Turtle in another syntax in four places, each on purpose:
+
+  one bundle per project   Documents whose bundle has the same label are one
+                           bundle with several study reports, as they are one
+                           node in the Turtle, which mints the bundle from
+                           its label. The oldest paper leads.
+  a formed acronym         The platform demands one. A bundle no document
+                           gives one is named after the first author and the
+                           year of its leading paper, `Riahi-2021`. That is
+                           made here, not read, and the run says how often.
+  no IAM annotation        The Turtle types every factsheet an IAM scenario.
+                           The platform's list does not hold that class yet
+                           and refuses a create for it, so a body omits it.
+  study region             The Turtle writes the parent property, the API the
+                           one its closed scenario shape names.
 
 Exit 0 is a report, whatever it says. Exit 2 is a run that could not be
 made: no harvest, no database, no API description or no shapes.
@@ -37,7 +48,7 @@ The shape verdict is a model of the server, built from its documentation
 and not from its code. It assumes what that documentation says: the server
 mints a uuid on every study report and every scenario, a contact,
 organisation, funder or author sent with a label alone is minted with that
-label, and a region or a scenario type sent as an IRI is a node that
+label, and a region, a tag or a scenario type sent as an IRI is a node that
 already exists over there with its own type and label. Where the model is
 wrong the verdict is, and only a real create settles it.
 
@@ -51,6 +62,7 @@ import io
 import json
 import logging
 import re
+import unicodedata
 from pathlib import Path
 from typing import Optional
 
@@ -84,6 +96,17 @@ LOCK = "scenarios_oekg_api"
 CREATE = "ScenarioBundleCreate"
 PATH = "/api/v0/scenario-bundles/"
 LIST_URL = "https://openenergyplatform.org" + PATH
+
+# The tags of a bundle, as the spec names them and as the API does.
+TAG_KEYS = {"study_descriptor": "descriptors",
+            "study_sector_division": "sector_divisions",
+            "study_sector": "sectors",
+            "study_technology": "technologies"}
+
+# Written on every factsheet of the Turtle, because the ontology side asks for
+# it. The platform's list of scenario types does not hold it yet, and a create
+# is refused for one entry off that list.
+NOT_YET_LISTED = (kg.OEO_BASE + kg.IAM_SCENARIO,)
 
 # What `study_regions` becomes over there. The Turtle writes the parent
 # property (kg.P_STUDY_REGION, see scenario_region in the spec); the API
@@ -119,9 +142,9 @@ def labels(cache: Path = upstream.CACHE) -> dict:
     """{IRI: label} for what a body references and a verdict names.
 
     The regions and the terms this profile's snapshot holds are checked in.
-    The properties the shapes name are in neither, so the OEO closure of the
-    last `vocabulary --refresh` is read where there is one; without it a
-    path is named by its identifier alone.
+    A property the shapes name and the spec does not is in neither, so the
+    OEO closure of the last `vocabulary --refresh` is read where there is
+    one; without it such a path is named by its identifier alone.
     """
     out = {}
     regions = json.loads(REGIONS_PATH.read_text(encoding="utf-8"))
@@ -143,6 +166,124 @@ def labels(cache: Path = upstream.CACHE) -> dict:
     return out
 
 
+# -- one bundle per project ---------------------------------------------------
+
+def _union(lists) -> list:
+    """Every name once, in the order first met, two spellings being one."""
+    seen, out = set(), []
+    for names in lists:
+        for name in names or ():
+            key = kg.normalise(name)
+            if key not in seen:
+                seen.add(key)
+                out.append(name)
+    return out
+
+
+def merge(studies: list) -> list:
+    """One study per bundle: the documents of one project, together.
+
+    kg.py mints a bundle from its label, so two papers of one project already
+    are one bundle with two reports in the Turtle. A create is one body per
+    bundle, and the body of each paper alone would make several bundles of
+    one study. The oldest paper leads: its spelling labels the bundle and
+    its abstract is the bundle's, of which the shapes allow one. An acronym
+    is the one most of the documents give.
+
+    The label alone decides, as it does in the Turtle. An acronym two
+    documents share does not: a harvest pairs a project's name with another
+    project's acronym often enough (a paper thanks two projects) that
+    joining on it would chain unrelated papers into one bundle. Such a pair
+    stays two bundles and is reported for its acronym.
+    """
+    groups: dict = {}
+    for study in studies:
+        groups.setdefault(kg.normalise(study["bundle"]["label"]),
+                          []).append(study)
+    out = []
+    for group in groups.values():
+        group.sort(key=lambda s: ((s["report"].get("publication_date")
+                                   or "9999")[:4], s["document"]))
+        bundles = [study["bundle"] for study in group]
+        acronyms = collections.Counter(b["acronym"] for b in bundles
+                                       if b.get("acronym"))
+        tags = {key: list(dict.fromkeys(
+            iri for b in bundles for iri in (b.get("tags") or {}).get(key, ())))
+            for key in TAG_KEYS}
+        out.append({
+            "documents": [study["document"] for study in group],
+            "bundle": {
+                "label": bundles[0]["label"],
+                "acronym": acronyms.most_common(1)[0][0] if acronyms else None,
+                "abstract": next((b["abstract"] for b in bundles
+                                  if b.get("abstract")), None),
+                "organisations": _union(b["organisations"] for b in bundles),
+                "funders": _union(b["funders"] for b in bundles),
+                "tags": tags},
+            "reports": [study["report"] for study in group],
+            "scenarios": [scenario for study in group
+                          for scenario in study["scenarios"]],
+            "formed": [],
+        })
+    return out
+
+
+def _fold(acronym) -> str:
+    return str(acronym or "").strip().casefold()
+
+
+_NOT_A_NAME = frozenset({"et", "al", "jr", "sr"})
+
+
+def _surname(name) -> str:
+    """The family name in an author's name as a document writes it.
+
+    `Keramidas, K.` puts it before the comma. Without one it is the last word
+    that is not an initial: `Keywan Riahi`, `K. Riahi` and `Riahi K` all give
+    Riahi. Only letters are kept, so a footnote mark does not travel, and an
+    apostrophe inside a name closes up: `O'Neill` gives ONeill, which is one
+    word in a handle. `et al.` and `Jr.` are not names. A pair of capitals
+    counts as initials only next to another word, so `WU, JING` gives WU.
+    """
+    text = unicodedata.normalize("NFC", str(name or ""))
+    text = re.sub("[\u2010\u2011]", "-", text)
+    text = re.sub("(?<=[^\\W\\d_])['\u2019\u02bc](?=[^\\W\\d_])", "", text)
+    words = [word for word in re.findall(r"[^\W\d_]+(?:-[^\W\d_]+)*",
+                                         text.split(",", 1)[0])
+             if len(word) > 1 and word.casefold() not in _NOT_A_NAME]
+    named = [word for word in words
+             if not (len(word) <= 2 and word.isupper())]
+    return (named or words or [""])[-1]
+
+
+def form_acronyms(bundles: list) -> None:
+    """Name every bundle no document gives an acronym: `Riahi-2021`.
+
+    The first author and the year of the leading paper. Made here and not
+    read anywhere, so the bundle says so in `formed`. Two that come out the
+    same are told apart by a number, in the order of their documents, which
+    keeps the name the same from one run over a harvest to the next. A paper
+    without an author or without a date gets none, and stays refused.
+    """
+    taken = {_fold(b["bundle"]["acronym"]) for b in bundles
+             if b["bundle"].get("acronym")}
+    for item in sorted(bundles, key=lambda b: b["documents"][0]):
+        if item["bundle"].get("acronym"):
+            continue
+        report = item["reports"][0]
+        surname = _surname((report.get("authors") or [""])[0])
+        year = (report.get("publication_date") or "")[:4]
+        if not surname or not year:
+            continue
+        acronym, number = f"{surname}-{year}", 1
+        while _fold(acronym) in taken:
+            number += 1
+            acronym = f"{surname}-{year}-{number}"
+        taken.add(_fold(acronym))
+        item["bundle"]["acronym"] = acronym
+        item["formed"].append("acronym")
+
+
 # -- the body -----------------------------------------------------------------
 
 def _references(names: list) -> list:
@@ -150,13 +291,13 @@ def _references(names: list) -> list:
 
 
 def body(study: dict, known: dict) -> dict:
-    """The create body for one study, as kg.py read it.
+    """The create body for one merged study.
 
     A value the harvest does not hold is a key the body does not carry. An
     empty string or an empty list would pass the schema and say something
     the document did not, and the refusal for the missing key is the finding.
     """
-    bundle, report = study["bundle"], study["report"]
+    bundle = study["bundle"]
     out: dict = {"label": bundle["label"]}
     for key in ("acronym", "abstract"):
         if bundle.get(key):
@@ -164,20 +305,27 @@ def body(study: dict, known: dict) -> dict:
     for key in ("organisations", "funders"):
         if bundle.get(key):
             out[key] = _references(bundle[key])
-    paper: dict = {"label": report["label"]}
-    for key in ("doi", "publication_date"):
-        if report.get(key):
-            paper[key] = report[key]
-    if report.get("authors"):
-        paper["authors"] = _references(report["authors"])
-    out["study_reports"] = [paper]
+    for key, api_key in TAG_KEYS.items():
+        if (bundle.get("tags") or {}).get(key):
+            out[api_key] = list(bundle["tags"][key])
+    out["study_reports"] = []
+    for report in study["reports"]:
+        paper: dict = {"label": report["label"]}
+        for key in ("doi", "publication_date"):
+            if report.get(key):
+                paper[key] = report[key]
+        if report.get("authors"):
+            paper["authors"] = _references(report["authors"])
+        out["study_reports"].append(paper)
     scenarios = []
     for scenario in study["scenarios"]:
         item: dict = {"label": scenario["label"], "acronym": scenario["acronym"]}
         if scenario.get("abstract"):
             item["abstract"] = scenario["abstract"]
-        if scenario.get("types"):
-            item["scenario_types"] = list(scenario["types"])
+        types = [kind for kind in scenario.get("types") or ()
+                 if kind not in NOT_YET_LISTED]
+        if types:
+            item["scenario_types"] = types
         if scenario.get("regions"):
             item["study_regions"] = [{"iri": iri, "label": known.get(iri, iri)}
                                      for iri in scenario["regions"]]
@@ -280,12 +428,44 @@ def _iri(name: str):
     return URIRef(_PREFIX[prefix] + local)
 
 
+def list_problems(shapes) -> list:
+    """Where a choice list of the spec and the shapes' list for it differ.
+
+    The model picks a tag or a scenario type from a list the spec copied
+    from the shapes. A class the shapes dropped would be harvested and then
+    refused; one they gained could never be chosen.
+    """
+    from rdflib import URIRef
+    from rdflib.collection import Collection
+    out = []
+    for parameter in kg._SPEC["parameters"]:
+        block = (parameter.get("kg") or {}).get("property")
+        offered = {iri for iri in parameter.get("vocabulary") or ()
+                   if kg.in_graph(iri)}
+        if not block or not offered:
+            continue
+        allowed: set = set()
+        for shape in shapes.subjects(URIRef(SH + "path"), _iri(kg._name(block))):
+            head = shapes.value(shape, URIRef(SH + "in"))
+            if head is not None:
+                allowed |= {str(item) for item in Collection(shapes, head)}
+        if not allowed:
+            continue
+        for iri in sorted(offered - allowed):
+            out.append(f"{parameter['uri']}: the spec offers "
+                       f"{iri.rsplit('/', 1)[-1]}, which the shapes do not list")
+        for iri in sorted(allowed - offered):
+            out.append(f"{parameter['uri']}: the shapes list "
+                       f"{iri.rsplit('/', 1)[-1]}, which the spec does not offer")
+    return out
+
+
 # The keys the model below turns into triples: the ones `body` writes. The
-# API has more (descriptors, sectors, contacts, datasets, ...), and a body
-# carrying one of those would be judged as if it did not.
+# API has more (energy carriers, contacts, datasets, ...), and a body carrying
+# one of those would be judged as if it did not.
 MODELLED = {
     "body": ("label", "acronym", "abstract", "organisations", "funders",
-             "study_reports", "scenarios"),
+             "study_reports", "scenarios") + tuple(TAG_KEYS.values()),
     "study_reports[]": ("label", "doi", "publication_date", "authors"),
     "scenarios[]": ("label", "acronym", "abstract", "scenario_types",
                     "study_regions", "years"),
@@ -340,6 +520,15 @@ def graph(payload: dict, known: dict):
             out.add((target, RDF.type, oeo(cls)))
             out.add((target, RDFS.label, Literal(reference["label"])))
 
+    def listed(subject, predicate: str, iris: list) -> None:
+        """An entry of an ontology's list: it carries its label over there
+        when the release holds it. One it does not hold has none, and the
+        shapes say so."""
+        for iri in iris or ():
+            out.add((subject, _iri(predicate), URIRef(iri)))
+            if iri in known:
+                out.add((URIRef(iri), RDFS.label, Literal(known[iri])))
+
     bundle = node("bundle")
     out.add((bundle, RDF.type, oeo(kg.CLS_BUNDLE)))
     text(bundle, kg.P_LABEL, payload.get("label"))
@@ -348,6 +537,8 @@ def graph(payload: dict, known: dict):
     named(bundle, kg.P_ORGANISATION, payload.get("organisations"),
           kg.CLS_ORGANISATION, "organisation")
     named(bundle, kg.P_FUNDER, payload.get("funders"), kg.CLS_FUNDER, "funder")
+    for key, api_key in TAG_KEYS.items():
+        listed(bundle, kg._property(key), payload.get(api_key))
 
     for paper in payload.get("study_reports") or ():
         report = node("report")
@@ -369,12 +560,7 @@ def graph(payload: dict, known: dict):
         text(scenario, kg.P_LABEL, item.get("label"))
         text(scenario, kg.P_SCENARIO_ACRONYM, item.get("acronym"))
         text(scenario, kg.P_SCENARIO_ABSTRACT, item.get("abstract"))
-        for kind in item.get("scenario_types") or ():
-            out.add((scenario, _iri(kg.P_SCENARIO_TYPE), URIRef(kind)))
-            # A class of a released ontology carries its label over there.
-            # One the release does not hold has none, and the shapes say so.
-            if kind in known:
-                out.add((URIRef(kind), RDFS.label, Literal(known[kind])))
+        listed(scenario, kg.P_SCENARIO_TYPE, item.get("scenario_types"))
         for region in item.get("study_regions") or ():
             target = URIRef(region["iri"])
             out.add((scenario, oeo(API_STUDY_REGION), target))
@@ -427,10 +613,6 @@ def shape_problems(data, shapes, known: dict) -> list:
 
 # -- the acronyms -------------------------------------------------------------
 
-def _fold(acronym) -> str:
-    return str(acronym or "").strip().casefold()
-
-
 def platform_acronyms(url: str = LIST_URL) -> dict:
     """{acronym: label} of the bundles the platform lists. Public, a GET.
 
@@ -464,46 +646,24 @@ def acronym_problems(entries: list, taken: Optional[dict] = None) -> None:
     for entry in entries:
         acronym = entry["body"].get("acronym")
         if acronym:
-            used.setdefault(_fold(acronym), []).append(entry["document"])
+            used.setdefault(_fold(acronym), []).append(entry["documents"][0])
     there = {_fold(acronym): (acronym, label)
              for acronym, label in (taken or {}).items()}
     for entry in entries:
         key = _fold(entry["body"].get("acronym"))
         if not key:
             continue
-        others = [name for name in used[key] if name != entry["document"]]
+        others = [name for name in used[key] if name != entry["documents"][0]]
         if others:
             entry["problems"].append({
                 "check": "acronym", "where": "body",
-                "what": "acronym used by more than one document of this harvest",
+                "what": "acronym used by more than one bundle of this harvest",
                 "message": ", ".join(sorted(others))})
         if key in there:
             entry["problems"].append({
                 "check": "acronym", "where": "body",
                 "what": "acronym already on the platform",
                 "message": f"{there[key][0]!r}: {there[key][1]}"})
-
-
-def shared_problems(entries: list) -> None:
-    """Add to each entry which other documents make the same bundle.
-
-    kg.py mints a bundle from its label, so in the Turtle two papers of one
-    project are one bundle with two reports. A create is one body per
-    document: sent as they are, they would be several bundles of one study.
-    """
-    used: dict = {}
-    for entry in entries:
-        used.setdefault(kg.normalise(entry["body"]["label"]),
-                        []).append(entry["document"])
-    for entry in entries:
-        others = [name for name in used[kg.normalise(entry["body"]["label"])]
-                  if name != entry["document"]]
-        if others:
-            entry["problems"].append({
-                "check": "bundle", "where": "body",
-                "what": "bundle label shared by more than one document of "
-                        "this harvest",
-                "message": ", ".join(sorted(others))})
 
 
 # -- the run ------------------------------------------------------------------
@@ -513,54 +673,70 @@ def dry_run(harvest: Path, db: Path, openapi: dict, shapes,
     """(entries, documents without a study) for a harvest directory.
 
     An entry is one request as it would be sent, and every reason the
-    platform would refuse it: {document, method, path, body, problems}.
+    platform would refuse it: {documents, formed, method, path, body,
+    problems}. `documents` are the harvest files the bundle was read from,
+    the leading one first; `formed` names what was made here and not read.
     """
     reader = kg.make_study_reader(db)
     schema = RequestSchema(openapi)
-    entries, without = [], []
+    studies, without = [], []
     for name, rows in collect(harvest).items():
         study = reader(name, rows)
         if study is None:
             without.append(name)
-            continue
-        payload = body(study, known)
+        else:
+            studies.append(study)
+    bundles = merge(studies)
+    form_acronyms(bundles)
+    entries = []
+    for item in bundles:
+        payload = body(item, known)
         problems = schema.problems(payload)
         problems += shape_problems(graph(payload, known), shapes, known)
-        entries.append({"document": name, "method": "POST", "path": PATH,
-                        "body": payload, "problems": problems})
+        entries.append({"documents": item["documents"], "formed": item["formed"],
+                        "method": "POST", "path": PATH, "body": payload,
+                        "problems": problems})
     acronym_problems(entries, taken)
-    shared_problems(entries)
     return entries, without
 
 
 HEADINGS = (("schema", "refused by the request schema"),
             ("shape", "refused by the shapes"),
-            ("acronym", "the acronym"),
-            ("bundle", "one study, several documents"))
+            ("acronym", "the acronym"))
 
 
-def report(entries: list, without: list,
-           taken: Optional[dict] = None) -> str:
+def report(entries: list, without: list, taken: Optional[dict] = None,
+           lists: Optional[list] = None) -> str:
     """The run in English, one line per kind of refusal."""
     ready = [entry for entry in entries if not entry["problems"]]
+    documents = sum(len(entry["documents"]) for entry in entries)
+    several = sum(1 for entry in entries if len(entry["documents"]) > 1)
+    formed = sum(1 for entry in entries if "acronym" in entry["formed"])
     lines = ["OEKG scenario-bundle dry run: nothing was sent",
-             f"  {len(entries)} document(s) carry a study, {len(without)} do "
+             f"  {documents} document(s) carry a study, {len(without)} do "
              f"not (no title harvested)",
-             f"  {len(ready)} would be created as they are, "
+             f"  {len(entries)} bundle(s), {several} of them from more than "
+             f"one document",
+             f"  {formed} acronym(s) formed from the first author and the "
+             f"year, not read in a document",
+             f"  {len(ready)} bundle(s) would be created as they are, "
              f"{len(entries) - len(ready)} would be refused"]
     for check, heading in HEADINGS:
-        # Documents, not nodes: thirty scenarios of one paper that miss the
-        # same thing are one finding about that paper.
+        # Bundles, not nodes: thirty scenarios of one bundle that miss the
+        # same thing are one finding about that bundle.
         counts: collections.Counter = collections.Counter()
         for entry in entries:
             counts.update({(p["where"], p["what"]) for p in entry["problems"]
                            if p["check"] == check})
         if not counts:
             continue
-        lines += ["", f"  {heading} (documents)"]
+        lines += ["", f"  {heading} (bundles)"]
         for (where, what), count in sorted(counts.items(),
                                            key=lambda kv: (-kv[1], kv[0])):
             lines.append(f"  {count:6d}  {where}: {what}")
+    if lists:
+        lines += ["", "  the spec's lists against the shapes'"]
+        lines += [f"    {line}" for line in lists]
     lines += ["", "  acronyms were not compared with the platform's (--live "
                   "reads its public list)" if taken is None else
               f"  acronyms were compared with the {len(taken)} acronym(s) "
@@ -571,6 +747,8 @@ def report(entries: list, without: list,
         held["bundles"] += 1
         held["organisations"] += len(payload.get("organisations") or ())
         held["funders"] += len(payload.get("funders") or ())
+        for api_key in TAG_KEYS.values():
+            held[api_key.replace("_", " ")] += len(payload.get(api_key) or ())
         held["study reports"] += len(payload.get("study_reports") or ())
         held["authors"] += sum(len(paper.get("authors") or ())
                                for paper in payload.get("study_reports") or ())
@@ -600,7 +778,7 @@ def main(argv=None) -> int:
                         help="read the platform's public bundle list (GET) "
                              "and compare the acronyms")
     parser.add_argument("--write", type=Path, default=None, metavar="JSONL",
-                        help="write one request per document, with its problems")
+                        help="write one request per bundle, with its problems")
     args = parser.parse_args(argv)
     logging.basicConfig(level=logging.WARNING,
                         format="%(asctime)s [%(levelname)s] %(name)s %(message)s",
@@ -654,7 +832,7 @@ def main(argv=None) -> int:
         with io.open(args.write, "w", encoding="utf-8", newline="\n") as handle:
             for entry in entries:
                 handle.write(json.dumps(entry, ensure_ascii=False) + "\n")
-    print(report(entries, without, taken))
+    print(report(entries, without, taken, list_problems(shapes)))
     return 0
 
 

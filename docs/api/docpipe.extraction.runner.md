@@ -1099,7 +1099,12 @@ generous" and no image at all, and the job script served that number as
 The payload term is measured off the spec when there is one: a parameter
 that hands the model a class list to choose from is many times the size of
 one that asks for a wording, and a flat allowance for both underserves the
-first.
+first. A request comes in two shapes, and the larger counts: one planned
+for a single parameter carries that parameter whole, and one planned for
+no parameter carries every parameter's class lists at once. The second
+was not counted until a profile had four lists, one of 153 classes, and
+its reading requests outgrew a budget that still measured the widest
+single parameter.
 
 A request carries several sources now, so the text term is the batch's
 ceiling rather than one window's — and one source too long to share a

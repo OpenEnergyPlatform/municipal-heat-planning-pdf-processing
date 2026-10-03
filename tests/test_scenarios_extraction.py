@@ -101,6 +101,8 @@ def test_the_spec_covers_exactly_the_fields_the_shapes_ask_of_us(spec):
         "publication_title", "publication_author", "publication_date",
         "publication_doi", "publication_abstract", "study_organisation",
         "study_funder", "study_project_name", "study_acronym",
+        "study_descriptor", "study_sector_division", "study_sector",
+        "study_technology",
         "scenario_label", "scenario_type", "scenario_abstract",
         "scenario_region", "scenario_year"}
 
@@ -270,7 +272,7 @@ def test_nothing_the_closed_shapes_do_not_name_is_emitted(monkeypatch):
     import profiles.scenarios.kg as kg
     monkeypatch.setattr(kg, "EVIDENCE", False)
     allowed = _promised() | STRUCTURAL
-    assert len(allowed) == 14, sorted(allowed)
+    assert len(allowed) == 18, sorted(allowed)
     used = _predicates_in(_ttl(_rows()))
     assert used <= allowed, used - allowed
 
@@ -300,10 +302,81 @@ def test_every_predicate_the_spec_promises_is_one_the_serializer_writes(
          "scenario": "CurPol", "tier": "text_located",
          "quote": "CurPol is a with existing measures scenario",
          "provenance": where},
+    ] + [
+        # A bundle tag is serialized under the same condition as a type.
+        {"parameter": key, "value": "an entry",
+         "value_uri": "https://openenergyplatform.org/ontology/oeo/" + entry,
+         "tier": "text_located", "quote": "the study covers an entry",
+         "provenance": where}
+        for key, entry in (("study_descriptor", "OEO_00140049"),
+                           ("study_sector_division", "OEO_00000368"),
+                           ("study_sector", "OEO_00000367"),
+                           ("study_technology", "OEO_00000407"))
     ]
     written = _predicates_in(_ttl(rows))
     assert _promised() - written == set(), _promised() - written
     assert written - (_promised() | STRUCTURAL) == set()
+
+
+def _tag_rows():
+    where = {"page": 2, "owner_kind": "section", "owner_id": 2}
+    oeo = "https://openenergyplatform.org/ontology/oeo/"
+    return _rows() + [
+        {"parameter": "study_sector", "value": "transport sector",
+         "value_uri": oeo + "OEO_00000422", "value_raw": "transport",
+         "quote": "The model covers transport and industry.",
+         "tier": "text_located", "provenance": where},
+        {"parameter": "study_sector", "value": "transport sector",
+         "value_uri": oeo + "OEO_00000422", "value_raw": "transport sector",
+         "quote": "Results for the transport sector follow.",
+         "tier": "text_located", "provenance": where},
+        {"parameter": "study_sector", "value": "industry sector",
+         "value_uri": oeo + "OEO_00000227", "value_raw": "industry",
+         "quote": "Industry is modelled by subsector.",
+         "tier": "text_located", "provenance": where},
+        {"parameter": "study_technology", "value": "keine dieser Technologien",
+         "value_uri": "out:not_in_list", "value_raw": "direct air capture",
+         "quote": "The model includes direct air capture.",
+         "tier": "text_located", "provenance": where},
+        {"parameter": "study_descriptor", "value": "a wording nobody mapped",
+         "quote": "The study is about a wording nobody mapped.",
+         "tier": "text_located", "provenance": where},
+    ]
+
+
+def test_a_bundle_tag_is_the_entry_the_model_chose_with_its_passages(
+        monkeypatch, caplog):
+    """The four tags the shapes demand of a bundle are entries of lists. One
+    the model picked is one triple on the bundle, whichever passages said
+    it, and each passage stays above it. An out: entry and a wording the
+    list did not hold reach no triple and are counted."""
+    import profiles.scenarios.kg as kg
+    monkeypatch.setattr(kg, "EVIDENCE", False)
+    assert kg.BUNDLE_TAGS == ("study_descriptor", "study_sector_division",
+                              "study_sector", "study_technology")
+    with caplog.at_level(logging.INFO, logger="profiles.scenarios.kg"):
+        ttl = _ttl(_tag_rows())
+    bundle = ttl.split("a oeo:OEO_00020227 ;")[1].split("\n\n")[0]
+    transport, industry = (
+        "oeo:OEO_00020439 <https://openenergyplatform.org/ontology/oeo/"
+        f"{entry}> ;" for entry in ("OEO_00000422", "OEO_00000227"))
+    assert bundle.count(transport) == 1 and bundle.count(industry) == 1, (
+        "a study covers more than one sector, and each is one triple")
+    # Each passage above the triple it is the evidence of: below it, a
+    # reader takes it for the next one's.
+    assert [bundle.index(piece) for piece in (
+        "The model covers transport and industry.",
+        "Results for the transport sector follow.", transport,
+        "Industry is modelled by subsector.", industry)] == sorted(
+        bundle.index(piece) for piece in (
+            "The model covers transport and industry.",
+            "Results for the transport sector follow.", transport,
+            "Industry is modelled by subsector.", industry))
+    assert "oeo:OEO_00020438" not in ttl, "an out: entry is no technology"
+    assert "oeo:OEO_00390071" not in ttl, "an unmapped wording is no tag"
+    assert "out:not_in_list" not in ttl and "direct air capture" not in bundle
+    assert "'out:not_in_list': 1" in caplog.text
+    assert "'unmapped:study_descriptor': 1" in caplog.text
 
 
 def test_the_writers_own_edges_are_declared_for_the_pin_to_judge(
@@ -1338,6 +1411,49 @@ def test_the_meanings_are_the_terms_own_and_not_a_paraphrase(spec):
     assert [u for u in parameter.vocabulary if not kg.in_graph(u)] \
         == ["out:not_in_list"]
     assert "Art" in parameter.definitions["out:not_in_list"]
+
+
+# The four lists a bundle is tagged from, as oekg_shapes.ttl holds them: how
+# many classes each, and a digest over their sorted identifiers, since 244
+# lines of them would be the spec a second time.
+BUNDLE_TAG_LISTS = {
+    "study_descriptor": (31, "cd2dc10d031b51b6"),
+    "study_sector_division": (17, "39c93a717e2d8887"),
+    "study_sector": (153, "52608add3ba857e7"),
+    "study_technology": (43, "1c557a0950312b28"),
+}
+
+
+def test_the_bundle_tag_lists_are_the_ones_the_shapes_accept(spec):
+    """Each list is sh:in in the platform's shapes, and a class outside it
+    makes the bundle invalid. A class dropped here is one no study can be
+    tagged with, a dropped out: entry leaves the model nothing to say when
+    the list does not hold what it read, and a meaning pasted onto a second
+    class tells the model the two are one. The meanings are the ontology's
+    own, so each is held against the snapshot of the pinned release; a class
+    the ontology gives none carries none here either."""
+    import hashlib
+    from profiles.scenarios import kg
+    terms = json.loads(SPEC_PATH.with_name("vocabulary.json").read_text(
+        encoding="utf-8"))["terms"]
+    by_uri = {p.uri: p for p in spec.parameters}
+    assert set(BUNDLE_TAG_LISTS) == set(kg.BUNDLE_TAGS)
+    for key, (count, digest) in BUNDLE_TAG_LISTS.items():
+        parameter = by_uri[key]
+        classes = [u for u in parameter.vocabulary if kg.in_graph(u)]
+        names = sorted(u.rsplit("/", 1)[-1] for u in classes)
+        assert len(names) == count, key
+        assert hashlib.sha256("\n".join(names).encode()).hexdigest()[
+            :16] == digest, key
+        assert [u for u in parameter.vocabulary if not kg.in_graph(u)] \
+            == ["out:not_in_list"], key
+        assert parameter.definitions["out:not_in_list"].strip(), key
+        for uri in classes:
+            assert parameter.definitions.get(uri) == terms[
+                uri.rsplit("/", 1)[-1]]["definition"], uri
+        meanings = [parameter.definitions[u] for u in classes
+                    if u in parameter.definitions]
+        assert len(set(meanings)) == len(meanings), key
 
 
 def test_the_offered_wording_did_not_move_when_the_meanings_arrived(spec):

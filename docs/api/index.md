@@ -162,7 +162,7 @@ is for and what it hands to what; this is the reference.
 - [profiles.scenarios.extraction](profiles.scenarios.extraction.md): Extraction stage wiring: where the ar6 spec lives, and the lists that are only closed once a document is named. (3 functions)
 - [profiles.scenarios.inference](profiles.scenarios.inference.md): What the answer loop says around the ar6 prompts.
 - [profiles.scenarios.kg](profiles.scenarios.kg.md): Harvested publication metadata to OEKG Turtle. (13 functions)
-- [profiles.scenarios.oekg_api](profiles.scenarios.oekg_api.md): What the OEKG scenario-bundle API would be asked, and what it would answer. (1 class, 12 functions)
+- [profiles.scenarios.oekg_api](profiles.scenarios.oekg_api.md): What the OEKG scenario-bundle API would be asked, and what it would answer. (1 class, 14 functions)
 - [profiles.scenarios.preprocessing](profiles.scenarios.preprocessing.md): What text extraction has to know about English.
 - [profiles.scenarios.profile](profiles.scenarios.profile.md): AR6 scenario literature: the publications the IIASA AR6 scenario database cites.
 - [profiles.scenarios.source](profiles.scenarios.source.md): Where the AR6 corpus comes from: pdf_index.json, the crawl over the publications the AR6 scenario database cites. (1 class, 5 functions)

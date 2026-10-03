@@ -9,7 +9,9 @@ The schema and the shapes below are stand-ins written for these tests; the
 real ones are pulled by `--refresh` and are not in the repository. The
 shapes mirror the real file where the model can go wrong: the bundle, the
 report and the factsheet are closed, a region and every node a reference
-mints are held to exactly one label, and the scenario types are a list.
+mints or a list names are held to exactly one label, and the tags and the
+scenario types are lists. Those lists are the spec's own, so the spec and
+the stand-in agree until a test makes them differ.
 """
 import json
 import logging
@@ -25,13 +27,21 @@ OEO = kg.OEO_BASE
 OBO = "http://purl.obolibrary.org/obo/"
 DC = "http://purl.org/dc/terms/"
 REGION = "https://openenergyplatform.org/ontology/oekg/region/Germany"
-POLICY = OEO + "OEO_00020247"
+POLICY = OEO + "OEO_00020247"        # target driven scenario
 IAM = OEO + kg.IAM_SCENARIO
 UNLISTED = OEO + "OEO_00099999"
+PATHWAY = OEO + "OEO_00010212"       # decarbonisation pathway
+DIVISION = OEO + "OEO_00000242"      # CRF sectors (IPCC 2006)
+TRANSPORT = OEO + "OEO_00000422"     # transport sector
+INDUSTRY = OEO + "OEO_00000227"      # industry sector
+PHOTOVOLTAIC = OEO + "OEO_00010428"  # photovoltaic technology
+TAGS = {"study_descriptor": PATHWAY, "study_sector_division": DIVISION,
+        "study_sector": TRANSPORT, "study_technology": PHOTOVOLTAIC}
 
 REFERENCE = {"type": "object", "required": ["label"],
              "properties": {"iri": {"type": "string", "nullable": True},
                             "label": {"type": "string"}}}
+IRIS = {"type": "array", "items": {"type": "string"}}
 OPENAPI = {"components": {"schemas": {
     "NodeReference": REFERENCE,
     "StudyReport": {"type": "object",
@@ -47,8 +57,7 @@ OPENAPI = {"components": {"schemas": {
                            "label": {"type": "string"},
                            "acronym": {"type": "string"},
                            "abstract": {"type": "string", "nullable": True},
-                           "scenario_types": {"type": "array",
-                                              "items": {"type": "string"}},
+                           "scenario_types": IRIS,
                            "study_regions": {"type": "array", "items": {
                                "$ref": "#/components/schemas/NodeReference"}},
                            "years": {"type": "array",
@@ -58,6 +67,9 @@ OPENAPI = {"components": {"schemas": {
                                  "label": {"type": "string"},
                                  "acronym": {"type": "string"},
                                  "abstract": {"type": "string", "nullable": True},
+                                 "descriptors": IRIS, "sector_divisions": IRIS,
+                                 "sectors": IRIS, "technologies": IRIS,
+                                 "energy_carriers": IRIS,
                                  "organisations": {"type": "array", "items": {
                                      "$ref": "#/components/schemas/NodeReference"}},
                                  "funders": {"type": "array", "items": {
@@ -68,7 +80,21 @@ OPENAPI = {"components": {"schemas": {
                                      "$ref": "#/components/schemas/StudyReport"}}}},
 }}}
 
-SHAPES = """
+
+def _listed(uri: str) -> list:
+    """The entries the spec offers for one parameter that are real classes."""
+    parameter, = [p for p in kg._SPEC["parameters"] if p["uri"] == uri]
+    return [iri for iri in parameter["vocabulary"] if kg.in_graph(iri)]
+
+
+def _shapes_text(lists=None) -> str:
+    lists = lists or {uri: _listed(uri)
+                      for uri in ("scenario_type",) + kg.BUNDLE_TAGS}
+
+    def allowed(uri):
+        return " ".join(f"<{iri}>" for iri in lists[uri])
+
+    return f"""
 @prefix sh: <http://www.w3.org/ns/shacl#> .
 @prefix ex: <http://example.org/> .
 @prefix dc: <http://purl.org/dc/terms/> .
@@ -82,7 +108,14 @@ ex:StudyShape a sh:NodeShape ;
     sh:targetClass oeo:OEO_00020227 ;
     sh:closed true ;
     sh:ignoredProperties ( rdf:type ) ;
-    sh:property [ sh:path oeo:OEO_00390071 ] ;
+    sh:property [ sh:path oeo:OEO_00390071 ; sh:minCount 1 ;
+                  sh:in ( {allowed("study_descriptor")} ) ] ;
+    sh:property [ sh:path oeo:OEO_00390079 ; sh:minCount 1 ;
+                  sh:in ( {allowed("study_sector_division")} ) ] ;
+    sh:property [ sh:path oeo:OEO_00020439 ; sh:minCount 1 ;
+                  sh:in ( {allowed("study_sector")} ) ] ;
+    sh:property [ sh:path oeo:OEO_00020438 ; sh:minCount 1 ;
+                  sh:in ( {allowed("study_technology")} ) ] ;
     sh:property [ sh:path obo:BFO_0000051 ;
                   sh:or ( [ sh:class oeo:OEO_00020012 ]
                           [ sh:class oeo:OEO_00000365 ] ) ] ;
@@ -125,7 +158,7 @@ ex:ScenarioShape a sh:NodeShape ;
     sh:property [ sh:path oeo:OEO_00020440 ; sh:datatype xsd:dateTime ] ;
     sh:property [ sh:path oeo:OEO_00020220 ; sh:class oeo:OEO_00020032 ] ;
     sh:property [ sh:path oeo:OEO_00390073 ; sh:minCount 1 ;
-                  sh:in ( oeo:OEO_00020247 ) ] .
+                  sh:in ( {allowed("scenario_type")} ) ] .
 
 ex:RegionShape a sh:NodeShape ;
     sh:targetObjectsOf oeo:OEO_00020220 ;
@@ -139,31 +172,28 @@ ex:CommonShape a sh:NodeShape ;
     sh:targetObjectsOf oeo:OEO_00000510 ;
     sh:targetObjectsOf oeo:OEO_00000509 ;
     sh:targetObjectsOf oeo:OEO_00390073 ;
+    sh:targetObjectsOf oeo:OEO_00390071 ;
+    sh:targetObjectsOf oeo:OEO_00390079 ;
+    sh:targetObjectsOf oeo:OEO_00020439 ;
+    sh:targetObjectsOf oeo:OEO_00020438 ;
     sh:closed true ;
     sh:ignoredProperties ( rdf:type rdfs:subClassOf ) ;
     sh:property [ sh:path rdfs:label ; sh:datatype xsd:string ;
                   sh:minCount 1 ; sh:maxCount 1 ] .
 """
-# The bundle tag the real shapes demand and no body carries.
-TAGGED = SHAPES + """
-ex:TagShape a sh:NodeShape ;
-    sh:targetClass oeo:OEO_00020227 ;
-    sh:property [ sh:path oeo:OEO_00390071 ; sh:minCount 1 ] .
-"""
-# Shapes whose list takes the IAM annotation, so a body can be ready.
-LENIENT = SHAPES.replace("sh:in ( oeo:OEO_00020247 )",
-                         f"sh:in ( oeo:OEO_00020247 oeo:{kg.IAM_SCENARIO} )")
+
+
+SHAPES = _shapes_text()
 
 KNOWN = {REGION: "Germany", POLICY: "target driven scenario",
+         PATHWAY: "decarbonisation pathway",
+         DIVISION: "CRF sectors (IPCC 2006)", TRANSPORT: "transport sector",
+         PHOTOVOLTAIC: "photovoltaic technology",
          OEO + "OEO_00390071": "has study descriptor tag",
          OEO + "OEO_00020227": "scenario bundle"}
-# The two things every body is refused for under SHAPES: the IAM annotation
-# is on no list, and the class behind it has no label over there.
-IAM_ONLY = {("OEO_00000365", f"In on OEO_00390073: {kg.IAM_SCENARIO}"),
-            (kg.IAM_SCENARIO, "MinCount on label")}
 
 
-def _rows(scenarios=("CurPol",), kind=POLICY, **overrides):
+def _rows(scenarios=("CurPol",), kind=POLICY, tags=TAGS, **overrides):
     base = {
         "publication_title": ["Global Energy and Climate Outlook 2023"],
         "publication_author": ["Keramidas, K.", "Fosse, F."],
@@ -179,13 +209,13 @@ def _rows(scenarios=("CurPol",), kind=POLICY, **overrides):
     rows = [{"parameter": k, "value": v, "quote": "x", "provenance": {},
              "tier": "text_located"}
             for k, values in base.items() for v in values]
+    rows += [{"parameter": key, "value": "an entry", "value_uri": iri,
+              "quote": "the study covers an entry", "provenance": {}}
+             for key, iri in (tags or {}).items()]
     for name in scenarios:
         rows += [
             {"parameter": "scenario_label", "value": name,
              "quote": f"the {name} scenario", "provenance": {}},
-            {"parameter": "scenario_type", "value": "a type",
-             "value_uri": kind, "scenario": name,
-             "quote": f"{name} is of a type", "provenance": {}},
             {"parameter": "scenario_region", "value": "Germany",
              "value_uri": REGION, "scenario": name,
              "quote": f"{name} covers Germany", "provenance": {}},
@@ -196,6 +226,10 @@ def _rows(scenarios=("CurPol",), kind=POLICY, **overrides):
              "quote": f"{name} assumes no additional policies",
              "provenance": {}},
         ]
+        if kind:
+            rows.append({"parameter": "scenario_type", "value": "a type",
+                         "value_uri": kind, "scenario": name,
+                         "quote": f"{name} is of a type", "provenance": {}})
     return rows
 
 
@@ -220,12 +254,21 @@ def _db(tmp_path, runs=()) -> Path:
     return db
 
 
-def _study(rows=None, db=Path("no-such.db")):
-    return kg.make_study_reader(db)("geco_2023", _rows() if rows is None else rows)
+def _study(rows=None, db=Path("no-such.db"), name="geco_2023"):
+    return kg.make_study_reader(db)(name, _rows() if rows is None else rows)
+
+
+def _bundles(documents: dict) -> list:
+    """The harvest of these documents, merged and named as a run does it."""
+    bundles = oekg_api.merge([_study(rows, name=name)
+                              for name, rows in documents.items()])
+    oekg_api.form_acronyms(bundles)
+    return bundles
 
 
 def _body(**overrides):
-    return oekg_api.body(_study(_rows(**overrides)), KNOWN)
+    bundle, = _bundles({"geco_2023": _rows(**overrides)})
+    return oekg_api.body(bundle, KNOWN)
 
 
 def _shapes(text=SHAPES):
@@ -274,6 +317,9 @@ def test_the_study_says_what_the_turtle_says(tmp_path):
     assert study["report"]["authors"] == ["Keramidas, K.", "Fosse, F."]
     assert study["bundle"]["organisations"] == ["Joint Research Centre"]
     assert study["bundle"]["funders"] == ["Horizon 2020"]
+    assert study["bundle"]["tags"] == {key: [iri] for key, iri in TAGS.items()}
+    for key, iri in TAGS.items():
+        assert f"{kg._property(key)} <{iri}> ;" in ttl
 
     scenario, = study["scenarios"]
     assert scenario["label"] == "CurPol", "the AR6 spelling"
@@ -291,7 +337,7 @@ def test_the_study_says_what_the_turtle_says(tmp_path):
 def test_without_a_project_name_the_title_labels_the_bundle():
     study = _study(_rows(study_project_name=[]))
     assert study["bundle"]["label"] == "Global Energy and Climate Outlook 2023"
-    assert oekg_api.body(study, KNOWN)["label"] == study["bundle"]["label"]
+    assert _body(study_project_name=[])["label"] == study["bundle"]["label"]
 
 
 def test_a_document_without_a_title_has_no_study():
@@ -309,18 +355,205 @@ def test_the_turtle_is_what_it_was_and_starts_with_its_header_once():
     assert "@prefix" not in second
 
 
+def test_the_api_names_every_tag_the_turtle_writes():
+    """A fifth tag in the spec that the body has no key for would be
+    harvested, written to the Turtle and never sent."""
+    assert set(oekg_api.TAG_KEYS) == set(kg.BUNDLE_TAGS)
+
+
+# ---------------------------------------------------------------------------
+# One bundle per project
+# ---------------------------------------------------------------------------
+
+def _paper(title, year, **overrides):
+    fields = {"publication_title": [title], "publication_date": [year],
+              "scenarios": (f"S{year}",)}
+    fields.update(overrides)
+    return _rows(**fields)
+
+
+def test_two_papers_of_one_project_are_one_bundle_and_the_oldest_leads():
+    """As in the Turtle, which mints the bundle from its label. The body of
+    each paper alone would make two bundles of one study."""
+    bundle, = _bundles({
+        "b_2021": _paper("The Later Paper", "2021",
+                         study_project_name=["ENGAGE PROJECT"],
+                         publication_abstract=["The later abstract."],
+                         study_organisation=["PIK", "Joint Research Centre"],
+                         tags={"study_sector": TRANSPORT,
+                               "study_technology": PHOTOVOLTAIC}),
+        "a_2019": _paper("The Earlier Paper", "2019",
+                         study_project_name=["Engage Project"],
+                         publication_abstract=["The earlier abstract."],
+                         tags={"study_sector": TRANSPORT,
+                               "study_descriptor": PATHWAY}),
+    })
+    assert bundle["documents"] == ["a_2019", "b_2021"]
+    payload = oekg_api.body(bundle, KNOWN)
+    assert payload["label"] == "Engage Project", "the oldest paper's spelling"
+    assert payload["abstract"] == "The earlier abstract."
+    assert payload["acronym"] == "ENGAGE" and bundle["formed"] == []
+    assert payload["organisations"] == [{"label": "Joint Research Centre"},
+                                        {"label": "PIK"}]
+    assert [r["label"] for r in payload["study_reports"]] == [
+        "The Earlier Paper", "The Later Paper"]
+    assert [s["label"] for s in payload["scenarios"]] == ["S2019", "S2021"]
+    assert payload["sectors"] == [TRANSPORT], "one sector, said twice"
+    assert payload["descriptors"] == [PATHWAY]
+    assert payload["technologies"] == [PHOTOVOLTAIC]
+
+
+def test_the_acronym_most_papers_give_names_the_bundle():
+    """Not the leading paper's: one paper that writes the acronym its own
+    way would otherwise rename the project the others agree on."""
+    bundle, = _bundles({
+        "a_2019": _paper("Paper A", "2019", study_acronym=["Engage-X"]),
+        "b_2020": _paper("Paper B", "2020", study_acronym=["ENGAGE"]),
+        "c_2021": _paper("Paper C", "2021", study_acronym=["ENGAGE"]),
+    })
+    assert bundle["documents"] == ["a_2019", "b_2020", "c_2021"]
+    assert bundle["bundle"]["acronym"] == "ENGAGE"
+    assert bundle["formed"] == []
+
+
+def test_two_spellings_of_one_organisation_are_one_reference():
+    """Each paper writes its institute its own way. Sent as two references,
+    the platform would hold one organisation twice."""
+    bundle, = _bundles({
+        "a_2019": _paper("Paper A", "2019",
+                         study_organisation=["Joint Research Centre"],
+                         study_funder=["Horizon 2020"]),
+        "b_2021": _paper("Paper B", "2021",
+                         study_organisation=["JOINT RESEARCH CENTRE", "PIK"],
+                         study_funder=["horizon 2020"]),
+    })
+    payload = oekg_api.body(bundle, KNOWN)
+    assert payload["organisations"] == [{"label": "Joint Research Centre"},
+                                        {"label": "PIK"}]
+    assert payload["funders"] == [{"label": "Horizon 2020"}]
+
+
+def test_every_entry_of_a_tag_reaches_the_body():
+    """A study covers more than one sector. Each entry the model picked is
+    one the bundle is tagged with, in the reading and in the body."""
+    rows = _rows() + [{"parameter": "study_sector", "value": "an entry",
+                       "value_uri": INDUSTRY, "provenance": {},
+                       "quote": "the study covers another entry"}]
+    assert _study(rows)["bundle"]["tags"]["study_sector"] == [TRANSPORT,
+                                                              INDUSTRY]
+    bundle, = _bundles({"geco_2023": rows})
+    assert oekg_api.body(bundle, KNOWN)["sectors"] == [TRANSPORT, INDUSTRY]
+
+
+def test_an_acronym_does_not_join_two_projects():
+    """A paper thanks two projects, and a harvest then pairs one project's
+    name with the other's acronym. Joined on the acronym, unrelated papers
+    would chain into one bundle. They stay two and are reported."""
+    bundles = _bundles({
+        "a": _paper("Paper A", "2020", study_project_name=["CD-LINKS"],
+                    study_acronym=["ENGAGE"]),
+        "b": _paper("Paper B", "2021", study_project_name=["ENGAGE project"],
+                    study_acronym=["ENGAGE"]),
+    })
+    assert [b["documents"] for b in bundles] == [["a"], ["b"]]
+    entries = [{"documents": b["documents"], "problems": [],
+                "body": oekg_api.body(b, KNOWN)} for b in bundles]
+    oekg_api.acronym_problems(entries)
+    assert [p["what"] for e in entries for p in e["problems"]] == [
+        "acronym used by more than one bundle of this harvest"] * 2
+    assert entries[0]["problems"][0]["message"] == "b"
+
+
+# ---------------------------------------------------------------------------
+# The acronym nobody read
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("name, surname", [
+    ("Keramidas, K.", "Keramidas"), ("Keywan Riahi", "Riahi"),
+    ("K. Riahi", "Riahi"), ("Riahi K", "Riahi"),
+    ("Keywan Riahi1,2*", "Riahi"), ("Detlef P. van Vuuren", "Vuuren"),
+    ("van Vuuren, D.P.", "Vuuren"), ("Müller-Casseres, E.", "Müller-Casseres"),
+    ("Li, M", "Li"), ("K. R.", ""), ("", ""),
+    ("Brian C. O'Neill", "ONeill"), ("Patrick O\u2019Rourke", "ORourke"),
+    ("Benigna Boza\u2010Kiss", "Boza-Kiss"),
+    ("Mark Roelfsema et al.", "Roelfsema"),
+    ("La Rovere et al. 2018", "Rovere"), ("John Smith Jr.", "Smith"),
+    ("WU, JING", "WU"), ("Riahi KR", "Riahi"), ("J.M.", "")])
+def test_the_family_name_of_an_author_as_documents_write_it(name, surname):
+    assert oekg_api._surname(name) == surname
+
+
+def test_a_bundle_of_two_papers_is_named_after_the_one_that_leads():
+    """The formed name is the only way to find the bundle again. Taken from
+    whichever paper came last, it would change when a third one joins."""
+    bundle, = _bundles({
+        "b_2021": _paper("The Later Paper", "2021", study_acronym=[],
+                         study_project_name=["Project P"],
+                         publication_author=["Elmar Kriegler"]),
+        "a_2019": _paper("The Earlier Paper", "2019", study_acronym=[],
+                         study_project_name=["Project P"],
+                         publication_author=["Keywan Riahi"]),
+    })
+    assert bundle["documents"] == ["a_2019", "b_2021"]
+    assert bundle["bundle"]["acronym"] == "Riahi-2019"
+    assert bundle["formed"] == ["acronym"]
+
+
+def test_a_bundle_no_document_names_is_named_after_author_and_year():
+    """The platform demands an acronym and finds a bundle by nothing else.
+    The name is made here and not read, so the bundle says so."""
+    bundles = _bundles({
+        "c": _paper("Paper C", "2021", study_acronym=[], study_project_name=[],
+                    publication_author=["Keywan Riahi", "Elmar Kriegler"]),
+        "a": _paper("Paper A", "2021", study_acronym=[], study_project_name=[],
+                    publication_author=["Riahi, K."]),
+        "b": _paper("Paper B", "2020", study_acronym=["RIAHI-2021"],
+                    study_project_name=[]),
+        "d": _paper("Paper D", "2021", study_acronym=[], study_project_name=[],
+                    publication_author=[]),
+        "e": _paper("Paper E", "2021", study_acronym=[], study_project_name=[],
+                    publication_date=[]),
+    })
+    named = {b["documents"][0]: (b["bundle"]["acronym"], b["formed"])
+             for b in bundles}
+    assert named["b"] == ("RIAHI-2021", []), "read, and left alone"
+    assert named["a"] == ("Riahi-2021-2", ["acronym"]), (
+        "the read one is taken, whatever its case; first document first")
+    assert named["c"] == ("Riahi-2021-3", ["acronym"])
+    assert named["d"] == (None, []), "no author, no name"
+    assert named["e"] == (None, []), "no date, no name"
+    assert "acronym" not in oekg_api.body(
+        [b for b in bundles if b["documents"] == ["d"]][0], KNOWN)
+
+
+def test_the_formed_names_are_the_same_on_every_run():
+    """The acronym is the only way to find the bundle again, so a second run
+    over the same harvest must not hand the numbers out differently."""
+    documents = {name: _paper(f"Paper {name}", "2021", study_acronym=[],
+                              study_project_name=[],
+                              publication_author=["Riahi, K."])
+                 for name in ("z", "m", "a")}
+    first = {b["documents"][0]: b["bundle"]["acronym"]
+             for b in _bundles(documents)}
+    again = {b["documents"][0]: b["bundle"]["acronym"]
+             for b in _bundles(dict(reversed(list(documents.items()))))}
+    assert first == again == {"a": "Riahi-2021", "m": "Riahi-2021-2",
+                              "z": "Riahi-2021-3"}
+
+
 # ---------------------------------------------------------------------------
 # The body
 # ---------------------------------------------------------------------------
 
 def test_the_body_carries_the_bundle_its_report_and_its_scenarios():
-    payload = _body()
-    assert payload == {
+    assert _body() == {
         "label": "Enabling Ambitious Climate Policy Assessment",
         "acronym": "ENGAGE",
         "abstract": "This report presents the results.",
         "organisations": [{"label": "Joint Research Centre"}],
         "funders": [{"label": "Horizon 2020"}],
+        "descriptors": [PATHWAY], "sector_divisions": [DIVISION],
+        "sectors": [TRANSPORT], "technologies": [PHOTOVOLTAIC],
         "study_reports": [{
             "label": "Global Energy and Climate Outlook 2023",
             "doi": "10.2760/58255",
@@ -329,10 +562,22 @@ def test_the_body_carries_the_bundle_its_report_and_its_scenarios():
         "scenarios": [{
             "label": "CurPol", "acronym": "CurPol",
             "abstract": "assumes no additional policies",
-            "scenario_types": [POLICY, IAM],
+            "scenario_types": [POLICY],
             "study_regions": [{"iri": REGION, "label": "Germany"}],
             "years": ["2050-01-01T00:00:00"]}],
     }
+
+
+def test_the_iam_annotation_stays_in_the_turtle_and_out_of_the_body():
+    """The Turtle types every factsheet an IAM scenario. The platform's list
+    does not hold that class and refuses a create for it. A factsheet with
+    no other type then has none, and is refused for that instead."""
+    assert IAM in _study()["scenarios"][0]["types"]
+    assert IAM not in json.dumps(_body())
+    scenario, = _body(kind=None)["scenarios"]
+    assert "scenario_types" not in scenario
+    assert ("OEO_00000365", "MinCount on OEO_00390073") in _refusals(
+        _body(kind=None))
 
 
 def test_the_body_names_no_identifier_of_ours():
@@ -347,8 +592,9 @@ def test_the_body_names_no_identifier_of_ours():
 def test_a_value_the_harvest_lacks_is_a_key_the_body_lacks():
     payload = _body(study_acronym=[], publication_author=[],
                     publication_date=[], study_funder=[],
-                    publication_abstract=[])
-    assert not {"acronym", "funders", "abstract"} & set(payload)
+                    publication_abstract=[], tags=None)
+    assert not {"acronym", "funders", "abstract", "descriptors",
+                "sector_divisions", "sectors", "technologies"} & set(payload)
     report, = payload["study_reports"]
     assert "authors" not in report and "publication_date" not in report
     assert "null" not in json.dumps(payload)
@@ -439,6 +685,11 @@ def test_every_value_of_the_body_is_a_triple_the_shapes_name():
         "Horizon 2020"}
     assert not list(graph.objects(bundle, oeo("OEO_00390095"))), (
         "the closed bundle shape names no uuid")
+    for path, iri in (("OEO_00390071", PATHWAY), ("OEO_00390079", DIVISION),
+                      ("OEO_00020439", TRANSPORT),
+                      ("OEO_00020438", PHOTOVOLTAIC)):
+        assert list(graph.objects(bundle, oeo(path))) == [URIRef(iri)]
+        assert graph.value(URIRef(iri), RDFS.label) == Literal(KNOWN[iri])
 
     report, = graph.subjects(RDF.type, oeo("OEO_00020012"))
     scenario, = graph.subjects(RDF.type, oeo("OEO_00000365"))
@@ -458,46 +709,51 @@ def test_every_value_of_the_body_is_a_triple_the_shapes_name():
     assert graph.value(scenario, URIRef(DC + "abstract")) == Literal(
         "assumes no additional policies")
     assert len(list(graph.objects(scenario, oeo("OEO_00390095")))) == 1
-    assert set(graph.objects(scenario, oeo("OEO_00390073"))) == {
-        URIRef(POLICY), URIRef(IAM)}
-    assert graph.value(URIRef(POLICY), RDFS.label) == Literal("target driven scenario")
-    assert graph.value(URIRef(IAM), RDFS.label) is None, "not in the release"
+    assert set(graph.objects(scenario, oeo("OEO_00390073"))) == {URIRef(POLICY)}
+    assert graph.value(URIRef(POLICY), RDFS.label) == Literal(
+        "target driven scenario")
     assert labelled(scenario, oeo("OEO_00020220"), "OEO_00020032") == {"Germany"}
     assert graph.value(scenario, oeo("OEO_00020440")) == Literal(
         "2050-01-01T00:00:00", datatype=XSD.dateTime)
 
 
-def test_a_complete_body_is_refused_for_the_iam_annotation_and_nothing_else():
+def test_a_complete_body_is_refused_for_nothing():
     """Closed shapes over every node the model writes. A triple too many, a
     label or a class too few, a missing uuid or a broken has-part link each
-    add a refusal, and then this set is no longer the whole of it."""
-    assert _refusals(_body()) == IAM_ONLY
+    add a refusal, and then this set is no longer empty."""
+    assert _refusals(_body()) == set()
 
 
 def test_the_shapes_name_what_the_bundle_lacks():
     found = _refusals(_body(study_acronym=[], publication_date=[],
-                            publication_author=[]), TAGGED)
-    assert found - IAM_ONLY == {
+                            publication_author=[],
+                            tags={"study_sector": TRANSPORT}))
+    assert found == {
         ("scenario bundle (OEO_00020227)", "MinCount on acronym"),
         ("scenario bundle (OEO_00020227)",
          "MinCount on has study descriptor tag (OEO_00390071)"),
+        ("scenario bundle (OEO_00020227)", "MinCount on OEO_00390079"),
+        ("scenario bundle (OEO_00020227)", "MinCount on OEO_00020438"),
         ("OEO_00020012", "MinCount on OEO_00390096"),
         ("OEO_00020012", "MinCount on OEO_00000506")}
 
 
-def test_a_scenario_type_outside_the_list_is_named_with_its_entry():
+def test_an_entry_outside_a_list_is_named_and_so_is_its_missing_label():
     found = _refusals(_body(kind=UNLISTED))
     assert ("OEO_00000365", "In on OEO_00390073: OEO_00099999") in found
     assert ("OEO_00099999", "MinCount on label") in found, (
         "a node without a class is named itself")
+    found = _refusals(_body(tags=dict(TAGS, study_sector=UNLISTED)))
+    assert ("scenario bundle (OEO_00020227)",
+            "In on OEO_00020439: OEO_00099999") in found
 
 
 def test_the_model_refuses_a_key_it_does_not_cover():
-    """The API takes descriptors, sectors and more, which `body` never
+    """The API takes energy carriers, contacts and more, which `body` never
     writes. A body that carried one would be judged as if it did not, so the
     model stops instead of answering."""
     pytest.importorskip("rdflib")
-    for where, key in (("body", "descriptors"),
+    for where, key in (("body", "energy_carriers"),
                        ("scenarios", "interacting_regions"),
                        ("study_reports", "reference")):
         payload = _body()
@@ -507,18 +763,35 @@ def test_the_model_refuses_a_key_it_does_not_cover():
             oekg_api.graph(payload, KNOWN)
 
 
+def test_a_list_of_the_spec_that_left_the_shapes_list_is_reported():
+    """The model picks from a list the spec copied from the shapes. A class
+    the shapes dropped would be harvested and then refused, and one they
+    gained could never be chosen."""
+    assert oekg_api.list_problems(_shapes()) == []
+
+    lists = {uri: _listed(uri) for uri in ("scenario_type",) + kg.BUNDLE_TAGS}
+    lists["study_technology"] = [iri for iri in lists["study_technology"]
+                                 if iri != PHOTOVOLTAIC]
+    lists["scenario_type"] = lists["scenario_type"] + [UNLISTED]
+    assert oekg_api.list_problems(_shapes(_shapes_text(lists))) == [
+        "study_technology: the spec offers OEO_00010428, which the shapes do "
+        "not list",
+        "scenario_type: the shapes list OEO_00099999, which the spec does "
+        "not offer"]
+
+
 # ---------------------------------------------------------------------------
-# Findings about the harvest: the acronym, the shared bundle
+# The acronym on the platform
 # ---------------------------------------------------------------------------
 
-def _entry(name, acronym, label=None):
-    payload = {"label": label or name}
+def _entry(name, acronym):
+    payload = {"label": name}
     if acronym:
         payload["acronym"] = acronym
-    return {"document": name, "body": payload, "problems": []}
+    return {"documents": [name], "body": payload, "problems": []}
 
 
-def test_an_acronym_two_documents_share_is_reported_on_both():
+def test_an_acronym_two_bundles_share_is_reported_on_both():
     entries = [_entry("a", "ENGAGE"), _entry("b", "engage "), _entry("c", "X"),
                _entry("d", None)]
     oekg_api.acronym_problems(entries)
@@ -531,19 +804,6 @@ def test_an_acronym_the_platform_holds_is_reported():
     oekg_api.acronym_problems(entries, {"IEA-WEO": "World Energy Outlook"})
     assert entries[0]["problems"][0]["what"] == "acronym already on the platform"
     assert entries[1]["problems"] == []
-
-
-def test_documents_that_make_one_bundle_are_reported_on_each():
-    """The Turtle mints a bundle from its label, so these are one node
-    there. As requests they would be two bundles of one study."""
-    entries = [_entry("a", None, "CD-LINKS"), _entry("b", None, "cd-links"),
-               _entry("c", None, "NAVIGATE")]
-    oekg_api.shared_problems(entries)
-    assert [len(e["problems"]) for e in entries] == [1, 1, 0]
-    assert entries[1]["problems"][0] == {
-        "check": "bundle", "where": "body",
-        "what": "bundle label shared by more than one document of this harvest",
-        "message": "a"}
 
 
 def test_the_platform_list_is_read_page_by_page_and_only_read(monkeypatch):
@@ -621,21 +881,24 @@ def test_a_refresh_writes_its_own_lock_and_leaves_the_profiles_alone(
 
 def test_the_labels_come_from_the_checked_in_files_and_the_cached_closure(
         tmp_path):
-    """Regions and the snapshot's terms without any refresh; the properties
-    the shapes name only from the closure a vocabulary refresh left."""
+    """Regions and the snapshot's terms without any refresh; a property the
+    shapes name and the spec does not only from the closure a vocabulary
+    refresh left."""
     pytest.importorskip("rdflib")
+    carrier = OEO + "OEO_00020432"       # covers energy carrier (shortcut)
     without = oekg_api.labels(tmp_path)
     assert without[REGION] == "Germany"
     assert without[POLICY] == "target driven scenario"
-    assert OEO + "OEO_00390071" not in without
+    assert without[TRANSPORT] == "transport sector", "a tag is in the snapshot"
+    assert carrier not in without
 
     closure = tmp_path / "oeo-closure.owl"
     closure.write_text(
         '<?xml version="1.0"?>\n'
         '<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"\n'
         '         xmlns:rdfs="http://www.w3.org/2000/01/rdf-schema#">\n'
-        f' <rdf:Description rdf:about="{OEO}OEO_00390071">\n'
-        '  <rdfs:label>has study descriptor tag</rdfs:label>\n'
+        f' <rdf:Description rdf:about="{carrier}">\n'
+        '  <rdfs:label>covers energy carrier (shortcut)</rdfs:label>\n'
         ' </rdf:Description>\n'
         f' <rdf:Description rdf:about="{POLICY}">\n'
         '  <rdfs:label>another spelling</rdfs:label>\n'
@@ -645,21 +908,18 @@ def test_the_labels_come_from_the_checked_in_files_and_the_cached_closure(
         {"sources": {"oeo": {"files": [{"path": str(closure)}]}}}),
         encoding="utf-8")
     known = oekg_api.labels(tmp_path)
-    assert known[OEO + "OEO_00390071"] == "has study descriptor tag"
-    assert known[POLICY] == "target driven scenario", "the snapshot's label stands"
+    assert known[carrier] == "covers energy carrier (shortcut)"
+    assert known[POLICY] == "target driven scenario", "the snapshot's stands"
 
 
 # ---------------------------------------------------------------------------
 # The run
 # ---------------------------------------------------------------------------
 
-E2E_KNOWN = dict(KNOWN, **{IAM: "IAM scenario"})
-
-
-def _run(tmp_path, monkeypatch, documents, *extra, shapes=LENIENT):
+def _run(tmp_path, monkeypatch, documents, *extra, shapes=SHAPES):
     pytest.importorskip("pyshacl")
     yaml = pytest.importorskip("yaml")
-    monkeypatch.setattr(oekg_api, "labels", lambda: E2E_KNOWN)
+    monkeypatch.setattr(oekg_api, "labels", lambda: KNOWN)
     harvest = _harvest(tmp_path, documents)
     openapi = tmp_path / "openapi.yaml"
     openapi.write_text(yaml.safe_dump(OPENAPI), encoding="utf-8")
@@ -677,16 +937,20 @@ def _run(tmp_path, monkeypatch, documents, *extra, shapes=LENIENT):
 
 DOCUMENTS = {
     "complete": _rows(),
-    # Two scenarios that fail the same way: one finding about one paper.
-    "no_acronym": _rows(scenarios=("A1", "B1"), kind=UNLISTED,
-                        study_acronym=[], study_project_name=[],
-                        publication_title=["Another Outlook"]),
+    # Nobody to name it after, and two scenarios that fail the same way: one
+    # finding about one bundle.
+    "unnamed": _rows(scenarios=("A1", "B1"), kind=UNLISTED,
+                     study_acronym=[], study_project_name=[],
+                     publication_author=[],
+                     publication_title=["Another Outlook"]),
+    "formed": _rows(study_acronym=[], study_project_name=[],
+                    publication_title=["A Third Outlook"]),
     "untitled": _rows(publication_title=[]),
 }
 
 
-def test_the_run_reports_per_document_and_sends_nothing(tmp_path, monkeypatch,
-                                                         capsys):
+def test_the_run_reports_per_bundle_and_sends_nothing(tmp_path, monkeypatch,
+                                                       capsys):
     import urllib.request
 
     def refuse(*args, **kwargs):
@@ -697,25 +961,34 @@ def test_the_run_reports_per_document_and_sends_nothing(tmp_path, monkeypatch,
     out = capsys.readouterr().out
     assert code == 0
     assert "nothing was sent" in out
-    assert "2 document(s) carry a study, 1 do not" in out
-    assert "1 would be created as they are, 1 would be refused" in out
-    assert "refused by the request schema (documents)" in out
+    assert "3 document(s) carry a study, 1 do not" in out
+    assert "3 bundle(s), 0 of them from more than one document" in out
+    assert "1 acronym(s) formed from the first author and the year" in out
+    assert "2 bundle(s) would be created as they are, 1 would be refused" in out
+    assert "refused by the request schema (bundles)" in out
     assert "     1  body: 'acronym' is a required property" in out
-    assert "refused by the shapes (documents)" in out
+    assert "refused by the shapes (bundles)" in out
     assert "     1  scenario bundle (OEO_00020227): MinCount on acronym" in out
     assert "     1  OEO_00000365: In on OEO_00390073: OEO_00099999" in out, (
-        "two factsheets of one document are one document")
+        "two factsheets of one bundle are one bundle")
+    assert "the spec's lists against the shapes'" not in out
     assert "acronyms were not compared" in out
-    assert "2 bundles" in out and "3 scenarios" in out and "4 authors" in out
+    assert "3 bundles" in out and "4 scenarios" in out and "4 authors" in out
+    assert "3 sectors" in out and "3 sector divisions" in out
 
-    assert [e["document"] for e in entries] == ["complete", "no_acronym"]
+    by_document = {e["documents"][0]: e for e in entries}
+    assert set(by_document) == {"complete", "unnamed", "formed"}
     assert all(e["method"] == "POST" and e["path"] == oekg_api.PATH
                for e in entries)
-    assert entries[0]["problems"] == [], "the complete one is ready"
-    assert {p["check"] for p in entries[1]["problems"]} == {"schema", "shape"}
-    assert len([p for p in entries[1]["problems"]
-                if p["what"].startswith("In on")]) == 2, (
-        "the file keeps every node; the report counts the document")
+    assert by_document["complete"]["problems"] == []
+    assert by_document["complete"]["formed"] == []
+    assert by_document["formed"]["problems"] == []
+    assert by_document["formed"]["formed"] == ["acronym"]
+    assert by_document["formed"]["body"]["acronym"] == "Keramidas-2023"
+    refused = by_document["unnamed"]["problems"]
+    assert {p["check"] for p in refused} == {"schema", "shape"}
+    assert len([p for p in refused if p["what"].startswith("In on")]) == 2, (
+        "the file keeps every node; the report counts the bundle")
 
 
 def test_live_compares_the_acronyms_and_says_how_many(tmp_path, monkeypatch,
@@ -728,20 +1001,41 @@ def test_live_compares_the_acronyms_and_says_how_many(tmp_path, monkeypatch,
     assert code == 0
     assert "     1  body: acronym already on the platform" in out
     assert "compared with the 2 acronym(s) the platform lists" in out
-    assert "0 would be created as they are, 2 would be refused" in out
-    assert entries[0]["problems"][0]["message"] == "'engage': ENGAGE"
+    assert "1 bundle(s) would be created as they are, 2 would be refused" in out
+    taken, = [e for e in entries if e["documents"] == ["complete"]]
+    assert taken["problems"][0]["message"] == "'engage': ENGAGE"
 
 
-def test_two_documents_of_one_study_are_not_ready(tmp_path, monkeypatch, capsys):
-    documents = {"paper_a": _rows(),
-                 "paper_b": _rows(publication_title=["A Second Paper"],
-                                  study_acronym=["OTHER"])}
-    code, _entries = _run(tmp_path, monkeypatch, documents)
+def test_two_documents_of_one_project_are_one_request(tmp_path, monkeypatch,
+                                                      capsys):
+    documents = {"paper_b": _paper("A Second Paper", "2022"),
+                 "paper_a": _paper("A First Paper", "2021")}
+    code, entries = _run(tmp_path, monkeypatch, documents)
     out = capsys.readouterr().out
     assert code == 0
-    assert "one study, several documents (documents)" in out
-    assert "     2  body: bundle label shared by more than one document" in out
-    assert "0 would be created as they are, 2 would be refused" in out
+    assert "2 document(s) carry a study, 0 do not" in out
+    assert "1 bundle(s), 1 of them from more than one document" in out
+    assert "1 bundle(s) would be created as they are, 0 would be refused" in out
+    entry, = entries
+    assert entry["documents"] == ["paper_a", "paper_b"]
+    assert len(entry["body"]["study_reports"]) == 2
+    assert "1 bundles" in out and "2 study reports" in out
+
+
+def test_the_run_says_where_the_specs_lists_left_the_shapes(tmp_path,
+                                                             monkeypatch, capsys):
+    lists = {uri: _listed(uri) for uri in ("scenario_type",) + kg.BUNDLE_TAGS}
+    lists["study_technology"] = [iri for iri in lists["study_technology"]
+                                 if iri != PHOTOVOLTAIC]
+    code, entries = _run(tmp_path, monkeypatch, {"complete": _rows()},
+                         shapes=_shapes_text(lists))
+    out = capsys.readouterr().out
+    assert code == 0
+    assert "the spec's lists against the shapes'" in out
+    assert "study_technology: the spec offers OEO_00010428" in out
+    assert "0 bundle(s) would be created as they are, 1 would be refused" in out
+    assert [p["what"] for p in entries[0]["problems"]] == [
+        "In on OEO_00020438: photovoltaic technology (OEO_00010428)"]
 
 
 def test_the_run_leaves_the_readings_log_level_alone(tmp_path, monkeypatch,
