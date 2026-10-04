@@ -70,8 +70,8 @@ IMAGE_TOKENS = 4096
 def max_request_tokens() -> int:
     """Worst case for one vision request: the longer of the two system
     prompts + one page image + the reply we ask for."""
-    words = max(len(TABLE_SYSTEM_PROMPT.split()),
-                len(FIGURE_SYSTEM_PROMPT.split()))
+    words = max(len(table_system_prompt().split()),
+                len(figure_system_prompt().split()))
     return int(words * TOKENS_PER_WORD + IMAGE_TOKENS + VLM_MAX_TOKENS)
 
 # ---------------------------------------------------------------------------
@@ -120,18 +120,41 @@ PROMPT_IDS = ("visuals/table_system", "visuals/table_user",
               "visuals/caption_keep", "visuals/caption_generate_table",
               "visuals/caption_generate_figure")
 
-TABLE_SYSTEM_PROMPT = prompts.text("visuals/table_system")
+# Read on first use, not on import: a prompt belongs to a profile, and the
+# stage is imported before its command line names one.
 
-TABLE_USER_PROMPT = prompts.text("visuals/table_user")
+@prompts.per_profile
+def table_system_prompt() -> str:
+    return prompts.text("visuals/table_system")
 
-# ── Caption instruction fragments (inserted into TABLE/FIGURE_USER_PROMPT) ──
 
-CAPTION_KEEP_INSTRUCTION = prompts.text("visuals/caption_keep")
+@prompts.per_profile
+def table_user_prompt() -> str:
+    return prompts.text("visuals/table_user")
 
-CAPTION_GENERATE_TABLE_INSTRUCTION = prompts.text("visuals/caption_generate_table")
 
-CAPTION_GENERATE_FIGURE_INSTRUCTION = prompts.text("visuals/caption_generate_figure")
+# ── Caption instruction fragments (inserted into the two user prompts) ──
 
-FIGURE_SYSTEM_PROMPT = prompts.text("visuals/figure_system")
+@prompts.per_profile
+def caption_keep_instruction() -> str:
+    return prompts.text("visuals/caption_keep")
 
-FIGURE_USER_PROMPT = prompts.text("visuals/figure_user")
+
+@prompts.per_profile
+def caption_generate_table_instruction() -> str:
+    return prompts.text("visuals/caption_generate_table")
+
+
+@prompts.per_profile
+def caption_generate_figure_instruction() -> str:
+    return prompts.text("visuals/caption_generate_figure")
+
+
+@prompts.per_profile
+def figure_system_prompt() -> str:
+    return prompts.text("visuals/figure_system")
+
+
+@prompts.per_profile
+def figure_user_prompt() -> str:
+    return prompts.text("visuals/figure_user")

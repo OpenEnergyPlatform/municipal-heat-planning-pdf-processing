@@ -373,6 +373,7 @@ def top_up_file(path: Path, spec: Spec, current: dict, deps: dict, *,
     if doc_spec is None:
         stats["dynamic list unavailable"] += 1
         return stats
+    unserved = runner.UNSERVED.of(document_id)
     keys, blocked = actionable(changed, doc_spec, deps.get("frame_names") or (),
                                dynamic_ok=deps.get("dynamic_ok", True),
                                only=only)
@@ -429,6 +430,11 @@ def top_up_file(path: Path, spec: Spec, current: dict, deps: dict, *,
     tmp = Path(path).with_suffix(".jsonl.tmp")
     tmp.write_text("\n".join(out) + "\n", encoding="utf-8")
     tmp.replace(path)
+    if runner.UNSERVED.of(document_id) > unserved:
+        # A coordinate that was never read is not a coordinate re-read. The
+        # stamp stays as it was, so the next top-up asks again.
+        stats["stamps left, a request ended on 429 or 5xx"] += 1
+        return stats
     if stamp_forward(stamp_path, current, settled):
         stats["stamps carried forward"] += 1
     return stats

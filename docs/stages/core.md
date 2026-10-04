@@ -80,47 +80,64 @@ captured empty.
 
 ### Resolving the active profile
 
-A CLI entry point calls `resolve_profile(args)`, which reads `--profile`
-or `DOCPIPE_PROFILE`, imports `profiles/<name>/profile.py` through
+A stage's `__main__` first calls `bind_command_line()`, which copies a
+`--profile` given on the command line into `os.environ[DOCPIPE_PROFILE]`
+before the stage is imported (`docpipe/profile.py:180-197`). It reads the
+flag with a small argparse parser and `parse_known_args`, as the stage's own
+parser does, so an abbreviation of `--profile` that the stage accepts, with a
+space or an equals sign before the name, is bound too; the parser raises where argparse would print
+a usage and exit (`_Quiet`, `:200-204`), and a line it cannot read is left to
+the stage's own parser (`:194-195`). The CLI entry
+point then calls `resolve_profile(args)`, which reads `--profile` or
+`DOCPIPE_PROFILE`, imports `profiles/<name>/profile.py` through
 `load_profile()`, and writes the resolved name back into
-`os.environ[DOCPIPE_PROFILE]` (`docpipe/profile.py:178-197`). Code with
+`os.environ[DOCPIPE_PROFILE]` (`docpipe/profile.py:212-234`);
+`require_profile(args)` is the same call for a stage that has nothing to
+run without a profile, and refuses in one line naming the available
+profiles when none is given (`docpipe/profile.py:237-244`). Code with
 no command line calls `active_profile()` instead, reading only the
-ambient variable (`docpipe/profile.py:145-149`). A third function,
+ambient variable (`docpipe/profile.py:147-151`). A third function,
 `profile_value(module, attr)`, resolves through `active_profile()` too,
 then caches its result in a module-level dict keyed by profile name,
 module and attribute, so a value is looked up once per process and
-reused after (`docpipe/profile.py:152,166-169`).
+reused after (`docpipe/profile.py:154,168-171`).
 Full mechanics (`component()`/`require()`, a profile's layout, why
-`--profile` alone can be too late) are on [profiles](../profiles.md).
+`--profile` alone is enough) are on [profiles](../profiles.md).
 
-### Binding a stage's prompts at import time
+### Reading a stage's prompts on first use
 
-A stage's config module calls `prompts.load()` at the moment Python
-imports it, not inside a function that runs later: refinement binds
-`SYSTEM_PROMPT = _REFINE.text` off `prompts.load("refinement/refine")`
-this way (`docpipe/refinement/config.py:77-79`). Because `load()`
-resolves through `active_profile()`, `DOCPIPE_PROFILE` must already be
-set before that module is first imported, or the wrong prompts, or
-none, get bound. The same module reads `_REFINE.meta` for
-`LLM_TEMPERATURE` and `LLM_MAX_TOKENS` (`:81-84`; see Data model).
+A stage's config module does not call `prompts.load()` when Python
+imports it. It wraps the read in a function decorated with
+`prompts.per_profile`, which runs it on first use and once per ambient
+profile (`docpipe/prompts.py:90-107`), so a stage can be imported, and
+print its usage, before anybody has named a profile. Refinement reads
+`refine_prompt()` this way (`docpipe/refinement/config.py:77-83`), and
+`system_prompt()`, `llm_temperature()` and `llm_max_tokens()` take the
+text and the front matter off it (`:86-98`; see Data model);
+`refinement/split.py` and `visuals/config.py` do the same. What a config
+module binds on import is the refinement `WINDOW_SIZE`
+(`docpipe/refinement/config.py:39-41`), which reads `active_profile()`
+when the module loads, so `DOCPIPE_PROFILE` must be set before that
+module is first imported; `bind_command_line()` sets it for a
+`python -m` run.
 
 ### Checking the server before the first document
 
 `assert_serving()` calls `serving_limits()`, one `GET {base_url}/models`
 request, 30 seconds and one retry by default
-(`docpipe/llm_preflight.py:37,45`), and compares served model ids and
+(`docpipe/llm_preflight.py:72,80`), and compares served model ids and
 the smallest `max_model_len` reported against the tokens the stage
 needs. It runs once per run, before any document, from four call
 sites: refinement's `run()` (`docpipe/refinement/pipeline.py:165`) and
-`main()` (`:248`); visuals (`docpipe/visuals/pipeline.py:502`, skipped
+`main()` (`:249`); visuals (`docpipe/visuals/pipeline.py:500`, skipped
 under `--dry-run`); and extraction's review pass and harvest
-(`docpipe/extraction/runner.py:4932` and `:5017`).
+(`docpipe/extraction/runner.py:5015` and `:5100`).
 
 ### Rendering a prompt for one request
 
 `Prompt.render(**values)` substitutes each `{{name}}` placeholder in a
 prompt's body and raises `KeyError` naming any placeholder left unfilled
-or any keyword not asked for (`docpipe/prompts.py:47-58`), so a
+or any keyword not asked for (`docpipe/prompts.py:49-60`), so a
 placeholder renamed in the Markdown file fails at the call site instead
 of shipping a literal `{{foo}}` to the model.
 
@@ -128,11 +145,11 @@ of shipping a literal `{{foo}}` to the model.
 
 After refinement or visuals writes its output, `prompts.record()` writes
 each prompt's sha256 into `.prompt_versions.json`
-(`docpipe/prompts.py:100-106`, called from
+(`docpipe/prompts.py:122-128`, called from
 `docpipe/refinement/pipeline.py:79` and
 `docpipe/visuals/pipeline.py:269`). The next run's `prompts.check()`
 compares that file against today's prompts and returns the ids changed
-(`docpipe/prompts.py:109-119`, called from
+(`docpipe/prompts.py:131-141`, called from
 `docpipe/refinement/pipeline.py:66` and
 `docpipe/visuals/pipeline.py:122`); a non-empty result decides whether
 `--force-stale` is warranted.
@@ -182,32 +199,32 @@ skipped (`docpipe/chunking/database.py:229-232,243,260`).
 
 ## Data model
 
-`Prompt` (`docpipe/prompts.py:35-41`) is a frozen dataclass: `id`
+`Prompt` (`docpipe/prompts.py:37-43`) is a frozen dataclass: `id`
 (`"<stage>/<name>"`), `text` (the body after any front matter, byte for
 byte), `meta` (the parsed front matter, or `{}`; a stage's config reads
 `temperature`/`max_tokens` off it, as refinement's does,
-`docpipe/refinement/config.py:81-84`), `sha256` (over the whole raw
+`docpipe/refinement/config.py:90-98`), `sha256` (over the whole raw
 file) and `path`, which `path_for()` resolves to `<profile's
-prompts_dir>/<stage>/<name>.md` (`:61-65`); `placeholders` extracts the
-`{{name}}` tokens in `text` by regex (`:43-45`). `.prompt_versions.json`
+prompts_dir>/<stage>/<name>.md` (`:63-67`); `placeholders` extracts the
+`{{name}}` tokens in `text` by regex (`:45-47`). `.prompt_versions.json`
 is a JSON object mapping each prompt id to its current sha256, written
 by `record()` next to a stage's output and read back by
 `check()`/`stale()`.
 
-`Profile` (`docpipe/profile.py:32-44`) is a frozen dataclass. A profile
+`Profile` (`docpipe/profile.py:34-46`) is a frozen dataclass. A profile
 author's own fields are on [profiles](../profiles.md); what belongs
 here are the properties a stage reads once resolved:
 `package_dir`, `prompts_dir`, `schema_sql`, and, under `root`
 (`<repo>/data/<name>` unless overridden), `pdf_dir`, `processed_dir`
 (`root/pdf/processed`, refinement's default input,
-`docpipe/refinement/pipeline.py:245`), `db_path` (`<name>.db`) and
-`index_path` (`faiss_index.bin`) (`docpipe/profile.py:85-121`). `Facet`
-(`docpipe/profile.py:25-29`) is `field`, `label`, `widget`.
+`docpipe/refinement/pipeline.py:246`), `db_path` (`<name>.db`) and
+`index_path` (`faiss_index.bin`) (`docpipe/profile.py:86-123`). `Facet`
+(`docpipe/profile.py:26-31`) is `field`, `label`, `widget`.
 
-`artifacts.py` names seven plain string constants for files under a
+`artifacts.py` names eight plain string constants for files under a
 document's own `results/` (`PAGES_JSON` through `DOCUMENT_JSON`), plus
 `DIR_IMAGES` for the sibling `images/` folder
-(`docpipe/artifacts.py:12-22`); the full table of who writes and reads
+(`docpipe/artifacts.py:12-24`); the full table of who writes and reads
 each one is on [artifacts](../artifacts.md).
 
 `resolve_title(caption, content, block_id)` reads three loosely typed
@@ -224,15 +241,15 @@ placeholder, all come back as `caption`, unchanged
 
 | Name | Kind | Default | Effect | Where read |
 |---|---|---|---|---|
-| `DOCPIPE_PROFILE` | environment variable | unset | names the active profile; `resolve_profile()` writes it back | `docpipe/profile.py:20,124-149,178-197` |
-| `--profile` | CLI flag | ambient `DOCPIPE_PROFILE` or none | passed through `resolve_profile()`; refused when named late on a prompt-overriding profile | `docpipe/profile.py:172-197` |
-| `DOCPIPE_DATA_ROOT` | environment variable | unset, falls back to `<repo>/data` | base directory for `Profile.root`, unless `Profile.data_root` is set | `docpipe/profile.py:100-105` |
+| `DOCPIPE_PROFILE` | environment variable | unset | names the active profile; `resolve_profile()` writes it back | `docpipe/profile.py:22,126-151,212-234` |
+| `--profile` | CLI flag | ambient `DOCPIPE_PROFILE` or none | copied into `DOCPIPE_PROFILE` by `bind_command_line()` before a stage is imported; passed through `resolve_profile()`, or `require_profile()` where a profile is needed; refused when named after a stage was imported under another profile and the named one ships prompts | `docpipe/profile.py:174-244` |
+| `DOCPIPE_DATA_ROOT` | environment variable | unset, falls back to `<repo>/data` | base directory for `Profile.root`, unless `Profile.data_root` is set | `docpipe/profile.py:106-107` |
 | `DOCPIPE_ENV_FILE` / `INFERENCE_ENV_FILE` | environment variables | unset; falls back to a bare `.env` | names a `.env` file to load before config reads `os.environ`; only the first readable one is loaded | `docpipe/dotenv.py:26-30` |
-| `Profile.column_layout` | dataclass field | `"auto"` | must be `auto`, `single` or `double`, or `Profile()` raises | `docpipe/profile.py:37,49-50` |
-| `Profile.data_root` / `Profile.home` | dataclass fields | `None` / `None` | override where a profile's data and package files live | `docpipe/profile.py:38-40` |
-| `timeout` (`serving_limits`) | function parameter | 30.0 seconds | timeout for the preflight `GET /models` call | `docpipe/llm_preflight.py:37` |
-| `max_retries` (OpenAI client) | hardcoded constant | 1 | preflight retried once before a connection failure is reported | `docpipe/llm_preflight.py:45` |
-| `what` / `flag` (`assert_serving`) | function parameters | `"this stage"` / `"--max-model-len"` | substituted into the error and success log; each call site names itself | `docpipe/llm_preflight.py:58-59` |
+| `Profile.column_layout` | dataclass field | `"auto"` | must be `auto`, `single` or `double`, or `Profile()` raises | `docpipe/profile.py:39,51-52` |
+| `Profile.data_root` / `Profile.home` | dataclass fields | `None` / `None` | override where a profile's data and package files live | `docpipe/profile.py:40-42` |
+| `timeout` (`serving_limits`) | function parameter | 30.0 seconds | timeout for the preflight `GET /models` call | `docpipe/llm_preflight.py:72` |
+| `max_retries` (OpenAI client) | hardcoded constant | 1 | preflight retried once before a connection failure is reported | `docpipe/llm_preflight.py:80` |
+| `what` / `flag` (`assert_serving`) | function parameters | `"this stage"` / `"--max-model-len"` | substituted into the error and success log; each call site names itself | `docpipe/llm_preflight.py:93-94` |
 | `_CAPTION_LIMIT` | module constant | 300 characters | caps the length of a title `resolve_title()` returns | `docpipe/captions.py:34` |
 | `DOCPIPE_USAGE_DB` | environment variable | `data/usage.db` | SQLite file the token counts are written to | `docpipe/usage.py:74` |
 
@@ -240,39 +257,40 @@ placeholder, all come back as `caption`, unchanged
 
 `prompts.py`: `load()` with no profile passed and none ambient raises
 `LookupError` naming the prompt id and the variable to set
-(`docpipe/prompts.py:73-75`); for a prompt id the profile ships no file
+(`docpipe/prompts.py:75-77`); for a prompt id the profile ships no file
 for, `FileNotFoundError` naming the profile, the id and the path
-(`:78-80`). `Prompt.render()` raises `KeyError` listing a missing
-placeholder, an unexpected keyword, or both (`:52-57`). `check()` finding
+(`:80-82`). `Prompt.render()` raises `KeyError` listing a missing
+placeholder, an unexpected keyword, or both (`:54-59`). `check()` finding
 `.prompt_versions.json` missing, unreadable or invalid treats the stored
-map as absent, so every current prompt id is reported stale (`:113-119`).
+map as absent, so every current prompt id is reported stale (`:135-141`).
 
 `profile.py`: `Profile(name=...)` with an empty name, a slash, or an
 unrecognised `column_layout` raises `ValueError`
-(`docpipe/profile.py:46-50`). `load_profile()` with no name resolvable
+(`docpipe/profile.py:48-52`). `load_profile()` with no name resolvable
 raises `LookupError`, listing available profiles when the name given is
-unknown (`:126-135`); a module exporting no proper `PROFILE`, or one
+unknown (`:128-137`); a module exporting no proper `PROFILE`, or one
 whose name disagrees with its own directory, raises `TypeError` or
-`ValueError` (`:137-141`). `component()` re-raises `ModuleNotFoundError`
+`ValueError` (`:139-143`). `component()` re-raises `ModuleNotFoundError`
 for an existing profile module that fails to import, not absence
-(`:65-73`); `require()` raises `LookupError` for genuine absence
-(`:76-82`). `resolve_profile()` raises
-`SystemExit` when a profile named only on the command line, later than
-process start, ships prompt overrides bound to whatever was ambient at
-import time (`:186-197`). `profile_value()` raises the same
+(`:66-75`); `require()` raises `LookupError` for genuine absence
+(`:78-84`). `resolve_profile()` raises
+`SystemExit` when it is given a profile other than the one a stage was
+imported under and that profile ships prompts (`:225-232`);
+`require_profile()` raises it, naming the available profiles, when no
+profile is given (`:237-244`). `profile_value()` raises the same
 `LookupError` when no profile is ambient, naming the module, the
-attribute and the environment variable to set (`:163-165`).
+attribute and the environment variable to set (`:166-167`).
 
 `llm_preflight.py`: a missing `openai` package raises `ImportError` with
-an install hint (`docpipe/llm_preflight.py:39-42`). An unreachable
+an install hint (`docpipe/llm_preflight.py:74-77`). An unreachable
 server, or one erroring on `GET /models`, raises `PreflightError`
-wrapping the exception (`:48-50`); one serving zero models likewise
-(`:52`). A requested model absent from what the server serves raises
-`PreflightError` listing what it serves (`:65-70`). When no served
+wrapping the exception (`:81-85`); one serving zero models likewise
+(`:86-87`). A requested model absent from what the server serves raises
+`PreflightError` listing what it serves (`:101-106`). When no served
 model card reports a usable `max_model_len`, the check warns and
-returns without comparing, not fatally (`:72-75`); when the reported
+returns without comparing, not fatally (`:108-111`); when the reported
 limit is smaller than required, `assert_serving()` names both numbers
-and the flag to raise (`:77-84`).
+and the flag to raise (`:113-120`).
 
 `captions.py`: `resolve_title()` never raises; Data model, above, lists
 what leaves `caption` unchanged.
@@ -387,9 +405,11 @@ throughout, including `prompts.py`, `refinement/config.py`,
 
 `prompts.py` loads a profile's Markdown prompt files, splits optional
 YAML front matter from the body, hashes the raw file, substitutes
-`{{placeholder}}` values and writes or reads `.prompt_versions.json`.
-Called at import time by every config module binding a system prompt,
-and at request time by `preprocessing/page_text_fallback.py`,
+`{{placeholder}}` values and writes or reads `.prompt_versions.json`;
+`per_profile` defers a stage's read of its prompts to first use. Called on
+first use by the refinement (`config.py`, `split.py`) and visuals
+(`config.py`) modules, at import time by `inference/llm_client.py`, and at
+request time by `preprocessing/page_text_fallback.py`,
 `extraction/runner.py` and `inference/kg_route.py`;
 `record()`/`check()` run from the refinement and visuals pipelines.
 

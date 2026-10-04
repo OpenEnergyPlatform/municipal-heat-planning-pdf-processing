@@ -60,18 +60,21 @@ def _write_temp_image(image_bytes: bytes) -> str:
 
 
 def _code_context(items: list, top_hits: list) -> dict:
-    """Table markdown of the sources in this batch, for the code sandbox.
+    """The tables among this batch's sources, as the variable the compute
+    prompt promises: `tables`, a list of {"caption", "markdown"}.
 
     A retrieved table carries its markdown in `text` — fetch_owner_content has
     no `markdown` key, and reading one silently handed the sandbox an empty
-    context on every turn.
+    context on every turn. The sandbox turns each key into a variable, so a
+    key that is no identifier (the source's index) never arrived either.
     """
-    out = {}
+    tables = []
     for it in items:
         hit = top_hits[it["index"]]
         if hit.get("owner_kind") == "table" and hit.get("text"):
-            out[str(it["index"])] = hit["text"]
-    return out
+            tables.append({"caption": hit.get("title") or "",
+                           "markdown": hit["text"]})
+    return {"tables": tables}
 
 
 def _image_requester(corpus: Corpus, document_id: int):

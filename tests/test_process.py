@@ -20,9 +20,9 @@ def test_truncate():
 
 
 def test_caption_instruction_selection():
-    assert P._caption_instruction("has cap", "table") == C.CAPTION_KEEP_INSTRUCTION
-    assert P._caption_instruction("", "table") == C.CAPTION_GENERATE_TABLE_INSTRUCTION
-    assert P._caption_instruction("", "figure") == C.CAPTION_GENERATE_FIGURE_INSTRUCTION
+    assert P._caption_instruction("has cap", "table") == C.caption_keep_instruction()
+    assert P._caption_instruction("", "table") == C.caption_generate_table_instruction()
+    assert P._caption_instruction("", "figure") == C.caption_generate_figure_instruction()
 
 
 def test_process_table_missing_image_counts_skip(tmp_path, make_client):
@@ -112,6 +112,43 @@ def test_process_table_strips_source_text_from_output(tmp_path, make_client, seq
     res = P.process_table({"id": "t", "path": "images/t.png", "source_text": "x 1 2"},
                           {"title": "S"}, tmp_path, client, stats, source_text="x 1 2")
     assert "source_text" not in res
+
+
+def test_a_table_and_a_figure_are_each_asked_with_their_own_prompt(
+        tmp_path, make_client, seq_responder):
+    """Each accessor reads its own file, and each crop is sent with the
+    system prompt of its kind."""
+    from docpipe import prompts
+    assert C.table_system_prompt() == prompts.text("visuals/table_system")
+    assert C.figure_system_prompt() == prompts.text("visuals/figure_system")
+    assert C.table_user_prompt() == prompts.text("visuals/table_user")
+    assert C.figure_user_prompt() == prompts.text("visuals/figure_user")
+    assert C.table_system_prompt() != C.figure_system_prompt()
+
+    (tmp_path / "images").mkdir()
+    for name in ("t.png", "f.png"):
+        (tmp_path / "images" / name).write_bytes(b"x")
+    tables, figures = [], []
+    P.process_table({"id": "t", "path": "images/t.png"},
+                    {"title": "S", "content": "c"}, tmp_path,
+                    make_client(seq_responder(
+                        ['{"markdown": "MD", "caption": "C"}']),
+                        recorder=tables), ProcessingStats())
+    P.process_figure({"id": "f", "path": "images/f.png"}, {"title": "S"},
+                     tmp_path, make_client(seq_responder(
+                         ['{"description": "DESC"}']), recorder=figures),
+                     ProcessingStats())
+    assert tables and {request["messages"][0]["content"]
+                       for request in tables} == {C.table_system_prompt()}
+    assert figures and {request["messages"][0]["content"]
+                        for request in figures} == {C.figure_system_prompt()}
+
+
+def test_the_budget_counts_the_longer_of_the_two_system_prompts():
+    longer = max(len(C.table_system_prompt().split()),
+                 len(C.figure_system_prompt().split()))
+    assert C.max_request_tokens() == int(
+        longer * C.TOKENS_PER_WORD + C.IMAGE_TOKENS + C.VLM_MAX_TOKENS)
 
 
 def test_process_figure_success(tmp_path, make_client, seq_responder):

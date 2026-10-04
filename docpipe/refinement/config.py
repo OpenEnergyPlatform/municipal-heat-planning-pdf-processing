@@ -13,6 +13,7 @@ from re import compile
 from docpipe import prompts
 from docpipe.profile import active_profile
 from docpipe.artifacts import (DIR_RESULTS,               # noqa: F401  (re-exported)
+                               REFINEMENT_PARTIAL_JSON,   # output (unfinished)
                                REFINEMENT_REPORT_JSON,    # output (what failed)
                                SECTIONS_JSON,             # input
                                SECTIONS_REFINED_JSON)     # output
@@ -73,15 +74,28 @@ REFINE_RETURN_CORRECTIONS = os.environ.get(
 PROMPT_IDS = (("refinement/refine_corrections" if REFINE_RETURN_CORRECTIONS
                else "refinement/refine"), "refinement/split")
 
-# Both spelled out, so the architecture test can still find them by AST.
-_REFINE = (prompts.load("refinement/refine_corrections") if REFINE_RETURN_CORRECTIONS
-           else prompts.load("refinement/refine"))
-SYSTEM_PROMPT = _REFINE.text
+# Read on first use, not on import: a prompt belongs to a profile, and the
+# stage is imported before its command line names one.
+@prompts.per_profile
+def refine_prompt():
+    # Both spelled out, so the architecture test can still find them by AST.
+    return (prompts.load("refinement/refine_corrections") if REFINE_RETURN_CORRECTIONS
+            else prompts.load("refinement/refine"))
+
+
+def system_prompt() -> str:
+    return refine_prompt().text
+
+
 # Sampling belongs to the prompt, so both travel together in the .md front matter.
-LLM_TEMPERATURE = float(os.environ.get("LLM_TEMPERATURE",
-                                       _REFINE.meta.get("temperature", 0.1)))
-LLM_MAX_TOKENS = int(os.environ.get("LLM_MAX_TOKENS",
-                                    _REFINE.meta.get("max_tokens", 8192)))
+def llm_temperature() -> float:
+    return float(os.environ.get("LLM_TEMPERATURE",
+                                refine_prompt().meta.get("temperature", 0.1)))
+
+
+def llm_max_tokens() -> int:
+    return int(os.environ.get("LLM_MAX_TOKENS",
+                              refine_prompt().meta.get("max_tokens", 8192)))
 
 # ---------------------------------------------------------------------------
 # Context budget
@@ -103,7 +117,7 @@ REPLY_TOKENS_CEILING = int(os.environ.get("REFINE_REPLY_CEILING", "16384"))
 
 def reply_tokens(user_words: int) -> int:
     """The max_tokens for one request, from what that request actually asks
-    the model to write. LLM_MAX_TOKENS stays the floor for small windows.
+    the model to write. llm_max_tokens() stays the floor for small windows.
 
     When the model returns corrections it does not scale at all: the reply is a
     list of find/replace pairs, so its size follows the number of artefacts and
@@ -111,9 +125,9 @@ def reply_tokens(user_words: int) -> int:
     has to cover a bibliography, which is the one case that writes text out.
     """
     if REFINE_RETURN_CORRECTIONS:
-        return LLM_MAX_TOKENS
+        return llm_max_tokens()
     wanted = int(user_words * TOKENS_PER_WORD * REPLY_HEADROOM)
-    return max(LLM_MAX_TOKENS, min(wanted, REPLY_TOKENS_CEILING))
+    return max(llm_max_tokens(), min(wanted, REPLY_TOKENS_CEILING))
 
 
 def max_request_tokens() -> int:
@@ -123,9 +137,9 @@ def max_request_tokens() -> int:
     Rests on split.py holding SECTION_MAX_WORDS on its output. The one case it
     cannot hold — a single segment longer than the limit — is logged there.
     """
-    system = len(SYSTEM_PROMPT.split()) * TOKENS_PER_WORD
+    system = len(system_prompt().split()) * TOKENS_PER_WORD
     window = WINDOW_SIZE * SECTION_MAX_WORDS * TOKENS_PER_WORD
-    reply = LLM_MAX_TOKENS if REFINE_RETURN_CORRECTIONS else REPLY_TOKENS_CEILING
+    reply = llm_max_tokens() if REFINE_RETURN_CORRECTIONS else REPLY_TOKENS_CEILING
     return int(system + window + reply)
 
 # ---------------------------------------------------------------------------
@@ -174,3 +188,4 @@ def dump_json_atomic(data, path) -> None:
             os.unlink(tmp)
         except OSError:
             pass
+        raise

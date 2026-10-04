@@ -51,10 +51,10 @@ flowchart LR
 
 ### Building the query item and its search anchor
 
-`answer_question` (`answer.py:95`) picks one of three modes: `image_only`
+`answer_question` (`answer.py:98`) picks one of three modes: `image_only`
 searches on an uploaded image alone, an image with text adds a
 caption-style anchor, and text alone anchors on the plain task
-(`answer.py:118-135`). The anchor, `llm_client.make_search_phrase`, is a
+(`answer.py:121-138`). The anchor, `llm_client.make_search_phrase`, is a
 HyDE-style construction: a short hypothetical passage written as it
 would appear in the corpus, not a question. Whatever non-empty phrase the
 model writes is used as the anchor; the function falls back to the raw
@@ -64,7 +64,7 @@ only when the model marks the task a repetition and history is
 non-empty (`llm_client.py:307`); when true, `answer_question` walks
 history backward, folding every `(owner_kind, owner_id)` pair each turn
 examined into one exclude set, stopping at the first non-recheck turn
-(`answer.py:144-150`).
+(`answer.py:147-153`).
 
 ### Retrieval narrowed to one document
 
@@ -85,23 +85,27 @@ into batches under `ANSWER_CONTEXT_TOKENS` tokens each
 instead of truncation. Token counts come from the tokenizer
 named by `LLM_TOKENIZER_ID`; a char/4 heuristic serves as an offline
 fallback only, since German prose runs 3.0 to 3.5 characters per token,
-denser than a flat divide by 4 assumes (`answer.py:178-181`).
+denser than a flat divide by 4 assumes (`answer.py:181-184`).
 
 ### Answering across batches, with computation and image requests
 
 For each batch, `llm_client.answer_from_sources` extends a running
 answer with crops of up to `ANSWER_MAX_IMAGES` items, so a chart value
 can be read. `code_exec.py` runs the calculation feature: when
-`CODE_EXEC_URL` is set, `run_code` posts the model's Python plus
-markdown context built by `answer._code_context` (`answer.py:62-74`)
-and parses back `{"ok", "stdout", "stderr", "exit_code", "error"}`
+`CODE_EXEC_URL` is set, `run_code` posts the model's Python plus the
+context `answer._code_context` builds, `{"tables": [{"caption",
+"markdown"}, ...]}`, one entry per table among the batch's sources
+(`answer.py:62-77`); the sandbox service turns each key into a variable of
+the code it runs (`scripts/inference_app/sandbox_service.py:56-64`), so the
+`tables` the compute prompt names exists there, an empty list when the batch
+has no table. It parses back `{"ok", "stdout", "stderr", "exit_code", "error"}`
 (`code_exec.py:22-54`), never raising (see Failure modes). An image
 requester may separately return a crop the section text only points at,
 through `db.request_item`. Both draw one shared round budget,
 `CODE_EXEC_MAX_ROUNDS` plus `REQUEST_IMAGE_MAX` (`llm_client.py:577`); a
 repeated crop id stops the loop and forces an answer
 (`llm_client.py:598-605`). The loop stops once a batch reports complete
-with a citation accepted (`answer.py:249-250`).
+with a citation accepted (`answer.py:252-253`).
 
 ### Grounding, image refinement and finishing the turn
 
@@ -113,10 +117,10 @@ image-based support, `visual_reading` (`llm_client.py:499-516`), is
 accepted only when its index was among the crops attached to the call
 and the reading is at least 8 characters, so background knowledge alone
 cannot count as grounded evidence. Citations are deduplicated by
-`(owner_kind, owner_id)` (`answer.py:241-244`); an answer with no
+`(owner_kind, owner_id)` (`answer.py:244-247`); an answer with no
 accepted citation is refused outright, and the log distinguishes "No
 grounded citations" from "Answer ignored the response envelope"
-(`answer.py:299-306`).
+(`answer.py:302-309`).
 
 Every visual citation is then re-read in a focused, single-image call,
 `llm_client.read_off_image`, up to `READOFF_MAX_CALLS` per turn: a first
@@ -126,7 +130,7 @@ back through `revise_with_readings`, unchanged on failure
 A JSON answer then goes through `llm_client.format_as_json`
 (`llm_client.py:656-663`), the only call here with no failure handling
 of its own (see Failure modes); every turn is logged through
-`request_log.log_request` (`answer.py:325-330`).
+`request_log.log_request` (`answer.py:328-333`).
 
 ### The profile's wording contract
 
@@ -187,8 +191,8 @@ dataclass this package never builds:
 | `log_conn` | an optional connection to the request-log database |
 
 `answer_question()` returns one dict per turn, most keys fixed in the
-function's own docstring (`answer.py:99-107`); `requested` is not among
-them (`answer.py:111`, populated `answer.py:269`):
+function's own docstring (`answer.py:102-110`); `requested` is not among
+them (`answer.py:114`, populated `answer.py:272`):
 
 | key | holds |
 |---|---|
@@ -225,7 +229,7 @@ Two more SQLite files stay apart from the corpus: `request_log.py`'s
 query mode, text and image bytes, `vector`, `created_at`).
 
 The logged `cache_hit` column is not the turn's own value: `_log` always
-calls `request_log.log_request` with `cache_hit=False` (`answer.py:330`),
+calls `request_log.log_request` with `cache_hit=False` (`answer.py:333`),
 so a persisted row never reflects the returned dict's `cache_hit` key.
 
 ## Configuration
@@ -256,10 +260,10 @@ nothing tied to a host name or shared drive.
 ## Failure modes
 
 An empty hit list is logged as "No hits" and `answer` returns `None`
-before any LLM call runs (`answer.py:170-173`); where hits exist but
+before any LLM call runs (`answer.py:173-176`); where hits exist but
 nothing could be grounded, `answer` comes back `None` (see Method;
-`answer.py:299-306`). An unknown or missing crop id comes back
-`None` and is logged (`answer.py:77-92`); a repeated id stops the loop
+`answer.py:302-309`). An unknown or missing crop id comes back
+`None` and is logged (`answer.py:80-95`); a repeated id stops the loop
 and forces an answer (`llm_client.py:598-605`).
 
 `pdf_locate._have_deps()` checks once for PyMuPDF and rapidfuzz and logs
@@ -273,7 +277,7 @@ raising `RuntimeError` (`llm_client.py:119-199`); callers above it
 degrade instead: `make_search_phrase` falls back to the raw task, and
 `answer_from_sources` comes back `{"found": False}`. `format_as_json`
 has no such wrapper and can raise past this package
-(`llm_client.py:656-663`; `answer.py:308-314`). `code_exec.run_code`
+(`llm_client.py:656-663`; `answer.py:311-317`). `code_exec.run_code`
 degrades without raising: any transport or JSON failure comes back
 `{"ok": False, "error": ...}`, read as no calculation, not a failed turn
 (`code_exec.py:36-62`).
@@ -335,6 +339,9 @@ The recheck exclusion chain: `test_recheck_excludes_what_earlier_turns_read`
 `test_batched_retrieval_honours_a_prior_exclusion`,
 `test_no_probes_and_no_candidates_are_both_empty`
 (`tests/test_faiss_retrieve_many.py`).
+
+The sandbox context: `test_the_tables_the_compute_prompt_promises_reach_the_sandbox`
+(`tests/test_answer_core.py`).
 
 Crop requests:
 `test_the_model_can_ask_for_a_crop_and_gets_it`,

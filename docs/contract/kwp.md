@@ -19,12 +19,12 @@ a document is read.
 `parameter_state`, `refusal` and `summary` are the three record kinds
 every profile's contract shares. `parameter_state` closes one parameter
 for one document: its `state` and how many `tuple` and `refusal` lines
-it produced (`docpipe/extraction/schema.py:548` to `572`). `refusal`
+it produced (`docpipe/extraction/schema.py:549` to `573`). `refusal`
 records a claim the run did not accept: why it failed, the claim as
-returned, and its source (`docpipe/extraction/schema.py:478` to `506`).
+returned, and its source (`docpipe/extraction/schema.py:478` to `507`).
 `summary`, the file's last line, counts a document's tuples and
 refusals by trust level and by reason
-(`docpipe/extraction/schema.py:507` to `547`). The remaining `##`
+(`docpipe/extraction/schema.py:508` to `548`). The remaining `##`
 sections, one per parameter, are the shapes a `tuple` line can take,
 named `tuple_<uri>` and shown here after the uri.
 
@@ -71,7 +71,7 @@ coordinate's `<name>_source` and a refusal's `owner` are the shorter
 A tuple section closes with the `allOf` rule: a coordinate is `null`
 unless its own `<name>_state` says `read` or `derived`, one branch of
 the schema's `allOf` array per coordinate (`docpipe/extraction/
-schema.py:269` to `281`). A coordinate never asked and one asked and
+schema.py:283` to `297`, `:407` to `408`). A coordinate never asked and one asked and
 answered `null` differ by type, not merely by convention.
 
 The stamp and the trace close the page, describing the run rather than
@@ -79,12 +79,12 @@ one row. The stamp is `<document>.stamp.json`: whole-run keys (`spec`,
 `model`, `anchors`, `page_text_transcribed`, `extraction/*`,
 `review/*`) beside the `parameter/`, `value/`, `axis/*/*`,
 `slot/parameter` and `question_text/` families, written one per
-question instead (`docpipe/extraction/schema.py:579` to `685`).
+question instead (`docpipe/extraction/schema.py:580` to `686`).
 The owner decided on 2026-09-10 that a stamp rests on the KG/ontology
 parameters alone: `stale` compares only the `parameter/`, `value/`,
 `axis/` and `slot/` families (`QUESTION_KEYS`,
-`docpipe/extraction/runner.py:4261`), and the whole-file sha `spec`
-only for a stamp that carries none of them (`COARSE`, `:4255`;
+`docpipe/extraction/runner.py:4324`), and the whole-file sha `spec`
+only for a stamp that carries none of them (`COARSE`, `:4318`;
 `tests/test_extraction_runner.py::test_a_stamp_from_before_the_detail_is_stale_in_all_of_it`).
 `model`, `anchors`, every `extraction/*` prompt, `page_text_transcribed`,
 `review/*` and `question_text/*` are written into the stamp so a reader
@@ -92,12 +92,12 @@ can place a harvest, and are never compared
 (`tests/test_extraction_runner.py::test_what_the_stamp_records_about_the_document_never_redoes_it`).
 Only the `parameter/`, `value/`, `axis/` and `slot/` families make a
 document eligible for `--force-stale`'s full re-harvest (`stale`,
-`docpipe/extraction/runner.py:4293` to `4330`, `already_done`, `:4373`
-to `4398`); redoing only the changed question is
-`top_up_file`'s job (`docpipe/extraction/topup.py:284` to `318`). The
+`docpipe/extraction/runner.py:4356` to `4393`, `already_done`, `:4436`
+to `4461`); redoing only the changed question is
+`top_up_file`'s job (`docpipe/extraction/topup.py:339` to `440`). The
 trace is `<document>.trace.jsonl`: eleven event kinds told apart by
 `t`, `plan` through `invalid` in source order
-(`docpipe/extraction/schema.py:695` to `782`), read by
+(`docpipe/extraction/schema.py:696` to `784`), read by
 `scripts/trace_report.py` and, for a cost report, by `trace_costs` in
 `scripts/harvest_compare.py:134` to `153`, never by a resume.
 
@@ -125,7 +125,7 @@ The spec's uri for the parameter, the same key a tuple carries.
 
 ### `claim`
 
-The claim as the model returned it. A sentinel carries _harvest_failed with _why: the server was gone, the model answered nothing, or the reply did not fit and there was nothing left to split.
+The claim as the model returned it. A sentinel carries _harvest_failed with _why: the server was gone, it answered 429 or 5xx, the model answered nothing, or the reply did not fit and there was nothing left to split.
 
 ### `kind`
 

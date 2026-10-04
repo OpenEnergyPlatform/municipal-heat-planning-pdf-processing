@@ -43,7 +43,7 @@ as they do on [core](core.md), without it appearing as a numbered link.
 
 `core_sql()` reads `docpipe/store/schema.sql` verbatim (`schema.py:30` to
 `31`); `profile_sql(profile)` does the same for `Profile.schema_sql`
-(`docpipe/profile.py:93` to `96`), returning an empty string if the file
+(`docpipe/profile.py:95` to `98`), returning an empty string if the file
 or profile is absent (`schema.py:34` to `37`). `apply()` turns
 `PRAGMA foreign_keys = ON` (see Configuration), then runs `BEGIN; <core
 sql> <profile sql> COMMIT;` in one `executescript` call, core first
@@ -208,14 +208,14 @@ Reading the tables back out is not this package's job.
   and the app's document picker both select `is_current = 1` documents by
   default, so a superseded document is never harvested or shown, even
   when named explicitly; the app labels a row `(aktuell)` or `(alt)`
-  (`docpipe/extraction/runner.py:4668` to `4693`, docstrings;
+  (`docpipe/extraction/runner.py:4751` to `4776`, docstrings;
   `docpipe/inference/catalog.py:61` to `83`).
 
 ## Configuration
 
 | name | kind | default | effect | where |
 |---|---|---|---|---|
-| `DOCPIPE_PROFILE` / `--profile` | environment variable / CLI flag | unset / none | selects which profile's `schema.sql` `apply()` layers on the core schema | `docpipe/profile.py:124` to `142` (env var, `load_profile`) and `172` to `190` (`--profile`, `add_profile_argument`/`resolve_profile`) |
+| `DOCPIPE_PROFILE` / `--profile` | environment variable / CLI flag | unset / none | selects which profile's `schema.sql` `apply()` layers on the core schema | `docpipe/profile.py:126` to `144` (env var, `load_profile`), `174` to `177` (`--profile`, `add_profile_argument`) and `212` to `234` (`resolve_profile`) |
 | `PRAGMA foreign_keys` | fixed connection pragma | `ON` | enables foreign-key enforcement, off by default in SQLite, so `ON DELETE CASCADE`/`SET NULL` fire | `docpipe/store/schema.py:42`; re-set independently by `docpipe/chunking/database.py:100` |
 | `PRAGMA busy_timeout` | fixed pragma, chunking's own `connect()` only | 30000 ms | a reader waits for a write lock instead of failing, needed once embedding began preparing documents while writing batches | `docpipe/chunking/database.py:97` to `108` |
 | `CORE_TABLES` | module constant | the 8 core table names, as a tuple | names which tables belong to the core, not a profile; used by tests | `docpipe/store/schema.py:26` to `27` |

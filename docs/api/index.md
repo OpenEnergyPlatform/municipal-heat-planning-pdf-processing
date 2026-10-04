@@ -26,8 +26,8 @@ is for and what it hands to what; this is the reference.
 - [docpipe.llm_preflight](docpipe.llm_preflight.md): Asks the server what it can do, before the first document. (1 class, 6 functions)
 - [docpipe.migrate_artifact_names](docpipe.migrate_artifact_names.md): Rename the per-document artefacts of an already processed tree to the names in ``docpipe.artifacts``. (3 functions)
 - [docpipe.ontology](docpipe.ontology.md): Reads the ontology a spec is written against once and pins it in a snapshot. (19 functions)
-- [docpipe.profile](docpipe.profile.md): A profile is everything a project contributes to the generic pipeline: where its documents come from, what extra tables it needs, which prompts it overrides and which filters its app offers. (2 classes, 5 functions)
-- [docpipe.prompts](docpipe.prompts.md): Loads a profile's prompts, one Markdown file per stage, from `profiles/<profile>/prompts/<stage>/<name>.md`. (1 class, 7 functions)
+- [docpipe.profile](docpipe.profile.md): A profile is everything a project contributes to the generic pipeline: where its documents come from, what extra tables it needs, which prompts it overrides and which filters its app offers. (2 classes, 8 functions)
+- [docpipe.prompts](docpipe.prompts.md): Loads a profile's prompts, one Markdown file per stage, from `profiles/<profile>/prompts/<stage>/<name>.md`. (1 class, 8 functions)
 - [docpipe.upstream](docpipe.upstream.md): Pulls the files a profile is written against, at the version upstream currently calls its own. (1 class, 9 functions)
 - [docpipe.usage](docpipe.usage.md): Counts the tokens every run spends, into one SQLite file that outlives the runs. (7 functions)
 
@@ -62,7 +62,7 @@ is for and what it hands to what; this is the reference.
 - [docpipe.extraction.recheck](docpipe.extraction.recheck.md): Reapplies the answer-in-quote rule to a harvest written before the rule existed. (3 functions)
 - [docpipe.extraction.remap](docpipe.extraction.remap.md): Re-resolves a moved or grown vocabulary against a harvest already on disk. (7 functions)
 - [docpipe.extraction.review](docpipe.extraction.review.md): Reads again, under a narrower window, the values at the lowest trust level. (8 functions)
-- [docpipe.extraction.runner](docpipe.extraction.runner.md): Wires the pure harvest loop of `pipeline.py` to the live stack. (1 class, 66 functions)
+- [docpipe.extraction.runner](docpipe.extraction.runner.md): Wires the pure harvest loop of `pipeline.py` to the live stack. (2 classes, 68 functions)
 - [docpipe.extraction.schema](docpipe.extraction.schema.md): Builds a JSON Schema for the harvest, the stamp and the trace. (7 functions)
 - [docpipe.extraction.serialize](docpipe.extraction.serialize.md): Turns a document harvest into the profile's target graph. (3 functions)
 - [docpipe.extraction.spec](docpipe.extraction.spec.md): The contract between a profile's ontology knowledge and the core. (4 classes, 10 functions)
@@ -113,11 +113,11 @@ is for and what it hands to what; this is the reference.
 ## docpipe.refinement
 
 - [docpipe.refinement.\_\_main\_\_](docpipe.refinement.__main__.md): Allow execution via: python -m docpipe.refinement
-- [docpipe.refinement.config](docpipe.refinement.config.md): Configuration and system prompt for the text-refinement module. (5 functions)
+- [docpipe.refinement.config](docpipe.refinement.config.md): Configuration and system prompt for the text-refinement module. (9 functions)
 - [docpipe.refinement.corrections](docpipe.refinement.corrections.md): Applies a model's edit list to a section and refuses the edits that do not hold up. (1 class, 1 function)
 - [docpipe.refinement.pipeline](docpipe.refinement.pipeline.md): Orchestrates the textrefinement stage. (4 functions)
-- [docpipe.refinement.refine](docpipe.refinement.refine.md): Runs Stage 4, the LLM-based refinement of Stage 3 sections. (2 functions)
-- [docpipe.refinement.split](docpipe.refinement.split.md): Cuts a section too long to be one retrieval chunk into several, each a self-contained citation unit. (7 functions)
+- [docpipe.refinement.refine](docpipe.refinement.refine.md): Runs Stage 4, the LLM-based refinement of Stage 3 sections. (1 class, 2 functions)
+- [docpipe.refinement.split](docpipe.refinement.split.md): Cuts a section too long to be one retrieval chunk into several, each a self-contained citation unit. (1 class, 10 functions)
 
 ## docpipe.store
 
@@ -129,7 +129,7 @@ is for and what it hands to what; this is the reference.
 
 - [docpipe.visuals](docpipe.visuals.md): Vision-LLM enrichment of tables and figures.
 - [docpipe.visuals.\_\_main\_\_](docpipe.visuals.__main__.md): Allow execution via: python -m docpipe.visuals
-- [docpipe.visuals.config](docpipe.visuals.config.md): Central configuration for the imageprocessing module. (2 functions)
+- [docpipe.visuals.config](docpipe.visuals.config.md): Central configuration for the imageprocessing module. (9 functions)
 - [docpipe.visuals.models](docpipe.visuals.models.md): Data structures for the imageprocessing module. (3 classes)
 - [docpipe.visuals.pipeline](docpipe.visuals.pipeline.md): Orchestrates the imageprocessing stage. (4 functions)
 - [docpipe.visuals.process](docpipe.visuals.process.md): Core processing logic for table and figure enrichment. (2 functions)

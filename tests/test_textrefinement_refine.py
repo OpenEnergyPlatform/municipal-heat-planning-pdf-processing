@@ -100,8 +100,16 @@ def test_call_llm_retries_after_bad_json(make_client, seq_responder):
 
 
 def test_call_llm_exhausts_to_none(make_client, seq_responder):
-    client = make_client(seq_responder([RuntimeError("down")]))
+    client = make_client(seq_responder(["garbage"]))
     assert s4._call_llm([{"t": 1}], client) is None
+
+
+def test_call_llm_on_a_server_that_is_down_is_not_a_none(make_client,
+                                                         seq_responder):
+    """None is a window the model could do nothing with, and it keeps its
+    text. A window nobody answered is asked again another time."""
+    client = make_client(seq_responder([RuntimeError("down")]))
+    assert s4._call_llm([{"t": 1}], client) is s4.NOT_SERVED
 
 
 def test_strip_table_source_text():

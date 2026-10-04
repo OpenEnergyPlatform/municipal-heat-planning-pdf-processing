@@ -30,7 +30,40 @@ cut at a guessed position.
 
 Author: Felix Vossel
 
+## Classes
+
+### NotServed
+
+```python
+class NotServed(Exception)
+```
+
+The request for the cuts got no answer from the server.
+
+Not a reason to cut mechanically: asked again another time, the model
+places the cuts. An answer that is unusable is, and so is a request the
+server refused.
+
 ## Functions
+
+### split_prompt
+
+```python
+@prompts.per_profile
+def split_prompt()
+```
+
+### split_temperature
+
+```python
+def split_temperature() -> float
+```
+
+### split_max_tokens
+
+```python
+def split_max_tokens() -> int
+```
 
 ### word_count
 

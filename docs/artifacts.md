@@ -6,14 +6,14 @@ Generated from `docpipe/artifacts.py` by `scripts/build_docs.py`: the names belo
 
 Preprocessing, refinement, visuals and chunking each run as their own
 command-line invocation (`docpipe/preprocessing/pipeline.py:547`,
-`docpipe/refinement/pipeline.py:264`, `docpipe/visuals/pipeline.py:517`,
+`docpipe/refinement/pipeline.py:265`, `docpipe/visuals/pipeline.py:515`,
 `docpipe/chunking/pipeline.py:371`, each its own `__main__` entry point).
 Nothing survives between invocations except what a stage writes to disk,
 so the files below let a later run resume or reuse an earlier one's work.
 
 Every PDF preprocessing takes in gets one directory under a profile's
 `processed_dir` (`<data root>/<profile>/pdf/processed`,
-`Profile.processed_dir`, `docpipe/profile.py:111-113`), named after the
+`Profile.processed_dir`, `docpipe/profile.py:113-115`), named after the
 PDF's filename stem and kept relative to the input folder so two
 same-named PDFs in different subfolders never collide
 (`docpipe/preprocessing/pipeline.py:233-235`). Inside it sit two
@@ -24,7 +24,7 @@ table and figure PNGs layout detection produces. Each stage's `config.py`
 imports the constant it needs from `artifacts.py` and re-exports it, so
 the filenames below live in exactly one place
 (`docpipe/preprocessing/config.py:13-15`, `docpipe/refinement/
-config.py:15-18`, `docpipe/visuals/config.py:12-13`, `docpipe/chunking/
+config.py:15-19`, `docpipe/visuals/config.py:12-13`, `docpipe/chunking/
 config.py:7-9`).
 
 ## Which stage writes which file
@@ -55,15 +55,19 @@ later by chunking's `enrich_page_source`, backfilling a
 
 [Text refinement](stages/refinement.md) reads `sections.json` as its
 only accepted input and writes `sections_refined.json` plus
-`refinement_report.json`, recording what it could not refine
-(`docpipe/refinement/pipeline.py:43-45`, `docpipe/refinement/
-refine.py:1029-1090`). [Reading the pictures](stages/visuals.md) reads
+`refinement_report.json`, recording what it could not refine. A pass in
+which the model server did not serve a window writes
+`sections_refined.partial.json` instead of `sections_refined.json`; the
+partial file names the missing windows, and the report is left as it was
+(`docpipe/refinement/pipeline.py:43-45`,
+`docpipe/refinement/refine.py:1116-1216`). A pass whose cut of an oversized
+section was not served writes neither. [Reading the pictures](stages/visuals.md) reads
 the crops left in `images/` together with whichever section text is
 available, preferring `sections_refined.json` over `sections.json`, and
 writes `visuals.json` (`docpipe/visuals/pipeline.py:56-65`).
 [Chunking](stages/chunking.md)'s merge step folds `sections_refined.json`
 and `visuals.json` into `document.json`, which a separate load step reads
-into the database (`docpipe/chunking/merge.py:68-144`).
+into the database (`docpipe/chunking/merge.py:69-145`).
 
 ## How a later stage finds them
 
@@ -73,8 +77,8 @@ is present, so a document's own directory is the only record of how far
 it has progressed. That check is safe because every write is atomic,
 each stage's `dump_json_atomic` writing a temp file and swapping it in
 with `os.replace` (`docpipe/preprocessing/config.py:281-296`,
-`docpipe/refinement/config.py:157-172`, `docpipe/visuals/
-config.py:16-31`, `docpipe/chunking/merge.py:133-143`), so a killed job
+`docpipe/refinement/config.py:171-191`, `docpipe/visuals/
+config.py:16-31`, `docpipe/chunking/merge.py:134-144`), so a killed job
 leaves the old file or none, never a partial one.
 
 A missing upstream file is tolerated two different ways. Within a single
@@ -82,26 +86,30 @@ run, visuals reads whichever of `sections_refined.json` or
 `sections.json` exists, and merge treats `visuals.json` as optional but
 requires `sections_refined.json`, returning `None` if that is missing
 (`docpipe/visuals/pipeline.py:56-65`,
-`docpipe/chunking/merge.py:86-103`). Across a batch, refinement's,
+`docpipe/chunking/merge.py:87-104`). Across a batch, refinement's,
 visuals' and merge's batch entry points filter candidate subdirectories
 to those already carrying the needed file, so a document without it is
-left out of the run rather than counted as a failure; each batch warns
-only when the filter leaves no candidates at all, not once per excluded
-document (`docpipe/refinement/pipeline.py:43-45, 87-99`,
+left out of the run rather than counted as a failure; refinement and
+visuals warn only when the filter leaves no candidates at all, not once per
+excluded document, while merge also warns once, naming up to twenty
+directories that carry `sections.json` and no `sections_refined.json`
+(`docpipe/refinement/pipeline.py:43-45, 87-99`,
 `docpipe/visuals/pipeline.py:304-324`,
-`docpipe/chunking/merge.py:157-169`). A missing and a corrupted file are
+`docpipe/chunking/merge.py:158-181`). A missing and a corrupted file are
 not alike: `_load_pages_cache` treats an unreadable
 `pages.json` as absent and re-extracts, but the readers of
 `sections.json`, `sections_refined.json` and `visuals.json` call
 `json.load` unguarded and raise on a truncated file
 (`docpipe/preprocessing/pipeline.py:49-60`,
-`docpipe/refinement/refine.py:1055-1062`,
-`docpipe/chunking/merge.py:93-99`).
+`docpipe/refinement/refine.py:1145-1146, 1154-1155`,
+`docpipe/chunking/merge.py:94-100`). The one reader that guards is
+`_read_partial`, which treats an unreadable `sections_refined.partial.json`
+as absent (`docpipe/refinement/refine.py:1230-1242`).
 
 Merge decides whether its cached `document.json` is reusable by
 comparing modification times, not existence, since visuals rewrites
 `visuals.json` every run even when every item came from its item-level
-cache (`docpipe/chunking/merge.py:46-65`). Refinement and
+cache (`docpipe/chunking/merge.py:47-66`). Refinement and
 visuals each also record, in `.prompt_versions.json`, which prompt
 produced a cached result, so a later run can tell whether the prompt it
 would use has changed; that mechanism belongs to
@@ -112,8 +120,10 @@ Refinement and visuals each take a `force` argument, redoing the stage
 unconditionally, and a `force_stale` argument, redoing it only when the
 prompt has changed, surfaced as `--force`/`--force-stale`
 (`docpipe/refinement/pipeline.py:52-53, 66-73`,
-`docpipe/visuals/pipeline.py:102-103, 122-130`). Merge takes only its own
-`force`, surfaced as `--force` (`docpipe/chunking/merge.py:68, 81`); it
+`docpipe/visuals/pipeline.py:102-103, 122-130`); a forced refinement
+resumes an unfinished pass that agrees with its input, prompts and window
+size, instead of discarding it. Merge takes only its own
+`force`, surfaced as `--force` (`docpipe/chunking/merge.py:69, 82`); it
 has no staleness check to bypass.
 
 Separately, `_index.json` at the processed root records, after every PDF
@@ -153,6 +163,7 @@ Author: Felix Vossel
 | `PAGE_TRANSCRIPTION_REPORT_JSON` | `results/page_transcription_report.json` | preprocessing (model-read pages) |
 | `SECTIONS_REFINED_JSON` | `results/sections_refined.json` | refinement |
 | `REFINEMENT_REPORT_JSON` | `results/refinement_report.json` | refinement (what failed) |
+| `REFINEMENT_PARTIAL_JSON` | `results/sections_refined.partial.json` | refinement (unfinished) |
 | `VISUALS_JSON` | `results/visuals.json` | visuals |
 | `DOCUMENT_JSON` | `results/document.json` | chunking (merge) → database |
 

@@ -33,13 +33,36 @@ otherwise look empty to a reader of the text alone.
 
 Author: Felix Vossel
 
+## Classes
+
+### Unfinished
+
+```python
+class Unfinished(Exception)
+```
+
+Windows the model server did not serve, so the document is not refined.
+
+*sections* are the sections the windows were cut from (after the split),
+*done* the usable replies by window index, *lost* the indices that were
+not served. A later run over the same sections asks only for the rest.
+Without *sections* it was the cut of an oversized section that was not
+served, and there is nothing to keep: the next run starts with the cut.
+
+#### Unfinished.\_\_init\_\_
+
+```python
+def __init__(self, sections: list, done: dict, lost: list, total: int)
+```
+
 ## Functions
 
 ### refine_sections
 
 ```python
 def refine_sections(sections: list[dict],
-                    report: Optional[dict] = None) -> list[dict]
+                    report: Optional[dict] = None,
+                    done: Optional[dict] = None) -> list[dict]
 ```
 
 Processes all sections through the LLM in windows of WINDOW_SIZE, dispatched
@@ -48,6 +71,12 @@ in parallel but assembled in order (merge/split semantics are positional).
 Mutates *sections* in place (source_text is stripped); returns the refined
 list. When *report* is given, it is filled with what this pass could not
 refine — see refine_document, which writes it next to the output.
+
+*done* resumes an unfinished pass: {window index: reply} over *sections*
+as that pass cut them, so they are not cut again and only the other
+windows are asked. Raises Unfinished when the server did not serve a
+window; nothing is assembled then, because a window that was never
+answered would go into the output as text that needed no change.
 
 ### run_refine
 
@@ -66,8 +95,12 @@ from *output_dir* instead.
 Forcing must not delete the old output first. dump_json_atomic replaces it
 in one step at the end, so a run killed part-way — a batch timeout, a job
 hitting its wall clock — leaves the previous refinement rather than nothing
-at all. A document with no refined output is skipped by the merge without
-a word, and would vanish from the database.
+at all. A document with no refined output is left out by the merge, and
+would vanish from the database.
+
+A pass the server did not serve every window of writes no refined output.
+What it did get is kept beside it (REFINEMENT_PARTIAL_JSON), and the next
+run, forced or not, asks only for the windows that are missing.
 
 Returns:
     The refined output dict, or None on failure.

@@ -32,8 +32,8 @@ differently (see Position in the pipeline).
 | | |
 |---|---|
 | In | `results/sections.json`, written by [Preprocessing](preprocessing.md) (Stage 3) |
-| Out | `results/sections_refined.json`, `results/refinement_report.json`, `results/.prompt_versions.json` |
-| Resumes on | the presence of `sections_refined.json`; `--force` redoes every candidate document, `--force-stale` only those whose prompt hash no longer matches |
+| Out | `results/sections_refined.json`, `results/refinement_report.json`, `results/.prompt_versions.json`, and, while a pass is unfinished, `results/sections_refined.partial.json` in place of the first; an unfinished pass leaves the report as it is |
+| Resumes on | the presence of `sections_refined.json` with no `sections_refined.partial.json` beside it; an unfinished pass is resumed window by window; `--force` redoes every candidate document, `--force-stale` only those whose prompt hash no longer matches |
 | Needs | an OpenAI-compatible LLM server reachable at `LLM_BASE_URL`, checked before the first document by `assert_serving` |
 
 Stage 4 follows Stage 3's structuring pass and precedes two consumers
@@ -43,7 +43,8 @@ that treat `sections_refined.json` differently. [Visuals](visuals.md)
 can run against separate model servers without waiting on each other.
 [Chunking](chunking.md)'s merge step has no such fallback and requires
 `sections_refined.json` outright (`docpipe/chunking/merge.py`), so an
-unrefined document is not a merge candidate. The stage imports no GPU
+unrefined document is not a merge candidate, and `merge_batch` names such
+documents in one warning. The stage imports no GPU
 library; its only external dependency is the `openai` client reaching
 `LLM_BASE_URL`.
 
@@ -59,9 +60,10 @@ requests fail mid-batch. When `results/sections_refined.json` exists,
 in use with `prompts.check`: a moved hash sets `force` under
 `--force-stale`, otherwise it only logs a warning. `run_single` always
 calls `run_refine`, and it is `run_refine`, not `run_single`, that reads
-that file back without calling the LLM whenever it exists and `force` is
-false, so an unforced stale prompt is still served from cache. `prompts.record`
-writes the new hashes once refinement finishes.
+that file back without calling the LLM whenever it exists, `force` is
+false and no unfinished pass sits beside it (see A window the server did
+not serve), so an unforced stale prompt is still served from cache.
+`prompts.record` writes the new hashes once a pass finishes.
 
 ### Splitting oversized sections
 
@@ -76,7 +78,11 @@ answers with cut positions and part titles; `split_section` applies them,
 and `_enforce_max` re-cuts any part still over the limit, subdividing an
 oversized segment with `_subdivide_segments` when there is no boundary to
 cut on. A section whose provenance no longer matches its content is left
-whole, with a warning, rather than cut at a guessed position.
+whole, with a warning, rather than cut at a guessed position. A resumed
+pass skips this step: its sections are the ones the unfinished pass cut.
+A split request the server does not answer is asked again like a window's,
+and a pass whose cut stays unanswered ends without output (see A window the
+server did not serve).
 
 ### Windowed dispatch
 
@@ -103,6 +109,64 @@ not retried, since an identical retry would be refused identically.
 A "maximum context length" error abandons the window with an error-level
 log line instead, since the caller then keeps that window's raw text,
 indistinguishable from a window that needed no change.
+The sampling temperature and the reply budget are read before the retry
+loop and outside its `try` (`refine.py:325-329`). Read inside it, a setting
+that cannot be read would fail every attempt and end as `NOT_SERVED`, as if
+the server had not answered; read outside it, the call raises, and the
+dispatch loop keeps the window as failed (`refine.py:954-958`). `main`
+therefore reads `llm_temperature()` and `llm_max_tokens()` once, right after
+the profile is resolved (`docpipe/refinement/pipeline.py:233-237`), so an
+unparseable value ends the run at the start and does not fail inside every
+request.
+
+### A window the server did not serve
+
+`_call_llm` ends one of three ways. It returns the parsed sections; or it
+returns `None`, for a window the model gave nothing usable for or whose
+request the server refused with a 4xx other than 429; or it returns
+`NOT_SERVED` (`docpipe/refinement/refine.py:106`) when its last attempt got
+no answer at all: no connection, a timeout, a 429 or a 5xx. An error raised
+after a reply arrived is the reply's, not the server's
+(`refine.py:419-422`). A `None` window keeps its original text and is listed
+under `failed_windows`. A `NOT_SERVED` window cannot be told from one that
+needed no change, so `refine_sections` raises `Unfinished` before it
+assembles anything (`refine.py:960-967`).
+
+`run_refine` then writes no `sections_refined.json`. The sections as cut,
+the usable replies by window index and, as `total_windows` and
+`unserved_windows`, the number of windows and the 1-based numbers of those
+the server did not serve go to `results/sections_refined.partial.json`
+(`refine.py:1194-1200`). `refinement_report.json` is not touched: it
+describes the refined output beside it, and this pass wrote none. An error
+is logged and the call returns `None`, so `run_batch` counts the document
+as failed and `main` exits 1; `prompts.record` is not called
+(`refine.py:1186-1205`). The next run, forced or not, reads the partial file
+(`_read_partial`; one that cannot be read counts as absent), does not cut
+the sections again and asks only for the windows without a usable reply
+(`refine.py:1140-1141`, `1174-1179`). It does so only if the unfinished
+pass agrees with this one: `_partial_key` hashes the input sections (after
+`run_refine` has stripped `source_text` from their tables, before the key is
+taken), the prompt hashes (`PROMPT_IDS`), `WINDOW_SIZE` and the model name
+`LLM_MODEL` (`refine.py:1160-1163`, `1219-1227`). On a mismatch the partial
+file is deleted with a warning and the pass starts over, an existing
+`sections_refined.json` being served from cache unless `--force` is given
+(`refine.py:1165-1173`). A `sections_refined.json` from an earlier pass
+stays in place until a pass finishes, and a finished pass deletes the
+partial file (`refine.py:1210-1214`).
+
+The cut of an oversized section is the other request whose outage ends a
+pass. `_make_splitter` asks again while the server does not answer, up to
+`MAX_RETRIES` attempts with the backoff a window gets, and raises
+`split.NotServed` when it stays that way (`refine.py:826-858`,
+`docpipe/refinement/split.py:55`). A refused request (a 4xx) or an unusable
+answer still falls back to the mechanical cut at once, and `_ask_cuts` lets
+`NotServed` through (`split.py:221-222`). `refine_sections` turns it into
+`Unfinished(None, {}, [], 0)` (`refine.py:908-912`), and `run_refine` then
+writes nothing at all, neither a refined output nor a partial file, logs an
+error and returns `None` (`refine.py:1187-1191`). The next run starts with
+the cut. Nothing is kept because a section cut mechanically for the want of
+an answer would keep those cuts: the windows of a partial are cut from the
+sections as they were split, and a resumed pass does not cut again.
 
 ### Materialising an edit-mode reply
 
@@ -177,9 +241,21 @@ A table's or figure's `id` is the block id a placeholder such as
 only anchor `_thread_provenance` has between an input segment and the
 output section that ends up owning it.
 
-`refinement_report.json` is written on every run, whether or not anything
-failed: an empty `failed_windows` list means the pass checked and found
-nothing wrong, while a missing file means nobody has looked yet. Its shape:
+`sections_refined.partial.json` exists only while a pass is unfinished:
+`{"key": ..., "sections": [...], "total_windows": N, "unserved_windows":
+[...], "windows": {...}}`. `key` is the hash `_partial_key` computes over
+the input sections, the prompt hashes, `WINDOW_SIZE` and `LLM_MODEL`;
+`sections` are the sections as cut; `total_windows` is the number of
+windows of the pass and `unserved_windows` the 1-based numbers of those the
+server did not serve; `windows` holds the usable replies by 0-based window
+index (`REFINEMENT_PARTIAL_JSON`, named in `docpipe/artifacts.py`). The file
+is written through `clean_data` (`refine.py:1194-1200`).
+
+`refinement_report.json` is written by every pass that finishes, whether or
+not anything failed: an empty `failed_windows` list means the pass checked
+and found nothing wrong, while a missing file means nobody has looked yet.
+A pass that does not finish leaves the report as it was, and the partial
+file carries what the report would not. Its shape:
 
 | field | type | notes |
 |---|---|---|
@@ -212,18 +288,18 @@ file layout).
 | `SECTION_MAX_WORDS` | constant | `1000` | threshold above which a section is split | `config.py` |
 | `SECTION_TARGET_WORDS` | constant | `600` | size a split aims each part at | `config.py` |
 | `SECTION_OUTLINE_WORDS` | constant | `14` | words per segment shown in the split outline | `config.py` |
-| `SPLIT_TEMPERATURE` | prompt front matter, float | `0.1` (both profiles) | sampling temperature for the section-split LLM call | `split.py` |
-| `SPLIT_MAX_TOKENS` | prompt front matter, int | `1024` (both profiles) | reply token ceiling for the section-split LLM call | `split.py` |
+| `split_temperature()` | prompt front matter, float | `0.1` (both profiles) | sampling temperature for the section-split LLM call | `split.py` |
+| `split_max_tokens()` | prompt front matter, int | `1024` (both profiles) | reply token ceiling for the section-split LLM call | `split.py` |
 | `TITLE_CLEANUP_ENABLE` | constant | `True` | whether the prefix strip and ALL-CAPS capitalization run | `config.py` |
 | `REFINE_RETURN_CORRECTIONS` | env, bool | off | switches the reply from a full rewrite to a find-and-replace edit list | `config.py` |
 | `MAX_SHRINK` | constant | `0.30` | ceiling on how much edit mode may shrink a section | `corrections.py` |
 | `REFINE_REPLY_CEILING` | env, int | `16384` | ceiling on one request's reply token budget (`REPLY_TOKENS_CEILING`) | `config.py` |
-| `LLM_TEMPERATURE` | env, float, or the prompt's front matter | `0.1` (both profiles) | sampling temperature | `config.py` |
-| `LLM_MAX_TOKENS` | env, int, or the prompt's front matter | `8192` (both profiles) | floor for the reply token budget on small windows | `config.py` |
+| `LLM_TEMPERATURE` | env, float, or the prompt's front matter | `0.1` (both profiles) | sampling temperature, read by `llm_temperature()`; `main` reads it once at the start, so an unparseable value ends the run there | `config.py` |
+| `LLM_MAX_TOKENS` | env, int, or the prompt's front matter | `8192` (both profiles) | floor for the reply token budget on small windows, read by `llm_max_tokens()`, which `main` also reads once at the start | `config.py` |
 | `--force` | CLI flag | off | ignores an existing `sections_refined.json` and re-refines | `pipeline.py` |
 | `--force-stale` | CLI flag | off | re-refines only documents whose recorded prompt hash changed | `pipeline.py` |
 | `--print-context-budget` | CLI flag | off | prints `max_request_tokens()` and exits, for sizing the server's `--max-model-len` | `pipeline.py` |
-| `--profile` | CLI flag | `$DOCPIPE_PROFILE` | supplies the default input path (`profile.processed_dir`) when none is given | `pipeline.py` |
+| `--profile` | CLI flag | `$DOCPIPE_PROFILE` | names the profile whose prompts the run reads and whose `processed_dir` is the default input path; the stage refuses to run without one, since it has no prompt of its own | `pipeline.py` |
 | `--log-level` | CLI flag | `INFO` | logging level: `DEBUG`/`INFO`/`WARNING`/`ERROR` | `pipeline.py` |
 
 Neither current profile overrides `WINDOW_SIZE` (see
@@ -237,11 +313,20 @@ a document cached under the other mode reads as stale on the next run.
 key up to `MAX_RETRIES` (4) times (see Method for echo and abandonment
 details); a 4xx status other than 429 is not retried, and a "maximum
 context length" error abandons the window outright. 429, 5xx, connection,
-and timeout errors retry with backoff (`_backoff`, capped at 10 seconds).
+and timeout errors retry with backoff (`_backoff`, capped at 10 seconds); a
+window whose last attempt still ended on one of them is `NOT_SERVED`, not
+`None`.
 
-A window that exhausts its retries, or is abandoned, keeps its original
-sections verbatim, `_action` stripped, and is recorded under
-`failed_windows` in `refinement_report.json`. A `remove` action on a
+A window the model gave nothing usable for, or that is abandoned, keeps its
+original sections verbatim, `_action` stripped, and is recorded under
+`failed_windows` in `refinement_report.json`. A window that is not served
+keeps nothing: the document is not written as refined, the usable replies
+wait in `sections_refined.partial.json` together with the numbers of the
+missing windows under `unserved_windows`, the report is left as it was, and
+the stage exits non-zero (see Method). The same holds for the cut of an
+oversized section that the server does not answer, except that nothing is
+kept and the next run starts with the cut.
+A `remove` action on a
 section still carrying tables or figures is refused; the section is kept,
 with a warning naming how many of each it holds. A `merge_into_previous`
 with no previous section available (a document's first window) is kept
@@ -256,18 +341,21 @@ over `SECTION_MAX_WORDS` is re-cut mechanically by `_enforce_max`.
 
 `run()`'s preflight (see Method) refuses to start before the first
 document rather than mid-run. A document with no `results/sections.json`
-is not a `--batch`-mode candidate (`_has_input`). A killed `--force` run
-never leaves a document without refined output, since `dump_json_atomic`
-replaces the old file in one step; a refinement report that
-fails to write is logged and swallowed rather than failing an
-already-successful run.
+is not a `--batch`-mode candidate (`_has_input`). A killed `--force` run,
+or one the server did not serve, never leaves a document without refined
+output, since `dump_json_atomic` replaces the old file in one step and
+only a finished pass replaces it. `dump_json_atomic` removes its temporary
+file and re-raises when a write fails (`docpipe/refinement/config.py:171-191`),
+so a file that could not be written is a failed document and not a silent
+one; a refinement report that fails to write is the exception, logged and
+swallowed rather than failing an already-successful run.
 
 ## Measured behaviour
 
 Across 60 ar6 documents, 28% of sections came back byte-identical from a
 full rewrite, the median section was 99% unchanged, and only 166 of 4887
 sections were real conversions (`docpipe/refinement/corrections.py:6-8`,
-`docpipe/refinement/config.py:63-64`): the stage spent output tokens, a
+`docpipe/refinement/config.py:64-65`): the stage spent output tokens, a
 request's costliest part, retyping input it was not changing, which is
 why `REFINE_RETURN_CORRECTIONS` exists.
 
@@ -280,25 +368,25 @@ rewritten (`docpipe/refinement/corrections.py:28-29`).
 Before the check refusing `remove` on a section carrying tables or
 figures existed, eleven plans with no text layer, their section bodies
 placeholder markers only, lost 1270 transcribed tables and figures that
-way (`docpipe/refinement/refine.py:434-436`). Before every section of a
+way (`docpipe/refinement/refine.py:480-482`). Before every section of a
 window carried through by default rather than only what a reply named, a
 reply naming only some of a window's sections cost one book 123 of its
-2697 sections, and another run 237 (`docpipe/refinement/refine.py:160-161`).
+2697 sections, and another run 237 (`docpipe/refinement/refine.py:193-194`).
 
 Before the context-size preflight existed, 42 windows silently kept raw
 text against a server whose `max_model_len` was smaller than a request
 could need (`docpipe/llm_preflight.py:8-9`). Under a flat, non-scaling
 reply budget, 24 of 1030 windows in one ar6 book run had their JSON reply
 truncated mid-string, each an "Unterminated string" error
-(`docpipe/refinement/config.py:97`).
+(`docpipe/refinement/config.py:111`).
 
 Before segments could be subdivided, 51 sections in one ar6 run stayed
 oversized however often the split was asked, up to 1409 words against the
 1000-word `SECTION_MAX_WORDS` limit, since their whole text sat in one
-segment with no boundary to cut on (`docpipe/refinement/split.py:254-256`).
+segment with no boundary to cut on (`docpipe/refinement/split.py:275-276`).
 The model's proposed cut is a suggestion, not a bound: an 11596-word
 section came back as 10 parts, one still 2392 words, which is what
-`_enforce_max` exists to correct (`docpipe/refinement/split.py:285-286`).
+`_enforce_max` exists to correct (`docpipe/refinement/split.py:305-306`).
 
 ## Verification
 
@@ -331,6 +419,27 @@ from the Stage 3 input by block id across a split, a no-op without
 geometry: `test_reattach_media_bbox_stamps_by_id_across_split`,
 `test_reattach_media_bbox_noop_without_geometry`
 (`tests/test_segment_bbox.py`).
+
+A window the server did not serve is not written as unchanged text, and
+the next run asks only for it: `test_a_window_nobody_answered_is_not_served`,
+`test_the_last_attempt_decides`,
+`test_a_reply_that_breaks_on_reading_was_served`,
+`test_a_refused_window_is_the_requests_fault`,
+`test_a_setting_nobody_can_read_is_not_an_outage`,
+`test_a_cut_nobody_answered_is_asked_again_and_then_not_served`,
+`test_a_refused_cut_is_not_asked_twice`,
+`test_a_document_whose_cut_was_not_served_is_not_refined`,
+`test_an_outage_writes_nothing_as_refined`,
+`test_the_next_run_asks_only_for_what_was_not_served`,
+`test_a_forced_pass_that_is_not_served_keeps_the_old_output`,
+`test_an_unfinished_pass_over_another_input_is_not_resumed`,
+`test_an_unfinished_pass_asked_with_another_prompt_is_not_resumed`,
+`test_an_unfinished_pass_asked_of_another_model_is_not_resumed`,
+`test_an_unfinished_pass_with_another_window_size_is_not_resumed`,
+`test_a_setting_nobody_can_read_ends_the_run_before_the_first_document`,
+`test_a_batch_counts_an_unserved_document_as_failed` and
+`test_the_merge_names_the_documents_it_leaves_out`
+(`tests/test_refinement_unserved.py`).
 
 A forced re-refine never leaves a document with no refined output, and
 `refinement_report.json` tells "checked, nothing failed" apart from
@@ -367,9 +476,11 @@ stops a run before the first document, not after a mid-run rejection:
 
 ## Modules
 
-`config.py` holds the stage's tunable constants and compiled system
+`config.py` holds the stage's tunable constants and the readers of its
 prompt: the LLM connection settings, `WINDOW_SIZE`, the oversized-section
-thresholds, and the reply-budget arithmetic. `pipeline.py`, `refine.py`,
+thresholds, the reply-budget arithmetic, and `system_prompt()`,
+`llm_temperature()` and `llm_max_tokens()`, which read the profile's
+prompt on first use. `pipeline.py`, `refine.py`,
 and `split.py` import from it; `corrections.py` keeps its own
 `MAX_SHRINK` and placeholder-pattern constants independently.
 
@@ -381,20 +492,29 @@ list. Called from `refine.py`'s `_materialise_corrections` in edit mode.
 `split.py` cuts a section over `SECTION_MAX_WORDS` at segment boundaries:
 `split_oversized` drives the pass, `_ask_all_cuts` dispatches every
 document's requests concurrently, and `_enforce_max` with
-`_subdivide_segments` re-cut any part still oversized. Called by
-`refine.py`'s `refine_sections`, before windowing.
+`_subdivide_segments` re-cut any part still oversized; its prompt and
+sampling come from `split_prompt()`, `split_temperature()` and
+`split_max_tokens()`. `NotServed` is its exception for a split request the
+server did not answer: `_ask_cuts` lets it through where it turns every
+other failure into a mechanical cut. Called by `refine.py`'s
+`refine_sections`, before windowing, and not at all on a resumed pass.
 
 `refine.py` is the stage's core: `refine_sections` dispatches the
 windows, `_call_llm` makes one window's request, `_thread_provenance` and
 `_redistribute_segments` reattach page provenance, `_apply_actions`
 applies the LLM's actions, and `_normalize_title` and
-`_report_dropped_text` finish the pass. Called by `pipeline.py`'s
-`run_refine`.
+`_report_dropped_text` finish the pass. `run_refine` is its file-level
+entry point: it reads and writes the partial file and the output, and
+`Unfinished` carries a pass the server did not finish back to it, with the
+sections and replies to keep or, for an unanswered cut, with nothing.
+Called by `pipeline.py`'s `run_single`.
 
 `pipeline.py` orchestrates the stage: `run_single` decides between a
 cache hit and a fresh run, `run_batch` runs every document subdirectory
-concurrently, and `run` calls `assert_serving` first. Entry point for
-`python -m docpipe.refinement` and library callers of `run()`.
+concurrently, and `run` calls `assert_serving` first. `main` resolves the
+profile and then reads `llm_temperature()` and `llm_max_tokens()` once. Entry point for
+`python -m docpipe.refinement`, whose `__main__.py` binds `--profile`
+before it imports the stage, and for library callers of `run()`.
 
 ## Module reference
 

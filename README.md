@@ -25,10 +25,10 @@ neither is something `docpipe/` could guess; a fallback could only be some
 other project's prompt. A stage whose profile has no prompt for it says so and
 stops.
 
-Set the profile in the environment rather than only passing `--profile`: a
-stage binds its prompts when it is imported, before the command line is parsed.
-A profile that carries prompts and is named only on the command line is refused
-rather than run with the wrong ones.
+`--profile <name>` on a stage's command line is enough: every stage's
+`__main__` puts the flag into `DOCPIPE_PROFILE` before it imports the stage,
+and `--help` needs no profile. Refinement, visuals and extraction stop with one
+line naming the available profiles when none is given.
 
 The documentation site is published at
 [municipal-heat-planning-pdf-processing.readthedocs.io](https://municipal-heat-planning-pdf-processing.readthedocs.io/en/latest/).
@@ -96,7 +96,7 @@ Output: `sections.json` per PDF.
 
 An LLM served locally via [vLLM](https://github.com/vllm-project/vllm) cleans the artefacts that are hard to catch deterministically: misattributed captions, residual boilerplate, bibliography pages. It operates in a sliding window over a document's sections (carrying context from the previous window so it can merge across window boundaries) and, per section, decides to keep, merge into the previous section, split, remove, or replace it. Bibliographies are converted to BibTeX.
 
-Output: `sections_refined.json`.
+Output: `sections_refined.json`. A window the model server does not serve (no connection, a timeout, a 429, a 5xx) leaves the document unrefined: no `sections_refined.json` is written, the usable replies are kept in `sections_refined.partial.json`, the stage exits non-zero, and the next run asks only for the windows that are missing. A cut of an oversized section the server does not answer ends the pass the same way, with nothing kept: the next run starts with the cut.
 
 ### 5. Image processing (`docpipe.visuals`)
 
@@ -106,13 +106,13 @@ Output: `visuals.json`.
 
 ### 6. Chunking, embedding & database population (`docpipe.chunking`)
 
-1. **Merge** — Stage-4 sections and Stage-5 enrichments are combined by ID into `document.json`.
+1. **Merge** — Stage-4 sections and Stage-5 enrichments are combined by ID into `document.json`. A document with `sections.json` and no `sections_refined.json` is left out, and the merge warns with its name.
 2. **Database population** — sections, tables, and images are written to SQLite with page-level provenance: each `Sections` row records which pages it spans (`SectionPages`) and an ordered list of page-tagged text/table/figure pieces (`Segments`), so a retrieved chunk can be cited down to the exact source page. A segment also carries the `bbox` it occupied in the source PDF, which lets a citation be highlighted in place rather than searched for by text.
 3. **Embedding** — six embedding types per document (see below) are produced by [Qwen3-VL-Embedding-8B](https://huggingface.co/Qwen/Qwen3-VL-Embedding-8B), loaded in bfloat16 and data-parallel across every visible GPU (one model replica per GPU). Documents are read and prepared in a thread pool while the GPUs work on the items already collected, and each block of them is embedded in batches sorted by text length, so a batch pads to the length of its own members rather than to the longest text in the corpus. Vectors are L2-normalised and added to a single global FAISS index (`IndexIDMap` over `IndexFlatIP`). The database is the source of truth for what has already been embedded, so re-runs only embed missing items.
 
 ### 7. Reading the values out (`docpipe.extraction` + profile)
 
-The profile's extraction spec (`profiles/<name>/extraction_spec.json`) says which parameters to look for and which coordinates each value carries (for `kwp`: scenario, year, energy carrier, sector, quantity, aggregation, spatial scope). For every document the stage retrieves the passages that fit, asks the LLM one request per field, and accepts a value only when the quoted passage really sits in the source and carries the answer; refusals are kept beside the accepted tuples, and every coordinate ends in a named state rather than empty. The result is one JSONL harvest and one stamp per document, so a re-run with the same spec, prompts and model skips what is already done and a changed question redoes only the coordinate it touches. The contract of that file is published on the documentation site, one page per profile.
+The profile's extraction spec (`profiles/<name>/extraction_spec.json`) says which parameters to look for and which coordinates each value carries (for `kwp`: scenario, year, energy carrier, sector, quantity, aggregation, spatial scope). For every document the stage retrieves the passages that fit, asks the LLM one request per field, and accepts a value only when the quoted passage really sits in the source and carries the answer; refusals are kept beside the accepted tuples, and every coordinate ends in a named state rather than empty. The result is one JSONL harvest and one stamp per document, so a re-run with the same spec, prompts and model skips what is already done and a changed question redoes only the coordinate it touches. A document one of whose requests ended on a 429 or a 5xx is written but not stamped, so the next run harvests it again and this run exits 1. The contract of that file is published on the documentation site, one page per profile.
 
 ### 8. The knowledge graph (`docpipe.extraction --serialize`)
 

@@ -18,5 +18,7 @@ PAGE_TRANSCRIPTION_REPORT_JSON = (
     f"{DIR_RESULTS}/page_transcription_report.json")            # preprocessing (model-read pages)
 SECTIONS_REFINED_JSON = f"{DIR_RESULTS}/sections_refined.json"  # refinement
 REFINEMENT_REPORT_JSON = f"{DIR_RESULTS}/refinement_report.json"  # refinement (what failed)
+REFINEMENT_PARTIAL_JSON = (
+    f"{DIR_RESULTS}/sections_refined.partial.json")             # refinement (unfinished)
 VISUALS_JSON          = f"{DIR_RESULTS}/visuals.json"           # visuals
 DOCUMENT_JSON         = f"{DIR_RESULTS}/document.json"          # chunking (merge) → database

@@ -70,6 +70,19 @@ def load(prompt_id: str, profile: Optional[Profile] = None,
 
 The prompt as the profile writes it.
 
+### per_profile
+
+```python
+def per_profile(read)
+```
+
+Make *read()* run once per ambient profile, on first use.
+
+For what a stage needs from its prompts: read when it is first asked for
+and not when the stage is imported, so a stage can be imported, and print
+its --help, before anybody has named a profile. Read once, so one run
+works with one prompt.
+
 ### text
 
 ```python

@@ -19,7 +19,7 @@ It runs as three steps, merge, then db, then embed, run in sequence but
 independently resumable and invocable through `--step`, plus three
 standalone, additive maintenance steps, `enrich-bbox`, `enrich-page-source` and
 `enrich-caption`, that backfill one column family on an already built corpus
-without touching sections, embeddings or the index (`pipeline.py:114`).
+without touching sections, embeddings or the index (`pipeline.py:115`).
 Skipping this stage leaves a plan processed but absent from the database and
 index everything downstream reads.
 
@@ -45,9 +45,9 @@ index are read at query time instead, by [extraction](extraction.md) and the
 
 `main()` parses argv, resolves `--profile` into default `data_dir`, `db_path`
 and `index_path` when omitted, calls `run()`, and exits 1 with a logged
-traceback on any uncaught exception (`pipeline.py:335`). `run()` dispatches on
+traceback on any uncaught exception (`pipeline.py:336`). `run()` dispatches on
 `--step`: the three `enrich-*` steps return after their own work; otherwise
-merge, db and embed run in order, or only the named step (`pipeline.py:94`).
+merge, db and embed run in order, or only the named step (`pipeline.py:95`).
 
 ### Merge
 
@@ -56,15 +56,19 @@ copies its sections and replaces each table or figure dict, matched by id, with
 its Stage 5 counterpart wherever that carries a `markdown` or `description`
 key, writing the result to `document.json` through a `.part` file and
 `os.replace` so a killed write leaves no truncated file for the cache to
-accept (`merge.py:68`). `merge_batch` runs this over every candidate and
-reports one success or failure per directory (`merge.py:157`).
+accept (`merge.py:69`). `merge_batch` runs this over every candidate and
+reports one success or failure per directory (`merge.py:158`). A
+subdirectory that carries `sections.json` and no `sections_refined.json` is
+not a candidate, and the batch names up to twenty of them in one warning,
+since an unfinished refinement leaves a document exactly there and the
+database would otherwise just lack it (`merge.py:167-177`).
 
 ### Database insertion
 
 When `--force` covers both the db and embed steps, `run()` first snapshots
 every candidate's current FAISS ids through `get_document_faiss_ids`, before
 the forced delete below removes the `Embeddings` rows that would otherwise name
-them (`pipeline.py:146`; `database.py:696`). `update_database` then resolves
+them (`pipeline.py:147`; `database.py:696`). `update_database` then resolves
 each directory to a `Documents.id`, skips it if `Sections` rows already exist
 and `--force` is unset, or under `--force` deletes and reinserts, then
 `_insert_sections` creates each `Pages` row via the get-or-create helper
@@ -91,20 +95,20 @@ section content and block id, recording the outcome in `caption_source`
 holds (`embedding.py:47`); `drop_embeddings_missing_from_index` deletes any
 `Embeddings` row whose `faiss_id` is absent from that set; `next_id` becomes
 the maximum of the index's count, the database's high-water mark, and one past
-the largest held id (`pipeline.py:189`; `database.py:724`).
+the largest held id (`pipeline.py:190`; `database.py:724`).
 
 ### Prepare and flush loop
 
 `candidates` are directories carrying `document.json`. `prepared_ahead` streams
 them through `prepare()` in a `ThreadPoolExecutor` bounded to
 `EMBED_PREPARE_WORKERS` threads, keeping at most `EMBED_PREPARE_AHEAD`
-documents' work in flight (`pipeline.py:74`). `prepare()` resolves the document
+documents' work in flight (`pipeline.py:75`). `prepare()` resolves the document
 id and filters `build_embedding_inputs`' output against
 `get_existing_embeddings`; an unresolved document contributes nothing and is
-named in one warning at the run's end (`pipeline.py:219`, `281`). At
+named in one warning at the run's end (`pipeline.py:220`, `282`). At
 `EMBED_FLUSH_ITEMS` pending items, `create_embeddings` runs and the index saves
 past `EMBED_SAVE_VECTORS` growth; a final flush and save close the run
-(`pipeline.py:251`). Each prepare thread reuses one connection across calls:
+(`pipeline.py:252-276`, `290`). Each prepare thread reuses one connection across calls:
 `_worker_connection` caches it per thread for `document_id()` and
 `get_existing_embeddings()`, replacing it only when a different `db_path` is
 requested (`database.py:113`). Every connection, opened by `connect()`, sets
@@ -176,33 +180,36 @@ faiss_id)` tuples per document (`database.py:840`).
 | `EMBEDDING_BACKEND` | env var | `local` | picks the query-time embedder in `docpipe.embedding`; ignored by `load_embedder` here, which always imports `MultiGPUEmbedder` | `embedding/config.py:19` |
 | `SECTION_EMBED_MAX_WORDS` | code constant | `1800` | last-resort word cap on a section's embedding text, logged when it fires | `chunking/config.py:23`; `chunking.py:64` |
 | `EMBEDDING_BATCH_SIZE` | code constant | `32` | items per model batch in `create_embeddings`; a same-named, env-driven constant in `embedding/config.py` (default `8`) is not read here | `chunking/config.py:25` |
-| `EMBED_PREPARE_WORKERS` | code constant | `8` | threads reading merged JSON and querying the DB while the GPUs work | `chunking/config.py:31`; `pipeline.py:251` |
-| `EMBED_PREPARE_AHEAD` | code constant | `32` | documents' prepared input allowed to sit unconsumed | `chunking/config.py:38`; `pipeline.py:74` |
-| `EMBED_FLUSH_ITEMS` | code constant | `4096` | pending-item threshold for one `create_embeddings` call; checked only after a document's inputs are appended, so a flush can exceed it | `chunking/config.py:43`; `pipeline.py:257` |
-| `EMBED_SAVE_VECTORS` | code constant | `50000` | vectors added since the last save before the index file rewrites mid-run; the run's end saves once more | `chunking/config.py:50`; `pipeline.py:263`, `289` |
-| `FAISS_INDEX_FILE` | code constant | `faiss_index.bin` | declared but unread elsewhere; the real filename comes from the CLI argument or `Profile.index_path`, hardcoding the same literal separately | `chunking/config.py:52`; `docpipe/profile.py:120` |
-| `--step` | CLI flag | none (merge, db, embed) | restrict the run to one of `merge`, `db`, `embed`, `enrich-bbox`, `enrich-page-source`, `enrich-caption` | `pipeline.py:314` |
-| `--force` | CLI flag | off | merge: ignore the cache. db: delete and reinsert. embed: evict old vectors instead of skipping. enrich-*: re-derive already-answered rows. | `pipeline.py:327`; used throughout |
-| `--profile` / `DOCPIPE_PROFILE` | CLI flag / env var | none / unset | supplies default `data_dir`, `db_path`, `index_path` when a positional argument is omitted | `profile.py:112`, `172`; `pipeline.py:307`, `346` |
-| `--log-level` | CLI flag | `INFO` | logging level for the run | `pipeline.py:329`, `340` |
-| `data_dir`, `db_path`, `index_path` | positional args | none (fall back to the profile's paths) | processed root, database path, index path | `pipeline.py:307`, `346` |
+| `EMBED_PREPARE_WORKERS` | code constant | `8` | threads reading merged JSON and querying the DB while the GPUs work | `chunking/config.py:31`; `pipeline.py:252` |
+| `EMBED_PREPARE_AHEAD` | code constant | `32` | documents' prepared input allowed to sit unconsumed | `chunking/config.py:38`; `pipeline.py:75` |
+| `EMBED_FLUSH_ITEMS` | code constant | `4096` | pending-item threshold for one `create_embeddings` call; checked only after a document's inputs are appended, so a flush can exceed it | `chunking/config.py:43`; `pipeline.py:258` |
+| `EMBED_SAVE_VECTORS` | code constant | `50000` | vectors added since the last save before the index file rewrites mid-run; the run's end saves once more | `chunking/config.py:50`; `pipeline.py:264`, `290` |
+| `FAISS_INDEX_FILE` | code constant | `faiss_index.bin` | declared but unread elsewhere; the real filename comes from the CLI argument or `Profile.index_path`, hardcoding the same literal separately | `chunking/config.py:52`; `docpipe/profile.py:123` |
+| `--step` | CLI flag | none (merge, db, embed) | restrict the run to one of `merge`, `db`, `embed`, `enrich-bbox`, `enrich-page-source`, `enrich-caption` | `pipeline.py:315-326` |
+| `--force` | CLI flag | off | merge: ignore the cache. db: delete and reinsert. embed: evict old vectors instead of skipping. enrich-*: re-derive already-answered rows. | `pipeline.py:328`; used throughout |
+| `--profile` / `DOCPIPE_PROFILE` | CLI flag / env var | none / unset | supplies default `data_dir`, `db_path`, `index_path` when a positional argument is omitted | `profile.py:113-123`, `174`; `pipeline.py:308`, `347` |
+| `--log-level` | CLI flag | `INFO` | logging level for the run | `pipeline.py:329-332`, `341` |
+| `data_dir`, `db_path`, `index_path` | positional args | none (fall back to the profile's paths) | processed root, database path, index path | `pipeline.py:308`, `347` |
 
 ## Failure modes
 
 Invalid JSON, or any other exception, in `merge_single` is caught by
 `merge_batch`, logged, recorded as a failure for that directory, and the
-batch continues (`merge.py:185`). A missing `visuals.json`
+batch continues (`merge.py:197`). A missing `visuals.json`
 is not an error: the merge proceeds without enrichment and logs a warning
-(`merge.py:103`). A failed atomic write of `document.json` deletes its `.part`
+(`merge.py:104`). A failed atomic write of `document.json` deletes its `.part`
 file and re-raises, leaving the previous cached file untouched
-(`merge.py:133`). An `OSError` while stat-ing a directory during the cache
+(`merge.py:134`). An `OSError` while stat-ing a directory during the cache
 probe reads as uncached rather than propagating, so one bad entry does not
-abort the batch (`merge.py:46`).
+abort the batch (`merge.py:47`). A document with `sections.json` and no
+`sections_refined.json` is left out of the merge, and so out of the database,
+with one warning that names it and says to run the refinement
+(`merge.py:167-177`).
 
 A directory whose `Documents` row cannot be resolved during the db step is
 skipped with a warning (`database.py:487`); reached during the embed step, it
 contributes no inputs and is named in one end-of-run warning, so no GPU time
-is spent on unownable vectors (`pipeline.py:219`, `281`). `enrich_bbox` and
+is spent on unownable vectors (`pipeline.py:220`, `282`). `enrich_bbox` and
 `enrich_page_source` instead `continue` silently on the same case
 (`database.py:584`, `188`), and `enrich_bbox` reads `sections.json` with a
 plain `open()`/`json.load()`, no per-directory `try`/`except`
@@ -257,7 +264,7 @@ thousand items each flush in chunks of 5000, not 4096
 
 Two directories with no `Documents` row once put 1096 orphaned vectors into
 the index, before the check that skips an unresolved directory existed
-(`pipeline.py:227`; `database.py:851`).
+(`pipeline.py:226-229`; `database.py:851`).
 
 Over one plan (Kassel), 15 of 89 tables were captioned with a rounding-footnote
 sentence instead of their real title (`docpipe/captions.py:8`); across its
@@ -352,8 +359,9 @@ The bbox backfill: `test_insert_sections_writes_bbox`,
 ## Modules
 
 `__init__.py` carries the package docstring and re-exports `run` for library
-callers. `__main__.py` calls `pipeline.main()` on import, enabling `python -m
-docpipe.chunking`.
+callers. `__main__.py` binds a `--profile` from the command line into
+`DOCPIPE_PROFILE`, then imports `pipeline` and calls `pipeline.main()`,
+enabling `python -m docpipe.chunking`.
 
 `config.py` holds the module's constants: `EMBEDDING_MODEL`, `EMBEDDING_DIM`
 and `MAX_TOKEN_LENGTH` re-exported from `docpipe/embedding/config.py`, plus

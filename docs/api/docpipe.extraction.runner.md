@@ -49,15 +49,52 @@ Author: Felix Vossel
 
 ## Classes
 
+### Unserved
+
+```python
+class Unserved
+```
+
+Documents one of whose requests ended on a 429 or a 5xx.
+
+Such a request was never answered, so its document is not finished,
+whichever request it was: a passage's rows, one coordinate, the frame, a
+search sentence. `finish_document` leaves the document unstamped and a
+resume harvests it again. Counted under None: requests of the run itself.
+
+#### Unserved.\_\_init\_\_
+
+```python
+def __init__(self)
+```
+
+#### Unserved.note
+
+```python
+def note(self, document_id) -> None
+```
+
+#### Unserved.of
+
+```python
+def of(self, document_id) -> int
+```
+
+#### Unserved.clear
+
+```python
+def clear(self) -> None
+```
+
 ### DeadStreak
 
 ```python
 class DeadStreak
 ```
 
-Consecutive replies that never reached the server, across every
-document in flight: a dead server fails all of them alike, and a document
-with twenty batches would never see sixty-four of its own in a row.
+Consecutive requests the server did not serve (not reached, or a 429
+or a 5xx), across every document in flight: a dead server fails them all
+alike, and one with twenty batches never sees sixty-four of its own.
 
 #### DeadStreak.\_\_init\_\_
 
@@ -113,6 +150,29 @@ no refusal, nothing to read. Doubling from 15 seconds gives a restarting
 vLLM 225 seconds over five attempts, which is what a model server needs
 to come back; the model's own mistakes keep the short curve, because
 waiting longer for those buys nothing.
+
+### unserved
+
+```python
+def unserved(exc: BaseException) -> bool
+```
+
+A 429 or a 5xx: the server was there and did not do the work.
+
+Neither says anything about the request. A rate limit lifts and a server
+recovers, and the same request is answered then. Every other 4xx refuses
+the request itself, and refuses it every time.
+
+### server_side
+
+```python
+def server_side(exc: BaseException) -> bool
+```
+
+Whether a failure is the server's: it never arrived, or was `unserved`.
+
+These wait on the long curve and count towards the dead-server streak. A
+429 retried after two seconds is the same 429.
 
 ### window_budget
 
@@ -456,7 +516,8 @@ written once for the whole corpus was never searched with.
 ```python
 def document_anchor(spec: Spec, context: Optional[dict] = None,
                     client=None, prompt=None,
-                    frame: Optional[dict] = None) -> dict
+                    frame: Optional[dict] = None,
+                    document_id: Optional[int] = None) -> dict
 ```
 
 {parameter uri: [one sentence]} — the probe THIS document is searched with.
@@ -1070,7 +1131,8 @@ ontology keys — or stale with nobody asking for the redo.
 def finish_document(report, name: str, out_dir: Path, spec_sha: str,
                     anchors_sha: str = "", answered: Optional[int] = None,
                     spec: Optional[Spec] = None,
-                    questions: Optional[dict] = None) -> None
+                    questions: Optional[dict] = None,
+                    lost: int = 0) -> bool
 ```
 
 Write one document's JSONL and stamp it with what produced it.
@@ -1088,6 +1150,16 @@ happen, and the sentinel arithmetic below cannot see it: with no reply
 there is no tuple and no refusal either, so it reads 0 > n/2, says no, and
 stamps an empty file. That is how a dead server turned 872 planned
 documents into 0-byte results a resume would have skipped.
+
+`lost` is how many of the document's other requests (a coordinate,
+the frame, a search sentence) ended on a 429 or a 5xx; the passages that
+ended there carry it in their sentinel. One is enough to withhold the
+stamp: the request was never answered and nothing says it cannot be.
+
+An earlier stamp is removed before the file is written. It vouched for
+the file this one replaces, and left in place it would have a resume
+skip a document whose stamp was just withheld. Returns whether the
+document is stamped.
 
 ### check_against_schema
 

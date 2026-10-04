@@ -166,6 +166,26 @@ is quietly wrong for it — with no error, only worse output.
 def add_profile_argument(parser) -> None
 ```
 
+### bind_command_line
+
+```python
+def bind_command_line(argv: Optional[Sequence[str]] = None) -> None
+```
+
+Put a --profile given on the command line into the environment.
+
+For a stage's `__main__`, before it imports the stage. What a stage binds
+when it is imported (how many sections fit one request, the chat's
+prompts) is read from the environment, and the command line is parsed
+only after the import. Read the way the stage's own parser reads it, so
+an abbreviation it accepts (--prof) is one this accepts too.
+
+### available_profiles
+
+```python
+def available_profiles() -> list
+```
+
 ### resolve_profile
 
 ```python
@@ -174,9 +194,18 @@ def resolve_profile(args=None, name: Optional[str] = None) -> Optional[Profile]
 
 The profile for this run, or None.
 
-A stage binds its prompts when it is imported, which happens before the
-command line is parsed. So a profile that overrides prompts has to be in the
-environment from the start; --profile alone would silently use the core
-prompts. That case is refused rather than run.
+A stage binds some of what a profile says when it is imported, which
+happens before the command line is parsed. `bind_command_line` puts the
+flag into the environment before that. A caller that imported the stage
+under one profile and names another here would run on a mix of both;
+that case is refused rather than run.
+
+### require_profile
+
+```python
+def require_profile(args=None, name: Optional[str] = None) -> Profile
+```
+
+`resolve_profile` for a stage that has nothing to run without one.
 
 [Back to the index](../README.md)

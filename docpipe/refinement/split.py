@@ -51,10 +51,28 @@ log = logging.getLogger(__name__)
 # nothing. Only the first may still place a call.
 _UNASKED = object()
 
-_SPLIT = prompts.load("refinement/split")
-SPLIT_PROMPT = _SPLIT.text
-SPLIT_TEMPERATURE = float(_SPLIT.meta.get("temperature", 0.1))
-SPLIT_MAX_TOKENS = int(_SPLIT.meta.get("max_tokens", 1024))
+
+class NotServed(Exception):
+    """The request for the cuts got no answer from the server.
+
+    Not a reason to cut mechanically: asked again another time, the model
+    places the cuts. An answer that is unusable is, and so is a request the
+    server refused.
+    """
+
+@prompts.per_profile
+def split_prompt():
+    return prompts.load("refinement/split")
+
+
+def split_temperature() -> float:
+    return float(split_prompt().meta.get("temperature", 0.1))
+
+
+def split_max_tokens() -> int:
+    return int(split_prompt().meta.get("max_tokens", 1024))
+
+
 PROMPT_IDS = ("refinement/split",)
 
 
@@ -200,6 +218,8 @@ def _ask_cuts(section: dict, ask: Callable):
     try:
         return ask(prompts.text("refinement/split", target=SECTION_TARGET_WORDS),
                    f"TITLE: {section.get('title') or ''}\n\nOUTLINE:\n{outline(section)}")
+    except NotServed:
+        raise
     except Exception as e:                           # any failure → mechanical
         log.warning("Split call failed for %r: %s", section.get("title"), e)
         return None

@@ -19,7 +19,8 @@ import os
 from pathlib import Path
 from typing import Optional
 
-from .config import SECTIONS_REFINED_JSON, VISUALS_JSON, DOCUMENT_JSON
+from .config import (SECTIONS_JSON, SECTIONS_REFINED_JSON, VISUALS_JSON,
+                     DOCUMENT_JSON)
 from .models import MergeStats
 
 log = logging.getLogger(__name__)
@@ -163,6 +164,17 @@ def merge_batch(root_dir: Path, *, force: bool = False) -> dict[str, bool]:
         d for d in root_dir.iterdir()
         if d.is_dir() and (d / SECTIONS_REFINED_JSON).exists()
     )
+    # Structured and not refined: left out here, and so missing from the
+    # database. An unfinished refinement leaves a document exactly there.
+    unrefined = sorted(
+        d.name for d in root_dir.iterdir()
+        if d.is_dir() and (d / SECTIONS_JSON).exists()
+        and not (d / SECTIONS_REFINED_JSON).exists())
+    if unrefined:
+        log.warning("Merge: %d document(s) have no refined output and are "
+                    "left out — run the refinement for: %s", len(unrefined),
+                    ", ".join(unrefined[:20])
+                    + (" …" if len(unrefined) > 20 else ""))
 
     if not candidates:
         log.warning("No PDF output directories found in '%s'.", root_dir)

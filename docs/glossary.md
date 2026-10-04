@@ -294,8 +294,11 @@ resume stamp
   `docpipe/extraction/runner.py`'s `stale` compares only the fingerprint
   keys (`parameter/`, `value/`, `axis/`, `slot/`), and the spec's sha256
   only where none of those are present; the model, the anchor set and
-  every prompt id are written for a reader and never compared. See
-  [extraction](stages/extraction.md).
+  every prompt id are written for a reader and never compared. The stamp
+  is withheld, and the next run harvests the document again, when more than
+  half its sources never reached the server, when no batch answered, or when
+  any request ended on a 429 or a 5xx; an earlier stamp is removed with it,
+  and the run exits 1 for the document. See [extraction](stages/extraction.md).
 
 review
 : The `--review` pass reading each of a harvest's level-C values a second

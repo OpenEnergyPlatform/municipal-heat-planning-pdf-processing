@@ -40,7 +40,7 @@ docstring in `chunking.py`).
 | **In** | `results/sections_refined.json` if Stage 4 wrote one, else `results/sections.json` (`_resolve_input`); `sections.json`'s table `source_text` fields, read again for the QA gate since Stage 4 drops them (`_load_source_texts`); the table/figure PNGs named by each item's `path`, under `images/`. |
 | **Out** | `results/visuals.json`: the input's section structure, each table gaining `markdown` and each figure gaining `description`, both optionally `caption`, `qa_warning` or `vlm_status`; `.prompt_versions.json`, the sha256 of this run's prompts, written as a sibling of `results/`, not inside it. |
 | **Resumes on** | An item already carrying `markdown` (table) or `description` (figure) is loaded from the cache and never resent; `--force-stale` redoes every item once any tracked prompt no longer matches, behaving like `--force`; `--force` redoes every item unconditionally. |
-| **Needs** | A vLLM, or other OpenAI-compatible, server serving `VLM_MODEL` at `VLM_BASE_URL`; a profile, since this stage has no default prompt and `DOCPIPE_PROFILE` must be set before import for its prompts to bind (`resolve_profile`; see [profiles](../profiles.md)). |
+| **Needs** | A vLLM, or other OpenAI-compatible, server serving `VLM_MODEL` at `VLM_BASE_URL`; a profile, since this stage has no default prompt: `--profile` or `DOCPIPE_PROFILE`, and a run with neither stops in one line naming the available profiles (`require_profile`; see [profiles](../profiles.md)). |
 
 Stage 3's structuring pass precedes this one; Stage 4's refinement
 precedes it only when already finished, since both read `sections.json`,
@@ -57,8 +57,8 @@ it.
 
 ### Resolving the profile and the context budget preflight
 
-`main` resolves the profile from `--profile`/`DOCPIPE_PROFILE`
-(`resolve_profile`), falls back to the profile's `processed_dir` when no
+`main` requires a profile from `--profile`/`DOCPIPE_PROFILE`
+(`require_profile`), falls back to the profile's `processed_dir` when no
 input path is given, and, on `--print-context-budget`, prints
 `max_request_tokens()` and exits early: the longer, by word count, of the
 two system prompts, times `TOKENS_PER_WORD`, plus `IMAGE_TOKENS` for a
@@ -102,7 +102,7 @@ never aborts the document.
 
 ### Transcribing a table and its QA gate
 
-`process_table` fills `TABLE_USER_PROMPT` and calls `call_vision` at
+`process_table` fills `table_user_prompt()` and calls `call_vision` at
 `TABLE_VLM_TEMPERATURE`. The Markdown returned passes through `qa.assess`,
 which fails a table with no data rows, duplicate rows over
 `TABLE_QA_MAX_DUPLICATION`, or coverage, when assessable, below
@@ -121,7 +121,7 @@ model returned one.
 
 ### Describing a figure
 
-`process_figure` fills `FIGURE_USER_PROMPT` and calls `call_vision` at the
+`process_figure` fills `figure_user_prompt()` and calls `call_vision` at the
 default `VLM_TEMPERATURE`, higher than a table's, since some paraphrase is
 acceptable where a transcription must be verbatim. There is no QA gate for
 a figure: no text layer exists to check a description's coverage against.
@@ -218,7 +218,7 @@ partial, tested shape rather than objects the code builds.
 | `--force`/`--force-stale` | CLI flags | off | redo every item / redo every item once any tracked prompt changed | `pipeline.py` |
 | `--input-json` | CLI flag | auto-resolved | overrides which JSON to read | `pipeline.py` |
 | `--print-context-budget` | CLI flag | off | print `max_request_tokens()` and exit | `pipeline.py` |
-| `--profile` | CLI flag | `$DOCPIPE_PROFILE` | prompts and `processed_dir` this run uses | `docpipe/profile.py` |
+| `--profile` | CLI flag | `$DOCPIPE_PROFILE` | prompts and `processed_dir` this run uses; the stage refuses to run without a profile | `pipeline.py`, `docpipe/profile.py` |
 
 ## Failure modes
 
@@ -264,7 +264,7 @@ reply open mid-JSON without saving anything new (`config.py`, comments
 above `RETRY_PENALTIES` and `RUNAWAY_CELL_RUN`; also
 `test_no_stop_sequence_is_sent`). Every profile
 that ships a `profile.py` states a positive context budget when its config
-module is imported in a subprocess
+module is imported in a subprocess and asked for it
 (`test_a_profile_states_a_usable_context_budget`,
 `tests/test_every_profile_loads.py`).
 
@@ -299,11 +299,11 @@ lower than a figure's. `tests/test_imageprocessing_models.py` pins the
 `tests/test_prompts.py` checks that `visuals/table_system`, one of this
 stage's prompt ids, resolves for the kwp profile, and that a prompt id a
 profile lacks fails by name rather than falling back to another project's
-text. All seven of the stage's `PROMPT_IDS` are exercised through import
-instead: `config.py` evaluates `prompts.text` for each at import time, which
-`tests/test_every_profile_loads.py` triggers per profile, in
-`test_a_profile_loads_every_config_module` and
-`test_a_profile_states_a_usable_context_budget`. `tests/test_segment_bbox.py`'s
+text. All seven of the stage's `PROMPT_IDS` are exercised through their readers
+instead: `config.py` reads each through a `prompts.per_profile` function on
+first use, and `tests/test_every_profile_loads.py` asks a subprocess for
+every one of them per profile, in `test_a_profile_loads_every_config_module`
+and `test_a_profile_states_a_usable_context_budget`. `tests/test_segment_bbox.py`'s
 `test_imageprocessing_passthrough_preserves_bbox` checks that a `bbox`
 survives this stage unchanged.
 
@@ -311,11 +311,13 @@ survives this stage unchanged.
 
 `__init__.py` re-exports `run`, `run_single` and `run_batch` and states, in
 one sentence, what the stage adds on top of preprocessing's structured
-output. `__main__.py` lets the package run as `python -m docpipe.visuals`.
+output. `__main__.py` lets the package run as `python -m docpipe.visuals`,
+binding `--profile` before it imports the stage.
 `config.py` holds every tuned constant this stage reads, the connection
 settings, the retry and QA thresholds, the context budget estimate,
-`dump_json_atomic`, and the seven prompt texts bound at import time from
-the active profile. `models.py` defines `EnrichedTable`, `EnrichedFigure`
+`dump_json_atomic`, and the seven prompt readers (`table_system_prompt()`,
+`table_user_prompt()`, `figure_system_prompt()`, `figure_user_prompt()` and
+the three `caption_*_instruction()` functions), which read the active profile's prompt on first use. `models.py` defines `EnrichedTable`, `EnrichedFigure`
 and `ProcessingStats`, the documented and tested shape of one output item
 and of the run's bookkeeping. `pipeline.py` is the orchestrator:
 resolving the profile and input, the per-item cache and staleness check,

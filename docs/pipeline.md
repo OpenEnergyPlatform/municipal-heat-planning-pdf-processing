@@ -110,17 +110,29 @@ leaked headers or footers, garbled ligatures, and numbering or label
 prefixes left on a caption; it also converts bibliography sections to
 BibTeX. It reads a sliding window of a document's sections at a time,
 `WINDOW_SIZE` sections per call, 3 by default
-(`docpipe/refinement/config.py:38` to `40`), keeping
+(`docpipe/refinement/config.py:39` to `41`), keeping
 context from the previous window so a merge can cross a boundary. A second,
 mechanical pass then holds every section to a fixed word ceiling for the
 embedding stage that follows; the model only proposes where to cut, the cut
 itself always happens at a segment boundary (`docpipe/refinement/
 split.py:11` to `12`). The output, `sections_refined.json`, is written
 atomically, so a run killed mid-document leaves the previous refinement
-rather than nothing (`docpipe/refinement/refine.py:1039` to `1043`). Resume
+rather than nothing (`docpipe/refinement/refine.py:1126` to `1130`). Resume
 skips a document once
 that file exists; `--force-stale` redoes only documents whose recorded
-prompt hash no longer matches the profile's current prompts.
+prompt hash no longer matches the profile's current prompts. A window the
+model server did not serve (no connection, a timeout, a 429, a 5xx) is not
+a window that needed no change, so the document is not written as refined:
+the sections as cut and the usable replies go to
+`sections_refined.partial.json`, which also lists the missing windows as
+`unserved_windows`, `refinement_report.json` is left as it was, and the
+stage exits non-zero. The next run asks only for those windows, provided the
+sections, the prompts, the window size and the model are the same
+(`docpipe/refinement/refine.py:1160` to `1179`). The cut of an oversized
+section is asked again while the server does not answer; if it stays
+unanswered nothing at all is written, because a section cut mechanically
+for the want of an answer would keep those cuts, and the next run starts
+with the cut (`refine.py:908` to `912`, `1187` to `1191`).
 
 ### 5. Visuals
 
@@ -250,7 +262,8 @@ is one turn.
 in `docpipe/artifacts.py`, so no stage hard-codes a filename of its own. A
 document's own output directory holds a `results/` folder (`pages.json`,
 `sections.json`, `sections_refined.json`, `visuals.json`, `document.json`,
-each written by the stage that owns it) and an `images/` folder holding the
+each written by the stage that owns it, plus `sections_refined.partial.json`
+while a refinement pass is unfinished) and an `images/` folder holding the
 cropped table and figure PNGs stage 2 produces. Stage 1 writes three
 further worklists at the top of the data directory, each removed before a
 clean run leaves nothing stale on it: `rejected_pdfs.txt` names a garbled
@@ -297,7 +310,7 @@ until it is pushed back through chunking's db step; no later stage rereads
 | 1 file processing | the filename is already a row in `Documents` | delete the row |
 | 2 layout detection | `pages.json` exists and loads cleanly | `--force-reextract` |
 | 3 structure assembly | `sections.json` exists and loads cleanly | `--force-reextract`, or `--rebuild-stage3` for stage 3 alone |
-| 4 refinement | `sections_refined.json` exists | `--force` for every document, `--force-stale` only where the recorded prompt moved |
+| 4 refinement | `sections_refined.json` exists and no `sections_refined.partial.json` sits beside it | `--force` for every document, `--force-stale` only where the recorded prompt moved; either way an unfinished pass is resumed, not started over |
 | 5 visuals | an item already carries `markdown` or `description` | `--force` for every item, `--force-stale` only for stale items |
 | 6, merge | `document.json` is newer than both its inputs | `--force` |
 | 6, db | the document's rows are already in `Sections` | `--force` |
@@ -319,9 +332,16 @@ per document, so this section documents its stamp on its own.
 `<doc>.stamp.json` is
 written only once `finish_document` decides a harvest actually happened;
 a document is left unstamped, so the next run redoes it, when more than
-half its planned sources came back unreachable or nothing answered at all
-(`UNREACHABLE_LIMIT = 0.5`, `docpipe/extraction/runner.py:4404`). Inside
-it:
+half its planned sources came back unreachable (`UNREACHABLE_LIMIT = 0.5`,
+`docpipe/extraction/runner.py:4467`, `:4529` to `4533`), when nothing
+answered at all (`:4534` to `4537`), or when any one of its requests ended
+on a 429 or a 5xx, which is no answer (`:4538` to `4543`).
+`finish_document` removes an earlier stamp before it writes the file, so a
+withheld stamp is not replaced by one that vouched for the file it
+overwrote (`:4523` to `4524`), and it returns whether the document is
+stamped. A document written but left unstamped is a failure of the run:
+`harvest_document` returns it as not finished and `main` exits 1
+(`:5543` to `5544`, `5579`). Inside it:
 
 | Key | What it records | Compared on a redo |
 |---|---|---|
@@ -339,22 +359,22 @@ it:
 
 The owner decided on 2026-09-10 that a stamp rests on the KG/ontology
 parameters alone (`parameter/`, `value/`, `axis/`, `slot/`,
-`docpipe/extraction/runner.py:4261`). The model, the anchors and every
+`docpipe/extraction/runner.py:4324`). The model, the anchors and every
 prompt id are still written into the stamp, so a reader can place a
 harvest, but a reworded prompt or another model no longer makes a
 document stale. The fine keys come from
-`spec.fingerprints()` (`docpipe/extraction/spec.py:618` to `640`), and
+`spec.fingerprints()` (`docpipe/extraction/spec.py:607` to `632`), and
 their presence is what licenses ignoring the coarse `spec` key. An earlier
 design hashed the whole spec file as one number, so one new label anywhere
 in it made a whole corpus stale together, about 93 GPU hours to reread
-1,082 documents over one added word (`docpipe/extraction/runner.py:4229`
-to `4231`); the ontology behind the spec is revised repeatedly, so the
+1,082 documents over one added word (`docpipe/extraction/runner.py:4292`
+to `4294`); the ontology behind the spec is revised repeatedly, so the
 same cost would recur each time it is. With one key per parameter, per value list
 and per axis, `stale()` names exactly which question changed and leaves
 the rest of the corpus alone; it checks both directions, so a question
 dropped from the spec counts as changed too, the one case the old
 whole-file hash used to catch that a purely additive scheme would
-otherwise miss (`docpipe/extraction/runner.py:4328` to `4329`). A file
+otherwise miss (`docpipe/extraction/runner.py:4391` to `4392`). A file
 with no stamp at all is read as fully stale, on principle: the opposite
 reading, a missing stamp taken as nothing left to do, had already let a
 run silently skip 165 documents with exit code 0
@@ -364,7 +384,7 @@ The review prompt (`extraction/review`) is deliberately left out of
 `PROMPT_IDS` itself, not merely out of the comparison: a review leaves a
 value unchanged, only its `flags` grow, so folding the review prompt's sha
 into every stamp would report the whole corpus stale the day that one
-prompt is edited (`docpipe/extraction/runner.py:225` to `227`).
+prompt is edited (`docpipe/extraction/runner.py:276` to `278`).
 
 Three passes act on a moved key without opening the document again.
 
@@ -399,11 +419,12 @@ after it; the embed half of chunking needs a visible GPU. Each of
 refinement, visuals and extraction checks the served model's context size
 before its first document and refuses to start rather than fail midway
 (`docpipe/llm_preflight.py`, called from `docpipe/refinement/
-pipeline.py:165` and `248`, `docpipe/visuals/pipeline.py:502`, and
-`docpipe/extraction/runner.py:4932` and `5017`).
+pipeline.py:165` and `249`, `docpipe/visuals/pipeline.py:500`, and
+`docpipe/extraction/runner.py:5015` and `5100`).
 
-Select the profile once, in the environment, before any stage that
-overrides prompts is imported:
+Select the profile once, in the environment, or pass `--profile <name>`
+to a stage, which puts it into the environment before the stage is
+imported:
 
 ```bash
 export DOCPIPE_PROFILE=kwp
@@ -468,7 +489,7 @@ searches the documents only where the graph has nothing to say.
 
 Every path after the first command comes from the profile on its own:
 stage 3's output directory and all of stage 6 need nothing more than the
-environment variable. Extraction's three positionals, `db`, `index` and
+profile. Extraction's three positionals, `db`, `index` and
 `out`, have no profile default and always have to be spelled out.
 
 ## Where the promises are written down

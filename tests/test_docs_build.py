@@ -436,11 +436,13 @@ def test_every_stage_package_of_the_core_has_a_page():
 
 def test_the_artifact_constants_carry_the_stage_that_writes_them():
     """Two tools over one string, because neither alone can do it: `ast` keeps
-    no comments, and seven of these nine names are f-strings that
+    no comments, and eight of these ten names are f-strings that
     `literal_eval` refuses."""
     rows = constants_of("docpipe/artifacts.py")
     by_name = {name: (value, note) for name, value, note in rows}
-    assert len(rows) == 9
+    assert len(rows) == 10
+    assert by_name["REFINEMENT_PARTIAL_JSON"] == (
+        "results/sections_refined.partial.json", "refinement (unfinished)")
     assert by_name["PAGES_JSON"] == ("results/pages.json",
                                      "preprocessing (extract)")
     # The two-line assignment: its comment sits on the continuation line.

@@ -15,11 +15,11 @@ fills every key below as a publication is read.
 `parameter_state`, `refusal` and `summary` are the three record kinds
 every profile's contract shares. `parameter_state` closes one
 parameter with its state and tuple and refusal counts
-(`docpipe/extraction/schema.py:548` to `572`); `refusal` records a
+(`docpipe/extraction/schema.py:549` to `573`); `refusal` records a
 claim the run did not accept: why it failed, the claim as returned,
 and its source (`:460` to `488`); `summary`, the file's last line, counts a
 document's tuples and refusals by trust level and reason (`:489` to
-`529`). The remaining `##` sections are `tuple` shapes, one per
+`530`). The remaining `##` sections are `tuple` shapes, one per
 parameter.
 
 Such a section opens with how its row becomes a node or an edge of the
@@ -99,19 +99,19 @@ value request says no entry of the list fits, is kept with its wording.
 Two sections close the page: `## The stamp`, the schema of
 `<publication>.stamp.json` (four fixed keys, `spec`, `model`,
 `anchors`, `page_text_transcribed`, plus per-question patterns,
-`docpipe/extraction/schema.py:579` to `685`), and `## The trace`, the
+`docpipe/extraction/schema.py:580` to `686`), and `## The trace`, the
 schema of `<publication>.trace.jsonl`, one `oneOf` branch per event
 kind: eleven, fixed by the schema for every profile rather than drawn
-from this one's spec (`docpipe/extraction/schema.py:688` to `802`). A
+from this one's spec (`docpipe/extraction/schema.py:689` to `804`). A
 `parameter/`, `value/`, `axis/` or `slot/` key differing from today's
 run makes the document eligible for a full re-harvest under
 `--force-stale`; `model`, `anchors` and every prompt id are written for
 a reader and never compared, so a reworded prompt or another model
 leaves a harvested corpus current (`stale`,
-`docpipe/extraction/runner.py:4293` to `4330`; `already_done`, `:4373`
-to `4398`). `top_up_file` redoes
+`docpipe/extraction/runner.py:4356` to `4393`; `already_done`, `:4436`
+to `4461`). `top_up_file` redoes
 only the changed question
-(`docpipe/extraction/topup.py:284` to `318`). The trace is read by
+(`docpipe/extraction/topup.py:339` to `440`). The trace is read by
 `scripts/trace_report.py` and, for cost, by `trace_costs`
 (`scripts/harvest_compare.py:134` to `153`), never by a resume.
 
@@ -139,7 +139,7 @@ The spec's uri for the parameter, the same key a tuple carries.
 
 ### `claim`
 
-The claim as the model returned it. A sentinel carries _harvest_failed with _why: the server was gone, the model answered nothing, or the reply did not fit and there was nothing left to split.
+The claim as the model returned it. A sentinel carries _harvest_failed with _why: the server was gone, it answered 429 or 5xx, the model answered nothing, or the reply did not fit and there was nothing left to split.
 
 ### `kind`
 

@@ -495,14 +495,15 @@ def harvest_schema(spec) -> dict:
                         "type": "object",
                         "description": "The claim as the model returned it. "
                                        "A sentinel carries _harvest_failed "
-                                       "with _why: the server was gone, the "
-                                       "model answered nothing, or the reply "
-                                       "did not fit and there was nothing "
-                                       "left to split.",
+                                       "with _why: the server was gone, it "
+                                       "answered 429 or 5xx, the model "
+                                       "answered nothing, or the reply did "
+                                       "not fit and there was nothing left "
+                                       "to split.",
                         "properties": {
                             "_harvest_failed": {"const": True},
-                            "_why": {"enum": ["unreachable", "no_answer",
-                                              "cut_off"]}}},
+                            "_why": {"enum": ["unreachable", "unserved",
+                                              "no_answer", "cut_off"]}}},
                     "owner": _owner(),
                 },
                 "required": ["kind", "parameter", "reason", "claim", "owner"],
@@ -777,7 +778,8 @@ def trace_schema() -> dict:
                   "finish": {"type": ["string", "null"]},
                   "status": {"type": ["integer", "string", "null"]},
                   "detail": {"type": "string"},
-                  "why": {"enum": ["unreachable", "no_answer", "cut_off"]},
+                  "why": {"enum": ["unreachable", "unserved", "no_answer",
+                                   "cut_off"]},
                   "owner": owner,
                   "sources": {"type": "array", "items": owner},
                   "ms": {"type": "integer"}},

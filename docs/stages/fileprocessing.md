@@ -46,8 +46,8 @@ the whole chain end to end are on [Running the pipeline](../running.md).
 
 `python -m scripts.fileprocessing` is the entry point
 (`scripts/fileprocessing/pipeline.py:main`). `_build_parser()` declares
-`--source` (aliased `--excel`, kept because existing job scripts still pass
-it), `--db`, `--data-dir`, `--backfill-meta`, `--profile`, and
+`--source` (also spelled `--excel`; both set `source`, the profile's
+document list), `--db`, `--data-dir`, `--backfill-meta`, `--profile`, and
 `--log-level`.
 
 ### Loading the profile

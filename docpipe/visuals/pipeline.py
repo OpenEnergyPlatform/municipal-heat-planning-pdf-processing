@@ -22,7 +22,7 @@ from pathlib import Path
 from typing import Optional
 
 from docpipe import prompts, usage
-from docpipe.profile import add_profile_argument, resolve_profile
+from docpipe.profile import add_profile_argument, require_profile
 
 from docpipe.llm_preflight import assert_serving
 
@@ -470,7 +470,7 @@ def main() -> None:
         datefmt="%H:%M:%S",
     )
 
-    profile = resolve_profile(args)
+    profile = require_profile(args)
     usage.begin("visuals")
 
     # Lets the job script derive --max-model-len from the code instead of
@@ -480,8 +480,6 @@ def main() -> None:
         sys.exit(0)
 
     if args.input is None:
-        if profile is None:
-            raise SystemExit("give an input path or a --profile to take it from")
         args.input = str(profile.processed_dir)
 
     common = dict(

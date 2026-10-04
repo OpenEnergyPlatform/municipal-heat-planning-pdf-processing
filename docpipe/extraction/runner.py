@@ -65,7 +65,7 @@ from typing import Callable, Optional
 from docpipe import prompts
 from docpipe import usage as token_usage
 from docpipe.llm_preflight import assert_serving, request_extras
-from docpipe.profile import add_profile_argument, resolve_profile
+from docpipe.profile import add_profile_argument, require_profile
 
 from . import fields
 from . import trace
@@ -162,6 +162,57 @@ def retry_wait(attempt: int, transport: bool = False) -> float:
         return min(TRANSPORT_WAIT * (2 ** max(0, attempt - 1)),
                    TRANSPORT_WAIT_MAX)
     return min(RETRY_WAIT * attempt, RETRY_WAIT_MAX)
+
+
+def unserved(exc: BaseException) -> bool:
+    """A 429 or a 5xx: the server was there and did not do the work.
+
+    Neither says anything about the request. A rate limit lifts and a server
+    recovers, and the same request is answered then. Every other 4xx refuses
+    the request itself, and refuses it every time.
+    """
+    status = getattr(exc, "status_code", None)
+    return isinstance(status, int) and (status == 429 or status >= 500)
+
+
+def server_side(exc: BaseException) -> bool:
+    """Whether a failure is the server's: it never arrived, or was `unserved`.
+
+    These wait on the long curve and count towards the dead-server streak. A
+    429 retried after two seconds is the same 429.
+    """
+    return (not isinstance(getattr(exc, "status_code", None), int)
+            or unserved(exc))
+
+
+class Unserved:
+    """Documents one of whose requests ended on a 429 or a 5xx.
+
+    Such a request was never answered, so its document is not finished,
+    whichever request it was: a passage's rows, one coordinate, the frame, a
+    search sentence. `finish_document` leaves the document unstamped and a
+    resume harvests it again. Counted under None: requests of the run itself.
+    """
+
+    def __init__(self):
+        self._lock = threading.Lock()
+        self._count: dict = {}
+
+    def note(self, document_id) -> None:
+        with self._lock:
+            self._count[document_id] = self._count.get(document_id, 0) + 1
+
+    def of(self, document_id) -> int:
+        with self._lock:
+            return self._count.get(document_id, 0)
+
+    def clear(self) -> None:
+        with self._lock:
+            self._count.clear()
+
+
+# For the whole run, like STOP: the request loops only know a document's id.
+UNSERVED = Unserved()
 # Requests in flight against the server, for the whole run — not per document.
 # vLLM batches continuously: what it can schedule is what it is given, and a
 # handful of requests leaves four GPUs idle between tokens. The first pilot
@@ -1022,7 +1073,8 @@ def anchor_targets(spec: Spec) -> list:
 
 def document_anchor(spec: Spec, context: Optional[dict] = None,
                     client=None, prompt=None,
-                    frame: Optional[dict] = None) -> dict:
+                    frame: Optional[dict] = None,
+                    document_id: Optional[int] = None) -> dict:
     """{parameter uri: [one sentence]} — the probe THIS document is searched with.
 
     The QA app turns a question into one short statement before it searches,
@@ -1066,7 +1118,7 @@ def document_anchor(spec: Spec, context: Optional[dict] = None,
                              for k, v in frame.items()
                              if not k.endswith(("_raw", "_quote", "_source"))}
         payload = json.dumps(body, ensure_ascii=False, indent=2)
-        transport = False
+        transport = lost = False
         conversation: list = [{"role": "user", "content": payload}]
         limit = int(prompt.meta.get("max_tokens", 300))
         faults = 0
@@ -1093,6 +1145,7 @@ def document_anchor(spec: Spec, context: Optional[dict] = None,
                 # tries were three copies of the same reply.
                 cause, correction = _reply_fault(reply, limit)
                 faults += 1
+                transport = lost = False
                 log.warning("phrase %s attempt %d: %s reply",
                             parameter.uri, attempt, cause)
                 conversation.append({"role": "assistant",
@@ -1101,10 +1154,11 @@ def document_anchor(spec: Spec, context: Optional[dict] = None,
             except Exception as exc:
                 log.warning("phrase %s attempt %d failed: %s",
                             parameter.uri, attempt, exc)
-                transport = not isinstance(
-                    getattr(exc, "status_code", None), int)
+                transport, lost = server_side(exc), unserved(exc)
             if attempt < MAX_RETRIES:
                 time.sleep(retry_wait(attempt, transport))
+        if lost:
+            UNSERVED.note(document_id)
         log.warning("phrase %s: no anchor written for this document",
                     parameter.uri)
         return parameter.uri, []
@@ -1305,7 +1359,7 @@ def make_frame_asker(image_root: Optional[Path] = None) -> Callable:
                 parts.append(part)
         if len(parts) > 1:
             content = parts
-        transport = False
+        transport = lost = False
         conversation: list = [{"role": "user", "content": content}]
         faults = 0
         for attempt in range(1, MAX_RETRIES + 1):
@@ -1327,7 +1381,7 @@ def make_frame_asker(image_root: Optional[Path] = None) -> Callable:
                               *conversation],
                     extra_body=request_extras(),
                 )
-                transport = False
+                transport = lost = False
                 _observe_usage(getattr(completion, "usage", None))
                 if usage_out is not None:
                     usage = getattr(completion, "usage", None)
@@ -1389,17 +1443,16 @@ def make_frame_asker(image_root: Optional[Path] = None) -> Callable:
             except Exception as exc:
                 log.warning("frame %s attempt %d failed: %s",
                             document_id, attempt, exc)
-                transport = not isinstance(
-                    getattr(exc, "status_code", None), int)
+                transport, lost = server_side(exc), unserved(exc)
                 trace.event("error", document_id, where="frame",
                             kind="exception", attempt=attempt,
                             detail=str(exc)[:200])
-                status = getattr(exc, "status_code", None)
-                if isinstance(status, int) and 400 <= status < 500 \
-                        and status != 429:
+                if not transport:
                     break
             if attempt < MAX_RETRIES:
                 time.sleep(retry_wait(attempt, transport))
+        if lost:
+            UNSERVED.note(document_id)
         return None
 
     return ask
@@ -1728,7 +1781,7 @@ def make_anchors(spec: Spec, client=None, *, store: Optional[Path] = None,
             # would get the same six sentences about the parameter.
             body["question"] = question
         payload = json.dumps(body, ensure_ascii=False, indent=2)
-        transport = False
+        transport = lost = False
         conversation: list = [{"role": "user", "content": payload}]
         limit = int(prompt.meta.get("max_tokens", 800))
         faults = 0
@@ -1752,6 +1805,7 @@ def make_anchors(spec: Spec, client=None, *, store: Optional[Path] = None,
                     return anchor_id, anchors
                 cause, correction = _reply_fault(reply, limit, key="anchors")
                 faults += 1
+                transport = lost = False
                 log.warning("anchors %s attempt %d: %s reply",
                             anchor_id, attempt, cause)
                 conversation.append({"role": "assistant",
@@ -1760,10 +1814,13 @@ def make_anchors(spec: Spec, client=None, *, store: Optional[Path] = None,
             except Exception as exc:
                 log.warning("anchors %s attempt %d failed: %s",
                             anchor_id, attempt, exc)
-                transport = not isinstance(
-                    getattr(exc, "status_code", None), int)
+                transport, lost = server_side(exc), unserved(exc)
             if attempt < MAX_RETRIES:
                 time.sleep(retry_wait(attempt, transport))
+        if lost:
+            # The run's own request: there is no document to leave unstamped,
+            # so the caller decides before any document is planned.
+            UNSERVED.note(None)
         log.warning("anchors %s: none generated", anchor_id)
         return anchor_id, []
 
@@ -2575,6 +2632,7 @@ def make_harvester(image_root: Optional[Path] = None,
                     **({"timeout": RETRY_TIMEOUT} if timed_out else {}),
                 )
                 transport = False
+                why[0] = "no_answer"
                 reply = response.choices[0]
                 _observe_usage(getattr(response, "usage", None))
                 # An action object instead of an answer: the model wants the
@@ -2660,12 +2718,15 @@ def make_harvester(image_root: Optional[Path] = None,
                             status=status, detail=str(exc)[:300],
                             owner=[first.owner_kind, first.owner_id])
                 # No HTTP status at all is a transport failure: the server is
-                # not there. That is the case a resume must never mistake for
-                # a harvested document.
-                why[0] = "no_answer" if isinstance(status, int) else "unreachable"
-                transport = not isinstance(status, int)
+                # not there. A 429 or a 5xx is a server that was there and did
+                # not do the work. Neither is a harvested document, and a
+                # resume must never mistake one for it.
+                why[0] = ("unserved" if unserved(exc)
+                          else "no_answer" if isinstance(status, int)
+                          else "unreachable")
+                transport = server_side(exc)
                 timed_out = _timed_out(exc)
-                if isinstance(status, int) and 400 <= status < 500 and status != 429:
+                if not transport:
                     # A request the server refuses is refused every time. The
                     # last run spent three tries and eight seconds of sleep on
                     # each over-long section before writing the same sentinel.
@@ -2952,7 +3013,7 @@ def make_field_asker(image_root: Optional[Path] = None, *,
         # failure is. Retrying a malformed reply without saying what was
         # malformed is one attempt three times.
         shape = field_response_format(slot)
-        transport = False
+        transport = lost = False
         timed_out = False
         faults = 0
         for attempt in range(1, MAX_RETRIES + 1):
@@ -2970,7 +3031,7 @@ def make_field_asker(image_root: Optional[Path] = None, *,
                     extra_body=request_extras(),
                     **({"timeout": RETRY_TIMEOUT} if timed_out else {}),
                 )
-                transport = False
+                transport = lost = False
                 if dead is not None:
                     dead.clear()
                 reply = response.choices[0]
@@ -3006,15 +3067,18 @@ def make_field_asker(image_root: Optional[Path] = None, *,
                 trace.event("error", document_id, where="field",
                             kind="exception", slot=name, attempt=attempt,
                             status=status, detail=str(exc)[:300])
-                transport = not isinstance(status, int)
+                transport, lost = server_side(exc), unserved(exc)
                 timed_out = _timed_out(exc)
-                if isinstance(status, int) and 400 <= status < 500 \
-                        and status != 429:
+                if not transport:
                     break
             if attempt < MAX_RETRIES:
                 time.sleep(retry_wait(attempt, transport))
+        if lost:
+            # One coordinate of this document was never read, and the sweep
+            # that asked cannot tell that from a window that held nothing.
+            UNSERVED.note(document_id)
         if transport and dead is not None and dead.hit():
-            log.error("field: %d requests in a row never reached the server "
+            log.error("field: %d requests in a row the server did not serve "
                       "-- the run gives up", dead.limit)
             if on_give_up is not None:
                 on_give_up()
@@ -3173,9 +3237,8 @@ def make_review_asker(image_root: Optional[Path] = None) -> Callable:
                 conversation.append({"role": "user", "content": correction})
             except Exception as exc:
                 log.warning("   review attempt %d failed: %s", attempt, exc)
-                status = getattr(exc, "status_code", None)
-                transport = not isinstance(status, int)
-                if isinstance(status, int) and 400 <= status < 500 and status != 429:
+                transport = server_side(exc)
+                if not transport:
                     break
             if attempt < MAX_RETRIES:
                 time.sleep(retry_wait(attempt, transport))
@@ -3862,9 +3925,9 @@ def split_long_sources(items: list, max_chars: int = MAX_SOURCE_CHARS) -> list:
 
 
 class DeadStreak:
-    """Consecutive replies that never reached the server, across every
-    document in flight: a dead server fails all of them alike, and a document
-    with twenty batches would never see sixty-four of its own in a row."""
+    """Consecutive requests the server did not serve (not reached, or a 429
+    or a 5xx), across every document in flight: a dead server fails them all
+    alike, and one with twenty batches never sees sixty-four of its own."""
 
     def __init__(self, limit: int):
         self.limit = limit
@@ -4061,11 +4124,11 @@ def harvest_batches(batches: list, harvest: Callable, *,
                              "status": "failed", "need_more": []}
                     sweep = None
                 results.append((batch, reply))
-                if any(t.get("_why") == "unreachable"
+                if any(t.get("_why") in ("unreachable", "unserved")
                        for t in reply.get("tuples") or []):
                     if dead.hit():
-                        log.error("harvest: %d requests in a row never reached "
-                                  "the server — cancelling the remaining %d",
+                        log.error("harvest: %d requests in a row the server "
+                                  "did not serve — cancelling the remaining %d",
                                   dead.limit, len(pending))
                         leave(pending)
                         if on_give_up is not None:
@@ -4365,9 +4428,9 @@ def run_document(document_id: int, name: str, out_dir: Path, spec: Spec,
                               more_sources=deps.get("more_sources"),
                               extra_probes=deps.get("anchors"),
                               prose_top=PROSE_TOP)
-    finish_document(report, name, out_dir, spec_sha, anchors_sha,
-                    spec=spec)
-    return True
+    stamped = finish_document(report, name, out_dir, spec_sha, anchors_sha,
+                              spec=spec, lost=UNSERVED.of(document_id))
+    return stamped
 
 
 def already_done(name: str, out_dir: Path, spec_sha: str, *,
@@ -4407,7 +4470,8 @@ UNREACHABLE_LIMIT = 0.5
 def finish_document(report, name: str, out_dir: Path, spec_sha: str,
                     anchors_sha: str = "", answered: Optional[int] = None,
                     spec: Optional[Spec] = None,
-                    questions: Optional[dict] = None) -> None:
+                    questions: Optional[dict] = None,
+                    lost: int = 0) -> bool:
     """Write one document's JSONL and stamp it with what produced it.
 
     The stamp is what a resume trusts, so it is withheld when the harvest did
@@ -4423,6 +4487,16 @@ def finish_document(report, name: str, out_dir: Path, spec_sha: str,
     there is no tuple and no refusal either, so it reads 0 > n/2, says no, and
     stamps an empty file. That is how a dead server turned 872 planned
     documents into 0-byte results a resume would have skipped.
+
+    `lost` is how many of the document's other requests (a coordinate,
+    the frame, a search sentence) ended on a 429 or a 5xx; the passages that
+    ended there carry it in their sentinel. One is enough to withhold the
+    stamp: the request was never answered and nothing says it cannot be.
+
+    An earlier stamp is removed before the file is written. It vouched for
+    the file this one replaces, and left in place it would have a resume
+    skip a document whose stamp was just withheld. Returns whether the
+    document is stamped.
     """
     failed = [r for r in report.refusals
               if r.get("claim", {}).get("_harvest_failed")]
@@ -4446,6 +4520,8 @@ def finish_document(report, name: str, out_dir: Path, spec_sha: str,
               if spec is not None else None)
     if spec is not None:
         check_against_schema(report, name, spec, states)
+    stamp = out_dir / f"{name}.stamp.json"
+    stamp.unlink(missing_ok=True)
     write_report(report, out_dir / f"{name}.jsonl", states)
     unreachable = sum(1 for r in failed
                       if r.get("claim", {}).get("_why") == "unreachable")
@@ -4454,16 +4530,23 @@ def finish_document(report, name: str, out_dir: Path, spec_sha: str,
         log.error("extraction: %s: %d of %d source(s) never reached the "
                   "server — not stamped, so a resume harvests it again",
                   name, unreachable, sources)
-        return
+        return False
     if sources and answered == 0:
         log.error("extraction: %s: %d source(s) planned and not one reply — "
                   "not stamped, so a resume harvests it again", name, sources)
-        return
-    (out_dir / f"{name}.stamp.json").write_text(
+        return False
+    lost += sum(1 for r in failed
+                if r.get("claim", {}).get("_why") == "unserved")
+    if lost:
+        log.error("extraction: %s: %d request(s) ended on a 429 or a 5xx — "
+                  "not stamped, so a resume harvests it again", name, lost)
+        return False
+    stamp.write_text(
         json.dumps({**_stamp_current(spec_sha, anchors_sha, spec),
                     **recorded_questions(questions)},
                    ensure_ascii=False, indent=2),
         encoding="utf-8")
+    return True
 
 
 def _harvest_validators(spec):
@@ -4830,7 +4913,7 @@ def main(argv: Optional[list] = None) -> int:
                         format="%(asctime)s [%(levelname)s] %(name)s %(message)s",
                         datefmt="%H:%M:%S")
 
-    profile = resolve_profile(args)
+    profile = require_profile(args)
     token_usage.begin("extraction")
     if args.recheck:
         raw_spec_path = profile.component("extraction", "SPEC_PATH")
@@ -5098,9 +5181,18 @@ def main(argv: Optional[list] = None) -> int:
     # planned: the anchors depend on the question, not on the document, and a
     # probe string that is the same for the whole corpus is what makes the
     # query-embedding cache pay.
+    UNSERVED.clear()
     anchors = ({} if os.environ.get("EXTRACT_ANCHORS", "1") == "0"
                else make_anchors(spec, store=args.out / "anchors.json",
                                  key=anchors_sha))
+    if UNSERVED.of(None):
+        # Every document would be searched without them and stamped as if it
+        # had been searched with them. The ones written are kept in the
+        # store, so the next start asks only for the rest.
+        log.error("extraction: %d anchor request(s) ended on a 429 or a 5xx "
+                  "— nothing is harvested without them, start the run again",
+                  UNSERVED.of(None))
+        return 1
 
     cache_path = args.out / "query_cache.db"
     primer = query_cache.connect(cache_path)
@@ -5195,7 +5287,8 @@ def main(argv: Optional[list] = None) -> int:
             if first:
                 context.setdefault(
                     "caption", (first[0].provenance or {}).get("title") or "")
-            probes = document_anchor(doc_spec, context, frame=frame)
+            probes = document_anchor(doc_spec, context, frame=frame,
+                                     document_id=document_id)
             name = Path(filename).stem
             for uri, texts in sorted(probes.items()):
                 for text in texts:
@@ -5260,7 +5353,7 @@ def main(argv: Optional[list] = None) -> int:
                     rows.append(dict(outcome.tuple))
         return rows
 
-    def verify(entry: tuple) -> None:
+    def verify(entry: tuple) -> bool:
         name, report, answered = entry
         replies = len(answered)
         for batch, reply in answered:
@@ -5279,10 +5372,12 @@ def main(argv: Optional[list] = None) -> int:
                         parameter=refusal.get("parameter"),
                         reason=refusal.get("reason"),
                         owner=refusal.get("owner"))
-        finish_document(report, name, args.out, spec_sha, anchors_sha,
-                        answered=replies, spec=spec,
-                        questions=asked.pop(name, None))
+        stamped = finish_document(report, name, args.out, spec_sha,
+                                  anchors_sha, answered=replies, spec=spec,
+                                  questions=asked.pop(name, None),
+                                  lost=UNSERVED.of(report.document_id))
         trace.flush(report.document_id)
+        return stamped
 
     started = time.time()
     failures = 0
@@ -5443,8 +5538,10 @@ def main(argv: Optional[list] = None) -> int:
             log.error("extraction: %s left with batches never harvested — not "
                       "written, so a resume harvests it again", name)
             return False, failed
-        verify((name, report, answered))
-        return True, failed
+        # Written and left for a resume is not a finished document: the
+        # run says so in its exit code, as it does for a server that is gone.
+        stamped = verify((name, report, answered))
+        return stamped, failed + (0 if stamped else 1)
 
     install_stop_handler()
     try:

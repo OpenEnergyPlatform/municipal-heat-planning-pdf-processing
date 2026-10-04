@@ -21,19 +21,19 @@ import openai
 
 from . import qa
 from .config import (
-    TABLE_SYSTEM_PROMPT,
-    TABLE_USER_PROMPT,
+    table_system_prompt,
+    table_user_prompt,
     TABLE_VLM_TEMPERATURE,
     TABLE_QA_MIN_COVERAGE,
     TABLE_QA_MAX_DUPLICATION,
     TABLE_QA_MIN_SOURCE_TOKENS,
     TABLE_QA_RETRY_TEMPERATURE,
     TABLE_QA_RETRY_PENALTY,
-    FIGURE_SYSTEM_PROMPT,
-    FIGURE_USER_PROMPT,
-    CAPTION_KEEP_INSTRUCTION,
-    CAPTION_GENERATE_TABLE_INSTRUCTION,
-    CAPTION_GENERATE_FIGURE_INSTRUCTION,
+    figure_system_prompt,
+    figure_user_prompt,
+    caption_keep_instruction,
+    caption_generate_table_instruction,
+    caption_generate_figure_instruction,
 )
 from .models import ProcessingStats
 from .vision import call_vision, call_vision_plain
@@ -91,10 +91,10 @@ def _truncate(text: str, max_len: int = 800) -> str:
 def _caption_instruction(existing: str, kind: str) -> str:
     """Returns the appropriate caption instruction fragment."""
     if existing:
-        return CAPTION_KEEP_INSTRUCTION
+        return caption_keep_instruction()
     if kind == "table":
-        return CAPTION_GENERATE_TABLE_INSTRUCTION
-    return CAPTION_GENERATE_FIGURE_INSTRUCTION
+        return caption_generate_table_instruction()
+    return caption_generate_figure_instruction()
 
 
 # ---------------------------------------------------------------------------
@@ -137,7 +137,7 @@ def process_table(
 
     existing_caption = table.get("caption") or ""
 
-    user_prompt = TABLE_USER_PROMPT.format(
+    user_prompt = table_user_prompt().format(
         section_title=section.get("title", "Unknown"),
         page_number=table.get("page_number", section.get("page_number", "?")),
         existing_caption=existing_caption or "(none)",
@@ -147,12 +147,12 @@ def process_table(
 
     kwargs = {"model": model} if model else {}
     response = call_vision(
-        client, TABLE_SYSTEM_PROMPT, user_prompt, image_path,
+        client, table_system_prompt(), user_prompt, image_path,
         temperature=TABLE_VLM_TEMPERATURE, **kwargs
     )
 
     if not response:
-        rescued = _rescue_plain(client, TABLE_SYSTEM_PROMPT, user_prompt,
+        rescued = _rescue_plain(client, table_system_prompt(), user_prompt,
                                 image_path, kwargs, "markdown")
         with guard:
             if rescued:
@@ -172,7 +172,7 @@ def process_table(
 
     if not passed:
         retry = call_vision(
-            client, TABLE_SYSTEM_PROMPT, user_prompt + _QA_RETRY_HINT, image_path,
+            client, table_system_prompt(), user_prompt + _QA_RETRY_HINT, image_path,
             temperature=TABLE_QA_RETRY_TEMPERATURE,
             repetition_penalty=TABLE_QA_RETRY_PENALTY, **kwargs,
         )
@@ -250,7 +250,7 @@ def process_figure(
 
     existing_caption = figure.get("caption") or ""
 
-    user_prompt = FIGURE_USER_PROMPT.format(
+    user_prompt = figure_user_prompt().format(
         section_title=section.get("title", "Unknown"),
         page_number=figure.get("page_number", section.get("page_number", "?")),
         existing_caption=existing_caption or "(none)",
@@ -260,7 +260,7 @@ def process_figure(
 
     kwargs = {"model": model} if model else {}
     response = call_vision(
-        client, FIGURE_SYSTEM_PROMPT, user_prompt, image_path, **kwargs
+        client, figure_system_prompt(), user_prompt, image_path, **kwargs
     )
 
     if response:
@@ -275,7 +275,7 @@ def process_figure(
             stats.processed_figures += 1
         log.info("  ✓ Figure %s", figure["id"])
     else:
-        rescued = _rescue_plain(client, FIGURE_SYSTEM_PROMPT, user_prompt,
+        rescued = _rescue_plain(client, figure_system_prompt(), user_prompt,
                                 image_path, kwargs, "description")
         with guard:
             if rescued:

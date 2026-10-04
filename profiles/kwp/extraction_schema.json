@@ -128,7 +128,7 @@
     "additionalProperties": false,
     "properties": {
      "claim": {
-      "description": "The claim as the model returned it. A sentinel carries _harvest_failed with _why: the server was gone, the model answered nothing, or the reply did not fit and there was nothing left to split.",
+      "description": "The claim as the model returned it. A sentinel carries _harvest_failed with _why: the server was gone, it answered 429 or 5xx, the model answered nothing, or the reply did not fit and there was nothing left to split.",
       "properties": {
        "_harvest_failed": {
         "const": true
@@ -136,6 +136,7 @@
        "_why": {
         "enum": [
          "unreachable",
+         "unserved",
          "no_answer",
          "cut_off"
         ]
@@ -6891,6 +6892,7 @@
      "why": {
       "enum": [
        "unreachable",
+       "unserved",
        "no_answer",
        "cut_off"
       ]

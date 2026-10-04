@@ -150,15 +150,15 @@ in one plan never excludes another's sources.
 as a raw float32 blob, `created_at`). `REQUEST_LOG_PATH` holds one table,
 `requests` (plan, query text, mode, scopes, timestamp, latency, hit and
 citation counts, `answer_hash`, error, `cache_hit`), appended to once per
-turn (`docpipe/inference/answer.py:318`); neither stores the answer text
+turn (`docpipe/inference/answer.py:321`); neither stores the answer text
 itself, `answer_hash` being a truncated hash of it, used to spot
 repeats. `request_log.py`'s docstring gives the reason: a
 follow-up is context-dependent, so a cache keyed on the query text alone
 would reuse an answer written for a different conversation; only the
 embedding vector is cached. That reuse is not what the logged
 `cache_hit` column reflects: `answer_question()`
-computes the real flag into its in-memory result (`answer.py:155`), but
-`_log()` hardcodes `cache_hit=False` on every call (`answer.py:330`)
+computes the real flag into its in-memory result (`answer.py:158`), but
+`_log()` hardcodes `cache_hit=False` on every call (`answer.py:333`)
 instead of forwarding it, so the stored column is always `False`
 regardless of the query's embedding coming from `QUERY_CACHE_PATH`.
 
@@ -209,6 +209,10 @@ endpoint (`config.py:14`).
   401 (`sandbox_service.py:105`); a container or backend error returns as
   a structured error rather than raising, so an outage degrades a turn
   to no calculation, not failure (`sandbox_service.py:83`).
+- The sandbox turns each key of the context it receives into a variable and
+  skips a key that is no identifier (`_preamble`, `sandbox_service.py:56-64`);
+  `answer._code_context` sends `{"tables": [{"caption", "markdown"}]}`, the
+  variable the compute prompt names (`docpipe/inference/answer.py:62-77`).
 - Loading `.env` from the app's config module, after
   `docpipe.inference` had captured `os.environ`, left the LLM API key at
   its fallback, every answer call failing with 401. The
@@ -226,7 +230,7 @@ endpoint (`config.py:14`).
   `39`, `42`).
 - A single LLM call retries up to `LLM_MAX_RETRIES` (4) times under a
   `LLM_TIMEOUT` of 180 seconds (`docpipe/inference/config.py:22`, `30`).
-- `code_exec.run_code()`, the sandbox's only caller (`answer.py:209`),
+- `code_exec.run_code()`, the sandbox's only caller (`answer.py:212`),
   never sends a `timeout` field (`docpipe/inference/code_exec.py:39`);
   `CODE_EXEC_TIMEOUT` (45 seconds, `code_exec.py:46`) bounds only the
   HTTP client, so every run falls back to the tighter

@@ -61,8 +61,8 @@ def test_split_gives_up_loudly_when_provenance_no_longer_lines_up(caplog):
 def test_budget_covers_a_full_window_plus_the_reply():
     budget = refine_config.max_request_tokens()
     window_words = refine_config.WINDOW_SIZE * refine_config.SECTION_MAX_WORDS
-    assert budget > window_words + refine_config.LLM_MAX_TOKENS
-    assert budget >= refine_config.LLM_MAX_TOKENS
+    assert budget > window_words + refine_config.llm_max_tokens()
+    assert budget >= refine_config.llm_max_tokens()
 
 
 def test_budget_reacts_to_the_knobs_it_names():
@@ -171,7 +171,7 @@ def test_reply_budget_grows_with_the_window():
     the window's size."""
     small = refine_config.reply_tokens(300)
     big = refine_config.reply_tokens(3 * 1400)
-    assert small == refine_config.LLM_MAX_TOKENS, "small windows keep the floor"
+    assert small == refine_config.llm_max_tokens(), "small windows keep the floor"
     assert big > small, "a window three times larger must get more room"
 
 

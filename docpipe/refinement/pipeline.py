@@ -26,11 +26,11 @@ from typing import Optional
 
 from docpipe import prompts, usage
 from docpipe.llm_preflight import assert_serving
-from docpipe.profile import add_profile_argument, resolve_profile
+from docpipe.profile import add_profile_argument, require_profile
 
 from .config import (DIR_RESULTS, LLM_API_KEY, LLM_BASE_URL, LLM_MODEL,
                      SECTIONS_REFINED_JSON, PROMPT_IDS, SECTIONS_JSON,
-                     max_request_tokens)
+                     llm_max_tokens, llm_temperature, max_request_tokens)
 from .refine import run_refine
 
 log = logging.getLogger(__name__)
@@ -230,8 +230,11 @@ def main() -> None:
         datefmt="%H:%M:%S",
     )
 
-    profile = resolve_profile(args)
+    profile = require_profile(args)
     usage.begin("refinement")
+    # Read once before the first document: a setting that cannot be read
+    # would otherwise fail inside every request of every document.
+    llm_temperature(), llm_max_tokens()
 
     # Lets the job script derive --max-model-len from the code instead of
     # restating it in a comment that nothing checks.
@@ -240,8 +243,6 @@ def main() -> None:
         sys.exit(0)
 
     if args.input is None:
-        if profile is None:
-            raise SystemExit("give an input path or a --profile to take it from")
         args.input = str(profile.processed_dir)
 
     try:

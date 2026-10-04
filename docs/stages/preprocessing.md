@@ -15,11 +15,14 @@ reading order and assembles them into sections carrying prose content, table
 and figure references, and placeholders marking where each one sits.
 Refinement reads `sections.json` directly. Image processing prefers
 `sections_refined.json` but falls back to `sections.json` itself whenever
-refinement has not produced it yet; only chunking, which imports
-`SECTIONS_REFINED_JSON` and `VISUALS_JSON` but never `SECTIONS_JSON`, reaches
-`sections.json` exclusively through the merged `document.json`
+refinement has not produced it yet. Chunking's merge step requires
+`sections_refined.json` and looks at `sections.json` only to warn about a
+document that has one and no refined output, so the content reaches the
+database through the merged `document.json`; only the standalone
+`enrich-bbox` step reads `sections.json` itself, for its geometry
 (`docpipe/refinement/pipeline.py:44-45`; `docpipe/visuals/pipeline.py:56-65`,
-152-155; `docpipe/chunking/merge.py:22`).
+152-155; `docpipe/chunking/merge.py:22-23`, `167-177`;
+`docpipe/chunking/database.py:587`).
 
 Everything here is deterministic, PyMuPDF text extraction, the
 PP-DocLayoutV3 forward pass, and rule-based section assembly, with one
@@ -50,10 +53,11 @@ reading `sections.json` and writing `sections_refined.json`
 
 ### Resolving the profile and choosing a mode
 
-`resolve_profile(args)` (`docpipe/profile.py:178-197`) loads the `Profile`
-named by `--profile` or `$DOCPIPE_PROFILE`; naming one only after
-prompt-binding import time raises `SystemExit` instead of silently running
-with the core prompts. `run()` (`docpipe/preprocessing/pipeline.py:391-438`)
+`resolve_profile(args)` (`docpipe/profile.py:212-234`) loads the `Profile`
+named by `--profile` or `$DOCPIPE_PROFILE`; `__main__.py` copies the flag
+into the environment before the stage is imported, and a profile named
+after the stage was imported under another one raises `SystemExit` instead
+of running on a mix of both. `run()` (`docpipe/preprocessing/pipeline.py:391-438`)
 dispatches to `run_single()` for a `.pdf` file, `run_folder()` for a
 directory, or, with `rebuild_stage3` set, `rebuild_stage3_from_cache()`,
 which ignores the input path.
@@ -184,7 +188,7 @@ a field the `Section` docstring in `models.py:159-161` omits.
 | `images/<block_id>.png` | Stage 2 | one PNG crop per table or image block |
 | `_index.json` | folder mode | `{relative_pdf_path: {status, output_dir, sections}}` |
 
-(`docpipe/artifacts.py:12-22`; `docpipe/preprocessing/page_text_fallback.py:161-265`.)
+(`docpipe/artifacts.py:12-24`; `docpipe/preprocessing/page_text_fallback.py:161-265`.)
 
 ## Configuration
 
@@ -202,12 +206,12 @@ a field the `Section` docstring in `models.py:159-161` omits.
 | `DOCPIPE_LAYOUT_PREFETCH` | env var | `1` | Stage 2 batches rendered ahead of the running forward pass, as `LAYOUT_PREFETCH_BATCHES` (`config.py:58`) |
 | `PAGE_TRANSCRIBE_WORKERS` / `PAGE_RENDER_WORKERS` | env vars | `64` / `4` | concurrent transcription calls and page renders in the fallback, bounded separately |
 
-`Profile.column_layout` (`docpipe/profile.py:37`) is optional: it defaults
+`Profile.column_layout` (`docpipe/profile.py:39`) is optional: it defaults
 to `"auto"`, `run()` falls back to `"auto"` even with no active profile
 (`pipeline.py:537`), and there is no dedicated `--column-layout` CLI flag.
 `Profile.__post_init__` raises
 `ValueError` only if it is set to something outside `auto`/`single`/`double`
-(`profile.py:46-50`). `auto` looks for a gutter and accepts one column as
+(`profile.py:48-52`). `auto` looks for a gutter and accepts one column as
 the answer, `double` falls back to a centre split if none is found, and
 `single` never looks.
 
@@ -245,7 +249,7 @@ A selection of the module constants that tune detection and assembly:
 | `LayoutDetectionFailed` reaches `run_folder`'s per-document handler | the document is marked `status="error"` in `_index.json` and the run continues; called directly, the exception propagates unhandled (`pipeline.py:237-256,529-544`) |
 | A page fails to render for Stage 2, its post-detection processing raises, or a crop fails to encode or write | logged and skipped; the page keeps its Stage-1-only data, and a written `Block` can still reference a failed crop (`stage2_layout.py:491-552,992,1032`) |
 | `pages.json` or `sections.json` is unreadable, or a Stage 3 cache was built while `n_failed` was set, or the input path is neither a `.pdf` file nor a directory | treated as absent and rebuilt, deleted before the cache-hit check runs, or `run()` raises `ValueError` and `main()` exits with status 1 (`pipeline.py:58-59,154-168,438,542-544`) |
-| No profile is active but a profile-gated function is called, or `--profile` resolves after prompt-binding import time | a `LookupError` propagates uncaught, or `resolve_profile` raises `SystemExit` (`stage1_extract.py:41-43`; `profile.py:76-82,155-169,178-197`) |
+| No profile is active but a profile-gated function is called, or a profile is named after the stage was imported under another one | a `LookupError` propagates uncaught, or `resolve_profile` raises `SystemExit` (`stage1_extract.py:41-43`; `profile.py:78-84,157-171,212-234`) |
 | A page-transcription call raises, returns an empty markdown string, or more candidates need transcription than `max_pages` | counted in `pages_failed` or `pages_empty`, or truncated with `pages_missing_text` still reporting the true total (`page_text_fallback.py:196-204`); unreachable through the CLI or `run()`, since `_fill_missing_page_text()` never passes `max_pages` (`pipeline.py:369-374`) |
 | `find_gutters()` cannot support a confident column split | returns `[]`; the page reads as a single column, or, under `column_layout="double"`, falls back to a hard centre split (`columns.py:158-267`) |
 

@@ -32,6 +32,7 @@ Author: Felix Vossel
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import re
@@ -40,12 +41,15 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Callable, Optional
 
-from docpipe import usage
+from docpipe import prompts, usage
 from docpipe.llm_preflight import request_extras
 
 from .corrections import apply_corrections
-from .split import SPLIT_MAX_TOKENS, SPLIT_TEMPERATURE, split_oversized
+from .split import (NotServed, split_max_tokens, split_oversized,
+                    split_temperature)
 from .config import (
+    PROMPT_IDS,
+    REFINEMENT_PARTIAL_JSON,
     REFINEMENT_REPORT_JSON,
     SECTIONS_JSON,
     SECTIONS_REFINED_JSON,
@@ -54,13 +58,12 @@ from .config import (
     LLM_API_KEY,
     LLM_TIMEOUT,
     LLM_NUM_PARALLEL,
-    LLM_TEMPERATURE,
-    LLM_MAX_TOKENS,
+    llm_temperature,
     REFINE_RETURN_CORRECTIONS,
     reply_tokens,
     MAX_RETRIES,
     WINDOW_SIZE,
-    SYSTEM_PROMPT,
+    system_prompt,
     TITLE_CLEANUP_ENABLE,
     clean_data,
     dump_json_atomic,
@@ -89,6 +92,34 @@ def _loads_json_object(text: str) -> dict:
 # ---------------------------------------------------------------------------
 # LLM API wrapper
 # ---------------------------------------------------------------------------
+
+
+class _NotServed:
+    """What `_call_llm` returns for a window the server did not serve."""
+
+    def __repr__(self) -> str:
+        return "NOT_SERVED"
+
+
+# Not None: None is a window the model was asked about and gave nothing usable
+# for, which keeps its text. This one was never answered at all.
+NOT_SERVED = _NotServed()
+
+
+class Unfinished(Exception):
+    """Windows the model server did not serve, so the document is not refined.
+
+    *sections* are the sections the windows were cut from (after the split),
+    *done* the usable replies by window index, *lost* the indices that were
+    not served. A later run over the same sections asks only for the rest.
+    Without *sections* it was the cut of an oversized section that was not
+    served, and there is nothing to keep: the next run starts with the cut.
+    """
+
+    def __init__(self, sections: list, done: dict, lost: list, total: int):
+        super().__init__(f"{len(lost)} of {total} window(s) not served")
+        self.sections, self.done, self.lost, self.total = (
+            sections, done, lost, total)
 
 
 def _backoff(attempt: int) -> None:
@@ -130,7 +161,7 @@ def _tail_text(content, n: int) -> str:
 
 # A repair turn has to tell the model that its answer was unusable — it does not
 # have to hand the whole answer back. Echoing it verbatim adds up to
-# LLM_MAX_TOKENS on top of a window that is already ~18k tokens, which is how a
+# llm_max_tokens() on top of a window that is already ~18k tokens, which is how a
 # retry, not the original request, ran into the 32k context limit.
 _ECHO_HEAD = 400
 _ECHO_TAIL = 200
@@ -239,7 +270,10 @@ def _call_llm(
     the request itself, so a retry of it is refused too.
 
     Returns:
-        Parsed list of section dicts with "_action" fields, or None on failure.
+        Parsed list of section dicts with "_action" fields. None when the
+        request was refused or the model gave nothing usable. NOT_SERVED when
+        the last attempt never got an answer: no connection, a timeout, a 429
+        or a 5xx.
     """
     # segments/pages are stripped from the payload: the model must not see or
     # rewrite them. They are reattached afterwards (see _thread_provenance).
@@ -281,27 +315,34 @@ def _call_llm(
         user_content = user_payload
 
     base_messages = [
-        {"role": "system", "content": SYSTEM_PROMPT},
+        {"role": "system", "content": system_prompt()},
         {"role": "user", "content": user_content},
     ]
     messages = list(base_messages)
+    lost = False
+    # Before the loop and outside its try: a setting that cannot be read is
+    # no failed request, and must not pass for a server that did not answer.
+    temperature = llm_temperature()
+    # Sized to THIS window, not a flat cap: the reply is the window handed
+    # back refined, so a big window needs a big answer. The flat 8192 cut the
+    # JSON mid-string.
+    max_tokens = reply_tokens(len(user_content.split()))
 
     for attempt in range(1, MAX_RETRIES + 1):
         raw_text = ""
+        answered = False
         try:
             response = client.chat.completions.create(
                 model=LLM_MODEL,
                 messages=messages,
                 response_format={"type": "json_object"},
-                temperature=LLM_TEMPERATURE,
-                # Sized to THIS window, not a flat cap: the reply is the
-                # window handed back refined, so a big window needs a big
-                # answer. The flat 8192 cut the JSON mid-string.
-                max_tokens=reply_tokens(len(user_content.split())),
+                temperature=temperature,
+                max_tokens=max_tokens,
                 # Reasoning models must not spend the token budget on a
                 # <think> block; that truncates the JSON answer.
                 extra_body=request_extras(),
             )
+            answered, lost = True, False
             usage.reply(response, LLM_MODEL)
 
             raw_text = response.choices[0].message.content or ""
@@ -375,14 +416,17 @@ def _call_llm(
                 else:
                     log.error("   LLM rejected the request (HTTP %d): %s", status, e)
                 return None
-            # Covers connection errors and the request timeout.
+            # Covers connection errors, the request timeout, 429 and 5xx. An
+            # error raised after the reply arrived is the reply's, not the
+            # server's.
+            lost = not answered
             log.error(
                 f"   Attempt {attempt}/{MAX_RETRIES}: LLM request failed: {e}"
             )
             messages = list(base_messages)
             _backoff(attempt)
 
-    return None
+    return NOT_SERVED if lost else None
 
 
 # ---------------------------------------------------------------------------
@@ -780,21 +824,37 @@ def _normalize_title(title: str) -> str:
 
 
 def _make_splitter(client) -> Callable[[str, str], str]:
-    """A one-shot JSON call for the split prompt — no retries, no repair.
+    """A JSON call for the split prompt — no repair, and no second call for
+    an answer.
 
-    A failed or unusable answer is not worth a second call: the mechanical
-    fallback in split.py cuts the section anyway, only less cleverly.
+    An unusable answer or a refused request is not worth a second call: the
+    mechanical fallback in split.py cuts the section anyway, only less
+    cleverly. A request the server did not answer is asked again like a
+    window's, and raises NotServed when it stays that way: cut mechanically
+    because of an outage, the section would keep those cuts for good.
     """
     def ask(system_prompt: str, user_content: str) -> str:
-        response = client.chat.completions.create(
-            model=LLM_MODEL,
-            messages=[{"role": "system", "content": system_prompt},
-                      {"role": "user", "content": user_content}],
-            response_format={"type": "json_object"},
-            temperature=SPLIT_TEMPERATURE,
-            max_tokens=SPLIT_MAX_TOKENS,
-            extra_body=request_extras(),
-        )
+        temperature, max_tokens = split_temperature(), split_max_tokens()
+        for attempt in range(1, MAX_RETRIES + 1):
+            try:
+                response = client.chat.completions.create(
+                    model=LLM_MODEL,
+                    messages=[{"role": "system", "content": system_prompt},
+                              {"role": "user", "content": user_content}],
+                    response_format={"type": "json_object"},
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                    extra_body=request_extras(),
+                )
+                break
+            except Exception as e:
+                if _client_error_status(e) is not None:
+                    raise
+                log.warning(f"   Split attempt {attempt}/{MAX_RETRIES}: "
+                            f"LLM request failed: {e}")
+                if attempt == MAX_RETRIES:
+                    raise NotServed(str(e)) from e
+                _backoff(attempt)
         usage.reply(response, LLM_MODEL)
         raw = response.choices[0].message.content or ""
         raw = re.sub(r"<think>.*?</think>", "", raw, flags=re.DOTALL).strip()
@@ -804,7 +864,8 @@ def _make_splitter(client) -> Callable[[str, str], str]:
 
 
 def refine_sections(sections: list[dict],
-                    report: Optional[dict] = None) -> list[dict]:
+                    report: Optional[dict] = None,
+                    done: Optional[dict] = None) -> list[dict]:
     """
     Processes all sections through the LLM in windows of WINDOW_SIZE, dispatched
     in parallel but assembled in order (merge/split semantics are positional).
@@ -812,6 +873,12 @@ def refine_sections(sections: list[dict],
     Mutates *sections* in place (source_text is stripped); returns the refined
     list. When *report* is given, it is filled with what this pass could not
     refine — see refine_document, which writes it next to the output.
+
+    *done* resumes an unfinished pass: {window index: reply} over *sections*
+    as that pass cut them, so they are not cut again and only the other
+    windows are asked. Raises Unfinished when the server did not serve a
+    window; nothing is assembled then, because a window that was never
+    answered would go into the output as text that needed no change.
     """
     if not sections:
         return sections
@@ -838,7 +905,12 @@ def refine_sections(sections: list[dict],
     # Cut oversized sections FIRST. A window has to echo every section it
     # carries, so a section too long to be one chunk is also too long to echo —
     # which is how those sections used to pass through unrefined.
-    sections = split_oversized(sections, ask=_make_splitter(client))
+    if done is None:
+        try:
+            sections = split_oversized(sections, ask=_make_splitter(client))
+        except NotServed as lost_cut:
+            raise Unfinished(None, {}, [], 0) from lost_cut
+    done = done or {}
 
     log.info(
         f"Stage 4: {len(sections)} sections, window size {WINDOW_SIZE}, "
@@ -861,6 +933,9 @@ def refine_sections(sections: list[dict],
     with ThreadPoolExecutor(max_workers=LLM_NUM_PARALLEL) as executor:
         futures = {}
         for win_idx, window in enumerate(windows):
+            if isinstance(done.get(win_idx), list):
+                ordered_results[win_idx] = (done[win_idx], window)
+                continue
             # Read-only context for merges across the window boundary.
             prev_ctx = windows[win_idx - 1][-1] if win_idx > 0 else None
             future = executor.submit(_call_llm, window, client, prev_ctx)
@@ -871,7 +946,8 @@ def refine_sections(sections: list[dict],
             try:
                 llm_result = future.result()
                 ordered_results[win_idx] = (llm_result, window)
-                status = "ok" if llm_result is not None else "FAILED"
+                status = ("NOT SERVED" if llm_result is NOT_SERVED
+                          else "ok" if llm_result is not None else "FAILED")
                 log.info(
                     f"  Stage 4: window {win_idx + 1}/{total_windows} → {status}"
                 )
@@ -880,6 +956,15 @@ def refine_sections(sections: list[dict],
                     f"  Stage 4: window {win_idx + 1} exception: {e}"
                 )
                 ordered_results[win_idx] = (None, window)
+
+    lost = [i for i in range(total_windows)
+            if ordered_results[i][0] is NOT_SERVED]
+    if lost:
+        raise Unfinished(
+            sections,
+            {i: reply for i, (reply, _window) in ordered_results.items()
+             if isinstance(reply, list)},
+            lost, total_windows)
 
     # ── Sequential assembly (order matters for merge_into_previous) ──────
     refined: list[dict] = []
@@ -1041,15 +1126,21 @@ def run_refine(output_dir: Path, data: Optional[dict] = None,
     Forcing must not delete the old output first. dump_json_atomic replaces it
     in one step at the end, so a run killed part-way — a batch timeout, a job
     hitting its wall clock — leaves the previous refinement rather than nothing
-    at all. A document with no refined output is skipped by the merge without
-    a word, and would vanish from the database.
+    at all. A document with no refined output is left out by the merge, and
+    would vanish from the database.
+
+    A pass the server did not serve every window of writes no refined output.
+    What it did get is kept beside it (REFINEMENT_PARTIAL_JSON), and the next
+    run, forced or not, asks only for the windows that are missing.
 
     Returns:
         The refined output dict, or None on failure.
     """
     final_path = output_dir / SECTIONS_REFINED_JSON
+    partial_path = output_dir / REFINEMENT_PARTIAL_JSON
+    partial = _read_partial(partial_path)
 
-    if final_path.exists() and not force:
+    if final_path.exists() and not force and partial is None:
         log.info(f"Stage 4: cache hit → {final_path}")
         with open(final_path, encoding="utf-8") as f:
             return json.load(f)
@@ -1066,17 +1157,89 @@ def run_refine(output_dir: Path, data: Optional[dict] = None,
     sections = data.get("sections", [])
     log.info(f"Stage 4: {len(sections)} sections loaded")
 
+    # What the pass strips first, stripped before the key is taken: a caller
+    # that hands the same sections in again hashes what was hashed before.
+    _strip_table_source_text(sections)
+    key = _partial_key(sections)
+    done = None
+    if partial is not None and partial.get("key") != key:
+        log.warning("Stage 4: the unfinished pass in %s is of another input, "
+                    "prompt or window size — not resumed", partial_path)
+        partial_path.unlink()
+        partial = None
+        if final_path.exists() and not force:
+            log.info(f"Stage 4: cache hit → {final_path}")
+            with open(final_path, encoding="utf-8") as f:
+                return json.load(f)
+    if partial is not None:
+        sections = partial["sections"]
+        done = {int(index): reply
+                for index, reply in partial["windows"].items()}
+        log.info("Stage 4: resuming an unfinished pass, %d window(s) kept",
+                 len(done))
+
     report: dict = {}
-    refined = refine_sections(sections, report)
+    try:
+        # A third argument only when there is something to resume.
+        refined = (refine_sections(sections, report) if done is None
+                   else refine_sections(sections, report, done))
+    except Unfinished as unfinished:
+        if unfinished.sections is None:
+            log.error("Stage 4: %s: the model server did not serve the cut "
+                      "of an oversized section — nothing is written as "
+                      "refined. Run the stage again.", output_dir.name)
+            return None
+        # The report stays as it is: it describes the refined output beside
+        # it, and this pass wrote none.
+        dump_json_atomic(clean_data(
+            {"key": key, "sections": unfinished.sections,
+             "total_windows": unfinished.total,
+             "unserved_windows": [n + 1 for n in unfinished.lost],
+             "windows": {str(index): reply
+                         for index, reply in unfinished.done.items()}}),
+            partial_path)
+        log.error("Stage 4: %s: the model server did not serve %d of %d "
+                  "window(s) — nothing is written as refined. Run the stage "
+                  "again and only those are asked.", output_dir.name,
+                  len(unfinished.lost), unfinished.total)
+        return None
 
     result = {"sections": refined}
     result = clean_data(result)
 
     dump_json_atomic(result, final_path)
     log.info(f"Stage 4: refined output written → {final_path}")
+    if partial_path.exists():
+        partial_path.unlink()
     _write_report(report, output_dir)
 
     return result
+
+
+def _partial_key(sections: list) -> str:
+    """What an unfinished pass must agree with to be resumed: the sections
+    it was given, the prompts and the model it asked, the size of its
+    windows. Half a document from one model and half from another is not
+    one refinement."""
+    return hashlib.sha256(json.dumps(
+        {"sections": sections, "window": WINDOW_SIZE, "model": LLM_MODEL,
+         "prompts": prompts.versions(PROMPT_IDS)},
+        ensure_ascii=False, sort_keys=True).encode("utf-8")).hexdigest()
+
+
+def _read_partial(path: Path) -> Optional[dict]:
+    """The unfinished pass beside the output, or None."""
+    if not path.exists():
+        return None
+    try:
+        with open(path, encoding="utf-8") as f:
+            partial = json.load(f)
+    except (OSError, ValueError):
+        return None
+    usable = (isinstance(partial, dict)
+              and isinstance(partial.get("sections"), list)
+              and isinstance(partial.get("windows"), dict))
+    return partial if usable else None
 
 
 def _write_report(report: dict, output_dir: Path) -> None:

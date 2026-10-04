@@ -309,3 +309,77 @@ def test_the_overview_cell_is_cut_where_the_reader_can_see_it():
     # The prose answer, not the JSON shaping of it.
     assert compare.summary({"answer": '{"r": 1}', "answer_text": "1 Prozent."}) \
         == "1 Prozent."
+
+
+def test_the_tables_the_compute_prompt_promises_reach_the_sandbox(monkeypatch):
+    """compute_hint tells the model a variable `tables` exists, a list of
+    objects with "caption" and "markdown". The context was keyed by the
+    source's index, the sandbox turns each key into a variable and "0" is no
+    identifier: the preamble was empty and the model's code ended on a
+    NameError whenever a table had been found."""
+    import importlib.util
+    import sys
+    import types
+    from pathlib import Path
+
+    stub = types.ModuleType("llm_sandbox")
+    stub.SandboxSession = object
+    const = types.ModuleType("llm_sandbox.const")
+    const.SandboxBackend = types.SimpleNamespace(PODMAN="podman")
+    monkeypatch.setitem(sys.modules, "llm_sandbox", stub)
+    monkeypatch.setitem(sys.modules, "llm_sandbox.const", const)
+    # Under a private name, so the stubbed import stays out of sys.modules.
+    path = (Path(__file__).resolve().parents[1] / "scripts" / "inference_app"
+            / "sandbox_service.py")
+    spec = importlib.util.spec_from_file_location("_sandbox_under_test", path)
+    service = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(service)
+
+    hits = [_hit(0, text="Fliesstext."),
+            dict(_hit(1, kind="table", text="| Erdgas | 42 |"),
+                 title="Tabelle 7: Endenergie"),
+            dict(_hit(2, kind="table", text=""), title="leer")]
+    items = [{"index": 0}, {"index": 1}, {"index": 2}]
+
+    scope: dict = {}
+    exec(service._preamble(answer._code_context(items, hits))
+         + "found = [(t['caption'], t['markdown']) for t in tables]", scope)
+    assert scope["found"] == [("Tabelle 7: Endenergie", "| Erdgas | 42 |")]
+
+    # No table among the sources: the variable the prompt names still exists.
+    scope = {}
+    exec(service._preamble(answer._code_context(items[:1], hits))
+         + "count = len(tables)", scope)
+    assert scope["count"] == 0
+
+
+def test_the_turn_hands_the_tables_of_its_sources_to_the_code_runner(
+        monkeypatch, corpus):
+    """The two ends are tested above. This is the line between them: what
+    the answering call is given as the sandbox's context, for the tables of
+    this turn and in their order."""
+    hits = [dict(_hit(0, kind="table", owner=1, text="| Erdgas | 42 |"),
+                 title="Tabelle 7"),
+            _hit(1, owner=2, text="Fliesstext."),
+            dict(_hit(2, kind="table", owner=3, text="| Strom | 7 |"),
+                 title="Tabelle 9")]
+    handed = []
+    monkeypatch.setattr(answer.llm_client, "make_search_phrase",
+                        lambda *a, **k: ("p", False))
+    monkeypatch.setattr(answer.faiss_store, "retrieve", lambda *a, **k: hits)
+    monkeypatch.setattr(answer.code_exec, "is_enabled", lambda: True)
+
+    def answer_from_sources(task, items, **kw):
+        handed.append((kw.get("code_runner"), kw.get("code_context")))
+        return {"found": False, "complete": True, "answer": "",
+                "supports": []}
+
+    monkeypatch.setattr(answer.llm_client, "answer_from_sources",
+                        answer_from_sources)
+    answer.answer_question("Summe?", corpus, 1, [config.SCOPE_TEXT])
+
+    assert handed, "the model was never asked"
+    tables = [t for _runner, context in handed for t in context["tables"]]
+    assert tables == [{"caption": "Tabelle 7", "markdown": "| Erdgas | 42 |"},
+                      {"caption": "Tabelle 9", "markdown": "| Strom | 7 |"}]
+    assert all(run is answer.code_exec.run_code for run, _context in handed)

@@ -641,6 +641,42 @@ def test_one_file_is_read_rewritten_and_stamped_in_one_place(tmp_path):
     again = topup.top_up_file(path, SPEC, _stamp(), _deps())
     assert again["already current"] == 1 and again["rows"] == 0
 
+
+def test_a_top_up_that_lost_a_request_keeps_the_old_stamp(tmp_path):
+    """A coordinate whose request ended on a 429 or a 5xx was not re-read.
+    The sweep cannot tell, so the stamp carried forward would say the file
+    is current, and no later top-up would ask again."""
+    from docpipe.extraction import runner
+    moved = _stamp(**{f"axis/{PARAMETER}/sector": "moved"})
+    path = _harvest(tmp_path, [_row(), _summary()], stamp=moved)
+    stamp_path = tmp_path / "plan.stamp.json"
+
+    read = _sweeper({"sector": {"value": "Haushalte", "raw": "Haushalte"}})
+
+    def lossy(batch, rows, slots, anchor_id=""):
+        # One window read the coordinate, the request for another ended on a
+        # 503: everything the sweep reports says the coordinate is settled.
+        runner.UNSERVED.note(7)
+        return read(batch, rows, slots, anchor_id)
+
+    runner.UNSERVED.clear()
+    try:
+        stats = topup.top_up_file(path, SPEC, _stamp(), _deps(sweep=lossy))
+        assert stats["rows"] == 1, "the sweep did read the coordinate"
+        assert stats["stamps carried forward"] == 0
+        assert stats["stamps left, a request ended on 429 or 5xx"] == 1
+        assert json.loads(stamp_path.read_text(encoding="utf-8")) == moved
+
+        again = topup.top_up_file(path, SPEC, _stamp(), _deps(
+            sweep=_sweeper({"sector": {"value": "Haushalte",
+                                       "raw": "Haushalte"}})))
+        assert again["stamps carried forward"] == 1, (
+            "the next top-up asks again, and an earlier loss is not held "
+            "against it")
+    finally:
+        runner.UNSERVED.clear()
+
+
 def test_the_passages_a_harvest_named_are_fetched_back_the_way_it_read_them(
         tmp_path):
     """`make_owner_sources` rebuilds a Source from the address a harvest

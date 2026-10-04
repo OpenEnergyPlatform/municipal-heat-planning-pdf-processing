@@ -9,8 +9,10 @@ Author: Felix Vossel
 """
 from __future__ import annotations
 
+import argparse
 import importlib
 import os
+import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional, Sequence
@@ -175,13 +177,46 @@ def add_profile_argument(parser) -> None:
                              f"(default: ${ENV_VAR})")
 
 
+def bind_command_line(argv: Optional[Sequence[str]] = None) -> None:
+    """Put a --profile given on the command line into the environment.
+
+    For a stage's `__main__`, before it imports the stage. What a stage binds
+    when it is imported (how many sections fit one request, the chat's
+    prompts) is read from the environment, and the command line is parsed
+    only after the import. Read the way the stage's own parser reads it, so
+    an abbreviation it accepts (--prof) is one this accepts too.
+    """
+    parser = _Quiet(add_help=False)
+    parser.add_argument("--profile")
+    try:
+        known, _rest = parser.parse_known_args(
+            list(sys.argv[1:] if argv is None else argv))
+    except ValueError:
+        return      # the stage's own parser says what is wrong with the line
+    if known.profile:
+        os.environ[ENV_VAR] = known.profile
+
+
+class _Quiet(argparse.ArgumentParser):
+    """A parser that raises where argparse prints a usage and exits."""
+
+    def error(self, message):
+        raise ValueError(message)
+
+
+def available_profiles() -> list:
+    return sorted(p.name for p in (ROOT / PROFILES_PACKAGE).iterdir()
+                  if (p / "profile.py").is_file())
+
+
 def resolve_profile(args=None, name: Optional[str] = None) -> Optional[Profile]:
     """The profile for this run, or None.
 
-    A stage binds its prompts when it is imported, which happens before the
-    command line is parsed. So a profile that overrides prompts has to be in the
-    environment from the start; --profile alone would silently use the core
-    prompts. That case is refused rather than run.
+    A stage binds some of what a profile says when it is imported, which
+    happens before the command line is parsed. `bind_command_line` puts the
+    flag into the environment before that. A caller that imported the stage
+    under one profile and names another here would run on a mix of both;
+    that case is refused rather than run.
     """
     name = name or getattr(args, "profile", None) or os.environ.get(ENV_VAR)
     if not name:
@@ -190,8 +225,20 @@ def resolve_profile(args=None, name: Optional[str] = None) -> Optional[Profile]:
     late = os.environ.get(ENV_VAR) != name
     if late and profile.prompts_dir.is_dir() and any(profile.prompts_dir.rglob("*.md")):
         raise SystemExit(
-            f"profile {name!r} overrides prompts, but {ENV_VAR} was not set when "
-            f"the stage was imported — the core prompts are already bound.\n"
-            f"Run it as:  {ENV_VAR}={name} python -m <stage> …")
+            f"profile {name!r} was named after the stage was imported under "
+            f"{os.environ.get(ENV_VAR) or 'none'!r} — what a stage binds on "
+            f"import is already bound.\n"
+            f"Run it as:  python -m <stage> --profile {name} …  "
+            f"or set {ENV_VAR}={name}")
     os.environ[ENV_VAR] = name
+    return profile
+
+
+def require_profile(args=None, name: Optional[str] = None) -> Profile:
+    """`resolve_profile` for a stage that has nothing to run without one."""
+    profile = resolve_profile(args, name)
+    if profile is None:
+        raise SystemExit(
+            f"no profile: pass --profile <name> or set {ENV_VAR} "
+            f"(available: {', '.join(available_profiles()) or 'none'})")
     return profile

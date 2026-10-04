@@ -8,6 +8,31 @@ Author: Felix Vossel
 
 ## Functions
 
+### refine_prompt
+
+```python
+@prompts.per_profile
+def refine_prompt()
+```
+
+### system_prompt
+
+```python
+def system_prompt() -> str
+```
+
+### llm_temperature
+
+```python
+def llm_temperature() -> float
+```
+
+### llm_max_tokens
+
+```python
+def llm_max_tokens() -> int
+```
+
 ### reply_tokens
 
 ```python
@@ -15,7 +40,7 @@ def reply_tokens(user_words: int) -> int
 ```
 
 The max_tokens for one request, from what that request actually asks
-the model to write. LLM_MAX_TOKENS stays the floor for small windows.
+the model to write. llm_max_tokens() stays the floor for small windows.
 
 When the model returns corrections it does not scale at all: the reply is a
 list of find/replace pairs, so its size follows the number of artefacts and

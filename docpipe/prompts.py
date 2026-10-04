@@ -18,8 +18,10 @@ Author: Felix Vossel
 """
 from __future__ import annotations
 
+import functools
 import hashlib
 import json
+import os
 import re
 from dataclasses import dataclass
 from pathlib import Path
@@ -83,6 +85,26 @@ def load(prompt_id: str, profile: Optional[Profile] = None,
     meta, body = _split(raw)
     return Prompt(id=prompt_id, text=body, meta=meta, path=path,
                   sha256=hashlib.sha256(raw.encode("utf-8")).hexdigest())
+
+
+def per_profile(read):
+    """Make *read()* run once per ambient profile, on first use.
+
+    For what a stage needs from its prompts: read when it is first asked for
+    and not when the stage is imported, so a stage can be imported, and print
+    its --help, before anybody has named a profile. Read once, so one run
+    works with one prompt.
+    """
+    cache: dict = {}
+
+    @functools.wraps(read)
+    def reader():
+        key = os.environ.get(ENV_VAR)
+        if key not in cache:
+            cache[key] = read()
+        return cache[key]
+
+    return reader
 
 
 def text(prompt_id: str, **values) -> str:

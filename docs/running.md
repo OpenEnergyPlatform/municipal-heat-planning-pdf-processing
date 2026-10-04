@@ -33,17 +33,23 @@ visuals and extraction load no model in the pipeline's process: each is
 an HTTP client to an OpenAI-compatible server, so their GPU can run on
 a different machine.
 
-`DOCPIPE_PROFILE` (`docpipe/profile.py` line 20) names the profile
+`DOCPIPE_PROFILE` (`docpipe/profile.py` line 22) names the profile
 `load_profile` imports: `profiles/kwp` or `profiles/scenarios` (lines
-124 to 149). A profile's document list, prompts, extra database tables
+126 to 151). A profile's document list, prompts, extra database tables
 and extraction contract come from `Profile.component`, `Profile.require`,
-`prompts_dir` and `schema_sql` (lines 57 to 96). It belongs in the
-environment, not only the command line: a stage binds its prompts at
-import time, before `--profile` is parsed, so a profile that overrides
-prompts and is named only there is refused (lines 178 to 197).
+`prompts_dir` and `schema_sql` (lines 59 to 98). `--profile <name>` on a
+stage's command line does the same: each stage's `__main__` calls
+`bind_command_line` before it imports the stage. It reads the flag with an
+argparse parser, so an abbreviation of `--profile` that the stage accepts is
+bound too, and puts it into `DOCPIPE_PROFILE` (lines 180 to 197); the usage text of
+every stage needs no profile. Refinement, visuals and extraction refuse to run
+without one, in a single line that names the available profiles
+(`require_profile`, lines 237 to 244). `resolve_profile` (lines 212 to
+234) refuses a profile named after a stage was imported under
+another one, which only a caller that imports the stage can do.
 `DOCPIPE_DATA_ROOT` moves a profile's PDFs, database and FAISS index to
 `<root>/<profile name>/`, in place of the repository's own `data/`
-(lines 100 to 105). A `.env` file is read into the environment before
+(lines 103 to 107). A `.env` file is read into the environment before
 any submodule's config module can capture its values (`docpipe/__init__.py`
 lines 2 and 5); only a key not already set is copied in, so an explicit
 variable always wins (`docpipe/dotenv.py` line 45); `.env.example`
@@ -170,6 +176,21 @@ and exits, to size the vLLM server's maximum context length
 server at `LLM_BASE_URL` is checked for the needed context first
 (`docpipe/llm_preflight.py`).
 
+A window the server does not serve (no connection, a timeout, a 429, a
+5xx) leaves the document unrefined, and the stage exits non-zero: no
+`sections_refined.json` is written, the usable replies are kept in
+`sections_refined.partial.json`, which also names the missing windows under
+`unserved_windows` (`docpipe/refinement/refine.py` lines 1186 to 1205);
+`refinement_report.json` is left as it was. The next run, with or without
+`--force`, asks only for those windows, provided the sections, the prompts,
+`WINDOW_SIZE` and the model name are as they were; otherwise it drops the
+partial file and starts over (lines 1160 to 1179). A
+`sections_refined.json` from an earlier pass stays in place until a pass
+finishes. The cut of an oversized section is asked again while the server does
+not answer; if it stays unanswered the stage writes nothing at all, not even a
+partial file, and the next run starts with the cut (lines 908 to 912, 1187 to
+1191).
+
 ### 5. Image processing (visuals)
 
 ```bash
@@ -202,11 +223,13 @@ merge ignores its modification-time cache, db deletes and reinserts a
 document's rows, embed evicts and re-adds its vectors. The stage writes
 `document.json`, then rows in SQLite and vectors in the FAISS index,
 each step resuming on its own marker: merge on `document.json` not
-older than its inputs (`docpipe/chunking/merge.py` lines 46 to
-65), db on the document already having `Sections` rows
+older than its inputs (`docpipe/chunking/merge.py` lines 47 to
+66), db on the document already having `Sections` rows
 (`docpipe/chunking/database.py` line 305), embed on the database already
 recording an item's embedding triple (`docpipe/chunking/database.py`
-line 638).
+line 638). A document with `sections.json` and no `sections_refined.json`
+is left out of the merge, and one warning names up to twenty of them
+(`docpipe/chunking/merge.py` lines 167 to 177).
 
 ### 7. Extraction
 
@@ -219,13 +242,24 @@ have no profile default. `--document` restricts the run to one document
 id and is repeatable. `--image-root`, left unset, defaults to
 `<pdf-root>/processed` when `--pdf-root` is given and to the profile's
 processed directory otherwise (`docpipe/extraction/runner.py` lines
-4907 to 4909). `--pdf-root` has no such default: left unset it stays
+4990 to 4992). `--pdf-root` has no such default: left unset it stays
 `None` and disables the digit-exact native check that locates a quote's
-highlight rectangles in the source PDF (lines 4774 to 4775, 4111 to
-4115). `--force` and `--force-stale` behave as in refinement.
+highlight rectangles in the source PDF (lines 4857 to 4858, 4174 to
+4178). `--force` and `--force-stale` behave as in refinement.
 The stage writes one `<doc>.jsonl` harvest and one `<doc>.stamp.json`
 per document, and resumes per question, not per document, detailed in
 [the extraction stage](stages/extraction.md) and below.
+
+A request that ends on a 429 or a 5xx was not answered: it waits on the
+long retry curve between attempts, and a row or field request that ends
+there counts towards the dead-server streak. A document with such a
+request is written but not stamped, so the next run harvests it again, and
+`--top-up` leaves that file's stamp as it was. A stamp from an earlier run is
+removed before the file is written. A document left unstamped counts as a
+failed document, and the run returns 1 for it (lines 5543 to 5544, 5579). If
+the run's own anchor requests end there, the stage returns 1 before it
+harvests anything, and the next start asks only for the anchors still missing
+(`docpipe/extraction/runner.py` lines 5184 to 5195).
 
 ### 8. The knowledge graph
 
@@ -236,7 +270,7 @@ python -m docpipe.extraction data/kwp/kwp.db data/kwp/faiss_index.bin data/kwp/e
 `--serialize` switches the run to serialize-only: no harvest, no model.
 It hands the JSONL already in the output directory to the profile's
 `kg.make_serializer` and writes Turtle (`docpipe/extraction/runner.py`
-lines 4874 to 4886); a profile with no `kg.py` is refused. Unlike the
+lines 4957 to 4969); a profile with no `kg.py` is refused. Unlike the
 earlier stages it does not resume: it walks the whole harvest directory
 again on every call (`docpipe/extraction/serialize.py`).
 
@@ -247,8 +281,8 @@ environment variables setting a stage's server and model defaults.
 
 | Stage | Variable | Default | Effect | Where read |
 |---|---|---|---|---|
-| Refinement | `LLM_BASE_URL` | `http://localhost:8000/v1` | refinement's request endpoint | `docpipe/refinement/config.py:24` |
-| Refinement | `LLM_MODEL` | `Qwen/Qwen3.5-122B-A10B-FP8` | model name requested | `docpipe/refinement/config.py:25` |
+| Refinement | `LLM_BASE_URL` | `http://localhost:8000/v1` | refinement's request endpoint | `docpipe/refinement/config.py:25` |
+| Refinement | `LLM_MODEL` | `Qwen/Qwen3.5-122B-A10B-FP8` | model name requested | `docpipe/refinement/config.py:26` |
 | Visuals | `VLM_BASE_URL` | `http://localhost:8001/v1` | the vision client's endpoint | `docpipe/visuals/config.py:42` |
 | Visuals | `VLM_MODEL` | `Qwen/Qwen3.5-122B-A10B-FP8` | served model name requested | `docpipe/visuals/config.py:43` |
 | Chunking | `EMBEDDING_BACKEND` | `local` | `local`, `api`, or an import path | `docpipe/embedding/config.py:19` |
@@ -257,11 +291,11 @@ environment variables setting a stage's server and model defaults.
 | Extraction | `LLM_MODEL` | `Qwen/Qwen3.5-122B-A10B-FP8` | harvesting model's name | `docpipe/extraction/runner.py:90` |
 | Extraction | `EXTRACT_MAX_RETRIES` | `3` | attempts per LLM request before giving up on it | `docpipe/extraction/runner.py:94` |
 | Extraction | `EXTRACT_RETRY_TIMEOUT` | `600` | client timeout (seconds) a retry gets after a request timed out; a request refused at once keeps the client's own timeout | `docpipe/extraction/runner.py:99` |
-| Extraction | `EXTRACT_BATCH_SOURCES` | `6` | sources sharing one harvest request | `docpipe/extraction/runner.py:178` |
-| Extraction | `EXTRACT_BATCH_DOCS` | `64` | documents kept in flight at once, largest first by section count, filename breaking a tie; one written and replaced by the next as soon as it finishes | `docpipe/extraction/runner.py:5091` |
-| Extraction | `EXTRACT_FIELD_ROWS` | `32` | rows one field request answers at once | `docpipe/extraction/runner.py:354` |
-| Extraction | `EXTRACT_MAX_MODEL_LEN` | `32768` | fallback context window, used only where the server's own preflight reports none | `docpipe/extraction/runner.py:1200` |
-| Extraction | `EXTRACT_LIMIT_ADAPTIVE` | `1` | off (`0`) disables the adaptive request limit; the thread pools alone bound concurrency | `docpipe/extraction/runner.py:1229` |
+| Extraction | `EXTRACT_BATCH_SOURCES` | `6` | sources sharing one harvest request | `docpipe/extraction/runner.py:229` |
+| Extraction | `EXTRACT_BATCH_DOCS` | `64` | documents kept in flight at once, largest first by section count, filename breaking a tie; one written and replaced by the next as soon as it finishes | `docpipe/extraction/runner.py:5174` |
+| Extraction | `EXTRACT_FIELD_ROWS` | `32` | rows one field request answers at once | `docpipe/extraction/runner.py:405` |
+| Extraction | `EXTRACT_MAX_MODEL_LEN` | `32768` | fallback context window, used only where the server's own preflight reports none | `docpipe/extraction/runner.py:1254` |
+| Extraction | `EXTRACT_LIMIT_ADAPTIVE` | `1` | off (`0`) disables the adaptive request limit; the thread pools alone bound concurrency | `docpipe/extraction/runner.py:1283` |
 | Extraction | `EXTRACT_LIMIT_START` | `128` | requests the adaptive limit opens with | `docpipe/extraction/throttle.py:44` |
 | Extraction | `EXTRACT_LIMIT_MIN` | `16` | floor the limit backs off to | `docpipe/extraction/throttle.py:45` |
 | Extraction | `EXTRACT_LIMIT_MAX` | `512` | ceiling the limit grows to; the server's own max-num-seqs cap must be at least this, or requests queue there instead | `docpipe/extraction/throttle.py:46` |
@@ -271,8 +305,8 @@ environment variables setting a stage's server and model defaults.
 | Extraction | `EXTRACT_LIMIT_KV_GROW` | `0.80` | KV cache fraction below which the limit may grow | `docpipe/extraction/throttle.py:51` |
 | Extraction | `EXTRACT_LIMIT_KV_HIGH` | `0.92` | KV cache fraction at or above which the limit steps down | `docpipe/extraction/throttle.py:52` |
 | Extraction | `EXTRACT_LIMIT_TPOT_MAX` | unset | seconds per output token above which a sample also counts as pressure; unset, token time never steps the limit down | `docpipe/extraction/throttle.py:55` |
-| Extraction | `EXTRACT_SERVER_DEAD_AFTER` | `180` | seconds without any reply to a `/models` probe before the harvest ends as if stopped, so a dead server is noticed in minutes | `docpipe/extraction/runner.py:1935` |
-| Extraction | `EXTRACT_LOCATE_CACHE_PAGES` | `512` | pages of words cached by `make_locate` across documents; a cache hit is a dict lookup and takes no lock | `docpipe/extraction/runner.py:207` |
+| Extraction | `EXTRACT_SERVER_DEAD_AFTER` | `180` | seconds without any reply to a `/models` probe before the harvest ends as if stopped, so a dead server is noticed in minutes | `docpipe/extraction/runner.py:1992` |
+| Extraction | `EXTRACT_LOCATE_CACHE_PAGES` | `512` | pages of words cached by `make_locate` across documents; a cache hit is a dict lookup and takes no lock | `docpipe/extraction/runner.py:258` |
 | App | `INFERENCE_DB_PATH` | profile `db_path`, else `data/KWP.db` | SQLite corpus database, opened read-only | `scripts/inference_app/config.py:61` |
 | App | `INFERENCE_INDEX_PATH` | profile `index_path`, else `data/faiss_index.bin` | FAISS index loaded into memory | `scripts/inference_app/config.py:62` |
 | App | `INFERENCE_KG_TTL_PATH` | profile `root/graph.ttl`, else `data/graph.ttl` | Turtle file from `--serialize` | `scripts/inference_app/config.py:66` |
@@ -286,7 +320,7 @@ already-written harvest directory, instead of or before harvesting.
 
 - `--print-context-budget` prints the worst-case tokens one harvest
   request needs and exits before contacting a server
-  (`docpipe/extraction/runner.py` lines 5012 to 5015); the same check
+  (`docpipe/extraction/runner.py` lines 5095 to 5098); the same check
   runs automatically before the first document too.
 - `--recheck` needs no model and no index. It reapplies the
   answer-in-quote rule to a harvest on disk, drops any coordinate whose quote no longer
@@ -307,7 +341,7 @@ already-written harvest directory, instead of or before harvesting.
 - `--review`, bounded with `--review-limit N`, needs the model. It reads
   every value nobody can stand behind a second time, over its own
   passage and section, and records only a disagreement as a trust
-  reason (`docpipe/extraction/runner.py` lines 4921 to 4970); see
+  reason (`docpipe/extraction/runner.py` lines 5004 to 5053); see
   [the trust contract](contract/trust.md). Each document is read against
   its own lists, as in `--recheck`.
 - `--serialize TTL` needs no harvest and no model, as in stage 8 above,
