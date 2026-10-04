@@ -670,3 +670,40 @@ def test_each_no_harvest_mode_reaches_its_own_run(tmp_path, monkeypatch):
         runner.REVIEW_PROMPT_ID).sha256
     stamp = seen[2][1][2]
     assert stamp["model"] == runner.LLM_MODEL and len(stamp["spec"]) == 64
+
+
+def test_a_row_is_read_again_against_its_documents_own_lists(tmp_path):
+    """A coordinate chosen from a per-document list is a choice only against
+    that list. The second reading used the run's spec, where the list is
+    empty, so it asked for a wording and compared a wording with a choice."""
+    from dataclasses import replace
+    from docpipe.extraction.spec import Spec
+    own = Spec(parameters=[replace(p, label=p.label + " (dieses Dokument)")
+                           for p in SPEC.parameters])
+    path, _stamp = _stamped(tmp_path, "a")
+    seen, asked_for = [], []
+
+    def spec_for(document_id):
+        asked_for.append(document_id)
+        return own
+
+    review.run(tmp_path, SPEC, ask=_asker(_agreeing(), seen),
+               sources_for=lambda row: _sources(), spec_for=spec_for)
+    assert asked_for == [_summary()["document_id"]]
+    assert seen[0]["parameter"] is own.by_uri[PARAMETER]
+
+
+def test_a_document_whose_lists_cannot_be_closed_is_left_alone(tmp_path):
+    """Read against an empty list the choice degrades to a wording, and
+    nothing would report it. So the file is not touched and not stamped as
+    read, and the pass counts it."""
+    path, stamp = _stamped(tmp_path, "a")
+    before = path.read_bytes()
+    seen = []
+    stats = review.run(tmp_path, SPEC, ask=_asker(_agreeing(), seen),
+                       sources_for=lambda row: _sources(),
+                       prompt_sha="abc123", model="ein-modell",
+                       spec_for=lambda document_id: None)
+    assert seen == [] and path.read_bytes() == before
+    assert stats[fields.LISTS_UNREADABLE] == 1 and stats["documents"] == 0
+    assert "review/prompt" not in json.loads(stamp.read_text(encoding="utf-8"))

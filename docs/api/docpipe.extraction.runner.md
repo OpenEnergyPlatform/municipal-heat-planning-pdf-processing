@@ -348,6 +348,45 @@ bridge that, and it can only do so if it is shown the list it may choose
 from; the mapping then arrives flagged, like every other judgement call
 the harvest records.
 
+### spec_of
+
+```python
+def spec_of(batch, spec)
+```
+
+The spec a batch is read against: its document's, or the run's.
+
+The lists a document closes were built for the search and then left
+behind: the requests that read the passages and the check of their
+answers were built from the run's spec, where a dynamic list is empty.
+So the model was offered nothing to choose from on exactly the fields
+whose point is the choice, and wrote a wording instead.
+
+### make_document_spec
+
+```python
+def make_document_spec(conn, spec: Spec,
+                       document_axes: Optional[Callable]) -> Callable
+```
+
+(document id) -> this document's spec, or None when its lists cannot
+be closed.
+
+For the passes that read a harvest already on disk. Asked against an
+empty list a dynamic axis degrades to a wording, which is a demotion
+nothing would report, so such a document is left alone and counted.
+
+### document_specs
+
+```python
+@contextmanager
+def document_specs(db_path, spec: Spec, document_axes: Optional[Callable])
+```
+
+`spec_for` for a pass over a harvest on disk, the corpus open for as
+long as the pass runs. None when the profile closes no list per document:
+such a pass needs no database.
+
 ### anchor_question_key
 
 ```python

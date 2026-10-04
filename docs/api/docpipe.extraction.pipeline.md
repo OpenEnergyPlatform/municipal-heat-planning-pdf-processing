@@ -109,6 +109,7 @@ Fields:
 - `pairs: tuple = ()`: Every pair of the document, in index order. A claim whose own quote names a different one of them is filed under that pair instead of being refused, which is the only use this list has.
 - `anchors: tuple = ()`: The sentences this request's passages were searched with. They say, in the plan's own words, what the request asks for, so the pair reaches the model as a question and not only as a field.
 - `bases: tuple = ()`: The document's base years with the frame's quotes (`base_years`), on every batch of the document, framed or not: a passage that says "Basisjahr" prints no pair, and it is exactly the one that needs them.
+- `spec: object = None`: The spec as this document sees it. A dynamic axis or value list is a closed list only once the document is known, so the corpus run puts the copy with the document's lists filled in on every batch of the document, like `bases`. None is the run's own spec: no list depends on the document, or the caller builds its slots from the document's spec itself, as the top-up does.
 
 #### Batch.sources
 
@@ -432,7 +433,7 @@ request per pair exists for.
 
 ```python
 def rows_from_reply(batch: Batch, reply: Optional[dict],
-                    frame_axes: Optional[list] = None) -> tuple
+                    frame_axes: Optional[list] = None, spec=None) -> tuple
 ```
 
 (rows, orphans) from the value request - the only request that counts.

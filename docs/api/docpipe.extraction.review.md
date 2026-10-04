@@ -112,7 +112,8 @@ disagreement is a disagreement with.
 ```python
 def review_file(path: Path, spec: Spec, *, ask: Callable,
                 sources_for: Callable, limit: int = 0,
-                working: Optional[list] = None) -> Counter
+                working: Optional[list] = None,
+                spec_for: Optional[Callable] = None) -> Counter
 ```
 
 Review one harvest file in place. Returns what the reading came to.
@@ -121,12 +122,19 @@ The summary is recomputed rather than carried over: a disagreement is a
 reason, and the summary counts reasons. A carried summary would report the
 run before the review.
 
+*spec_for* gives the spec as the file's document sees it (document id ->
+Spec, or None when its lists cannot be closed). A coordinate chosen from
+a per-document list is read again against that list, not against the
+run's spec, where the list is empty and the second reading would be a
+wording.
+
 ### run
 
 ```python
 def run(harvest_dir: Path, spec: Spec, *, ask: Callable,
         sources_for: Callable, documents=None, limit: int = 0,
-        prompt_sha: str = "", model: str = "") -> Counter
+        prompt_sha: str = "", model: str = "",
+        spec_for: Optional[Callable] = None) -> Counter
 ```
 
 Review a whole harvest directory, or the documents named by stem.

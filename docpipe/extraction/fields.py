@@ -178,12 +178,19 @@ def parameter_slot(spec) -> Slot:
 UNIT = "unit"
 
 
+# Counted by a pass over a harvest on disk for a document whose own choice
+# lists could not be closed. Such a file is left as it is: read against an
+# empty list a choice degrades to a wording, and nothing would report it.
+LISTS_UNREADABLE = "choice lists unreadable, left alone"
+
+
 def has_number(claim: dict) -> bool:
     """Is this row's value a number, so that a unit belongs to it?
 
-    The same reading `derive_parameter` makes: a wording is a text
-    parameter's value and carries no unit, whatever the value request wrote
-    beside it.
+    Asked only where a unit can be: of a spec with a numeric parameter. A
+    wording there is a text parameter's value and carries no unit, whatever
+    the value request wrote beside it. A spec without one has no unit
+    question, and what counts as a wording there is `is_wording`'s to say.
     """
     from .verify import canonical_number
     value = claim.get("value")
@@ -263,8 +270,41 @@ def frame_slots(spec, names) -> list:
     return []
 
 
+def is_wording(spec, claim: dict) -> bool:
+    """Is this row's value a wording, which only a parameter that is not
+    numeric can hold?
+
+    A string that is no number is one. In a spec without a numeric parameter
+    every string is: "2030" is a year there, and that a number without a
+    unit belongs to no parameter is a rule about parameters that have units.
+    Read as a number, every bare year and every dotted date of such a spec
+    left the harvest `out_of_slice`, unasked.
+
+    There a row whose value was left out, with the wording in `value_raw`,
+    is one too: that is how the value request says no entry of the list
+    fits, and the row is kept with its wording. A value that is no string
+    and has no wording beside it is not one. No parameter takes it, so
+    asking would pay for a refusal.
+
+    The rule stops at a spec with a numeric parameter: there a digit string
+    is a number, whichever text parameter might have held a year.
+    """
+    from .verify import canonical_number
+    value = claim.get("value")
+    measured = any(p.is_numeric for p in spec.parameters)
+    if isinstance(value, str):
+        return not measured or canonical_number(value) is None
+    if measured:
+        return False
+    wording = claim.get("value_raw")
+    return isinstance(wording, str) and bool(wording.strip())
+
+
 def derive_parameter(spec, claim: dict):
-    """Which parameter this row belongs to, from its unit alone, or None.
+    """Which parameter this row belongs to, or None when that is a question.
+
+    A wording belongs to the text parameter when the spec has exactly one.
+    A number is decided by its unit alone.
 
     The spec says it itself: "the unit separates the two parameters". Measured
     over the kwp spec the nine energy units and the forty-two emission units
@@ -276,9 +316,7 @@ def derive_parameter(spec, claim: dict):
     accepts (the row is refused later, with the unit as the reason), or a unit
     two parameters accept. Then the question is a real question and is asked.
     """
-    from .verify import canonical_number
-    value = claim.get("value")
-    if isinstance(value, str) and canonical_number(value) is None:
+    if is_wording(spec, claim):
         text = [p for p in spec.parameters if not p.is_numeric]
         return text[0] if len(text) == 1 else None
     # The entry the unit question read, never the wording beside it: the
@@ -307,10 +345,8 @@ def parameter_undecidable(spec, claim: dict) -> bool:
     spelling. They cost 178 of 853 field requests, 20.9 percent, and every
     one of the five answers they produced was refused afterwards anyway.
     """
-    from .verify import canonical_number
-    value = claim.get("value")
-    if isinstance(value, str) and canonical_number(value) is None:
-        # A non-numeric value needs a text parameter, and one is a decision.
+    if is_wording(spec, claim):
+        # A wording needs a text parameter, and one is a decision.
         return not [p for p in spec.parameters if not p.is_numeric]
     unit = claim.get("unit")
     if not isinstance(unit, str) or not unit.strip():

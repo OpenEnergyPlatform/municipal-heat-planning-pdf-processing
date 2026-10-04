@@ -57,6 +57,7 @@ import signal
 import sqlite3
 import threading
 import time
+from contextlib import contextmanager
 from dataclasses import replace
 from pathlib import Path
 from typing import Callable, Optional
@@ -879,7 +880,63 @@ def fill_dynamic_axes(spec: Spec, vocabularies: Optional[dict]) -> Spec:
             changed = True
         else:
             parameters.append(replace(parameter, axes=axes))
-    return Spec(parameters=parameters) if changed else spec
+    # A copy in which only the lists differ: the questions the spec asks go
+    # with it.
+    return replace(spec, parameters=parameters) if changed else spec
+
+
+def spec_of(batch, spec):
+    """The spec a batch is read against: its document's, or the run's.
+
+    The lists a document closes were built for the search and then left
+    behind: the requests that read the passages and the check of their
+    answers were built from the run's spec, where a dynamic list is empty.
+    So the model was offered nothing to choose from on exactly the fields
+    whose point is the choice, and wrote a wording instead.
+    """
+    own = getattr(batch, "spec", None)
+    return spec if own is None else own
+
+
+def make_document_spec(conn, spec: Spec,
+                       document_axes: Optional[Callable]) -> Callable:
+    """(document id) -> this document's spec, or None when its lists cannot
+    be closed.
+
+    For the passes that read a harvest already on disk. Asked against an
+    empty list a dynamic axis degrades to a wording, which is a demotion
+    nothing would report, so such a document is left alone and counted.
+    """
+    def document_spec(document_id):
+        if document_axes is None:
+            return spec
+        if document_id is None:
+            return None
+        try:
+            filled = document_axes(conn, document_id)
+        except Exception as exc:              # pragma: no cover - defensive
+            log.warning("   document %s: dynamic axes unreadable: %s",
+                        document_id, exc)
+            return None
+        return fill_dynamic_axes(spec, filled) if filled else None
+
+    return document_spec
+
+
+@contextmanager
+def document_specs(db_path, spec: Spec, document_axes: Optional[Callable]):
+    """`spec_for` for a pass over a harvest on disk, the corpus open for as
+    long as the pass runs. None when the profile closes no list per document:
+    such a pass needs no database."""
+    if document_axes is None:
+        yield None
+        return
+    conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
+    conn.row_factory = sqlite3.Row
+    try:
+        yield make_document_spec(conn, spec, document_axes)
+    finally:
+        conn.close()
 
 
 # Bumped when the SET of anchor targets changes, not just their wording: an
@@ -2451,7 +2508,8 @@ def make_harvester(image_root: Optional[Path] = None,
     def harvest(batch, prior: Optional[list] = None, *,
                 ceiling: Optional[int] = None, depth: int = 0) -> dict:
         started = time.time()
-        payload = json.dumps(_batch_payload(batch, prior or [], spec),
+        payload = json.dumps(_batch_payload(batch, prior or [],
+                                            spec_of(batch, spec)),
                              ensure_ascii=False, indent=2)
         compute: list = []
         # The crops ride along for tables and figures: the transcription is a
@@ -3536,7 +3594,9 @@ def make_fieldwise_harvester(image_root: Optional[Path] = None,
 
     def harvest(batch, prior: Optional[list] = None) -> dict:
         reply = find_rows(batch, prior)
-        rows, orphans = rows_from_reply(batch, reply, frame_axes)
+        # This document's lists, on every slot built below.
+        doc_spec = spec_of(batch, spec)
+        rows, orphans = rows_from_reply(batch, reply, frame_axes, doc_spec)
 
         def project(group: list, axes: list) -> None:
             """The pair onto these rows, as far as their parameter has its axes.
@@ -3607,7 +3667,7 @@ def make_fieldwise_harvester(image_root: Optional[Path] = None,
         # dropped first: it was a choice made beside the number, not a
         # reading of its own, and left in place it would stand where the
         # question's answer belongs.
-        unit_slot = fields.unit_slot(spec)
+        unit_slot = fields.unit_slot(doc_spec)
         with_unit = ([row for row in rows if fields.has_number(row.claim)]
                      if unit_slot is not None else [])
         for row in with_unit:
@@ -3635,12 +3695,12 @@ def make_fieldwise_harvester(image_root: Optional[Path] = None,
             # share not one spelling. Asking anyway cost 322 of 1,043 field
             # windows on Kassel, 30.9 percent, for a coordinate not one of
             # 559 accepted tuples contradicted.
-            slot = fields.parameter_slot(spec)
+            slot = fields.parameter_slot(doc_spec)
             undecided = []
             for row in rows:
-                parameter = fields.derive_parameter(spec, row.claim)
+                parameter = fields.derive_parameter(doc_spec, row.claim)
                 if parameter is None:
-                    if fields.parameter_undecidable(spec, row.claim):
+                    if fields.parameter_undecidable(doc_spec, row.claim):
                         # No parameter of the spec can hold this row, so the
                         # sweep has no answer to find: whatever it returned,
                         # `verify` refuses it on the same unit lookup. The row
@@ -3673,7 +3733,7 @@ def make_fieldwise_harvester(image_root: Optional[Path] = None,
                 row.claim["parameter"] = uri
                 grouped.setdefault(uri, []).append(row)
             for uri, group in grouped.items():
-                axes = fields.axis_slots(spec.by_uri[uri])
+                axes = fields.axis_slots(doc_spec.by_uri[uri])
                 for row in group:
                     slots_of[row.label] = [slot] + axes
                 project(group, axes)
@@ -4778,8 +4838,16 @@ def main(argv: Optional[list] = None) -> int:
             parser.error(f"profile {profile.name!r} does not configure the "
                          f"extraction stage")
         from .recheck import run as recheck_run
-        stats = recheck_run(args.out, load_spec(Path(raw_spec_path)),
-                            drop_stamps=not args.keep_stamps)
+        run_spec = load_spec(Path(raw_spec_path))
+        with document_specs(args.db, run_spec, profile.component(
+                "extraction", "document_axes")) as spec_for:
+            stats = recheck_run(args.out, run_spec,
+                                drop_stamps=not args.keep_stamps,
+                                spec_for=spec_for)
+        if stats[fields.LISTS_UNREADABLE]:
+            log.warning("recheck: %d document(s) left alone, their choice "
+                        "lists could not be closed",
+                        stats[fields.LISTS_UNREADABLE])
         total = stats["coordinates"] or 1
         log.info("recheck: %d of %d coordinates survive the rule (%.1f%%), "
                  "over %d tuple(s)", stats["read"], stats["coordinates"],
@@ -4883,11 +4951,18 @@ def main(argv: Optional[list] = None) -> int:
                           len(missing), ", ".join(str(m) for m in missing))
                 return 1
             wanted = [Path(fn).stem for _did, fn in chosen]
-        stats = review_run(args.out, spec,
-                           ask=make_review_asker(args.image_root),
-                           sources_for=make_review_sources(args.db),
-                           documents=wanted, limit=args.review_limit,
-                           prompt_sha=review_prompt.sha256, model=LLM_MODEL)
+        with document_specs(args.db, spec, profile.component(
+                "extraction", "document_axes")) as spec_for:
+            stats = review_run(
+                args.out, spec, ask=make_review_asker(args.image_root),
+                sources_for=make_review_sources(args.db),
+                documents=wanted, limit=args.review_limit,
+                prompt_sha=review_prompt.sha256, model=LLM_MODEL,
+                spec_for=spec_for)
+        if stats[fields.LISTS_UNREADABLE]:
+            log.warning("review: %d document(s) left alone, their choice "
+                        "lists could not be closed",
+                        stats[fields.LISTS_UNREADABLE])
         log.info("review: %d value(s) read again — %d agreed, %d disagreed, "
                  "%d could not be backed, over %d document(s)",
                  stats["reviewed"], stats["agree"], stats["disagree"],
@@ -4917,6 +4992,9 @@ def main(argv: Optional[list] = None) -> int:
     # Which coordinates belong to the DOCUMENT rather than to the row. The
     # profile names them; the core never names a coordinate. Empty means the
     # old shape: every coordinate is asked per row.
+    # From the run's spec: a frame coordinate is asked once per document
+    # with the list the spec holds, so a list a document closes is not
+    # supported on a frame axis.
     frame_axes = fields.frame_slots(spec, profile.component("extraction",
                                                             "FRAME") or ())
     # Which frame pairs are the plan's own state, so their years date a row
@@ -5039,19 +5117,7 @@ def main(argv: Optional[list] = None) -> int:
         listing = sqlite3.connect(f"file:{args.db}?mode=ro", uri=True)
         listing.row_factory = sqlite3.Row
 
-        def document_spec(document_id):
-            """This document's own spec, or None when its list cannot be
-            closed: swept against an empty list a dynamic axis degrades to a
-            wording, which is a demotion nothing would report."""
-            if document_axes is None:
-                return spec
-            try:
-                filled = document_axes(listing, document_id)
-            except Exception as exc:          # pragma: no cover - defensive
-                log.warning("   document %s: dynamic axes unreadable: %s",
-                            document_id, exc)
-                return None
-            return fill_dynamic_axes(spec, filled) if filled else None
+        document_spec = make_document_spec(listing, spec, document_axes)
 
         try:
             log.info("top-up: this may rewrite %s for every question whose "
@@ -5157,7 +5223,7 @@ def main(argv: Optional[list] = None) -> int:
                             chars=len(item.source.text or ""),
                             image=bool(item.source.image_path),
                             frame=frame_index if frame else None)
-            return name, split_long_sources(items), report
+            return name, split_long_sources(items), report, doc_spec
         finally:
             conn.close()
             cache_conn.close()
@@ -5183,8 +5249,8 @@ def main(argv: Optional[list] = None) -> int:
         rows: list = []
         for item, claims in zip(batch.items, routed):
             for claim in claims:
-                parameter = item.parameter or spec.by_uri.get(
-                    str(claim.get("parameter") or ""))
+                parameter = item.parameter or spec_of(
+                    batch, spec).by_uri.get(str(claim.get("parameter") or ""))
                 if parameter is None:
                     continue
                 outcome = verify_tuple(dict(claim), parameter,
@@ -5198,7 +5264,8 @@ def main(argv: Optional[list] = None) -> int:
         name, report, answered = entry
         replies = len(answered)
         for batch, reply in answered:
-            fold_batch(batch, reply, report, locate=locate, spec=spec)
+            fold_batch(batch, reply, report, locate=locate,
+                       spec=spec_of(batch, spec))
         for row in report.tuples:
             prov = row.get("provenance") or {}
             trace.event("coord", report.document_id,
@@ -5282,8 +5349,8 @@ def main(argv: Optional[list] = None) -> int:
         documents share, and written the moment its last batch is back.
         """
         failed = 0
-        name, items, report = plan_pool.submit(plan, document_id,
-                                               filename).result()
+        name, items, report, doc_spec = plan_pool.submit(
+            plan, document_id, filename).result()
         # ---- Frame: which scenarios and which years, once per document --
         # Before any value. Every value request below asks for ONE of these
         # pairs, so the coordinate is never something the model has to decide
@@ -5324,7 +5391,7 @@ def main(argv: Optional[list] = None) -> int:
             for future in as_completed(futures):
                 pair_index = futures[future]
                 try:
-                    _name, found, pair_report = future.result()
+                    _name, found, pair_report, _spec = future.result()
                 except Exception:
                     failed += 1
                     log.exception("extraction: planning %s for pair %d "
@@ -5357,6 +5424,9 @@ def main(argv: Optional[list] = None) -> int:
                      ", ".join(str(b["year"]) for b in bases))
         for batch in batches:
             batch.bases = bases
+            # What the plan searched with is what the requests offer and
+            # what their answers are checked against.
+            batch.spec = doc_spec
         log.info("extraction: %s planned — %d batch(es) over %d source(s)",
                  name, len(batches), sum(len(b.items) for b in batches))
         if Halted.is_set():

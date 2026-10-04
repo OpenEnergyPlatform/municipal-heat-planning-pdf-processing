@@ -10,7 +10,7 @@ shown source (`verify.py:335-521`). The field sweep in
 `docpipe/extraction/pipeline.py` holds each coordinate to the same two
 clauses, its quote stands in a shown source and carries the answer, and
 writes the passage's owner onto the row (`merge_field`,
-`pipeline.py:874-1101`); a closed-list coordinate is held to a third, naming
+`pipeline.py:930-1157`); a closed-list coordinate is held to a third, naming
 one of the list's own entries, or it is never marked read (`not_an_option`).
 Where in the document that passage
 stands is no check and no grade
@@ -82,14 +82,14 @@ one of three flags: `review:agree` when it matches the stored value,
 `review:disagree` when it does not, `review:unbacked` when its own answer
 cannot be checked against the narrowed window (`review.py:221-225`;
 `test_agreement_writes_the_flag_and_moves_nothing_else`,
-`tests/test_extraction_review.py:279`). None of the three raises the
+`tests/test_extraction_review.py:281`). None of the three raises the
 level: an agreement is recorded as `corroborated`, since the second
 reading checks self-consistency, not that it is right
 (`trust.py:118`; `test_a_corroborated_row_is_still_a_c`,
-`tests/test_extraction_review.py:303`). A disagreement becomes a
+`tests/test_extraction_review.py:305`). A disagreement becomes a
 `review:disagree` reason instead, a fact a curator can count
 (`test_a_disagreement_is_a_reason_a_curator_can_count`,
-`tests/test_extraction_review.py:320`).
+`tests/test_extraction_review.py:322`).
 
 ## What the marks of a trust line say
 

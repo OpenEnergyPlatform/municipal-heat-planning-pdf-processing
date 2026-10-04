@@ -2626,3 +2626,121 @@ def test_a_list_entry_does_not_count_where_a_longer_entry_of_the_list_stands():
     assert pipeline_answer_in_quote(slot, "t", None, "12 t CO2 im Jahr")
     assert not pipeline_answer_in_quote(slot, "t", None, "12 t CO2eq im Jahr")
     assert pipeline_answer_in_quote(slot, "t CO2eq", None, "12 t CO2eq im Jahr")
+
+
+# ---------------------------------------------------------------------------
+# The lists a document closes
+# ---------------------------------------------------------------------------
+
+def _scenarios_spec():
+    return load_spec(json.loads(
+        (PROFILES / "scenarios" / "extraction_spec.json").read_text(
+            encoding="utf-8")))
+
+
+DOCUMENT_LISTS = {
+    "scenario": {"EN_NPi2100": ["EN_NPi2100"],
+                 "out:family": ["Szenario-Familie"]},
+    "scenario_label": {"EN_NPi2100": ["EN_NPi2100"],
+                       "out:family": ["Szenario-Familie"]},
+}
+YEARS = "Results for the CurPol scenario are reported for 2030, 2050 and 2070."
+
+
+def _years_batch(spec=None):
+    batch = group_items([WorkItem(7, None, Source(
+        "section", 1, YEARS, {"document_id": 7, "page": 3}))],
+        max_sources=runner.BATCH_SOURCES)[0]
+    batch.spec = spec
+    return batch
+
+
+def test_a_documents_own_list_is_what_the_field_request_offers(monkeypatch):
+    """A dynamic axis is a closed list only once the document is known. The
+    plan built that list and searched with it, and the requests that read the
+    passages were then built from the run's spec, where the list is empty: the
+    scenario of a value was asked as a wording, on the one coordinate whose
+    whole point is the choice. Nothing failed, the answers just came back
+    unmapped."""
+    monkeypatch.setenv("DOCPIPE_PROFILE", "scenarios")
+    spec = _scenarios_spec()
+    year = spec.by_uri["scenario_year"]
+    rows_reply = {"tuples": [{"source": "Q1", "value": "2030",
+                              "value_raw": "2030", "quote": YEARS}],
+                  "status": "complete", "need_more": []}
+    offered: dict = {}
+
+    def answers(slot, rows):
+        offered[slot.name] = [option.label for option in slot.options]
+        value = year.label if slot.name == "parameter" else "Szenario-Familie"
+        return {"answers": {row.label: {"value": value, "value_raw": "CurPol",
+                                        "quote": YEARS} for row in rows}}
+
+    harvest, asked = _fieldwise(monkeypatch, spec, rows_reply, answers)
+    filled = runner.fill_dynamic_axes(spec, DOCUMENT_LISTS)
+    assert filled is not spec
+    reply = harvest(_years_batch(filled))
+    assert "scenario" in asked
+    assert offered["scenario"] == ["EN_NPi2100", "Szenario-Familie"], (
+        "the document's runs, not a blank to write a wording into")
+    assert reply["tuples"][0]["scenario"] == "Szenario-Familie"
+
+    # Without a document list the run's spec stands, as it always did.
+    offered.clear()
+    harvest(_years_batch())
+    assert offered["scenario"] == []
+
+
+def test_a_year_is_a_wording_where_nothing_is_measured(monkeypatch):
+    """That a number without a unit belongs to no parameter is a rule about
+    parameters that have units. A spec without one reads "2030" as a year,
+    and the rule dropped it unasked: every scenario year and every
+    publication year of the scenarios profile, with a state saying it was
+    never in range."""
+    monkeypatch.setenv("DOCPIPE_PROFILE", "scenarios")
+    spec = _scenarios_spec()
+    assert not any(p.is_numeric for p in spec.parameters)
+    year = {"value": "2030", "quote": YEARS}
+    assert not fields.parameter_undecidable(spec, year), (
+        "which of the eighteen it is, is a question, and it is asked")
+    # A value that is no string has to bring its wording: without one no
+    # parameter takes it, and asking would pay for a refusal.
+    assert fields.parameter_undecidable(spec, {"value": 2030})
+    assert not fields.parameter_undecidable(
+        spec, {"value_raw": "Atlantis"}), "no entry fits, the wording stays"
+    # One text parameter and nothing measured: the year is that parameter's.
+    title = spec.by_uri["publication_title"]
+    alone = Spec(parameters=[title])
+    assert fields.derive_parameter(alone, year) is title
+
+    # Where something is measured the rule stands: a number without a unit
+    # is no reading of any quantity, and a name is no number.
+    kwp = load_spec(json.loads(
+        (PROFILES / "kwp" / "extraction_spec.json").read_text(encoding="utf-8")))
+    assert any(p.is_numeric for p in kwp.parameters)
+    assert fields.parameter_undecidable(kwp, {"value": "2030"})
+    assert fields.parameter_undecidable(kwp, {"value": 2030})
+    assert not fields.parameter_undecidable(kwp, {"value": "Stadtwerke"})
+    # And a number stays a number with its printed form beside it: the
+    # wording of a value is what a left-out value needs, not what makes one.
+    read = {"value": 42005, "value_raw": "42.005", "unit": "MWh/a"}
+    assert not fields.is_wording(kwp, read)
+    assert fields.derive_parameter(kwp, read).is_numeric
+
+
+def test_a_follow_up_batch_reads_against_the_same_document():
+    """More passages of the same document, asked for by the model: they are
+    read against the lists of that document, like its base years."""
+    from docpipe.extraction import pipeline
+    marker = object()
+    batch = _years_batch(marker)
+    batch.bases = ({"year": 2020},)
+    reply = {"status": "partial",
+             "need_more": ["the table of results per scenario and year"]}
+    extra = pipeline.follow_up(
+        batch, reply, pipeline.Sweep(set(), 2),
+        lambda document_id, asked, seen: [Source(
+            "table", 9, "| 2050 | 12 |", {"document_id": 7, "page": 4})])
+    assert extra, "the fixture has to earn a follow-up"
+    assert all(one.spec is marker for one in extra)
+    assert all(one.bases == batch.bases for one in extra)

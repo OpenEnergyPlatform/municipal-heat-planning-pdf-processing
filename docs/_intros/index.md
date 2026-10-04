@@ -123,6 +123,6 @@ Read the Docs rebuilds the hosted site from its own webhook once new
 pages are committed to a tracked branch or tag.
 
 The pipeline's own correctness is checked separately: [running the
-pipeline](running.md) describes a suite of about 1,500 tests
+pipeline](running.md) describes a suite of about 1,800 tests
 (`requirements.txt`, the comment above `pytest`), run with `pytest tests/
 -n 8 --dist loadfile`.

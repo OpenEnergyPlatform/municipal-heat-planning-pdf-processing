@@ -254,12 +254,19 @@ def _working_lines(document: str, row: dict, parameter, slots: list,
 
 def review_file(path: Path, spec: Spec, *, ask: Callable,
                 sources_for: Callable, limit: int = 0,
-                working: Optional[list] = None) -> Counter:
+                working: Optional[list] = None,
+                spec_for: Optional[Callable] = None) -> Counter:
     """Review one harvest file in place. Returns what the reading came to.
 
     The summary is recomputed rather than carried over: a disagreement is a
     reason, and the summary counts reasons. A carried summary would report the
     run before the review.
+
+    *spec_for* gives the spec as the file's document sees it (document id ->
+    Spec, or None when its lists cannot be closed). A coordinate chosen from
+    a per-document list is read again against that list, not against the
+    run's spec, where the list is empty and the second reading would be a
+    wording.
     """
     stats: Counter = Counter()
     lines: list = []
@@ -284,6 +291,11 @@ def review_file(path: Path, spec: Spec, *, ask: Callable,
             continue
         tuples.append(row)
         lines.append(row)
+    if spec_for is not None:
+        spec = spec_for(document_id)
+        if spec is None:
+            stats[fields.LISTS_UNREADABLE] += 1
+            return stats
     for row in rows_to_review(tuples):
         if limit and stats["reviewed"] >= limit:
             break
@@ -321,7 +333,8 @@ def review_file(path: Path, spec: Spec, *, ask: Callable,
 
 def run(harvest_dir: Path, spec: Spec, *, ask: Callable,
         sources_for: Callable, documents=None, limit: int = 0,
-        prompt_sha: str = "", model: str = "") -> Counter:
+        prompt_sha: str = "", model: str = "",
+        spec_for: Optional[Callable] = None) -> Counter:
     """Review a whole harvest directory, or the documents named by stem.
 
     The stamps stay, and none is created. The review changes nothing a resume
@@ -346,8 +359,11 @@ def run(harvest_dir: Path, spec: Spec, *, ask: Callable,
         if wanted is not None and path.stem not in wanted:
             continue
         got = review_file(path, spec, ask=ask, sources_for=sources_for,
-                          limit=left, working=working)
+                          limit=left, working=working, spec_for=spec_for)
         stats.update(got)
+        if got[fields.LISTS_UNREADABLE]:
+            # Not read, so not stamped as read: a later run can still tell.
+            continue
         stats["documents"] += 1
         read.append(path)
         if limit:

@@ -114,7 +114,7 @@ needs. It runs once per run, before any document, from four call
 sites: refinement's `run()` (`docpipe/refinement/pipeline.py:165`) and
 `main()` (`:248`); visuals (`docpipe/visuals/pipeline.py:502`, skipped
 under `--dry-run`); and extraction's review pass and harvest
-(`docpipe/extraction/runner.py:4171` and `:4240`).
+(`docpipe/extraction/runner.py:4932` and `:5017`).
 
 ### Rendering a prompt for one request
 

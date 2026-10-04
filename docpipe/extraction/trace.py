@@ -44,6 +44,9 @@ def open_trace(directory, name_of: Callable) -> None:
     global _root, _name_of
     if not ENABLED:
         return
+    # A file opened under an earlier directory would go on taking the events
+    # of its document, and this directory would never see them.
+    close()
     _root = Path(directory)
     _root.mkdir(parents=True, exist_ok=True)
     _name_of = name_of

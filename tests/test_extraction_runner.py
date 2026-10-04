@@ -2587,3 +2587,72 @@ def test_a_page_is_laid_out_once_for_every_quote_on_it(tmp_path, monkeypatch):
     assert locate(source, "Erdgas") == [[0, 0, 1, 1]]
     assert locate(source, "Erdgas 2022") == [[0, 0, 1, 1]]
     assert laid_out == [3]
+
+
+# ---------------------------------------------------------------------------
+# The lists a document closes
+# ---------------------------------------------------------------------------
+
+def test_the_value_request_offers_the_documents_own_lists(monkeypatch):
+    """A category whose list depends on the document (the scenarios a
+    publication documents, the regions it names) is a choice only when the
+    request shows that list. The plan filled it and searched with it; the
+    value request was built from the run's spec and showed nothing."""
+    from pathlib import Path
+    from docpipe.extraction.pipeline import Source, WorkItem, group_items
+    from docpipe.extraction.spec import load as load_spec
+    monkeypatch.setenv("DOCPIPE_PROFILE", "scenarios")
+    spec = load_spec(json.loads(
+        (Path(__file__).resolve().parent.parent / "profiles" / "scenarios"
+         / "extraction_spec.json").read_text(encoding="utf-8")))
+    lists = {"scenario_label": {"EN_NPi2100": ["EN_NPi2100"]},
+             "scenario_region": {"https://example.org/region/Germany":
+                                 ["Germany"]}}
+    filled = runner.fill_dynamic_axes(spec, lists)
+    text = "The Current Policies scenario (CurPol) covers Germany."
+    seen = _stub_client(monkeypatch, [json.dumps(
+        {"tuples": [], "status": "complete", "need_more": []})] * 2, "stop")
+    harvest = runner.make_harvester(prompt_id=runner.ROWS_PROMPT_ID, spec=spec)
+
+    def request(own):
+        batch = group_items([WorkItem(7, None, Source(
+            "section", 1, text, {"document_id": 7, "page": 3}))],
+            max_sources=runner.BATCH_SOURCES)[0]
+        batch.spec = own
+        harvest(batch, [])
+        user = seen[-1][1]["content"]
+        return user if isinstance(user, str) else "".join(
+            part.get("text", "") for part in user)
+
+    with_lists = request(filled)
+    assert '"EN_NPi2100"' in with_lists and '"Germany"' in with_lists
+    without = request(None)
+    assert '"EN_NPi2100"' not in without, "the run's spec holds no such list"
+
+
+def test_the_halves_of_a_cut_off_request_keep_the_documents_lists(monkeypatch):
+    """A reply cut off at the answer limit is asked again in two halves.
+    Each half is a request of the same document and offers the same lists."""
+    from pathlib import Path
+    from docpipe.extraction.pipeline import Source, WorkItem, group_items
+    from docpipe.extraction.spec import load as load_spec
+    monkeypatch.setenv("DOCPIPE_PROFILE", "scenarios")
+    spec = load_spec(json.loads(
+        (Path(__file__).resolve().parent.parent / "profiles" / "scenarios"
+         / "extraction_spec.json").read_text(encoding="utf-8")))
+    filled = runner.fill_dynamic_axes(
+        spec, {"scenario_label": {"EN_NPi2100": ["EN_NPi2100"]}})
+    text = "The Current Policies scenario (CurPol) covers Germany."
+    batch = group_items([WorkItem(7, None, Source(
+        "section", n, text, {"document_id": 7, "page": n}))
+        for n in range(2)], max_sources=runner.BATCH_SOURCES)[0]
+    batch.spec = filled
+    done = json.dumps({"tuples": [], "status": "complete", "need_more": []})
+    seen = _stub_client(monkeypatch, ['{"tuples": [', done, done], "length")
+    runner.make_harvester(prompt_id=runner.ROWS_PROMPT_ID, spec=spec)(batch, [])
+    assert len(seen) == 3, "the whole request, then one per half"
+    for messages in seen:
+        user = messages[1]["content"]
+        user = user if isinstance(user, str) else "".join(
+            part.get("text", "") for part in user)
+        assert '"EN_NPi2100"' in user

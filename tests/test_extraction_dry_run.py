@@ -183,3 +183,77 @@ def test_the_corpus_path_runs_the_shape_the_plan_really_produces(profile):
     assert all(reply.get("status") == "complete" for _b, reply in answered), (
         "a batch that raised comes back as a failure sentinel, which is how "
         "this crash looked like a harvest that found nothing")
+
+
+def test_the_lists_a_document_closes_reach_its_requests_and_their_check(
+        profile, monkeypatch):
+    """A list that exists only per document (`dynamic`) is filled by the
+    plan. The requests that read the passages and the check of their answers
+    have to see the same list: built from the run's spec they offered
+    nothing, and the model wrote a wording on exactly the fields whose point
+    is the choice. No error anywhere, which is why it has to be looked for
+    here."""
+    from docpipe.extraction import fields
+    _name, spec, _prompt = profile
+    lists = {}
+    for parameter in spec.parameters:
+        if parameter.vocabulary_dynamic:
+            lists[parameter.uri] = {"x:entry": ["an entry of this document"]}
+        for axis_name, axis in parameter.axes.items():
+            if axis.dynamic:
+                lists[axis_name] = {"x:entry": ["an entry of this document"]}
+    if not lists:
+        pytest.skip("this profile closes no list per document")
+    filled = runner.fill_dynamic_axes(spec, lists)
+    assert filled.parameter_question == spec.parameter_question
+    assert filled.unit_question == spec.unit_question
+    carrier = next(p for p in spec.parameters
+                   if any(a.dynamic for a in p.axes.values()))
+    axis_name = next(n for n, a in carrier.axes.items() if a.dynamic)
+    example = carrier.example
+    first = dict(example["tuples"][0])
+    quote = first["quote"]
+    batch = group_items([WorkItem(7, None, Source(
+        "section", 1, example["source"], {"document_id": 7, "page": 1}))],
+        max_sources=runner.BATCH_SOURCES)[0]
+    batch.spec = filled
+    assert "an entry of this document" in json.dumps(
+        runner._batch_payload(batch, [], runner.spec_of(batch, spec)),
+        ensure_ascii=False), "the value request offers the document's list"
+
+    rows_reply = {"tuples": [{"source": "Q1", "value": first["value"],
+                              "value_raw": first.get("value_raw",
+                                                     first["value"]),
+                              "quote": quote}],
+                  "status": "complete", "need_more": []}
+    offered = {}
+    monkeypatch.setattr(runner, "make_harvester",
+                        lambda *a, **kw: (lambda batch, prior=None: rows_reply))
+
+    def make_asker(image_root=None, **kw):
+        def ask(shown, rows, slots, corrections=None, document_id=None,
+                usage_out=None, owner_of=None, bases=None):
+            slots = slots if isinstance(slots, (list, tuple)) else [slots]
+            out = {}
+            for slot in slots:
+                offered[slot.name] = (slot.question,
+                                      [o.label for o in slot.options])
+                value = (carrier.label if slot.name == "parameter"
+                         else "a name the list does not hold")
+                # The wording is the row's own, which its quote prints.
+                out[slot.name] = {"answers": {row.label: {
+                    "value": value, "value_raw": rows_reply["tuples"][0][
+                        "value_raw"], "quote": quote} for row in rows}}
+            return {"fields": out}
+        return ask
+
+    monkeypatch.setattr(runner, "make_field_asker", make_asker)
+    reply = runner.make_fieldwise_harvester(spec=spec)(batch)
+    assert offered["parameter"][0] == spec.parameter_question
+    assert offered[axis_name][1] == ["an entry of this document"]
+    report = DocumentReport(7)
+    fold_batch(batch, reply, report, spec=runner.spec_of(batch, spec))
+    row, = report.tuples
+    assert row["parameter"] == carrier.uri
+    assert row.get(axis_name) is None, "no entry of the list, so no choice"
+    assert row[f"{axis_name}_state"] == fields.UNBACKED

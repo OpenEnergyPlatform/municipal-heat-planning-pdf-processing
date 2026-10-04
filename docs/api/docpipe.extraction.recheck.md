@@ -38,7 +38,8 @@ Strip every coordinate of one tuple whose quote does not carry it.
 ### recheck_file
 
 ```python
-def recheck_file(path: Path, spec: Spec) -> Counter
+def recheck_file(path: Path, spec: Spec,
+                 spec_for: Optional[Callable] = None) -> Counter
 ```
 
 Rewrite one harvest file in place. Returns what it dropped and why.
@@ -47,10 +48,16 @@ The summary line is recomputed rather than carried over: it counts the
 trust levels of the tuples above it, and this pass is in the business of
 demoting them. A kept summary would report the run that no longer exists.
 
+*spec_for* gives the spec as the file's document sees it (document id ->
+Spec, or None when its lists cannot be closed). A coordinate the harvest
+backed as an entry of the document's list is held to the same list here:
+against the run's spec the entry is a bare identifier no quote prints.
+
 ### run
 
 ```python
-def run(harvest_dir: Path, spec: Spec, *, drop_stamps: bool = True) -> Counter
+def run(harvest_dir: Path, spec: Spec, *, drop_stamps: bool = True,
+        spec_for: Optional[Callable] = None) -> Counter
 ```
 
 Recheck a whole harvest directory.
@@ -58,6 +65,7 @@ Recheck a whole harvest directory.
 The stamps go with it. A file rewritten by a rule the harvest did not
 apply is not the output of the run its stamp names, and leaving the stamp
 would make the next run skip the document — which is exactly how 205 plans
-kept a whole-tuple harvest through a field-wise corpus run.
+kept a whole-tuple harvest through a field-wise corpus run. A file left
+alone keeps its stamp: it still is that run's output.
 
 [Back to the index](../README.md)

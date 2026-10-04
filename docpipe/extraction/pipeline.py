@@ -140,6 +140,13 @@ class Batch:
     # every batch of the document, framed or not: a passage that says
     # "Basisjahr" prints no pair, and it is exactly the one that needs them.
     bases: tuple = ()
+    # The spec as this document sees it. A dynamic axis or value list is a
+    # closed list only once the document is known, so the corpus run puts
+    # the copy with the document's lists filled in on every batch of the
+    # document, like `bases`. None is the run's own spec: no list depends on
+    # the document, or the caller builds its slots from the document's spec
+    # itself, as the top-up does.
+    spec: object = None
 
     @property
     def sources(self) -> list:
@@ -491,7 +498,7 @@ def cell_index(quote: str, value) -> Optional[tuple]:
     return (hits[0], len(cells)) if len(hits) == 1 else None
 
 
-def _invented_wording(claim: dict) -> bool:
+def _invented_wording(claim: dict, spec=None) -> bool:
     """A non-numeric value that its own quote does not contain.
 
     Numbers are left to the verifier: it collapses whitespace, repairs a
@@ -499,9 +506,16 @@ def _invented_wording(claim: dict) -> bool:
     of that here would refuse claims the verifier would have taken. A wording
     needs none of it — either the passage says it or the model wrote it down
     from somewhere else.
+
+    In a spec without a numeric parameter a digit string is a wording too
+    (`fields.is_wording`): the verifier compares a year there as it compares
+    a title. Without *spec* it is taken for a number, as before.
     """
     value = claim.get("value")
-    if not isinstance(value, str) or canonical_number(value) is not None:
+    if not isinstance(value, str):
+        return False
+    if canonical_number(value) is not None and (
+            spec is None or any(p.is_numeric for p in spec.parameters)):
         return False
     # value_raw first, exactly as value_in_quote does it. A choice carries
     # the class in `value` and the document's own wording in `value_raw`, and
@@ -595,7 +609,7 @@ def pair_of_source(source, pairs: tuple, slots: list,
 
 
 def rows_from_reply(batch: Batch, reply: Optional[dict],
-                    frame_axes: Optional[list] = None) -> tuple:
+                    frame_axes: Optional[list] = None, spec=None) -> tuple:
     """(rows, orphans) from the value request - the only request that counts.
 
     Routing is the same as for a whole tuple: the quote decides which source a
@@ -637,7 +651,7 @@ def rows_from_reply(batch: Batch, reply: Optional[dict],
             theirs = pair_of_source(source, batch.pairs, frame_axes or [],
                                     batch.frame)
             for claim in claims:
-                if _invented_wording(claim):
+                if _invented_wording(claim, spec):
                     orphans.append(dict(claim, _why="text value not in its quote"))
                     continue
                 elsewhere = pair_of_claim(claim, batch.pairs,
@@ -653,7 +667,7 @@ def rows_from_reply(batch: Batch, reply: Optional[dict],
                                 pair=pair, pair_index=pair_index))
             continue
         for claim in claims:
-            if _invented_wording(claim):
+            if _invented_wording(claim, spec):
                 # A wording that is not in the passage it cites is not a
                 # reading, and the cheapest place to say so is here, before
                 # it becomes a row. It used to become one and was refused at
@@ -1395,6 +1409,7 @@ def follow_up(batch: Batch, reply: dict, sweep: Sweep, more_sources: Callable,
         one.followed_up = True
         # The document's, not the request's: they hold for every passage.
         one.bases = batch.bases
+        one.spec = batch.spec
     return extra_batches
 
 

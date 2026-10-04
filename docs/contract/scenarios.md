@@ -74,7 +74,7 @@ the same four parameters takes a different path: the spec marks it
 `dynamic`, not `vocabulary_dynamic`, and `axis_slots` types it as
 plain text through a path that never calls `_value_uri` at all; that
 call runs earlier in the same function, for the parameter's own
-`value` key (`docpipe/extraction/fields.py:300` to `325`;
+`value` key (`docpipe/extraction/fields.py:399` to `424`;
 `docpipe/extraction/schema.py:367`, `:387` to `399`).
 
 What the list holds is decided once, before harvest starts, by
@@ -90,6 +90,11 @@ scenario list (`REGION_OUT`, `SCENARIO_OUT`,
 `profiles/scenarios/extraction.py:69` to `91`). `value_raw` and
 `<axis>_raw` keep the publication's own wording beside the resolved
 entry on every tuple, recording what the list held at harvest time.
+No parameter of this spec is numeric, so a bare year or a dotted date is
+a wording here: a row carrying one is asked which parameter it belongs
+to, and is dropped before that when its own quote does not print it. A
+row whose value was left out, the wording in `value_raw`, which is how the
+value request says no entry of the list fits, is kept with its wording.
 
 Two sections close the page: `## The stamp`, the schema of
 `<publication>.stamp.json` (four fixed keys, `spec`, `model`,
@@ -103,8 +108,8 @@ run makes the document eligible for a full re-harvest under
 `--force-stale`; `model`, `anchors` and every prompt id are written for
 a reader and never compared, so a reworded prompt or another model
 leaves a harvested corpus current (`stale`,
-`docpipe/extraction/runner.py:3565` to `3606`; `already_done`, `:3593`
-to `3618`). `top_up_file` redoes
+`docpipe/extraction/runner.py:4293` to `4330`; `already_done`, `:4373`
+to `4398`). `top_up_file` redoes
 only the changed question
 (`docpipe/extraction/topup.py:284` to `318`). The trace is read by
 `scripts/trace_report.py` and, for cost, by `trace_costs`

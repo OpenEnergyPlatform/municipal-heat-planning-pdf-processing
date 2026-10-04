@@ -136,6 +136,12 @@ scenario, or no country its own text narrows a region list to, still
 gets a complete list; otherwise the field reverts to open text, exactly
 what a closed list exists to avoid (`extraction.py`, lines 172 to 184).
 
+The copy of the spec these lists fill in goes with every batch of the
+document, so the value request, the field requests and their checks offer
+and hold an answer to the same lists the search used. `--review` and
+`--recheck` read a harvest file against its own document's lists, and leave
+alone, stamp included, a document whose lists cannot be closed.
+
 The fixed kind carries the rest of the list-valued fields: `scenario_type`,
 and the four tags the OEKG shapes demand of every bundle,
 `study_descriptor` (`OEO_00390071`), `study_sector_division`
