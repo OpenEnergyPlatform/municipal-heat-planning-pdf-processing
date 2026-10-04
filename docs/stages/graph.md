@@ -194,7 +194,11 @@ class under it or individual it types. `build` grows a profile's
 closures plus its spec's identifiers to a fixpoint over parents,
 domains and ranges, and writes a pin recording the ontology's version
 IRI, each file's sha256, and which identifier families the files
-cover. `vocabulary.py --write` calls this with an external `--closure`
+cover. It also carries what a writer's own edges name (`also`, which
+`kwp` fills from `vocabulary.edge_terms`): `edge_problems` asks
+whether a subject is under a predicate's domain, and a class the
+snapshot lacks has no parents to answer with. `vocabulary.py --write`
+calls this with an external `--closure`
 file (plus, for `kwp`, `--mhpo`) and overwrites `vocabulary.json`;
 `--refresh` does the same pull automatically, through `upstream.py`
 (below), and then runs `--check` on what it wrote. `--check` runs
@@ -216,12 +220,16 @@ parsed file covers.
 version and caches it under `data/upstream/<source>/<version>/`: a
 `release_asset` is an asset of the repository's latest GitHub release,
 found from the redirect `github.com/<repo>/releases/latest` gives,
-never the GitHub API; a `repo_files` source is files at a branch
+never the GitHub API; a `release_file` is a file in the repository at
+that release's tag, for a project that attaches nothing to its
+releases; a `repo_files` source is files at a branch
 head, versioned by a digest over their bytes and, where the source
 names a `reviewed` commit, compared against it so a schema `kg.py`
 mirrors by hand is named the moment it moves; a `sparql` source
 queries the OEKG endpoint with a token read from the environment
-variable it names and written nowhere. `write_lock` records every
+variable it names and written nowhere. `kwp` reads MHPO's `mhpo.owl`
+as a `release_file`, because MHPO's releases carry no attachment.
+`write_lock` records every
 source's result in `data/upstream/<profile>.lock.json`.
 
 `vocabulary.py --refresh` pulls `SOURCES`, rebuilds `vocabulary.json`
@@ -255,8 +263,10 @@ terms, disjoint}`, plus `regions` for `scenarios`; `pin` carries
 come from `--refresh`. A declared edge, the
 unit `edge_problems` checks, is `{where, subject, predicate,
 object|datatype, accepted}`: `accepted` lets a serializer name why a
-triple contradicts the pinned domain, for example `scenarios`' `has
-uuid` on a bundle, though domained on report or factsheet alone.
+triple contradicts the pinned domain or range, for example `scenarios`' `has
+uuid` on a bundle, though domained on report or factsheet alone, or
+`kwp`'s publication date on the plan, a slot the MHPKG schema
+prescribes with range `date` where OEO says `xsd:dateTime`.
 
 Every value's trust verdict, `{level, reasons, image_origin,
 corroborated}`, is rendered into one line by a profile's own
@@ -340,8 +350,9 @@ marks a trust line is built from are at
   node's class, making the graph unsatisfiable while every check then
   in place still passed (`docpipe/ontology.py`, `edge_problems`
   docstring).
-- The checked-in `kwp` snapshot holds 335 terms, 6 sets and 10 disjoint
-  pairs, pinned to OEO 2.13.0, against a spec naming 58 identifiers;
+- The checked-in `kwp` snapshot holds 352 terms, 6 sets and 11 disjoint
+  pairs, pinned to OEO 2.13.0 and MHPO v0.1.0, against a spec naming 58
+  identifiers;
   `scenarios`' holds 322 terms and 249 OEKG regions, same release,
   against a spec of 280 (inspected directly; `ontology.spec_terms`).
   `--refresh` pulls that same release straight from GitHub rather than
@@ -538,11 +549,14 @@ module resolves each one to a version, downloads it into a cache keyed by that
 version, and returns a record of what it got. What a file is for (a closure to
 snapshot, shapes to validate against, regions to offer) is the profile's.
 
-Three kinds:
+Four kinds:
 
   release_asset  An asset of the repository's latest GitHub release. A
                  repository without a release is an error, unless the source
                  says `until_released`: then it is skipped with a note.
+  release_file   A file in the repository at the tag of its latest release,
+                 for a project that attaches nothing to its releases. The
+                 same rule for a repository without a release.
   repo_files     Files at the head of a branch. The version is a digest over
                  their bytes. A source may name the commit its profile was
                  `reviewed` against, and the record then lists every file that

@@ -254,11 +254,16 @@ def spec_terms(spec_raw: dict) -> dict:
 
 
 def build(closure: Path, sets: dict, spec_raw: dict, *,
-          extra: Optional[list] = None, base: str = "") -> dict:
+          extra: Optional[list] = None, base: str = "",
+          also: tuple = ()) -> dict:
     """The vocabulary snapshot, from the ontology files as they stand.
 
     `extra` are further files parsed into the same graph (MHPO, say); `base`
     is the IRI prefix whose ontology header carries the version to pin.
+    `also` are identifiers the snapshot has to carry although the spec does
+    not name them: the classes a writer's own edges name. `edge_problems`
+    asks whether a subject is under a predicate's domain, and a subject the
+    snapshot does not carry has no parents to answer with.
     """
     from rdflib import OWL, RDF, URIRef
     paths = [closure] + list(extra or [])
@@ -271,6 +276,7 @@ def build(closure: Path, sets: dict, spec_raw: dict, *,
     # that is not the ontology's.
     wanted = {uri for members in reachable.values() for uri in members}
     wanted |= set(spec_terms(spec_raw))
+    wanted |= set(also)
     full = index(graph)
     # Grown to a fixpoint over parents, domains and ranges rather than one
     # generation up. `edge_problems` asks whether a subject class is UNDER a

@@ -120,7 +120,7 @@ def test_a_family_no_file_covers_is_named_and_not_called_an_error():
     false error that teaches everyone to ignore the real ones; reporting
     nothing would let the gap grow."""
     spec, snapshot = _spec("kwp"), _snapshot("kwp")
-    # Until MHPO has a release, which is when `--refresh` starts pulling it.
+    # A snapshot built without the MHPO file, as before its first release.
     snapshot = json.loads(json.dumps(snapshot))
     snapshot["pin"]["families"] = [f for f in snapshot["pin"]["families"]
                                    if f != "MHPO"]
@@ -475,6 +475,53 @@ def test_a_built_snapshot_carries_what_the_edge_check_needs(tmp_path):
     assert len(problems) == 2, problems
     assert "disjoint" in problems[0]
     assert "xsd:dateTime" in problems[1]
+
+
+def test_a_built_snapshot_carries_the_classes_a_writer_names(tmp_path):
+    """A serializer writes triples that sit behind no parameter, so the spec
+    names neither their subject nor their predicate. A snapshot without them
+    has no parents for the subject: once its family is covered, the edge
+    check reads every such subject as outside every domain."""
+    spec = {"parameters": [{"uri": "p", "kg": {"class": "OEO_00000292"}}]}
+    edge = [{"where": "writer", "subject": "OEO_00000292",
+             "predicate": "OEO_00000510"}]
+    bare = _build_tiny(tmp_path, spec)
+    assert "OEO_00000510" not in bare["terms"]
+    assert ontology.edge_problems(edge, bare) == []     # nothing to ask with
+    built = ontology.build(tmp_path / "tiny.ttl", {"energy_carrier": (
+        "class", "https://openenergyplatform.org/ontology/oeo/OEO_00020039")},
+        spec, base="https://openenergyplatform.org/ontology/oeo/",
+        also=("OEO_00000510", "MHPO_00020003"))
+    assert {"OEO_00000510", "MHPO_00020003"} <= set(built["terms"])
+    # The predicate brings its domain with it, as a spec's predicate does.
+    assert "OEO_00020011" in built["terms"]
+    assert len(ontology.edge_problems(edge, built)) == 1
+
+
+def test_kwp_carries_every_term_its_writer_names():
+    """What `edges` hands the check and what the snapshot can answer for are
+    the same set, so no edge of kg.py is passed for want of its terms."""
+    from profiles.kwp import vocabulary
+    spec, snapshot = _spec("kwp"), _snapshot("kwp")
+    named = vocabulary.edge_terms(spec)
+    assert {"MHPO_00020003", "OEO_00390096"} <= set(named)
+    assert not [name for name in named if name not in snapshot["terms"]]
+    assert ontology.ancestors("MHPO_00020003", snapshot) >= {"IAO_0000030"}
+
+
+def test_kwp_writes_the_publication_date_as_its_schema_prescribes():
+    """OEO declares `has publication date` for a report and as a dateTime.
+    The MHPKG schema puts it on the plan as a date and says so; the edge
+    carries that reason, and without it the check names both differences."""
+    from profiles.kwp import kg, vocabulary
+    spec, snapshot = _spec("kwp"), _snapshot("kwp")
+    dated = [edge for edge in kg.EDGES if edge["predicate"] == "OEO_00390096"]
+    assert len(dated) == 1 and "MHPKG schema" in dated[0]["accepted"]
+    assert vocabulary.check(spec, snapshot) == []
+    undeclared = [dict(dated[0], accepted=None)]
+    problems = ontology.edge_problems(undeclared, snapshot)
+    assert len(problems) == 2, problems
+    assert "IAO_0000088" in problems[0] and "xsd:dateTime" in problems[1]
 
 
 def test_a_built_snapshot_names_the_families_it_can_speak_for(tmp_path):

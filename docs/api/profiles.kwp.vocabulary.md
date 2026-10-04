@@ -93,6 +93,14 @@ The `kg` blocks carry most of them and `kg.py` declares the handful that
 sit behind no parameter, so the two together are the whole output and the
 pin can be asked about all of it.
 
+### edge_terms
+
+```python
+def edge_terms(spec_raw: dict) -> tuple
+```
+
+Every identifier those triple shapes name, for the snapshot to carry.
+
 ### check
 
 ```python

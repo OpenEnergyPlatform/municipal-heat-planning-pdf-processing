@@ -77,6 +77,44 @@ def test_a_release_without_the_named_asset_says_which_asset(web, tmp_path):
                               "asset": "gone.owl"}}, tmp_path)
 
 
+def test_a_release_file_is_read_from_the_repository_at_the_release_tag(
+        web, tmp_path):
+    """A project that attaches nothing to its releases: the file is in the
+    repository, and the tag of the latest release says which state of it."""
+    pages, redirects, asked = web
+    redirects[f"{GH}/o/m/releases/latest"] = f"{GH}/o/m/releases/tag/v0.1.0"
+    url = f"{RAW}/o/m/v0.1.0/m.owl"
+    pages[url] = b"<rdf/>"
+    source = {"m": {"kind": "release_file", "repo": "o/m", "file": "m.owl"}}
+    record = upstream.fetch(source, tmp_path)["m"]
+    assert record["version"] == "v0.1.0"
+    assert upstream.files(record, ".owl") == [tmp_path / "m" / "v0.1.0" / "m.owl"]
+    assert upstream.summary("m", record) == "m: release_file v0.1.0"
+    upstream.fetch(source, tmp_path)        # a tag fixes the content
+    assert [a for a in asked if a[0] == url] == [(url, None, None)]
+    # Nothing is asked of the release's attachments.
+    assert not [a for a in asked if "/releases/download/" in a[0]]
+
+
+def test_a_release_file_that_is_not_in_the_repository_is_named(web, tmp_path):
+    _pages, redirects, _ = web
+    redirects[f"{GH}/o/m/releases/latest"] = f"{GH}/o/m/releases/tag/v3"
+    with pytest.raises(upstream.UpstreamError, match="v3 has no file 'gone.owl'"):
+        upstream.fetch({"m": {"kind": "release_file", "repo": "o/m",
+                              "file": "gone.owl"}}, tmp_path)
+
+
+def test_a_release_file_waits_for_a_release_as_an_asset_does(web, tmp_path):
+    _pages, redirects, _ = web
+    redirects[f"{GH}/o/m/releases/latest"] = f"{GH}/o/m/releases"
+    source = {"kind": "release_file", "repo": "o/m", "file": "m.owl"}
+    with pytest.raises(upstream.UpstreamError, match="has no release"):
+        upstream.fetch({"m": source}, tmp_path)
+    record = upstream.fetch({"m": {**source, "until_released": True}},
+                            tmp_path)["m"]
+    assert record["version"] is None and record["files"] == []
+
+
 def test_repo_files_name_what_changed_since_the_reviewed_commit(web, tmp_path):
     pages, _redirects, _ = web
     for ref, shapes in (("production", b"new shapes"), ("abc1234", b"old")):
@@ -209,11 +247,13 @@ def test_kwp_refresh_builds_the_snapshot_from_what_it_pulled(tmp_path,
     from profiles.kwp import vocabulary
     closure = tmp_path / "oeo-closure.owl"
     closure.write_text("x")
+    mhpo = tmp_path / "mhpo.owl"
+    mhpo.write_text("y")
     records = {
         "oeo": {"kind": "release_asset", "version": "v9.0.0",
                 "files": [{"path": str(closure)}]},
-        "mhpo": {"kind": "release_asset", "version": None, "files": [],
-                 "note": "no release yet"},
+        "mhpo": {"kind": "release_file", "version": "v0.1.0",
+                 "files": [{"path": str(mhpo)}]},
         "mhpkg": {"kind": "repo_files", "version": "abc", "files": [
             {"path": str(tmp_path / "a.shacl.ttl")},
             {"path": str(tmp_path / "mint_slice.py")}]},
@@ -229,17 +269,22 @@ def test_kwp_refresh_builds_the_snapshot_from_what_it_pulled(tmp_path,
     monkeypatch.setattr(vocabulary, "build", build)
     monkeypatch.setattr(vocabulary, "VOCABULARY_PATH", tmp_path / "v.json")
     vocabulary.refresh(tmp_path)
-    assert built == {"closure": closure, "mhpo": None}
+    assert built == {"closure": closure, "mhpo": mhpo}
     written = json.loads((tmp_path / "v.json").read_text(encoding="utf-8"))
-    assert written["pin"]["sources"] == {"oeo": "v9.0.0", "mhpo": None,
+    assert written["pin"]["sources"] == {"oeo": "v9.0.0", "mhpo": "v0.1.0",
                                          "mhpkg": "abc"}
     assert vocabulary.shapes(tmp_path) == [tmp_path / "a.shacl.ttl"]
 
 
-def test_kwp_names_its_sources_and_waits_for_an_mhpo_release():
+def test_kwp_names_its_sources_and_reads_mhpo_at_its_release_tag():
+    """MHPO's releases carry no attachment; its mhpo.owl is a file of the
+    repository. Asked for as an attachment, the refresh ended on a 404 and
+    the run it opens did not start."""
     from profiles.kwp import vocabulary
     assert vocabulary.SOURCES["oeo"]["asset"] == "oeo-closure.owl"
-    assert vocabulary.SOURCES["mhpo"]["until_released"] is True
+    assert vocabulary.SOURCES["mhpo"]["kind"] == "release_file"
+    assert vocabulary.SOURCES["mhpo"]["file"] == "mhpo.owl"
+    assert "until_released" not in vocabulary.SOURCES["mhpo"]
     assert len(vocabulary.SOURCES["mhpkg"]["reviewed"]) == 40
     assert vocabulary.shapes(Path("/nonexistent")) == []
 

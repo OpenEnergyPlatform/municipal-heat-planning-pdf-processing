@@ -153,7 +153,7 @@ is for and what it hands to what; this is the reference.
 - [profiles.kwp.profile](profiles.kwp.profile.md): Kommunale Wärmeplanung: German municipal heat plans from the KWW register.
 - [profiles.kwp.source](profiles.kwp.source.md): Where heat plans come from: the KWW "Status quo KWP" sheet. (1 class, 7 functions)
 - [profiles.kwp.store](profiles.kwp.store.md): The project's own tables: organisations, municipalities and their KWW metadata. (4 functions)
-- [profiles.kwp.vocabulary](profiles.kwp.vocabulary.md): This profile's half of the ontology snapshot. (10 functions)
+- [profiles.kwp.vocabulary](profiles.kwp.vocabulary.md): This profile's half of the ontology snapshot. (11 functions)
 
 ## profiles.scenarios
 

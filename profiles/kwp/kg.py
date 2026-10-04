@@ -315,7 +315,10 @@ def _bare(name: str) -> str:
 # passed it.
 EDGES = tuple(
     [{"where": "kg.py plan", "subject": _bare(CLS_HEATPLAN),
-      "predicate": _bare(P_PUBLICATION_DATE), "datatype": "xsd:date"},
+      "predicate": _bare(P_PUBLICATION_DATE), "datatype": "xsd:date",
+      "accepted": ("the MHPKG schema prescribes this slot on the plan with "
+                   "range date and calls it a near miss itself: OEO declares "
+                   "domain report and range xsd:dateTime")},
      {"where": "kg.py plan", "subject": _bare(CLS_HEATPLAN),
       "predicate": _bare(P_ORGANISATION), "object": _bare(CLS_ORGANISATION)},
      {"where": "kg.py area", "subject": _bare(CLS_PLAN_AREA),

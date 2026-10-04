@@ -7,11 +7,14 @@ module resolves each one to a version, downloads it into a cache keyed by that
 version, and returns a record of what it got. What a file is for (a closure to
 snapshot, shapes to validate against, regions to offer) is the profile's.
 
-Three kinds:
+Four kinds:
 
   release_asset  An asset of the repository's latest GitHub release. A
                  repository without a release is an error, unless the source
                  says `until_released`: then it is skipped with a note.
+  release_file   A file in the repository at the tag of its latest release,
+                 for a project that attaches nothing to its releases. The
+                 same rule for a repository without a release.
   repo_files     Files at the head of a branch. The version is a digest over
                  their bytes. A source may name the commit its profile was
                  `reviewed` against, and the record then lists every file that
@@ -134,23 +137,38 @@ def latest_release(repo: str) -> Optional[str]:
                         f"{target or 'no redirect'}")
 
 
-def _release_asset(name: str, source: dict, cache: Path) -> dict:
-    repo, asset = source["repo"], source["asset"]
+def _released(name: str, source: dict, cache: Path, what: str, path: str,
+              url: str) -> dict:
+    """`path` of the latest release of the source's repository, from `url`
+    (which names the tag as `{tag}`)."""
+    repo = source["repo"]
     tag = latest_release(repo)
     if tag is None:
         if source.get("until_released"):
             return {"version": None, "files": [],
                     "note": f"{repo} has no release yet, skipped"}
         raise UpstreamError(f"{repo} has no release")
-    url = f"{GITHUB}/{repo}/releases/download/{tag}/{asset}"
     try:
-        record = _store(url, cache / name / tag / asset, reuse=True)
+        record = _store(url.format(tag=tag), cache / name / tag / path,
+                        reuse=True)
     except UpstreamError as exc:
         if exc.status != 404:
             raise
-        raise UpstreamError(f"{repo} {tag} has no asset {asset!r} "
+        raise UpstreamError(f"{repo} {tag} has no {what} {path!r} "
                             f"({exc})", 404) from exc
     return {"version": tag, "files": [record]}
+
+
+def _release_asset(name: str, source: dict, cache: Path) -> dict:
+    repo, asset = source["repo"], source["asset"]
+    return _released(name, source, cache, "asset", asset,
+                     f"{GITHUB}/{repo}/releases/download/{{tag}}/{asset}")
+
+
+def _release_file(name: str, source: dict, cache: Path) -> dict:
+    repo, path = source["repo"], source["file"]
+    return _released(name, source, cache, "file", path,
+                     f"{RAW}/{repo}/{{tag}}/{path}")
 
 
 def _repo_files(name: str, source: dict, cache: Path) -> dict:
@@ -217,8 +235,8 @@ def _sparql(name: str, source: dict, cache: Path) -> dict:
                        "bytes": target.stat().st_size}]}
 
 
-KINDS = {"release_asset": _release_asset, "repo_files": _repo_files,
-         "sparql": _sparql}
+KINDS = {"release_asset": _release_asset, "release_file": _release_file,
+         "repo_files": _repo_files, "sparql": _sparql}
 
 
 def fetch(sources: dict, cache: Path = CACHE) -> dict:
