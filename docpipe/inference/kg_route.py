@@ -180,15 +180,27 @@ def to_coordinates(task: str, spec, axes, ask) -> dict:
     harvested coordinate, so a synonym the spec knows lands and a wording it
     does not is left unbound, never matched by nearest string.
     """
+    parameter = parameter_of(task, spec, ask)
+    if parameter is None:
+        return {}
+    return coordinates_of(task, parameter, ask, axes)
+
+
+def parameter_of(task: str, spec, ask):
+    """The parameter the question asks for, or None: one closed question
+    over the spec's parameters."""
     slot = fields.parameter_slot(spec)
     by_label = {fold_label(p.label): p.uri for p in spec.parameters}
-    parameter_uri = by_label.get(fold_label(ask(task, slot) or ""))
-    if parameter_uri is None:
-        return {}
-    parameter = spec.by_uri[parameter_uri]
+    uri = by_label.get(fold_label(ask(task, slot) or ""))
+    return spec.by_uri[uri] if uri is not None else None
+
+
+def coordinates_of(task: str, parameter, ask, axes=None) -> dict:
+    """{axis: uri | int} for the coordinates of *parameter* the question
+    fixes. *axes* limits which are asked; None asks every one."""
     out: dict = {}
     for slot in fields.axis_slots(parameter):
-        if slot.name not in axes:
+        if axes is not None and slot.name not in axes:
             continue
         answer = ask(task, slot)
         if answer is None or str(answer).strip() == fields.UNSTATED:

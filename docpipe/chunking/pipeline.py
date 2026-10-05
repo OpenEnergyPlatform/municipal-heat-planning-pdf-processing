@@ -20,7 +20,8 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import Optional
 
 from docpipe import usage
-from docpipe.profile import add_profile_argument, resolve_profile
+from docpipe.profile import add_profile_argument, program, resolve_profile
+from docpipe.store import schema as store_schema
 
 from .config import (
     EMBED_FLUSH_ITEMS,
@@ -50,10 +51,29 @@ from .embedding import (
     save_index,
     remove_ids_from_index,
     create_embeddings,
+    index_backend,
     load_embedder,
 )
 
 log = logging.getLogger(__name__)
+
+
+def note_embedding(db_path: Path, embedder) -> None:
+    """Record in the database which model builds its index, and say so when
+    the index already holds another model's vectors."""
+    import sqlite3
+
+    from docpipe import __version__
+    from docpipe.embedding import config as backend
+    model = getattr(embedder, "model", None)
+    if not isinstance(model, str):
+        model = EMBEDDING_MODEL
+    with sqlite3.connect(str(db_path)) as connection:
+        mixed = store_schema.note_embedding(
+            connection, model, backend.EMBEDDING_DIM, index_backend(),
+            backend.EMBEDDING_MAX_TOKEN_LENGTH, __version__)
+    if mixed:
+        log.warning("%s", mixed)
 
 
 def peak_rss_gb() -> float:
@@ -190,6 +210,7 @@ def run(
         next_id = max(next_id, next_faiss_id(db_path),
                       (max(held) + 1) if held else 0)
         embedder = load_embedder(EMBEDDING_MODEL)
+        note_embedding(db_path, embedder)
 
         candidates = sorted(
             d for d in data_dir.iterdir()
@@ -294,7 +315,7 @@ def run(
 def _build_parser() -> argparse.ArgumentParser:
     """Build the CLI argument parser."""
     p = argparse.ArgumentParser(
-        prog="python -m docpipe.chunking",
+        prog=program("docpipe.chunking"),
         description="Chunking & Embedding – Merge, embed, and index pipeline outputs",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""\

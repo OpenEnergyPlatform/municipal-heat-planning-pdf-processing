@@ -44,6 +44,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from docpipe import jsonl                                   # noqa: E402
 from docpipe.extraction import fields                       # noqa: E402
 from docpipe.profile import load_profile                    # noqa: E402
 
@@ -73,7 +74,7 @@ def read_harvest(path: Path) -> tuple:
     """
     tuples, refusals, summary = [], [], None
     parameter_lines: list = []
-    for line in path.read_text(encoding="utf-8").splitlines():
+    for line in jsonl.read(path):
         if not line.strip():
             continue
         try:
@@ -140,7 +141,8 @@ def trace_costs(directory: Path, name: str) -> dict:
                  if p.is_file()), None)
     if path is None:
         return out
-    for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+    for line in jsonl.lines(path.read_text(encoding="utf-8",
+                                           errors="replace")):
         try:
             event = json.loads(line)
         except json.JSONDecodeError:

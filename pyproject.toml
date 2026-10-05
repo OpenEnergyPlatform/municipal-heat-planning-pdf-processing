@@ -1,0 +1,60 @@
+# The package and its one command. `pip install .` gives what every stage
+# needs that asks a model over an API; the stages that run a model in this
+# process are extras. requirements.txt stays what it is: the lock the
+# container image is built from.
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "docpipe"
+dynamic = ["version"]
+description = "PDF corpora to quoted, verified values: layout, text repair, tables and figures, a search index, ontology-based extraction and a chat."
+readme = "README.md"
+requires-python = ">=3.9"
+license = {file = "LICENSE"}
+authors = [{name = "Felix Vossel"}]
+dependencies = [
+    "PyYAML",
+    "openai>=1.40",
+    "numpy",
+    "Pillow",
+    "PyMuPDF",
+    "requests",
+    "tqdm",
+    "jsonschema",
+    "rapidfuzz",
+    "faiss-cpu",
+    "tomli; python_version < '3.11'",
+]
+
+[project.optional-dependencies]
+# stage 2: the layout model, on a GPU or a CPU
+layout = ["torch", "transformers", "opencv-python-headless"]
+# stage 6 and the chat's queries with the embedding model in this process
+embed = ["torch", "transformers", "qwen-vl-utils"]
+app = ["streamlit"]
+# the graph: snapshot of the ontology, SHACL report
+kg = ["rdflib", "pyshacl"]
+# what the profiles in this repository read their document lists with
+kwp = ["pandas", "openpyxl"]
+sandbox = ["llm-sandbox"]
+# a hosted text or vision model of this provider (openai is a core package,
+# gemini needs none)
+anthropic = ["anthropic>=0.108"]
+dev = ["pytest", "rdflib", "pandas", "openpyxl"]
+
+[project.scripts]
+docpipe = "docpipe.cli:main"
+
+[tool.setuptools.dynamic]
+version = {attr = "docpipe.__version__"}
+
+[tool.setuptools.packages.find]
+include = ["docpipe*"]
+
+[tool.setuptools.package-data]
+# builtin/ holds the profile the package brings itself. It is found as a
+# profile is (by its directory), not imported as part of the package.
+docpipe = ["**/*.md", "**/*.json", "**/*.sql", "**/*.toml", "**/*.js",
+           "builtin/**/*.py"]

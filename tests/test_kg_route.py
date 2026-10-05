@@ -376,8 +376,8 @@ def test_the_caption_tells_a_carrier_from_a_sector_by_the_specs_own_lists(
     # The app reads the split, never a list of its own. Read as text: the
     # app imports streamlit, which this suite does not have.
     from pathlib import Path
-    source = (Path(__file__).resolve().parent.parent / "scripts"
-              / "inference_app" / "app.py").read_text(encoding="utf-8")
+    source = (Path(__file__).resolve().parent.parent / "docpipe"
+              / "app" / "app.py").read_text(encoding="utf-8")
     render = source[source.index("def _render_kg("):]
     render = render[:render.index("\ndef ")]
     assert "kg_route.by_axis(" in render

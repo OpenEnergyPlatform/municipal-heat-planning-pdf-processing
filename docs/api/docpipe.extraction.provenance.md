@@ -1,0 +1,117 @@
+# docpipe.extraction.provenance
+
+`docpipe/extraction/provenance.py`, read with `ast` by `scripts/build_docs.py`. The docstrings are the code's own: edit them there, not here.
+
+provenance.py: Where every value of a graph comes from, as a graph.
+
+A graph carries a number. That it was read on page 97, from which words,
+by which run and how far the run stands behind it, the harvest knows and
+the graph does not say. This module says it, in a file of its own beside
+the graph (`<graph>.prov.ttl`), with PROV-O and the W3C Web Annotation
+vocabulary and a small vocabulary for what those two do not have. Every
+statement points at a value and none starts from one, so the graph itself
+is the same with and without it, and a reader who does not want it leaves
+the file away. A run that should not write it is started with
+EXTRACT_PROVENANCE=0.
+
+Per value:
+
+    its reading       an oa:Annotation whose body is the value and whose
+                      target is the part of the document it stands in: the
+                      page (a fragment selector), refined by the quote and,
+                      where the quote was located, by its rectangles
+    each coordinate   an annotation of its own: what was read (the body),
+                      the wording it was read from, how the reading ended,
+                      and its own passage where it had one
+    its trust         an assessment with the level, the reasons below A and
+                      whether it was read from an image
+    a second reading  what it came to, where one was made
+
+and once per document the run (a prov:Activity with its model and the
+fingerprints of the spec and the prompts) and each part of the document
+that is quoted.
+
+The vocabulary's terms live where the writer says (`vocabulary`: a prefix
+and an IRI). A graph that has an ontology for them names it; one that has
+none gets them under its own base.
+
+Not written yet: the decision between two readings that claim one value.
+The writers settle that before a value reaches this module, and what lost
+does not come with it.
+
+Author: Felix Vossel
+
+## Classes
+
+### Writer
+
+```python
+class Writer
+```
+
+Collects the provenance of a run's values and writes it once.
+
+#### Writer.\_\_init\_\_
+
+```python
+def __init__(self, base: str, vocabulary: Optional[dict] = None)
+```
+
+#### Writer.term
+
+```python
+def term(self, name: str) -> str
+```
+
+#### Writer.header
+
+```python
+def header(self) -> str
+```
+
+#### Writer.add
+
+```python
+def add(self, name: str, claims: dict, stamp: Optional[dict] = None,
+        *, transcribed: bool = False) -> None
+```
+
+The provenance of one document's written values.
+
+*claims* is what a writer left for the document: `document` (the
+IRI of its node) and `values`, each with `about` (the IRI of the
+value), its harvest `row`, and optionally `id`, `bodies` (the IRI a
+coordinate became) and `statement` (subject, predicate, object as
+Turtle) where the value is a statement and not a node.
+
+#### Writer.write
+
+```python
+def write(self, path) -> Optional[Path]
+```
+
+Write what was collected; nothing collected, nothing written.
+
+## Functions
+
+### enabled
+
+```python
+def enabled() -> bool
+```
+
+### path_for
+
+```python
+def path_for(graph_path) -> Path
+```
+
+### read_stamp
+
+```python
+def read_stamp(jsonl_dir, name: str) -> dict
+```
+
+The stamp beside a document's harvest, or {}.
+
+[Back to the index](../README.md)

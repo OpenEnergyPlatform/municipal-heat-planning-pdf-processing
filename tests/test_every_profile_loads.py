@@ -21,6 +21,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 PROFILES = ROOT / "profiles"
+BUILTIN = ROOT / "docpipe" / "builtin"
 
 # What has to resolve before a stage can process its first document.
 # The subprocess does not get conftest's stubs, so it installs its own for the
@@ -73,8 +74,8 @@ print("@@" + json.dumps({
 
 
 def _profiles():
-    return sorted(p.name for p in PROFILES.iterdir()
-                  if (p / "profile.py").is_file())
+    return sorted(p.name for root in (PROFILES, BUILTIN)
+                  for p in root.iterdir() if (p / "profile.py").is_file())
 
 
 def _load(name: str) -> dict:

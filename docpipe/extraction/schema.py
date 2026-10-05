@@ -626,6 +626,35 @@ def stamp_schema() -> dict:
                                        "the same result as one read under "
                                        "another. Empty when anchors were "
                                        "off."},
+            "docpipe": {"type": "string",
+                        "description": "The version that wrote this stamp. "
+                                       "Recorded and never compared."},
+            "document": {
+                "type": "object",
+                "description": "Which bytes were read: the sha256 and the "
+                               "size of the file as the database recorded "
+                               "them. Absent for a database that records "
+                               "none. Recorded and never compared.",
+                "properties": {"sha256": sha,
+                               "bytes": {"type": ["integer", "null"]}},
+                "required": ["sha256"], "additionalProperties": False},
+            "producers": {
+                "type": "array",
+                "description": "Every pass that wrote into this harvest, in "
+                               "order: the harvest, then each top-up, remap "
+                               "or review that changed a row. `model` above "
+                               "names the first only. Recorded and never "
+                               "compared.",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "pass": {"type": "string"},
+                        "model": {"type": ["string", "null"]},
+                        "provider": {"type": "string"},
+                        "prompts": {"type": "object"},
+                        "docpipe": {"type": "string"},
+                        "utc": {"type": "string"}},
+                    "required": ["pass"], "additionalProperties": False}},
             "page_text_transcribed": {
                 "type": ["integer", "null"],
                 "description": "How many pages of this document a model read "
@@ -838,9 +867,19 @@ def serialize(schema: dict) -> str:
                       sort_keys=True) + "\n"
 
 
+def _profile_dir(profile_name: str) -> Path:
+    """Where a profile lives: wherever profiles are found (a project's own
+    directory, the search path), else the checkout's `profiles/`."""
+    from docpipe.profile import load_profile
+    try:
+        return Path(load_profile(profile_name).package_dir)
+    except (LookupError, ImportError, ValueError):  # not a profile yet
+        return (Path(__file__).resolve().parent.parent.parent / "profiles"
+                / profile_name)
+
+
 def schema_path(profile_name: str) -> Path:
-    return (Path(__file__).resolve().parent.parent.parent / "profiles"
-            / profile_name / SCHEMA_NAME)
+    return _profile_dir(profile_name) / SCHEMA_NAME
 
 
 def main(argv=None) -> int:
@@ -850,8 +889,7 @@ def main(argv=None) -> int:
                         help=f"write profiles/<profile>/{SCHEMA_NAME}")
     args = parser.parse_args(argv)
 
-    spec_file = (Path(__file__).resolve().parent.parent.parent / "profiles"
-                 / args.profile / "extraction_spec.json")
+    spec_file = _profile_dir(args.profile) / "extraction_spec.json"
     if not spec_file.is_file():
         print(f"no spec: {spec_file}")
         return 1

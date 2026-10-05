@@ -30,6 +30,7 @@ from collections import Counter
 from pathlib import Path
 from typing import Callable, Optional
 
+from .. import jsonl
 from .fields import (DERIVED, LISTS_UNREADABLE, NUMBER, READ, UNANSWERED,
                      asked_slots)
 from .pipeline import answer_in_quote
@@ -76,7 +77,7 @@ def recheck_row(row: dict, slots: list) -> Counter:
 
 def _document_of(text: str):
     """The document id a harvest file's summary line names, or None."""
-    for line in text.splitlines():
+    for line in jsonl.lines(text):
         if '"summary"' not in line:
             continue
         try:
@@ -110,7 +111,7 @@ def recheck_file(path: Path, spec: Spec,
         if spec is None:
             stats[LISTS_UNREADABLE] += 1
             return stats
-    for line in text.splitlines():
+    for line in jsonl.lines(text):
         if not line.strip():
             continue
         try:

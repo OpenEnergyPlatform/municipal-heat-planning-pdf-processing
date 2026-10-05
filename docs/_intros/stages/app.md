@@ -1,307 +1,186 @@
 ## Purpose
 
-`scripts/inference_app` is the Streamlit front end over `docpipe.inference`
-(see [Asking the corpus](inference.md)), the only package in the
-repository importing Streamlit at all (`app.py:1`). Where the eight
-numbered stages turn PDFs into a corpus once, offline, this one turns
-that corpus into a running chat: a person opens a profile's database
-and FAISS index, picks a document (or a few, to compare), asks a
-question in ordinary language, and reads back an answer grounded in a
-citation that traces to a page and, where possible, to the exact
-passage on it. It loads no model of its own, holds no state on disk
-beyond two caches, and keeps a conversation only in the running
-process, discarded on reload or a new selection. Every
-retrieval and answering decision is made by `docpipe.inference` and
-`docpipe.embedding`; this page covers what `app.py`, `config.py`,
-`pdf_link.py` and `sandbox_service.py` add: a document and scope
-picker, chat history, follow-up context, PDF deep links, and an
-optional code-execution sandbox.
+`docpipe/app/` is the Streamlit front end over `docpipe.inference` (see
+[Asking the corpus](inference.md)); `app.py` is the only module in `docpipe/`
+that imports Streamlit. Where the numbered stages turn PDFs into a corpus once,
+offline, this turns that corpus into a running chat: a person opens a
+profile's database and FAISS index, asks a question in ordinary language, and
+reads back an answer grounded in a citation that traces to a page and, where
+possible, to the passage on it. It has two pages:
 
-A few decisions belong to this layer alone. Selecting several documents
-does not become one joint retrieval: `run_comparison` asks each
-separately, since one top-k search across several plans would give the
-longest chapter most of the slots, leaving shorter documents few or no
-citations (`app.py:154`). The embedding model is left out of
-the `st.cache_resource` set that
-covers the database, the index and the two caches: `get_embedder()` is
-imported lazily inside `embed_query()` so that a query-cache hit never
-imports `torch` (`app.py:112`). The app answers from the documents
-alone: no graph route is offered while no corpus graph exists
-(`app.py:347-349`).
+- the chat, over one document, several (each asked by itself, then compared)
+  or the whole corpus;
+- the review page, where a person decides whether harvested values are what
+  the documents say (see below). It is offered only where a harvest is
+  configured.
+
+The app reads the corpus and writes nothing into it. It loads no model of its
+own, keeps a conversation only in the running process, and writes two small
+files of its own: a cache of query vectors and a log of requests. Every
+retrieval and answering decision is made by `docpipe.inference` and
+`docpipe.embedding`; this package adds the pickers, the history, the deep
+links into the source PDF and the optional calculation sandbox. Every word on
+its pages comes from the profile (`inference.UI`); without a profile the app
+runs on the built-in `default` profile's English words and generic labels.
 
 ## Position in the pipeline
 
 | | |
 |---|---|
-| In | One profile's read-only corpus: database at `DB_PATH`, FAISS index at `INDEX_PATH` (chunking, stage 6), `IMAGE_ROOT`/`PDF_ROOT` for table, figure and PDF paths; one chat turn (task, optional image, document selection). |
-| Out | Nothing written to the corpus, read-only here. Its durable output: two SQLite files created on first use, `QUERY_CACHE_PATH` and `REQUEST_LOG_PATH`; chat history lives only in Streamlit's session state. |
-| Resumes on | Nothing: one question is one turn, with no per-document stamp. The one thing an identical query skips is re-embedding, served from `QUERY_CACHE_PATH`; the LLM calls always run. |
-| Needs | An OpenAI-compatible LLM endpoint at `LLM_BASE_URL`, the embedding backend `docpipe.embedding.get_embedder()` returns, and a corpus chunking already wrote; a code-exec sandbox is optional. |
+| In | One profile's corpus, read-only: the database and the FAISS index (chunking), the image root and the PDF folder for table, figure and PDF paths. Optionally the word index (`docpipe lexical`) and a harvest directory (`docpipe extract`). One chat turn: a task, an optional image, a selection. |
+| Out | Nothing written to the corpus. Two SQLite files on first use, the query cache and the request log; and, from the review page, decisions appended to `gold.jsonl`. History lives only in Streamlit's session state. |
+| Resumes on | Nothing: one question is one turn. An identical query skips only the embedding, from the query cache; the model calls always run. |
+| Needs | A model endpoint for the search phrase, the answer and the comparison (`LLM_PROVIDER`, `LLM_BASE_URL`), the embedding backend `docpipe.embedding.get_embedder()` returns, and a corpus chunking already wrote. A code sandbox is optional. |
 
-No numbered stage runs after this one; it reads what chunking wrote
-and writes nothing back.
-The batch chain must finish first (see [Running the
-pipeline](../running.md)); this one starts directly:
+No numbered stage runs after this one. The batch chain has to finish first
+(see [Running the pipeline](../running.md)); this starts directly:
 
 ```bash
-DOCPIPE_PROFILE=kwp streamlit run scripts/inference_app/app.py \
-    --server.address 0.0.0.0 --server.port 8501
+docpipe --profile kwp chat --server.address 0.0.0.0 --server.port 8501
 ```
 
-## Method
+`docpipe chat` starts `docpipe/app/app.py` with Streamlit and passes what
+follows to it. It needs the `app` extra. The older form, `streamlit run
+scripts/inference_app/app.py`, still works: that file only hands over to the
+package.
 
-### Startup: cached resources
+## What a turn does
 
-`streamlit run` re-executes `main()` on every widget interaction, so
-the database, the FAISS index and the two SQLite caches are each opened
-inside `@st.cache_resource` functions (`get_db`, `get_index`,
-`get_catalog`, and four more; `app.py:59`), evaluated once per process. Two
-import-time guards run first: a MIME-type registration for the pdf.js
-viewer's ES modules, since some Python installs otherwise serve them as
-`octet-stream`, unexecutable by browsers (`app.py:32`); and a
-`sys.path` insert of the repository root, since `streamlit run` gives no
-package context for the imports below (`app.py:36-38`).
+The sidebar offers the picker the profile's catalog builds (its filters, the
+document label, the detail shown for one document), a checkbox for the whole
+corpus, the search scopes and the answer format. Changing the selection
+resets the history. A turn then runs in this order:
 
-### Picking a document and a scope
+1. If a harvest is configured (`INFERENCE_HARVEST_DIR`) and the question is
+   not only an image, the numbers the harvest holds for it are shown first,
+   each with its document, page, trust level and quote, as they were read and
+   checked and not as a model writes them now. This is
+   `docpipe/inference/values_route.py` over `docpipe/serve/values.py`; a
+   question that names no parameter shows nothing here. `INFERENCE_VALUES_LEVEL`
+   leaves out values below a trust level and `INFERENCE_VALUES_LIMIT` caps how
+   many are shown before the count of the rest.
+2. The answer from the documents follows, as before: a search anchor, the
+   query embedding, retrieval, and the answer across token-budgeted batches.
+   Retrieval is by meaning and, where a word index exists beside the database
+   and is current, also by word, and the two rankings are merged
+   (`docpipe/inference/hybrid.py`). `INFERENCE_LEXICAL=0` turns the word
+   search off.
+3. With several documents selected there is no values step and no joint
+   search: `run_comparison` asks each document by itself and one more call
+   compares the finished answers, since one top-k over several plans would
+   give the longest chapter most of the slots.
 
-The sidebar is built from the active profile's catalog. A `Historische
-Versionen einbeziehen` checkbox sets `include_old`, passed to
-`cat.entries()` as `include_superseded`; unchecked, the picker is
-filtered to `is_current = 1`, so a superseded version is absent
-(`app.py:221`; `docpipe/inference/catalog.py:62-64`, `89-92`).
-`catalog.facet_options()` and `apply_filters()` then apply whatever
-facets the profile declared, and a multiselect picks one document or,
-capped at `COMPARE_MAX_DOCUMENTS`, several to compare; with exactly one
-selected, its `detail` expanders open below the picker, a per-profile
-addition since the base `Catalog` returns none (`app.py:254-257`). A
-scope multiselect defaults to
-every embedding type, and an answer-format radio chooses prose or JSON
-(`app.py:258-265`). Changing the document
-selection resets chat history and follow-up memory (`app.py:274`,
-`278`).
+Over the whole corpus every source names its document (the label of the
+catalog, or the name of the document's file without its ending where it gives none), only the
+current version of a document answers, and the conversation is one of its own.
+The values of step 1 are not narrowed that way: they come from every
+harvested document, older versions included, and the help text of the
+checkbox (`whole_corpus_help` of the profile) says so.
 
-### No graph route
+The graph route is not offered while no corpus graph exists. `kg_route` stays
+in the core, and `run_kg_turn` and `_render_kg` stay in the app, for the day
+one does.
 
-The graph route is not offered: there is no corpus graph yet, and a
-selector for a source that does not exist would promise what the app
-cannot keep (`app.py:347-349`). `kg_route` stays in the core, and
-`run_kg_turn()` and `_render_kg()` stay in the app, unused, for the day
-a graph is there.
+## The review page
 
-### One document, and several
+The review page is how the decisions behind
+[a harvest's precision and recall](evaluation.md) are made. The person gives
+a name and works through the queue of rows nobody has decided yet: for each
+field of the row (the value, the unit, every coordinate) the value, its quote
+and a button into the source PDF at its page are shown, and the field is
+marked correct or wrong, with what is right where it is wrong. Two more
+forms record that the document states a value the harvest lacks, and that
+somebody has read a whole document for one parameter. All three append to
+`gold.jsonl` (`INFERENCE_GOLD_PATH`, by default beside the harvest directory);
+nothing here changes the harvest.
 
-`run_turn()` assembles a `docpipe.inference.answer.Corpus` from the
-cached database, index, the app's own `_embed()` closure and
-`resolve_image_path()` (`app.py:126-146`), then calls
-`answer.answer_question()` with the task, document id, scopes, and up to
-five prior turns for that document.
-`_embed()` (`app.py:134-141`) builds the cache key from the query mode,
-text and image bytes and calls the module-level `embed_query()`, which
-checks `QUERY_CACHE_PATH` first and embeds afresh only on a miss
-(`app.py:112-123`). `run_comparison()`
-builds the same `Corpus` without an image, since one crop would
-otherwise anchor every plan to whatever looks similar, then calls
-`compare.compare_documents()`, which runs `answer_question` once per
-document and makes one further, source-less LLM call to describe where
-the answers differ (`app.py:154`).
+A row is keyed on the page by `gold.row_name`, its name and what it says
+beside the value, so two rows of one document that share a quote and a value
+are two rows with their own decisions; a row that is skipped stays skipped
+under that key. A number typed into the form, what is right or a value that is
+missing, is read with the decimal mark of the profile's documents (`_typed`:
+`1.234,5` is 1234.5 where they write a decimal comma; a comma where the profile
+names none). The form for a missing value is emptied once it is saved (the document and the
+parameter stay chosen), so the same value is not saved twice by a second press.
 
-### Locating a citation in the source PDF
+## Locating a citation in the source PDF
 
-`_pdf_link_for()` builds a citation's deep link in fallback steps
-(`app.py:523`). Since a section's chunk text is refined and not
-byte-identical to the PDF's text layer, `pdf_link.locate_quote()`
-matches the quote against the raw, page-tagged `Segments` instead,
-returning a page and a fallback phrase. When a page is found,
-`pdf_link.best_quote_rects()` re-derives highlight rectangles live from
-that page with PyMuPDF and `rapidfuzz`, through
-`docpipe.inference.pdf_locate.quote_rects()` (`pdf_link.py:193`). The
-rectangles reach the browser as the deep link's
-`&mhl=` parameter (`pdf_link.encode_rects()`, `pdf_link.py:99`);
-`pdfjs_overlay.js`, in the pdf.js bundle's `web/` directory and not
-imported by `app.py`, decodes them client-side and draws the boxes on
-the page (`app.py:544-545`). Either library missing, or the fuzzy match
-scoring under 55, degrades the link further: a bare page link, or none
-when `PDF_URL_PREFIX` is empty or the filename is unknown.
-
-### Rendering and remembering
-
-`main()` dispatches a finished turn to `_render_answer`,
-`_render_citation` or `_render_comparison`, and a
-document-search or comparison answer also shows any sandbox-run code
-through `_render_compute()` (`app.py:377`, `391`, `462`).
-`_remember()` then appends the turn, a failed one included, to
-`turns_by_doc[document_id]` and keeps only the last five, because a
-"check again" follow-up is asked precisely after a failure and needs it
-in context to search past (`app.py:407`).
-
-## Data model
-
-Chat history lives only in `st.session_state["chat_history"]`, a list of
-role/content dicts. An assistant entry carries `citations`, `phrase`,
-`as_json`, `recheck_note`, `route_note` and `compute` for a
-document-search answer, or `rows` for a
-comparison; the render loop dispatches on whichever key is present
-(`app.py:282`). `st.session_state["turns_by_doc"]` maps a document id to
-its own remembered turns (`task`, `phrase`, `answer`, `examined`,
-`recheck`), capped at five and kept separate per document so a re-check
-in one plan never excludes another's sources.
-
-`QUERY_CACHE_PATH` holds one table, `query_cache` (`query_key`, `vector`
-as a raw float32 blob, `created_at`). `REQUEST_LOG_PATH` holds one table,
-`requests` (plan, query text, mode, scopes, timestamp, latency, hit and
-citation counts, `answer_hash`, error, `cache_hit`), appended to once per
-turn (`docpipe/inference/answer.py:321`); neither stores the answer text
-itself, `answer_hash` being a truncated hash of it, used to spot
-repeats. `request_log.py`'s docstring gives the reason: a
-follow-up is context-dependent, so a cache keyed on the query text alone
-would reuse an answer written for a different conversation; only the
-embedding vector is cached. That reuse is not what the logged
-`cache_hit` column reflects: `answer_question()`
-computes the real flag into its in-memory result (`answer.py:158`), but
-`_log()` hardcodes `cache_hit=False` on every call (`answer.py:333`)
-instead of forwarding it, so the stored column is always `False`
-regardless of the query's embedding coming from `QUERY_CACHE_PATH`.
+A section's chunk text is refined and is not byte-identical to the PDF's text
+layer. So `pdf_link.locate_quote` matches the quote against the raw,
+page-tagged `Segments` and returns a page and a fallback phrase. When a page
+is found, `pdf_link.best_quote_rects` derives highlight rectangles from that
+page with PyMuPDF and `rapidfuzz`. They reach the browser as the `&mhl=`
+parameter of the deep link; `pdfjs_overlay.js`, which goes into the bundled
+pdf.js viewer, decodes them and draws the boxes. Either library missing, or
+a fuzzy match scoring under 55, degrades the link to a bare page link, or to
+none when `PDF_URL_PREFIX` is empty or the file name is unknown.
 
 ## Configuration
 
-| name | kind | default | effect | where |
-|---|---|---|---|---|
-| `DOCPIPE_PROFILE` | env var | unset | Profile supplying the catalog, facets and paths below | `config.py:44` |
-| `INFERENCE_DB_PATH` | env var | profile `db_path`, else `data/KWP.db` | Corpus database, opened read-only | `config.py:61` |
-| `INFERENCE_INDEX_PATH` | env var | profile `index_path`, else `data/faiss_index.bin` | Global FAISS index, loaded once into RAM | `config.py:62` |
-| `INFERENCE_IMAGE_ROOT` | env var | profile `processed_dir`, else `data/pdf/processed` | Root `Tables.path`/`Images.path` resolve against | `config.py:64` |
-| `INFERENCE_KG_TTL_PATH` | env var | profile `root/graph.ttl`, else `data/graph.ttl` | Turtle file a graph route would read, read by nothing while the route is not offered | `config.py:66` |
-| `QUERY_CACHE_PATH` | env var | `data/inference_app_query_cache.db` | Query-to-vector cache, separate from the corpus | `config.py:103` |
-| `REQUEST_LOG_PATH` | env var | `data/inference_app_request_log.db` | Per-turn request log, separate from the corpus | `config.py:108` |
-| `PDF_URL_PREFIX` | env var | `/app/static/pdf` | URL prefix PDFs are served under; empty hides every PDF link | `config.py:121` |
-| `PDF_VIEWER_PREFIX` | env var | `/app/static/pdfjs/web` | pdf.js viewer directory; empty falls back to the browser's viewer | `config.py:125` |
-| `INFERENCE_PDF_ROOT` | env var | profile `pdf_dir`, else `data/pdf` | Filesystem directory holding the source PDFs | `config.py:127` |
-| `COMPARE_MAX_DOCUMENTS` | env var | 5 | Documents one comparison may ask, each a full retrieval-and-answer loop | `docpipe/inference/config.py:56`, `app.py:247` |
-| `CODE_EXEC_URL` | env var | empty | Sandbox `/run` endpoint; empty turns the calculation feature off | `docpipe/inference/config.py:64` |
-| `CODE_EXEC_TOKEN` | env var | falls back to `KWP_SANDBOX_TOKEN` | Bearer token sent with a `/run` request | `docpipe/inference/config.py:65` |
-| `CODE_EXEC_MAX_ROUNDS` | env var | 2 | Sandbox calls one answer batch may make | `docpipe/inference/config.py:68` |
-| `KWP_SANDBOX_TOKEN` | env var | none, required | Bearer token `sandbox_service.py` demands; absent, it refuses to start | `sandbox_service.py:34` |
-| `KWP_SANDBOX_IMAGE` | env var | `localhost/kwp-sandbox:latest` | Container image a run executes in | `sandbox_service.py:35` |
-| `KWP_SANDBOX_HOST` / `KWP_SANDBOX_PORT` | env var | `127.0.0.1` / 8600 | Interface and port the sandbox server binds | `sandbox_service.py:36-37` |
-| `KWP_SANDBOX_TIMEOUT` | env var | 20 seconds | Ceiling actually enforced on every run today (see Measured behaviour) | `sandbox_service.py:38` |
-| `KWP_SANDBOX_MEM` | env var | `512m` | Container memory limit | `sandbox_service.py:40` |
+Every name is a setting: `docpipe config --stage chat` lists them with their
+values, and the project file takes them under `[chat]`. The paths default to
+the profile's own.
 
-`config.py` re-exports rather than redefines every retrieval and LLM
-setting shared with `docpipe.inference.config`, since two copies of a
-setting like `LLM_BASE_URL` risk a deployment talking to the wrong
-endpoint (`config.py:14`).
+| setting | what it is |
+|---|---|
+| `INFERENCE_DB_PATH`, `INFERENCE_INDEX_PATH`, `INFERENCE_IMAGE_ROOT`, `INFERENCE_PDF_ROOT` | the corpus database (read-only), the FAISS index, the root of table and figure images, the folder of source PDFs |
+| `INFERENCE_HARVEST_DIR`, `INFERENCE_GOLD_PATH`, `INFERENCE_VALUES_LEVEL`, `INFERENCE_VALUES_LIMIT` | the harvest the values and the review page read, the decisions file, how many and how trustworthy a value must be to be shown |
+| `INFERENCE_LEXICAL` | search by word beside the search by meaning where a word index exists |
+| `INFERENCE_KG_TTL_PATH` | the Turtle file a graph route would read; read by nothing while the route is not offered |
+| `QUERY_CACHE_PATH`, `REQUEST_LOG_PATH` | the two files of the app's own |
+| `PDF_URL_PREFIX`, `PDF_VIEWER_PREFIX` | where the PDFs and the pdf.js viewer are served; empty hides the links or uses the browser's viewer |
+| `COMPARE_MAX_DOCUMENTS`, `TOP_K`, `MAX_CHUNK_ATTEMPTS`, `ANSWER_CONTEXT_TOKENS` | how many documents one comparison asks, and the retrieval and answer budgets |
+| `CODE_EXEC_URL`, `CODE_EXEC_TOKEN`, `CODE_EXEC_MAX_ROUNDS`, `CODE_EXEC_TIMEOUT` | the calculation sandbox; an empty URL turns the feature off |
+
+`config.py` re-exports every retrieval and model setting it shares with
+`docpipe.inference.config` and does not redefine one: two copies of a value
+like `LLM_BASE_URL` are how a deployment ends up talking to the wrong endpoint.
+
+## Data the app keeps
+
+Chat history lives in `st.session_state["chat_history"]`, a list of
+role and content dicts. An assistant entry carries what the turn produced:
+`citations`, `phrase`, `values`, `compute`, or `rows` for a comparison.
+`turns_by_doc` maps a document id (the whole corpus under `None`) to its last
+five turns, kept apart per document so that a "check again" in one plan never
+excludes another's sources, and a failed turn is kept because that follow-up
+is asked precisely after one.
+
+`QUERY_CACHE_PATH` holds one table, `query_cache` (a key, the vector as a
+float32 blob, a timestamp). `REQUEST_LOG_PATH` holds one table, `requests`
+(plan, query text, mode, scopes, timestamp, latency, hit and citation counts,
+a truncated hash of the answer, error, `cache_hit`). No answer is cached: a
+follow-up depends on the conversation, and a cache keyed on the question text
+would reuse an answer written for another one. The logged `cache_hit` is
+always `False`; whether the query vector came from the cache is reported in
+the turn's own result.
 
 ## Failure modes
 
-- An empty `Documents` table (`app.py:223`), a filter matching no
-  document (`app.py:236`), a document multiselect left empty
-  (`app.py:251`), or a turn with no search scope selected (`app.py:323`),
-  each stop before retrieval with its own message.
-- A comparison naming more documents than `COMPARE_MAX_DOCUMENTS` cannot
-  reach `compare_documents` through the sidebar, whose multiselect already
-  caps the selection; its own slice and `dropped` list are a second
-  check for any caller (`docpipe/inference/compare.py:94`, `97`).
-- Neither PyMuPDF nor `rapidfuzz` importable makes both PDF-link helpers
-  return `None`, degrading the citation as a low fuzzy-match score does
-  (see Method, Locating a citation; `pdf_link.py:147`).
-- `sandbox_service.py` refuses to start without `KWP_SANDBOX_TOKEN`
-  (`sandbox_service.py:122`) and rejects a mismatched bearer token with a
-  401 (`sandbox_service.py:105`); a container or backend error returns as
-  a structured error rather than raising, so an outage degrades a turn
-  to no calculation, not failure (`sandbox_service.py:83`).
-- The sandbox turns each key of the context it receives into a variable and
-  skips a key that is no identifier (`_preamble`, `sandbox_service.py:56-64`);
-  `answer._code_context` sends `{"tables": [{"caption", "markdown"}]}`, the
-  variable the compute prompt names (`docpipe/inference/answer.py:62-77`).
-- Loading `.env` from the app's config module, after
-  `docpipe.inference` had captured `os.environ`, left the LLM API key at
-  its fallback, every answer call failing with 401. The
-  load now happens in `docpipe/__init__.py`, before any submodule (see
-  Verification).
-
-## Measured behaviour
-
-- `COMPARE_MAX_DOCUMENTS` is 5; each extra document costs one full
-  retrieval-and-answer loop, a latency budget, not a modelling limit
-  (`docpipe/inference/config.py:56`).
-- One turn examines up to `MAX_CHUNK_ATTEMPTS` (10) sources from a
-  `TOP_K` (50) candidate set, each answer call budgeted to
-  `ANSWER_CONTEXT_TOKENS` (10000) tokens (`docpipe/inference/config.py:37`,
-  `39`, `42`).
-- A single LLM call retries up to `LLM_MAX_RETRIES` (4) times under a
-  `LLM_TIMEOUT` of 180 seconds (`docpipe/inference/config.py:22`, `30`).
-- `code_exec.run_code()`, the sandbox's only caller (`answer.py:212`),
-  never sends a `timeout` field (`docpipe/inference/code_exec.py:39`);
-  `CODE_EXEC_TIMEOUT` (45 seconds, `code_exec.py:46`) bounds only the
-  HTTP client, so every run falls back to the tighter
-  `KWP_SANDBOX_TIMEOUT` (20 seconds, `sandbox_service.py:38`, `115`);
-  `KWP_SANDBOX_MAX_TIMEOUT` (30 seconds, `sandbox_service.py:39`) only
-  clamps a caller-supplied `timeout`, which none is.
-- Each sandbox run is hardened with `network_mode: none`, every Linux
-  capability dropped, a 512 megabyte memory limit and a 128-process
-  limit, a single `threading.Lock` serializing containers
-  (`sandbox_service.py:42`).
-- `pdf_link`'s two PDF-page fallbacks both accept a fuzzy match only at a
-  `rapidfuzz` score of 55 or above (`pdf_link.py:148`).
-
-## Verification
-
-- `test_locate_quote_finds_page_and_verbatim_phrase` and
-  `test_locate_quote_keeps_punctuation_verbatim`: the phrase
-  `locate_quote()` returns is a literal substring of the raw page segment,
-  since only a verbatim string drives the viewer's text search.
-- `test_locate_quote_returns_none_when_no_shared_run`,
-  `test_locate_quote_none_for_too_short_quote` and
-  `test_best_search_phrase_graceful_on_missing_file`: a quote sharing no
-  three-word run with any segment, one shorter than that, and an
-  unreadable PDF path each return `None` rather than raising.
-- `test_pdf_page_url_encodes_raw_umlaut_filename`: a filename stored raw
-  in the database, umlauts included, is percent-encoded exactly once.
-- `test_pdf_viewer_url_rects_overlay_supersedes_search`: a rectangle
-  overlay replaces the `search=` term rather than combining with it.
-- `test_the_caption_tells_a_carrier_from_a_sector_by_the_specs_own_lists`
-  (`tests/test_kg_route.py`): reads `app.py`'s source to confirm
-  `_render_kg` calls `kg_route.by_axis()` rather than keeping its own
-  vocabulary list.
-- `test_a_route_note_nobody_worded_stops_the_route_being_built`
-  (`tests/test_kg_route.py`): a `ROUTE_NOTES` table missing one of
-  `kg_route.REASONS` makes `kg_route.hooks()` raise `LookupError`.
-- `test_the_value_reaches_the_config_that_reads_it`
-  (`tests/test_dotenv.py`): a config module under `docpipe` already sees
-  a value from `.env` in a fresh interpreter, pinning that
-  `docpipe/__init__.py` loads it before any submodule captures
-  `os.environ`.
+- An empty `Documents` table, a filter that matches no document, a selection
+  left empty or a turn with no scope each stop before retrieval with a message
+  of their own.
+- A selection of more documents than `COMPARE_MAX_DOCUMENTS` cannot be made
+  in the sidebar; `compare_documents` names what it leaves out as a second
+  check for any other caller.
+- `sandbox_service.py` refuses to start without `KWP_SANDBOX_TOKEN` and
+  answers a wrong bearer token with 401. A container or backend error comes
+  back as a structured error, so an outage costs a turn its calculation and
+  not its answer.
+- The `.env` is loaded in `docpipe/__init__.py`, before any module captures
+  its settings. Loaded later, in the app's config, the model key stayed at its
+  placeholder and every call failed with 401.
 
 ## Modules
 
-`__init__.py` marks the package, its one-line docstring calling it a
-Streamlit retrieval and question-answering chat front end over a
-`docpipe` corpus; it carries no other logic.
-
-`app.py` is the Streamlit UI and orchestration layer detailed above, the
-only module in the repository that imports `streamlit`, run directly
-with `streamlit run`.
-
-`config.py` centralizes this app's configuration: it re-exports every
-value `docpipe.embedding.config` and `docpipe.inference.config` define,
-and adds this app's own paths, derived from the active profile.
-Imported by `app.py` and `scripts/inference_app_smoketest.py`.
-
-`pdf_link.py` builds a citation's deep link into the source PDF:
-matching a refined quote onto raw, page-tagged text, resolving
-highlight rectangles, and assembling a pdf.js viewer or plain page URL.
-It touches no database and imports no Streamlit, so it is testable
-alone, called from `_pdf_link_for()` and exercised directly by
-`tests/test_inference_app.py`.
-
-`sandbox_service.py` is a standalone HTTP server, not imported by
-`app.py`, that a deployment runs separately and points `CODE_EXEC_URL`
-at. It accepts one authenticated `POST /run` at a time, runs the code in
-a fresh, network-isolated podman container through `llm_sandbox`, and
-returns a structured result or error, shipped here alongside `app.py`
-for a chat deployment.
-
-`scripts/inference_app_smoketest.py` sits beside this package, checking
-a deployment's embedding backend by hand: vector dimension, L2
-normalization, image and image+text queries, and batch-vs-singly
-agreement. Run manually on the serving machine, not by pytest.
+`app.py` is the pages and the orchestration, run with `docpipe chat`.
+`config.py` reads every path and limit of the app. `pdf_link.py` builds the
+deep link into the source PDF; it touches no database and imports no
+Streamlit, so it is tested alone. `pdfjs_overlay.js` is the client side of
+the highlight rectangles. `sandbox_service.py` is a separate HTTP server, not
+imported by the app, that a deployment runs and points `CODE_EXEC_URL` at
+(`docpipe sandbox`): one authenticated `POST /run` at a time, in a fresh
+container with no network, every capability dropped and a memory limit.
+`scripts/inference_app_smoketest.py` checks a deployment's embedding backend
+by hand: vector dimension, normalisation, image and image-and-text queries,
+and batch against single. It is run by a person, not by pytest.

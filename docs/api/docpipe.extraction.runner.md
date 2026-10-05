@@ -15,8 +15,7 @@ for no GPU stack it does not use.
 document and ranks each owner by the best score any probe gave it; measured
 over 65 documents and 15,082 values, the fused ranking put the source a value
 was really read from at median rank 26, against 77 for the old per-probe
-concatenation. `make_candidates` is a deterministic floor under that ranking,
-matched by LIKE over the corpus's own vocabulary tokens. A probe is either one
+concatenation. A probe is either one
 of the spec's query templates (`queries.expand`), stable across the whole
 corpus so `prime_probe_cache`'s embeddings hit for every document, or a
 HyDE-style anchor sentence a model writes: `make_anchors` writes one set per
@@ -136,6 +135,16 @@ Killed outright, a time-limit stop threw away the whole group in flight,
 up to 64 documents and hours of work, including every batch that had
 already come back. Only the main thread can install a handler, so a call
 from anywhere else leaves the default in place.
+
+### unheld_requests
+
+```python
+def unheld_requests() -> int
+```
+
+1 when this run replayed a cassette and asked something it does not
+hold, else 0: such a harvest is not the recorded run's, and a job that
+compares the two must not take it for one.
 
 ### retry_wait
 
@@ -743,23 +752,6 @@ cost one GPU round trip per miss and put every planning thread behind the
 same lock; embedded here they cost one call, and retrieval afterwards
 reads nothing but the cache.
 
-### make_candidates
-
-```python
-def make_candidates(conn: sqlite3.Connection,
-                    content_fetcher: Optional[Callable] = None) -> Callable
-```
-
-Token-filtered owners of one document, straight from SQL.
-
-LIKE over the stored text is deliberately dumb: it is the *floor*, not
-the harvest. Retrieval finds what wording variance hides from tokens;
-this finds what ranking hides from retrieval.
-
-Bound to the caller's connection. It used to open its own for every call,
-which on an NFS-backed database is a file open, a header read and a schema
-parse per document and parameter.
-
 ### probe_server
 
 ```python
@@ -1044,6 +1036,45 @@ Uses the same alignment the app highlights with, so a value's recorded
 provenance and the box a reader sees are produced by one implementation.
 A section can run over a page break, so the section's other pages are
 tried too - bounded, because this opens the PDF each time.
+
+### producer
+
+```python
+def producer(kind: str, model: Optional[str] = None) -> dict
+```
+
+Who wrote into a harvest in one pass. Recorded, never compared.
+
+A harvest is written once and then written into: a top-up reads single
+coordinates again, possibly under another model or prompt, a remap moves
+answers without a model at all. The stamp's `model` names the first of
+them only. This is one entry of the list that names them all.
+
+### note_documents
+
+```python
+def note_documents(db_path) -> int
+```
+
+Read which bytes each document of the database is. Returns how many
+documents have that recorded.
+
+### note_index_model
+
+```python
+def note_index_model(db_path) -> None
+```
+
+Say so when this run embeds its probes with another model than the
+one the database's index was built with. A line in the log, no more.
+
+### stamp_record
+
+```python
+def stamp_record(name: str) -> dict
+```
+
+The stamp keys that place a harvest and decide nothing.
 
 ### recorded_questions
 

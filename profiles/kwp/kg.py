@@ -25,7 +25,9 @@ from pathlib import Path
 from typing import Optional
 
 from docpipe.extraction.fields import DERIVED
+from docpipe.extraction.identity import tuple_ids
 from docpipe.extraction.spec import kg_name, load as load_spec
+from docpipe.store.schema import readonly_uri
 from docpipe.extraction.trust import (LEVEL_A, LEVEL_B, LEVEL_C, check_prose,
                                       render, trust)
 
@@ -34,6 +36,13 @@ log = logging.getLogger(__name__)
 BASE = "https://openenergyplatform.org/id/mhpkg/"
 OEO = "https://openenergyplatform.org/ontology/oeo/"
 NS_MHPKG = uuid.uuid5(uuid.NAMESPACE_URL, BASE)
+
+# Where the provenance of this graph's values is written under, and the
+# vocabulary that says it (docpipe/extraction/provenance.py). The terms are
+# the ones proposed to the ontology; until they are published there they
+# resolve nowhere, which is why the provenance is a file of its own.
+PROVENANCE = {"base": BASE, "prefix": "mhpx",
+              "iri": "https://purl.org/mhpo/prov/"}
 
 # Up here because every identifier below is qualified against it as it is
 # read, and a prefix this header does not bind writes Turtle nobody can load.
@@ -390,7 +399,7 @@ def _iso_date(raw) -> str:
 
 def _document_identity(db_path: Path, name: str):
     """(ags, published, municipality name, transcribed page count) or None."""
-    conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
+    conn = sqlite3.connect(readonly_uri(db_path), uri=True)
     try:
         row = conn.execute(
             "SELECT id, published FROM Documents "
@@ -725,8 +734,23 @@ def evidence_comment(row: dict, document: str, *,
     return lines
 
 
+def _class_iri(identifier) -> Optional[str]:
+    """The IRI of a class the graph writes, or None for what is no class."""
+    if not identifier or not is_class(identifier):
+        return None
+    try:
+        return expand(qualified(identifier))
+    except KeyError:
+        return None
+
+
 def make_serializer(db_path: Path):
-    """(document name, accepted tuple rows) -> TTL string or None."""
+    """(document name, accepted tuple rows) -> TTL string or None.
+
+    What was written for a document is left in `serializer.claims[name]`:
+    the plan's node, and for every value its node, its row and the node or
+    class each coordinate became. The provenance file is written from that.
+    """
     header_pending = [True]
     # (ags, published) -> document name. Value IRIs are pure functions of
     # these coordinates, so two documents claiming one identity would merge
@@ -956,8 +980,30 @@ def make_serializer(db_path: Path):
     a {CLS_MUNICIPALITY} ;
     rdfs:label "Gemeindegebiet {place}" .
 """)
+        names = dict(zip(map(id, rows), tuple_ids(name, rows)))
+
+        def bodies(row: dict) -> dict:
+            area = municipality_iri
+            if row.get("spatial_scope") == "sub_area":
+                key = normalise(row["spatial_scope_raw"])
+                area = mint("heatplanarea", f"{ags}|{key}")
+            found = {"quantity": _class_iri(row.get("quantity")),
+                     "carrier": _class_iri(row.get("carrier")),
+                     "sector": _class_iri(row.get("sector")),
+                     "aggregation": _class_iri(row.get("aggregation")),
+                     "year": year_iri(row["year"]),
+                     "scenario": part_iri[row["scenario"]],
+                     "spatial_scope": area}
+            return {axis: iri for axis, iri in found.items() if iri}
+
+        serializer.claims[name] = {
+            "document": heatplan, "transcribed": bool(transcribed),
+            "values": [{"about": iri, "row": row, "id": names.get(id(row)),
+                        "bodies": bodies(row)}
+                       for iri, row in values.items()]}
         return "\n".join(parts)
 
+    serializer.claims = {}
     return serializer
 
 

@@ -19,7 +19,7 @@ from pathlib import Path
 
 import openai
 
-from . import qa
+from . import qa, replies
 from .config import (
     table_system_prompt,
     table_user_prompt,
@@ -148,7 +148,7 @@ def process_table(
     kwargs = {"model": model} if model else {}
     response = call_vision(
         client, table_system_prompt(), user_prompt, image_path,
-        temperature=TABLE_VLM_TEMPERATURE, **kwargs
+        temperature=TABLE_VLM_TEMPERATURE, reply=replies.TABLE, **kwargs
     )
 
     if not response:
@@ -174,7 +174,8 @@ def process_table(
         retry = call_vision(
             client, table_system_prompt(), user_prompt + _QA_RETRY_HINT, image_path,
             temperature=TABLE_QA_RETRY_TEMPERATURE,
-            repetition_penalty=TABLE_QA_RETRY_PENALTY, **kwargs,
+            repetition_penalty=TABLE_QA_RETRY_PENALTY,
+            reply=replies.TABLE, **kwargs,
         )
         if retry:
             retry_md = retry.get("markdown", "")
@@ -260,7 +261,8 @@ def process_figure(
 
     kwargs = {"model": model} if model else {}
     response = call_vision(
-        client, figure_system_prompt(), user_prompt, image_path, **kwargs
+        client, figure_system_prompt(), user_prompt, image_path,
+        reply=replies.FIGURE, **kwargs
     )
 
     if response:

@@ -41,6 +41,7 @@ from typing import Optional
 
 from docpipe.extraction.spec import kg_name, load as load_spec
 from docpipe.extraction.trust import check_prose, render, trust
+from docpipe.store.schema import readonly_uri
 
 log = logging.getLogger(__name__)
 
@@ -640,7 +641,7 @@ def _make_builder(db_path: Path):
             # `with sqlite3.connect(...)` commits a transaction, it does not
             # close the connection — one leaked handle per document, and on
             # Windows a file nobody can delete afterwards.
-            conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
+            conn = sqlite3.connect(readonly_uri(db_path), uri=True)
             _crosscheck(conn, name, chosen)
             known = _known_scenarios(conn, name)
         except sqlite3.Error as exc:

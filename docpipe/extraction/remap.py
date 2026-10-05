@@ -43,6 +43,7 @@ from collections import Counter
 from pathlib import Path
 from typing import Optional
 
+from .. import jsonl
 from .fields import CHOICE, axis_slots
 from .spec import Spec, fold_label
 from .trust import document_summary
@@ -155,11 +156,26 @@ def refused_spaces(refusals: list, spaces: set) -> set:
     return out
 
 
-def stamp_forward(stamp_path: Path, current: dict, settled: set) -> bool:
+def _producer() -> dict:
+    """This pass, for the stamp's list: it moves answers and asks no model."""
+    from datetime import datetime, timezone
+
+    from docpipe import __version__
+    return {"pass": "remap", "docpipe": __version__,
+            "utc": datetime.now(timezone.utc).isoformat(timespec="seconds")}
+
+
+def stamp_forward(stamp_path: Path, current: dict, settled: set,
+                  producer: Optional[dict] = None) -> bool:
     """Write the stamp keys this pass earned; keep the rest. True if it wrote.
 
     Everything outside `settled` stays exactly as the old stamp had it, so a
     run that comes later still sees which question it has to redo.
+
+    *producer* is who this pass was (see `runner.producer`). It joins the
+    stamp's list when the pass wrote, so a harvest that two models wrote
+    into names both. A stamp from before the list starts it with what it
+    does say: the model of its harvest.
     """
     if not stamp_path.is_file():
         return False
@@ -172,6 +188,11 @@ def stamp_forward(stamp_path: Path, current: dict, settled: set) -> bool:
     if not earned:
         return False
     stored.update({k: current[k] for k in earned})
+    if producer is not None:
+        wrote = stored.get("producers")
+        if not isinstance(wrote, list):
+            wrote = [{"pass": "harvest", "model": stored.get("model")}]
+        stored["producers"] = [*wrote, producer]
     # The whole-file sha is a coarse mirror of the keys under it. It may only
     # move once nothing else it stands for is still stale, or a document would
     # read as current while a changed prompt sits unaddressed.
@@ -192,7 +213,7 @@ def remap_file(path: Path, spec: Spec, current: dict) -> Counter:
     tuples, refusals, document_id = [], [], None
     spaces = spaces_of(current)
     settled = set(spaces)
-    for line in Path(path).read_text(encoding="utf-8").splitlines():
+    for line in jsonl.read(path):
         if not line.strip():
             continue
         try:
@@ -241,7 +262,8 @@ def remap_file(path: Path, spec: Spec, current: dict) -> Counter:
     tmp = Path(path).with_suffix(".jsonl.tmp")
     tmp.write_text("\n".join(lines) + "\n", encoding="utf-8")
     tmp.replace(path)
-    if stamp_forward(stamp_path_of(Path(path)), current, settled):
+    if stamp_forward(stamp_path_of(Path(path)), current, settled,
+                     producer=_producer()):
         stats["stamps carried forward"] += 1
     return stats
 

@@ -41,9 +41,10 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Callable, Optional
 
-from docpipe import prompts, usage
+from docpipe import prompts, providers, usage
 from docpipe.llm_preflight import request_extras
 
+from . import replies
 from .corrections import apply_corrections
 from .split import (NotServed, split_max_tokens, split_oversized,
                     split_temperature)
@@ -335,7 +336,11 @@ def _call_llm(
             response = client.chat.completions.create(
                 model=LLM_MODEL,
                 messages=messages,
-                response_format={"type": "json_object"},
+                response_format=providers.reply_format(
+                    "llm", "refined_sections",
+                    replies.CORRECTIONS if REFINE_RETURN_CORRECTIONS
+                    else replies.window(stripped),
+                    otherwise={"type": "json_object"}),
                 temperature=temperature,
                 max_tokens=max_tokens,
                 # Reasoning models must not spend the token budget on a
@@ -841,7 +846,9 @@ def _make_splitter(client) -> Callable[[str, str], str]:
                     model=LLM_MODEL,
                     messages=[{"role": "system", "content": system_prompt},
                               {"role": "user", "content": user_content}],
-                    response_format={"type": "json_object"},
+                    response_format=providers.reply_format(
+                        "llm", "section_cuts", replies.SPLIT,
+                        otherwise={"type": "json_object"}),
                     temperature=temperature,
                     max_tokens=max_tokens,
                     extra_body=request_extras(),
@@ -890,17 +897,17 @@ def refine_sections(sections: list[dict],
     # One shared client for every call below: it is thread-safe, so the workers
     # can share it. max_retries=0 leaves retry control to our own loop.
     try:
-        from openai import OpenAI
+        client = providers.client(
+            "llm",
+            base_url=LLM_BASE_URL,
+            api_key=LLM_API_KEY,
+            timeout=LLM_TIMEOUT,
+            max_retries=0,
+        )
     except ImportError:
         raise ImportError(
             "openai package not installed.\n  pip install openai"
         )
-    client = OpenAI(
-        base_url=LLM_BASE_URL,
-        api_key=LLM_API_KEY,
-        timeout=LLM_TIMEOUT,
-        max_retries=0,
-    )
 
     # Cut oversized sections FIRST. A window has to echo every section it
     # carries, so a section too long to be one chunk is also too long to echo —

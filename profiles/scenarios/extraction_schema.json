@@ -5797,6 +5797,30 @@
     "pattern": "^([0-9a-f]{16})?$",
     "type": "string"
    },
+   "docpipe": {
+    "description": "The version that wrote this stamp. Recorded and never compared.",
+    "type": "string"
+   },
+   "document": {
+    "additionalProperties": false,
+    "description": "Which bytes were read: the sha256 and the size of the file as the database recorded them. Absent for a database that records none. Recorded and never compared.",
+    "properties": {
+     "bytes": {
+      "type": [
+       "integer",
+       "null"
+      ]
+     },
+     "sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+     }
+    },
+    "required": [
+     "sha256"
+    ],
+    "type": "object"
+   },
    "model": {
     "description": "the serving model",
     "type": "string"
@@ -5807,6 +5831,40 @@
      "integer",
      "null"
     ]
+   },
+   "producers": {
+    "description": "Every pass that wrote into this harvest, in order: the harvest, then each top-up, remap or review that changed a row. `model` above names the first only. Recorded and never compared.",
+    "items": {
+     "additionalProperties": false,
+     "properties": {
+      "docpipe": {
+       "type": "string"
+      },
+      "model": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "pass": {
+       "type": "string"
+      },
+      "prompts": {
+       "type": "object"
+      },
+      "provider": {
+       "type": "string"
+      },
+      "utc": {
+       "type": "string"
+      }
+     },
+     "required": [
+      "pass"
+     ],
+     "type": "object"
+    },
+    "type": "array"
    },
    "spec": {
     "description": "sha256 of extraction_spec.json. A record, not a verdict: it moves on a comment, an indent or a graph annotation, none of which any question is asked through. Compared, it would outvote every key below it.",

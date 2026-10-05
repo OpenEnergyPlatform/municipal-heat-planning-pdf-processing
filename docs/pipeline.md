@@ -30,16 +30,16 @@ flowchart LR
 
 | Stage | Consumes | Produces |
 |---|---|---|
-| [1. File processing](stages/fileprocessing.md) | the profile's document list (an Excel register for `kwp`, a publication crawl index for `scenarios`) | a `Documents` and `DocumentMeta` row per accepted PDF, plus the profile's own tables |
+| [1. File processing](stages/fileprocessing.md) | the profile's document list (an Excel register for `kwp`, a publication crawl index for `scenarios`, a folder of PDFs for `default`) | a `Documents` and `DocumentMeta` row per accepted PDF, plus the profile's own tables |
 | [2. Layout detection](stages/preprocessing.md) | the PDF file | `pages.json`, one entry per page with every detected table, figure, title and caption |
 | [3. Structure assembly](stages/preprocessing.md) | `pages.json` | `sections.json`, an ordered section list with table and figure placeholders |
 | [4. Refinement](stages/refinement.md) | `sections.json` | `sections_refined.json` |
 | [5. Visuals](stages/visuals.md) | `sections_refined.json`, or `sections.json` where refinement has not run | `visuals.json`: a Markdown transcription per table, a description per figure |
 | [6. Chunking, embedding, database](stages/chunking.md) | `sections_refined.json` and `visuals.json`, then `document.json` | `document.json`, then rows in SQLite and vectors in the FAISS index |
 | [7. Extraction](stages/extraction.md) | the corpus itself: SQLite and the FAISS index, plus, by default, the table and figure crops under each document's `images/` directory | one `<doc>.jsonl` harvest and one `<doc>.stamp.json` per document |
-| [8. The graph](stages/graph.md) | the accepted tuple lines of a harvest | one Turtle file, written by the profile's own `kg.make_serializer` |
-| [Inference](stages/inference.md) | one question, SQLite and the FAISS index, read live | a grounded answer with a citation; nothing written to the corpus |
-| [The app](stages/app.md) | the same corpus, one chat turn at a time | a rendered answer, plus its own query cache and request log |
+| [8. The graph](stages/graph.md) | the accepted tuple lines of a harvest | one Turtle file, written by the profile's own `kg.make_serializer` or from the `graph` block of its spec, and beside it the provenance file |
+| [Inference](stages/inference.md) | one question, SQLite and the FAISS index, a word index and a harvest where there are ones, read live | a grounded answer with a citation; nothing written to the corpus |
+| [The app](stages/app.md) | the same corpus, one chat turn at a time | a rendered answer, plus its own query cache and request log; from its review page, decisions for `gold.jsonl` |
 
 ## The stages
 
@@ -54,16 +54,17 @@ The stage decides which documents exist in the corpus at all. It reads a
 profile's own document list: an Excel register filtered to complete plans
 with a usable PDF link for `kwp` (`profiles/kwp/source.py`), a publication
 crawl index plus two optional sibling files for `scenarios`
-(`profiles/scenarios/source.py`). For every entry it fetches or locates the
+(`profiles/scenarios/source.py`), and for `default`, a folder of PDFs, each
+one document (`docpipe/ingest/folder.py`). For every entry it fetches or locates the
 PDF and grades whether its text layer is usable. A garbled or unreadable
 document is refused and left out of the corpus, but a scan, a PDF with no
 text layer at all, is registered anyway and listed for stage 2's optional
 `--transcribe-missing-text` pass rather than refused
-(`docpipe/ingest/pipeline.py:52` to `61`). A `kwp` PDF missing from the data
+(`docpipe/ingest/pipeline.py:53` to `62`). A `kwp` PDF missing from the data
 directory is downloaded; a `scenarios` PDF is expected already staged and
 never fetched over the network. This is the only stage with no model and no
 GPU. Resume is keyed on the filename already present in `Documents`
-(`docpipe/store/documents.py:29` to `32`); the profile's own metadata write
+(`docpipe/store/documents.py:59` to `62`); the profile's own metadata write
 still runs on an already-registered document, which is how a profile
 refreshes metadata without re-registering the file.
 
@@ -117,7 +118,7 @@ embedding stage that follows; the model only proposes where to cut, the cut
 itself always happens at a segment boundary (`docpipe/refinement/
 split.py:11` to `12`). The output, `sections_refined.json`, is written
 atomically, so a run killed mid-document leaves the previous refinement
-rather than nothing (`docpipe/refinement/refine.py:1126` to `1130`). Resume
+rather than nothing (`docpipe/refinement/refine.py:1133` to `1137`). Resume
 skips a document once
 that file exists; `--force-stale` redoes only documents whose recorded
 prompt hash no longer matches the profile's current prompts. A window the
@@ -128,11 +129,11 @@ the sections as cut and the usable replies go to
 `unserved_windows`, `refinement_report.json` is left as it was, and the
 stage exits non-zero. The next run asks only for those windows, provided the
 sections, the prompts, the window size and the model are the same
-(`docpipe/refinement/refine.py:1160` to `1179`). The cut of an oversized
+(`docpipe/refinement/refine.py:1167` to `1186`). The cut of an oversized
 section is asked again while the server does not answer; if it stays
 unanswered nothing at all is written, because a section cut mechanically
 for the want of an answer would keep those cuts, and the next run starts
-with the cut (`refine.py:908` to `912`, `1187` to `1191`).
+with the cut (`refine.py:915` to `919`, `1187` to `1191`).
 
 ### 5. Visuals
 
@@ -204,14 +205,18 @@ Resume answers per question rather than per document; see
 
 Full account: [stages/graph.md](stages/graph.md).
 
-A profile-agnostic core walks a harvest directory and groups tuple lines
-per document (`docpipe/extraction/serialize.py`); a profile-owned
-serializer, `profiles/<name>/kg.py`, alone decides IRI minting, node shape
-and predicate choice, turning tuples into the profile's target graph:
-MHPKG Turtle for `kwp`, OEKG Turtle for `scenarios`. A refusal never
-reaches the serializer. Every IRI a serializer mints is a pure function of
-a normalized name, so two runs over one document produce identical Turtle
-(pinned by `tests/test_scenarios_extraction.py::
+A profile-agnostic core walks a harvest directory and groups tuple lines per
+document (`docpipe/extraction/serialize.py`); a profile-owned serializer,
+`profiles/<name>/kg.py`, decides IRI minting, node shape and predicate
+choice, turning tuples into the profile's target graph: MHPKG Turtle for
+`kwp`, OEKG Turtle for `scenarios`. A profile with no serializer of its own
+is written by the generic writer (`docpipe/extraction/graph.py`) from the
+`graph` block of its spec. Beside the graph, a second file,
+`<graph>.prov.ttl`, says where each value comes from: the page, the quote,
+the run and the trust level (`docpipe/extraction/provenance.py`). A refusal
+never reaches the serializer. Every IRI a serializer mints is a pure
+function of a normalized name, so two runs over one document produce
+identical Turtle (pinned by `tests/test_scenarios_extraction.py::
 test_the_iri_is_a_pure_function_of_the_name`). Nothing here is a model call
 or a GPU step, only a read-only pass over SQLite for a document's identity
 and over the harvest files themselves. There is no resume: a `--serialize`
@@ -223,38 +228,48 @@ Full account: [stages/inference.md](stages/inference.md).
 
 `docpipe.inference`, paired with `docpipe.embedding`, is the
 retrieval-and-answer core the app is built on. It opens the corpus's SQLite
-database read-only (`docpipe/inference/db.py:21` to `33`) and its FAISS
+database read-only (`docpipe/inference/db.py:22` to `34`) and its FAISS
 index once, then answers one question at a time: a search phrase, an
-embedded query, a search over the selected documents, and an answer with a
-citation resolved down to the page, and where a bounding box was stored,
-to the passage highlighted in the source PDF. The query is embedded with
-its own embedder, kept separate from the one that built the corpus, so one
-question does not need a whole GPU. Where a profile's Turtle graph exists,
-a closed question can be answered from it directly before falling back to
-document retrieval, a different guarantee from extraction's verified
-tuples: a claim extraction would refuse can still surface, unchecked, in a
-grounded answer. It writes nothing to the corpus; its own durable side
-effects are two SQLite files, a query-embedding cache, read on every
-question to skip re-embedding a repeated query (`scripts/inference_app/
-app.py:112` to `122`), and a request log that is write-only.
+embedded query, a search over the selected documents or the whole corpus,
+by meaning and, where a word index exists beside the database, by word as
+well, and an answer with a citation resolved down to the page, and where a
+bounding box was stored, to the passage highlighted in the source PDF. The
+query is embedded with its own embedder, kept separate from the one that built
+the corpus, so one question does not need a whole GPU.
+
+Two further answer paths read what extraction wrote, and carry its
+guarantee. Where a harvest is configured, a question for a number is first
+answered from the harvest itself, with the quote, page and trust level
+extraction wrote, and the answer from the documents follows. Where a profile's
+Turtle graph exists, a closed question can be answered from it directly (the
+app does not offer that route while no corpus graph exists). An answer from
+the documents carries a different guarantee: a claim extraction would refuse
+can still surface, unchecked, in a grounded answer.
+
+It writes nothing to the corpus; its own durable side effects are two SQLite
+files, a query-embedding cache, read on every question to skip re-embedding a
+repeated query (`embed_query` in `docpipe/app/app.py`), and a request log that
+is write-only.
 
 ### The app
 
 Full account: [stages/app.md](stages/app.md).
 
-`scripts/inference_app/app.py` is the Streamlit front end over
-`docpipe.inference`, and the only module in the whole pipeline that
-imports Streamlit (`scripts/inference_app/app.py:1` to `16`). It opens one
-profile's SQLite database, FAISS index, and, once a `--serialize` run has
-produced one, a Turtle graph; every retrieval and answering decision is
-made by `docpipe.inference` and `docpipe.embedding`, never reimplemented
-in the app. A conversation's state, which documents are open and its turns
-so far, lives only in the running process and is discarded when the
-selection changes or the process restarts. An optional code-exec sandbox
-lets an answer run a short calculation (sums, shares, unit conversions) in
-an isolated container reached over a localhost HTTP service rather than in
-the app's own process. Nothing here is a resumable batch job; one question
-is one turn.
+`docpipe/app/app.py`, started with `docpipe chat`, is the Streamlit front
+end over `docpipe.inference`, and the only module in the whole pipeline that
+imports Streamlit. It opens one profile's SQLite database, FAISS index, and,
+once a `--serialize` run has produced one, a Turtle graph; every retrieval
+and answering decision is made by `docpipe.inference` and
+`docpipe.embedding`, never reimplemented in the app. A conversation's state,
+which documents are open and its turns so far, lives only in the running
+process and is discarded when the selection changes or the process restarts.
+An optional code-exec sandbox lets an answer run a short calculation (sums,
+shares, unit conversions) in an isolated container reached over a localhost
+HTTP service rather than in the app's own process. A second page of the app
+is where people decide whether harvested values are right, field by field;
+those decisions are the gold that [measuring a
+harvest](stages/evaluation.md) counts against. Nothing here is a resumable
+batch job; one question is one turn.
 
 ## The hand-off between stages
 
@@ -269,7 +284,7 @@ further worklists at the top of the data directory, each removed before a
 clean run leaves nothing stale on it: `rejected_pdfs.txt` names a garbled
 document refused from the corpus, `unreachable_pdfs.txt` names a link that
 could not be fetched, and `scanned_pdfs.txt` names a document registered
-with no text layer (`docpipe/ingest/pipeline.py:105` to `116`). All three
+with no text layer (`docpipe/ingest/pipeline.py:134` to `145`). All three
 are written for an operator to read, in the log and on disk; none is read
 back by any stage. Stage 2's `--transcribe-missing-text` pass instead
 decides, per page and per document, at run time, which pages carry no
@@ -323,7 +338,7 @@ Running `--force` across the db and embed steps together needs one detail
 the two steps cannot each see on their own: a document's old FAISS ids
 have to be read off before the db step's forced delete removes its
 `Embeddings` rows, or the embed step has nothing left naming which vectors
-to evict from the index (`docpipe/chunking/pipeline.py:147` to `148`).
+to evict from the index (`docpipe/chunking/pipeline.py:167` to `168`).
 
 ## The extraction stamp
 
@@ -333,15 +348,15 @@ per document, so this section documents its stamp on its own.
 written only once `finish_document` decides a harvest actually happened;
 a document is left unstamped, so the next run redoes it, when more than
 half its planned sources came back unreachable (`UNREACHABLE_LIMIT = 0.5`,
-`docpipe/extraction/runner.py:4467`, `:4529` to `4533`), when nothing
-answered at all (`:4534` to `4537`), or when any one of its requests ended
-on a 429 or a 5xx, which is no answer (`:4538` to `4543`).
+`docpipe/extraction/runner.py:4435`, `:4497` to `4501`), when nothing
+answered at all (`:4502` to `4505`), or when any one of its requests ended
+on a 429 or a 5xx, which is no answer (`:4506` to `4511`).
 `finish_document` removes an earlier stamp before it writes the file, so a
 withheld stamp is not replaced by one that vouched for the file it
-overwrote (`:4523` to `4524`), and it returns whether the document is
+overwrote (`:4491` to `4492`), and it returns whether the document is
 stamped. A document written but left unstamped is a failure of the run:
 `harvest_document` returns it as not finished and `main` exits 1
-(`:5543` to `5544`, `5579`). Inside it:
+(`:5543` to `5544`, `5580`). Inside it:
 
 | Key | What it records | Compared on a redo |
 |---|---|---|
@@ -359,22 +374,22 @@ stamped. A document written but left unstamped is a failure of the run:
 
 The owner decided on 2026-09-10 that a stamp rests on the KG/ontology
 parameters alone (`parameter/`, `value/`, `axis/`, `slot/`,
-`docpipe/extraction/runner.py:4324`). The model, the anchors and every
+`docpipe/extraction/runner.py:4292`). The model, the anchors and every
 prompt id are still written into the stamp, so a reader can place a
 harvest, but a reworded prompt or another model no longer makes a
 document stale. The fine keys come from
-`spec.fingerprints()` (`docpipe/extraction/spec.py:607` to `632`), and
+`spec.fingerprints()` (`docpipe/extraction/spec.py:609` to `634`), and
 their presence is what licenses ignoring the coarse `spec` key. An earlier
 design hashed the whole spec file as one number, so one new label anywhere
 in it made a whole corpus stale together, about 93 GPU hours to reread
-1,082 documents over one added word (`docpipe/extraction/runner.py:4292`
+1,082 documents over one added word (`docpipe/extraction/runner.py:4194`
 to `4294`); the ontology behind the spec is revised repeatedly, so the
 same cost would recur each time it is. With one key per parameter, per value list
 and per axis, `stale()` names exactly which question changed and leaves
 the rest of the corpus alone; it checks both directions, so a question
 dropped from the spec counts as changed too, the one case the old
 whole-file hash used to catch that a purely additive scheme would
-otherwise miss (`docpipe/extraction/runner.py:4391` to `4392`). A file
+otherwise miss (`docpipe/extraction/runner.py:4359` to `4360`). A file
 with no stamp at all is read as fully stale, on principle: the opposite
 reading, a missing stamp taken as nothing left to do, had already let a
 run silently skip 165 documents with exit code 0
@@ -384,7 +399,7 @@ The review prompt (`extraction/review`) is deliberately left out of
 `PROMPT_IDS` itself, not merely out of the comparison: a review leaves a
 value unchanged, only its `flags` grow, so folding the review prompt's sha
 into every stamp would report the whole corpus stale the day that one
-prompt is edited (`docpipe/extraction/runner.py:276` to `278`).
+prompt is edited (`docpipe/extraction/runner.py:298` to `300`).
 
 Three passes act on a moved key without opening the document again.
 
@@ -412,19 +427,16 @@ Three passes act on a moved key without opening the document again.
 
 ## Running it end to end
 
-One profile, one run, in this order. Refinement needs the LLM already
-served at `LLM_BASE_URL`; visuals needs its own instance of the same model
-at `VLM_BASE_URL`, which is what lets it run beside refinement rather than
-after it; the embed half of chunking needs a visible GPU. Each of
+One profile, one run, in this order. Refinement needs the model already
+served at `LLM_BASE_URL`, or a hosted API; visuals needs its own instance of
+the same model at `VLM_BASE_URL`, which is what lets it run beside refinement
+rather than after it; the embed half of chunking needs a visible GPU. Each of
 refinement, visuals and extraction checks the served model's context size
 before its first document and refuses to start rather than fail midway
-(`docpipe/llm_preflight.py`, called from `docpipe/refinement/
-pipeline.py:165` and `249`, `docpipe/visuals/pipeline.py:500`, and
-`docpipe/extraction/runner.py:5015` and `5100`).
+(`docpipe/llm_preflight.py`).
 
-Select the profile once, in the environment, or pass `--profile <name>`
-to a stage, which puts it into the environment before the stage is
-imported:
+Select the profile once: in the project file (`docpipe init` writes it there),
+with `--profile` on a command, or in the environment:
 
 ```bash
 export DOCPIPE_PROFILE=kwp
@@ -433,64 +445,84 @@ export DOCPIPE_PROFILE=kwp
 File processing, reading the profile's own document list:
 
 ```bash
-python -m scripts.fileprocessing --source kww.xlsx --db data/kwp/kwp.db \
-    --data-dir data/kwp/pdf
+docpipe ingest --source kww.xlsx
 ```
 
 Layout detection and structure assembly, stages 2 and 3, over the whole
 data directory:
 
 ```bash
-python -m docpipe.preprocessing data/kwp/pdf
+docpipe preprocess data/kwp/pdf
 ```
 
 Refinement over every document under the profile's processed directory:
 
 ```bash
-python -m docpipe.refinement --batch
+docpipe refine --batch
 ```
 
 Visuals, over the same processed directory, against its own served model:
 
 ```bash
-python -m docpipe.visuals --batch
+docpipe visuals --batch
 ```
 
 Chunking, embedding and the database, merge, db and embed in one call:
 
 ```bash
-python -m docpipe.chunking
+docpipe chunk
 ```
 
 Extraction, over the corpus the previous steps built:
 
 ```bash
-python -m docpipe.extraction data/kwp/kwp.db data/kwp/faiss_index.bin \
+docpipe extract data/kwp/kwp.db data/kwp/faiss_index.bin \
     data/kwp/extraction
 ```
 
 The graph, serializing the same harvest directory:
 
 ```bash
-python -m docpipe.extraction data/kwp/kwp.db data/kwp/faiss_index.bin \
+docpipe extract data/kwp/kwp.db data/kwp/faiss_index.bin \
     data/kwp/extraction --serialize data/kwp/graph.ttl
 ```
 
-The app, reading the corpus and, once it exists, the graph:
+The app, reading the corpus:
 
 ```bash
-DOCPIPE_PROFILE=kwp streamlit run scripts/inference_app/app.py
+docpipe chat
 ```
 
-With the Turtle file from the previous step in place at
-`INFERENCE_KG_TTL_PATH` (by default the profile's own `graph.ttl`), the
-app offers the graph as the first answer path for a closed question and
-searches the documents only where the graph has nothing to say.
+With `INFERENCE_HARVEST_DIR` set to the harvest directory, the chat shows the
+numbers the harvest holds for a question before it searches the documents, and
+offers the review page. A word index built with `docpipe lexical
+data/kwp/kwp.db` makes it search by word beside the search by meaning. The
+Turtle file at `INFERENCE_KG_TTL_PATH` is read by no route while the app does
+not offer the graph route.
 
-Every path after the first command comes from the profile on its own:
-stage 3's output directory and all of stage 6 need nothing more than the
-profile. Extraction's three positionals, `db`, `index` and
-`out`, have no profile default and always have to be spelled out.
+Every path comes from the profile on its own: ingest's database and PDF
+folder, stage 3's output directory and all of stage 6 need nothing more than
+the profile. Extraction's three positionals, `db`, `index` and `out`, have no
+profile default and always have to be spelled out.
+
+## What sits beside the stages
+
+- **The command and its settings.** `docpipe` runs every stage, and a project
+  is a `docpipe.toml` with a profile of its own; see [the command and its
+  settings](stages/command.md).
+- **The provider layer.** Every stage that asks a model asks through one client
+  shape, whether the API is a server of one's own or a hosted one. A cassette
+  records the answers of a run so that the run can be made again without a
+  model; see [which API a request goes to](stages/providers.md).
+- **Measuring a harvest.** People decide on the chat's review page whether
+  harvested values are right. `docpipe evaluate` counts precision and recall
+  against those decisions, and `docpipe benchmark` makes a recorded harvest
+  again; see [measuring a harvest](stages/evaluation.md).
+- **Handing the values on.** `docpipe export` and `docpipe serve` give the
+  harvested values, with their quotes and trust levels, as a table, an API or
+  an assistant's tool; see [handing the values on](stages/serve.md).
+- **Drafting a spec.** `docpipe compile` drafts an extraction spec from the
+  shapes and the ontology of a graph; see [the spec compiler](stages/compile.md).
 
 ## Where the promises are written down
 
@@ -509,9 +541,9 @@ schema.py`, never hand-written.
 requires every generated page under `docs/` to equal a fresh render; this
 page, `running.md` and `glossary.md` are the three the build refuses to
 overwrite and refuses to run without
-(`build_docs.HANDWRITTEN`). The command list two sections above is itself
-checked: `test_every_command_the_hand_written_pages_print_can_be_run`
-confirms every `python -m` module this page names against the packages on
+(`build_docs.HANDWRITTEN`). The commands the hand-written pages print are
+themselves checked: `test_every_command_the_hand_written_pages_print_can_be_run`
+confirms every `python -m` module they name against the packages on
 disk, and every flag named in backticks against every `add_argument`
 call under `docpipe/` and `scripts/`. `tests/test_architecture.py` holds
 the profile boundary from the other side: the core under `docpipe/` never

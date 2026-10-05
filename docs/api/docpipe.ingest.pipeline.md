@@ -29,6 +29,22 @@ Fetch and register one document. False if it was already in the DB.
 They ARE registered: preprocessing reads their pages with the model. They are
 collected so the run can say which documents depend on that.
 
+### note_content
+
+```python
+def note_content(filename: str, connection: sqlite3.Connection,
+                 data_dir: Path) -> None
+```
+
+Record which bytes a document is, or say that they are others now.
+
+A new row gets the sha256 and the size of its file. So does a row from
+before this was recorded, once. A row that has them is held against the
+size of the file as it lies there: a different size is a different file
+under the old name, and everything produced from the old one (sections,
+vectors, harvest) is of the old one. That is said, and nothing is
+stopped; a file edited to the same length is not seen here.
+
 ### ingest
 
 ```python

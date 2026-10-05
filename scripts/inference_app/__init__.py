@@ -1,10 +1,7 @@
 """
-__init__.py: Marks inference_app as a package, a Streamlit retrieval and
-question answering chat front end over a docpipe corpus.
-
-The corpus is produced by the batch pipeline and read as a SQLite database
-(`data/KWP.db` by default, or the active profile's own path) together with
-a global FAISS index.
+__init__.py: Marks inference_app as a package. It holds what starts and
+deploys the chat: `app.py` runs the app that lives in docpipe/app, and the
+Containerfile and requirements build its image.
 
 Author: Felix Vossel
 """

@@ -35,6 +35,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from docpipe import jsonl                                   # noqa: E402
 from docpipe.extraction.spec import load as load_spec       # noqa: E402
 from docpipe.profile import active_profile                  # noqa: E402
 
@@ -88,7 +89,7 @@ def harvest_files(directory: Path) -> list:
 def read_rows(path: Path) -> list:
     """The lines of one harvest file that parse as JSON objects. Skips the rest."""
     out = []
-    for line in path.read_text(encoding="utf-8").splitlines():
+    for line in jsonl.read(path):
         if not line.strip():
             continue
         try:

@@ -26,7 +26,7 @@ from typing import Optional
 
 from docpipe import prompts, usage
 from docpipe.llm_preflight import assert_serving
-from docpipe.profile import add_profile_argument, require_profile
+from docpipe.profile import add_profile_argument, program, require_profile
 
 from .config import (DIR_RESULTS, LLM_API_KEY, LLM_BASE_URL, LLM_MODEL,
                      SECTIONS_REFINED_JSON, PROMPT_IDS, SECTIONS_JSON,
@@ -175,7 +175,7 @@ def run(
 
 def _build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
-        prog="python -m docpipe.refinement",
+        prog=program("docpipe.refinement"),
         description="Text Refinement – LLM-based section refinement of Stage-3 output",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""\

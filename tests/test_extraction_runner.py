@@ -158,12 +158,6 @@ def test_a_source_the_model_never_answered_is_a_visible_hole(tmp_path, monkeypat
     assert rows[0]["claim"]["_harvest_failed"] is True
 
 
-def test_candidate_tokens_cover_units_label_and_vocabulary():
-    from docpipe.extraction.runner import _candidate_tokens
-    tokens = _candidate_tokens(SPEC.parameters[0])
-    assert {"MWh/a", "Endenergieverbrauch", "Erdgas", "Gas"} <= set(tokens)
-
-
 def test_serialize_walks_only_accepted_tuples(tmp_path):
     from docpipe.extraction.serialize import run
     (tmp_path / "plan_a.jsonl").write_text(
@@ -2469,12 +2463,12 @@ def _client_that(monkeypatch, errors, reply='{"answers": {}}'):
 
 
 def _timeout(_monkeypatch=None):
-    from conftest import api_error
+    from tests.conftest import api_error
     return api_error("timed out", timeout=True)
 
 
 def _refused(_monkeypatch=None):
-    from conftest import api_error
+    from tests.conftest import api_error
     return api_error("no server", connection=True)
 
 

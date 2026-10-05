@@ -1,6 +1,6 @@
-# scripts.inference_app.pdf_link
+# docpipe.app.pdf_link
 
-`scripts/inference_app/pdf_link.py`, read with `ast` by `scripts/build_docs.py`. The docstrings are the code's own: edit them there, not here.
+`docpipe/app/pdf_link.py`, read with `ast` by `scripts/build_docs.py`. The docstrings are the code's own: edit them there, not here.
 
 pdf_link.py: Builds deep links into the source PDF for one citation.
 

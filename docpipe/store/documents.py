@@ -22,8 +22,38 @@ Author: Felix Vossel
 from __future__ import annotations
 
 import sqlite3
+import hashlib
 from itertools import groupby
 from typing import Optional
+
+
+def file_sha256(path) -> tuple:
+    """(sha256, size in bytes) of a file, read in pieces."""
+    digest, size = hashlib.sha256(), 0
+    with open(path, "rb") as handle:
+        for piece in iter(lambda: handle.read(1 << 20), b""):
+            digest.update(piece)
+            size += len(piece)
+    return digest.hexdigest(), size
+
+
+def content_of(filename: str, connection: sqlite3.Connection):
+    """(sha256, bytes) a document was registered with; (None, None) when the
+    row, or the database, is older than that record."""
+    try:
+        row = connection.execute(
+            "SELECT sha256, bytes FROM Documents WHERE filename = ?",
+            (filename,)).fetchone()
+    except sqlite3.OperationalError:            # no such column
+        return None, None
+    return (row[0], row[1]) if row else (None, None)
+
+
+def set_content(filename: str, sha256: str, size: int,
+                connection: sqlite3.Connection) -> None:
+    connection.execute(
+        "UPDATE Documents SET sha256 = ?, bytes = ? WHERE filename = ?",
+        (sha256, size, filename))
 
 
 def document_exists(filename: str, connection: sqlite3.Connection) -> bool:

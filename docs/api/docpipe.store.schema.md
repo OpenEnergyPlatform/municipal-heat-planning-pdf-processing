@@ -39,6 +39,75 @@ def apply(connection: sqlite3.Connection, profile: Optional[Profile] = None) -> 
 
 Create every missing table. Idempotent (everything is IF NOT EXISTS).
 
+### readonly_uri
+
+```python
+def readonly_uri(path) -> str
+```
+
+The address that opens a database file for reading only.
+
+The path is percent-encoded. Written into the address as it is, a `#`
+in it starts a fragment and a `?` a query: SQLite then opens another
+file than the one that was named, and without `mode=ro` makes it.
+
+### columns
+
+```python
+def columns(connection: sqlite3.Connection, table: str) -> set
+```
+
+### migrate
+
+```python
+def migrate(connection: sqlite3.Connection) -> int
+```
+
+Bring a database of an older format up to this one. Returns the
+format it had. Adds what is missing and touches nothing that is there.
+
+### note_embedding
+
+```python
+def note_embedding(connection: sqlite3.Connection, model: str, dim: int,
+                   backend: str, max_token_length: int,
+                   version: str) -> Optional[str]
+```
+
+Write down what builds this database's index.
+
+Returns a sentence when the index already holds vectors of another
+model, else None. Vectors of two models do not compare, so that is worth
+a line in the log; it is the caller's line, and nothing is refused here.
+The first model stays the recorded one and the other is recorded beside
+it, so the database says both.
+
+### embedding_mismatch
+
+```python
+def embedding_mismatch(connection: sqlite3.Connection,
+                       model: str) -> Optional[str]
+```
+
+A sentence when a query would be embedded with another model than the
+index was built with, else None. For the query side to log; a database
+that records no model says nothing.
+
+### meta
+
+```python
+def meta(connection: sqlite3.Connection) -> dict
+```
+
+Everything the database says about itself; empty for one that was
+made before it said anything.
+
+### set_meta
+
+```python
+def set_meta(connection: sqlite3.Connection, values: dict) -> None
+```
+
 ### connect
 
 ```python

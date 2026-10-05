@@ -30,6 +30,12 @@ it is pushed again. A server without /metrics gets no limit at all, and one
 that stops answering them leaves the limit where it is. The limit decides only
 when a request is sent, never what it asks or what is accepted from its answer.
 
+A hosted API shows no queue. What it does say is "not now": a 429, which
+closes the endpoint's gate (docpipe/providers/governor.py). The limit of a
+hosted run is steered by that alone: it starts at the minimum, grows while
+every request is served and the limit is in use, and steps down each time the
+API asks to wait.
+
 ## Classes
 
 ### AdaptiveLimit
@@ -178,6 +184,41 @@ def decide(self, sample: Sample, used: int) -> tuple
 
 (new limit, reason) for *sample*, *used* the peak requests open.
 
+### RateController
+
+```python
+class RateController
+```
+
+Decides the next limit from whether the API asked to wait.
+
+#### RateController.\_\_init\_\_
+
+```python
+def __init__(self, limit: AdaptiveLimit, *, step: int = STEP,
+             backoff: float = BACKOFF)
+```
+
+#### RateController.limited
+
+```python
+def limited(self) -> None
+```
+
+The gate's listener: the API has just asked to wait.
+
+#### RateController.decide
+
+```python
+def decide(self, used: int, closed: bool = False) -> tuple
+```
+
+(new limit, reason), *used* the peak requests open.
+
+While the gate is *closed* the limit does not grow: the requests
+that wait at the gate hold their places, so the limit looks in use
+when nothing is being asked.
+
 ## Functions
 
 ### parse_metrics
@@ -187,6 +228,15 @@ def parse_metrics(text: str) -> dict
 ```
 
 {metric name: value summed over its label sets} from Prometheus text.
+
+### start_hosted
+
+```python
+def start_hosted(gate, *, limit: Optional[AdaptiveLimit] = None,
+                 poll: float = POLL) -> AdaptiveLimit
+```
+
+An adaptive limit for a hosted API, steered by its gate.
 
 ### start
 

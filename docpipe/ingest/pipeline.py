@@ -41,6 +41,7 @@ def register(doc: SourceDoc, connection: sqlite3.Connection, data_dir: Path,
     collected so the run can say which documents depend on that.
     """
     if docs.document_exists(doc.filename, connection):
+        note_content(doc.filename, connection, data_dir)
         return False
 
     if not (data_dir / doc.filename).exists():
@@ -63,7 +64,32 @@ def register(doc: SourceDoc, connection: sqlite3.Connection, data_dir: Path,
     docs.add_document(doc.filename, doc.external_id, doc.group_key, doc.published,
                       get_num_pages(doc.filename, data_dir),
                       datetime.now().strftime("%Y%m%d"), doc.meta, connection)
+    note_content(doc.filename, connection, data_dir)
     return True
+
+
+def note_content(filename: str, connection: sqlite3.Connection,
+                 data_dir: Path) -> None:
+    """Record which bytes a document is, or say that they are others now.
+
+    A new row gets the sha256 and the size of its file. So does a row from
+    before this was recorded, once. A row that has them is held against the
+    size of the file as it lies there: a different size is a different file
+    under the old name, and everything produced from the old one (sections,
+    vectors, harvest) is of the old one. That is said, and nothing is
+    stopped; a file edited to the same length is not seen here.
+    """
+    path = data_dir / filename
+    if not path.is_file():
+        return
+    sha256, size = docs.content_of(filename, connection)
+    if sha256 is None:
+        docs.set_content(filename, *docs.file_sha256(path), connection)
+    elif size is not None and path.stat().st_size != size:
+        log.warning(
+            "%s is not the file that was registered (%d bytes then, %d "
+            "now, sha256 then %s...): what was produced from it is of the "
+            "old file", filename, size, path.stat().st_size, sha256[:12])
 
 
 def ingest(source, db_file: Path, data_dir: Path,
@@ -75,6 +101,9 @@ def ingest(source, db_file: Path, data_dir: Path,
     rejected: dict = {}
     unreachable: dict = {}
     scans: dict = {}
+    prepare = getattr(source, "prepare", None)
+    if prepare is not None:
+        prepare(data_dir)
     with sqlite3.connect(db_file) as connection:
         schema.apply(connection, profile)
         try:

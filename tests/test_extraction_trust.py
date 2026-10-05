@@ -395,3 +395,51 @@ def test_the_plan_keeps_which_passages_each_parameters_own_anchors_rank():
     assert report.sources_of == {
         "planning_organisation": {("section", 1)},
         "energy_consumption": {("table", 2)}}
+
+
+# -- which documents a model transcribed -------------------------------------
+
+def _documents(path, column=True):
+    import sqlite3
+    path.parent.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(path)
+    extra = ', "page_text_transcribed" INTEGER' if column else ""
+    conn.execute(f'CREATE TABLE "Documents" ("id" INTEGER PRIMARY KEY, '
+                 f'"filename" TEXT{extra})')
+    if column:
+        conn.executemany('INSERT INTO "Documents" VALUES (?, ?, ?)', [
+            (1, "scan.pdf", 3), (2, "born_digital.pdf", 0),
+            (3, "unknown.pdf", None)])
+    else:
+        conn.execute('INSERT INTO "Documents" VALUES (1, \'scan.pdf\')')
+    conn.commit()
+    conn.close()
+    return path
+
+
+@pytest.mark.parametrize("folder", ["plain", "run#5", "x%41", "a b"])
+def test_the_transcribed_documents_are_read_from_the_database_that_was_named(
+        tmp_path, folder):
+    """By the name their harvest file has. A `#` in the path is part of the
+    path: read as the start of a fragment, another file was opened and every
+    transcribed document passed as one with its own text."""
+    from docpipe.extraction.trust import transcribed_documents
+    database = _documents(tmp_path / folder / "c.db")
+    assert transcribed_documents(database) == {"scan"}
+    assert transcribed_documents(str(database)) == {"scan"}
+
+
+def test_only_a_database_without_the_mark_says_no_document(tmp_path):
+    import sqlite3
+
+    from docpipe.extraction.trust import transcribed_documents
+    assert transcribed_documents(None) == set()
+    assert transcribed_documents(
+        _documents(tmp_path / "old.db", column=False)) == set()
+    # a database that cannot be opened is not one without the mark
+    with pytest.raises(sqlite3.OperationalError):
+        transcribed_documents(tmp_path / "nowhere" / "c.db")
+    broken = tmp_path / "broken.db"
+    broken.write_bytes(b"this is not a database, " * 64)
+    with pytest.raises(sqlite3.DatabaseError):
+        transcribed_documents(broken)

@@ -1,0 +1,1 @@
+Your last output did not follow the read-off schema. Respond with ONLY {"reading": "<element, value, unit>", "value": <float|null>, "unit": "<str|null>", "confidence": "<high|medium|low>"}.

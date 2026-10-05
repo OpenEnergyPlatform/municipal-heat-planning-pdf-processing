@@ -10,9 +10,10 @@ entry point is `answer_question()` in `answer.py`: a caller hands it a
 task, a document id, a set of scopes and a `Corpus` (see Data model),
 and receives an answer, its citations, and follow-up bookkeeping.
 `answer_question` is called directly from two places: the Streamlit app
-documented on [Chatting with the corpus](./app.md) (`app.py:147`), and
-`compare.compare_documents` (`compare.py:100`), once per document,
-itself reached only from the app. Nothing here imports a UI toolkit.
+documented on [the chat over the corpus](./app.md), and
+`compare.compare_documents`, once per document, itself reached only from the
+app. A document id of `None` asks the whole corpus. Nothing here imports a
+UI toolkit.
 
 A question answered here is not the same finding as a value the
 extraction stage (see [Extraction](./extraction.md)) writes to its
@@ -22,16 +23,20 @@ free-text answer in a citation resolved at ask time. A second answer
 path exists once the extraction stage's `--serialize` step has written a
 plan's numbers as a graph (see [The knowledge graph](./graph.md)):
 `kg_route.answer_from_graph` reads that graph directly, with no
-retrieval or free-text generation.
+retrieval or free-text generation. A third path reads the harvest itself:
+`values_route.answer_from_values` turns a question into a parameter and the
+coordinates it names and shows the values the harvest holds for them, each
+with its quote, page and trust level (see Method).
 
 ## Position in the pipeline
 
 | | |
 |---|---|
-| **In** | The read-only corpus SQLite database and global FAISS index stage 6, chunking (see [Chunking, embedding, database](./chunking.md)), wrote; the source PDF; the profile's wording and prompts; and, where configured, the graph stage's Turtle file (see [The knowledge graph](./graph.md)) and a code-execution sandbox. |
+| **In** | The read-only corpus SQLite database and global FAISS index stage 6, chunking (see [Chunking, embedding, database](./chunking.md)), wrote; the source PDF; the profile's wording and prompts; and, where configured, the word index beside the database, a harvest
+directory, the graph stage's Turtle file (see [The knowledge graph](./graph.md)) and a code-execution sandbox. |
 | **Out** | A per-turn result dict, plus one appended row per turn in a request-log database apart from the corpus; the corpus is never written. |
 | **Resumes on** | Nothing. There is no batch and, by design, no answer cache (see Failure modes). |
-| **Needs** | The LLM endpoint at `LLM_BASE_URL`; a query embedder supplied through `Corpus.embed` (this package runs no embedding model, `faiss_store.py:22`); optionally `CODE_EXEC_URL` and a profile's knowledge-graph hooks. |
+| **Needs** | A model endpoint (`LLM_PROVIDER`, `LLM_BASE_URL`; see [the provider layer](./providers.md)); a query embedder supplied through `Corpus.embed` (this package runs no embedding model); optionally `CODE_EXEC_URL` and a profile's knowledge-graph hooks. |
 
 This package sits downstream of stage 6, the last stage to write under
 `results/` (see [How the parts fit together](../pipeline.md)); it has no
@@ -53,20 +58,20 @@ flowchart LR
 
 ### Building the query item and its search anchor
 
-`answer_question` (`answer.py:98`) picks one of three modes: `image_only`
+`answer_question` (`answer.py:129`) picks one of three modes: `image_only`
 searches on an uploaded image alone, an image with text adds a
 caption-style anchor, and text alone anchors on the plain task
-(`answer.py:121-138`). The anchor, `llm_client.make_search_phrase`, is a
+(`answer.py:154-171`). The anchor, `llm_client.make_search_phrase`, is a
 HyDE-style construction: a short hypothetical passage written as it
 would appear in the corpus, not a question. Whatever non-empty phrase the
 model writes is used as the anchor; the function falls back to the raw
 task text only on a transport or parse error, or an empty reply, and it
-never raises (`llm_client.py:273-309`). The same call sets `recheck`, true
+never raises (`llm_client.py:331-367`). The same call sets `recheck`, true
 only when the model marks the task a repetition and history is
-non-empty (`llm_client.py:307`); when true, `answer_question` walks
+non-empty (`llm_client.py:365`); when true, `answer_question` walks
 history backward, folding every `(owner_kind, owner_id)` pair each turn
 examined into one exclude set, stopping at the first non-recheck turn
-(`answer.py:147-153`).
+(`answer.py:180-186`).
 
 ### Retrieval narrowed to one document
 
@@ -79,15 +84,56 @@ dedup after the search keeps the higher-scoring one per
 `(owner_kind, owner_id)` (`faiss_store.py:308-365`); results are capped
 at `TOP_K`.
 
+### Searching by word as well, and over the whole corpus
+
+Retrieval is `hybrid.retrieve`. By meaning it is the document's own
+sub-index as above or, when no document is named, a search of the global
+index. By word it asks the word index (`lexical.py`) where there is one: an
+FTS5 file beside the corpus database, `<name>.lexical.db`, built from it by
+`docpipe lexical DB` and never written into it. A vector search is weak
+exactly where a question is most specific, a name, an abbreviation, a number
+or a place, and a word index is not. The two rankings are merged by
+reciprocal rank: a passage's score is the sum of 1 / (60 + its rank) over the
+searches that found it, because a cosine and a BM25 score share no scale.
+
+The index notes a digest of the passages it was built from: the kind, id,
+document, title and text of each. A database that has since changed makes it
+stale, and a text rewritten in place does too, which a count of passages would
+not see. A stale index is not asked, since a hit for a passage that no longer
+exists would be worse than none (`docpipe lexical DB --check` says which it
+is). The index is built beside the old one and put in its place whole; where
+that fails, because a program such as the chat holds the old file open, the
+build says so, removes what it built and leaves the old index as it was.
+Without an index, or for a question that is an image, the result is the search
+by meaning alone. `INFERENCE_LEXICAL=0` turns the word search off.
+
+The words of a question are lowered and not case-folded: the index folds what
+it stores itself and keeps a sharp s, which case-folding would write as "ss".
+The word search asks for more than `top_k` passages (`OVERFETCH` times `top_k`,
+and the passages already examined besides), because what an earlier turn read
+and what an older version of a document says are taken out afterwards and
+would otherwise use up the places. The search by meaning over the whole corpus
+asks the global index for `OVERFETCH` times `top_k` vectors, since several of
+them are one passage, held to `MAX_FETCH`; it asks again, four times as many up
+to the same cap, only while fewer than `top_k` passages came out. The ids it
+gets back are looked up in the database in parts of `LOOKUP`, under the number
+of values a statement may carry.
+
+Over the whole corpus only the current version of a document answers, so two
+editions of one plan do not put two numbers for one place into one answer, and
+every source says whose it is: the label the caller gives its document, or,
+where there is none, the name of the document's file without its ending
+(`_whose`).
+
 ### Packing sources into token-budgeted batches
 
 The top `MAX_CHUNK_ATTEMPTS` hits are packed by `chunker.pack_chunks`
 into batches under `ANSWER_CONTEXT_TOKENS` tokens each
-(`chunker.py:94-116`), greedily, one oversized hit getting its own chunk
+(`chunker.py:100-122`), greedily, one oversized hit getting its own chunk
 instead of truncation. Token counts come from the tokenizer
 named by `LLM_TOKENIZER_ID`; a char/4 heuristic serves as an offline
 fallback only, since German prose runs 3.0 to 3.5 characters per token,
-denser than a flat divide by 4 assumes (`answer.py:181-184`).
+denser than a flat divide by 4 assumes (`answer.py:222-225`).
 
 ### Answering across batches, with computation and image requests
 
@@ -97,51 +143,51 @@ can be read. `code_exec.py` runs the calculation feature: when
 `CODE_EXEC_URL` is set, `run_code` posts the model's Python plus the
 context `answer._code_context` builds, `{"tables": [{"caption",
 "markdown"}, ...]}`, one entry per table among the batch's sources
-(`answer.py:62-77`); the sandbox service turns each key into a variable of
-the code it runs (`scripts/inference_app/sandbox_service.py:56-64`), so the
+(`answer.py:80-95`); the sandbox service turns each key into a variable of
+the code it runs (`docpipe/app/sandbox_service.py`), so the
 `tables` the compute prompt names exists there, an empty list when the batch
 has no table. It parses back `{"ok", "stdout", "stderr", "exit_code", "error"}`
 (`code_exec.py:22-54`), never raising (see Failure modes). An image
 requester may separately return a crop the section text only points at,
 through `db.request_item`. Both draw one shared round budget,
-`CODE_EXEC_MAX_ROUNDS` plus `REQUEST_IMAGE_MAX` (`llm_client.py:577`); a
+`CODE_EXEC_MAX_ROUNDS` plus `REQUEST_IMAGE_MAX` (`llm_client.py:635`); a
 repeated crop id stops the loop and forces an answer
-(`llm_client.py:598-605`). The loop stops once a batch reports complete
-with a citation accepted (`answer.py:252-253`).
+(`llm_client.py:658-665`). The loop stops once a batch reports complete
+with a citation accepted (`answer.py:296-297`).
 
 ### Grounding, image refinement and finishing the turn
 
 Every claim must point at a batch index and either a verbatim quote or,
 for an attached image, a reading. A text quote is accepted only through
 `llm_client.grounded_quote`, a match of at least 12 characters against
-the excerpt shown (`_quote_is_grounded`, `llm_client.py:145-156`). An
-image-based support, `visual_reading` (`llm_client.py:499-516`), is
+the excerpt shown (`_quote_is_grounded`, `llm_client.py:179-190`). An
+image-based support, `visual_reading` (`llm_client.py:557-574`), is
 accepted only when its index was among the crops attached to the call
 and the reading is at least 8 characters, so background knowledge alone
 cannot count as grounded evidence. Citations are deduplicated by
-`(owner_kind, owner_id)` (`answer.py:244-247`); an answer with no
+`(owner_kind, owner_id)` (`answer.py:288-291`); an answer with no
 accepted citation is refused outright, and the log distinguishes "No
 grounded citations" from "Answer ignored the response envelope"
-(`answer.py:302-309`).
+(`answer.py:348-355`).
 
 Every visual citation is then re-read in a focused, single-image call,
 `llm_client.read_off_image`, up to `READOFF_MAX_CALLS` per turn: a first
-pass often misreads a chart (`llm_client.py:439-444`). Readings fold
+pass often misreads a chart (`llm_client.py:494-499`). Readings fold
 back through `revise_with_readings`, unchanged on failure
-(`llm_client.py:482-496`).
+(`llm_client.py:539-554`).
 A JSON answer then goes through `llm_client.format_as_json`
-(`llm_client.py:656-663`), the only call here with no failure handling
+(`llm_client.py:717-732`), the only call here with no failure handling
 of its own (see Failure modes); every turn is logged through
-`request_log.log_request` (`answer.py:328-333`).
+`request_log.log_request` (`answer.py:374-379`).
 
 ### The profile's wording contract
 
 Every phrase and label the loop wraps around the model comes from the
 active profile through `wording.py`. `phrases()` checks a profile's
-`PHRASES` dict against `REQUIRED`, a frozenset of 29 keys
-(`wording.py:22-32`). `llm_client.py` calls `phrases()` at module level
-(`llm_client.py:47`), so this package needs an active profile to import
-(see Failure modes).
+`PHRASES` dict against `REQUIRED`, a frozenset of 32 keys
+(`wording.py:28-39`). `llm_client.py` calls `phrases()` on first use
+(`llm_client.py:91-93`), so this package imports with no active profile
+and a lookup with none fails (see Failure modes).
 
 ### The knowledge-graph route
 
@@ -153,9 +199,9 @@ and trust/reason wording, returning `None` where `kg.VALUE_QUERY` is
 absent, so `scenarios` gets no route at all (`kg_route.py:95-122`).
 `to_coordinates` asks one closed
 question per axis over the spec's own vocabulary, through
-`llm_client.choose` in the app (`llm_client.py:202-225`,
-`app.py:191-194`); an answer outside the vocabulary leaves the axis
-unbound (`kg_route.py:174-204`), and the route proceeds only once a
+`llm_client.choose` in the app (`llm_client.py:260-284`,
+`app.py:251-254`); an answer outside the vocabulary leaves the axis
+unbound (`kg_route.py:174-216`), and the route proceeds only once a
 coordinate lands on one of the `DECIDING_AXES`, quantity, scenario or
 year (`kg_route.py:61`). It runs the profile's SPARQL and reads a
 value's evidence and trust from the serializer's comment lines,
@@ -166,6 +212,21 @@ behind](../contract/trust.md)). Every decline is one of five closed
 tokens, `REASONS` (`kg_route.py:57`) (see Failure modes);
 `answer_from_graph` returns only four, the fifth, `no_graph`, left to
 the caller.
+
+### Numbers from the harvest
+
+`values_route.answer_from_values`, called by the app before the documents are
+searched, needs no graph and no query of the profile: the harvest and the spec
+are enough, so it works for every profile that has both, over one document or
+all of them. The question is turned into a parameter and the coordinates it
+names, one closed question each over the spec's own lists, asked with the same
+`llm_client.choose` and the `kg/coordinate` prompt as the graph route. An
+answer outside a list leaves that coordinate open, and an open coordinate
+narrows nothing; a question that names no parameter is not one for this
+route, and the caller searches the documents. What is shown is what
+`docpipe/serve/values.py` holds for the values, as it holds them (see
+[handing the values on](./serve.md)), limited only by the caller's worst
+trust level and count.
 
 ### Comparing several documents
 
@@ -193,8 +254,8 @@ dataclass this package never builds:
 | `log_conn` | an optional connection to the request-log database |
 
 `answer_question()` returns one dict per turn, most keys fixed in the
-function's own docstring (`answer.py:102-110`); `requested` is not among
-them (`answer.py:114`, populated `answer.py:272`):
+function's own docstring (`answer.py:134-143`); `requested` is not among
+them (`answer.py:147`, populated `answer.py:318`):
 
 | key | holds |
 |---|---|
@@ -207,7 +268,7 @@ them (`answer.py:114`, populated `answer.py:272`):
 | `compute`, `requested` | the sandbox runs made, and the block ids of delivered crop requests |
 | `cache_hit` | whether the query embedding came from `query_cache` |
 
-One citation carries `db.fetch_owner_content`'s fields (`db.py:176-256`)
+One citation carries `db.fetch_owner_content`'s fields (`db.py:177-257`)
 plus what `answer.py` adds:
 
 | field | holds |
@@ -215,30 +276,38 @@ plus what `answer.py` adds:
 | `owner_kind`, `owner_id` | `section`, `table` or `figure`, and that row's id |
 | `title`, `text` | the resolved title and body; a section's placeholders are annotated with their caption, a table's or figure's body is unchanged |
 | `page_number`, `image_path`, `section_number`, `section_title`, `document_id` | citation/scoping fields; `image_path` relative to `IMAGE_ROOT`, `None` for a section |
-| `caption_stored`, `section_id`, `block_id` | table/figure owners only: the stored caption before title resolution, the section's id, and the block id (`db.py:242, 246-247`) |
+| `caption_stored`, `section_id`, `block_id` | table/figure owners only: the stored caption before title resolution, the section's id, and the block id (`db.py:243, 247-248`) |
 | `quote`, `visual`, `requested` | the accepted quote or reading, whether from an image or crop request, added in `answer.py` |
 
 `kg_route.answer_from_graph` returns `{route, reason, values,
-coordinates}` (`kg_route.py:260-293`): `route` is `"kg"` or `"rag"`,
+coordinates}` (`kg_route.py:272-305`): `route` is `"kg"` or `"rag"`,
 `reason` one of `REASONS` or `None`, `values` one dict per matching row
 with its `evidence` and `trust`.
 
 Two more SQLite files stay apart from the corpus: `request_log.py`'s
-`requests` (`request_log.py:17-32`, one row per turn: `plan_id`,
+`requests` (`request_log.py:26-41`, one row per turn: `plan_id`,
 `query_text`, `mode`, `scopes`, `latency_ms`, `n_hits`, `n_citations`,
 `answer_hash`, `error_message`, `cache_hit`), and `query_cache.py`'s
 `query_cache` (`query_cache.py:18-24`: `query_key`, a sha256 of the
-query mode, text and image bytes, `vector`, `created_at`).
+query mode, text and image bytes, `vector`, `created_at`). `plan_id` is
+the document the question asked and is empty for a question to the whole
+corpus. A log made when every question named a document refuses such a row, so
+opening it brings it forward: the table is made again and every row is carried
+over under its own id.
 
 The logged `cache_hit` column is not the turn's own value: `_log` always
-calls `request_log.log_request` with `cache_hit=False` (`answer.py:333`),
+calls `request_log.log_request` with `cache_hit=False` (`answer.py:379`),
 so a persisted row never reflects the returned dict's `cache_hit` key.
 
 ## Configuration
 
 Every name is read once, at import, from `docpipe/inference/config.py`
 unless "where" names another file: env vars and module constants only,
-nothing tied to a host name or shared drive.
+nothing tied to a host name or shared drive. The model's provider is one more
+setting, `LLM_PROVIDER` (see [the provider layer](./providers.md)). The
+settings of the app itself, the harvest, the decisions file and
+`INFERENCE_LEXICAL`, are on [the app page](./app.md); `docpipe config --stage
+chat` lists them all.
 
 | name | kind | default | effect | where |
 |---|---|---|---|---|
@@ -247,7 +316,7 @@ nothing tied to a host name or shared drive.
 | `LLM_TEMPERATURE`, `LLM_MAX_TOKENS` | env vars | `0.1`, `2048` | sampling temperature and `max_tokens` per completion | `config.py:23-24` |
 | `LLM_TOKENIZER_ID` | env var | equal to `LLM_MODEL` | tokenizer for token-budget accounting | `config.py:27` |
 | `LLM_MAX_RETRIES`, `LLM_STUB_MODE` | env vars | `4`, off | retries of one failed call; canned replies with no endpoint call | `config.py:30, 32` |
-| `SCOPE_*` (6), `SCOPE_TO_EMBEDDING_TYPES`, `ALL_SCOPES`, `VISUAL_SCOPES` | module constants | 6 fixed strings, e.g. `"Body text"` | the `scopes` vocabulary, its embedding-type map, and the visual-only subset `scopes_are_visual` (`answer.py:50-52`) checks | `config.py:73-99` |
+| `SCOPE_*` (6), `SCOPE_TO_EMBEDDING_TYPES`, `ALL_SCOPES`, `VISUAL_SCOPES` | module constants | 6 fixed strings, e.g. `"Body text"` | the `scopes` vocabulary, its embedding-type map, and the visual-only subset `scopes_are_visual` (`answer.py:68-70`) checks | `config.py:73-99` |
 | `TOP_K`, `MAX_CHUNK_ATTEMPTS` | env vars | `50`, `10` | candidates kept per retrieval; sources examined per turn | `config.py:37, 39` |
 | `ANSWER_CONTEXT_TOKENS`, `ANSWER_MAX_IMAGES` | env vars | `10000`, `4` | token budget per answer batch; crops attached to one answer call | `config.py:42, 45` |
 | `ANSWER_IMAGE_MAX_SIDE`, `READOFF_IMAGE_MAX_SIDE` | env vars | `1280`, `1600` | crop downscale side, answer call and read-off | `config.py:46, 59` |
@@ -262,11 +331,11 @@ nothing tied to a host name or shared drive.
 ## Failure modes
 
 An empty hit list is logged as "No hits" and `answer` returns `None`
-before any LLM call runs (`answer.py:173-176`); where hits exist but
+before any LLM call runs (`answer.py:214-217`); where hits exist but
 nothing could be grounded, `answer` comes back `None` (see Method;
-`answer.py:302-309`). An unknown or missing crop id comes back
-`None` and is logged (`answer.py:80-95`); a repeated id stops the loop
-and forces an answer (`llm_client.py:598-605`).
+`answer.py:348-355`). An unknown or missing crop id comes back
+`None` and is logged (`answer.py:98-126`); a repeated id stops the loop
+and forces an answer (`llm_client.py:658-665`).
 
 `pdf_locate._have_deps()` checks once for PyMuPDF and rapidfuzz and logs
 an error (`log.error`) if either is missing; when it fails, quote
@@ -275,33 +344,33 @@ highlight rectangles (`pdf_locate.py:33-56`).
 
 Inside `llm_client._chat_json`, a malformed reply or transport error is
 retried up to `LLM_MAX_RETRIES` with backoff capped at 10 seconds before
-raising `RuntimeError` (`llm_client.py:119-199`); callers above it
+raising `RuntimeError` (`llm_client.py:153-257`); callers above it
 degrade instead: `make_search_phrase` falls back to the raw task, and
 `answer_from_sources` comes back `{"found": False}`. `format_as_json`
 has no such wrapper and can raise past this package
-(`llm_client.py:656-663`; `answer.py:311-317`). `code_exec.run_code`
+(`llm_client.py:717-732`; `answer.py:357-363`). `code_exec.run_code`
 degrades without raising: any transport or JSON failure comes back
 `{"ok": False, "error": ...}`, read as no calculation, not a failed turn
 (`code_exec.py:36-62`).
 
 `kg_route` fails closed on missing trust, withholding the whole answer
-with reason `no_trust` (`kg_route.py:286-291`). A profile that leaves a
+with reason `no_trust` (`kg_route.py:298-303`). A profile that leaves a
 `REASONS` token unworded, or words an extra one, raises `LookupError`
 when the route is built (`kg_route.py:80-92`); a Turtle fragment with no
 `@prefix` line is refused outright (`kg_route.py:139-141`).
 
 The wording contract fails the same way: a profile whose `PHRASES` dict
 is missing a required key raises `LookupError` at the first check
-(`wording.py:56-58`), and no active profile raises `LookupError` from
-`wording._component` (`wording.py:35-39`) for any lookup a turn needs.
-`llm_client.py` resolves its own phrases at import
-(`llm_client.py:47`), so the
-missing-profile case can surface as an import error before a turn is
-asked.
+(`wording.py:102-104`), and no active profile raises `LookupError` from
+`wording._component` (`wording.py:77-81`) for any lookup a turn needs.
+`llm_client.py` resolves its own phrases on first use
+(`llm_client.py:91-93`), so the
+missing-profile case surfaces at the first lookup of a turn and not as an
+import error.
 
 Answers are deliberately not cached: a follow-up is context-dependent,
 and a cache keyed on the question text alone would misfit a later
-conversation (`request_log.py:1-8`). The only cache in the path is the
+conversation (`request_log.py:8-10`). The only cache in the path is the
 query embedding, reported in `cache_hit` but never used to skip
 retrieval or the LLM call.
 
@@ -313,8 +382,8 @@ about 470 candidate vectors, and the batched call measured 0.421 to
 0.277 seconds over 50 repetitions, 8.4 milliseconds per document instead
 of 5.5 (`faiss_store.py:76-81`).
 
-The grounding gate's floor of 12 characters (`llm_client.py:145-156`) and
-the image-reading floor of 8 characters (`llm_client.py:499-516`) are
+The grounding gate's floor of 12 characters (`llm_client.py:179-190`) and
+the image-reading floor of 8 characters (`llm_client.py:557-574`) are
 sized the same way, long enough to reject a short stray word standing
 in for evidence; the code names "GmbH" as the concrete case the
 12-character floor rejects.
@@ -367,6 +436,16 @@ The picker's filters and its fallback:
 `test_without_a_profile_the_generic_catalog_is_used`
 (`tests/test_catalog.py`).
 
+The word index and the merged search: `test_two_rankings_are_merged_by_reciprocal_rank`,
+`test_an_index_of_another_state_of_the_database_is_not_asked`,
+`test_over_the_whole_corpus_only_current_documents_answer`,
+`test_without_a_word_index_the_result_is_the_search_by_meaning`
+(`tests/test_hybrid_search.py`). The values route:
+`test_a_coordinate_the_question_does_not_name_narrows_nothing`,
+`test_an_answer_outside_the_list_is_no_answer`,
+`test_no_harvest_no_route_and_no_question_asked`
+(`tests/test_values_route.py`).
+
 The wording contract: `test_a_profile_that_answers_provides_all_of_it`
 (`tests/test_wording.py`). The search anchor is the sentence the model
 wrote: `test_the_search_phrase_is_the_sentence_the_model_wrote`
@@ -388,9 +467,11 @@ The graph route:
 ## Modules
 
 `__init__.py` re-exports `Corpus` and `answer_question`, the package's
-only public surface; `answer.py` holds both, the turn's entry point and
-the dataclass every step reads. `answer_question` is called directly by
-`scripts/inference_app/app.py` and by `compare.py`'s
+only public surface, and loads them on first use and not when the package is
+imported: a command that builds the word index or reads harvested values has
+no use for the answer loop and the libraries it brings. `answer.py` holds
+both, the turn's entry point and the dataclass every step reads. `answer_question` is called directly by
+`docpipe/app/app.py` and by `compare.py`'s
 `compare_documents`, itself reached only from the app.
 
 `catalog.py` holds the generic `Catalog` class, `load_catalog`,
@@ -423,7 +504,7 @@ the extraction stage's `runner.py` (as `inference_db`).
 
 `wording.py` holds `REQUIRED`, `phrases` and `readoff`, the profile's
 phrase contract described in Method and Failure modes. Called by
-`answer.py`, `chunker.py` and, at module level, `llm_client.py`.
+`answer.py`, `chunker.py` and, on first use, `llm_client.py`.
 
 `code_exec.py` holds `is_enabled` and `run_code`, the sandbox client.
 Called by `answer.py` and, for the same feature, `runner.py`.
@@ -435,6 +516,13 @@ path. Called only by the app.
 `by_axis`, `trust_level` and `REASONS`, the graph-route contract
 described in Method. Called only by the app.
 
+`hybrid.py` holds `retrieve`, the one ranking out of the search by meaning
+and the search by word, over one document or all; `answer.py` calls it.
+`lexical.py` builds and asks the word index (`docpipe lexical`), called by
+`hybrid.py` and the app. `values_route.py` answers a question for a number
+from the harvest, called only by the app. `replies.py` holds the reply
+schemas of the chat's requests, for an API that generates inside one.
+
 `request_log.py` holds the `requests` table and `log_request`. Called by
 `answer.py`'s `_log` helper and directly by the app.
 
@@ -443,12 +531,12 @@ described in Method. Called only by the app.
 
 `pdf_locate.py` holds `_have_deps`, `quote_rects`, `page_words` and
 `rects_from_words`, the quote-to-rectangle match described in Failure
-modes. Called by `scripts/inference_app/pdf_link.py` and the extraction
+modes. Called by `docpipe/app/pdf_link.py` and the extraction
 stage's `runner.py`.
 
 `config.py` holds every name in the Configuration table above, read once
 at import by every module in the package;
-`scripts/inference_app/config.py` re-exports the names the app reads.
+`docpipe/app/config.py` re-exports the names the app reads.
 
 ## Module reference
 
@@ -459,6 +547,12 @@ The docstring of each module of this stage, verbatim from the code and generated
 
 __init__.py: Retrieval and grounded answering, usable from a UI or
 from a batch job.
+
+`Corpus` and `answer_question` are loaded when they are first asked for and
+not when the package is. A command that builds the word index (`lexical.py`)
+or reads harvested values has no use for the answer loop and the libraries
+it brings, and a module run as a command must not have been imported by its
+own package before it runs.
 
 </details>
 
@@ -572,6 +666,152 @@ this module imports neither `profiles` nor `streamlit`. rdflib is
 imported inside the functions that need it, the convention
 `docpipe/ontology.py` states: the batch path never touches this
 module, and the check that does can run without it.
+
+Author: Felix Vossel
+
+</details>
+
+<details>
+<summary><code>docpipe/inference/hybrid.py</code></summary>
+
+hybrid.py: One ranking out of two searches, over one document or all.
+
+The chat used to search one document by meaning. Two things were missing:
+a search over the whole corpus, and a search by word for the questions a
+vector is weak at (`lexical.py` says why). This module is both.
+
+    by meaning   the query vector against the passages' vectors: the
+                 document's own sub-index as before, or the global index
+                 when no document is named
+    by word      the question's words against the word index, where there
+                 is one
+
+and the two rankings merged by reciprocal rank: a passage's score is the
+sum of 1 / (60 + its rank) over the searches that found it. Ranks, not
+scores, because a cosine and a BM25 number share no scale; 60 is the
+constant of the method's paper and nothing here was tuned on it.
+
+Without a word index, or for a question that is an image, the result is
+the search by meaning alone, in its order and with its scores: what the
+chat did before.
+
+Over the whole corpus only the current version of a document answers. An
+older version of the same plan would otherwise put two numbers for one
+place into one answer.
+
+Author: Felix Vossel
+
+</details>
+
+<details>
+<summary><code>docpipe/inference/lexical.py</code></summary>
+
+lexical.py: A word index over the corpus, beside the vector index.
+
+The vector search finds a passage by what it means. It is weak exactly
+where a question is most specific: a name, an abbreviation, a number, a
+place. "Stadtwerke Marburg" and "Stadtwerke Kassel" are neighbours in the
+embedding space and different words on the page, and a search over a whole
+corpus that cannot tell them apart answers from the wrong document. A word
+index can, so the chat asks both and merges the two rankings
+(`hybrid.py`).
+
+The index is a file of its own beside the corpus database
+(`<name>.lexical.db`), built from it and never written into it: the corpus
+database stays what the chunk stage made, and the chat keeps opening it
+read-only.
+
+    docpipe lexical DB          build it, or build it again
+    docpipe lexical DB --check  say whether it is there and current
+
+It holds one row per section, table and figure with its title and text
+(SQLite FTS5). It notes a digest of the passages it was built from; a
+database whose passages have since changed makes it stale, and a stale
+index is not asked: a hit for a passage that no longer exists, or for a
+word it no longer has, would be worse than none.
+
+Author: Felix Vossel
+
+</details>
+
+<details>
+<summary><code>docpipe/inference/values_route.py</code></summary>
+
+values_route.py: Answers a question for a number from the harvest, before
+the documents are searched.
+
+A question like "how much gas in 2030?" names a parameter and some of its
+coordinates. The harvest has read exactly those out of the documents, each
+with its quote, its page and a trust level. So the number is not looked for
+a second time and not written by a model: the question is turned into the
+parameter and the coordinates it names, and the values the harvest holds
+for them are shown as they are (`docpipe/serve/values.py`).
+
+The route does not guess. Which parameter and which coordinates the
+question names is one closed question each over the spec's own lists (the
+harvest's rule: one request per field, chosen from the list). An answer
+outside the list leaves the coordinate open, and an open coordinate narrows
+nothing. A question that names no parameter is not one for this route, and
+the caller searches the documents as before.
+
+Unlike `kg_route` this needs no graph and no query of the profile's: the
+harvest and the spec are enough, so it works for every profile that has
+both, across one document or all of them.
+
+Author: Felix Vossel
+
+</details>
+
+<details>
+<summary><code>docpipe/inference/wording.py</code></summary>
+
+wording.py: What the answer loop says around the prompts.
+
+The prompts belong to the profile; so does everything the loop wraps around
+them: the heading over the user's task, the labels inside the history block,
+the sentence that tells the model to answer NOW. The core assembles those
+pieces and does not write them: it cannot know whether the reader is holding a
+German heat plan or an English scenario study.
+
+A profile contributes them in `profiles/<name>/inference.py`. A profile that
+extends another one writes only the pieces it words differently: its PHRASES
+are laid over those of the profile it extends.
+
+The words of the app's pages come the same way and from the same file: the
+profile's `UI` table, which a person reads where a model reads PHRASES. Both
+are checked for the entries the core asks for (`REQUIRED`, `UI_REQUIRED`).
+
+Author: Felix Vossel
+
+</details>
+
+<details>
+<summary><code>docpipe/inference/replies.py</code></summary>
+
+replies.py: The reply each chat request asks for, as a JSON schema.
+
+For an API that generates inside a schema (see `docpipe.providers`). The
+prompts state the same shapes in words; nothing here is a check.
+
+One request has no schema: the answer reformatted into a JSON shape the user
+wrote into the task. That shape is the user's and only exists as prose.
+
+Author: Felix Vossel
+
+</details>
+
+<details>
+<summary><code>docpipe/inference/request_log.py</code></summary>
+
+request_log.py: Request logging in a separate SQLite file.
+
+One line per chat turn: which document was asked (none for a question to
+the whole corpus), the question, the scopes, how long it took and how many
+passages and citations it had.
+
+Answers are deliberately NOT cached: follow-up queries ("schau noch einmal
+nach") are context-dependent, and a cache keyed on the query text alone serves
+an answer from a different conversation.
 
 Author: Felix Vossel
 

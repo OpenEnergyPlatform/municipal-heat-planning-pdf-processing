@@ -71,3 +71,42 @@ def test_connect_creates_the_file(tmp_path):
     con = store.connect(path, KWP)
     assert path.exists()
     assert con.execute("SELECT COUNT(*) FROM Documents").fetchone()[0] == 0
+
+
+@pytest.mark.parametrize("name", ["plain.db", "run#5.db", "x%41.db",
+                                  "a b.db", "why?.db"])
+def test_a_read_only_address_names_the_file_it_was_given(tmp_path, name,
+                                                         monkeypatch):
+    """`#`, `?` and `%` are part of a file name. In the address they are
+    escaped, so the database that is opened is the one that was named, and
+    reading only: nothing is created where there is no file."""
+    import sqlite3
+
+    from docpipe.store.schema import readonly_uri
+    path = tmp_path / name
+    try:
+        sqlite3.connect(path).close()
+    except sqlite3.OperationalError:
+        pytest.skip(f"this file system has no file named {name}")
+    if not path.is_file():
+        pytest.skip(f"this file system has no file named {name}")
+    made = sqlite3.connect(path)
+    made.execute("CREATE TABLE t (x)")
+    made.execute("INSERT INTO t VALUES (7)")
+    made.commit()
+    made.close()
+    before = sorted(entry.name for entry in tmp_path.iterdir())
+    conn = sqlite3.connect(readonly_uri(path), uri=True)
+    try:
+        assert conn.execute("SELECT x FROM t").fetchone() == (7,)
+        with pytest.raises(sqlite3.OperationalError):
+            conn.execute("INSERT INTO t VALUES (8)")
+    finally:
+        conn.close()
+    assert sorted(entry.name for entry in tmp_path.iterdir()) == before
+    # relative to where the process stands, and also for a file not there
+    monkeypatch.chdir(tmp_path)
+    assert readonly_uri(name) == readonly_uri(path)
+    with pytest.raises(sqlite3.OperationalError):
+        sqlite3.connect(readonly_uri("nowhere.db"), uri=True)
+    assert not (tmp_path / "nowhere.db").exists()

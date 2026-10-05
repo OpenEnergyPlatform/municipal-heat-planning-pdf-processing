@@ -2,7 +2,11 @@
 
 `docpipe/inference/request_log.py`, read with `ast` by `scripts/build_docs.py`. The docstrings are the code's own: edit them there, not here.
 
-request_log.py – Request logging in a separate SQLite file.
+request_log.py: Request logging in a separate SQLite file.
+
+One line per chat turn: which document was asked (none for a question to
+the whole corpus), the question, the scopes, how long it took and how many
+passages and citations it had.
 
 Answers are deliberately NOT cached: follow-up queries ("schau noch einmal
 nach") are context-dependent, and a cache keyed on the query text alone serves
@@ -25,7 +29,7 @@ Open (creating if needed) the request log database.
 ```python
 def log_request(
     conn: sqlite3.Connection,
-    plan_id: int,
+    plan_id: Optional[int],
     query_text: str,
     mode: str,
     scopes: list[str],

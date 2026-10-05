@@ -51,6 +51,25 @@ write its own rows (an organisation, a municipality) before it can name the
 document's metadata. `after_document` runs once per yielded document that
 was accepted — a rejected PDF must not leave project rows behind.
 
+#### Source.default_location
+
+```python
+@classmethod
+def default_location(cls, data_dir)
+```
+
+What stands in for `--source` when the command line names none.
+None: this source has a document list, and it has to be named.
+
+#### Source.prepare
+
+```python
+def prepare(self, data_dir) -> None
+```
+
+Before the first document: a source that has to put its files
+into the data directory does it here.
+
 #### Source.documents
 
 ```python

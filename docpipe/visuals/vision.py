@@ -19,7 +19,7 @@ from pathlib import Path
 
 import openai
 
-from docpipe import usage
+from docpipe import providers, usage
 from docpipe.llm_preflight import request_extras
 
 from .config import (
@@ -69,9 +69,10 @@ def _is_client_error(status: int | None) -> bool:
 # Client management
 # ---------------------------------------------------------------------------
 
-def create_client(base_url: str | None = None, timeout: float | None = None) -> openai.OpenAI:
-    """Creates an OpenAI client pointed at the vLLM server."""
-    return openai.OpenAI(
+def create_client(base_url: str | None = None, timeout: float | None = None):
+    """The client of the vision model, for the provider it is set to."""
+    return providers.client(
+        "vlm",
         base_url=base_url or VLM_BASE_URL,
         api_key=VLM_API_KEY,
         timeout=timeout or VLM_TIMEOUT,
@@ -121,12 +122,14 @@ def call_vision(
     temperature: float = VLM_TEMPERATURE,
     max_tokens: int = VLM_MAX_TOKENS,
     repetition_penalty: float | None = None,
+    reply: tuple | None = None,
 ) -> dict | None:
     """
     Sends an image + prompt to the vision model and parses the JSON response.
 
     The wall-clock bound per request is the client timeout set by
-    create_client(), not *max_retries*.
+    create_client(), not *max_retries*. *reply* is the (name, schema) of the
+    object asked for (see `replies`), for an API that generates inside one.
 
     Returns:
         Parsed JSON dict, or None once the retries are exhausted or the server
@@ -174,7 +177,10 @@ def call_vision(
             response = client.chat.completions.create(
                 model=model,
                 messages=messages,
-                response_format={"type": "json_object"},
+                response_format=(
+                    providers.reply_format(
+                        "vlm", *reply, otherwise={"type": "json_object"})
+                    if reply else {"type": "json_object"}),
                 temperature=temperature,
                 max_tokens=max_tokens,
                 extra_body=extra_body or None,
@@ -220,7 +226,7 @@ def call_vision(
                         },
                     ]
 
-        except openai.APITimeoutError as e:
+        except (openai.APITimeoutError, providers.ProviderTimeout) as e:
             log.warning("  Attempt %d: request timed out (%s)", attempt, e)
             messages = list(base_messages)
             current_penalty = penalty_after(attempt)
@@ -228,7 +234,7 @@ def call_vision(
                 log.info("  Setting repetition_penalty=%.1f for next attempt",
                          current_penalty)
             server_needs_time = True
-        except openai.APIError as e:
+        except (openai.APIError, providers.ProviderError) as e:
             status = _http_status(e)
             if _is_client_error(status):
                 # The request is what the server refused, not the moment. Three

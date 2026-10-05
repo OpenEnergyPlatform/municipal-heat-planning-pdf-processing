@@ -11,12 +11,15 @@ that survived verification and trust scoring to a fact a query engine
 can walk. The walk from JSONL to Turtle splits in two:
 `docpipe/extraction/serialize.py` is a profile free core guaranteeing
 the file walk and that a refusal line never reaches a serializer,
-while `profiles/<name>/kg.py` alone decides IRI minting, node shape
-and predicate choice. `kwp`'s Turtle file is read back by
-`docpipe/inference/kg_route.py` when
-`scripts/inference_app` has a graph configured; `scenarios`' `kg.py`
+while `profiles/<name>/kg.py` decides IRI minting, node shape
+and predicate choice for a profile that has a writer of its own. A
+profile whose spec carries a `graph` block and which has no `kg.py` is
+written by the generic writer, `docpipe/extraction/graph.py`. `kwp`'s Turtle
+file is read back by `docpipe/inference/kg_route.py` when the chat
+(`docpipe/app`) has a graph configured; `scenarios`' `kg.py`
 declares no `COORDINATE_AXES` or `VALUE_QUERY`, so its file has no
-reader here.
+reader here. Beside the graph a run also writes where each value comes from,
+as a second file (see The provenance file under Method).
 
 A second, unrelated tool lives here: `docpipe/ontology.py`, with
 `profiles/<name>/vocabulary.py` and `docpipe/upstream.py`, writes a
@@ -42,7 +45,7 @@ rather than a call the ontology check makes itself.
 | | |
 |---|---|
 | **In** | A document's accepted JSONL tuple lines (`kind == "tuple"`), the profile's SQLite corpus database, and its `extraction_spec.json` `kg` blocks, parsed once at import. |
-| **Out** | One Turtle file per `--serialize` call: a shared prefix header plus one block per document that produced anything (`kwp`'s read back by `kg_route.py`; `scenarios`' by nothing here). |
+| **Out** | One Turtle file per `--serialize` call: a shared prefix header plus one block per document that produced anything (`kwp`'s read back by `kg_route.py`; `scenarios`' by nothing here), and beside it the provenance file `<graph>.prov.ttl`. |
 | **Resumes on** | Nothing. Every call re walks the harvest and re renders the whole output; a run's dedupe state (which identities are claimed) is never persisted. |
 | **Needs** | No served model and no GPU: a read only SQLite connection and local text; the ontology check also needs `rdflib`. `vocabulary.py --refresh` needs network access to pull `SOURCES`, and, for `scenarios`, `OEP_API_TOKEN`; `--write` needs an external OEO closure file by hand instead. The SHACL report a `kwp` `--serialize` run writes needs `pyshacl`. |
 
@@ -61,9 +64,10 @@ skips a line that does not parse, and keeps only rows whose `kind` is
 document (`None` skips it), concatenates what came back, and refuses to
 write at all, raising `ValueError` with the output path untouched, when
 nothing came back. The CLI, `--serialize` on `python -m
-docpipe.extraction`, resolves the profile, requires
-`profiles/<name>/kg.py` to export `make_serializer`, and logs and exits
-1 on that `ValueError`:
+docpipe.extraction` (`docpipe extract`), resolves the profile, takes its
+`kg.make_serializer` where it has one and otherwise the generic writer built
+from the spec's `graph` block (see below), and logs and exits 1 on that
+`ValueError`:
 
 ```bash
 python -m docpipe.extraction <db> <index> <out> \
@@ -72,6 +76,53 @@ python -m docpipe.extraction <db> <index> <out> \
 
 The `index` positional is still required by the parser, though this
 branch returns before it is touched.
+
+### The generic writer
+
+A spec drafted by [`docpipe compile`](./compile.md) carries a `graph` block,
+the base IRI, the prefixes, the nodes and how they are linked, and every
+parameter's `kg` names the node and the property its value is written to. That
+is everything a writer needs, so a project whose spec was compiled needs no
+`kg.py` (`docpipe/extraction/graph.py`). A profile that has a serializer keeps
+it: its graph knows things no shape says.
+
+Per document the writer writes a node of each kind the block declares
+`per: document`, once it carries something; a property for the value of a
+parameter, a literal of the property's datatype or the term chosen from the
+parameter's list; a node of its own for a value that names one, at
+`<base><node>/<its wording>`, with the wording written under the parameter's
+`kg.property` and the edge to it; and a link between two nodes that are both
+there. Three things are left out and counted in the log, none silently: a
+parameter with coordinates (where a year or a scenario goes is not something
+the block says, and two values of two years would become one property with two
+numbers); a property that allows fewer values than the harvest has (`max`: the
+values of the best trust level are taken, and if those are still too many none
+is written, because picking one would be a guess, and a value that is left out
+leaves no node of its own behind either); and an answer that is not a term
+where a term has to be written.
+
+### The provenance file
+
+A graph carries a number. That it was read on page 97, from which words, by
+which run and how far the run stands behind it, the harvest knows and the graph
+does not say. `--serialize` writes that in a file of its own beside the graph,
+`<graph>.prov.ttl` (`docpipe/extraction/provenance.py`), as PROV-O and W3C Web
+Annotation statements: per value an annotation whose body is the value and
+whose target is the page, refined by the quote and, where it was located, by
+its rectangles; per coordinate an annotation of its own with what was read, the
+wording and how the reading ended; the trust level with its reasons; and once
+per document the run, with its model and the fingerprints of the spec and the
+prompts. Every statement points at a value and none starts from one, so the
+graph itself is the same with and without the file, and a reader who does not
+want it leaves it away.
+
+The file is written where the writer names a base IRI for its terms (a
+profile's `kg.PROVENANCE`, or the `graph` block of the spec), from what a
+serializer leaves in its `claims`. `--no-provenance`, or `EXTRACT_PROVENANCE=0`,
+leaves it out. A file that this run did not write is not removed, and the run
+warns that it describes an earlier graph. Not written is the decision between
+two readings that claim one value: the writers settle that before a value
+reaches this module.
 
 ### kwp: gating, identity and rendering the plan
 
@@ -284,6 +335,7 @@ marks a trust line is built from are at
 | `db` (positional) | required argument | none | SQLite path passed to `make_serializer(db_path)` | `runner.py` |
 | `out` (positional) | required argument | none | Harvest directory `serialize.collect` walks | `runner.py` |
 | `--serialize TTL` | CLI flag | none | Switches to serialize only mode, writing the graph here | `runner.py` |
+| `--no-provenance`, `EXTRACT_PROVENANCE` | CLI flag, env var | provenance written (`1`) | With `--serialize`: leave out the provenance file beside the graph | `runner.py` |
 | `--profile NAME` | CLI flag | `$DOCPIPE_PROFILE` | Selects which `kg.py` and spec the run uses | `docpipe/profile.py` |
 | `DOCPIPE_PROFILE` | environment variable | unset | Default for `--profile` | `docpipe/profile.py` |
 | `OEKG_ID_BASE` | env var, `scenarios` only | `https://openenergyplatform.org/ontology/oekg/` | Overrides the IRI prefix every node and namespace uses | `profiles/scenarios/kg.py` |
@@ -418,7 +470,10 @@ marks a trust line is built from are at
 
 `docpipe/extraction/serialize.py` is the profile free core walking the
 harvest and choosing a serializer (see Method above); called only from
-`runner.py`'s `--serialize` branch. Its `validate` holds a written
+`runner.py`'s `--serialize` branch. `docpipe/extraction/graph.py` is the
+generic writer for a spec with a `graph` block, and
+`docpipe/extraction/provenance.py` writes the provenance file; both are
+chosen and called there too. Its `validate` holds a written
 graph against a profile's refreshed SHACL shapes and is the one place
 this stage calls into the ontology tooling. `docpipe/ontology.py` is
 the profile free snapshot builder and checker (see Method above),
@@ -480,13 +535,20 @@ serialize.py: Turns a document harvest into the profile's target graph.
 
 The module walks the JSONL harvest directory and keeps only the rows
 a run accepted (kind is "tuple"), grouped by document name (collect).
-run() hands each document's rows to a serializer the profile
-supplies: profiles/<name>/kg.py exposes make_serializer(db_path), and
-the runner's --serialize flag calls it. What the serializer emits
-(Turtle with project IRI rules, LinkML YAML, or another format) is
-the profile's own decision; the module guarantees only the walk, the
-per-document grouping, and that a refusal row never reaches the
-serializer.
+run() hands each document's rows to a serializer, and the runner's
+--serialize flag chooses it: profiles/<name>/kg.py exposes
+make_serializer(db_path) where the profile writes its graph itself,
+and a profile without one gets the generic writer of graph.py, which
+writes what the `graph` block of the spec describes. What a profile's
+own serializer emits (Turtle with project IRI rules, LinkML YAML, or
+another format) is the profile's decision; the module guarantees only
+the walk, the per-document grouping, and that a refusal row never
+reaches the serializer.
+
+A serializer may leave, per document, which values it wrote
+(`claims`). run() then hands them to the provenance writer it was
+given (provenance.py), and the provenance of the written values goes
+to a file of its own beside the graph.
 
 run() concatenates the output of every document whose serializer
 returned something and writes it to the output path. It raises
@@ -495,6 +557,91 @@ anything. The check runs unconditionally at the end of a GPU job, so
 a run that ended in a counted exception still yields a graph; without
 the check, an empty or unreadable harvest directory would overwrite a
 valid graph from an earlier run with nothing.
+
+Author: Felix Vossel
+
+</details>
+
+<details>
+<summary><code>docpipe/extraction/graph.py</code></summary>
+
+graph.py: Writes a harvest as the graph a compiled spec describes.
+
+`docpipe compile` drafts a spec from the shapes of a graph, and with it
+what each answer becomes there: the `graph` block names the nodes and how
+they are linked, and every parameter's `kg` names the node and the property
+its value is written to. That is everything a writer needs, so a project
+whose spec was compiled needs no writer of its own. A profile that has one
+(`kg.make_serializer`) keeps it: its graph knows things no shape says.
+
+What is written, per document:
+
+    a node per document   one of each node the block declares as
+                          `per: document`, at <base><node>/<document name>,
+                          once it carries something
+    a property            the value of a parameter on its node: a literal
+                          of the property's datatype, or the term chosen
+                          from the parameter's list (`object: term`)
+    a named thing         a node of its own for a value that names one
+                          (`edge_from`), at <base><node>/<its wording>, with
+                          that wording under the parameter's property, and
+                          the edge to it
+    a link                between two nodes that are both there
+
+Three things are left out and counted in the log, none silently:
+
+  * a parameter with coordinates. Where a year or a scenario of a value
+    goes is not something the block says, and written onto the node without
+    them two values of two years would be one property with two numbers.
+  * a property that allows fewer values than the harvest has for it
+    (`max`). The values of the best trust level are taken; if those are
+    still too many, none is written, because picking one would be a guess.
+    A value that is left out leaves no node of its own behind either.
+  * an answer that is not a term where a term has to be written.
+
+Author: Felix Vossel
+
+</details>
+
+<details>
+<summary><code>docpipe/extraction/provenance.py</code></summary>
+
+provenance.py: Where every value of a graph comes from, as a graph.
+
+A graph carries a number. That it was read on page 97, from which words,
+by which run and how far the run stands behind it, the harvest knows and
+the graph does not say. This module says it, in a file of its own beside
+the graph (`<graph>.prov.ttl`), with PROV-O and the W3C Web Annotation
+vocabulary and a small vocabulary for what those two do not have. Every
+statement points at a value and none starts from one, so the graph itself
+is the same with and without it, and a reader who does not want it leaves
+the file away. A run that should not write it is started with
+EXTRACT_PROVENANCE=0.
+
+Per value:
+
+    its reading       an oa:Annotation whose body is the value and whose
+                      target is the part of the document it stands in: the
+                      page (a fragment selector), refined by the quote and,
+                      where the quote was located, by its rectangles
+    each coordinate   an annotation of its own: what was read (the body),
+                      the wording it was read from, how the reading ended,
+                      and its own passage where it had one
+    its trust         an assessment with the level, the reasons below A and
+                      whether it was read from an image
+    a second reading  what it came to, where one was made
+
+and once per document the run (a prov:Activity with its model and the
+fingerprints of the spec and the prompts) and each part of the document
+that is quoted.
+
+The vocabulary's terms live where the writer says (`vocabulary`: a prefix
+and an IRI). A graph that has an ontology for them names it; one that has
+none gets them under its own base.
+
+Not written yet: the decision between two readings that claim one value.
+The writers settle that before a value reaches this module, and what lost
+does not come with it.
 
 Author: Felix Vossel
 

@@ -22,7 +22,7 @@ from pathlib import Path
 from typing import Optional
 
 from docpipe import prompts, usage
-from docpipe.profile import add_profile_argument, require_profile
+from docpipe.profile import add_profile_argument, program, require_profile
 
 from docpipe.llm_preflight import assert_serving
 
@@ -391,7 +391,7 @@ def run(
 
 def _build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
-        prog="python -m docpipe.visuals",
+        prog=program("docpipe.visuals"),
         description="Image Processing – Vision-LLM enrichment of tables and figures",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""\
@@ -499,7 +499,7 @@ def main() -> None:
         if not args.dry_run:
             assert_serving(args.base_url or VLM_BASE_URL, VLM_API_KEY,
                            args.model or VLM_MODEL, max_request_tokens(),
-                           what="image enrichment")
+                           what="image enrichment", role="vlm")
         if args.batch:
             results = run_batch(Path(args.input), **common)
             ok = sum(1 for v in results.values() if v)

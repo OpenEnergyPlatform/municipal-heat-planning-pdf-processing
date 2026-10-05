@@ -175,6 +175,10 @@ def make_serializer(db_path: Path)
 
 (document name, accepted tuple rows) -> TTL string or None.
 
+What was written for a document is left in `serializer.claims[name]`:
+the plan's node, and for every value its node, its row and the node or
+class each coordinate became. The provenance file is written from that.
+
 ### value_bindings
 
 ```python

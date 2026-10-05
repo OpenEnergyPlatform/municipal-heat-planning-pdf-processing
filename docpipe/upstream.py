@@ -44,10 +44,10 @@ import urllib.request
 from pathlib import Path
 from typing import Optional
 
-from docpipe.profile import ROOT
+from docpipe.profile import ROOT, shared_file
 
 CACHE = Path(os.environ.get("DOCPIPE_UPSTREAM_CACHE")
-             or ROOT / "data" / "upstream")
+             or shared_file("upstream", ROOT / "data" / "upstream"))
 GITHUB = "https://github.com"
 RAW = "https://raw.githubusercontent.com"
 TIMEOUT = 120

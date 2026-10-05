@@ -40,7 +40,7 @@ docstring in `chunking.py`).
 | **In** | `results/sections_refined.json` if Stage 4 wrote one, else `results/sections.json` (`_resolve_input`); `sections.json`'s table `source_text` fields, read again for the QA gate since Stage 4 drops them (`_load_source_texts`); the table/figure PNGs named by each item's `path`, under `images/`. |
 | **Out** | `results/visuals.json`: the input's section structure, each table gaining `markdown` and each figure gaining `description`, both optionally `caption`, `qa_warning` or `vlm_status`; `.prompt_versions.json`, the sha256 of this run's prompts, written as a sibling of `results/`, not inside it. |
 | **Resumes on** | An item already carrying `markdown` (table) or `description` (figure) is loaded from the cache and never resent; `--force-stale` redoes every item once any tracked prompt no longer matches, behaving like `--force`; `--force` redoes every item unconditionally. |
-| **Needs** | A vLLM, or other OpenAI-compatible, server serving `VLM_MODEL` at `VLM_BASE_URL`; a profile, since this stage has no default prompt: `--profile` or `DOCPIPE_PROFILE`, and a run with neither stops in one line naming the available profiles (`require_profile`; see [profiles](../profiles.md)). |
+| **Needs** | A vLLM, or other OpenAI-compatible, server serving `VLM_MODEL` at `VLM_BASE_URL`, or a hosted API chosen with `VLM_PROVIDER` (see [the provider layer](providers.md)); a profile, since the core has no prompt of its own: `--profile` or `DOCPIPE_PROFILE`, and a run with neither stops in one line naming the available profiles (`require_profile`; see [profiles](../profiles.md)). |
 
 Stage 3's structuring pass precedes this one; Stage 4's refinement
 precedes it only when already finished, since both read `sections.json`,
@@ -399,6 +399,19 @@ model's markdown or description. A table's transcription passes a
 quality gate and gets one retry with a stronger prompt on failure; a
 call that never returns valid JSON falls back to a plain text
 request before the item is marked failed.
+
+Author: Felix Vossel
+
+</details>
+
+<details>
+<summary><code>docpipe/visuals/replies.py</code></summary>
+
+replies.py: The reply each vision request asks for, as a JSON schema.
+
+For an API that generates inside a schema (see `docpipe.providers`). The
+prompts state the same shapes in words; nothing here is a check. The
+plain-text rescue asks for no JSON and has no schema.
 
 Author: Felix Vossel
 

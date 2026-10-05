@@ -18,7 +18,7 @@ import sys
 from pathlib import Path
 from typing import Optional
 
-from docpipe.profile import add_profile_argument, resolve_profile
+from docpipe.profile import add_profile_argument, program, resolve_profile
 
 from .config import (
     PAGE_TRANSCRIPTION_REPORT_JSON,
@@ -444,7 +444,7 @@ def run(
 
 def _build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
-        prog="python -m docpipe.preprocessing.pipeline",
+        prog=program("docpipe.preprocessing"),
         description="Municipal Heat Planning – PDF Preprocessing Pipeline (Stages 1-3)",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""

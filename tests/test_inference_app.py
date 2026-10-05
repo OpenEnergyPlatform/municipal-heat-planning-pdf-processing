@@ -12,7 +12,7 @@ import sqlite3
 import pytest
 
 from docpipe.inference import chunker, db, query_cache
-from scripts.inference_app import pdf_link
+from docpipe.app import pdf_link
 from docpipe.embedding import config as EC
 from docpipe.inference import config as C
 

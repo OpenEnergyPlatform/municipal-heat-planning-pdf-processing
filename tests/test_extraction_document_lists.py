@@ -433,3 +433,43 @@ def test_the_passes_over_a_harvest_are_given_the_documents_lists(
     assert [name for name, _ in seen] == ["review", "recheck"]
     assert all(RUN in lists for _, lists in seen)
     assert caplog.text.count("2 document(s) left alone") == 2
+
+
+@pytest.mark.parametrize("missed, code", [(0, 0), (1, 1)])
+def test_a_run_that_asked_what_a_recording_does_not_hold_fails(
+        tmp_path, monkeypatch, corpus_run, missed, code):
+    """The harvest, the review and the top-up each ask a model. Whichever
+    of them asked a replay something the recording does not hold ends
+    with 1: its result is not the recorded run's."""
+    from docpipe.extraction import topup
+    db, out = corpus_run
+    out.mkdir()
+    monkeypatch.setattr(runner, "unheld_requests", lambda: missed)
+    monkeypatch.setattr(review, "run", lambda *a, **kw: Counter())
+    monkeypatch.setattr(topup, "run", lambda *a, **kw: Counter())
+    assert runner.main([str(db), "no.index", str(out), "--review",
+                        "--image-root", str(tmp_path)]) == code
+    assert runner.main([str(db), "no.index", str(out), "--top-up",
+                        "--image-root", str(tmp_path)]) == code
+
+    def make_retrieve(conn, index, id_to_pos, cache_conn, fetch, limit=0):
+        return lambda probes, document_id, exclude: [
+            Source("section", 10, TEXT, {"document_id": document_id,
+                                         "page": 1, "title": "Scenarios"})]
+
+    def make_fieldwise(*a, **k):
+        return lambda batch, prior=None: {
+            "tuples": [{"source": batch.label(0),
+                        "parameter": "scenario_label", "value": RUN,
+                        "value_raw": "Current Policies",
+                        "quote": "The Current Policies scenario (CurPol)"}],
+            "status": "complete", "need_more": []}
+
+    monkeypatch.setattr(runner, "make_retrieve", make_retrieve)
+    monkeypatch.setattr(runner, "make_fieldwise_harvester", make_fieldwise)
+    monkeypatch.setattr(runner, "FIELDWISE", True)
+    monkeypatch.setattr(runner, "fit_batch_sources", lambda *a, **k: 1)
+    monkeypatch.setattr(runner, "LLM_PARALLEL", 1)
+    assert runner.main([str(db), "no.index", str(out), "--image-root",
+                        str(tmp_path), "--document", "1"]) == code
+    assert (out / "a.jsonl").is_file()          # harvested either way

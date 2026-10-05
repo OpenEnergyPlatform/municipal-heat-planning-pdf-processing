@@ -2,19 +2,17 @@
 
 `scripts/fileprocessing/pipeline.py`, read with `ast` by `scripts/build_docs.py`. The docstrings are the code's own: edit them there, not here.
 
-pipeline.py: CLI for registering a profile's documents.
+pipeline.py: The earlier name of stage 1's command line.
 
-The work lives in docpipe.ingest (generic) and profiles/\<name>/source.py
-(project-specific); this module is only the entry point.
+`python -m scripts.fileprocessing` keeps working with the same arguments;
+the entry point itself is `docpipe ingest` (docpipe/ingest/cli.py).
 
 Author: Felix Vossel
 
-## Functions
+## Exports
 
-### main
+What `__all__` names, and where each name is defined:
 
-```python
-def main() -> None
-```
+- `main`
 
 [Back to the index](../README.md)

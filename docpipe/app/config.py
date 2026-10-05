@@ -1,5 +1,5 @@
 """
-config.py: Central configuration for the inference_app module.
+config.py: Central configuration for the chat app.
 
 Every value is overridable through an environment variable; the defaults
 are safe placeholders. The corpus paths (the database, the FAISS index,
@@ -39,7 +39,7 @@ from pathlib import Path
 # picker labels and filters, its data root the paths below. None is allowed:
 # without DOCPIPE_PROFILE the app still runs, on generic labels and the
 # historical data/ paths.
-from docpipe.profile import active_profile
+from docpipe.profile import active_profile, shared_file
 
 PROFILE = active_profile()
 
@@ -64,6 +64,30 @@ INDEX_PATH = _path("INFERENCE_INDEX_PATH", lambda p: p.index_path, "data/faiss_i
 IMAGE_ROOT = _path("INFERENCE_IMAGE_ROOT", lambda p: p.processed_dir, "data/pdf/processed")
 # The graph `--serialize` wrote. Missing -> the graph route is not offered.
 KG_TTL_PATH = _path("INFERENCE_KG_TTL_PATH", lambda p: p.root / "graph.ttl", "data/graph.ttl")
+
+# ---------------------------------------------------------------------------
+# The harvest (optional): values the extraction read, each with its quote
+# ---------------------------------------------------------------------------
+# The directory `docpipe extract` wrote. Unset -> the chat answers from the
+# documents alone, and the review page is not offered.
+HARVEST_DIR = (Path(os.environ["INFERENCE_HARVEST_DIR"])
+               if os.environ.get("INFERENCE_HARVEST_DIR") else None)
+# Where the review page appends what people decide (docpipe/extraction/
+# gold.py). Beside the harvest directory unless said otherwise: the one file
+# this app writes that is not a cache or a log.
+GOLD_PATH = (Path(os.environ["INFERENCE_GOLD_PATH"])
+             if os.environ.get("INFERENCE_GOLD_PATH")
+             else (HARVEST_DIR.resolve().with_name("gold.jsonl")
+                   if HARVEST_DIR else None))
+# The worst trust level of a harvested value the chat still shows: A, B or C.
+# Unset shows every value, each with its level.
+VALUES_LEVEL = (os.environ.get("INFERENCE_VALUES_LEVEL") or "").strip() or None
+# How many harvested values one answer shows before it says how many more
+# there are.
+VALUES_LIMIT = int(os.environ.get("INFERENCE_VALUES_LIMIT", "20"))
+# 0 searches by meaning only, also where a word index was built
+# (`docpipe lexical`).
+LEXICAL = os.environ.get("INFERENCE_LEXICAL", "1") != "0"
 
 # ---------------------------------------------------------------------------
 # Embedding backend
@@ -100,12 +124,14 @@ KG_TTL_PATH = _path("INFERENCE_KG_TTL_PATH", lambda p: p.root / "graph.ttl", "da
 # ---------------------------------------------------------------------------
 # Query→vector cache (separate SQLite file – NEVER the authoritative KWP.db)
 # ---------------------------------------------------------------------------
-QUERY_CACHE_PATH = Path(os.environ.get("QUERY_CACHE_PATH", "data/inference_app_query_cache.db"))
+QUERY_CACHE_PATH = Path(os.environ.get("QUERY_CACHE_PATH") or shared_file(
+    "inference_app_query_cache.db", Path("data/inference_app_query_cache.db")))
 
 # ---------------------------------------------------------------------------
 # Request logging and response cache (separate SQLite file)
 # ---------------------------------------------------------------------------
-REQUEST_LOG_PATH = Path(os.environ.get("REQUEST_LOG_PATH", "data/inference_app_request_log.db"))
+REQUEST_LOG_PATH = Path(os.environ.get("REQUEST_LOG_PATH") or shared_file(
+    "inference_app_request_log.db", Path("data/inference_app_request_log.db")))
 
 # ---------------------------------------------------------------------------
 # Code-execution sandbox (optional) — a remote service the LLM can call for

@@ -1,8 +1,8 @@
-# scripts.inference_app.config
+# docpipe.app.config
 
-`scripts/inference_app/config.py`, read with `ast` by `scripts/build_docs.py`. The docstrings are the code's own: edit them there, not here.
+`docpipe/app/config.py`, read with `ast` by `scripts/build_docs.py`. The docstrings are the code's own: edit them there, not here.
 
-config.py: Central configuration for the inference_app module.
+config.py: Central configuration for the chat app.
 
 Every value is overridable through an environment variable; the defaults
 are safe placeholders. The corpus paths (the database, the FAISS index,

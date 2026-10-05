@@ -39,6 +39,7 @@ from collections import Counter
 from pathlib import Path
 from typing import Callable, Optional
 
+from .. import jsonl
 from . import fields
 from .pipeline import (Row, WorkItem, base_years, group_items,
                        mark_unanswered, row_label)
@@ -349,7 +350,7 @@ def top_up_file(path: Path, spec: Spec, current: dict, deps: dict, *,
 
     lines: list = []
     tuples, refusals, document_id = [], [], None
-    for line in Path(path).read_text(encoding="utf-8").splitlines():
+    for line in jsonl.read(path):
         if not line.strip():
             continue
         try:
@@ -435,7 +436,8 @@ def top_up_file(path: Path, spec: Spec, current: dict, deps: dict, *,
         # stamp stays as it was, so the next top-up asks again.
         stats["stamps left, a request ended on 429 or 5xx"] += 1
         return stats
-    if stamp_forward(stamp_path, current, settled):
+    if stamp_forward(stamp_path, current, settled,
+                     producer=runner.producer("top-up", runner.LLM_MODEL)):
         stats["stamps carried forward"] += 1
     return stats
 

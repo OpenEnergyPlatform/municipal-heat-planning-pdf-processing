@@ -13,18 +13,21 @@ imports that module and calls the named attribute with the caller's own
 keyword arguments, the extension point for an implementation this
 repository does not contain (`docpipe/embedding/__init__.py:47` to `62`).
 
-Only the query side of the pipeline calls it. The corpus itself is built by
-stage 6 (see [chunking](chunking.md)), and that build talks to the
-embedding model directly through its own `load_embedder()` and
-`MultiGPUEmbedder`, never importing `get_embedder()`: a batch run already
-owns the GPU it was launched on and never has to swap backends mid-run, so
-the indirection this package offers is unused overhead there. What does
+Only the query side of the pipeline calls `get_embedder()`. The corpus itself
+is built by stage 6 (see [chunking](chunking.md)), which never imports it. Its
+own `load_embedder()` follows `EMBEDDING_INDEX_BACKEND`, a setting apart from
+`EMBEDDING_BACKEND`: with `local`, the default, it talks to the embedding model
+directly through `MultiGPUEmbedder`, since a batch run already owns the GPU it
+was launched on and never has to swap backends mid-run, so the indirection this
+package offers is unused overhead there. With `api` it returns an
+`ApiIndexEmbedder` that wraps `docpipe.embedding.api.ApiEmbedder`, so the corpus
+build uses this package's api backend, though not its factory, and embeds text
+only. What does
 call `get_embedder()` is code asking the already-built corpus a question
 after the fact: the retrieval sweep of stage 7 embedding a probe, or a
 batch of probes, against the FAISS index
-(`docpipe/extraction/runner.py:415`, `510`, `1871`), and the inference app
-embedding one chat turn's query (`scripts/inference_app/app.py:112` to
-`122`). Both can run on hardware not used for the corpus build: a laptop
+(`docpipe/extraction/runner.py:426`, `535`, `1907`), and the inference app
+embedding one chat turn's query (`docpipe/app/app.py`, `embed_query`). Both can run on hardware not used for the corpus build: a laptop
 with no GPU pointed at `api`, or a small card that cannot hold an 8B model
 resident, which is what the import-path form exists for.
 
@@ -32,14 +35,15 @@ resident, which is what the import-path form exists for.
 
 | | |
 |---|---|
-| In | Item dicts from a caller already holding the corpus: a probe's text from the retrieval sweep (`docpipe/extraction/runner.py`), a chat query from the app (`scripts/inference_app/app.py`); plus the `EMBEDDING_*` variables `docpipe/embedding/config.py` reads once |
+| In | Item dicts from a caller already holding the corpus: a probe's text from the retrieval sweep (`docpipe/extraction/runner.py`), a chat query from the app (`docpipe/app/app.py`); plus the `EMBEDDING_*` variables `docpipe/embedding/config.py` reads once |
 | Out | A list of float vectors, in input order; nothing is written to disk, the database, or the FAISS index by this package |
 | Resumes on | Nothing: `embed()` and `embed_one()` are plain functions of their input, so there is no cache or stamp file to clear |
 | Needs | No GPU by default: `local` needs a CUDA device or falls back to the CPU; `api` needs network access; import-path needs whatever the deployment's class requires |
 
 No numbered stage in the diagram on [How the parts fit together](../pipeline.md)
-owns this page. It sits below stage 6's FAISS index, but takes no part in
-building it, and is called from two places downstream of that index: the
+owns this page. It sits below stage 6's FAISS index and takes no part in
+building it except through `ApiEmbedder` when `EMBEDDING_INDEX_BACKEND=api`
+(see Purpose), and is called from two places downstream of that index: the
 retrieval sweep inside [extraction](extraction.md) and one chat turn
 inside [the app](app.md). Neither caller reconstructs the corpus's own
 `embedding_type` vocabulary (`docpipe/chunking/config.py`); that label is
@@ -55,7 +59,10 @@ spec goes to `_from_path()`; the literal names `api` and `local`
 (case-insensitive) construct `ApiEmbedder(**kwargs)` or
 `LocalEmbedder(**kwargs)`; anything else raises `ValueError`. Every call
 builds a fresh instance; nothing here is cached
-(`docpipe/embedding/__init__.py:65` to `79`).
+(`docpipe/embedding/__init__.py:65` to `82`). While a cassette is being
+replayed (`DOCPIPE_CASSETTE_REPLAY`) the call returns the cassette's
+`ReplayEmbedder` before any of this and builds no backend (see [measuring a
+harvest](evaluation.md)).
 
 ### The import-path extension point
 
@@ -70,12 +77,16 @@ it returns is the embedder (`docpipe/embedding/__init__.py:47` to `62`).
 
 `ApiEmbedder.__init__` resolves `base_url`, `api_key`, `model` and
 `batch_size` against `config.*`, raising `ValueError` at once if
-`base_url` is still empty. `embed()` scans items for an `image` key and
+`base_url` is still empty and the embedding role is not a hosted API.
+`embed()` scans items for an `image` key and
 refuses the whole call if any carry one, rather than embedding only the
 text half; otherwise it chunks `text` values into groups of `batch_size`
-and calls `self.client().embeddings.create()` once per chunk, concatenating
-results in order. `embed_one()` wraps one item in a one-element list and
-calls `embed()` (`docpipe/embedding/api.py:26` to `62`).
+and sends each chunk through `_create`, concatenating results in order.
+`_create` calls `self.client().embeddings.create()` once for a server of one's
+own, whose client retries by itself, and for a hosted API that answers "not
+now" asks again, up to `HOSTED_ATTEMPTS` times in all. `embed_one()` wraps one
+item in a one-element list and calls `embed()`
+(`docpipe/embedding/api.py:32` to `89`).
 
 ### Embedding with a resident local model
 
@@ -98,7 +109,7 @@ raise (`docpipe/embedding/local.py:36` to `68`).
 [chunking](chunking.md)), which also constructs it independently for the
 batch build. `LocalEmbedder` only holds one instance and calls its
 `process()`; what that call actually does is described under Modules,
-below (`docpipe/chunking/qwen3_vl_embedding.py:392` to `485`).
+below (`docpipe/chunking/qwen3_vl_embedding.py:403` to `485`).
 
 ## Data model
 
@@ -132,7 +143,7 @@ package; storing a returned vector is the caller's job.
 backend's constructor, so only the names that constructor defines take
 effect: `model` and `max_length` for `local`
 (`docpipe/embedding/local.py:37` to `38`); `base_url`, `api_key`, `model`
-and `batch_size` for `api` (`docpipe/embedding/api.py:27` to `28`).
+and `batch_size` for `api` (`docpipe/embedding/api.py:33` to `34`).
 `EMBEDDING_DIM` matches no parameter on either backend and cannot be
 overridden this way; a name belonging to the other backend raises
 `TypeError`. `docpipe/chunking/config.py` imports `EMBEDDING_DIM`,
@@ -146,22 +157,24 @@ error raised anywhere (`docpipe/chunking/config.py:11` to `14`).
 
 - `EMBEDDING_BACKEND` (or a `backend` argument) that is not `local`, `api`,
   and contains no `:` makes `get_embedder()` raise `ValueError` naming the
-  three valid forms (`docpipe/embedding/__init__.py:77` to `79`). An
+  three valid forms (`docpipe/embedding/__init__.py:80` to `82`). An
   import-path spec with no `:` is refused before any import is attempted
   (`docpipe/embedding/__init__.py:50` to `53`); an unimportable module or
   a missing attribute instead raise `ValueError` from an actual, failed
   `import_module()` or `getattr()` call (`docpipe/embedding/__init__.py:54`
   to `61`).
 - `ApiEmbedder` constructed with no usable `base_url` raises `ValueError`
-  in the constructor, before any request is attempted
-  (`docpipe/embedding/api.py:33` to `34`).
+  in the constructor, before any request is attempted, unless the embedding
+  role is a hosted API, which needs none (`docpipe/embedding/api.py:39` to
+  `40`).
 - `ApiEmbedder.embed()` called with any item carrying an `image` key
   refuses the whole call with `ValueError` naming the offending indices,
   rather than silently embedding only the text half
-  (`docpipe/embedding/api.py:43` to `48`).
+  (`docpipe/embedding/api.py:71` to `75`).
 - A dead endpoint or a rejected model name is not caught: whatever the
-  `openai` client raises propagates unchanged, and nothing is retried
-  (`docpipe/embedding/api.py:54`).
+  `openai` client raises propagates unchanged, and nothing is retried against
+  a server of one's own; only a hosted API that answers "not now" is asked
+  again (`docpipe/embedding/api.py:49` to `68`).
 - Two or more threads calling `LocalEmbedder.embed()` before the model has
   ever loaded are serialized by the double-checked lock, so only the first
   thread through constructs `MultiGPUEmbedder`; without the second check
@@ -170,7 +183,7 @@ error raised anywhere (`docpipe/chunking/config.py:11` to `14`).
 - `ApiEmbedder.client()` builds `self._client` the same lazily-checked
   way, but with no lock: two threads calling `embed()` before any client
   exists could each construct their own `OpenAI` client
-  (`docpipe/embedding/api.py:37` to `41`), and no test exercises
+  (`docpipe/embedding/api.py:43` to `47`), and no test exercises
   concurrent calls on it the way
   `test_the_local_backend_guards_its_lazy_load` does for `LocalEmbedder`.
 - A single replica's forward pass raising inside `MultiGPUEmbedder.process()`
@@ -179,7 +192,7 @@ error raised anywhere (`docpipe/chunking/config.py:11` to `14`).
   (`docpipe/chunking/qwen3_vl_embedding.py:460` to `474`).
 - A sequence truncated to `max_length` is still embedded, not refused, but
   logged with its index and real token count
-  (`docpipe/chunking/qwen3_vl_embedding.py:332` to `339`).
+  (`docpipe/chunking/qwen3_vl_embedding.py:337` to `344`).
 
 ## Measured behaviour
 
@@ -195,7 +208,7 @@ error raised anywhere (`docpipe/chunking/config.py:11` to `14`).
   wraps around `get_embedder()`, five replicas of the model fit on one
   card, a sixth raised a CUDA out-of-memory error, and none of the
   sixteen documents in that pilot completed
-  (`docpipe/extraction/runner.py:416` to `426`, the `embedder()`
+  (`docpipe/extraction/runner.py:427` to `437`, the `embedder()`
   docstring; pinned by
   `test_the_embedder_is_built_once_however_many_threads_ask` below).
 - The `api` backend batches eight texts per request by default
@@ -231,25 +244,28 @@ error raised anywhere (`docpipe/chunking/config.py:11` to `14`).
 
 `docpipe/embedding/__init__.py` defines the `Embedder` protocol and
 `get_embedder()`, the one factory every caller uses to obtain a backend.
-It is what `docpipe/extraction/runner.py`, `scripts/inference_app/app.py`
+It is what `docpipe/extraction/runner.py`, `docpipe/app/app.py`
 and `scripts/inference_app_smoketest.py` import `get_embedder` from.
 
 `docpipe/embedding/config.py` declares the `EMBEDDING_*` environment
 variables once, read directly by the other modules here and re-exported,
 not redeclared, by `docpipe/chunking/config.py`,
-`docpipe/inference/faiss_store.py` and `scripts/inference_app/config.py`.
+`docpipe/inference/faiss_store.py` and `docpipe/app/config.py`.
 
 `docpipe/embedding/local.py` implements `LocalEmbedder`, the GPU-resident
 backend that lazily constructs and holds one `MultiGPUEmbedder` behind a
 double-checked lock, translating its `process()`/tensor interface into
 this package's `embed()`/list-of-floats contract. It is used directly by
 `docpipe/extraction/runner.py` and, through `get_embedder()`, by
-`scripts/inference_app/app.py`.
+`docpipe/app/app.py`.
 
 `docpipe/embedding/api.py` implements `ApiEmbedder`, the text-only backend
-calling an OpenAI-compatible `/v1/embeddings` endpoint in batches,
-constructed by `get_embedder()` when `EMBEDDING_BACKEND=api`, and directly
-by `tests/test_embedding_backends.py`.
+calling an OpenAI-compatible `/v1/embeddings` endpoint in batches (or, with
+`EMBEDDING_PROVIDER` set to `openai` or `gemini`, that hosted API; see [the
+provider layer](providers.md)), constructed by `get_embedder()` when
+`EMBEDDING_BACKEND=api`, by `docpipe/chunking/embedding.py`'s
+`ApiIndexEmbedder` when `EMBEDDING_INDEX_BACKEND=api`, and directly by
+`tests/test_embedding_backends.py`.
 
 `docpipe/chunking/qwen3_vl_embedding.py` is not part of this package, but
 `LocalEmbedder` depends on it entirely: `Qwen3VLForEmbedding` (a Qwen3-VL
@@ -258,5 +274,5 @@ wrapper returning hidden states, no language-modeling head),
 `MultiGPUEmbedder` (one replica per visible GPU, length-balanced sharding,
 order-preserving reassembly). Its own account, and
 `docpipe/chunking/embedding.py`'s independent, direct use of
-`MultiGPUEmbedder` for the corpus build, are documented at
-[chunking](chunking.md).
+`MultiGPUEmbedder` for the corpus build when `EMBEDDING_INDEX_BACKEND` is
+`local`, are documented at [chunking](chunking.md).

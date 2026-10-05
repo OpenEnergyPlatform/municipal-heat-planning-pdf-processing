@@ -40,3 +40,17 @@ DIRECTORY_FIGTAB_WORDS = ("Figure", "Table", r"Fig\.", r"Tab\.", "Box")
 # Bibliography titles → routed to the Stage-4 [LITERATURE] BibTeX path.
 BIBLIOGRAPHY_TITLE_WORDS = ("references", "bibliography", "works cited",
                             "literature cited")
+
+
+# The one line of the user's turn when a page without a text layer is read
+# by the vision model; the system prompt is prompts/preprocessing/
+# page_transcribe.md.
+PAGE_REQUEST = "Page {page}. Return the text of this page."
+
+# What the text before a document's first heading is called, and a part of a
+# split section that has no title of its own. German, although the corpus is
+# English: these two words are stored with every section of the corpus as it
+# was processed, and stage 3 finds its own front section by the first of
+# them. Changing them is a rebuild of stage 3.
+FRONT_SECTION_TITLE = "Dokument"
+PART_TITLE = "Abschnitt"

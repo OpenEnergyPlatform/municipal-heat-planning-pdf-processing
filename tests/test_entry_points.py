@@ -191,9 +191,13 @@ def test_a_stage_that_cannot_run_without_a_profile_says_which_there_are(
         profile_module.require_profile()
     message = str(refused.value)
     assert "--profile" in message and ENV_VAR in message
+    # the profiles of this repository and the one the package brings itself
     on_disk = sorted(path.parent.name
-                     for path in (ROOT / "profiles").glob("*/profile.py"))
+                     for root in (ROOT / "profiles",
+                                  ROOT / "docpipe" / "builtin")
+                     for path in root.glob("*/profile.py"))
     assert profile_module.available_profiles() == on_disk
+    assert "default" in on_disk
     assert "kwp" in on_disk and "__pycache__" not in on_disk
     assert f"(available: {', '.join(on_disk)})" in message
     monkeypatch.setenv(ENV_VAR, "kwp")

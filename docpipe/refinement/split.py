@@ -36,6 +36,7 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import Callable, Optional
 
 from docpipe import prompts
+from docpipe.profile import profile_value
 
 from .config import (
     LLM_NUM_PARALLEL,
@@ -197,7 +198,8 @@ def apply_cuts(section: dict, cuts: list, first_title: Optional[str] = None) -> 
         part["segments"] = chunk
         part["content"] = content_from_segments(chunk)
         part["title"] = (titles[k] or section.get("title") or "").strip() \
-            or f"{section.get('title') or 'Abschnitt'} ({k + 1})"
+            or (f"{section.get('title') or profile_value('preprocessing', 'PART_TITLE')}"
+                f" ({k + 1})")
         # Each part keeps only the media its own text refers to.
         refs = [s.get("ref") for s in chunk if s.get("kind") in ("table", "figure")]
         part["tables"] = [media[r][1] for r in refs if r in media and media[r][0] == "tables"]

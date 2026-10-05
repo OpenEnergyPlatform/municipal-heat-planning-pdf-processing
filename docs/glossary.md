@@ -37,6 +37,14 @@ block
   PyMuPDF text runs with Stage 2's PP-DocLayoutV3 detections; see
   [preprocessing](stages/preprocessing.md).
 
+cassette
+: The answers of one run, each filed under what was asked, so the run can be
+  made again without a model: `DOCPIPE_CASSETTE_RECORD` writes one and
+  `DOCPIPE_CASSETTE_REPLAY` takes its answers from one. Defined in
+  `docpipe/providers/cassette.py` and the basis of `docpipe benchmark`; see
+  [the provider layer](stages/providers.md) and [measuring a
+  harvest](stages/evaluation.md).
+
 chunk
 : One LLM question-answering attempt in the inference app: a token-budgeted
   group of retrieval hits, defined as the `Chunk` dataclass in
@@ -86,6 +94,12 @@ corpus
   whose paths are `Profile.db_path` and `Profile.index_path` in
   `docpipe/profile.py`. Built by chunking and read by extraction and the
   inference app; see [chunking](stages/chunking.md).
+
+default profile
+: The profile the package brings itself (`docpipe/builtin/default/`): any
+  folder of English documents, with no subject. A project's profile extends it
+  with `extends="default"` and writes only what it knows better. See
+  [profiles](profiles.md).
 
 derived coordinate
 : A coordinate the spec decides on its own, such as the parameter a unit
@@ -160,6 +174,17 @@ frame
   `docpipe.extraction.pipeline.apply_frame`; see
   [extraction](stages/extraction.md) and [kwp](profiles/kwp.md).
 
+gold
+: What people decided about harvested values: a field of a row is `correct`
+  or `wrong`, the document states a value the harvest lacks, a document was
+  read whole for a parameter. One JSON line each in `gold.jsonl`, appended and
+  never rewritten, kept beside the harvest and never in it; the only thing
+  precision and recall are counted against. A verdict also notes what its
+  row said beside the value, so two rows that share a quote and a value keep
+  their own decisions. Defined in
+  `docpipe/extraction/gold.py`; see [measuring a
+  harvest](stages/evaluation.md).
+
 group_key
 : The profile-assigned string that marks two or more `Documents` rows as
   versions of one work. `docpipe.store.documents.link_document_versions`
@@ -167,7 +192,7 @@ group_key
   links the rest through `supersedes`; see [store](stages/store.md).
 
 harvest
-: The JSONL a run of `python -m docpipe.extraction` writes for one
+: The JSONL a run of `docpipe extract` (`python -m docpipe.extraction`) writes for one
   document: one line per accepted tuple, one per refusal, one
   `parameter_state` line per spec parameter, and a closing summary.
   Written by `docpipe.extraction.pipeline.write_report`; see
@@ -227,7 +252,7 @@ passage
 : The stretch of source text a coordinate's or a value's quote is checked
   against, cut at sentence boundaries when a quote has to be rebuilt
   (`docpipe/extraction/verify.py`'s `_sentence_around`). At least
-  `MIN_QUOTE_CHARS` characters, 8 by `docpipe/extraction/verify.py:282`, so
+  `MIN_QUOTE_CHARS` characters, 8 in `docpipe/extraction/verify.py`, so
   it identifies a specific place rather than a recurring token. See
   [extraction](stages/extraction.md).
 
@@ -243,14 +268,16 @@ profile
   pipeline: where its documents live, which Python components and prompts
   it supplies, which facets its inference app offers. Represented by the
   `Profile` dataclass in `docpipe/profile.py` and never imported by the
-  core, only received by it; see [profiles](profiles.md).
+  core, only received by it. It may extend another profile and then takes
+  what it does not provide from that one; see [profiles](profiles.md).
 
 prompt
 : A Markdown file under `profiles/<profile>/prompts/<stage>/<name>.md`,
   with optional YAML front matter carrying model parameters, loaded as a
-  `Prompt` with an id, text and sha256 by `docpipe/prompts.py`. A stage
-  has no default prompt of its own, so a profile without a matching file
-  fails to import. See [core](stages/core.md).
+  `Prompt` with an id, text and sha256 by `docpipe/prompts.py`. The core has
+  no default prompt of its own, so a profile without a matching file fails
+  to import, unless it extends a profile that has one (`default` has them
+  all). See [core](stages/core.md).
 
 provenance
 : The block on an accepted tuple recording where its evidence came from:
@@ -258,6 +285,20 @@ provenance
   a crop path and highlight rectangles. Attached by
   `docpipe.extraction.pipeline.fold_claims`; see
   [extraction](stages/extraction.md).
+
+provenance file
+: `<graph>.prov.ttl`, written beside a graph by `--serialize`: for every value
+  its page, quote, run and trust level, as PROV-O and Web Annotation
+  statements. Not the same as a tuple's provenance block. Written by
+  `docpipe/extraction/provenance.py`; see [the knowledge
+  graph](stages/graph.md).
+
+provider
+: The API a role (`llm`, `vlm` or `embedding`) sends its requests to:
+  `openai-compatible` (a server of one's own), `openai`, `anthropic` or
+  `gemini`, set per role (`LLM_PROVIDER` and its two siblings). Defined in
+  `docpipe/providers/__init__.py`; see [the provider
+  layer](stages/providers.md).
 
 quote
 : The verbatim passage a claim or a coordinate cites as its evidence,
@@ -320,6 +361,14 @@ row
   `docpipe/extraction/pipeline.py`. Every later field request fills a
   column of rows that already exist and can neither invent one nor drop
   one. See [extraction](stages/extraction.md).
+
+row name
+: One text for a harvested row as it reads now: its document, its tuple id and
+  its parameter, and a short hash of what it says beside its value (its unit
+  and each coordinate). Two rows of one document can share a tuple id, and a
+  decision is about the row it was made on; the review page keys a row by this
+  name. `gold.row_name` in `docpipe/extraction/gold.py`; see [measuring a
+  harvest](stages/evaluation.md).
 
 section
 : One assembled unit of document structure: a title, joined prose content,
@@ -424,11 +473,18 @@ tuple
   report by `docpipe/extraction/pipeline.py`. See
   [extraction](stages/extraction.md).
 
+tuple id
+: A name for a harvested row made from its document, its quote and its value
+  as written. It survives a re-chunk and a re-harvest that reads the same
+  thing, so a decision, an export and a provenance record can hold on to it.
+  `identity.tuple_id` in `docpipe/extraction/identity.py`; see
+  [extraction](stages/extraction.md).
+
 unstated
 : The state (`SAID_UNSTATED`, wire value `unstated`) a coordinate is given
   when the model answers that the passages shown do not state it, an
   answer in its own right rather than a gap. Offered in every field
-  request's closed list as `docpipe/extraction/fields.py:47`'s sentinel
+  request's closed list as `docpipe/extraction/fields.py:48`'s sentinel
   `out:unstated`. See [states](contract/states.md).
 
 value request
@@ -466,6 +522,13 @@ window
   (`docpipe/extraction/pipeline.py`). Kept short and overlapping on
   purpose, so a caption is never cut off from the table it belongs to. See
   [extraction](stages/extraction.md).
+
+word index
+: The SQLite FTS5 file `<name>.lexical.db` beside a corpus database, one row
+  per section, table and figure, built by `docpipe lexical`. The chat searches
+  it beside the vectors and merges the two rankings; a stale one is not asked.
+  Defined in `docpipe/inference/lexical.py`; see [asking the
+  corpus](stages/inference.md).
 
 work item
 : One planned document, parameter (or none), and source triple before

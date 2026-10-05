@@ -10,7 +10,7 @@ of either saying "out of disk".
 import pathlib
 import types
 
-import conftest
+from tests import conftest
 
 
 def _usage(free_mb):

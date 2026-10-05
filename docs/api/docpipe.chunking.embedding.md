@@ -8,7 +8,41 @@ the FAISS index, as chunking's third step.
 Every embedding lives in one FAISS IDMap(IndexFlatIP), keyed by
 globally unique ids allocated from the database.
 
+Where the vectors come from is EMBEDDING_INDEX_BACKEND: `local` runs the
+model in this process on the visible GPUs; `api` asks an embeddings endpoint
+and needs none. A setting of its own beside the query side's
+EMBEDDING_BACKEND, because the two differ in a common setup: the index is
+built once with the model on GPUs and queried through an endpoint ever
+after. An endpoint takes text only, so with it the inputs that carry a
+picture are left out and the index holds the text vectors of a corpus.
+
 Author: Felix Vossel
+
+## Classes
+
+### ApiIndexEmbedder
+
+```python
+class ApiIndexEmbedder
+```
+
+The api backend at index time: items in, one unit vector each out.
+
+The index is an inner-product index and the local model hands it unit
+vectors, so these are scaled to length one as well; an endpoint that
+already returns unit vectors is left as it is by that.
+
+#### ApiIndexEmbedder.\_\_init\_\_
+
+```python
+def __init__(self, embedder=None)
+```
+
+#### ApiIndexEmbedder.process
+
+```python
+def process(self, items)
+```
 
 ## Functions
 
@@ -51,16 +85,25 @@ def remove_ids_from_index(index: faiss.Index, ids: list[int]) -> int
 
 Remove vectors by id from a FAISS IDMap index; returns the count removed.
 
+### index_backend
+
+```python
+def index_backend() -> str
+```
+
+What builds the index: `local` or `api`.
+
 ### load_embedder
 
 ```python
 def load_embedder(model_name: str = EMBEDDING_MODEL)
 ```
 
-Load the embedding model, data-parallel across all visible GPUs in bf16.
+The embedder of this run, for the backend EMBEDDING_INDEX_BACKEND names.
 
-Returns a MultiGPUEmbedder, which exposes the same ``process()`` interface
-as a single Qwen3VLEmbedder.
+`api`: an ApiIndexEmbedder. Otherwise the model itself, data-parallel
+across all visible GPUs in bf16: a MultiGPUEmbedder, which exposes the
+same ``process()`` interface as a single Qwen3VLEmbedder.
 
 ### create_embeddings
 

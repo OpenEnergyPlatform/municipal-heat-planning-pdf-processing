@@ -71,7 +71,9 @@ CREATE VIEW IF NOT EXISTS token_totals AS
 
 def db_path() -> Path:
     """Where the counts go. Read at flush time, so a test can redirect it."""
-    return Path(os.environ.get("DOCPIPE_USAGE_DB", "data/usage.db"))
+    from docpipe.profile import shared_file
+    return Path(os.environ.get("DOCPIPE_USAGE_DB")
+                or shared_file("usage.db", "data/usage.db"))
 
 
 def _now() -> str:
@@ -186,19 +188,50 @@ def totals(path: Optional[Path] = None) -> list:
     return rows
 
 
+def cost(row, prices: dict) -> Optional[float]:
+    """What one row of `totals` cost, or None when its model has no price.
+
+    *prices* is the project file's table: per model what a million input,
+    output and embedding tokens cost. A kind the table leaves out costs
+    nothing, which is right for a model that is only ever used for the other.
+    """
+    price = prices.get(row[1])
+    if price is None:
+        return None
+    _, _, _, _, tokens_in, tokens_out, tokens_embedded = row
+    return (tokens_in * price.get("input", 0.0)
+            + tokens_out * price.get("output", 0.0)
+            + tokens_embedded * price.get("embedding", 0.0)) / 1_000_000
+
+
 def main(argv=None) -> int:
     rows = totals(Path(argv[0]) if argv else None)
     if not rows:
         print(f"no token counts in {argv[0] if argv else db_path()}")
         return 0
+    from docpipe import settings
+    prices = settings.prices()
     header = ("stage", "model", "runs", "requests", "input", "output",
-              "embedding")
-    table = [header] + [tuple(f"{v:,}" if isinstance(v, int) else str(v)
-                              for v in row) for row in rows]
+              "embedding") + (("cost",) if prices else ())
+    table = [header]
+    costs = []
+    for row in rows:
+        line = tuple(f"{v:,}" if isinstance(v, int) else str(v) for v in row)
+        if prices:
+            spent = cost(row, prices)
+            costs.append(spent)
+            line += ("-" if spent is None else f"{spent:,.2f}",)
+        table.append(line)
     widths = [max(len(r[i]) for r in table) for i in range(len(header))]
     for r in table:
         print("  ".join(c.ljust(w) if i < 2 else c.rjust(w)
                         for i, (c, w) in enumerate(zip(r, widths))))
+    if prices:
+        priced = [spent for spent in costs if spent is not None]
+        print(f"cost: {sum(priced):,.2f} over {len(priced)} of {len(costs)} "
+              f"rows; prices per million tokens from "
+              f"{settings.project_file().name}, a model without one is not "
+              f"counted")
     return 0
 
 

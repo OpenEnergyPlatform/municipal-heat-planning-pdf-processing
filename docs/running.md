@@ -8,52 +8,82 @@ inference and the app together as one runnable unit, since a question
 is a turn inside the running Streamlit process, not a command of its
 own.
 
+## The command
+
+Everything starts with one command, `docpipe` ([the command and its
+settings](stages/command.md)):
+
+```bash
+docpipe [--profile P] [--config FILE] <command> [arguments]
+```
+
+`docpipe <command> --help` shows what a command takes. A stage command runs
+the stage the way `python -m docpipe.<stage>` runs it, with the same
+arguments, and that form keeps working:
+
+| command | the same as |
+|---|---|
+| `docpipe ingest` | `python -m docpipe.ingest`, earlier `python -m scripts.fileprocessing` |
+| `docpipe preprocess` | `python -m docpipe.preprocessing` |
+| `docpipe refine` | `python -m docpipe.refinement` |
+| `docpipe visuals` | `python -m docpipe.visuals` |
+| `docpipe chunk` | `python -m docpipe.chunking` |
+| `docpipe extract` | `python -m docpipe.extraction` |
+| `docpipe reanchor` | `python -m docpipe.extraction.identity` |
+| `docpipe compile` | `python -m docpipe.compile` |
+| `docpipe evaluate` | `python -m docpipe.extraction.evaluate` |
+| `docpipe benchmark` | `python -m docpipe.extraction.benchmark` |
+| `docpipe export` | `python -m docpipe.serve.export` |
+| `docpipe serve` | `python -m docpipe.serve` |
+| `docpipe lexical` | `python -m docpipe.inference.lexical` |
+| `docpipe sandbox` | `python -m docpipe.app.sandbox_service` |
+
+`docpipe chat` starts the chat, and `docpipe init`, `doctor`, `config` and
+`profiles` look after the project; they are described below.
+
 ## Installation and environment
 
-Nothing pins a Python version for the pipeline itself; the one fixed
-version is for the documentation build, where Read the Docs and the CI
-workflow both provision Python 3.11 (`.readthedocs.yaml` line 12;
-`.github/workflows/docs.yml` line 46).
+`pip install .` installs the package and the command. It brings what every
+stage needs that asks a model over an API; the stages that run a model in
+the process are extras (`layout`, `embed`, `app`, `kg`, `kwp`, `sandbox`,
+`anthropic` and `dev`, named in `pyproject.toml`), for example
+`pip install ".[layout,embed,app]"`. Python 3.9 or newer; the documentation
+build uses 3.11. `requirements.txt` is the lock the container image is built
+from, and `docs/requirements.txt` is the documentation build's own short list.
 
-`requirements.txt` (213
-lines) covers the batch pipeline: PyMuPDF, OpenCV, torch, faiss-cpu,
-pandas for the KWW workbook, openai for every LLM and vision call, and
-pytest at its tail (`requirements.txt` lines 210 to 213), installed
-with `pip install -r requirements.txt`. `docs/requirements.txt` is a
-separate three-line list (sphinx, myst-parser, furo) for the
-documentation build. `scripts/inference_app/requirements.txt` is a
-third list, for the chat application's own environment.
+The GPU stack is optional: nothing refuses to start without one. Stage 2's
+layout model and the local embedding backend move to CUDA when available and
+fall back to the CPU otherwise. Refinement, visuals and extraction load no
+model in the pipeline's process: each is a client to a model API, a server of
+one's own that speaks the OpenAI API or a hosted provider chosen with
+`LLM_PROVIDER` and `VLM_PROVIDER` (see [the provider layer](stages/providers.md)),
+so their GPU can run on a different machine.
 
-The GPU stack is optional: nothing refuses to start without one. Stage
-2's layout model and the local embedding backend move to CUDA when
-available and fall back to the CPU otherwise
-(`docpipe/preprocessing/stage2_layout.py` line 108;
-`docpipe/chunking/qwen3_vl_embedding.py` lines 423 to 424). Refinement,
-visuals and extraction load no model in the pipeline's process: each is
-an HTTP client to an OpenAI-compatible server, so their GPU can run on
-a different machine.
+A project is a folder with a `docpipe.toml`. `docpipe init` writes one, with a
+profile of its own that extends the built-in `default` profile:
 
-`DOCPIPE_PROFILE` (`docpipe/profile.py` line 22) names the profile
-`load_profile` imports: `profiles/kwp` or `profiles/scenarios` (lines
-126 to 151). A profile's document list, prompts, extra database tables
-and extraction contract come from `Profile.component`, `Profile.require`,
-`prompts_dir` and `schema_sql` (lines 59 to 98). `--profile <name>` on a
-stage's command line does the same: each stage's `__main__` calls
-`bind_command_line` before it imports the stage. It reads the flag with an
-argparse parser, so an abbreviation of `--profile` that the stage accepts is
-bound too, and puts it into `DOCPIPE_PROFILE` (lines 180 to 197); the usage text of
-every stage needs no profile. Refinement, visuals and extraction refuse to run
-without one, in a single line that names the available profiles
-(`require_profile`, lines 237 to 244). `resolve_profile` (lines 212 to
-234) refuses a profile named after a stage was imported under
-another one, which only a caller that imports the stage can do.
-`DOCPIPE_DATA_ROOT` moves a profile's PDFs, database and FAISS index to
-`<root>/<profile name>/`, in place of the repository's own `data/`
-(lines 103 to 107). A `.env` file is read into the environment before
-any submodule's config module can capture its values (`docpipe/__init__.py`
-lines 2 and 5); only a key not already set is copied in, so an explicit
-variable always wins (`docpipe/dotenv.py` line 45); `.env.example`
-lists what a deployment usually sets.
+```bash
+mkdir heatplans && cd heatplans
+docpipe init
+docpipe doctor
+```
+
+The keys of the project file are the settings the environment already has,
+and the environment wins. A `.env` beside it takes the keys and tokens, which
+the project file refuses. `docpipe config` lists every setting with its value
+and where the value comes from; `docpipe doctor` checks packages, profile,
+model servers and data without a GPU or a model question and exits 1 on a
+failure.
+
+The profile is the `profile` key of the project file, `--profile` on the
+command (a name, or the directory of a profile), or `DOCPIPE_PROFILE`. A
+profile is found on a search path: `DOCPIPE_PROFILE_PATH`, the project's
+`profiles/`, installed packages, the `profiles/` of this repository and last
+the built-in `default`; `docpipe profiles` lists what is found. Refinement,
+visuals and extraction refuse to run without a profile, in one line that names
+the available ones. `DOCPIPE_DATA_ROOT` moves a profile's PDFs, database and
+FAISS index to `<root>/<profile name>/`; without it they are under `data/`
+beside the project file.
 
 ## Container image
 
@@ -118,14 +148,15 @@ to 486), omitted below.
 ### 1. File processing
 
 ```bash
-export DOCPIPE_PROFILE=kwp
-python -m scripts.fileprocessing --source kww.xlsx --db data/kwp/kwp.db --data-dir data/kwp/pdf
+docpipe --profile kwp ingest --source kww.xlsx
 ```
 
 `--source` is the profile's document list: an Excel export for `kwp`, a
-crawl index for `scenarios`. `--backfill-meta` skips the run and only
-refreshes metadata for municipalities already registered, with no
-downloads (`scripts/fileprocessing/pipeline.py` lines 39 to 41). No
+crawl index for `scenarios`, a folder of PDFs for a profile that extends
+`default` (left out, the PDFs lying in the data directory). `--db` and
+`--data-dir` default to the profile's own. `--backfill-meta` skips the run
+and only refreshes metadata for municipalities already registered, with no
+downloads (`docpipe/ingest/cli.py`). No
 separate step creates the database: `ingest` applies the core schema,
 then the profile's own `schema.sql`, before registering any document
 (`docpipe/store/schema.py` line 40; `docpipe/ingest/pipeline.py` line
@@ -140,7 +171,7 @@ does.
 ### 2 and 3. Layout and structure (preprocessing)
 
 ```bash
-python -m docpipe.preprocessing data/kwp/pdf
+docpipe preprocess data/kwp/pdf
 ```
 
 The input is a PDF file or a folder of PDFs
@@ -162,7 +193,7 @@ document over.
 ### 4. LLM refinement
 
 ```bash
-python -m docpipe.refinement --batch
+docpipe refine --batch
 ```
 
 `--batch` refines every document subdirectory under the input path,
@@ -194,7 +225,7 @@ partial file, and the next run starts with the cut (lines 908 to 912, 1187 to
 ### 5. Image processing (visuals)
 
 ```bash
-python -m docpipe.visuals --batch
+docpipe visuals --batch
 ```
 
 `--batch` processes every subdirectory under the input path; `--dry-run`
@@ -209,7 +240,7 @@ so an interrupted run continues on exactly the items missing one.
 ### 6. Chunking, embedding, database
 
 ```bash
-python -m docpipe.chunking
+docpipe chunk
 ```
 
 With no `--step`, the run does merge, database population and embedding
@@ -234,7 +265,7 @@ is left out of the merge, and one warning names up to twenty of them
 ### 7. Extraction
 
 ```bash
-python -m docpipe.extraction data/kwp/kwp.db data/kwp/faiss_index.bin data/kwp/extraction
+docpipe extract data/kwp/kwp.db data/kwp/faiss_index.bin data/kwp/extraction
 ```
 
 The three positional paths (database, FAISS index, output directory)
@@ -264,20 +295,55 @@ harvests anything, and the next start asks only for the anchors still missing
 ### 8. The knowledge graph
 
 ```bash
-python -m docpipe.extraction data/kwp/kwp.db data/kwp/faiss_index.bin data/kwp/extraction --serialize data/kwp/graph.ttl
+docpipe extract data/kwp/kwp.db data/kwp/faiss_index.bin data/kwp/extraction --serialize data/kwp/graph.ttl
 ```
 
 `--serialize` switches the run to serialize-only: no harvest, no model.
 It hands the JSONL already in the output directory to the profile's
-`kg.make_serializer` and writes Turtle (`docpipe/extraction/runner.py`
-lines 4957 to 4969); a profile with no `kg.py` is refused. Unlike the
-earlier stages it does not resume: it walks the whole harvest directory
-again on every call (`docpipe/extraction/serialize.py`).
+`kg.make_serializer` and writes Turtle; a profile with none is written by
+the generic writer from the `graph` block of its spec, and refused where the
+spec has no such block either (`docpipe/extraction/runner.py`). Beside the
+graph it writes `<graph>.prov.ttl`, where each value comes from;
+`--no-provenance` leaves that out. Unlike the earlier stages it does not
+resume: it walks the whole harvest directory again on every call
+(`docpipe/extraction/serialize.py`).
+
+### After the harvest
+
+Commands that work on what the stages left behind:
+
+```bash
+docpipe reanchor data/kwp/kwp.db data/kwp/extraction
+docpipe evaluate data/kwp/extraction --gold data/kwp/gold.jsonl
+docpipe benchmark benchmarks/kwp --record
+docpipe benchmark benchmarks/kwp
+docpipe export data/kwp/extraction --out values.csv
+docpipe serve data/kwp/extraction --http
+docpipe lexical data/kwp/kwp.db
+docpipe compile spec --shapes shapes.ttl --out draft.json
+```
+
+- `reanchor` finds each harvested row's passage again after the database was
+  rebuilt (`--dry-run` shows what it would do); see [extraction](stages/extraction.md).
+- `evaluate` counts precision and recall against the decisions people made on
+  the chat's review page, and `benchmark` records a harvest once with a model
+  (`--record`) and makes it again without one; see [measuring a
+  harvest](stages/evaluation.md).
+- `export` and `serve` (`--http` or `--mcp`) hand the harvested values on as a
+  table, a JSON API or a tool server; see [handing the values
+  on](stages/serve.md).
+- `lexical` builds the word index beside the database that the chat searches
+  with the vectors (`--check` says whether it is current); see [asking the
+  corpus](stages/inference.md).
+- `compile` drafts an extraction spec from the shapes of a graph; see [the
+  spec compiler](stages/compile.md).
 
 ## Configuration reference
 
 The flags for each stage are named above; the table gives the
-environment variables setting a stage's server and model defaults.
+environment variables setting a stage's server and model defaults. They are
+also keys of `docpipe.toml`, and `docpipe config` lists all of them with
+their values and where each value comes from.
 
 | Stage | Variable | Default | Effect | Where read |
 |---|---|---|---|---|
@@ -287,35 +353,42 @@ environment variables setting a stage's server and model defaults.
 | Visuals | `VLM_MODEL` | `Qwen/Qwen3.5-122B-A10B-FP8` | served model name requested | `docpipe/visuals/config.py:43` |
 | Chunking | `EMBEDDING_BACKEND` | `local` | `local`, `api`, or an import path | `docpipe/embedding/config.py:19` |
 | Chunking | `EMBEDDING_MODEL` | `Qwen/Qwen3-VL-Embedding-8B` | HF model id for every embedding | `docpipe/embedding/config.py:21` |
-| Extraction | `LLM_BASE_URL` | `http://localhost:8000/v1` | harvesting model's endpoint | `docpipe/extraction/runner.py:88` |
-| Extraction | `LLM_MODEL` | `Qwen/Qwen3.5-122B-A10B-FP8` | harvesting model's name | `docpipe/extraction/runner.py:90` |
-| Extraction | `EXTRACT_MAX_RETRIES` | `3` | attempts per LLM request before giving up on it | `docpipe/extraction/runner.py:94` |
-| Extraction | `EXTRACT_RETRY_TIMEOUT` | `600` | client timeout (seconds) a retry gets after a request timed out; a request refused at once keeps the client's own timeout | `docpipe/extraction/runner.py:99` |
-| Extraction | `EXTRACT_BATCH_SOURCES` | `6` | sources sharing one harvest request | `docpipe/extraction/runner.py:229` |
-| Extraction | `EXTRACT_BATCH_DOCS` | `64` | documents kept in flight at once, largest first by section count, filename breaking a tie; one written and replaced by the next as soon as it finishes | `docpipe/extraction/runner.py:5174` |
-| Extraction | `EXTRACT_FIELD_ROWS` | `32` | rows one field request answers at once | `docpipe/extraction/runner.py:405` |
-| Extraction | `EXTRACT_MAX_MODEL_LEN` | `32768` | fallback context window, used only where the server's own preflight reports none | `docpipe/extraction/runner.py:1254` |
-| Extraction | `EXTRACT_LIMIT_ADAPTIVE` | `1` | off (`0`) disables the adaptive request limit; the thread pools alone bound concurrency | `docpipe/extraction/runner.py:1283` |
-| Extraction | `EXTRACT_LIMIT_START` | `128` | requests the adaptive limit opens with | `docpipe/extraction/throttle.py:44` |
-| Extraction | `EXTRACT_LIMIT_MIN` | `16` | floor the limit backs off to | `docpipe/extraction/throttle.py:45` |
-| Extraction | `EXTRACT_LIMIT_MAX` | `512` | ceiling the limit grows to; the server's own max-num-seqs cap must be at least this, or requests queue there instead | `docpipe/extraction/throttle.py:46` |
-| Extraction | `EXTRACT_LIMIT_STEP` | `8` | requests added on each growth step | `docpipe/extraction/throttle.py:47` |
-| Extraction | `EXTRACT_LIMIT_BACKOFF` | `0.8` | factor the limit is multiplied by on a step down | `docpipe/extraction/throttle.py:48` |
-| Extraction | `EXTRACT_LIMIT_POLL` | `5` | seconds between `/metrics` samples | `docpipe/extraction/throttle.py:49` |
-| Extraction | `EXTRACT_LIMIT_KV_GROW` | `0.80` | KV cache fraction below which the limit may grow | `docpipe/extraction/throttle.py:51` |
-| Extraction | `EXTRACT_LIMIT_KV_HIGH` | `0.92` | KV cache fraction at or above which the limit steps down | `docpipe/extraction/throttle.py:52` |
-| Extraction | `EXTRACT_LIMIT_TPOT_MAX` | unset | seconds per output token above which a sample also counts as pressure; unset, token time never steps the limit down | `docpipe/extraction/throttle.py:55` |
-| Extraction | `EXTRACT_SERVER_DEAD_AFTER` | `180` | seconds without any reply to a `/models` probe before the harvest ends as if stopped, so a dead server is noticed in minutes | `docpipe/extraction/runner.py:1992` |
-| Extraction | `EXTRACT_LOCATE_CACHE_PAGES` | `512` | pages of words cached by `make_locate` across documents; a cache hit is a dict lookup and takes no lock | `docpipe/extraction/runner.py:258` |
-| App | `INFERENCE_DB_PATH` | profile `db_path`, else `data/KWP.db` | SQLite corpus database, opened read-only | `scripts/inference_app/config.py:61` |
-| App | `INFERENCE_INDEX_PATH` | profile `index_path`, else `data/faiss_index.bin` | FAISS index loaded into memory | `scripts/inference_app/config.py:62` |
-| App | `INFERENCE_KG_TTL_PATH` | profile `root/graph.ttl`, else `data/graph.ttl` | Turtle file from `--serialize` | `scripts/inference_app/config.py:66` |
+| Extraction | `LLM_BASE_URL` | `http://localhost:8000/v1` | harvesting model's endpoint | `docpipe/extraction/runner.py:92` |
+| Extraction | `LLM_MODEL` | `Qwen/Qwen3.5-122B-A10B-FP8` | harvesting model's name | `docpipe/extraction/runner.py:94` |
+| Extraction | `EXTRACT_MAX_RETRIES` | `3` | attempts per LLM request before giving up on it | `docpipe/extraction/runner.py:96` |
+| Extraction | `EXTRACT_RETRY_TIMEOUT` | `600` | client timeout (seconds) a retry gets after a request timed out; a request refused at once keeps the client's own timeout | `docpipe/extraction/runner.py:101` |
+| Extraction | `EXTRACT_BATCH_SOURCES` | `6` | sources sharing one harvest request | `docpipe/extraction/runner.py:251` |
+| Extraction | `EXTRACT_BATCH_DOCS` | `64` | documents kept in flight at once, largest first by section count, filename breaking a tie; one written and replaced by the next as soon as it finishes | `docpipe/extraction/runner.py:5171` |
+| Extraction | `EXTRACT_FIELD_ROWS` | `32` | rows one field request answers at once | `docpipe/extraction/runner.py:416` |
+| Extraction | `EXTRACT_MAX_MODEL_LEN` | `32768` | fallback context window, used only where the server's own preflight reports none | `docpipe/extraction/runner.py:1269` |
+| Extraction | `EXTRACT_LIMIT_ADAPTIVE` | `1` | off (`0`) disables the adaptive request limit; the thread pools alone bound concurrency | `docpipe/extraction/runner.py:1298` |
+| Extraction | `EXTRACT_LIMIT_START` | `128` | requests the adaptive limit opens with | `docpipe/extraction/throttle.py:50` |
+| Extraction | `EXTRACT_LIMIT_MIN` | `16` | floor the limit backs off to | `docpipe/extraction/throttle.py:51` |
+| Extraction | `EXTRACT_LIMIT_MAX` | `512` | ceiling the limit grows to; the server's own max-num-seqs cap must be at least this, or requests queue there instead | `docpipe/extraction/throttle.py:52` |
+| Extraction | `EXTRACT_LIMIT_STEP` | `8` | requests added on each growth step | `docpipe/extraction/throttle.py:53` |
+| Extraction | `EXTRACT_LIMIT_BACKOFF` | `0.8` | factor the limit is multiplied by on a step down | `docpipe/extraction/throttle.py:54` |
+| Extraction | `EXTRACT_LIMIT_POLL` | `5` | seconds between `/metrics` samples | `docpipe/extraction/throttle.py:55` |
+| Extraction | `EXTRACT_LIMIT_KV_GROW` | `0.80` | KV cache fraction below which the limit may grow | `docpipe/extraction/throttle.py:57` |
+| Extraction | `EXTRACT_LIMIT_KV_HIGH` | `0.92` | KV cache fraction at or above which the limit steps down | `docpipe/extraction/throttle.py:58` |
+| Extraction | `EXTRACT_LIMIT_TPOT_MAX` | unset | seconds per output token above which a sample also counts as pressure; unset, token time never steps the limit down | `docpipe/extraction/throttle.py:61` |
+| Extraction | `EXTRACT_SERVER_DEAD_AFTER` | `180` | seconds without any reply to a `/models` probe before the harvest ends as if stopped, so a dead server is noticed in minutes | `docpipe/extraction/runner.py:1910` |
+| Extraction | `EXTRACT_LOCATE_CACHE_PAGES` | `512` | pages of words cached by `make_locate` across documents; a cache hit is a dict lookup and takes no lock | `docpipe/extraction/runner.py:280` |
+| App | `INFERENCE_DB_PATH` | profile `db_path`, else `data/KWP.db` | SQLite corpus database, opened read-only | `docpipe/app/config.py` |
+| App | `INFERENCE_INDEX_PATH` | profile `index_path`, else `data/faiss_index.bin` | FAISS index loaded into memory | `docpipe/app/config.py` |
+| App | `INFERENCE_KG_TTL_PATH` | profile `root/graph.ttl`, else `data/graph.ttl` | Turtle file from `--serialize` | `docpipe/app/config.py` |
+| App | `INFERENCE_HARVEST_DIR` | unset | harvest directory the chat shows values from and the review page reads; unset: neither | `docpipe/app/config.py` |
+| App | `INFERENCE_GOLD_PATH` | `gold.jsonl` beside the harvest directory | file the review page appends decisions to | `docpipe/app/config.py` |
+| App | `INFERENCE_VALUES_LEVEL`, `INFERENCE_VALUES_LIMIT` | unset, `20` | worst trust level of a value the chat still shows; how many it shows before the count of the rest | `docpipe/app/config.py` |
+| App | `INFERENCE_LEXICAL` | `1` | search by word beside the search by meaning where a word index exists; `0` turns it off | `docpipe/app/config.py` |
 | App | `CODE_EXEC_URL` | `""` (off) | calculation sandbox endpoint | `docpipe/inference/config.py:64` |
-| Refinement, visuals, chunking, extraction | `DOCPIPE_USAGE_DB` | `data/usage.db` | SQLite file the token/request counts of that process are flushed to | `docpipe/usage.py:74` |
+| Refinement, visuals, extraction, chat | `LLM_PROVIDER`, `VLM_PROVIDER`, `EMBEDDING_PROVIDER` | `openai-compatible` | the API behind a role: a server of one's own, `openai`, `anthropic` or `gemini` (embeddings: not `anthropic`) | `docpipe/providers/__init__.py` |
+| Stages that ask a model | `DOCPIPE_CASSETTE_RECORD`, `DOCPIPE_CASSETTE_REPLAY` | unset | file a run writes its model answers to, or takes them from in place of a server | `docpipe/providers/cassette.py` |
+| Extraction | `EXTRACT_PROVENANCE` | `1` | `0` leaves out the provenance file `--serialize` writes beside the graph | `docpipe/extraction/provenance.py` |
+| Refinement, visuals, chunking, extraction | `DOCPIPE_USAGE_DB` | `data/usage.db` | SQLite file the token/request counts of that process are flushed to | `docpipe/usage.py:75-76` |
 
 ## The extraction passes
 
-`python -m docpipe.extraction` accepts flags acting on an
+`docpipe extract` accepts flags acting on an
 already-written harvest directory, instead of or before harvesting.
 
 - `--print-context-budget` prints the worst-case tokens one harvest
@@ -345,29 +418,44 @@ already-written harvest directory, instead of or before harvesting.
   [the trust contract](contract/trust.md). Each document is read against
   its own lists, as in `--recheck`.
 - `--serialize TTL` needs no harvest and no model, as in stage 8 above,
-  and produces or refreshes [the knowledge graph](stages/graph.md).
+  and produces or refreshes [the knowledge graph](stages/graph.md) and its
+  provenance file.
 
 ## The chat application
 
-A Streamlit page over the finished corpus, started with the profile set
-in the environment:
+A Streamlit page over the finished corpus, started with the command:
 
 ```bash
-DOCPIPE_PROFILE=kwp streamlit run scripts/inference_app/app.py --server.address 0.0.0.0 --server.port 8501
+docpipe --profile kwp chat --server.address 0.0.0.0 --server.port 8501
 ```
 
-(`scripts/inference_app/app.py`, module docstring). It needs its own
-dependency set plus: the corpus the batch pipeline built, opened
-read-only (`INFERENCE_DB_PATH`, `INFERENCE_INDEX_PATH`;
-`docpipe/inference/db.py` lines 21 to 33); an LLM endpoint at
-`LLM_BASE_URL` for the search-phrase, answer and comparison calls; an
-embedding backend (`EMBEDDING_BACKEND`) apart from the batch embedder,
-so one question needs no whole GPU; and, optionally, the Turtle file a
-`--serialize` run wrote (`INFERENCE_KG_TTL_PATH`), a code-execution
-sandbox (`CODE_EXEC_URL`), and the source PDFs (`INFERENCE_PDF_ROOT`)
-for deep links. Without `DOCPIPE_PROFILE` the app still runs, on
-generic labels and dates. See [the app](stages/app.md) and
-[asking a question](stages/inference.md) for the turn itself.
+What follows `chat` goes to Streamlit; the app needs the `app` extra. The
+older `streamlit run scripts/inference_app/app.py` still works: that file only
+hands over to the package (`docpipe/app/`). The corpus the batch pipeline built
+is opened read-only (`INFERENCE_DB_PATH`, `INFERENCE_INDEX_PATH`). The app also
+needs a model endpoint for the search-phrase, answer and comparison calls
+(`LLM_PROVIDER`, `LLM_BASE_URL`), and an embedding backend
+(`EMBEDDING_BACKEND`) apart from the batch embedder, so one question needs no
+whole GPU. Optional:
+
+- a word index beside the database, built with `docpipe lexical`, which the
+  chat searches beside the vectors (`INFERENCE_LEXICAL=0` turns that off);
+- a harvest directory (`INFERENCE_HARVEST_DIR`): a question for a number then
+  shows the values the harvest holds for it first, each with its quote, page
+  and trust level, and a review page offers the decisions that
+  `docpipe evaluate` counts against (`INFERENCE_GOLD_PATH`);
+- the Turtle file a `--serialize` run wrote (`INFERENCE_KG_TTL_PATH`), which no
+  route reads while the graph route is not offered;
+- a code-execution sandbox (`CODE_EXEC_URL`, run with `docpipe sandbox`);
+- the source PDFs (`INFERENCE_PDF_ROOT`), for deep links.
+
+A question goes to one document, to several (each asked by itself, then
+compared) or, with the checkbox in the sidebar, to the whole corpus, where
+only the current version of a document answers but the harvest's values shown
+first come from every harvested document, older versions included. The app
+needs no `DOCPIPE_PROFILE`: without one it runs on the `default` profile's
+English words and generic labels. See [the app](stages/app.md) and [asking a
+question](stages/inference.md) for the turn itself.
 
 ## Tests and checks
 

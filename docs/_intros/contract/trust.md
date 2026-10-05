@@ -2,11 +2,11 @@
 
 Every accepted tuple already passed a minimum check: `verify.py`'s
 `verify_tuple` checks the number against its quote and the quote against a
-shown source (`verify.py:335-521`). The field sweep in
+shown source (`verify.py:365-551`). The field sweep in
 `docpipe/extraction/pipeline.py` holds each coordinate to the same two
 clauses, its quote stands in a shown source and carries the answer, and
 writes the passage's owner onto the row (`merge_field`,
-`pipeline.py:930-1157`); a closed-list coordinate is held to a third, naming
+`pipeline.py:932-1149`); a closed-list coordinate is held to a third, naming
 one of the list's own entries, or it is never marked read (`not_an_option`).
 Where in the document that passage
 stands is no check and no grade
@@ -25,12 +25,12 @@ no image involved
 `tests/test_extraction_trust.py:45`). A value drops to `B` for two
 independent reasons: its evidence tier is `verify.TIER_VISUAL`, an owner
 kind outside `verify.TEXT_KINDS` such as a table transcription or a figure
-description (`verify.py:42-43,488-496`;
+description (`verify.py:44-45,488-496`;
 `test_a_reading_out_of_a_picture_is_a_b_and_not_a_warning`,
 `tests/test_extraction_trust.py:51`); or the document had no text layer
 and was transcribed page by page, passed to `trust()` as a `transcribed`
 keyword read from the `page_text_transcribed` column
-(`profiles/kwp/kg.py:407-409,570,669-670`) and capping a row at `B` even with
+(`profiles/kwp/kg.py:416-418,571,670-671`) and capping a row at `B` even with
 tier `TIER_TEXT` (`trust.py:120-124`;
 `test_the_same_value_from_a_transcribed_plan_never_reaches_a`,
 `tests/test_extraction_trust.py:61`). On the 559 tuples the levels were
@@ -60,7 +60,7 @@ by a profile's own graph serializer resolving two competing readings of
 one coordinate: kwp settles them first (`settle`: by the plan's wording,
 by rounding, by trust), drops every claimant of what stays tied and never
 marks `conflict`, scenarios keeps a chosen reading and marks it `conflict`
-(`profiles/kwp/kg.py:513-579`, `profiles/scenarios/kg.py:697-698`; see
+(`profiles/kwp/kg.py:522-588`, `profiles/scenarios/kg.py:698-699`; see
 [graph](../stages/graph.md)). `page_transcribed` never by itself decides
 the level: it caps a value at `B` rather than pushing it to `C`, since a
 page with no text layer is a fact about the source, not about this reading
@@ -77,7 +77,7 @@ unless forced, so a row is reviewed once
 `tests/test_extraction_review.py:114`). The second reading writes exactly
 one of three flags: `review:agree` when it matches the stored value,
 `review:disagree` when it does not, `review:unbacked` when its own answer
-cannot be checked against the narrowed window (`review.py:221-225`;
+cannot be checked against the narrowed window (`review.py:222-226`;
 `test_agreement_writes_the_flag_and_moves_nothing_else`,
 `tests/test_extraction_review.py:281`). None of the three raises the
 level: an agreement is recorded as `corroborated`, since the second
@@ -93,27 +93,27 @@ reading checks self-consistency, not that it is right
 A profile's serializer writes one line above every value node, built from
 up to six marks in a fixed order: `level`, `image_origin` or
 `image_origin_named`, `corroborated`, `reasons`, `review` (`trust.marks`,
-`trust.py:152-174`). Only the marks a verdict actually has appear, and
+`trust.py:168-200`). Only the marks a verdict actually has appear, and
 `image_origin_named` replaces `image_origin` when the row's provenance
 records the image's file name. Each mark's wording is the profile's own:
 the [kwp](../profiles/kwp.md) and [scenarios](../profiles/scenarios.md)
 serializers each state a `TRUST_PROSE` table, both in English
-(`profiles/kwp/kg.py:586-593`, `profiles/scenarios/kg.py:481-488`), and a
+(`profiles/kwp/kg.py:595-602`, `profiles/scenarios/kg.py:482-489`), and a
 profile missing a mark, or wording one that is not on this list, is
-refused at import (`trust.check_prose`, `trust.py:177-189`;
+refused at import (`trust.check_prose`, `trust.py:203-215`;
 `test_every_profile_words_every_mark_the_core_can_produce`,
 `tests/test_extraction_trust.py:187`;
 `test_a_table_that_words_a_mark_that_is_not_one_is_refused`,
 `tests/test_extraction_trust.py:203`). The reason tokens are never
 translated, so a curator greps for `exhausted:carrier` in either corpus and
-finds the same string (`trust.py:145-149`).
+finds the same string (`trust.py:169-173`).
 
 ## Two summaries above the row
 
 `trust.py` defines two more public functions. `document_summary`, called
 from six modules including `runner.py` and `review.py`, builds the
 `kind: summary` line a harvest file ends with: counts of tuples by level,
-by reason and by image origin (`trust.py:205-237`), and a document with
+by reason and by image origin (`trust.py:229-261`), and a document with
 no tuples still gets a line, all levels at zero
 (`test_a_document_with_nothing_in_it_still_has_a_summary`,
 `tests/test_extraction_trust.py:288`). `parameter_states`, called from
@@ -121,6 +121,6 @@ no tuples still gets a line, all levels at zero
 `unbacked`, `exhausted` (nothing of the document was answered, or a cut
 request held one of the parameter's own ranked sources, or, without that
 source list or a source named on the request, any cut at all) or
-`unstated` (`trust.py:247-283`;
+`unstated` (`trust.py:271-307`;
 `test_parameter_states_names_every_parameter_of_the_spec`,
 `tests/test_extraction_trust.py:296`).

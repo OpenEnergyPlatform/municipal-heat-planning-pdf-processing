@@ -13,6 +13,15 @@ Author: Felix Vossel
 
 ## Functions
 
+### note_embedding
+
+```python
+def note_embedding(db_path: Path, embedder) -> None
+```
+
+Record in the database which model builds its index, and say so when
+the index already holds another model's vectors.
+
 ### peak_rss_gb
 
 ```python

@@ -357,9 +357,12 @@ def build_sections(pages: list[PageData], column_layout: str = "auto") -> list[S
         sections.append(new_section)
         current_section = new_section
 
+    # What comes before the first heading. Its title is the profile's word:
+    # it is stored, shown in a citation and read by the model.
+    front = profile_value("preprocessing", "FRONT_SECTION_TITLE")
     # page_number=None, not 1: a leading cover/blank page can push real content
     # to page 2+, so the derivation step below sets it from the first segment.
-    _open_section("Dokument", page_number=None)
+    _open_section(front, page_number=None)
 
     for pg in pages:
         for block in pg.blocks:
@@ -435,11 +438,11 @@ def build_sections(pages: list[PageData], column_layout: str = "auto") -> list[S
     if current_section is not None:
         current_section.content = current_section.content.strip()
 
-    # Drop the synthetic "Dokument" section when the document opened with a
+    # Drop the synthetic front section when the document opened with a
     # real title and it stayed empty.
     if (
         sections
-        and sections[0].title == "Dokument"
+        and sections[0].title == front
         and not sections[0].content
         and not sections[0].tables
         and not sections[0].figures

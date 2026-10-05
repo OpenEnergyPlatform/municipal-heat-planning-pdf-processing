@@ -26,6 +26,12 @@ After a step down it holds for a few samples, so the server can drain before
 it is pushed again. A server without /metrics gets no limit at all, and one
 that stops answering them leaves the limit where it is. The limit decides only
 when a request is sent, never what it asks or what is accepted from its answer.
+
+A hosted API shows no queue. What it does say is "not now": a 429, which
+closes the endpoint's gate (docpipe/providers/governor.py). The limit of a
+hosted run is steered by that alone: it starts at the minimum, grows while
+every request is served and the limit is in use, and steps down each time the
+API asks to wait.
 """
 from __future__ import annotations
 
@@ -258,6 +264,69 @@ class Controller:
                 and used >= current - self.step // 2):
             return min(self.limit.maximum, current + self.step), None
         return current, None
+
+
+class RateController:
+    """Decides the next limit from whether the API asked to wait."""
+
+    def __init__(self, limit: AdaptiveLimit, *, step: int = STEP,
+                 backoff: float = BACKOFF):
+        self.limit = limit
+        self.step = max(1, int(step))
+        self.backoff = backoff
+        self._limited = threading.Event()
+        self._hold = 0
+
+    def limited(self) -> None:
+        """The gate's listener: the API has just asked to wait."""
+        self._limited.set()
+
+    def decide(self, used: int, closed: bool = False) -> tuple:
+        """(new limit, reason), *used* the peak requests open.
+
+        While the gate is *closed* the limit does not grow: the requests
+        that wait at the gate hold their places, so the limit looks in use
+        when nothing is being asked.
+        """
+        current = self.limit.limit
+        if self._limited.is_set():
+            self._limited.clear()
+            self._hold = HOLD_SAMPLES
+            return (max(self.limit.minimum, int(current * self.backoff)),
+                    "the API asked to wait")
+        if closed:
+            return current, None
+        if self._hold > 0:
+            self._hold -= 1
+            return current, None
+        if used >= current - self.step // 2:
+            return min(self.limit.maximum, current + self.step), None
+        return current, None
+
+
+def start_hosted(gate, *, limit: Optional[AdaptiveLimit] = None,
+                 poll: float = POLL) -> AdaptiveLimit:
+    """An adaptive limit for a hosted API, steered by its gate."""
+    limit = limit or AdaptiveLimit(start=MINIMUM)
+    controller = RateController(limit)
+    gate.listen(controller.limited)
+
+    def steer() -> None:
+        while True:
+            time.sleep(poll)
+            used = limit.take_peak()
+            before = limit.limit
+            after, why = controller.decide(used, gate.closed())
+            if after != before:
+                limit.resize(after)
+                log.info("llm limit %d -> %d%s (open %d)", before,
+                         limit.limit, f": {why}" if why else "", used)
+
+    threading.Thread(target=steer, name="llm-limit", daemon=True).start()
+    log.info("llm limit: adaptive from %d (%d..%d), step +%d / x%.2f, "
+             "steered by the API's own refusals", limit.limit, limit.minimum,
+             limit.maximum, controller.step, controller.backoff)
+    return limit
 
 
 def start(base_url: str, *, limit: Optional[AdaptiveLimit] = None,

@@ -46,6 +46,8 @@ SCENARIOS = ("status_quo", "trend", "target", "unknown")
 # contradicts, "kWh/m²a" filed as kWh/a, "kWp" as kW, "g/kWh" as t CO2eq/a,
 # "kg" as t with no factor applied.
 _PER_YEAR = re.compile(r"pro\s*jahr|/\s*jahr|jährlich|jaehrlich|im\s*jahr"
+                       r"|per\s*year|per\s*annum|annual|yearly"
+                       r"|/\s*(?:yr|year)(?![a-z])"
                        r"|p\.?\s?a\.?$", re.I)
 # The canonical per-year suffix itself: "MWh/a", "t / a". Not "/ab".
 _PER_A = re.compile(r"/\s*a(?![a-zäöüß])")
@@ -633,6 +635,9 @@ def fingerprints(spec: "Spec") -> dict:
 
 
 _KG_ID = re.compile(r"^[A-Za-z]+_[0-9]+$")
+# A class of an ontology that numbers nothing: a prefixed name
+# ("schema:Person") or the IRI itself.
+_KG_NAME = re.compile(r"^(?:[A-Za-z][\w.-]*:[\w.-]+|https?://\S+)$")
 
 
 def kg_name(block: dict, prefixes: str) -> str:
@@ -667,6 +672,10 @@ def _validate_kg_ids(path: str, kg) -> None:
     "organisation" alone would mint `oeo:organisation`. A predicate is held
     only to being one token, because three legal predicates of the scenarios
     profile are the words `abstract`, `acronym` and `label`.
+
+    A class may also be written with its prefix or as its IRI. Not every
+    ontology numbers its terms, and `schema:Person` says which namespace the
+    bare word would only suggest. A bare word stays refused.
     """
     if not isinstance(kg, dict):
         return
@@ -679,10 +688,12 @@ def _validate_kg_ids(path: str, kg) -> None:
         stack.extend(v for v in block.values() if isinstance(v, dict))
     for block in blocks:
         klass = block.get("class")
-        if klass is not None and not _KG_ID.match(str(klass)):
+        if klass is not None and not (_KG_ID.match(str(klass))
+                                      or _KG_NAME.match(str(klass))):
             _fail(path, f"kg class {klass!r} is not an identifier: a class is "
-                        f"an id like OEO_00030022, and the words for it "
-                        f"belong in a label or a note")
+                        f"an id like OEO_00030022, a prefixed name or an "
+                        f"IRI, and the words for it belong in a label or a "
+                        f"note")
         predicate = block.get("predicate")
         if predicate is not None:
             text = str(predicate)

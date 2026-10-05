@@ -8,7 +8,8 @@ prompts.py: Loads a profile's prompts, one Markdown file per stage, from
 There is no core default. A prompt names the corpus it is written for and
 the language it answers in, and the core knows neither: a fallback here
 could only be some other project's prompt, which is worse than a missing
-file.
+file. A profile that extends another one has asked for that profile's
+prompts where it wrote none itself, and gets exactly those.
 
 Optional YAML front matter carries the model parameters that belong to the
 prompt (temperature, max_tokens), so the two never drift apart.
@@ -60,6 +61,10 @@ model.
 ```python
 def path_for(prompt_id: str, profile: Profile) -> Path
 ```
+
+Where the prompt lies: in the profile, else in the nearest profile
+it extends. The profile's own place when nobody has it, for the message
+that says so.
 
 ### load
 

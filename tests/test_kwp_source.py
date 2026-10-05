@@ -5,7 +5,7 @@
 # collected at all on 3.9 and took the whole suite down with it.
 from __future__ import annotations
 
-import conftest
+from tests import conftest
 
 conftest.needs_real("fitz")
 

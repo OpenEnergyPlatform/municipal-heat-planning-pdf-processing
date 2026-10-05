@@ -1,5 +1,9 @@
 """
-request_log.py – Request logging in a separate SQLite file.
+request_log.py: Request logging in a separate SQLite file.
+
+One line per chat turn: which document was asked (none for a question to
+the whole corpus), the question, the scopes, how long it took and how many
+passages and citations it had.
 
 Answers are deliberately NOT cached: follow-up queries ("schau noch einmal
 nach") are context-dependent, and a cache keyed on the query text alone serves
@@ -14,10 +18,15 @@ import sqlite3
 from pathlib import Path
 from typing import Optional
 
+_COLUMNS = ("request_id", "plan_id", "query_text", "mode", "scopes",
+            "timestamp", "latency_ms", "n_hits", "n_citations",
+            "answer_hash", "error_message", "cache_hit")
+
+# plan_id is the document a request asked. NULL: it asked the whole corpus.
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS requests (
     request_id      INTEGER PRIMARY KEY AUTOINCREMENT,
-    plan_id         INTEGER NOT NULL,
+    plan_id         INTEGER,
     query_text      TEXT NOT NULL,
     mode            TEXT NOT NULL,
     scopes          TEXT NOT NULL,
@@ -39,12 +48,33 @@ def connect(path: Path) -> sqlite3.Connection:
     conn = sqlite3.connect(path, check_same_thread=False)
     conn.executescript(_SCHEMA)
     conn.commit()
+    _allow_no_document(conn)
     return conn
+
+
+def _allow_no_document(conn: sqlite3.Connection) -> None:
+    """Bring a log forward that was made when every request named a
+    document. Its table refuses a request to the whole corpus, and SQLite
+    cannot lift that from a column: the table is made again and every row
+    carried over under its own id."""
+    demands = any(row[1] == "plan_id" and row[3] for row in
+                  conn.execute("PRAGMA table_info(requests)"))
+    if not demands:
+        return
+    names = ", ".join(_COLUMNS)
+    conn.executescript(
+        "BEGIN;\n"
+        "ALTER TABLE requests RENAME TO requests_before;\n"
+        + _SCHEMA +
+        f"INSERT INTO requests ({names}) SELECT {names} "
+        f"FROM requests_before;\n"
+        "DROP TABLE requests_before;\n"
+        "COMMIT;\n")
 
 
 def log_request(
     conn: sqlite3.Connection,
-    plan_id: int,
+    plan_id: Optional[int],
     query_text: str,
     mode: str,
     scopes: list[str],

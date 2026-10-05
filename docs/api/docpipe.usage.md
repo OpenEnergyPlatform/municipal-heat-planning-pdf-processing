@@ -81,6 +81,18 @@ def totals(path: Optional[Path] = None) -> list
 
 (stage, model, runs, requests, input, output, embedding) per stage and model.
 
+### cost
+
+```python
+def cost(row, prices: dict) -> Optional[float]
+```
+
+What one row of `totals` cost, or None when its model has no price.
+
+*prices* is the project file's table: per model what a million input,
+output and embedding tokens cost. A kind the table leaves out costs
+nothing, which is right for a model that is only ever used for the other.
+
 ### main
 
 ```python

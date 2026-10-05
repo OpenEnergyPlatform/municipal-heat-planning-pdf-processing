@@ -40,6 +40,16 @@ class Source:
     was accepted — a rejected PDF must not leave project rows behind.
     """
 
+    @classmethod
+    def default_location(cls, data_dir):
+        """What stands in for `--source` when the command line names none.
+        None: this source has a document list, and it has to be named."""
+        return None
+
+    def prepare(self, data_dir) -> None:
+        """Before the first document: a source that has to put its files
+        into the data directory does it here."""
+
     def documents(self, connection):
         raise NotImplementedError
 

@@ -43,6 +43,7 @@ from pathlib import Path
 from typing import Callable, Optional
 
 from . import queries as queries_mod
+from .wording import say
 from .spec import Spec, fold_label
 from .fields import (CHOICE, NUMBER, READ, SAID_UNSTATED, TEXT,
                      UNANSWERED, UNBACKED, UNSTATED)
@@ -834,10 +835,11 @@ def _wrong_type(slot, given) -> Optional[str]:
     model as the reason its answer was refused.
     """
     if slot.kind == NUMBER:
+        whole = say("kind_whole_number")
         if isinstance(given, bool):
-            return "eine ganze Zahl"
+            return whole
         if isinstance(given, float):
-            return None if given.is_integer() else "eine ganze Zahl"
+            return None if given.is_integer() else whole
         if isinstance(given, int):
             return None
         try:
@@ -847,10 +849,10 @@ def _wrong_type(slot, given) -> Optional[str]:
             # back empty on one path and filled on the other.
             number = float(str(given).strip().replace(",", "."))
         except (TypeError, ValueError):
-            return "eine ganze Zahl"
-        return None if number.is_integer() else "eine ganze Zahl"
+            return whole
+        return None if number.is_integer() else whole
     if slot.kind == TEXT and not isinstance(given, str):
-        return "eine Angabe als Text"
+        return say("kind_text")
     return None
 
 
@@ -1044,12 +1046,8 @@ def merge_field(rows: list, sources: list, slot, reply: Optional[dict],
                 row.claim[f"{slot.name}_seen"] = noticed.strip()
             row.claim[f"{slot.name}_state"] = UNBACKED
             failed.append({"row": row.label, "why": "not_an_option",
-                           "given": given, "reason": (
-                f"Dein \"value\" {given!r} ist keiner der Einträge aus "
-                f"\"options\". Wähle genau einen Namen daraus, Zeichen für "
-                f"Zeichen abgeschrieben, auch einen mit \"out:\". Passt keiner, "
-                f"obwohl die Passage die Angabe nennt, dann lass \"value\" weg "
-                f"und gib die Bezeichnung in \"value_raw\".")})
+                           "given": given, "reason": say(
+                               "not_an_option", given=given)})
             unbacked += 1
             continue
         wrong = _wrong_type(slot, given)
@@ -1060,9 +1058,8 @@ def merge_field(rows: list, sources: list, slot, reply: Optional[dict],
             # the graph was a value nobody had read anywhere.
             row.claim[f"{slot.name}_state"] = UNBACKED
             failed.append({"row": row.label, "why": "wrong_type",
-                           "given": given, "reason": (
-                f"Dein \"value\" {given!r} ist nicht {wrong}. "
-                f"Antworte mit {wrong}, genau wie die Passage es schreibt.")})
+                           "given": given, "reason": say(
+                               "wrong_type", given=given, wrong=wrong)})
             unbacked += 1
             continue
         quote = answer.get("quote")
@@ -1076,20 +1073,16 @@ def merge_field(rows: list, sources: list, slot, reply: Optional[dict],
             row.claim[f"{slot.name}_state"] = UNBACKED
             failed.append({"row": row.label, "why": "quote_not_in_source",
                            "given": given, "raw": answer.get("value_raw"),
-                           "quote": quote, "reason": (
-                "Dein \"quote\" steht in keiner der gezeigten Quellen. "
-                "Kopiere eine Passage Zeichen für Zeichen aus \"sources\" "
-                "oder aus dem \"quote\" der Zeile selbst.")})
+                           "quote": quote, "reason": say(
+                               "quote_not_in_source")})
             unquoted += 1
             continue
         if len(quote.strip()) < MIN_QUOTE_CHARS:
             row.claim[f"{slot.name}_state"] = UNBACKED
             failed.append({"row": row.label, "why": "quote_too_short",
                            "given": given, "raw": answer.get("value_raw"),
-                           "quote": quote, "reason": (
-                f"Dein \"quote\" ist zu kurz, um eine Stelle zu benennen "
-                f"(mindestens {MIN_QUOTE_CHARS} Zeichen). Zitier den ganzen "
-                f"Satz oder die ganze Zeile, in der die Antwort steht.")})
+                           "quote": quote, "reason": say(
+                               "quote_too_short", minimum=MIN_QUOTE_CHARS)})
             unbacked += 1
             continue
         wording = answer.get("value_raw")
@@ -1103,10 +1096,9 @@ def merge_field(rows: list, sources: list, slot, reply: Optional[dict],
             shown_answer = wording or given
             failed.append({"row": row.label, "why": "answer_not_in_quote",
                            "given": given, "raw": wording, "quote": quote,
-                           "reason": (
-                f"Dein \"quote\" enthält {shown_answer!r} nicht. Zitier die "
-                f"Stelle, an der es wirklich steht, oder antworte mit "
-                f"\"{UNSTATED}\".")})
+                           "reason": say(
+                               "answer_not_in_quote", answer=shown_answer,
+                               unstated=UNSTATED)})
             unbacked += 1
             continue
         row.claim[f"{slot.name}_state"] = READ

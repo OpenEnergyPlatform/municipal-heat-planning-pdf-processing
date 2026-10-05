@@ -18,10 +18,10 @@ Author: Felix Vossel
 ### get_client
 
 ```python
-def get_client() -> OpenAI
+def get_client()
 ```
 
-Lazily build the OpenAI-compatible client (own retry loop → max_retries=0).
+Lazily build the client (own retry loop → max_retries=0).
 
 ### choose
 

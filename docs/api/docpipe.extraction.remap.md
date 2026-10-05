@@ -73,13 +73,19 @@ space it belonged to would be the same mistake in a smaller place.
 ### stamp_forward
 
 ```python
-def stamp_forward(stamp_path: Path, current: dict, settled: set) -> bool
+def stamp_forward(stamp_path: Path, current: dict, settled: set,
+                  producer: Optional[dict] = None) -> bool
 ```
 
 Write the stamp keys this pass earned; keep the rest. True if it wrote.
 
 Everything outside `settled` stays exactly as the old stamp had it, so a
 run that comes later still sees which question it has to redo.
+
+*producer* is who this pass was (see `runner.producer`). It joins the
+stamp's list when the pass wrote, so a harvest that two models wrote
+into names both. A stamp from before the list starts it with what it
+does say: the model of its harvest.
 
 ### stamp_path_of
 

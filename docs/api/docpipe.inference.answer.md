@@ -32,6 +32,8 @@ Fields:
 - `embed: Callable[[dict], tuple]`: query item -> (vector, came_from_cache)
 - `resolve_image: Callable[[Optional[str]], Optional[Path]] = lambda p: None`: stored image path -> a readable path, or None
 - `log_conn: Optional[sqlite3.Connection] = None`
+- `lexical: Optional[sqlite3.Connection] = None`: The word index beside the vectors (`lexical.py`), or None: the search is then by meaning alone.
+- `document_label: Callable[[Optional[int]], Optional[str]] = lambda i: None`: document id -> what a reader calls the document. Asked only when the whole corpus is searched, where a source has to say whose it is. Where it says nothing, the document's file name does (`_whose`).
 
 ## Functions
 
@@ -46,13 +48,15 @@ True if the query targets ONLY figure/table scopes → caption-style anchor.
 ### answer_question
 
 ```python
-def answer_question(task: str, corpus: Corpus, document_id: int, scopes: list, *,
+def answer_question(task: str, corpus: Corpus, document_id: Optional[int],
+                    scopes: list, *,
                     image_bytes: Optional[bytes] = None, image_only: bool = False,
                     as_json: bool = False, history: Optional[list] = None,
                     progress: Callable = _silent) -> dict
 ```
 
-Execute one full retrieval + answer turn. Returns a dict with:
+Execute one full retrieval + answer turn. *document_id* None asks the
+whole corpus: every source then names its document. Returns a dict with:
 answer (str|None), answer_text (str|None), citations (list[dict]),
 n_findings (int), cache_hit (bool), n_hits (int), phrase (str|None),
 as_json (bool), n_batches (int), compute (list), examined, recheck,

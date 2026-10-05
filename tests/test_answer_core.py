@@ -29,14 +29,14 @@ def corpus():
 
 def test_no_hits_returns_an_empty_answer(monkeypatch, corpus):
     monkeypatch.setattr(answer.llm_client, "make_search_phrase", lambda *a, **k: ("p", False))
-    monkeypatch.setattr(answer.faiss_store, "retrieve", lambda *a, **k: [])
+    monkeypatch.setattr(answer.hybrid.faiss_store, "retrieve", lambda *a, **k: [])
     out = answer.answer_question("Frage?", corpus, 1, [config.SCOPE_TEXT])
     assert out["answer"] is None and out["n_hits"] == 0 and out["phrase"] == "p"
 
 
 def test_grounded_answer_carries_its_citation(monkeypatch, corpus):
     monkeypatch.setattr(answer.llm_client, "make_search_phrase", lambda *a, **k: ("p", False))
-    monkeypatch.setattr(answer.faiss_store, "retrieve", lambda *a, **k: [_hit(0)])
+    monkeypatch.setattr(answer.hybrid.faiss_store, "retrieve", lambda *a, **k: [_hit(0)])
     monkeypatch.setattr(answer.llm_client, "answer_from_sources", lambda *a, **k: {
         "found": True, "complete": True, "answer": "100 GWh.",
         "supports": [{"index": 0, "quote": "Der Wärmebedarf betrug 100 GWh."}]})
@@ -51,7 +51,7 @@ def test_grounded_answer_carries_its_citation(monkeypatch, corpus):
 def test_an_ungrounded_answer_is_refused(monkeypatch, corpus):
     """Sources were found, but nothing could be quoted → no answer at all."""
     monkeypatch.setattr(answer.llm_client, "make_search_phrase", lambda *a, **k: ("p", False))
-    monkeypatch.setattr(answer.faiss_store, "retrieve", lambda *a, **k: [_hit(0)])
+    monkeypatch.setattr(answer.hybrid.faiss_store, "retrieve", lambda *a, **k: [_hit(0)])
     monkeypatch.setattr(answer.llm_client, "answer_from_sources", lambda *a, **k: {
         "found": True, "complete": True, "answer": "Frei erfunden.",
         "supports": [{"index": 0, "quote": "steht so nirgends"}]})
@@ -68,7 +68,7 @@ def test_recheck_excludes_what_earlier_turns_read(monkeypatch, corpus):
     def _retrieve(conn, index, pos, doc, types, vec, k, exclude=None):
         seen["exclude"] = exclude
         return []
-    monkeypatch.setattr(answer.faiss_store, "retrieve", _retrieve)
+    monkeypatch.setattr(answer.hybrid.faiss_store, "retrieve", _retrieve)
 
     history = [{"examined": [["section", 1], ["table", 7]], "recheck": False}]
     out = answer.answer_question("Schau noch mal", corpus, 1, [config.SCOPE_TEXT],
@@ -86,7 +86,7 @@ def test_progress_is_optional_and_silent_by_default(monkeypatch, corpus):
     """The core must not require a UI to report into."""
     labels = []
     monkeypatch.setattr(answer.llm_client, "make_search_phrase", lambda *a, **k: ("p", False))
-    monkeypatch.setattr(answer.faiss_store, "retrieve", lambda *a, **k: [])
+    monkeypatch.setattr(answer.hybrid.faiss_store, "retrieve", lambda *a, **k: [])
 
     @contextmanager
     def _spy(label):
@@ -126,7 +126,7 @@ def _turns(monkeypatch, said):
     def _retrieve(conn, index, pos, doc, types, vec, k, exclude=None):
         where["doc"] = doc
         return [_hit(0, text=SECRET, document_id=doc)] if said.get(doc) else []
-    monkeypatch.setattr(answer.faiss_store, "retrieve", _retrieve)
+    monkeypatch.setattr(answer.hybrid.faiss_store, "retrieve", _retrieve)
 
     def _from_sources(task, items, **kw):
         answer_text = said.get(where["doc"])
@@ -151,7 +151,7 @@ def test_every_selected_document_gets_its_own_row_and_its_own_retrieval(
     def _retrieve(conn, index, pos, doc, types, vec, k, exclude=None):
         asked.append(doc)
         return []
-    monkeypatch.setattr(answer.faiss_store, "retrieve", _retrieve)
+    monkeypatch.setattr(answer.hybrid.faiss_store, "retrieve", _retrieve)
 
     out = compare.compare_documents("Sanierungsrate?", corpus, DOCS,
                                     [config.SCOPE_TEXT])
@@ -223,7 +223,7 @@ def test_more_documents_than_the_budget_are_named_not_dropped_quietly(
     latency budget. A silent cut would read as "that plan says nothing"."""
     monkeypatch.setattr(answer.llm_client, "make_search_phrase",
                         lambda *a, **k: ("p", False))
-    monkeypatch.setattr(answer.faiss_store, "retrieve",
+    monkeypatch.setattr(answer.hybrid.faiss_store, "retrieve",
                         lambda *a, **k: [])
     monkeypatch.setattr(compare.config, "COMPARE_MAX_DOCUMENTS", 2)
 
@@ -243,7 +243,7 @@ def test_a_follow_up_searches_past_what_that_document_showed(monkeypatch, corpus
     def _retrieve(conn, index, pos, doc, types, vec, k, exclude=None):
         seen[doc] = exclude
         return []
-    monkeypatch.setattr(answer.faiss_store, "retrieve", _retrieve)
+    monkeypatch.setattr(answer.hybrid.faiss_store, "retrieve", _retrieve)
 
     histories = {1: [{"examined": [["table", 87457]], "recheck": False}],
                  2: [{"examined": [["section", 9]], "recheck": False}]}
@@ -259,7 +259,7 @@ def test_the_progress_stage_names_the_document_it_runs_for(monkeypatch, corpus):
     identical "Retrieval" spinners and cannot tell how far it has got."""
     monkeypatch.setattr(answer.llm_client, "make_search_phrase",
                         lambda *a, **k: ("p", False))
-    monkeypatch.setattr(answer.faiss_store, "retrieve", lambda *a, **k: [])
+    monkeypatch.setattr(answer.hybrid.faiss_store, "retrieve", lambda *a, **k: [])
     labels = []
 
     @contextmanager
@@ -329,7 +329,7 @@ def test_the_tables_the_compute_prompt_promises_reach_the_sandbox(monkeypatch):
     monkeypatch.setitem(sys.modules, "llm_sandbox", stub)
     monkeypatch.setitem(sys.modules, "llm_sandbox.const", const)
     # Under a private name, so the stubbed import stays out of sys.modules.
-    path = (Path(__file__).resolve().parents[1] / "scripts" / "inference_app"
+    path = (Path(__file__).resolve().parents[1] / "docpipe" / "app"
             / "sandbox_service.py")
     spec = importlib.util.spec_from_file_location("_sandbox_under_test", path)
     service = importlib.util.module_from_spec(spec)
@@ -366,7 +366,7 @@ def test_the_turn_hands_the_tables_of_its_sources_to_the_code_runner(
     handed = []
     monkeypatch.setattr(answer.llm_client, "make_search_phrase",
                         lambda *a, **k: ("p", False))
-    monkeypatch.setattr(answer.faiss_store, "retrieve", lambda *a, **k: hits)
+    monkeypatch.setattr(answer.hybrid.faiss_store, "retrieve", lambda *a, **k: hits)
     monkeypatch.setattr(answer.code_exec, "is_enabled", lambda: True)
 
     def answer_from_sources(task, items, **kw):

@@ -5,7 +5,8 @@ prompts.py: Loads a profile's prompts, one Markdown file per stage, from
 There is no core default. A prompt names the corpus it is written for and
 the language it answers in, and the core knows neither: a fallback here
 could only be some other project's prompt, which is worse than a missing
-file.
+file. A profile that extends another one has asked for that profile's
+prompts where it wrote none itself, and gets exactly those.
 
 Optional YAML front matter carries the model parameters that belong to the
 prompt (temperature, max_tokens), so the two never drift apart.
@@ -61,9 +62,16 @@ class Prompt:
 
 
 def path_for(prompt_id: str, profile: Profile) -> Path:
+    """Where the prompt lies: in the profile, else in the nearest profile
+    it extends. The profile's own place when nobody has it, for the message
+    that says so."""
     stage, _, name = prompt_id.partition("/")
     if not stage or not name:
         raise ValueError(f"prompt id must be '<stage>/<name>', got {prompt_id!r}")
+    for owner in profile.lineage():
+        path = owner.prompts_dir / stage / f"{name}.md"
+        if path.is_file():
+            return path
     return profile.prompts_dir / stage / f"{name}.md"
 
 
@@ -78,8 +86,10 @@ def load(prompt_id: str, profile: Optional[Profile] = None,
 
     path = path_for(prompt_id, profile)
     if not path.is_file():
+        extended = [owner.name for owner in profile.lineage()[1:]]
         raise FileNotFoundError(
-            f"profile {profile.name!r} provides no prompt {prompt_id!r} ({path})")
+            f"profile {profile.name!r} provides no prompt {prompt_id!r} ({path})"
+            + (f", nor does {', '.join(extended)}" if extended else ""))
 
     raw = path.read_text(encoding="utf-8")
     meta, body = _split(raw)

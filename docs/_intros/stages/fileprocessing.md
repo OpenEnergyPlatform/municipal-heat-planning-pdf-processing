@@ -14,11 +14,13 @@ Everything project-specific, a document's identity, its metadata, and what
 other tables it needs, is delegated to the profile
 through `SourceDoc.meta`/`payload` and the `Source.documents()`/
 `after_document()` hooks (`docpipe/ingest/models.py`); the core never
-inspects `payload`. Two profiles ship: `kwp` reads an Excel workbook of
-German municipal heat plans and writes `OrganisationUnits`, `Municipalities`
-and `MunicipalityMeta` rows alongside the shared tables; `scenarios` reads a
-JSON crawl index of the literature the AR6 scenario database cites and
-writes `Scenarios` and `DocumentScenarios` link rows instead. Every stage
+inspects `payload`. Two profiles ship a source of their own: `kwp` reads an
+Excel workbook of German municipal heat plans and writes `OrganisationUnits`,
+`Municipalities` and `MunicipalityMeta` rows alongside the shared tables;
+`scenarios` reads a JSON crawl index of the literature the AR6 scenario
+database cites and writes `Scenarios` and `DocumentScenarios` link rows
+instead. A profile that extends the built-in `default` profile and has no
+source of its own gets the one that reads a folder of PDFs. Every stage
 after this one, from preprocessing onward, iterates the `Documents` table
 and nothing else: a document this stage never registers does not exist for
 the rest of the run, regardless of the PDF's quality.
@@ -42,11 +44,12 @@ the whole chain end to end are on [Running the pipeline](../running.md).
 
 ### Parsing the command line
 
-`python -m scripts.fileprocessing` is the entry point
-(`scripts/fileprocessing/pipeline.py:main`). `_build_parser()` declares
-`--source` (also spelled `--excel`; both set `source`, the profile's
-document list), `--db`, `--data-dir`, `--backfill-meta`, `--profile`, and
-`--log-level`.
+`docpipe ingest` is the entry point (`docpipe/ingest/cli.py:main`);
+`python -m docpipe.ingest` and the earlier `python -m scripts.fileprocessing`
+take the same arguments. `_build_parser()` declares `--source` (also spelled
+`--excel`; both set `source`, the profile's document list), `--db`,
+`--data-dir`, `--backfill-meta`, `--profile`, and `--log-level`. `--db` and
+`--data-dir` default to the profile's own.
 
 ### Loading the profile
 
@@ -70,9 +73,10 @@ exports no such function; `--backfill-meta` for it ends the run with
 ### Resolving the source and starting the run
 
 Otherwise `main()` looks up `profile.component("source", "SOURCE")`, again
-`SystemExit` if absent, requires `--data-dir`, and calls
-`docpipe.ingest.ingest(source_class(Path(args.source)), db_file, data_dir,
-profile)`. `ingest()` (`docpipe/ingest/pipeline.py`) coerces its paths,
+`SystemExit` if absent, takes the document list from `--source` or from the
+source class's `default_location(data_dir)` (a folder source's is the data
+directory itself; any other source has to be told) and calls
+`docpipe.ingest.ingest(source_class(location), db_file, data_dir, profile)`. `ingest()` (`docpipe/ingest/pipeline.py`) coerces its paths,
 creates the data directory, opens the SQLite connection, and applies the
 core schema plus the profile's own `schema.sql` in one transaction
 (`docpipe/store/schema.py:apply`), which also sets `PRAGMA foreign_keys =
@@ -80,6 +84,19 @@ ON`; every statement is `CREATE TABLE IF NOT EXISTS`, unchanged by a
 second run against the same database. The pragma is what enforces
 `Documents.supersedes`'s `ON DELETE SET NULL` and the profile tables'
 `ON DELETE CASCADE` references during this stage's run.
+
+### A folder of PDFs
+
+The built-in `default` profile's source is `docpipe/ingest/folder.py`: every
+PDF in a folder is one document, with no register behind it. `docpipe ingest`
+alone registers what lies directly in the data directory, since the stages
+keep their own output underneath it. `docpipe ingest --source FOLDER` reads a
+folder with its subfolders and copies each file into the data directory once
+(`Source.prepare`), so the corpus is complete in one place and does not change
+when the folder does. A file is known by its name, so two files of one name in
+different subfolders are refused and named. The subfolder a file lies in
+travels as `DocumentMeta.folder`, which the default profile offers as a
+filter.
 
 ### Enumerating documents
 
@@ -207,13 +224,13 @@ Each worklist holds one tab-separated line per document, sorted by key:
 
 | name | kind | default | effect | where |
 |---|---|---|---|---|
-| `--source` / `--excel` | CLI flag | none, required | Path to the profile's document list | `scripts/fileprocessing/pipeline.py` |
-| `--db` | CLI flag | none, required | Path to the SQLite database file | `scripts/fileprocessing/pipeline.py` |
-| `--data-dir` | CLI flag | none; required unless `--backfill-meta` | Directory PDFs are read from and downloaded into | `scripts/fileprocessing/pipeline.py` |
-| `--backfill-meta` | CLI flag | off | Skips the run; only refreshes a profile's own metadata | `scripts/fileprocessing/pipeline.py` |
+| `--source` / `--excel` | CLI flag | the source's default location, else required | Path to the profile's document list, or the folder of PDFs | `docpipe/ingest/cli.py` |
+| `--db` | CLI flag | the profile's database | Path to the SQLite database file | `docpipe/ingest/cli.py` |
+| `--data-dir` | CLI flag | the profile's PDF directory | Directory PDFs are read from and downloaded into | `docpipe/ingest/cli.py` |
+| `--backfill-meta` | CLI flag | off | Skips the run; only refreshes a profile's own metadata | `docpipe/ingest/cli.py` |
 | `--profile` | CLI flag | `$DOCPIPE_PROFILE` | Selects which `profiles/<name>` supplies `SOURCE` | `docpipe/profile.py` |
 | `DOCPIPE_PROFILE` | environment variable | unset | Default for `--profile` | `docpipe/profile.py` |
-| `--log-level` | CLI flag | `INFO` | Logging verbosity | `scripts/fileprocessing/pipeline.py` |
+| `--log-level` | CLI flag | `INFO` | Logging verbosity | `docpipe/ingest/cli.py` |
 | `SAMPLE_PAGES` | module constant | 40 | Pages sampled evenly for the quality check | `docpipe/ingest/pdf_quality.py` |
 | `EMPTY_PAGE_CHARS`, `MAX_EMPTY_FRACTION` | module constant | 50 chars, 0.8 | A page below 50 characters counts empty; above 0.8 of the sample empty gives `NO_TEXT` | `docpipe/ingest/pdf_quality.py` |
 | `MIN_TEXT_CHARS`, `MIN_ALPHA_RATIO` | module constant | 2000 chars, 0.5 | Below 2000 sampled characters the letters ratio check is skipped; below 0.5 it is `BROKEN_ENCODING` | `docpipe/ingest/pdf_quality.py` |
@@ -364,12 +381,11 @@ Each worklist holds one tab-separated line per document, sorted by key:
 
 `docpipe/ingest/__init__.py` re-exports the area's public surface:
 `Source`, `SourceDoc`, `UnusablePDF`, `ingest`, `register`. It is what
-`scripts/fileprocessing/pipeline.py` and `tests/test_ingest.py` import
-from.
+`docpipe/ingest/cli.py` and `tests/test_ingest.py` import from.
 
 `docpipe/ingest/pipeline.py` holds the stage's orchestration: `register()`
 for one document, `ingest()` for a whole run, and the worklist reporting
-helpers. It is called by `scripts/fileprocessing/pipeline.py:main()` and
+helpers. It is called by `docpipe/ingest/cli.py:main()` and
 directly by `tests/test_ingest.py`, `tests/test_kwp_source.py`, and
 `tests/test_scenarios_source.py`.
 
@@ -389,9 +405,9 @@ finishes documents, plus the `UnusablePDF` exception. It is imported by
 `docpipe/ingest/pipeline.py` and by `profiles/kwp/source.py` and
 `profiles/scenarios/source.py`.
 
-`scripts/fileprocessing/__init__.py` re-exports `main()` as the package's
-public entry point.
-
-`scripts/fileprocessing/pipeline.py` is the command-line interface:
-argument parsing, profile resolution, the `--backfill-meta` branch, and the
-call into `docpipe.ingest.ingest()`. It holds no pipeline logic of its own.
+`docpipe/ingest/cli.py` is the command-line interface: argument parsing,
+profile resolution, the `--backfill-meta` branch, and the call into
+`docpipe.ingest.ingest()`. It holds no pipeline logic of its own.
+`docpipe/ingest/folder.py` is the source of the `default` profile (see A
+folder of PDFs under Method). `scripts/fileprocessing/` is the earlier name of
+the command line and re-exports `main()` from `docpipe/ingest/cli.py`.

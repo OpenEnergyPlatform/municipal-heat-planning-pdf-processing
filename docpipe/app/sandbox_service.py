@@ -28,8 +28,13 @@ import os
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-from llm_sandbox import SandboxSession
-from llm_sandbox.const import SandboxBackend
+try:
+    from llm_sandbox import SandboxSession
+    from llm_sandbox.const import SandboxBackend
+except ImportError:                 # the one package only this service needs
+    # Said when the service is started (`main`), not here: `--help` has
+    # to answer on a machine that does not have it.
+    SandboxSession = SandboxBackend = None
 
 TOKEN = os.environ.get("KWP_SANDBOX_TOKEN", "")
 IMAGE = os.environ.get("KWP_SANDBOX_IMAGE", "localhost/kwp-sandbox:latest")
@@ -118,7 +123,18 @@ class Handler(BaseHTTPRequestHandler):
         pass  # quiet
 
 
-def main() -> None:
+def main(argv=None) -> None:
+    import argparse
+    argparse.ArgumentParser(
+        prog="docpipe sandbox",
+        description="The service that runs code a model wrote, in a "
+                    "container without a network. It takes no arguments: "
+                    "where it listens and what a run may use are settings "
+                    "(`docpipe config --stage sandbox`), and "
+                    "KWP_SANDBOX_TOKEN has to be set.").parse_args(argv)
+    if SandboxSession is None:
+        raise SystemExit("the sandbox service needs llm-sandbox: "
+                         "pip install 'docpipe[sandbox]'")
     if not TOKEN:
         raise SystemExit("KWP_SANDBOX_TOKEN must be set")
     server = ThreadingHTTPServer((HOST, PORT), Handler)

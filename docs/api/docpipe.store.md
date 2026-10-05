@@ -13,6 +13,7 @@ What `__all__` names, and where each name is defined:
 - `connect` from [docpipe.store.schema](docpipe.store.schema.md)
 - `core_sql` from [docpipe.store.schema](docpipe.store.schema.md)
 - `profile_sql` from [docpipe.store.schema](docpipe.store.schema.md)
+- `readonly_uri` from [docpipe.store.schema](docpipe.store.schema.md)
 - `tables` from [docpipe.store.schema](docpipe.store.schema.md)
 
 [Back to the index](../README.md)

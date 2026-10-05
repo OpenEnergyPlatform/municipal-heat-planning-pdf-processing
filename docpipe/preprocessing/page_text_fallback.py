@@ -333,9 +333,15 @@ def make_transcriber(profile, *, client=None, model=None):
     is project knowledge, while "a page with no text layer needs reading" is not.
     """
     from docpipe import prompts
-    from docpipe.visuals import vision
+    from docpipe.visuals import replies, vision
+
+    from docpipe.profile import profile_value
 
     prompt = prompts.load(PAGE_TRANSCRIBE_PROMPT_ID, profile)
+    # The one line of the user's turn, in the prompt's language.
+    request = (profile.require("preprocessing", "PAGE_REQUEST")
+               if profile is not None
+               else profile_value("preprocessing", "PAGE_REQUEST"))
     client = client or vision.create_client()
     model = model or vision.VLM_MODEL
     meta = prompt.meta or {}
@@ -343,10 +349,11 @@ def make_transcriber(profile, *, client=None, model=None):
     def transcribe(image_path, page_number: int):
         reply = vision.call_vision(
             client, prompt.text,
-            f"Seite {page_number}. Gib den Text dieser Seite zurück.",
+            request.format(page=page_number),
             image_path, model=model,
             temperature=float(meta.get("temperature", 0.1)),
             max_tokens=int(meta.get("max_tokens", 4096)),
+            reply=replies.PAGE,
         )
         if not isinstance(reply, dict):
             return None

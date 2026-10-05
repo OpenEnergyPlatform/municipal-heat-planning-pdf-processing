@@ -5,16 +5,24 @@ the FAISS index, as chunking's third step.
 Every embedding lives in one FAISS IDMap(IndexFlatIP), keyed by
 globally unique ids allocated from the database.
 
+Where the vectors come from is EMBEDDING_INDEX_BACKEND: `local` runs the
+model in this process on the visible GPUs; `api` asks an embeddings endpoint
+and needs none. A setting of its own beside the query side's
+EMBEDDING_BACKEND, because the two differ in a common setup: the index is
+built once with the model on GPUs and queried through an endpoint ever
+after. An endpoint takes text only, so with it the inputs that carry a
+picture are left out and the index holds the text vectors of a corpus.
+
 Author: Felix Vossel
 """
 from __future__ import annotations
 
 import logging
+import os
 from collections import defaultdict
 from pathlib import Path
 
 import faiss
-import torch
 import numpy as np
 
 from .config import EMBEDDING_MODEL, EMBEDDING_DIM, EMBEDDING_BATCH_SIZE, MAX_TOKEN_LENGTH
@@ -77,13 +85,55 @@ def remove_ids_from_index(index: faiss.Index, ids: list[int]) -> int:
     return removed
 
 
+def index_backend() -> str:
+    """What builds the index: `local` or `api`."""
+    return os.environ.get("EMBEDDING_INDEX_BACKEND", "local").strip()
+
+
+class ApiIndexEmbedder:
+    """The api backend at index time: items in, one unit vector each out.
+
+    The index is an inner-product index and the local model hands it unit
+    vectors, so these are scaled to length one as well; an endpoint that
+    already returns unit vectors is left as it is by that.
+    """
+    text_only = True
+
+    def __init__(self, embedder=None):
+        if embedder is None:
+            from docpipe.embedding.api import ApiEmbedder
+            embedder = ApiEmbedder()
+        self._embedder = embedder
+        self.model = getattr(embedder, "model", None)
+
+    def process(self, items):
+        vectors = np.asarray(self._embedder.embed(items), dtype=np.float32)
+        lengths = np.linalg.norm(vectors, axis=1, keepdims=True)
+        return vectors / np.where(lengths == 0, 1.0, lengths)
+
+
+def _as_array(embeddings):
+    """A batch of vectors as float32, whichever backend made it."""
+    if hasattr(embeddings, "detach"):           # a torch tensor
+        import torch
+        return embeddings.detach().to(torch.float32).cpu().numpy()
+    return np.asarray(embeddings, dtype=np.float32)
+
+
 def load_embedder(model_name: str = EMBEDDING_MODEL):
     """
-    Load the embedding model, data-parallel across all visible GPUs in bf16.
+    The embedder of this run, for the backend EMBEDDING_INDEX_BACKEND names.
 
-    Returns a MultiGPUEmbedder, which exposes the same ``process()`` interface
-    as a single Qwen3VLEmbedder.
+    `api`: an ApiIndexEmbedder. Otherwise the model itself, data-parallel
+    across all visible GPUs in bf16: a MultiGPUEmbedder, which exposes the
+    same ``process()`` interface as a single Qwen3VLEmbedder.
     """
+    if index_backend() == "api":
+        embedder = ApiIndexEmbedder()
+        log.info("Embedding through the api backend: %s (text inputs only)",
+                 embedder.model)
+        return embedder
+    import torch
     from docpipe.chunking.qwen3_vl_embedding import MultiGPUEmbedder
     log.info("Loading embedding model: %s", model_name)
     model = MultiGPUEmbedder(
@@ -125,6 +175,10 @@ def create_embeddings(
 
     text_inputs = [inp for inp in inputs if inp.image is None]
     vl_inputs = [inp for inp in inputs if inp.image is not None]
+    if vl_inputs and getattr(embedder, "text_only", False):
+        log.warning("%d input(s) with a picture are not embedded: this "
+                    "backend takes text only", len(vl_inputs))
+        vl_inputs = []
 
     start_id = next_id
 
@@ -165,7 +219,17 @@ def create_embeddings(
                     )
                     continue
 
-                vectors = embeddings.detach().to(torch.float32).cpu().numpy()
+                vectors = _as_array(embeddings)
+                held = getattr(index, "d", None)
+                if (isinstance(held, int) and vectors.ndim == 2
+                        and vectors.shape[1] != held):
+                    # Not a batch that failed: every batch of this run would,
+                    # and a vector of another model has no place in the index.
+                    raise ValueError(
+                        f"the embedder returns vectors of {vectors.shape[1]} "
+                        f"dimensions, the index holds {held}: set "
+                        f"EMBEDDING_DIM={vectors.shape[1]} for a new index, "
+                        f"or embed with the model this index was built with")
 
                 ids = np.arange(next_id, next_id + len(vectors), dtype=np.int64)
                 index.add_with_ids(vectors, ids)

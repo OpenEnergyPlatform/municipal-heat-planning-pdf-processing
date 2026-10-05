@@ -11,11 +11,11 @@ fills every key below as a publication is read.
 `parameter_state`, `refusal` and `summary` are the three record kinds
 every profile's contract shares. `parameter_state` closes one
 parameter with its state and tuple and refusal counts
-(`docpipe/extraction/schema.py:549` to `573`); `refusal` records a
+(`docpipe/extraction/schema.py:553` to `577`); `refusal` records a
 claim the run did not accept: why it failed, the claim as returned,
-and its source (`:460` to `488`); `summary`, the file's last line, counts a
-document's tuples and refusals by trust level and reason (`:489` to
-`530`). The remaining `##` sections are `tuple` shapes, one per
+and its source (`:480` to `511`); `summary`, the file's last line, counts a
+document's tuples and refusals by trust level and reason (`:512` to
+`552`). The remaining `##` sections are `tuple` shapes, one per
 parameter.
 
 Such a section opens with how its row becomes a node or an edge of the
@@ -32,9 +32,9 @@ test_a_document_field_carries_no_axes_and_a_scenario_field_carries_one`).
 A tuple's `provenance` names where its `quote` sits: `document_id`,
 `owner_kind` and `owner_id` always present, the rest, page and
 section location among them, filled in as the source allows
-(`docpipe/extraction/schema.py:429` to `477`); a coordinate's
+(`docpipe/extraction/schema.py:431` to `479`); a coordinate's
 `<name>_source` and a refusal's `owner` use the shorter
-`[owner_kind, owner_id]` pair instead (`:144` to `148`).
+`[owner_kind, owner_id]` pair instead (`:147` to `151`).
 
 `x-question` is the sentence, in German, the model was asked for a
 coordinate. `x-kg` is the spec's own `kg` block, published unchanged,
@@ -70,7 +70,7 @@ the same four parameters takes a different path: the spec marks it
 `dynamic`, not `vocabulary_dynamic`, and `axis_slots` types it as
 plain text through a path that never calls `_value_uri` at all; that
 call runs earlier in the same function, for the parameter's own
-`value` key (`docpipe/extraction/fields.py:399` to `424`;
+`value` key (`docpipe/extraction/fields.py:404` to `429`;
 `docpipe/extraction/schema.py:367`, `:387` to `399`).
 
 What the list holds is decided once, before harvest starts, by
@@ -95,18 +95,18 @@ value request says no entry of the list fits, is kept with its wording.
 Two sections close the page: `## The stamp`, the schema of
 `<publication>.stamp.json` (four fixed keys, `spec`, `model`,
 `anchors`, `page_text_transcribed`, plus per-question patterns,
-`docpipe/extraction/schema.py:580` to `686`), and `## The trace`, the
+`docpipe/extraction/schema.py:580` to `715`), and `## The trace`, the
 schema of `<publication>.trace.jsonl`, one `oneOf` branch per event
 kind: eleven, fixed by the schema for every profile rather than drawn
-from this one's spec (`docpipe/extraction/schema.py:689` to `804`). A
+from this one's spec (`docpipe/extraction/schema.py:718` to `833`). A
 `parameter/`, `value/`, `axis/` or `slot/` key differing from today's
 run makes the document eligible for a full re-harvest under
 `--force-stale`; `model`, `anchors` and every prompt id are written for
 a reader and never compared, so a reworded prompt or another model
 leaves a harvested corpus current (`stale`,
-`docpipe/extraction/runner.py:4356` to `4393`; `already_done`, `:4436`
-to `4461`). `top_up_file` redoes
+`docpipe/extraction/runner.py:4324` to `4361`; `already_done`, `:4404`
+to `4429`). `top_up_file` redoes
 only the changed question
-(`docpipe/extraction/topup.py:339` to `440`). The trace is read by
+(`docpipe/extraction/topup.py:340` to `442`). The trace is read by
 `scripts/trace_report.py` and, for cost, by `trace_costs`
-(`scripts/harvest_compare.py:134` to `153`), never by a resume.
+(`scripts/harvest_compare.py:135` to `155`), never by a resume.

@@ -11,13 +11,18 @@ municipal heat plan or a scenario report says. What is project specific
 (where the documents come from, which extra database tables they need,
 which prompts a stage runs on) lives in a `profiles/<name>/` directory,
 selected by `DOCPIPE_PROFILE` or a `--profile` flag before a stage starts.
+One command, `docpipe`, runs every stage ([the command and its
+settings](stages/command.md)); a project is a `docpipe.toml` and a profile of
+its own, started with `docpipe init`.
 
-Two profiles exist. `kwp` covers German municipal heat plans and answers
-in German; its accepted values go into MHPKG on the Open Energy Platform.
-`scenarios` covers the literature the IPCC AR6 scenario database cites and
+Three profiles exist. `default` is the one the package brings itself: any
+folder of English documents, with no subject. A project's own profile extends
+it and writes only what it knows better. `kwp` covers German municipal heat
+plans and answers in German; its accepted values go into MHPKG on the Open
+Energy Platform. `scenarios` covers the literature the IPCC AR6 scenario database cites and
 answers in English; its accepted values go into OEKG, whose identifiers
 are minted under the Open Energy Platform's own domain by default
-(`profiles/scenarios/kg.py`). The two share every module under `docpipe/`;
+(`profiles/scenarios/kg.py`). The three share every module under `docpipe/`;
 what differs is confined to their own directory: where the documents come
 from, what a document's metadata looks like, and the questions their
 extraction stage asks.
@@ -41,11 +46,10 @@ states, stage by stage, what causes a re-run.
 Filenames are the constants `docpipe/artifacts.py` defines; [what each
 stage leaves behind](artifacts.md) lists them all, with the stage that
 writes each one. The answer side, a Streamlit application
-(`scripts/inference_app/app.py`) that reads the finished database and
-index, writes nothing back, and installs from
-`scripts/inference_app/requirements.txt` rather than the batch pipeline's,
-is not a numbered stage and is documented under [asking the
-corpus](stages/inference.md) and [the chat over the corpus](stages/app.md).
+(`docpipe/app/`, started by `docpipe chat`) that reads the finished
+database and index and writes nothing back to them, is not a numbered stage
+and is documented under [asking the corpus](stages/inference.md) and [the
+chat over the corpus](stages/app.md).
 
 ## How the documentation is organised
 
@@ -57,20 +61,25 @@ cannot: the whole chain from a PDF to a graph, what one stage must supply
 to the next, and the points where two stages read the same input and can
 run at the same time.
 
-Twelve chapters sit under `stages/`, one per pipeline stage or per part
-every stage depends on (`scripts/build_docs.py:296`). [Getting the
-documents in](stages/fileprocessing.md) through [the knowledge
-graph](stages/graph.md) are the eight numbered stages of the table above;
-[the embedders](stages/embedding.md), [asking the
+The chapters under `stages/` are one per pipeline stage, per part every stage
+depends on, or per tool around the harvest (the manifest is `SOURCES` in
+`scripts/build_docs.py`). [Getting the documents in](stages/fileprocessing.md)
+through [the knowledge graph](stages/graph.md) are the eight numbered stages of
+the table above; [the embedders](stages/embedding.md), [asking the
 corpus](stages/inference.md), [the chat over the corpus](stages/app.md),
-[the database](stages/store.md) and [the parts every stage
-uses](stages/core.md) cover what those stages and the chat application
-depend on.
+[the database](stages/store.md), [which API a request
+goes to](stages/providers.md) and [the parts every stage
+uses](stages/core.md) cover what those stages and the chat application depend
+on. [The command and its settings](stages/command.md) covers `docpipe` itself.
+Around the harvest: [measuring it](stages/evaluation.md) against what people
+decided, [handing its values on](stages/serve.md) as a table, an API or an
+assistant's tool, and [drafting the spec it is read
+against](stages/compile.md) from the shapes of a graph.
 
 [Profiles](profiles.md) states what a profile is and is not: a directory
-under `profiles/<name>/` that the core finds by name and asks for whatever
-a stage needs, never a shared base class or registry entry. [The
-kwp profile](profiles/kwp.md) and [the scenarios
+that the core finds by name on a search path and asks for whatever a stage
+needs, and that may extend another profile, never a shared base class or
+registry entry. [The kwp profile](profiles/kwp.md) and [the scenarios
 profile](profiles/scenarios.md) list each profile's own parameters and
 axes, read off its published contract rather than its hand-written
 specification.
@@ -87,7 +96,7 @@ pipeline](running.md) covers how to invoke each stage from the command
 line, with the flags and environment variables each one reads.
 
 The [API reference](api/index.md) has one page per module of `docpipe/`,
-`profiles/`, `scripts/inference_app/` and `scripts/fileprocessing/`: every
+`profiles/` and `scripts/`: every
 public function, class and method with its signature as written and its
 docstring. The chapters say what a module is for; the reference says what
 it defines.

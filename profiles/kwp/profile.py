@@ -3,6 +3,11 @@ from docpipe.profile import Facet, Profile
 
 PROFILE = Profile(
     name="kwp",
+    # Everything the default profile has, this one writes itself; a test
+    # holds that, so no English prompt ever stands in for a missing one.
+    extends="default",
+    # Heat plans are published by the municipalities that adopt them.
+    documents_shareable=True,
     title="Kommunale Wärmeplanung – Recherche",
     document_noun="Wärmeplan",
     source_language="de",

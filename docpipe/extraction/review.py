@@ -36,6 +36,7 @@ from collections import Counter
 from pathlib import Path
 from typing import Callable, Optional
 
+from .. import jsonl
 from . import fields
 from .pipeline import answer_in_quote
 from .remap import stamp_path_of
@@ -272,7 +273,7 @@ def review_file(path: Path, spec: Spec, *, ask: Callable,
     lines: list = []
     tuples, refusals, document_id = [], [], None
     document = Path(path).stem
-    for line in Path(path).read_text(encoding="utf-8").splitlines():
+    for line in jsonl.read(path):
         if not line.strip():
             continue
         try:

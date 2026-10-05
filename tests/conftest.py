@@ -76,6 +76,9 @@ def _usage_db_outside_the_repo(tmp_path_factory):
 # profile — so importing one without a profile is an error, not a default.
 # Tests that care about another profile pass it explicitly.
 os.environ["DOCPIPE_PROFILE"] = "kwp"
+# And no project file: a docpipe.toml lying in or above the checkout is the
+# developer's, and the suite must not run under its settings.
+os.environ["DOCPIPE_CONFIG"] = ""
 
 
 # Which of the heavy libraries below are stand-ins rather than the real

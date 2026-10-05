@@ -13,14 +13,13 @@ Author: Felix Vossel
 from __future__ import annotations
 
 import base64
+import contextvars
 import io
 import json
 import logging
 import re
 import time
 from typing import Optional
-
-from openai import OpenAI
 
 from .config import (
     LLM_BASE_URL,
@@ -33,9 +32,10 @@ from .config import (
     LLM_STUB_MODE,
 )
 
-from docpipe import prompts
+from docpipe import prompts, providers
+from docpipe.prompts import per_profile as prompts_per_profile
 
-from . import wording
+from . import replies, wording
 
 log = logging.getLogger(__name__)
 
@@ -43,52 +43,86 @@ log = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 # Prompts
 # ---------------------------------------------------------------------------
-# Everything the loop says around them comes from the same profile.
-_W = wording.phrases()
+# Read when first used, not when this module is imported: the app, a test
+# and `--help` can import the answer loop before anybody has named a profile.
+# Everything the loop says around the prompts comes from the same profile
+# (`wording.phrases`), and is read the same way.
+_PROMPTS = {
+    "PHRASE_SYSTEM_PROMPT": "inference/phrase",
+    "CHUNK_QA_SYSTEM_PROMPT": "inference/chunk_qa",
+    "IMAGE_PHRASE_SYSTEM_PROMPT": "inference/image_phrase",
+    "_ANSWER_PROMPT_HEAD": "inference/answer_head",
+    "_ANSWER_PROMPT_TAIL": "inference/answer_tail",
+    "_ANSWER_SPEC_TEXT": "inference/answer_spec_text",
+    "_ANSWER_SPEC_JSON": "inference/answer_spec_json",
+    "JSON_FORMAT_PROMPT": "inference/json_format",
+    "COMPARE_PROMPT": "inference/compare",
+    "_COMPUTE_HINT": "inference/compute_hint",
+    "_IMAGE_HINT": "inference/image_hint",
+    "_ENVELOPE_CORRECTION": "inference/envelope_correction",
+    "READOFF_PROMPT": "inference/readoff",
+    "_READOFF_CORRECTION": "inference/readoff_correction",
+    "REVISE_PROMPT": "inference/revise",
+}
 
-PHRASE_SYSTEM_PROMPT = prompts.text("inference/phrase")
 
-CHUNK_QA_SYSTEM_PROMPT = prompts.text("inference/chunk_qa")
+@prompts_per_profile
+def _texts() -> dict:
+    return {}
 
-IMAGE_PHRASE_SYSTEM_PROMPT = prompts.text("inference/image_phrase")
 
-# Batched QA: the top sources are handed over together with a "prior" partial
-# answer carried across batches. Every statement is tied to a source via a
-# verbatim `quote` + `index`, validated by the caller. Assembled at call time
-# with the answer-format spec spliced in, so the literal `{...}` braces here need
-# no escaping.
-_ANSWER_PROMPT_HEAD = prompts.text("inference/answer_head")
-_ANSWER_PROMPT_TAIL = prompts.text("inference/answer_tail")
+def _prompt(prompt_id: str) -> str:
+    """One prompt of the ambient profile, read once per profile."""
+    texts = _texts()
+    if prompt_id not in texts:
+        texts[prompt_id] = prompts.text(prompt_id)
+    return texts[prompt_id]
 
-_ANSWER_SPEC_TEXT = prompts.text("inference/answer_spec_text")
-_ANSWER_SPEC_JSON = prompts.text("inference/answer_spec_json")
 
-JSON_FORMAT_PROMPT = prompts.text("inference/json_format")
+def __getattr__(name: str):
+    """The prompts under the names they had as module constants."""
+    if name in _PROMPTS:
+        return _prompt(_PROMPTS[name])
+    if name == "_W":
+        return wording.phrases()
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
-# One comparison over the finished per-document answers. Its own prompt:
-# the answering prompt is written to stay inside one document, and the
-# comparison has no document in front of it at all.
-COMPARE_PROMPT = prompts.text("inference/compare")
 
-# Appended to the answer prompt only when a code-exec sandbox is available: the
-# model answers with an action object, the caller runs it and feeds the printed
-# output back, then the model finalises.
-_COMPUTE_HINT = prompts.text("inference/compute_hint")
-# The model may ask for a crop the section text only points at; see db.request_item.
-_IMAGE_HINT = prompts.text("inference/image_hint")
+def _w() -> dict:
+    """What the loop says around the prompts, from the same profile."""
+    return wording.phrases()
+
+
+# answer_head / answer_tail: batched QA. The top sources are handed over
+# together with a "prior" partial answer carried across batches. Every
+# statement is tied to a source via a verbatim `quote` + `index`, validated by
+# the caller. Assembled at call time with the answer-format spec spliced in,
+# so the literal `{...}` braces there need no escaping.
+#
+# compare: one comparison over the finished per-document answers. Its own
+# prompt: the answering prompt is written to stay inside one document, and
+# the comparison has no document in front of it at all.
+#
+# compute_hint: appended to the answer prompt only when a code-exec sandbox is
+# available: the model answers with an action object, the caller runs it and
+# feeds the printed output back, then the model finalises.
+#
+# image_hint: the model may ask for a crop the section text only points at;
+# see db.request_item.
 
 
 # ---------------------------------------------------------------------------
 # Client + parsing helpers
 # ---------------------------------------------------------------------------
-_client: Optional[OpenAI] = None
+_client = None
 
 
-def get_client() -> OpenAI:
-    """Lazily build the OpenAI-compatible client (own retry loop → max_retries=0)."""
+def get_client():
+    """Lazily build the client (own retry loop → max_retries=0)."""
     global _client
     if _client is None:
-        _client = OpenAI(
+        _client = providers.client(
+            "llm",
             base_url=LLM_BASE_URL,
             api_key=LLM_API_KEY,
             timeout=LLM_TIMEOUT,
@@ -156,6 +190,30 @@ def _quote_is_grounded(quote: str, chunk_items: list[dict]) -> bool:
     return q in haystack
 
 
+# The reply the request under way asks for: (name, schema), or None. Beside
+# the arguments and not among them, because `_chat_json(messages,
+# temperature)` is the seam every test of the answer loop replaces.
+_SHAPE: contextvars.ContextVar = contextvars.ContextVar("reply_shape",
+                                                        default=None)
+
+
+def _ask(shape, messages: list, temperature: float) -> dict:
+    """`_chat_json` for a request whose reply has this shape."""
+    token = _SHAPE.set(shape)
+    try:
+        return _chat_json(messages, temperature=temperature)
+    finally:
+        _SHAPE.reset(token)
+
+
+def _reply_format() -> dict:
+    shape = _SHAPE.get()
+    if shape is None:
+        return {"type": "json_object"}
+    return providers.reply_format("llm", *shape,
+                                  otherwise={"type": "json_object"})
+
+
 def _chat_json(messages: list, temperature: float) -> dict:
     """
     One chat completion returning a parsed JSON object, with a
@@ -171,7 +229,7 @@ def _chat_json(messages: list, temperature: float) -> dict:
             response = client.chat.completions.create(
                 model=LLM_MODEL,
                 messages=convo,
-                response_format={"type": "json_object"},
+                response_format=_reply_format(),
                 temperature=temperature,
                 max_tokens=LLM_MAX_TOKENS,
             )
@@ -179,7 +237,7 @@ def _chat_json(messages: list, temperature: float) -> dict:
             if not raw:
                 convo = base_messages + [
                     {"role": "assistant", "content": ""},
-                    {"role": "user", "content": _W["empty_reply"]},
+                    {"role": "user", "content": _w()["empty_reply"]},
                 ]
                 _backoff(attempt)
                 continue
@@ -188,7 +246,7 @@ def _chat_json(messages: list, temperature: float) -> dict:
             log.warning("LLM JSON parse failed (attempt %d/%d): %s", attempt, LLM_MAX_RETRIES, e)
             convo = base_messages + [
                 {"role": "assistant", "content": raw},
-                {"role": "user", "content": _W["parse_error"].format(error=e)},
+                {"role": "user", "content": _w()["parse_error"].format(error=e)},
             ]
             _backoff(attempt)
         except Exception as e:  # transport / timeout → reset conversation, back off
@@ -212,7 +270,8 @@ def choose(prompt, task: str, question: str, options: dict) -> Optional[str]:
     if LLM_STUB_MODE:
         return None
     payload = {"task": task, "question": question, "options": options}
-    parsed = _chat_json(
+    parsed = _ask(
+        replies.CHOOSE,
         [{"role": "system", "content": prompt.text},
          {"role": "user", "content": json.dumps(payload, ensure_ascii=False)}],
         temperature=float(prompt.meta.get("temperature", 0)))
@@ -249,20 +308,19 @@ def _history_context(history: Optional[list], limit: int = 5) -> str:
         task = str(turn.get("task", "")).strip()
         if not task:
             continue
-        lines = [f"- {_W['history_task']}: {task}"]
+        lines = [f"- {_w()['history_task']}: {task}"]
         anchor = str(turn.get("phrase", "")).strip()
         if anchor:
-            lines.append(f"  {_W['history_phrase']}: {anchor}")
+            lines.append(f"  {_w()['history_phrase']}: {anchor}")
         answer = str(turn.get("answer", "")).strip()
         if answer:
-            lines.append(f"  {_W['history_answer']}: {answer[:800]}")
+            lines.append(f"  {_w()['history_answer']}: {answer[:800]}")
         blocks.append("\n".join(lines))
     if not blocks:
         return ""
-    return f"\n\n{_W['history_heading']}:\n" + "\n".join(blocks)
+    return f"\n\n{_w()['history_heading']}:\n" + "\n".join(blocks)
 
 
-_ENVELOPE_CORRECTION = prompts.text("inference/envelope_correction")
 
 
 def _is_off_envelope(parsed) -> bool:
@@ -291,11 +349,11 @@ def make_search_phrase(task: str, visual: bool = False,
     # No `system` role: the gateway's agent supplies a leading system message and
     # rejects a second one ("System message must be at the beginning"). Fold our
     # instructions into the user turn instead.
-    prompt = IMAGE_PHRASE_SYSTEM_PROMPT if visual else PHRASE_SYSTEM_PROMPT
-    base = f"{prompt}{_history_context(history)}\n\n{_W['task_heading']}:\n{task}"
+    prompt = _prompt("inference/image_phrase") if visual else _prompt("inference/phrase")
+    base = f"{prompt}{_history_context(history)}\n\n{_w()['task_heading']}:\n{task}"
     messages = [{"role": "user", "content": base}]
     try:
-        parsed = _chat_json(messages, temperature=LLM_TEMPERATURE)
+        parsed = _ask(replies.PHRASE, messages, temperature=LLM_TEMPERATURE)
     except Exception as e:
         log.warning("Search-phrase generation failed, using raw task: %s", e)
         return task.strip(), False
@@ -327,10 +385,10 @@ def ask_chunk(task: str, chunk_items: list[dict]) -> dict:
     # No `system` role — see make_search_phrase.
     payload = json.dumps({"task": task, "excerpt": chunk_items}, ensure_ascii=False)
     messages = [
-        {"role": "user", "content": f"{CHUNK_QA_SYSTEM_PROMPT}\n\n{payload}"},
+        {"role": "user", "content": f"{_prompt('inference/chunk_qa')}\n\n{payload}"},
     ]
     try:
-        parsed = _chat_json(messages, temperature=LLM_TEMPERATURE)
+        parsed = _ask(replies.CHUNK, messages, temperature=LLM_TEMPERATURE)
     except Exception as e:
         log.warning("Chunk QA produced no valid JSON, treating as not-found: %s", e)
         return {"found": False}
@@ -359,9 +417,9 @@ def _format_exec_result(out: dict) -> str:
     """The user-turn text fed back to the model after a sandbox run."""
     if out.get("ok"):
         s = (out.get("stdout") or "").strip()
-        return f"{_W['exec_stdout']}:\n" + (s if s else _W["exec_empty"])
-    err = (out.get("error") or (out.get("stderr") or "")).strip() or _W["exec_unknown"]
-    return f"{_W['exec_failed']}:\n" + err[:1500] + "\n" + _W["exec_recover"]
+        return f"{_w()['exec_stdout']}:\n" + (s if s else _w()["exec_empty"])
+    err = (out.get("error") or (out.get("stderr") or "")).strip() or _w()["exec_unknown"]
+    return f"{_w()['exec_failed']}:\n" + err[:1500] + "\n" + _w()["exec_recover"]
 
 
 def _compute_tail(compute: list, force: bool) -> str:
@@ -373,10 +431,10 @@ def _compute_tail(compute: list, force: bool) -> str:
     """
     if not compute:
         return ""
-    done = "\n\n".join(f"{_W['code_heading']}:\n{c['code']}\n{_format_exec_result(c['output'])}"
+    done = "\n\n".join(f"{_w()['code_heading']}:\n{c['code']}\n{_format_exec_result(c['output'])}"
                        for c in compute)
-    guide = _W["compute_guide_final"] if force else _W["compute_guide"]
-    return f"\n\n{_W['compute_heading']}:\n" + done + "\n\n" + guide
+    guide = _w()["compute_guide_final"] if force else _w()["compute_guide"]
+    return f"\n\n{_w()['compute_heading']}:\n" + done + "\n\n" + guide
 
 
 def _requested_tail(requested: list, force: bool) -> str:
@@ -387,11 +445,11 @@ def _requested_tail(requested: list, force: bool) -> str:
     """
     if not requested:
         return ""
-    done = "\n".join(f"- [{r['block_id']}] {r.get('title') or _W['image_uncaptioned']}"
-                     f"{'' if r.get('delivered') else ' — ' + _W['image_unavailable']}"
+    done = "\n".join(f"- [{r['block_id']}] {r.get('title') or _w()['image_uncaptioned']}"
+                     f"{'' if r.get('delivered') else ' — ' + _w()['image_unavailable']}"
                      for r in requested)
-    guide = _W["image_guide_final"] if force else _W["image_guide"]
-    return f"\n\n{_W['image_heading']}:\n" + done + "\n\n" + guide
+    guide = _w()["image_guide_final"] if force else _w()["image_guide"]
+    return f"\n\n{_w()['image_heading']}:\n" + done + "\n\n" + guide
 
 
 def _image_part(path: str, max_side: int = None, png: bool = False) -> Optional[dict]:
@@ -429,11 +487,8 @@ def _answer_messages(text: str, image_parts: list) -> list:
     return [{"role": "user", "content": [{"type": "text", "text": text}, *image_parts]}]
 
 
-READOFF_PROMPT = prompts.text("inference/readoff")
 
-_READOFF_CORRECTION = prompts.text("inference/readoff_correction")
 
-REVISE_PROMPT = prompts.text("inference/revise")
 
 
 def read_off_image(task: str, image_path: str, hint: str) -> Optional[dict]:
@@ -452,13 +507,14 @@ def read_off_image(task: str, image_path: str, hint: str) -> Optional[dict]:
     part = _image_part(image_path, max_side=READOFF_IMAGE_MAX_SIDE, png=True)
     if part is None:
         return None
-    text = (f"{READOFF_PROMPT}\n{_W['task_heading']}:\n{task}\n\n"
-            f"{_W['readoff_heading']}:\n{hint}")
+    text = (f"{_prompt('inference/readoff')}\n{_w()['task_heading']}:\n{task}\n\n"
+            f"{_w()['readoff_heading']}:\n{hint}")
     # A format spec inside the task hijacks this schema too ({"amount": ...}
     # instead of {"reading": ...}) — re-ask once, same cure as the envelope.
-    for attempt_text in (text, f"{text}\n\n{_READOFF_CORRECTION}"):
+    for attempt_text in (text, f"{text}\n\n{_prompt('inference/readoff_correction')}"):
         try:
-            parsed = _chat_json(
+            parsed = _ask(
+                replies.READOFF,
                 [{"role": "user", "content": [{"type": "text", "text": attempt_text}, part]}],
                 temperature=LLM_TEMPERATURE)
         except Exception as e:
@@ -472,7 +528,8 @@ def read_off_image(task: str, image_path: str, hint: str) -> Optional[dict]:
             value = parsed.get("value")
             if isinstance(value, (int, float)) and f"{value:g}" not in reading:
                 unit = str(parsed.get("unit") or "").strip()
-                reading = f"{reading} — abgelesener Wert: {value:g} {unit}".strip()
+                reading = _w()["readoff_value"].format(
+                    reading=reading, value=f"{value:g}", unit=unit).strip()
                 parsed["reading"] = reading
             return parsed
         log.warning("Read-off ignored its schema (keys: %s), retrying", sorted(parsed)[:6])
@@ -486,8 +543,9 @@ def revise_with_readings(task: str, answer_text: str, readings: list[str]) -> st
     payload = json.dumps({"task": task, "answer": answer_text,
                           "readings": readings}, ensure_ascii=False)
     try:
-        parsed = _chat_json(
-            [{"role": "user", "content": f"{REVISE_PROMPT}\n\n{payload}"}],
+        parsed = _ask(
+            replies.REVISE,
+            [{"role": "user", "content": f"{_prompt('inference/revise')}\n\n{payload}"}],
             temperature=LLM_TEMPERATURE)
     except Exception as e:
         log.warning("Answer revision failed, keeping the original: %s", e)
@@ -551,13 +609,13 @@ def answer_from_sources(task: str, chunk_items: list[dict],
                               "quote": str(first.get("text", ""))[:120]}],
                 "compute": [], "attached_images": []}
 
-    spec = _ANSWER_SPEC_JSON if as_json else _ANSWER_SPEC_TEXT
-    prompt = _ANSWER_PROMPT_HEAD + spec + _ANSWER_PROMPT_TAIL
+    spec = _prompt("inference/answer_spec_json") if as_json else _prompt("inference/answer_spec_text")
+    prompt = _prompt("inference/answer_head") + spec + _prompt("inference/answer_tail")
     budget = max_compute if code_runner else 0
     if budget > 0:
-        prompt = prompt + _COMPUTE_HINT
+        prompt = prompt + _prompt("inference/compute_hint")
     if image_requester and max_image_requests > 0:
-        prompt = prompt + _IMAGE_HINT
+        prompt = prompt + _prompt("inference/image_hint")
     payload = json.dumps({"task": task, "prior": prior, "excerpt": chunk_items},
                          ensure_ascii=False)
     base = f"{prompt}{_history_context(history)}\n\n{payload}"
@@ -567,7 +625,7 @@ def answer_from_sources(task: str, chunk_items: list[dict],
         part = _image_part(images[idx])
         if part is not None:
             image_parts.append({"type": "text",
-                                "text": _W["image_part"].format(index=idx) + ":"})
+                                "text": _w()["image_part"].format(index=idx) + ":"})
             image_parts.append(part)
             attached.append(idx)
 
@@ -579,7 +637,8 @@ def answer_from_sources(task: str, chunk_items: list[dict],
         force = attempt == actions                   # last allowed call → must answer
         tail = _compute_tail(compute, force) + _requested_tail(requested, force)
         try:
-            parsed = _chat_json(
+            parsed = _ask(
+                None if as_json else replies.answer(actions=not force),
                 _answer_messages(base + tail, image_parts),
                 temperature=LLM_TEMPERATURE)
         except Exception as e:
@@ -590,7 +649,8 @@ def answer_from_sources(task: str, chunk_items: list[dict],
             break
         if code_runner and action == "python" and parsed.get("code"):
             code = str(parsed["code"])
-            out = code_runner(code, code_context) or {"ok": False, "error": "kein Ergebnis"}
+            out = code_runner(code, code_context) or {
+                "ok": False, "error": _w()["exec_none"]}
             compute.append({"code": code, "output": out})
             continue
         # "image" is accepted alongside "image": the surrounding prompt is German
@@ -606,9 +666,9 @@ def answer_from_sources(task: str, chunk_items: list[dict],
             item = image_requester(block_id) or {}
             part = _image_part(item.get("image_path")) if item.get("image_path") else None
             if part is not None:
-                image_parts.append({"type": "text",
-                                    "text": f"Angefordertes Bild [{block_id}]: "
-                                            f"{item.get('title') or ''}"})
+                image_parts.append({"type": "text", "text": _w()[
+                    "image_requested"].format(
+                        id=block_id, title=item.get("title") or "")})
                 image_parts.append(part)
             requested.append({"block_id": block_id, "title": item.get("title"),
                               "delivered": part is not None,
@@ -625,9 +685,10 @@ def answer_from_sources(task: str, chunk_items: list[dict],
         log.warning("Answer ignored the response envelope (keys: %s), retrying",
                     sorted(parsed)[:8])
         try:
-            parsed = _chat_json(
+            parsed = _ask(
+                None if as_json else replies.answer(actions=False),
                 _answer_messages(
-                    f"{base}{_compute_tail(compute, True)}\n\n{_ENVELOPE_CORRECTION}",
+                    f"{base}{_compute_tail(compute, True)}\n\n{_prompt('inference/envelope_correction')}",
                     image_parts),
                 temperature=LLM_TEMPERATURE)
         except Exception as e:
@@ -657,8 +718,16 @@ def format_as_json(task: str, answer_text: str) -> str:
     """Reformat a finished text answer as a pretty JSON string (schema from the task)."""
     if LLM_STUB_MODE:
         return json.dumps({"answer": answer_text}, ensure_ascii=False, indent=2)
+    if providers.enforces_schema("llm"):
+        # The shape is the user's own and exists only as prose in the task,
+        # so there is no schema to generate in, and a model that is asked
+        # inside schemas only is not asked for it.
+        log.warning("the answer is not reformatted as JSON: this model is "
+                    "only asked inside a reply schema, and the task's own "
+                    "shape is none")
+        return json.dumps({"answer": answer_text}, ensure_ascii=False, indent=2)
     payload = json.dumps({"task": task, "answer": answer_text}, ensure_ascii=False)
-    messages = [{"role": "user", "content": f"{JSON_FORMAT_PROMPT}\n\n{payload}"}]
+    messages = [{"role": "user", "content": f"{_prompt('inference/json_format')}\n\n{payload}"}]
     obj = _chat_json(messages, temperature=LLM_TEMPERATURE)
     return json.dumps(obj, ensure_ascii=False, indent=2)
 
@@ -677,8 +746,9 @@ def compare_answers(task: str, plans: list) -> Optional[str]:
         return "\n".join(f"{p['label']}: {p['answer'] or '-'}" for p in plans)
     payload = json.dumps({"task": task, "documents": plans}, ensure_ascii=False)
     try:
-        parsed = _chat_json(
-            [{"role": "user", "content": f"{COMPARE_PROMPT}\n\n{payload}"}],
+        parsed = _ask(
+            replies.COMPARE,
+            [{"role": "user", "content": f"{_prompt('inference/compare')}\n\n{payload}"}],
             temperature=LLM_TEMPERATURE)
     except Exception as e:
         log.warning("Comparison failed, keeping the per-document answers: %s", e)

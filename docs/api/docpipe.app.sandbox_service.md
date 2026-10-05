@@ -1,6 +1,6 @@
-# scripts.inference_app.sandbox_service
+# docpipe.app.sandbox_service
 
-`scripts/inference_app/sandbox_service.py`, read with `ast` by `scripts/build_docs.py`. The docstrings are the code's own: edit them there, not here.
+`docpipe/app/sandbox_service.py`, read with `ast` by `scripts/build_docs.py`. The docstrings are the code's own: edit them there, not here.
 
 sandbox_service.py: Localhost HTTP wrapper around llm-sandbox.
 
@@ -60,7 +60,7 @@ def run_code(code: str, context: dict | None, timeout: int) -> dict
 ### main
 
 ```python
-def main() -> None
+def main(argv=None) -> None
 ```
 
 [Back to the index](../README.md)

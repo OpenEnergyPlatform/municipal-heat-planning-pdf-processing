@@ -67,6 +67,16 @@ def trust(row: dict, *, conflict: bool = False, transcribed: bool = False,
 
 {level, reasons, image_origin, corroborated} for one accepted tuple.
 
+### transcribed_documents
+
+```python
+def transcribed_documents(db) -> set
+```
+
+The documents of a database whose pages a model transcribed, by the
+name their harvest file has. None, or a database that predates the
+mark: no document.
+
 ### marks
 
 ```python

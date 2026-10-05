@@ -24,6 +24,30 @@ Author: Felix Vossel
 
 ## Functions
 
+### file_sha256
+
+```python
+def file_sha256(path) -> tuple
+```
+
+(sha256, size in bytes) of a file, read in pieces.
+
+### content_of
+
+```python
+def content_of(filename: str, connection: sqlite3.Connection)
+```
+
+(sha256, bytes) a document was registered with; (None, None) when the
+row, or the database, is older than that record.
+
+### set_content
+
+```python
+def set_content(filename: str, sha256: str, size: int,
+                connection: sqlite3.Connection) -> None
+```
+
 ### document_exists
 
 ```python

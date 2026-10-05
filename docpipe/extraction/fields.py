@@ -25,6 +25,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Optional
 
+from . import wording
 from .spec import Parameter
 
 # What a slot wants back. VALUE is the only one that decides how many rows
@@ -121,15 +122,19 @@ class Slot:
         # meaning rather than by which word looks nearest. Where no entry
         # has a meaning the short form stays, so a profile that has not
         # written any pays nothing for the promise.
+        # The two keys and the gloss of UNSTATED are the profile's words,
+        # as the prompt that explains them is.
+        words = wording.phrases()
+        means, spellings = words["option_means"], words["option_spellings"]
         if any(opt.definition for opt in self.options):
-            out = {opt.label: {"bedeutet": opt.definition,
-                               "Schreibweisen": list(opt.synonyms)}
-                   if opt.definition else {"Schreibweisen": list(opt.synonyms)}
+            out = {opt.label: {means: opt.definition,
+                               spellings: list(opt.synonyms)}
+                   if opt.definition else {spellings: list(opt.synonyms)}
                    for opt in self.options}
-            out[UNSTATED] = {"bedeutet": "in diesen Passagen steht es nicht"}
+            out[UNSTATED] = {means: words["unstated_means"]}
             return out
         out = {opt.label: list(opt.synonyms) for opt in self.options}
-        out[UNSTATED] = ["steht in diesen Passagen nicht"]
+        out[UNSTATED] = [words["unstated_spelling"]]
         return out
 
 

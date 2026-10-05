@@ -3,6 +3,9 @@ from docpipe.profile import Facet, Profile
 
 PROFILE = Profile(
     name="scenarios",
+    # Everything the default profile has, this one writes itself; a test
+    # holds that, so no other prompt ever stands in for a missing one.
+    extends="default",
     title="IPCC-AR6-Szenarienliteratur – Recherche",
     document_noun="Publikation",
     source_language="en",

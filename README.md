@@ -4,6 +4,28 @@
 
 Tools and scripts developed to support the [MHPO development](https://github.com/OpenEnergyPlatform/municipal-heat-planning-ontology) by automating data extraction, enrichment, and semantic indexing of PDF reports: a document pipeline (`docpipe/`) that turns a corpus of PDFs into a searchable database and index and then reads typed values out of it into a knowledge graph. The corpus is a profile's business (`profiles/<name>/`): `kwp` covers German municipal heat plans (Kommunale Wärmepläne) and feeds MHPKG on the Open Energy Platform, `scenarios` covers the literature the IPCC AR6 scenario database cites and feeds OEKG.
 
+## Install and start
+
+```bash
+pip install .                        # the package and the docpipe command
+pip install ".[layout,embed,app]"    # plus stages that run a model in this process
+```
+
+The extras are named in `pyproject.toml`: `layout` (stage 2), `embed` (stage 6
+and the chat's local embedder), `app` (the chat), `kg` (the graph and its
+checks), `kwp` (what the profiles here read their document lists with),
+`sandbox`, `anthropic` and `dev`. A project of one's own starts in an empty
+folder:
+
+```bash
+docpipe init       # docpipe.toml, and a profile that extends the built-in default
+docpipe doctor     # what is missing before a stage can run
+docpipe ingest     # register the PDFs put into data/<name>/pdf
+```
+
+`docpipe --help` lists every command: the stages, the chat and the tools around
+them. `python -m docpipe.<stage>` still works and takes the same arguments.
+
 ## Profiles
 
 The pipeline itself is generic: `docpipe/` knows about PDFs, not about heat
@@ -11,24 +33,27 @@ plans. What a project contributes lives in `profiles/<name>/` — where its
 documents come from (`source.py`), the tables it adds (`schema.sql`), the
 prompts it runs on (`prompts/<stage>/`) and the filters its app offers.
 
-Pick one per run. The profile also decides where the data lives
+Pick one per run: the `profile` key of `docpipe.toml`, `--profile <name>` on a
+command, or `DOCPIPE_PROFILE`. The profile also decides where the data lives
 (`data/<name>/`), so two projects never share a database or an index:
 
 ```bash
-export DOCPIPE_PROFILE=kwp
-python -m docpipe.preprocessing            # paths come from the profile
+docpipe --profile kwp preprocess            # paths come from the profile
 ```
 
-The prompts belong to the profile, all of them — the core has no defaults. A
+A profile is found by name on a search path: the project's own `profiles/`,
+installed packages, the `profiles/` of this repository, then the built-in
+`default`; `--profile` also takes the directory of one. The `default` profile is
+the one the package brings itself, any folder of English documents with prompts
+for every stage. A project's profile extends it (`extends="default"`) and
+writes only what it knows better.
+
+The prompts still belong to a profile: the core has no prompt of its own. A
 prompt names the corpus it was written for and the language it answers in, and
 neither is something `docpipe/` could guess; a fallback could only be some
-other project's prompt. A stage whose profile has no prompt for it says so and
-stops.
-
-`--profile <name>` on a stage's command line is enough: every stage's
-`__main__` puts the flag into `DOCPIPE_PROFILE` before it imports the stage,
-and `--help` needs no profile. Refinement, visuals and extraction stop with one
-line naming the available profiles when none is given.
+other project's prompt. A profile that stands alone and has no prompt for a
+stage says so and stops. Refinement, visuals and extraction stop with one line
+naming the available profiles when none is given.
 
 The documentation site is published at
 [municipal-heat-planning-pdf-processing.readthedocs.io](https://municipal-heat-planning-pdf-processing.readthedocs.io/en/latest/).
@@ -66,6 +91,13 @@ the single place they are spelled out. Each stage resumes incrementally — only
 documents or items missing their output are reprocessed — so any stage can be
 re-run in isolation. A tree processed before the rename is brought forward with
 `python -m docpipe.migrate_artifact_names <processed root> --apply`.
+
+Around the stages: `docpipe compile` drafts an extraction spec from the SHACL
+shapes of a graph, `docpipe evaluate` and `docpipe benchmark` count precision and
+recall against what people decided and make a recorded harvest again without a
+model, and `docpipe export` and `docpipe serve` hand the values on as a table, an
+HTTP API or an MCP server. Every model request goes through one provider layer: a
+server of one's own, OpenAI, Anthropic or Gemini.
 
 ### 1. File processing (`docpipe.ingest` + profile)
 
@@ -131,7 +163,8 @@ The accepted tuples of a harvest are serialized into Turtle by the profile's `kg
 ### Python Libraries
 
 [vLLM](https://github.com/vllm-project/vllm) serves the LLM stages (one instance each for 4 and 5),
-reached through the [openai](https://github.com/openai/openai-python) client.
+reached through the [openai](https://github.com/openai/openai-python) client; a hosted API
+takes its place when a role's provider is set (`LLM_PROVIDER`, `VLM_PROVIDER`, `EMBEDDING_PROVIDER`).
 [Transformers](https://huggingface.co/docs/transformers/) runs PP-DocLayoutV3 (Stage 2) and the
 embedding model (Stage 6), with [qwen-vl-utils](https://github.com/QwenLM/Qwen2.5-VL) for vision
 input preprocessing. [PyMuPDF](https://pymupdf.readthedocs.io/) (rawdict mode) extracts text and
@@ -142,11 +175,12 @@ the metadata, and [pandas](https://pandas.pydata.org/) reads a profile's registe
 
 ## Database Schema
 
-SQLite, foreign keys enabled. The core schema (`docpipe/store/schema.sql`) describes any PDF corpus in eight tables; a profile adds its own tables through `profiles/<name>/schema.sql`, applied after the core schema on the same connection, and the core never learns their column names.
+SQLite, foreign keys enabled. The core schema (`docpipe/store/schema.sql`) describes any PDF corpus in nine tables; a profile adds its own tables through `profiles/<name>/schema.sql`, applied after the core schema on the same connection, and the core never learns their column names.
 
 | Table | Content |
 | --- | --- |
 | Documents | One row per PDF: `external_id` (the profile's stable identity: the file name for `kwp`, the DOI for `scenarios`), `filename`, `published`, `num_pages`, whether a model had to transcribe the pages (`page_text_transcribed`), and the versioning columns `group_key`, `is_current`, `supersedes` |
+| Meta | What the database says about itself, one row per fact: the model, dimension and backend its index was built with |
 | Pages | One row per physical page of a document |
 | Sections | Retrieval chunks: title, primary page number, full content |
 | SectionPages | Which pages a section spans (many-to-many) |
@@ -186,10 +220,15 @@ the source PDF. `docpipe.embedding` provides the query-side embedder (a local
 model or an API), separately from the batch embedder so a query does not need a
 whole GPU.
 
-[`scripts/inference_app/`](scripts/inference_app/README.md) is the Streamlit
-front-end around it: one document at a time, or the same question put to
-several documents and answered side by side. It documents its own
-configuration.
+`docpipe chat` starts the Streamlit app around it (`docpipe/app/`, the `app`
+extra). A question goes to one document, to several documents answered side by
+side, or to the whole corpus; retrieval is by meaning and, where
+`docpipe lexical` built a word index, by word as well. Pointed at a harvest
+directory, the app shows the verified values the harvest holds for a question
+before it answers from the documents, and has a review page where people decide
+whether harvested values are right; `docpipe evaluate` counts against those
+decisions. [`scripts/inference_app/README.md`](scripts/inference_app/README.md)
+documents its configuration.
 
 ## Collaboration
 

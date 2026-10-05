@@ -66,17 +66,23 @@ def citation_label(hit: dict) -> str:
     kind = hit.get("owner_kind")
     section = w["citation_section"]
 
+    # Over the whole corpus a source says whose it is, in front: the model
+    # must not put two documents' numbers into one sentence unnamed, and
+    # the reader has to know which PDF to open.
+    whose = hit.get("document_label")
+    whose = f"{whose}: " if whose else ""
+
     if kind == "section":
         name = sec_title or section
-        return f'{section} {lq}{name}{rq}, {page_str}'
+        return f'{whose}{section} {lq}{name}{rq}, {page_str}'
     in_sec = f' ({section} {lq}{sec_title}{rq})' if sec_title else ''
     if kind == "table":
         cap = hit.get("title") or w["citation_table"]
-        return f'{w["citation_table"]} {lq}{cap}{rq}{in_sec}, {page_str}'
+        return f'{whose}{w["citation_table"]} {lq}{cap}{rq}{in_sec}, {page_str}'
     if kind == "figure":
         cap = hit.get("title") or w["citation_figure"]
-        return f'{w["citation_figure"]} {lq}{cap}{rq}{in_sec}, {page_str}'
-    return page_str
+        return f'{whose}{w["citation_figure"]} {lq}{cap}{rq}{in_sec}, {page_str}'
+    return f"{whose}{page_str}"
 
 
 def format_hit(index: int, hit: dict) -> dict:

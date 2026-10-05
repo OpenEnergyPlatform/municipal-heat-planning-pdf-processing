@@ -130,6 +130,30 @@ def trust(row: dict, *, conflict: bool = False, transcribed: bool = False,
             "corroborated": bool(corroborated)}
 
 
+def transcribed_documents(db) -> set:
+    """The documents of a database whose pages a model transcribed, by the
+    name their harvest file has. None, or a database that predates the
+    mark: no document."""
+    if db is None:
+        return set()
+    import sqlite3
+    from pathlib import Path
+
+    from docpipe.store.schema import columns, readonly_uri
+    connection = sqlite3.connect(readonly_uri(db), uri=True)
+    try:
+        # Asked, not tried: a database that cannot be opened is not one
+        # that predates the mark, and must not read as "no document".
+        if "page_text_transcribed" not in columns(connection, "Documents"):
+            return set()
+        rows = connection.execute(
+            'SELECT "filename" FROM "Documents" '
+            'WHERE "page_text_transcribed" > 0').fetchall()
+    finally:
+        connection.close()
+    return {Path(row[0]).stem for row in rows}
+
+
 # The pieces of a trust line, in the order they are said. Names, not words:
 # the level is a fact about the harvest, the sentence is a fact about the
 # reader, and the two corpora do not share a reader. One profile serves German

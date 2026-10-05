@@ -24,10 +24,10 @@ True if *text* carries the empty-cell run that precedes a truncated answer.
 ### create_client
 
 ```python
-def create_client(base_url: str | None = None, timeout: float | None = None) -> openai.OpenAI
+def create_client(base_url: str | None = None, timeout: float | None = None)
 ```
 
-Creates an OpenAI client pointed at the vLLM server.
+The client of the vision model, for the provider it is set to.
 
 ### check_model_available
 
@@ -54,13 +54,15 @@ def call_vision(
     temperature: float = VLM_TEMPERATURE,
     max_tokens: int = VLM_MAX_TOKENS,
     repetition_penalty: float | None = None,
+    reply: tuple | None = None,
 ) -> dict | None
 ```
 
 Sends an image + prompt to the vision model and parses the JSON response.
 
 The wall-clock bound per request is the client timeout set by
-create_client(), not *max_retries*.
+create_client(), not *max_retries*. *reply* is the (name, schema) of the
+object asked for (see `replies`), for an API that generates inside one.
 
 Returns:
     Parsed JSON dict, or None once the retries are exhausted or the server

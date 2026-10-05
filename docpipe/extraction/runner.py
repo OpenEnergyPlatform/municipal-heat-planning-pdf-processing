@@ -12,8 +12,7 @@ for no GPU stack it does not use.
 document and ranks each owner by the best score any probe gave it; measured
 over 65 documents and 15,082 values, the fused ranking put the source a value
 was really read from at median rank 26, against 77 for the old per-probe
-concatenation. `make_candidates` is a deterministic floor under that ranking,
-matched by LIKE over the corpus's own vocabulary tokens. A probe is either one
+concatenation. A probe is either one
 of the spec's query templates (`queries.expand`), stable across the whole
 corpus so `prime_probe_cache`'s embeddings hit for every document, or a
 HyDE-style anchor sentence a model writes: `make_anchors` writes one set per
@@ -57,18 +56,23 @@ import signal
 import sqlite3
 import threading
 import time
+from datetime import datetime, timezone
 from contextlib import contextmanager
 from dataclasses import replace
 from pathlib import Path
 from typing import Callable, Optional
 
 from docpipe import prompts
+from docpipe import providers
 from docpipe import usage as token_usage
 from docpipe.llm_preflight import assert_serving, request_extras
-from docpipe.profile import add_profile_argument, require_profile
+from docpipe.profile import add_profile_argument, program, require_profile
+from docpipe.store.schema import readonly_uri
 
 from . import fields
+from . import replies
 from . import trace
+from .wording import say
 from .pipeline import (Source, WorkItem, apply_frame, base_years, batch_uri,
                        build_sweeps, cell_index as pipeline_cell_index,
                        drop_repeats, fold_batch, follow_up, group_items,
@@ -89,8 +93,6 @@ LLM_BASE_URL = os.environ.get("LLM_BASE_URL", "http://localhost:8000/v1")
 LLM_API_KEY = os.environ.get("LLM_API_KEY", "EMPTY")
 LLM_MODEL = os.environ.get("LLM_MODEL", "Qwen/Qwen3.5-122B-A10B-FP8")
 LLM_TIMEOUT = int(os.environ.get("LLM_TIMEOUT", "180"))
-TOP_K = int(os.environ.get("EXTRACT_TOP_K", "8"))
-MAX_ROUNDS = int(os.environ.get("EXTRACT_MAX_ROUNDS", "4"))
 MAX_RETRIES = int(os.environ.get("EXTRACT_MAX_RETRIES", "3"))
 # What a retry may take after a request timed out. The first attempt keeps
 # LLM_TIMEOUT, which is sized for a slow but working generation; a request the
@@ -149,6 +151,24 @@ TRANSPORT_WAIT = float(os.environ.get("EXTRACT_TRANSPORT_WAIT", "15"))
 TRANSPORT_WAIT_MAX = float(os.environ.get("EXTRACT_TRANSPORT_WAIT_MAX", "120"))
 
 
+def unheld_requests() -> int:
+    """1 when this run replayed a cassette and asked something it does not
+    hold, else 0: such a harvest is not the recorded run's, and a job that
+    compares the two must not take it for one."""
+    if not providers.replaying():
+        return 0
+    from docpipe.providers import cassette
+    held = cassette.player()
+    log.info("extraction: %d answer(s) taken from %s, %d request(s) it does "
+             "not hold", held.replayed, held.path.name, held.missed)
+    if not held.missed:
+        return 0
+    log.error("extraction: this run asked %d request(s) the recorded one did "
+              "not. Its harvest is not the recorded run's and says nothing "
+              "about it.", held.missed)
+    return 1
+
+
 def retry_wait(attempt: int, transport: bool = False) -> float:
     """Seconds to wait before attempt *attempt* + 1.
 
@@ -158,6 +178,8 @@ def retry_wait(attempt: int, transport: bool = False) -> float:
     to come back; the model's own mistakes keep the short curve, because
     waiting longer for those buys nothing.
     """
+    if providers.replaying():
+        return 0.0          # nothing comes back that is waited for
     if transport:
         return min(TRANSPORT_WAIT * (2 ** max(0, attempt - 1)),
                    TRANSPORT_WAIT_MAX)
@@ -292,13 +314,6 @@ UNIT_ANCHOR = "#unit"
 # 50 ranks of an anchor-only ranking, 80% of them are in a table or a figure
 # and are taken whole regardless of rank.
 PROSE_TOP = int(os.environ.get("EXTRACT_PROSE_TOP", "200"))
-# The pool: how far down EACH probe's own ranking an owner still counts as
-# found. An owner is planned when it is in the top of at least one probe, so
-# a section only the year anchor likes is read, instead of sitting at rank 200
-# of the fused list because two hundred owners have a higher best score.
-# PROSE_TOP is then a ceiling against a pathological document, not the
-# selector: a plan has about 132 sections, so the pool cannot exceed that.
-POOL_TOP = int(os.environ.get("EXTRACT_POOL_TOP", "50"))
 # How many owners the document plan takes, tables figures and prose together,
 # in the order the ranking put them. This is the cut that replaces the
 # structural floor: whether something is a table decides nothing here, only
@@ -354,10 +369,6 @@ FIELD_PARALLEL = int(os.environ.get("EXTRACT_FIELD_PARALLEL", "192"))
 FIELD_WINDOW = int(os.environ.get("EXTRACT_FIELD_WINDOW", "2"))
 FIELD_OVERLAP = int(os.environ.get("EXTRACT_FIELD_OVERLAP", "1"))
 FIELD_ROUNDS = int(os.environ.get("EXTRACT_FIELD_ROUNDS", "4"))
-# How many sections at each end of a document count as its covers. Only ever
-# used for a parameter without axes, which asks for something that stands once
-# and at a known place — the title page in front, the Impressum at the back.
-EDGE_SECTIONS = int(os.environ.get("EXTRACT_EDGE_SECTIONS", "3"))
 # The most windows one coordinate may cost before the sweep stops. A plan of
 # 249 sections combed two at a time for seven axes would be nine hundred
 # requests for one batch, so there is a ceiling — and a row that hits it is
@@ -626,7 +637,7 @@ def make_parents(db_path: Path) -> Callable:
 
     def fetcher():
         if getattr(local, "conn", None) is None:
-            local.conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
+            local.conn = sqlite3.connect(readonly_uri(db_path), uri=True)
             local.conn.row_factory = sqlite3.Row
             local.fetch = make_content_fetcher()
         return local.conn, local.fetch
@@ -681,7 +692,7 @@ def make_owner_sources(db_path: Path) -> Callable:
 
     def _connections():
         if getattr(local, "conn", None) is None:
-            local.conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
+            local.conn = sqlite3.connect(readonly_uri(db_path), uri=True)
             local.conn.row_factory = sqlite3.Row
             local.fetch = make_content_fetcher()
         return local.conn, local.fetch
@@ -728,7 +739,7 @@ def make_review_sources(db_path: Path) -> Callable:
 
     def _connections():
         if getattr(local, "conn", None) is None:
-            local.conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
+            local.conn = sqlite3.connect(readonly_uri(db_path), uri=True)
             local.conn.row_factory = sqlite3.Row
             local.fetch = make_content_fetcher()
         return local.conn, local.fetch
@@ -798,7 +809,7 @@ def make_rest_of_document(db_path: Path) -> Callable:
 
     def connections():
         if getattr(local, "conn", None) is None:
-            local.conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
+            local.conn = sqlite3.connect(readonly_uri(db_path), uri=True)
             local.conn.row_factory = sqlite3.Row
             local.fetch = make_content_fetcher()
         return local.conn, local.fetch
@@ -870,7 +881,7 @@ def make_more_sources(db_path: Path, index, id_to_pos: dict,
 
     def connections():
         if getattr(local, "conn", None) is None:
-            local.conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
+            local.conn = sqlite3.connect(readonly_uri(db_path), uri=True)
             local.conn.row_factory = sqlite3.Row
             local.cache = query_cache.connect(cache_path, create=False)
             local.fetch = make_content_fetcher()
@@ -982,7 +993,7 @@ def document_specs(db_path, spec: Spec, document_axes: Optional[Callable]):
     if document_axes is None:
         yield None
         return
-    conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
+    conn = sqlite3.connect(readonly_uri(db_path), uri=True)
     conn.row_factory = sqlite3.Row
     try:
         yield make_document_spec(conn, spec, document_axes)
@@ -1058,8 +1069,10 @@ def anchor_targets(spec: Spec) -> list:
     sentence `document_anchor` writes for the document it plans, and a set
     written once for the whole corpus was never searched with.
     """
-    out: list = [(PARAMETER_ANCHOR, "Kennzahl", "", spec.parameter_question),
-                 (UNIT_ANCHOR, "Einheit", "", spec.unit_question)]
+    out: list = [(PARAMETER_ANCHOR, say("anchor_parameter"), "",
+                  spec.parameter_question),
+                 (UNIT_ANCHOR, say("anchor_unit"), "",
+                  spec.unit_question)]
     for parameter in spec.parameters:
         # asked_slots, not axis_slots: an anchor is a sentence to search
         # with, and a coordinate the spec derives is never searched for.
@@ -1132,6 +1145,8 @@ def document_anchor(spec: Spec, context: Optional[dict] = None,
                     messages=[{"role": "system", "content": prompt.text},
                               *conversation],
                     extra_body=request_extras(),
+                    **providers.formatted("llm", "phrase_reply",
+                                          replies.phrase()),
                 )
                 token_usage.reply(response, LLM_MODEL)
                 reply = response.choices[0]
@@ -1283,8 +1298,13 @@ def start_limit() -> None:
     if LIMIT is not None or os.environ.get("EXTRACT_LIMIT_ADAPTIVE",
                                            "1") == "0":
         return
+    if providers.replaying():
+        return              # no queue to read and nothing to be refused by
     from . import throttle
-    LIMIT = throttle.start(LLM_BASE_URL)
+    gate = providers.gate("llm")
+    # A hosted API has no queue to read; what it refuses steers the limit.
+    LIMIT = (throttle.start(LLM_BASE_URL) if gate is None
+             else throttle.start_hosted(gate))
     if LIMIT is not None and FIELD_PARALLEL < LIMIT.maximum:
         log.info("llm limit: EXTRACT_FIELD_PARALLEL=%d opens fewer field "
                  "requests than EXTRACT_LIMIT_MAX=%d allows", FIELD_PARALLEL,
@@ -1355,7 +1375,8 @@ def make_frame_asker(image_root: Optional[Path] = None) -> Callable:
                 continue
             part = _image_part(str(image_root / path) if image_root else path)
             if part is not None:
-                parts.append({"type": "text", "text": f"Bild zu Q{index + 1}:"})
+                parts.append({"type": "text", "text": say(
+                    "image_for", label=f"Q{index + 1}")})
                 parts.append(part)
         if len(parts) > 1:
             content = parts
@@ -1380,6 +1401,8 @@ def make_frame_asker(image_root: Optional[Path] = None) -> Callable:
                     messages=[{"role": "system", "content": prompt.text},
                               *conversation],
                     extra_body=request_extras(),
+                    **providers.formatted("llm", "frame_reply",
+                                          replies.frame(slots)),
                 )
                 transport = lost = False
                 _observe_usage(getattr(completion, "usage", None))
@@ -1402,9 +1425,7 @@ def make_frame_asker(image_root: Optional[Path] = None) -> Callable:
                 faults += 1
                 cause, correction = _reply_fault(
                     reply, limit, key="pairs",
-                    shorter="Antworte mit weniger Paaren und zitiere nur die "
-                            "kurze Stelle, an der das Szenario oder das Jahr "
-                            "steht.")
+                    shorter=say("shorter_frame"))
                 log.warning("frame %s attempt %d: %s reply%s",
                             document_id, attempt, cause, _unparsable(reply))
                 trace.event("error", document_id, where="frame",
@@ -1498,11 +1519,12 @@ def frame_pairs(reply: Optional[dict], slots: list, sources: list,
             if isinstance(given, str):
                 given = given.strip()
             if given is None or given == "":
-                refuse(f'In einem Paar fehlte "{slot.name}".')
+                refuse(say("frame_missing", slot=slot.name))
                 break
             quote = entry.get(f"{slot.name}_quote")
             if not isinstance(quote, str) or not quote.strip():
-                refuse(f'Zu {slot.name}={given!r} fehlte "{slot.name}_quote".')
+                refuse(say("frame_no_quote", slot=slot.name,
+                                   given=given))
                 break
             named = entry.get(f"{slot.name}_source")
             found = where.get(str(named))
@@ -1510,16 +1532,16 @@ def frame_pairs(reply: Optional[dict], slots: list, sources: list,
                 found = next((s for s in sources
                               if quote_in(s.text or "", quote)), None)
             if found is None:
-                refuse(f"Das Zitat zu {slot.name}={given!r} steht in keiner "
-                       f"der gezeigten Passagen: {quote.strip()[:80]!r}. "
-                       f"Kopiere es Zeichen f\u00fcr Zeichen aus \"sources\".")
+                refuse(say("frame_quote_not_in_source",
+                                   slot=slot.name, given=given,
+                                   quote=quote.strip()[:80]))
                 break
             wording = entry.get(f"{slot.name}_raw")
             wording = wording.strip() if isinstance(wording, str) else None
             if not answer_in_quote(slot, given, wording, quote):
-                refuse(f"{slot.name}={given!r} steht nicht in seinem Zitat "
-                       f"{quote.strip()[:80]!r}. Schreib die Formulierung des "
-                       f"Plans in \"{slot.name}_raw\".")
+                refuse(say("frame_answer_not_in_quote",
+                                   slot=slot.name, given=given,
+                                   quote=quote.strip()[:80]))
                 break
             if slot.kind == fields.CHOICE and slot.options \
                     and option_named(slot, given) is None:
@@ -1528,17 +1550,15 @@ def frame_pairs(reply: Optional[dict], slots: list, sources: list,
                 # class lookup behind it then came back empty -- 8,944 of
                 # ar6's tuples carry an unmapped scenario label for exactly
                 # this reason. Asked again instead, and told which list.
-                refuse(f"{given!r} ist keiner der Schl\u00fcssel aus "
-                       f'"scenarios". W\u00e4hle genau einen daraus, Zeichen '
-                       f"f\u00fcr Zeichen abgeschrieben, und schreib das Wort "
-                       f'des Plans in "{slot.name}_raw".')
+                refuse(say("frame_not_an_option", given=given,
+                                   slot=slot.name))
                 break
             if slot.kind == fields.NUMBER:
                 try:
                     given = int(str(given).strip())
                 except (TypeError, ValueError):
-                    refuse(f"{slot.name}={given!r} ist keine ganze "
-                           f"Jahreszahl. Gib das Jahr vierstellig an.")
+                    refuse(say("frame_not_a_year",
+                                       slot=slot.name, given=given))
                     break
             pair[slot.name] = given
             pair[f"{slot.name}_raw"] = wording
@@ -1795,6 +1815,8 @@ def make_anchors(spec: Spec, client=None, *, store: Optional[Path] = None,
                     messages=[{"role": "system", "content": prompt.text},
                               *conversation],
                     extra_body=request_extras(),
+                    **providers.formatted("llm", "anchors_reply",
+                                          replies.anchors()),
                 )
                 token_usage.reply(response, LLM_MODEL)
                 reply = response.choices[0]
@@ -1877,110 +1899,6 @@ def prime_probe_cache(cache_conn, spec: Spec, templates: list,
 
 
 # ---------------------------------------------------------------------------
-# Fallback: the deterministic candidate floor under the retrieval sweep
-# ---------------------------------------------------------------------------
-
-def _candidate_tokens(parameter) -> list:
-    """Everything a value-bearing source could literally contain."""
-    tokens = set(parameter.units_accepted)
-    tokens.add(parameter.label)
-    for axis in parameter.axes.values():
-        if axis.dynamic:
-            # A per-document list is not corpus vocabulary: adding 146 scenario
-            # identifiers here would put 146 LIKE patterns in front of every
-            # candidate query for words that occur in no document.
-            continue
-        for labels in (axis.vocabulary or {}).values():
-            tokens.update(labels)
-    return sorted(t for t in tokens if len(t) >= 2)
-
-
-_TOKENS: dict = {}
-_TOKENS_LOCK = threading.Lock()
-
-
-def make_candidates(conn: sqlite3.Connection,
-                    content_fetcher: Optional[Callable] = None) -> Callable:
-    """Token-filtered owners of one document, straight from SQL.
-
-    LIKE over the stored text is deliberately dumb: it is the *floor*, not
-    the harvest. Retrieval finds what wording variance hides from tokens;
-    this finds what ranking hides from retrieval.
-
-    Bound to the caller's connection. It used to open its own for every call,
-    which on an NFS-backed database is a file open, a header read and a schema
-    parse per document and parameter.
-    """
-    from docpipe.inference import db as inference_db
-
-    fetch = content_fetcher or inference_db.fetch_owner_content
-
-    def edges(document_id: int) -> list:
-        """The document's first and last sections — its covers.
-
-        A parameter without axes asks for something that stands once in the
-        document and at a known place, and that place is an edge: the title
-        page in front, the Impressum at the back. It is not a similarity
-        question, and treating it as one fails in a way retrieval cannot fix,
-        because a cover page carries almost no text to embed.
-
-        The token floor above cannot reach these either: its words come from
-        units_accepted and the axis vocabularies, and a parameter without axes
-        has neither. What is left is its label, so `planning_organisation`
-        searched German full text for the phrase "Beauftragtes Planungsbüro".
-
-        Both edges, not just the front. The scenarios side measured 59 of 60
-        missing front pages in section 1 and proposed the first; measured on
-        the 58 KWP plans that named no planning office, section 1 holds it for
-        15, sections 2-3 for another 17, and the last three sections for 17
-        more. A Wärmeplan puts its Impressum at the back.
-        """
-        first = [int(r[0]) for r in conn.execute(
-            "SELECT id FROM Sections WHERE document = ? "
-            "ORDER BY COALESCE(section_number, id) LIMIT ?",
-            (document_id, EDGE_SECTIONS))]
-        last = [int(r[0]) for r in conn.execute(
-            "SELECT id FROM Sections WHERE document = ? "
-            "ORDER BY COALESCE(section_number, id) DESC LIMIT ?",
-            (document_id, EDGE_SECTIONS))]
-        return first + last
-
-    def candidates(document_id: int, parameter) -> list:
-        with _TOKENS_LOCK:
-            tokens = _TOKENS.get(parameter.uri)
-            if tokens is None:
-                tokens = _TOKENS[parameter.uri] = _candidate_tokens(parameter)
-        like = lambda column: " OR ".join([f"{column} LIKE ?"] * len(tokens))
-        params = [f"%{t}%" for t in tokens]
-        owners: list = []
-        owners += [("table", int(r[0])) for r in conn.execute(
-            f"SELECT t.id FROM Tables t JOIN Sections s ON t.section = s.id "
-            f"WHERE s.document = ? AND ({like('t.markdown')} OR {like('t.caption')})",
-            [document_id, *params, *params])]
-        owners += [("section", int(r[0])) for r in conn.execute(
-            f"SELECT id FROM Sections WHERE document = ? AND ({like('content')})",
-            [document_id, *params])]
-        owners += [("figure", int(r[0])) for r in conn.execute(
-            f"SELECT i.id FROM Images i JOIN Sections s ON i.section = s.id "
-            f"WHERE s.document = ? AND ({like('i.description')})",
-            [document_id, *params])]
-        if not parameter.axes:
-            seen = {o for o in owners}
-            owners += [("section", sid) for sid in edges(document_id)
-                       if ("section", sid) not in seen]
-        sources = []
-        for owner_kind, owner_id in owners:
-            hit = fetch(conn, owner_kind, owner_id)
-            if hit is None:
-                continue
-            sources.append(_source_of({**hit, "owner_kind": owner_kind,
-                                       "owner_id": owner_id}, via="fallback"))
-        return sources
-
-    return candidates
-
-
-# ---------------------------------------------------------------------------
 # Harvest: one source + one parameter -> the model's claimed tuples
 # ---------------------------------------------------------------------------
 
@@ -2043,10 +1961,10 @@ def watch_server(on_dead: Callable, *, probe: Callable = probe_server,
 
 
 def _client():
-    """The one OpenAI-compatible client shape this stage uses."""
-    from openai import OpenAI
-    client = OpenAI(base_url=LLM_BASE_URL, api_key=LLM_API_KEY,
-                    timeout=LLM_TIMEOUT, max_retries=0)
+    """The one client shape this stage uses, for the provider it is set to."""
+    client = providers.client("llm", base_url=LLM_BASE_URL,
+                              api_key=LLM_API_KEY, timeout=LLM_TIMEOUT,
+                              max_retries=0)
     if LIMIT is None:
         return client
     from .throttle import Limited
@@ -2180,12 +2098,10 @@ def _unparsable(reply) -> str:
             f" | reasoning {len(reasoning)}ch: {show(reasoning)}]")
 
 
-# What has to be said back whatever went wrong: the shape that was asked for.
-_SHAPE_RULE = (" Gib NUR das JSON-Objekt aus, in EINER Zeile, ohne Text davor "
-               "oder danach, ohne Codefence, ohne <think>-Block und ohne ein "
-               "zweites Objekt. Anführungszeichen INNERHALB eines Zitats "
-               "müssen als \\\" escaped sein — ist das mühsam, kürz das "
-               "Zitat auf eine Stelle ohne Anführungszeichen.")
+def _shape_rule() -> str:
+    """What has to be said back whatever went wrong: the shape that was
+    asked for."""
+    return say("shape_rule")
 
 
 def _reply_fault(reply, limit: int, *, key: str = "",
@@ -2202,12 +2118,11 @@ def _reply_fault(reply, limit: int, *, key: str = "",
     The cause goes into the trace too, so a run can say what its retries were
     spent on instead of counting all of them as "unparsable".
     """
+    shape = _shape_rule()
+
     def cut_off() -> tuple:
-        return "cut_off", (
-            f"Deine Antwort wurde nach {limit} Tokens abgeschnitten und ist "
-            "deshalb kein vollständiges JSON-Objekt. "
-            + (shorter or "Antworte kürzer: zitiere nur die kurze Stelle, an "
-                          "der die Angabe steht."))
+        return "cut_off", (say("cut_off", limit=limit)
+                           + (shorter or say("shorter")))
 
     ran_out = getattr(reply, "finish_reason", None) == "length"
     message = getattr(reply, "message", None)
@@ -2221,13 +2136,10 @@ def _reply_fault(reply, limit: int, *, key: str = "",
         # the model is told instead — and this is also the one reply that
         # says the server's thinking switch did not take, which is worth
         # seeing in the trace rather than hiding behind "empty".
-        return "reasoning_only", (
-            "Du hast nur nachgedacht und nichts geantwortet: dein Beitrag "
-            "war leer. Denk nicht vor, sondern gib direkt das Ergebnis aus."
-            + _SHAPE_RULE)
+        return "reasoning_only", say("reasoning_only") + shape
     if not text:
         return cut_off() if ran_out else (
-            "empty", "Deine Antwort war leer." + _SHAPE_RULE)
+            "empty", say("empty") + shape)
     try:
         data = json.loads(text)
     except json.JSONDecodeError as exc:
@@ -2240,29 +2152,24 @@ def _reply_fault(reply, limit: int, *, key: str = "",
             return cut_off()
         start = text.find("{")
         if start == -1:
-            return "no_object", ("Deine Antwort enthielt gar kein "
-                                 "JSON-Objekt." + _SHAPE_RULE)
+            return "no_object", say("no_object") + shape
         try:
             _obj, end = _DECODER.raw_decode(text, start)
         except json.JSONDecodeError:
             around = text[max(start, exc.pos - 60):exc.pos + 20]
-            return "syntax", (
-                f"Dein JSON bricht bei Zeichen {exc.pos - start} ab "
-                f"({exc.msg}), an dieser Stelle: {around!r}." + _SHAPE_RULE)
+            return "syntax", say(
+                "syntax", position=exc.pos - start, message=exc.msg,
+                around=around) + shape
         extra = (text[:start] + text[end:]).strip()
-        return "outside_text", (
-            f"Neben dem JSON-Objekt stand noch Text: {extra[:200]!r}."
-            + _SHAPE_RULE)
+        return "outside_text", say(
+            "outside_text", extra=extra[:200]) + shape
     if not isinstance(data, dict):
-        return "not_an_object", (
-            f"Deine Antwort war eine {type(data).__name__}-Struktur und kein "
-            "JSON-Objekt." + _SHAPE_RULE)
+        return "not_an_object", say(
+            "not_an_object", kind=type(data).__name__) + shape
     if key and not isinstance(data.get(key), list):
-        had = "fehlte" if key not in data else "war keine Liste"
-        return "missing_key", (
-            f'In deiner Antwort {had} "{key}".' + _SHAPE_RULE)
-    return "wrong_shape", ("Deine Antwort hatte nicht die Form, die verlangt "
-                           "war." + _SHAPE_RULE)
+        which = "key_missing" if key not in data else "key_not_a_list"
+        return "missing_key", say(which, key=key) + shape
+    return "wrong_shape", say("wrong_shape") + shape
 
 
 def _relabel_sources(entries, offset: int, suffix: str = "source"):
@@ -2340,14 +2247,12 @@ def _parse_action(text) -> Optional[str]:
 def _compute_reply(run: dict) -> str:
     """What the model gets back after a sandbox round."""
     if not run.get("ok"):
-        return (f"Der Code lief nicht: {run.get('error') or 'unbekannt'}. "
-                f"Antworte jetzt ohne Berechnung, oder korrigiere den Code.")
+        return say("code_failed", error=run.get("error")
+                           or say("code_error_unknown"))
     out = (run.get("stdout") or "").strip()
     if not out:
-        return ("Der Code lief, hat aber nichts ausgegeben. Gib jedes Ergebnis "
-                "mit print() aus, oder antworte ohne Berechnung.")
-    return (f"Ausgabe des Codes:\n{out}\n\nAntworte jetzt mit dem "
-            f'Tupel-Objekt. Berechnete Werte tragen "computed": true.')
+        return say("code_silent")
+    return say("code_output", output=out)
 
 
 def _parameter_payload(parameter) -> dict:
@@ -2582,8 +2487,8 @@ def make_harvester(image_root: Optional[Path] = None,
                 continue
             part = _image_part(str(image_root / path) if image_root else path)
             if part is not None:
-                parts.append({"type": "text",
-                              "text": f"Bild zu {batch.label(index)}:"})
+                parts.append({"type": "text", "text": say(
+                    "image_for", label=batch.label(index))})
                 parts.append(part)
         if len(parts) > 1:
             content = parts
@@ -2630,6 +2535,10 @@ def make_harvester(image_root: Optional[Path] = None,
                     # them, HTTP 200 every one.
                     extra_body=request_extras(),
                     **({"timeout": RETRY_TIMEOUT} if timed_out else {}),
+                    **providers.formatted("llm", "rows_reply", replies.rows(
+                        spec_of(batch, spec),
+                        whole=prompt_id == HARVEST_PROMPT_ID,
+                        sandbox=CODE_ROUNDS > 0)),
                 )
                 transport = False
                 why[0] = "no_answer"
@@ -2680,8 +2589,7 @@ def make_harvester(image_root: Optional[Path] = None,
                 faults += 1
                 cause, correction = _reply_fault(
                     reply, limit, key="tuples",
-                    shorter="Antworte mit weniger Tupeln und zitiere nur die "
-                            "kurze Stelle, an der die Zahl steht.")
+                    shorter=say("shorter_rows"))
                 log.warning("   harvest %s/%s+%d attempt %d: %s reply%s",
                             first.owner_kind, first.owner_id,
                             len(batch.items) - 1, attempt, cause,
@@ -2932,11 +2840,7 @@ def field_response_format(slot) -> dict:
 def _timed_out(exc: BaseException) -> bool:
     """A request the server never answered within its budget, as opposed to a
     connection it refused at once: only the first is worth a shorter retry."""
-    try:
-        import openai
-    except ImportError:                     # pragma: no cover - always installed
-        return False
-    return isinstance(exc, openai.APITimeoutError)
+    return providers.timed_out(exc)
 
 
 def make_field_asker(image_root: Optional[Path] = None, *,
@@ -2980,7 +2884,8 @@ def make_field_asker(image_root: Optional[Path] = None, *,
                 continue
             part = _image_part(str(image_root / path) if image_root else path)
             if part is not None:
-                parts.append({"type": "text", "text": f"Bild zu Q{index + 1}:"})
+                parts.append({"type": "text", "text": say(
+                    "image_for", label=f"Q{index + 1}")})
                 parts.append(part)
         if len(parts) == 1:
             return head + tail
@@ -3047,10 +2952,7 @@ def make_field_asker(image_root: Optional[Path] = None, *,
                     return answer
                 faults += 1
                 cause, correction = _reply_fault(
-                    reply, limit,
-                    shorter="Fasse Zeilen mit derselben Antwort in \"groups\" "
-                            "zusammen und zitiere nur die kurze Stelle, an "
-                            "der die Angabe steht.")
+                    reply, limit, shorter=say("shorter_field"))
                 log.warning("   field %s attempt %d: %s reply%s",
                             name, attempt, cause, _unparsable(reply))
                 trace.event("error", document_id, where="field",
@@ -3192,7 +3094,8 @@ def make_review_asker(image_root: Optional[Path] = None) -> Callable:
                 continue
             part = _image_part(str(image_root / path) if image_root else path)
             if part is not None:
-                parts.append({"type": "text", "text": f"Bild zu Q{index + 1}:"})
+                parts.append({"type": "text", "text": say(
+                    "image_for", label=f"Q{index + 1}")})
                 parts.append(part)
         if len(parts) > 1:
             content = parts
@@ -3214,6 +3117,8 @@ def make_review_asker(image_root: Optional[Path] = None) -> Callable:
                     messages=[{"role": "system", "content": prompt.text},
                               *conversation],
                     extra_body=request_extras(),
+                    **providers.formatted("llm", "review_reply",
+                                          replies.review(slots)),
                 )
                 transport = False
                 reply = response.choices[0]
@@ -3226,10 +3131,7 @@ def make_review_asker(image_root: Optional[Path] = None) -> Callable:
                 # to answer for fewer rows.
                 faults += 1
                 cause, correction = _reply_fault(
-                    reply, limit,
-                    shorter="Zitiere nur die kurze Stelle, an der die Angabe "
-                            "steht, und lass jedes Feld weg, das die zwei "
-                            "Passagen nicht tragen.")
+                    reply, limit, shorter=say("shorter_review"))
                 log.warning("   review attempt %d: %s reply%s",
                             attempt, cause, _unparsable(reply))
                 conversation.append({"role": "assistant",
@@ -4216,7 +4118,7 @@ def make_locate(db_path: Path, pdf_root: Optional[Path]) -> Optional[Callable]:
             pages = section_pages.get((owner_kind, owner_id))
         if known and (owner_kind != "section" or pages is not None):
             return filename, pages or []
-        conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
+        conn = sqlite3.connect(readonly_uri(db_path), uri=True)
         try:
             if not known:
                 row = conn.execute(
@@ -4306,6 +4208,72 @@ def _stamp_current(spec_sha: str, anchors_sha: str = "",
     return {"spec": spec_sha, "model": LLM_MODEL, "anchors": anchors_sha,
             **prompts.versions(PROMPT_IDS),
             **(fingerprints(spec) if spec is not None else {})}
+
+
+def producer(kind: str, model: Optional[str] = None) -> dict:
+    """Who wrote into a harvest in one pass. Recorded, never compared.
+
+    A harvest is written once and then written into: a top-up reads single
+    coordinates again, possibly under another model or prompt, a remap moves
+    answers without a model at all. The stamp's `model` names the first of
+    them only. This is one entry of the list that names them all.
+    """
+    from docpipe import __version__
+    entry = {"pass": kind, "docpipe": __version__,
+             "utc": datetime.now(timezone.utc).isoformat(timespec="seconds")}
+    if model is not None:
+        entry.update(model=model, provider=providers.provider("llm"),
+                     prompts=prompts.versions(PROMPT_IDS))
+    return entry
+
+
+# {document name: {"sha256", "bytes"}} of the database this run reads, for
+# the stamp. Filled by `note_documents`; empty when the database records
+# none, and then the stamp says nothing about it.
+DOCUMENT_CONTENT: dict = {}
+
+
+def note_documents(db_path) -> int:
+    """Read which bytes each document of the database is. Returns how many
+    documents have that recorded."""
+    DOCUMENT_CONTENT.clear()
+    try:
+        with sqlite3.connect(readonly_uri(db_path), uri=True) as conn:
+            rows = conn.execute(
+                "SELECT filename, sha256, bytes FROM Documents "
+                "WHERE sha256 IS NOT NULL").fetchall()
+    except sqlite3.Error:               # a database older than the record
+        return 0
+    for filename, sha256, size in rows:
+        content = {"sha256": sha256, "bytes": size}
+        DOCUMENT_CONTENT[filename] = content
+        DOCUMENT_CONTENT[Path(filename).stem] = content
+    return len(rows)
+
+
+def note_index_model(db_path) -> None:
+    """Say so when this run embeds its probes with another model than the
+    one the database's index was built with. A line in the log, no more."""
+    from docpipe.embedding import config as embedding_config
+    from docpipe.store import schema as store_schema
+    try:
+        with sqlite3.connect(readonly_uri(db_path), uri=True) as conn:
+            mismatch = store_schema.embedding_mismatch(
+                conn, embedding_config.EMBEDDING_MODEL)
+    except sqlite3.Error:
+        return
+    if mismatch:
+        log.warning("extraction: %s", mismatch)
+
+
+def stamp_record(name: str) -> dict:
+    """The stamp keys that place a harvest and decide nothing."""
+    from docpipe import __version__
+    record = {"docpipe": __version__,
+              "producers": [producer("harvest", LLM_MODEL)]}
+    if name in DOCUMENT_CONTENT:
+        record["document"] = DOCUMENT_CONTENT[name]
+    return record
 
 
 # Recorded, and compared only while there is nothing finer to go on: the sha
@@ -4543,7 +4511,8 @@ def finish_document(report, name: str, out_dir: Path, spec_sha: str,
         return False
     stamp.write_text(
         json.dumps({**_stamp_current(spec_sha, anchors_sha, spec),
-                    **recorded_questions(questions)},
+                    **recorded_questions(questions),
+                    **stamp_record(name)},
                    ensure_ascii=False, indent=2),
         encoding="utf-8")
     return True
@@ -4846,7 +4815,7 @@ def pair_batches(items: list, pairs: list, pair_plans: list, frame_axes: list,
 
 def main(argv: Optional[list] = None) -> int:
     parser = argparse.ArgumentParser(
-        prog="python -m docpipe.extraction",
+        prog=program("docpipe.extraction"),
         description="Ontology-guided value extraction over an indexed corpus")
     parser.add_argument("db", type=Path, help="SQLite corpus database")
     parser.add_argument("index", type=Path, help="FAISS index")
@@ -4872,6 +4841,11 @@ def main(argv: Optional[list] = None) -> int:
     parser.add_argument("--serialize", type=Path, default=None, metavar="TTL",
                         help="No harvest: hand the JSONL in OUT to the "
                              "profile's kg.make_serializer and write TTL")
+    parser.add_argument("--no-provenance", dest="provenance",
+                        action="store_false",
+                        help="With --serialize: do not write the "
+                             "provenance file beside the graph "
+                             "(<graph>.prov.ttl; also EXTRACT_PROVENANCE=0)")
     parser.add_argument("--recheck", action="store_true",
                         help="No harvest and no model: check every "
                              "coordinate of the JSONL already in OUT again, "
@@ -4955,13 +4929,34 @@ def main(argv: Optional[list] = None) -> int:
                  stats["stamps carried forward"])
         return 0
     if args.serialize is not None:
+        from . import graph, provenance
         factory = profile.component("kg", "make_serializer")
-        if factory is None:
-            parser.error(f"profile {profile.name!r} provides no "
-                         f"kg.make_serializer (profiles/{profile.name}/kg.py)")
+        described = profile.component("kg", "PROVENANCE") or {}
+        if factory is not None:
+            serializer = factory(args.db)
+        else:
+            # No writer of its own: the graph block of the spec says what
+            # an answer becomes, where the spec has one.
+            raw_spec_path = profile.component("extraction", "SPEC_PATH")
+            if raw_spec_path is None:
+                parser.error(f"profile {profile.name!r} has no extraction "
+                             f"spec and no kg.make_serializer: nothing "
+                             f"says what its graph is")
+            try:
+                serializer = graph.make_serializer(json.loads(
+                    Path(raw_spec_path).read_text(encoding="utf-8")))
+            except graph.GraphError as exc:
+                parser.error(f"{raw_spec_path}: {exc}")
+            described = {"base": serializer.base,
+                         **(serializer.provenance or {})}
+        writer = None
+        if args.provenance and provenance.enabled() \
+                and described.get("base"):
+            writer = provenance.Writer(described["base"], described)
         from .serialize import run as serialize_run, validate
         try:
-            counts = serialize_run(args.out, args.serialize, factory(args.db))
+            counts = serialize_run(args.out, args.serialize, serializer,
+                                   writer)
         except ValueError as exc:
             log.error("serialize: %s", exc)
             return 1
@@ -5015,7 +5010,7 @@ def main(argv: Optional[list] = None) -> int:
         set_model_len(assert_serving(LLM_BASE_URL, LLM_API_KEY, LLM_MODEL,
                                      context_budget(review_prompt, spec),
                                      what="extraction review",
-                                     flag="--max-model-len"))
+                                     flag="--max-model-len", role="llm"))
         start_limit()
         from .review import run as review_run
         wanted = None
@@ -5023,7 +5018,7 @@ def main(argv: Optional[list] = None) -> int:
             # The harvest files are named after the documents, so a
             # restriction is resolved through the same listing the harvest
             # selects from and fails the same way on an id that is not on it.
-            listing = sqlite3.connect(f"file:{args.db}?mode=ro", uri=True)
+            listing = sqlite3.connect(readonly_uri(args.db), uri=True)
             try:
                 chosen, missing = select_documents(_documents(listing),
                                                    args.document)
@@ -5050,7 +5045,7 @@ def main(argv: Optional[list] = None) -> int:
                  "%d could not be backed, over %d document(s)",
                  stats["reviewed"], stats["agree"], stats["disagree"],
                  stats["unbacked"], stats["documents"])
-        return 0
+        return 1 if unheld_requests() else 0
     spec_sha = hashlib.sha256(spec_path.read_bytes()).hexdigest()
     # Which coordinates decide whether a value belongs in the graph at all.
     # The profile's business: "scenario == target" is what the kwp target
@@ -5099,7 +5094,7 @@ def main(argv: Optional[list] = None) -> int:
     # The window every request is sized against before it is sent.
     set_model_len(assert_serving(LLM_BASE_URL, LLM_API_KEY, LLM_MODEL,
                                  required, what="extraction",
-                                 flag="--max-model-len"))
+                                 flag="--max-model-len", role="llm"))
     start_limit()
 
     from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -5147,8 +5142,10 @@ def main(argv: Optional[list] = None) -> int:
     else:
         log.info("extraction: one request per tuple (EXTRACT_FIELDWISE=0)")
     locate = make_locate(args.db, args.pdf_root)
+    note_documents(args.db)
+    note_index_model(args.db)
 
-    listing = sqlite3.connect(f"file:{args.db}?mode=ro", uri=True)
+    listing = sqlite3.connect(readonly_uri(args.db), uri=True)
     try:
         # `with` on a connection commits, it does not close.
         documents = _documents(listing)
@@ -5172,9 +5169,9 @@ def main(argv: Optional[list] = None) -> int:
     # is written makes room for the next one, so a slow plan holds its own
     # place and nobody else's.
     in_flight = max(1, int(os.environ.get("EXTRACT_BATCH_DOCS", "64")))
-    log.info("extraction: %d document(s), %d parameter(s), top_k=%d, "
-             "max_rounds=%d, plan_parallel=%d, llm_parallel=%d, in_flight=%d",
-             len(documents), len(spec.parameters), TOP_K, MAX_ROUNDS,
+    log.info("extraction: %d document(s), %d parameter(s), "
+             "plan_parallel=%d, llm_parallel=%d, in_flight=%d",
+             len(documents), len(spec.parameters),
              PLAN_PARALLEL, LLM_PARALLEL, in_flight)
 
     # One call per question the field sweep asks, before anything is
@@ -5206,7 +5203,7 @@ def main(argv: Optional[list] = None) -> int:
         trace.open_trace(args.out / TOPUP_TRACE_DIR,
                          {did: Path(fn).stem for did, fn in documents}.get)
         frame_names = [slot.name for slot in frame_axes]
-        listing = sqlite3.connect(f"file:{args.db}?mode=ro", uri=True)
+        listing = sqlite3.connect(readonly_uri(args.db), uri=True)
         listing.row_factory = sqlite3.Row
 
         document_spec = make_document_spec(listing, spec, document_axes)
@@ -5240,7 +5237,7 @@ def main(argv: Optional[list] = None) -> int:
                  "carried forward, %d blocked",
                  stats["rows"], stats["documents"],
                  stats["stamps carried forward"], stats["blocked"])
-        return 0
+        return 1 if unheld_requests() else 0
 
     ask_frame = make_frame_asker(args.image_root) if frame_axes else None
 
@@ -5253,7 +5250,7 @@ def main(argv: Optional[list] = None) -> int:
         # Both connections per thread, cache included. Sharing one across the
         # pool would rest on SQLite being built serialized, and the priming
         # above already means every read here is a hit.
-        conn = sqlite3.connect(f"file:{args.db}?mode=ro", uri=True)
+        conn = sqlite3.connect(readonly_uri(args.db), uri=True)
         conn.row_factory = sqlite3.Row
         cache_conn = query_cache.connect(cache_path, create=False)
         try:
@@ -5412,7 +5409,10 @@ def main(argv: Optional[list] = None) -> int:
         logging.shutdown()
         _hard_exit(1)
 
-    watch_server(server_dead)
+    # A hosted API is not a server of this run's own that can die under it,
+    # and its address is not the one the probe would ask.
+    if not providers.hosted("llm") and not providers.replaying():
+        watch_server(server_dead)
 
     # Shared by every document in flight: the pool bounds the batches of all
     # of them together, the streak sees a dead server across all of them.
@@ -5574,6 +5574,7 @@ def main(argv: Optional[list] = None) -> int:
         return STOPPED_EXIT
 
     log_usage(context_budget(prompts.load(HARVEST_PROMPT_ID), spec))
+    failures += unheld_requests()
     log.info("extraction: done in %.0f s, %d failure(s)",
              time.time() - started, failures)
     return 1 if failures else 0

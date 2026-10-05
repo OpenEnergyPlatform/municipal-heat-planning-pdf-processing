@@ -11,7 +11,14 @@ import pytest
 
 CORE = pathlib.Path(__file__).resolve().parent.parent / "docpipe"
 PROFILES = CORE.parent / "profiles"
+# The profile the package brings itself lies inside it.
+BUILTIN = CORE / "builtin"
 FORBIDDEN = ("profiles", "streamlit")
+# The one module of the package that is a UI: the chat app's page. Every
+# other module, the app's own configuration and link builder included, is
+# imported by tests, by the command and by batch jobs, none of which have
+# Streamlit.
+UI = CORE / "app" / "app.py"
 _PROMPT_ID = re.compile(r"\A[a-z_]+/[a-z_0-9]+\Z")
 
 
@@ -27,24 +34,35 @@ def _imported_modules(path):
 
 @pytest.mark.parametrize("path", sorted(CORE.rglob("*.py")), ids=lambda p: p.name)
 def test_core_imports_neither_profiles_nor_streamlit(path):
+    forbidden = ("profiles",) if path == UI else FORBIDDEN
     for lineno, module in _imported_modules(path):
         root = module.split(".")[0]
-        assert root not in FORBIDDEN, (
+        assert root not in forbidden, (
             f"{path.relative_to(CORE.parent)}:{lineno} imports {module!r}; "
             f"the core must receive a profile, not fetch one, and must stay "
             f"usable from the CLI and the batch module")
 
 
+def test_the_one_ui_module_is_the_one_that_imports_streamlit():
+    """The exception above is one file, and it is the file that needs it."""
+    assert UI.is_file()
+    assert "streamlit" in {module.split(".")[0]
+                           for _line, module in _imported_modules(UI)}
+
+
 def _requested_prompt_ids(*roots):
-    """The prompt ids the source asks for: literal load()/text() arguments
-    plus `*_PROMPT_ID = "stage/name"` constants (loaded through the name)."""
+    """The prompt ids the source asks for: literal load()/text() arguments,
+    the chat's `_prompt("stage/name")`, plus `*_PROMPT_ID = "stage/name"`
+    constants (loaded through the name)."""
     ids = set()
     for root in roots:
         for path in root.rglob("*.py"):
             for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
                 if (isinstance(node, ast.Call)
-                        and isinstance(node.func, ast.Attribute)
-                        and node.func.attr in ("load", "text")
+                        and (isinstance(node.func, ast.Attribute)
+                             and node.func.attr in ("load", "text")
+                             or isinstance(node.func, ast.Name)
+                             and node.func.id == "_prompt")
                         and node.args
                         and isinstance(node.args[0], ast.Constant)
                         and isinstance(node.args[0].value, str)
@@ -78,8 +96,12 @@ def _required_for(profile, requested):
 
 
 def _profile_homes():
-    return sorted(p for p in PROFILES.iterdir()
+    return sorted(p for root in (PROFILES, BUILTIN) for p in root.iterdir()
                   if (p / "prompts").is_dir() and any((p / "prompts").rglob("*.md")))
+
+
+def test_the_built_in_profile_is_among_the_profiles_checked():
+    assert "default" in [home.name for home in _profile_homes()]
 
 
 @pytest.mark.parametrize("home", _profile_homes(), ids=lambda p: p.name)

@@ -24,7 +24,7 @@ from pathlib import Path
 from typing import Any, Callable, Optional
 
 from . import chunker, code_exec, config, db, llm_client, request_log
-from . import faiss_store, wording
+from . import hybrid, wording
 
 log = logging.getLogger(__name__)
 
@@ -45,6 +45,24 @@ class Corpus:
     # stored image path -> a readable path, or None
     resolve_image: Callable[[Optional[str]], Optional[Path]] = lambda p: None
     log_conn: Optional[sqlite3.Connection] = None
+    # The word index beside the vectors (`lexical.py`), or None: the search
+    # is then by meaning alone.
+    lexical: Optional[sqlite3.Connection] = None
+    # document id -> what a reader calls the document. Asked only when the
+    # whole corpus is searched, where a source has to say whose it is.
+    # Where it says nothing, the document's file name does (`_whose`).
+    document_label: Callable[[Optional[int]], Optional[str]] = lambda i: None
+
+
+def _whose(corpus: Corpus, document_id) -> Optional[str]:
+    """What a source of a corpus-wide answer calls its document: what the
+    caller's `document_label` says, else the name of its file."""
+    label = corpus.document_label(document_id)
+    if label:
+        return label
+    name = db.document_filename(corpus.conn, document_id) \
+        if corpus.conn is not None else None
+    return Path(name).stem if name else None
 
 
 def scopes_are_visual(scopes: list) -> bool:
@@ -77,14 +95,27 @@ def _code_context(items: list, top_hits: list) -> dict:
     return {"tables": tables}
 
 
-def _image_requester(corpus: Corpus, document_id: int):
+def _image_requester(corpus: Corpus, document_id: Optional[int],
+                     shown: tuple = ()):
     """Resolve a [p17_img1] the model asked for into an item with a readable crop.
 
     Returns None when the id is unknown or its file is missing — the caller then
     tells the model the picture is unavailable instead of leaving it waiting.
+
+    A block id is unique within one document only. Over the whole corpus it
+    is looked for in the documents whose passages the model was *shown*,
+    and taken when exactly one of them has it: two documents with a
+    p17_img1 each leave nothing to tell which was meant.
     """
     def _request(block_id: str) -> Optional[dict]:
-        item = db.request_item(corpus.conn, document_id, block_id)
+        if document_id is not None:
+            item = db.request_item(corpus.conn, document_id, block_id)
+        else:
+            found = [item for item in (
+                db.request_item(corpus.conn, document, block_id)
+                for document in dict.fromkeys(shown) if document is not None)
+                if item is not None]
+            item = found[0] if len(found) == 1 else None
         if item is None:
             log.info("Model asked for unknown block id %r", block_id)
             return None
@@ -95,12 +126,14 @@ def _image_requester(corpus: Corpus, document_id: int):
     return _request
 
 
-def answer_question(task: str, corpus: Corpus, document_id: int, scopes: list, *,
+def answer_question(task: str, corpus: Corpus, document_id: Optional[int],
+                    scopes: list, *,
                     image_bytes: Optional[bytes] = None, image_only: bool = False,
                     as_json: bool = False, history: Optional[list] = None,
                     progress: Callable = _silent) -> dict:
     """
-    Execute one full retrieval + answer turn. Returns a dict with:
+    Execute one full retrieval + answer turn. *document_id* None asks the
+    whole corpus: every source then names its document. Returns a dict with:
     answer (str|None), answer_text (str|None), citations (list[dict]),
     n_findings (int), cache_hit (bool), n_hits (int), phrase (str|None),
     as_json (bool), n_batches (int), compute (list), examined, recheck,
@@ -165,10 +198,18 @@ def answer_question(task: str, corpus: Corpus, document_id: int, scopes: list, *
     # --- 3) scoped retrieval ---
     with progress("📚 Retrieval"):
         embedding_types = [t for s in scopes for t in config.SCOPE_TO_EMBEDDING_TYPES[s]]
-        hits = faiss_store.retrieve(
-            corpus.conn, corpus.index, corpus.id_to_pos, document_id, embedding_types,
-            query_vec, config.TOP_K, exclude=exclude,
-        )
+        # The word index is asked with the question and its search anchor:
+        # the question has the names and numbers, the anchor the wording a
+        # document would use.
+        worded = " ".join(part for part in (task, phrase) if part)
+        hits = hybrid.retrieve(
+            corpus.conn, corpus.index, corpus.id_to_pos, document_id,
+            embedding_types, query_vec, config.TOP_K,
+            text=None if mode == "image" else worded,
+            lexical_index=corpus.lexical, exclude=exclude)
+        if document_id is None:
+            for hit in hits:
+                hit["document_label"] = _whose(corpus, hit.get("document_id"))
     result["n_hits"] = len(hits)
     if not hits:
         _log(corpus, document_id, task or phrase or "", mode, scopes, start_time,
@@ -212,7 +253,10 @@ def answer_question(task: str, corpus: Corpus, document_id: int, scopes: list, *
                 code_runner=(code_exec.run_code if code_exec.is_enabled() else None),
                 code_context=code_ctx, max_compute=config.CODE_EXEC_MAX_ROUNDS,
                 history=history, images=images or None,
-                image_requester=_image_requester(corpus, document_id),
+                image_requester=_image_requester(
+                    corpus, document_id,
+                    tuple(top_hits[it["index"]].get("document_id")
+                          for it in items)),
                 max_image_requests=config.REQUEST_IMAGE_MAX)
             for req in out.get("requested") or []:
                 if req.get("delivered") and req.get("owner_kind"):
@@ -265,6 +309,8 @@ def answer_question(task: str, corpus: Corpus, document_id: int, scopes: list, *
         hit = db.fetch_owner_content(corpus.conn, req["owner_kind"], req["owner_id"])
         if hit is None:
             continue
+        if document_id is None:
+            hit["document_label"] = _whose(corpus, hit.get("document_id"))
         seen.add(key)
         citations.append({**hit, "quote": (hit.get("title") or "").strip()
                                   or (hit.get("text") or "")[:160],

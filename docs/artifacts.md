@@ -7,13 +7,13 @@ Generated from `docpipe/artifacts.py` by `scripts/build_docs.py`: the names belo
 Preprocessing, refinement, visuals and chunking each run as their own
 command-line invocation (`docpipe/preprocessing/pipeline.py:547`,
 `docpipe/refinement/pipeline.py:265`, `docpipe/visuals/pipeline.py:515`,
-`docpipe/chunking/pipeline.py:371`, each its own `__main__` entry point).
+`docpipe/chunking/pipeline.py:392`, each its own `__main__` entry point).
 Nothing survives between invocations except what a stage writes to disk,
 so the files below let a later run resume or reuse an earlier one's work.
 
 Every PDF preprocessing takes in gets one directory under a profile's
 `processed_dir` (`<data root>/<profile>/pdf/processed`,
-`Profile.processed_dir`, `docpipe/profile.py:113-115`), named after the
+`Profile.processed_dir`, `docpipe/profile.py:309-311`), named after the
 PDF's filename stem and kept relative to the input folder so two
 same-named PDFs in different subfolders never collide
 (`docpipe/preprocessing/pipeline.py:233-235`). Inside it sit two
@@ -60,7 +60,7 @@ which the model server did not serve a window writes
 `sections_refined.partial.json` instead of `sections_refined.json`; the
 partial file names the missing windows, and the report is left as it was
 (`docpipe/refinement/pipeline.py:43-45`,
-`docpipe/refinement/refine.py:1116-1216`). A pass whose cut of an oversized
+`docpipe/refinement/refine.py:1123-1223`). A pass whose cut of an oversized
 section was not served writes neither. [Reading the pictures](stages/visuals.md) reads
 the crops left in `images/` together with whichever section text is
 available, preferring `sections_refined.json` over `sections.json`, and
@@ -101,10 +101,10 @@ not alike: `_load_pages_cache` treats an unreadable
 `sections.json`, `sections_refined.json` and `visuals.json` call
 `json.load` unguarded and raise on a truncated file
 (`docpipe/preprocessing/pipeline.py:49-60`,
-`docpipe/refinement/refine.py:1145-1146, 1154-1155`,
+`docpipe/refinement/refine.py:1152-1153, 1154-1155`,
 `docpipe/chunking/merge.py:94-100`). The one reader that guards is
 `_read_partial`, which treats an unreadable `sections_refined.partial.json`
-as absent (`docpipe/refinement/refine.py:1230-1242`).
+as absent (`docpipe/refinement/refine.py:1237-1249`).
 
 Merge decides whether its cached `document.json` is reusable by
 comparing modification times, not existence, since visuals rewrites

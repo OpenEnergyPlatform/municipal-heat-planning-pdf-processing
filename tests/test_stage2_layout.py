@@ -1,5 +1,5 @@
 """Tests for Stage 2 geometry: IoU, NMS, cross-class suppression, bbox transforms."""
-import conftest
+from tests import conftest
 
 conftest.needs_real("torch")
 
