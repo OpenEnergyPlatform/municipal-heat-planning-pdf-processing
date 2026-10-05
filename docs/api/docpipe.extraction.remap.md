@@ -70,6 +70,40 @@ space current would hide exactly the value the new option was added for.
 A refusal that cannot be attributed unsettles everything: guessing which
 space it belonged to would be the same mistake in a smaller place.
 
+### producers_of
+
+```python
+def producers_of(stored: dict) -> list
+```
+
+The stamp's list of who wrote into the harvest.
+
+A stamp from before the list starts it with what it does say: the model of
+its harvest.
+
+### next_producer
+
+```python
+def next_producer(stamp_path: Path) -> Optional[int]
+```
+
+The position a pass entered into this stamp now would take, or None when
+there is no stamp to enter it into. A pass that writes `<axis>_producer`
+onto rows asks this first, because the rows are written before the list.
+
+### enter_producer
+
+```python
+def enter_producer(stamp_path: Path, producer: dict) -> Optional[int]
+```
+
+Append this pass to the stamp's list, whatever else it earned. Returns
+its position, or None when there is no readable stamp to write into.
+
+Unlike `stamp_forward`, which enters a pass only when it earned a stamp
+key: a top-up that re-read a coordinate has rows that point at it, and a
+pointer into a list it never joined would read as unknown.
+
 ### stamp_forward
 
 ```python

@@ -267,6 +267,11 @@ def test_the_example_survives_the_field_wise_round_trip(profile):
         assert report.tuples, f"{parameter.uri}: nothing survived"
         assert not report.refusals, \
             f"{parameter.uri}: {report.refusals[0]['reason']}"
+        # Nothing new in a harvest: only a top-up says who re-read a
+        # coordinate, so a coordinate without `<axis>_producer` is the
+        # harvest's.
+        assert not [k for tuple_ in report.tuples for k in tuple_
+                    if k.endswith(fields.PRODUCER)], parameter.uri
         for got, want in zip(report.tuples, expected):
             for name in parameter.axes:
                 if want.get(name) is None:
@@ -838,7 +843,8 @@ def test_a_unit_two_parameters_accept_is_still_a_real_question(monkeypatch):
                      .read_text(encoding="utf-8"))
     for parameter in raw["parameters"]:
         if parameter.get("units_accepted"):
-            parameter["units_accepted"]["GWh"] = 1.0
+            parameter["units_accepted"]["GWh"] = {"factor": 1.0,
+                                                  "names_period": False}
     spec = load_spec(raw)
     assert fields.derive_parameter(spec, {"value": 1, "unit": "GWh"}) is None
     assert not fields.parameter_undecidable(spec, {"value": 1, "unit": "GWh"})
@@ -1688,21 +1694,23 @@ def test_the_request_says_what_each_option_means(profile):
     """field.md rule 7 says "decide by the meaning, the spellings are only
     examples" and the request never carried a meaning: the model was handed a
     class identifier and a list of German words. The rule was unfollowable,
-    and which class a number is is the decision the whole tuple hangs on."""
+    and which class a number is is the decision the whole tuple hangs on. The
+    entry carries them under the keys "means" and "spellings", the words that
+    rule names."""
     name, spec = profile
     if name != "kwp":
         pytest.skip("the meanings are the profile's to write")
     slot = next(s for s in fields.axis_slots(spec.parameters[0])
                 if s.name == "quantity")
     offered = slot.answerable()
-    assert offered["final energy consumption value"]["bedeutet"].startswith(
+    assert offered["final energy consumption value"]["means"].startswith(
         "A final energy consumption value is")
     assert "Endenergiebedarf" in \
-        offered["final energy consumption value"]["Schreibweisen"]
+        offered["final energy consumption value"]["spellings"]
     # "The passages do not state it" is an answer like any other and says so.
-    assert offered[fields.UNSTATED]["bedeutet"]
+    assert offered[fields.UNSTATED]["means"]
     # And every entry the graph does NOT take says what it excludes.
-    assert "Nutzwärme" in offered["Nutzenergie"]["bedeutet"]
+    assert "Nutzwärme" in offered["Nutzenergie"]["means"]
 
 
 def test_an_option_list_without_meanings_keeps_the_short_form():

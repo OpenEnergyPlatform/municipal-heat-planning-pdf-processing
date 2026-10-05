@@ -119,12 +119,49 @@ since a real table can legitimately repeat a row. An existing caption is
 copied through unchanged; one is generated only where none existed and the
 model returned one.
 
+The result of the check is kept. For every table the model transcribed as JSON,
+`process_table` leaves `qa` on it: `{passed, coverage, coverage_assessed,
+duplication, has_rows}`, the metrics of the attempt that was kept, measured on
+what the model wrote (a failing table has its repeated neighbouring rows
+collapsed afterwards, which the metrics do not see), and whether it passed.
+`qa_warning` stays and says the same on a failure. A table rescued as plain
+text or never read has no `qa`, and none means not checked, never passed; so
+has a table of a `visuals.json` written before this, whose failures carry
+`qa_warning` and no `qa`. The merge hands it on and chunking stores it in
+`Tables.qa` (see [chunking](chunking.md)).
+
 ### Describing a figure
 
 `process_figure` fills `figure_user_prompt()` and calls `call_vision` at the
 default `VLM_TEMPERATURE`, higher than a table's, since some paraphrase is
 acceptable where a transcription must be verbatim. There is no QA gate for
 a figure: no text layer exists to check a description's coverage against.
+
+### Counting a transcription against the PDF
+
+`scripts/table_numbers_in_pdf.py DB PDF_ROOT [--harvest DIR] [--document ID]
+[--worst N] [--json FILE] [--profile NAME]` sets what stage 5 transcribed beside
+what the PDF itself prints. It counts (a) per table, how many of the distinct
+numbers of the stored Markdown stand in the PDF text inside the table's stored
+bbox, which is stage 2's frame widened by a few points, so a number printed just
+beside the table can count; and (b), given a harvest, per parameter, how many of
+the values the harvest read out of a table have their digits in that text. A
+number is compared as the harvest compares one (`1.234,5` and `1234.5` are one
+number, by the profile's decimal mark) and counts once per table however many
+cells hold it.
+
+It is read-only. The database is opened for reading and nothing reads what the
+script prints: no trust level, flag or refusal moves. What it cannot judge is
+counted apart, with the reason, and left out of every share instead of counted as
+a miss: a table with no transcription, no number in it, no bbox or no page; a PDF
+not under the root or not readable; a page the PDF does not have or one with no
+text layer (a plan a model transcribed); a frame with no text. For values, the
+sandbox's computed ones, text that is no number, a table frame that could not be
+read, a table not in the database and an id that is another table's, which a
+rebuilt database produces since it renews `Tables.id`. A frame that holds text
+but no digit is judged, with none of its numbers found, and so cannot be told
+from a misread table. The script needs PyMuPDF and no model, and ends 1 only for
+an operand it cannot open at all.
 
 ### The vision call, its retry ladder and the plain text rescue
 
@@ -169,7 +206,7 @@ comment on `DOC_PARALLEL`).
 
 | file | written by | shape |
 |---|---|---|
-| `results/visuals.json` | `dump_json_atomic` | `{"sections": [...]}`; each section's `tables`/`figures` lists carry the original item plus this stage's added keys |
+| `results/visuals.json` | `dump_json_atomic` | `{"version": 1, "sections": [...]}`; each section's `tables`/`figures` lists carry the original item plus this stage's added keys. The shape is `docpipe/schemas/visuals.schema.json`; stage 5 writes the version first and replaces the one its input brought, and no stage checks a file against the schema (see [the files each stage leaves behind](../artifacts.md)) |
 | `.prompt_versions.json` | `prompts.record` | `{prompt_id: sha256}`, one entry per id in `PROMPT_IDS`; a sibling of `results/`, not inside it |
 
 A table item keeps `id`, `path`, `page_number`, `caption` and `bbox` from
@@ -180,7 +217,9 @@ present only in `sections.json` and stripped before every write. It gains
 `caption`, optionally `qa_warning`, a
 `{"coverage": float or null, "coverage_assessed": bool, "duplication":
 float, "has_rows": bool}` dict present only when the kept attempt did not
-pass the QA gate, and optionally `"vlm_status": "plain_text"`. A figure item
+pass the QA gate, `qa`, the same metrics plus `"passed": bool`, present for
+every table the model transcribed as JSON, and optionally `"vlm_status":
+"plain_text"`. A figure item
 keeps the same inherited fields and gains `description`, optionally
 `caption`, and optionally `vlm_status`, on the same terms.
 
@@ -413,6 +452,55 @@ replies.py: The reply each vision request asks for, as a JSON schema.
 For an API that generates inside a schema (see `docpipe.providers`). The
 prompts state the same shapes in words; nothing here is a check. The
 plain-text rescue asks for no JSON and has no schema.
+
+Author: Felix Vossel
+
+</details>
+
+<details>
+<summary><code>scripts/table_numbers_in_pdf.py</code></summary>
+
+table_numbers_in_pdf.py: How much of a stored table the PDF itself prints.
+
+Stage 5 has a vision model read every table off its picture, and the Markdown
+it wrote is what the database stores and what a harvest quotes. A PDF with a
+text layer prints the same numbers as text, inside the same frame. This sets
+the two side by side and counts. It reads a corpus database, the PDFs and,
+when it is given one, a harvest directory:
+
+  (a) per table: how many of the distinct numbers of the stored transcription
+      stand in the PDF text at the table's place;
+  (b) per parameter: of the values the harvest read out of a table, how many
+      have their digits in that text.
+
+It judges nothing and changes nothing. No trust level, reason or flag reads
+what it prints, the database is opened for reading only, and a table it
+cannot judge is listed with the reason and left out of every share, never
+counted as a miss.
+
+    python scripts/table_numbers_in_pdf.py data/KWP.db data/pdf
+    python scripts/table_numbers_in_pdf.py <db> <pdf root> --harvest data/extraction/corpus
+    python scripts/table_numbers_in_pdf.py <db> <pdf root> --document 12 --json counts.json
+
+What the numbers are. A number is compared the way the harvest compares one:
+1.234,5 and 1234.5 are one number, and how a point or comma is read is the
+profile's decimal mark (--profile or DOCPIPE_PROFILE; with neither the comma,
+as everywhere else the harvest reads a number). Each table counts
+its DISTINCT numbers, so a number that stands in six cells is one. The table's
+place is its stored bbox, which stage 2 widens by a few points on each side:
+a number printed just beside a table can stand in its text. The PDF text is
+the text layer. A page without one (a plan a model transcribed) cannot be
+judged, and neither can a table whose frame holds no text, and both are said
+so.
+
+What (b) compares: the value of a numeric parameter, as the harvest wrote it,
+against the numbers in the frame text of the table the value was read from.
+A value the sandbox computed is not read off a page and is counted apart. A
+harvest names its table by Tables.id, which a rebuilt database renews, so a
+tuple whose id is not a table of this database, or is one of another document
+or block, is counted apart too.
+
+Needs PyMuPDF. No model, no GPU.
 
 Author: Felix Vossel
 

@@ -24,6 +24,23 @@ Author: Felix Vossel
 
 ## Functions
 
+### chat_profile
+
+```python
+def chat_profile(profile: Optional[Profile] = None) -> Profile
+```
+
+The profile the answer loop reads from: the one given, else the one
+in force, else the built-in one.
+
+The chat starts on any corpus, and its pages already take their words
+from the built-in profile when none is named; its prompts and phrases
+follow, so the first question is answered in English instead of stopping.
+The fallback is here and not in `prompts.load` or `require_profile`: the
+stages that write a corpus keep their stop without a profile, because a
+forgotten flag there would start a real run on the wrong prompts. Said
+once per process, since the loop asks for a profile on every hit.
+
 ### phrases
 
 ```python

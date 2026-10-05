@@ -26,7 +26,7 @@ only. What does
 call `get_embedder()` is code asking the already-built corpus a question
 after the fact: the retrieval sweep of stage 7 embedding a probe, or a
 batch of probes, against the FAISS index
-(`docpipe/extraction/runner.py:426`, `535`, `1907`), and the inference app
+(`docpipe/extraction/runner.py:427`, `536`, `1908`), and the inference app
 embedding one chat turn's query (`docpipe/app/app.py`, `embed_query`). Both can run on hardware not used for the corpus build: a laptop
 with no GPU pointed at `api`, or a small card that cannot hold an 8B model
 resident, which is what the import-path form exists for.
@@ -151,7 +151,7 @@ overridden this way; a name belonging to the other backend raises
 declaring its own copies, a fix for a defect its own comment records:
 setting `EMBEDDING_MODEL` in `.env` once moved only the query side and left
 the index builder on the old model, same dimension, different vectors, no
-error raised anywhere (`docpipe/chunking/config.py:11` to `14`).
+error raised anywhere (`docpipe/chunking/config.py:13` to `16`).
 
 ## Failure modes
 
@@ -208,12 +208,12 @@ error raised anywhere (`docpipe/chunking/config.py:11` to `14`).
   wraps around `get_embedder()`, five replicas of the model fit on one
   card, a sixth raised a CUDA out-of-memory error, and none of the
   sixteen documents in that pilot completed
-  (`docpipe/extraction/runner.py:427` to `437`, the `embedder()`
+  (`docpipe/extraction/runner.py:428` to `438`, the `embedder()`
   docstring; pinned by
   `test_the_embedder_is_built_once_however_many_threads_ask` below).
 - The `api` backend batches eight texts per request by default
   (`docpipe/embedding/config.py:24`), a different number from the 32 items
-  `docpipe/chunking/config.py:25` batches into one call to the model when
+  `docpipe/chunking/config.py:32` batches into one call to the model when
   the corpus is built, a constant this package neither reads nor uses.
 
 ## Verification

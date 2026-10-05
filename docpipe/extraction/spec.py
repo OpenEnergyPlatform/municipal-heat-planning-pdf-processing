@@ -38,33 +38,6 @@ VALUE_TYPES = NUMERIC_TYPES + ("text", "category")
 SCENARIOS = ("status_quo", "trend", "target", "unknown")
 
 
-# What an entry of units_accepted says about the period, read off the spec's
-# own spelling and never off a document's. Which entry a document's wording
-# means is a reading, made by the model with its own passage
-# (`fields.unit_slot`): a spelling table stood here once, and measured on 641
-# plans of corpus_m5 it let 3,324 tuples carry an entry their wording
-# contradicts, "kWh/m²a" filed as kWh/a, "kWp" as kW, "g/kWh" as t CO2eq/a,
-# "kg" as t with no factor applied.
-_PER_YEAR = re.compile(r"pro\s*jahr|/\s*jahr|jährlich|jaehrlich|im\s*jahr"
-                       r"|per\s*year|per\s*annum|annual|yearly"
-                       r"|/\s*(?:yr|year)(?![a-z])"
-                       r"|p\.?\s?a\.?$", re.I)
-# The canonical per-year suffix itself: "MWh/a", "t / a". Not "/ab".
-_PER_A = re.compile(r"/\s*a(?![a-zäöüß])")
-
-
-def states_a_year(unit) -> bool:
-    """Does this entry of units_accepted say the amount is per year?
-
-    Asked of the entry the model chose, which is the spec's own spelling. The
-    period is part of what the model reads off the passage -- "450 kWh über
-    das Jahr" is kWh/a, a storage capacity of 200 kWh is kWh -- so the entry
-    carries that reading and nothing looks at the passage a second time.
-    """
-    text = unicodedata.normalize("NFKC", str(unit)).casefold()
-    return bool(_PER_YEAR.search(text) or _PER_A.search(text))
-
-
 def fold_label(raw) -> str:
     """One spelling for a vocabulary label, so a list need not list them all.
 
@@ -162,6 +135,15 @@ class Parameter:
     # must not flag the second, or the flag fires on every row of one
     # parameter and means nothing.
     integrated: bool = True
+    # What the spec says of each entry of units_accepted: does it name a
+    # period ("MWh/a", "t per year") or is it a plain amount ("MWh")? Said by
+    # the entry itself, {"factor": 1.0, "names_period": true}, and required
+    # of every entry of an integrated parameter; an entry of a rate may stay
+    # a bare factor. The unit question chooses the entry (a passage saying
+    # "over the year" makes the model choose kWh/a), so the choice carries
+    # the period, and the verifier reads this instead of a spelling. Shown to
+    # no request and in no fingerprint.
+    unit_names_period: dict = field(default_factory=dict)  # unit -> bool
     vocabulary: Optional[dict] = None      # category parameters: uri -> labels
     definitions: dict = field(default_factory=dict)
     # A category whose closed list is real but per document, filled in by the
@@ -187,6 +169,18 @@ class Parameter:
         if isinstance(unit, str):
             return self.units_accepted.get(unit)
         return None
+
+    def names_period(self, unit) -> bool:
+        """Does this entry of units_accepted name a period, as the spec says?
+
+        Only the entry's own statement. A parameter whose entries carry none
+        (a rate, or one built without `load`) has no answer to give, and
+        guessing one would put a claim about a passage on a row.
+        """
+        if unit not in self.unit_names_period:
+            raise SpecError(f"{self.uri}.units_accepted: entry {unit!r} says "
+                            f"nothing about a period (names_period)")
+        return self.unit_names_period[unit]
 
     def value_to_uri(self) -> dict:
         """Corpus label (folded) -> URI, for a category parameter."""
@@ -356,6 +350,35 @@ def _validate_example(path: str, raw, value_type: str,
     return raw
 
 
+def _validate_unit_entry(path: str, raw, integrated: bool) -> tuple:
+    """(factor, names_period or None) of one entry of units_accepted.
+
+    A bare factor is the short form and says nothing about a period. An
+    integrated parameter has to say it for every entry: the verifier flags a
+    plain amount from this statement and from nothing else, so an entry that
+    left it out would be read as a plain amount by silence.
+    """
+    statement = None
+    if isinstance(raw, dict):
+        factor = raw.get("factor")
+        statement = raw.get("names_period")
+        if statement is not None and not isinstance(statement, bool):
+            _fail(f"{path}.names_period",
+                  "true when the entry names a period (\"MWh/a\"), false "
+                  "when it is a plain amount (\"MWh\")")
+    else:
+        factor = raw
+    if not isinstance(factor, (int, float)) or factor <= 0:
+        _fail(f"{path}.factor" if isinstance(raw, dict) else path,
+              "a positive factor onto unit_target")
+    if integrated and statement is None:
+        _fail(f"{path}.names_period",
+              "required for a unit of an integrated parameter: true when the "
+              "entry names a period (\"MWh/a\"), false when it is a plain "
+              "amount (\"MWh\")")
+    return factor, statement
+
+
 def _validate_parameter(path: str, raw) -> Parameter:
     if not isinstance(raw, dict):
         _fail(path, "parameter must be an object")
@@ -375,6 +398,7 @@ def _validate_parameter(path: str, raw) -> Parameter:
     # Demanding either from the other kind was what kept this contract
     # numbers-only.
     units: dict = {}
+    unit_names_period: dict = {}
     unit_target = raw.get("unit_target")
     vocabulary, value_definitions = _vocabulary(f"{path}.vocabulary", raw.get("vocabulary"))
     vocabulary_dynamic = bool(raw.get("vocabulary_dynamic", False))
@@ -382,15 +406,21 @@ def _validate_parameter(path: str, raw) -> Parameter:
         if not isinstance(unit_target, str) or not unit_target.strip():
             _fail(f"{path}.unit_target",
                   "required for a numeric parameter, non-empty string")
-        units = raw.get("units_accepted")
-        if not isinstance(units, dict) or not units or \
-                not all(isinstance(f, (int, float)) and f > 0 for f in units.values()):
+        listed = raw.get("units_accepted")
+        if not isinstance(listed, dict) or not listed:
             _fail(f"{path}.units_accepted",
-                  "non-empty object of unit string -> positive factor")
+                  "non-empty object of unit string -> positive factor, or "
+                  "{factor, names_period}")
         if not isinstance(raw.get("integrated", True), bool):
             _fail(f"{path}.integrated",
                   "true when the unit is an amount over a span, false when "
                   "it is a rate")
+        for unit, entry in listed.items():
+            units[unit], period = _validate_unit_entry(
+                f"{path}.units_accepted.{unit}", entry,
+                bool(raw.get("integrated", True)))
+            if period is not None:
+                unit_names_period[unit] = period
     else:
         if "integrated" in raw:
             _fail(f"{path}.integrated",
@@ -442,6 +472,7 @@ def _validate_parameter(path: str, raw) -> Parameter:
                      description=raw["description"], value_type=value_type,
                      unit_target=unit_target, units_accepted=units,
                      integrated=bool(raw.get("integrated", True)),
+                     unit_names_period=unit_names_period,
                      vocabulary=vocabulary, definitions=value_definitions,
                      vocabulary_dynamic=vocabulary_dynamic,
                      axes=axes, example=example, kg=raw.get("kg"))
@@ -548,17 +579,26 @@ def parameter_fingerprint(parameter: "Parameter") -> str:
 def value_fingerprint(parameter: "Parameter") -> str:
     """The list a category parameter answers from, or "" when it has none.
 
-    Spellings AND meanings, the same three things an axis fingerprint takes:
-    all of them reach the model when it picks (`fields.Slot.answerable`), so
-    a changed definition is a changed question. Left out, a term whose
-    meaning was rewritten would leave every document current.
+    The classes and their spellings, which is all the rows request shows the
+    model for this list (`runner._parameter_payload` and
+    `_quantities_payload`: the class name and the other spellings). The
+    definitions are not in it: no request of the harvest puts them in front of
+    the model for a category value, so counting them made a document stale
+    over a sentence no model had read. An axis is another case, its field
+    request does show them, and `axis_fingerprint` keeps them.
+
+    A stamp written while the definitions were counted holds another digest,
+    so a stored scenarios stamp reports its `value/<parameter>` keys stale
+    once. `--remap` (no model) settles them; `--force-stale` first would read
+    the document again for nothing. A document with a wording no list holds
+    stays stale in that key (`not listed` in the remap's count) and is the
+    one `--force-stale` is left for.
     """
     if not parameter.vocabulary and not parameter.vocabulary_dynamic:
         return ""
     return _digest({
         "dynamic": parameter.vocabulary_dynamic,
-        "options": {uri: {"spellings": sorted(map(str, labels or [])),
-                          "definition": (parameter.definitions or {}).get(uri)}
+        "options": {uri: {"spellings": sorted(map(str, labels or []))}
                     for uri, labels in (parameter.vocabulary or {}).items()},
     })
 

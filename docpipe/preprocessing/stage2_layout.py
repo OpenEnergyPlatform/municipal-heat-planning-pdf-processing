@@ -10,7 +10,9 @@ those sets are ignored, since the Stage 1 PyMuPDF text blocks already
 cover that content. A detection passes a global confidence filter,
 then a per-class threshold, then per-class non-maximum suppression
 and cross-class suppression among table and image boxes, so one
-region never yields two crops.
+region never yields two crops. The text in a footnote box leaves the
+page like a page number does, and the document's log says how many text
+blocks and characters that was.
 
 Two passes run over the whole document afterward. Font-based heading
 promotion turns a plain text block into a section title when the
@@ -56,6 +58,7 @@ from .config import (
     PP_GLOBAL_MIN_CONF,
     PP_ID2LABEL,
     SUPPRESS_CLASSES,
+    FOOTNOTE_CLASSES,
     TABLE_CLASSES,
     IMAGE_CLASSES,
     CAPTION_CLASSES,
@@ -119,6 +122,21 @@ class _CropJob:
     block_id: str
     out_path: Path
     crop_rgb: np.ndarray
+
+
+@dataclass
+class _FootnoteTally:
+    """What the footnote class took off the pages of one document."""
+    blocks: int = 0
+    chars: int = 0
+
+    def add(self, removed: list[Block]) -> None:
+        self.blocks += len(removed)
+        self.chars += sum(len(b.content or "") for b in removed)
+
+    def line(self) -> str:
+        return (f"Stage 2: the footnote class removed {self.blocks} text "
+                f"block(s) with {self.chars} character(s)")
 
 
 @dataclass
@@ -552,6 +570,16 @@ def _write_crop(job: _CropJob) -> bool:
         return False
 
 
+def _lies_in(block: Block, boxes: list[list[float]]) -> bool:
+    """Whether *boxes* take this block off the page: a text block that lies in
+    one of them by TEXT_SUPPRESS_OVERLAP. Removal and the footnote count ask
+    this one question, so the count cannot drift from what is removed."""
+    return block.type == "text" and any(
+        _overlap_fraction(block.bbox, box) >= TEXT_SUPPRESS_OVERLAP
+        for box in boxes
+    )
+
+
 def _process_page(
     pg: PageData,
     fp: fitz.Page,
@@ -560,6 +588,7 @@ def _process_page(
     crop_image: Image.Image,
     detections: list[_Detection],
     images_dir: Path,
+    footnotes: Optional[_FootnoteTally] = None,
 ) -> tuple[PageData, list[_CropJob]]:
     """
     Processes one page through all detection-type branches; returns the updated
@@ -567,12 +596,15 @@ def _process_page(
 
     *detections* are in detection-image pixel space (det_w x det_h), while
     crops come from *crop_image*, which may be rendered at a different DPI.
+    *footnotes*, when given, is told which text blocks the footnote class took
+    off this page.
     """
     prefix = f"p{pg.page_number - 1}"
 
     new_blocks: list[Block] = []
     crop_jobs: list[_CropJob] = []
     suppress_bboxes: list[list[float]] = []
+    footnote_bboxes: list[list[float]] = []
 
     title_counter = 0
     cap_counter   = 0
@@ -597,6 +629,8 @@ def _process_page(
 
         if label in SUPPRESS_CLASSES:
             suppress_bboxes.append(bbox_pt)
+            if label in FOOTNOTE_CLASSES:
+                footnote_bboxes.append(bbox_pt)
             continue
 
         if label in SECTION_TITLE_CLASSES:
@@ -742,13 +776,9 @@ def _process_page(
 
     if suppress_bboxes:
         before = len(pg.blocks)
-        pg.blocks = [
-            b for b in pg.blocks
-            if b.type != "text" or not any(
-                _overlap_fraction(b.bbox, sb) >= TEXT_SUPPRESS_OVERLAP
-                for sb in suppress_bboxes
-            )
-        ]
+        if footnotes is not None:
+            footnotes.add([b for b in pg.blocks if _lies_in(b, footnote_bboxes)])
+        pg.blocks = [b for b in pg.blocks if not _lies_in(b, suppress_bboxes)]
         suppressed = before - len(pg.blocks)
         if suppressed:
             log.debug(f"Page {pg.page_number}: {suppressed} text block(s) suppressed")
@@ -973,6 +1003,7 @@ def detect_layout_all_pages(
     written     = 0
     total_crops = 0
     failed_batches: list[int] = []
+    footnotes = _FootnoteTally()
 
     def render_batch(b_idx: int):
         """One batch of detection inputs. Runs in the prefetch thread."""
@@ -1019,7 +1050,8 @@ def detect_layout_all_pages(
                     with _FITZ_LOCK:      # the prefetch thread is rendering too
                         crop_img = _render_page_to_pil(fp, PAGE_RENDER_DPI)
                 updated_pg, crop_jobs = _process_page(
-                    pg, fp, det_img.width, det_img.height, crop_img, dets, images_dir
+                    pg, fp, det_img.width, det_img.height, crop_img, dets, images_dir,
+                    footnotes,
                 )
                 page_by_number[updated_pg.page_number] = updated_pg
                 # Write each crop right away so only one RGB array is held.
@@ -1066,5 +1098,10 @@ def detect_layout_all_pages(
                sum(min(LAYOUT_BATCH_SIZE, n - (b - 1) * LAYOUT_BATCH_SIZE)
                    for b in failed_batches))
         )
+
+    # After the refusal above: a document that is dropped has no count worth
+    # reading. Zero is logged too, so that "none found" is told from "not
+    # counted".
+    log.info(footnotes.line())
 
     return updated_pages

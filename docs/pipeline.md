@@ -182,7 +182,7 @@ index. Resume differs by step: merge on the mtime cache, db on whether a
 document already has `Sections` rows, embed on whether the database
 already has a matching embedding, reconciled against what the FAISS index
 file actually holds so a crash between a database write and an index save
-is never read as done (`docpipe/chunking/database.py:717` to `748`).
+is never read as done (`docpipe/chunking/database.py:734` to `765`).
 
 ### 7. Extraction
 
@@ -344,7 +344,7 @@ Running `--force` across the db and embed steps together needs one detail
 the two steps cannot each see on their own: a document's old FAISS ids
 have to be read off before the db step's forced delete removes its
 `Embeddings` rows, or the embed step has nothing left naming which vectors
-to evict from the index (`docpipe/chunking/pipeline.py:173` to `174`).
+to evict from the index (`docpipe/chunking/pipeline.py:180` to `181`).
 
 ## The extraction stamp
 
@@ -354,15 +354,15 @@ per document, so this section documents its stamp on its own.
 written only once `finish_document` decides a harvest actually happened;
 a document is left unstamped, so the next run redoes it, when more than
 half its planned sources came back unreachable (`UNREACHABLE_LIMIT = 0.5`,
-`docpipe/extraction/runner.py:4442`, `:4504` to `4508`), when nothing
-answered at all (`:4509` to `4512`), or when any one of its requests ended
-on a 429 or a 5xx, which is no answer (`:4513` to `4518`).
+`docpipe/extraction/runner.py:4497`, `:4559` to `4563`), when nothing
+answered at all (`:4564` to `4567`), or when any one of its requests ended
+on a 429 or a 5xx, which is no answer (`:4568` to `4573`).
 `finish_document` removes an earlier stamp before it writes the file, so a
 withheld stamp is not replaced by one that vouched for the file it
-overwrote (`:4498` to `4499`), and it returns whether the document is
+overwrote (`:4553` to `4554`), and it returns whether the document is
 stamped. A document written but left unstamped is a failure of the run:
 `harvest_document` returns it as not finished and `main` exits 1
-(`:5550` to `5551`, `5587`). Inside it:
+(`:5668` to `5669`, `5705`). Inside it:
 
 | Key | What it records | Compared on a redo |
 |---|---|---|
@@ -371,31 +371,39 @@ stamped. A document written but left unstamped is a failure of the run:
 | `anchors` | sha of the retrieval anchors the plan searched with | never |
 | one entry per `PROMPT_IDS` id | sha256 of that prompt file | never |
 | `parameter/<uri>` | fingerprint of one parameter's own question | yes |
-| `value/<uri>` | fingerprint of a value's own closed list | yes |
+| `value/<uri>` | fingerprint of a value's own closed list: its classes and their spellings, not their definitions | yes |
 | `axis/<uri>/<name>` | fingerprint of one axis's question and vocabulary | yes |
 | `slot/parameter` | fingerprint of the value question itself | yes |
 | `slot/unit` | fingerprint of the unit question and every numeric parameter's `units_accepted` | yes |
 | `question_text/<key>` | the sentence this document was actually searched with | never |
 | `review/*` | what a second reading of a value came to | never |
+| `document` | the sha256 and size of the PDF the harvest was read from, as the database holds them | the sha256, where the stamp and the database both carry one; a stamp without the key is not compared |
+| `docpipe` / `producers` | the version, and every pass that wrote into the harvest in order (a top-up marks the coordinates it re-read with `<axis>_producer`, a position in this list) | never |
 
 The owner decided on 2026-09-10 that a stamp rests on the KG/ontology
 parameters alone (`parameter/`, `value/`, `axis/`, `slot/`,
-`docpipe/extraction/runner.py:4299`). The model, the anchors and every
+`docpipe/extraction/runner.py:4341`). The model, the anchors and every
 prompt id are still written into the stamp, so a reader can place a
 harvest, but a reworded prompt or another model no longer makes a
 document stale. The fine keys come from
-`spec.fingerprints()` (`docpipe/extraction/spec.py:609` to `634`), and
+`spec.fingerprints()` (`docpipe/extraction/spec.py:649` to `674`), and
 their presence is what licenses ignoring the coarse `spec` key. An earlier
 design hashed the whole spec file as one number, so one new label anywhere
 in it made a whole corpus stale together, about 93 GPU hours to reread
-1,082 documents over one added word (`docpipe/extraction/runner.py:4201`
-to `4295`); the ontology behind the spec is revised repeatedly, so the
+1,082 documents over one added word (`docpipe/extraction/runner.py:4204`
+to `4337`); the ontology behind the spec is revised repeatedly, so the
 same cost would recur each time it is. With one key per parameter, per value list
 and per axis, `stale()` names exactly which question changed and leaves
 the rest of the corpus alone; it checks both directions, so a question
 dropped from the spec counts as changed too, the one case the old
 whole-file hash used to catch that a purely additive scheme would
-otherwise miss (`docpipe/extraction/runner.py:4366` to `4367`). A file
+otherwise miss (`docpipe/extraction/runner.py:4414` to `4415`). The PDF is
+the one addition to the ontology's keys: where the stamp and the database both
+name its sha256 and the two differ, the document is reported stale, named in a
+warning, skipped, and read again only under `--force-stale`. The database's
+checksum is the one taken when the file was first registered and ingest does
+not refresh it for a file replaced under the same name, so this fires when the
+`Documents` row is created anew and not for a file edited in place. A file
 with no stamp at all is read as fully stale, on principle: the opposite
 reading, a missing stamp taken as nothing left to do, had already let a
 run silently skip 165 documents with exit code 0
@@ -405,7 +413,7 @@ The review prompt (`extraction/review`) is deliberately left out of
 `PROMPT_IDS` itself, not merely out of the comparison: a review leaves a
 value unchanged, only its `flags` grow, so folding the review prompt's sha
 into every stamp would report the whole corpus stale the day that one
-prompt is edited (`docpipe/extraction/runner.py:298` to `300`).
+prompt is edited (`docpipe/extraction/runner.py:299` to `301`).
 
 Three passes act on a moved key without opening the document again.
 

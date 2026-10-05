@@ -2,8 +2,8 @@
 
 Preprocessing, refinement, visuals and chunking each run as their own
 command-line invocation (`docpipe/preprocessing/pipeline.py:548`,
-`docpipe/refinement/pipeline.py:260`, `docpipe/visuals/pipeline.py:524`,
-`docpipe/chunking/pipeline.py:410`, each its own `__main__` entry point).
+`docpipe/refinement/pipeline.py:260`, `docpipe/visuals/pipeline.py:539`,
+`docpipe/chunking/pipeline.py:424`, each its own `__main__` entry point).
 Nothing survives between invocations except what a stage writes to disk,
 so the files below let a later run resume or reuse an earlier one's work.
 
@@ -20,10 +20,10 @@ imports the constant it needs from `artifacts.py` and re-exports it, so
 the filenames below live in exactly one place
 (`docpipe/preprocessing/config.py:13-15`, `docpipe/refinement/
 config.py:15-19`, `docpipe/visuals/config.py:12-13`, `docpipe/chunking/
-config.py:7-9`).
+config.py:9-11`).
 
 Later stages list these directories at any depth through `document_dirs` in
-`docpipe/artifacts.py` (`:40`): a directory that holds a file the stage reads
+`docpipe/artifacts.py` (`:49`): a directory that holds a file the stage reads
 is a document and is not searched further, any other directory is searched,
 and a document is known by its directory's name. Two directories of one name
 under different subfolders are refused with both places named
@@ -38,7 +38,7 @@ below a subfolder reaches stages 4 to 6 but shows and attaches no crops there.
 Layout detection, the second step of preprocessing, writes first: it
 crops every detected table and figure into `images/<block id>.png` and
 records that path on the block itself
-(`docpipe/preprocessing/stage2_layout.py:571, 684-693, 722-731`).
+(`docpipe/preprocessing/stage2_layout.py:602, 718-727, 756-765`).
 Preprocessing's own JSON output follows in two files. `pages.json` is
 written only once Stage 1 (text extraction) and Stage 2 (layout
 detection) have both completed with no failed page; it caches their
@@ -53,11 +53,11 @@ pages needed transcription from a rendered image, a count that can be
 zero (`docpipe/preprocessing/pipeline.py:75, 134-135, 376-379, 476-480`;
 see [preprocessing](stages/preprocessing.md)). Stage 3 reads only the
 in-memory pages object, whatever text it holds by then, and writes
-`sections.json` (`docpipe/preprocessing/stage3_structure.py:275`); it
+`sections.json` (`docpipe/preprocessing/stage3_structure.py:291`); it
 never opens `page_transcription_report.json` itself. That file is read
 later by chunking's `enrich_page_source`, backfilling a
 `page_text_transcribed` database column
-(`docpipe/chunking/database.py:158-185`).
+(`docpipe/chunking/database.py:167-194`).
 
 [Text refinement](stages/refinement.md) reads `sections.json` as its
 only accepted input and writes `sections_refined.json` plus
@@ -74,6 +74,31 @@ writes `visuals.json` (`docpipe/visuals/pipeline.py:61-70`).
 and `visuals.json` into `document.json`, which a separate load step reads
 into the database (`docpipe/chunking/merge.py:71-147`).
 
+## The shape of the two files stages 3 and 5 hand on
+
+What stage 3 hands on in `sections.json` and what stage 5 hands on in
+`visuals.json` is written down as two JSON Schemas,
+`docpipe/schemas/sections.schema.json` and `docpipe/schemas/visuals.schema.json`,
+collected from the writers and from every reader: refinement, visuals, the bbox
+backfill, chunking's merge and database insert, `estimate` and `status`. Each
+file carries its own version under the key `version` (`SECTIONS_VERSION` and
+`VISUALS_VERSION` in `docpipe/artifacts.py`, both 1), written first by the stage
+that writes the file; stage 5 replaces the version its input brought along. A
+file without the key is version 1. The schemas are documentation and tests: no
+stage opens them and none refuses a file because it does not fit, so a file that
+breaks one is still read.
+
+A writer other than stage 3 meets the contract by writing the shape and the
+crops its `path` values name. The id of a table or figure matches `[a-z0-9_]+`,
+because chunking and the app find its `[id]` placeholder with that pattern. A
+section's `content` is its text segments, and one `[id]` placeholder where a table
+or figure stands, joined by single spaces. A `bbox` is a list of `[x0, y0, x1,
+y1]` rectangles in PDF points, origin top left. An empty `path` does not read as
+no crop: stage 5 joins it to the document's directory, fails on reading that as an
+image, logs the table as crashed and leaves it without a markdown. Stage 5 keeps
+the result of its table check for every table the model transcribed as JSON (see
+[reading the pictures](stages/visuals.md)).
+
 ## How a later stage finds them
 
 A later stage never consults an index of what exists elsewhere: it builds
@@ -81,7 +106,7 @@ A later stage never consults an index of what exists elsewhere: it builds
 is present, so a document's own directory is the only record of how far
 it has progressed. That check is safe because every write is atomic,
 each stage's `dump_json_atomic` writing a temp file and swapping it in
-with `os.replace` (`docpipe/preprocessing/config.py:281-296`,
+with `os.replace` (`docpipe/preprocessing/config.py:287-302`,
 `docpipe/refinement/config.py:171-191`, `docpipe/visuals/
 config.py:16-31`, `docpipe/chunking/merge.py:136-146`), so a killed job
 leaves the old file or none, never a partial one.
@@ -100,7 +125,7 @@ visuals warn only when the filter leaves no candidates at all, not once per
 excluded document, while merge also warns once, naming up to twenty
 directories that carry `sections.json` and no `sections_refined.json`
 (`docpipe/refinement/pipeline.py:83-98`,
-`docpipe/visuals/pipeline.py:316-334`,
+`docpipe/visuals/pipeline.py:331-349`,
 `docpipe/chunking/merge.py:160-181`). A missing and a corrupted file are
 not alike: `_load_pages_cache` treats an unreadable
 `pages.json` as absent and re-extracts, but the readers of

@@ -31,8 +31,8 @@ What is promised, sentence by sentence:
     words; where the page cannot be shown the expander says what is missing;
   * a link into an external viewer is shown only where a prefix is
     configured, and a fresh install configures none;
-  * a chat with no profile says so in one line, naming how to give one AND
-    that the built-in profile works for any folder.
+  * a chat with no profile says so in one line, naming that it runs on the
+    built-in profile AND how to give another.
 """
 import importlib.util
 import json
@@ -1057,6 +1057,9 @@ def test_a_chat_with_no_profile_says_so_in_one_line(app, page, monkeypatch):
     assert "--profile" in line and "DOCPIPE_PROFILE" in line \
         and "docpipe.toml" in line      # how to give one
     assert "`default`" in line and "any folder" in line
+    # what holds now: the chat runs, and the line says on what
+    assert "runs on the built-in profile" in line
+    assert "cannot be answered" not in line
 
 
 def test_a_chat_with_a_profile_does_not_say_it(app, page, monkeypatch):

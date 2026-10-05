@@ -687,6 +687,11 @@
       ],
       "type": "array"
      },
+     "aggregation_producer": {
+      "description": "Who re-read 'aggregation': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.",
+      "minimum": 0,
+      "type": "integer"
+     },
      "aggregation_quote": {
       "description": "The verbatim passage carrying 'aggregation'. Present exactly when aggregation_state is 'read'.",
       "minLength": 8,
@@ -1039,6 +1044,11 @@
       ],
       "type": "array"
      },
+     "carrier_producer": {
+      "description": "Who re-read 'carrier': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.",
+      "minimum": 0,
+      "type": "integer"
+     },
      "carrier_quote": {
       "description": "The verbatim passage carrying 'carrier'. Present exactly when carrier_state is 'read'.",
       "minLength": 8,
@@ -1148,6 +1158,11 @@
        }
       ],
       "type": "array"
+     },
+     "parameter_producer": {
+      "description": "Who re-read 'parameter': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.",
+      "minimum": 0,
+      "type": "integer"
      },
      "parameter_quote": {
       "description": "The verbatim passage carrying 'parameter'. Present exactly when parameter_state is 'read'.",
@@ -1335,6 +1350,11 @@
       ],
       "type": "array"
      },
+     "quantity_producer": {
+      "description": "Who re-read 'quantity': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.",
+      "minimum": 0,
+      "type": "integer"
+     },
      "quantity_quote": {
       "description": "The verbatim passage carrying 'quantity'. Present exactly when quantity_state is 'read'.",
       "minLength": 8,
@@ -1507,6 +1527,11 @@
       ],
       "type": "array"
      },
+     "scenario_producer": {
+      "description": "Who re-read 'scenario': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.",
+      "minimum": 0,
+      "type": "integer"
+     },
      "scenario_quote": {
       "description": "The verbatim passage carrying 'scenario'. Present exactly when scenario_state is 'read'.",
       "minLength": 8,
@@ -1676,6 +1701,11 @@
       ],
       "type": "array"
      },
+     "sector_producer": {
+      "description": "Who re-read 'sector': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.",
+      "minimum": 0,
+      "type": "integer"
+     },
      "sector_quote": {
       "description": "The verbatim passage carrying 'sector'. Present exactly when sector_state is 'read'.",
       "minLength": 8,
@@ -1812,6 +1842,11 @@
        }
       ],
       "type": "array"
+     },
+     "spatial_scope_producer": {
+      "description": "Who re-read 'spatial_scope': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.",
+      "minimum": 0,
+      "type": "integer"
      },
      "spatial_scope_quote": {
       "description": "The verbatim passage carrying 'spatial_scope'. Present exactly when spatial_scope_state is 'read'.",
@@ -2155,6 +2190,11 @@
       ],
       "type": "array"
      },
+     "unit_producer": {
+      "description": "Who re-read 'unit': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.",
+      "minimum": 0,
+      "type": "integer"
+     },
      "unit_quote": {
       "description": "The verbatim passage carrying 'unit'. Present exactly when unit_state is 'read'.",
       "minLength": 8,
@@ -2260,6 +2300,11 @@
        }
       ],
       "type": "array"
+     },
+     "year_producer": {
+      "description": "Who re-read 'year': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.",
+      "minimum": 0,
+      "type": "integer"
      },
      "year_quote": {
       "description": "The verbatim passage carrying 'year'. Present exactly when year_state is 'read'.",
@@ -2716,6 +2761,11 @@
       ],
       "type": "array"
      },
+     "aggregation_producer": {
+      "description": "Who re-read 'aggregation': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.",
+      "minimum": 0,
+      "type": "integer"
+     },
      "aggregation_quote": {
       "description": "The verbatim passage carrying 'aggregation'. Present exactly when aggregation_state is 'read'.",
       "minLength": 8,
@@ -3068,6 +3118,11 @@
       ],
       "type": "array"
      },
+     "carrier_producer": {
+      "description": "Who re-read 'carrier': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.",
+      "minimum": 0,
+      "type": "integer"
+     },
      "carrier_quote": {
       "description": "The verbatim passage carrying 'carrier'. Present exactly when carrier_state is 'read'.",
       "minLength": 8,
@@ -3177,6 +3232,11 @@
        }
       ],
       "type": "array"
+     },
+     "parameter_producer": {
+      "description": "Who re-read 'parameter': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.",
+      "minimum": 0,
+      "type": "integer"
      },
      "parameter_quote": {
       "description": "The verbatim passage carrying 'parameter'. Present exactly when parameter_state is 'read'.",
@@ -3365,6 +3425,11 @@
       ],
       "type": "array"
      },
+     "quantity_producer": {
+      "description": "Who re-read 'quantity': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.",
+      "minimum": 0,
+      "type": "integer"
+     },
      "quantity_quote": {
       "description": "The verbatim passage carrying 'quantity'. Present exactly when quantity_state is 'read'.",
       "minLength": 8,
@@ -3537,6 +3602,11 @@
       ],
       "type": "array"
      },
+     "scenario_producer": {
+      "description": "Who re-read 'scenario': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.",
+      "minimum": 0,
+      "type": "integer"
+     },
      "scenario_quote": {
       "description": "The verbatim passage carrying 'scenario'. Present exactly when scenario_state is 'read'.",
       "minLength": 8,
@@ -3706,6 +3776,11 @@
       ],
       "type": "array"
      },
+     "sector_producer": {
+      "description": "Who re-read 'sector': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.",
+      "minimum": 0,
+      "type": "integer"
+     },
      "sector_quote": {
       "description": "The verbatim passage carrying 'sector'. Present exactly when sector_state is 'read'.",
       "minLength": 8,
@@ -3842,6 +3917,11 @@
        }
       ],
       "type": "array"
+     },
+     "spatial_scope_producer": {
+      "description": "Who re-read 'spatial_scope': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.",
+      "minimum": 0,
+      "type": "integer"
      },
      "spatial_scope_quote": {
       "description": "The verbatim passage carrying 'spatial_scope'. Present exactly when spatial_scope_state is 'read'.",
@@ -4005,6 +4085,11 @@
       ],
       "type": "array"
      },
+     "unit_producer": {
+      "description": "Who re-read 'unit': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.",
+      "minimum": 0,
+      "type": "integer"
+     },
      "unit_quote": {
       "description": "The verbatim passage carrying 'unit'. Present exactly when unit_state is 'read'.",
       "minLength": 8,
@@ -4110,6 +4195,11 @@
        }
       ],
       "type": "array"
+     },
+     "year_producer": {
+      "description": "Who re-read 'year': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.",
+      "minimum": 0,
+      "type": "integer"
      },
      "year_quote": {
       "description": "The verbatim passage carrying 'year'. Present exactly when year_state is 'read'.",
@@ -4558,6 +4648,11 @@
       ],
       "type": "array"
      },
+     "aggregation_producer": {
+      "description": "Who re-read 'aggregation': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.",
+      "minimum": 0,
+      "type": "integer"
+     },
      "aggregation_quote": {
       "description": "The verbatim passage carrying 'aggregation'. Present exactly when aggregation_state is 'read'.",
       "minLength": 8,
@@ -4910,6 +5005,11 @@
       ],
       "type": "array"
      },
+     "carrier_producer": {
+      "description": "Who re-read 'carrier': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.",
+      "minimum": 0,
+      "type": "integer"
+     },
      "carrier_quote": {
       "description": "The verbatim passage carrying 'carrier'. Present exactly when carrier_state is 'read'.",
       "minLength": 8,
@@ -5019,6 +5119,11 @@
        }
       ],
       "type": "array"
+     },
+     "parameter_producer": {
+      "description": "Who re-read 'parameter': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.",
+      "minimum": 0,
+      "type": "integer"
      },
      "parameter_quote": {
       "description": "The verbatim passage carrying 'parameter'. Present exactly when parameter_state is 'read'.",
@@ -5184,6 +5289,11 @@
        }
       ],
       "type": "array"
+     },
+     "quantity_producer": {
+      "description": "Who re-read 'quantity': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.",
+      "minimum": 0,
+      "type": "integer"
      },
      "quantity_quote": {
       "description": "The verbatim passage carrying 'quantity'. Present exactly when quantity_state is 'read'.",
@@ -5357,6 +5467,11 @@
       ],
       "type": "array"
      },
+     "scenario_producer": {
+      "description": "Who re-read 'scenario': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.",
+      "minimum": 0,
+      "type": "integer"
+     },
      "scenario_quote": {
       "description": "The verbatim passage carrying 'scenario'. Present exactly when scenario_state is 'read'.",
       "minLength": 8,
@@ -5526,6 +5641,11 @@
       ],
       "type": "array"
      },
+     "sector_producer": {
+      "description": "Who re-read 'sector': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.",
+      "minimum": 0,
+      "type": "integer"
+     },
      "sector_quote": {
       "description": "The verbatim passage carrying 'sector'. Present exactly when sector_state is 'read'.",
       "minLength": 8,
@@ -5663,6 +5783,11 @@
       ],
       "type": "array"
      },
+     "spatial_scope_producer": {
+      "description": "Who re-read 'spatial_scope': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.",
+      "minimum": 0,
+      "type": "integer"
+     },
      "spatial_scope_quote": {
       "description": "The verbatim passage carrying 'spatial_scope'. Present exactly when spatial_scope_state is 'read'.",
       "minLength": 8,
@@ -5790,6 +5915,11 @@
       ],
       "type": "array"
      },
+     "unit_producer": {
+      "description": "Who re-read 'unit': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.",
+      "minimum": 0,
+      "type": "integer"
+     },
      "unit_quote": {
       "description": "The verbatim passage carrying 'unit'. Present exactly when unit_state is 'read'.",
       "minLength": 8,
@@ -5895,6 +6025,11 @@
        }
       ],
       "type": "array"
+     },
+     "year_producer": {
+      "description": "Who re-read 'year': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.",
+      "minimum": 0,
+      "type": "integer"
      },
      "year_quote": {
       "description": "The verbatim passage carrying 'year'. Present exactly when year_state is 'read'.",
@@ -6055,6 +6190,11 @@
       ],
       "type": "array"
      },
+     "parameter_producer": {
+      "description": "Who re-read 'parameter': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.",
+      "minimum": 0,
+      "type": "integer"
+     },
      "parameter_quote": {
       "description": "The verbatim passage carrying 'parameter'. Present exactly when parameter_state is 'read'.",
       "minLength": 8,
@@ -6210,7 +6350,7 @@
   "$id": "https://openenergyplatform.org/schema/mhpkg/extraction/stamp",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
-  "description": "Every key but `spec` makes the document stale, and it is harvested again, when it differs from the current run. `spec` is recorded so a reader can say which file a harvest came from, and is not compared. Withheld when the harvest did not happen. The parameter/, value/, axis/ and slot/ keys record which question changed, so a moving ontology costs only the coordinates it touched rather than a full re-read of the corpus. A stamp written before those keys existed carries none of them, so for it `spec` decides again, and it is stale in all of them.",
+  "description": "The parameter/, value/, axis/ and slot/ keys, and the sha256 in `document`, make the document stale when they differ from the current run: it is named in a warning, skipped, and harvested again with --force-stale. Every other key is recorded and never compared. `spec` is recorded so a reader can say which file a harvest came from. Withheld when the harvest did not happen. The parameter/, value/, axis/ and slot/ keys record which question changed, so a moving ontology costs only the coordinates it touched rather than a full re-read of the corpus. A stamp written before those keys existed carries none of them, so for it `spec` decides again, and it is stale in all of them.",
   "patternProperties": {
    "^axis/[^/]+/[^/]+$": {
     "description": "What this coordinate asks and what it may answer: the question and the offered list with its spellings and its definitions. Everything the model sees for this axis, and nothing else.",
@@ -6244,7 +6384,7 @@
     "type": "string"
    },
    "^value/[^/]+$": {
-    "description": "The list a category parameter answers from. Its own key, because a moved option can be re-mapped from the wording the harvest kept while a rewritten question cannot.",
+    "description": "The list a category parameter answers from: its classes and their spellings, which is all the rows request shows the model. Not their definitions. Its own key, because a moved option can be re-mapped from the wording the harvest kept while a rewritten question cannot.",
     "pattern": "^[0-9a-f]{64}$",
     "type": "string"
    }
@@ -6261,7 +6401,7 @@
    },
    "document": {
     "additionalProperties": false,
-    "description": "Which bytes were read: the sha256 and the size of the file as the database recorded them. Absent for a database that records none. Recorded and never compared.",
+    "description": "Which bytes were read: the sha256 and the size of the file as the database recorded them. Absent for a database that records none. Another sha256 than this one makes the document stale, as a changed ontology key does. The size is recorded and never compared, and a stamp without this key is not compared at all.",
     "properties": {
      "bytes": {
       "type": [
@@ -6291,7 +6431,7 @@
     ]
    },
    "producers": {
-    "description": "Every pass that wrote into this harvest, in order: the harvest, then each top-up, remap or review that changed a row. `model` above names the first only. Recorded and never compared.",
+    "description": "Every pass that wrote into this harvest, in order: the harvest, then each top-up that rewrote the file, each remap that carried a key forward and each review that changed a row. Entries are only ever added, so a position is stable: a coordinate a top-up re-read points at its entry with `<axis>_producer`. `model` above names the first only. Recorded and never compared.",
     "items": {
      "additionalProperties": false,
      "properties": {

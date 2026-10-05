@@ -13,7 +13,10 @@ This module instead takes the coordinate off the rows that carry it, walks the
 same sweep the harvest walks (`runner.make_sweeper`, so there is one sweep and
 one set of numbers), and writes the answer back. It then carries that one stamp
 key forward and leaves every other key exactly as it was, so a later run still
-sees what it has to redo.
+sees what it has to redo. Who read is recorded apart from that: the pass enters
+the stamp's `producers` list whether or not it earned a key, and each
+coordinate it re-read points at its entry (`<axis>_producer`), so a file with
+two readings of one coordinate's rows says which is which.
 
 What the module refuses to touch matters more than what it does. A key that
 decided which rows exist, which passages were planned, or which model read them
@@ -43,7 +46,8 @@ from .. import jsonl
 from . import fields
 from .pipeline import (Row, WorkItem, base_years, group_items,
                        mark_unanswered, row_label)
-from .remap import stamp_forward, stamp_path_of
+from .remap import (enter_producer, next_producer, stamp_forward,
+                    stamp_path_of)
 from .spec import Spec
 from .trust import document_summary
 from .verify import Refusal, quote_in, verify_tuple
@@ -55,7 +59,8 @@ log = logging.getLogger(__name__)
 # `<name>_state` alone, but a leftover `_quote` or `_source` would then be
 # evidence for an answer nobody gave.
 SLOT_KEYS = ("", "_state", "_raw", "_raw_foreign", "_quote", "_source",
-             "_window", "_seen", "_link_quote", "_link_source")
+             "_window", "_seen", "_link_quote", "_link_source",
+             fields.PRODUCER)
 
 # A coordinate that was read stays read unless the sweep reads it again.
 KEEP_READ = (fields.READ, fields.DERIVED)
@@ -386,6 +391,10 @@ def top_up_file(path: Path, spec: Spec, current: dict, deps: dict, *,
     demoted: list = []
     bases = base_years_of(tuples, deps.get("frame_axes"),
                           deps.get("base_state"))
+    # Where this pass will stand in the stamp's list. The coordinates it
+    # re-reads point at that position, and the rows are written before the
+    # list is, so it is asked for now.
+    position = next_producer(stamp_path)
     for key in keys:
         for parameter, slot in targets_of(doc_spec, key):
             mine = [r for r in tuples if r.get("parameter") == parameter.uri]
@@ -399,9 +408,14 @@ def top_up_file(path: Path, spec: Spec, current: dict, deps: dict, *,
                 for entry in rows:
                     reopen(entry.claim, slot)
                 stats["derived"] += fields.apply_derived(rows, slot)
+                # Written by this pass, so it says so: a missing key reads as
+                # the harvest.
+                for entry in rows:
+                    if f"{slot.name}_state" in entry.claim:
+                        point(entry.claim, slot, position)
                 continue
             got, refused = _sweep_one(mine, parameter, slot, doc_spec, deps,
-                                      stats, bases=bases)
+                                      stats, bases=bases, position=position)
             demoted.extend(refused)
             if not got:
                 settled.discard(key)
@@ -414,7 +428,7 @@ def top_up_file(path: Path, spec: Spec, current: dict, deps: dict, *,
             deps.get("frame_names") or ()):
         stats["closed rows reopened"] += len(mine)
         _got, refused = _sweep_one(mine, parameter, slot, doc_spec, deps,
-                                   stats, bases=bases)
+                                   stats, bases=bases, position=position)
         demoted.extend(refused)
     # A refused row is a refusal now, in the file and in the summary. The
     # line keeps its place: the dict was rewritten where it stands.
@@ -428,6 +442,13 @@ def top_up_file(path: Path, spec: Spec, current: dict, deps: dict, *,
                       **document_summary(document_id, tuples, refusals)})
     out = [json.dumps(row, ensure_ascii=False) if isinstance(row, dict)
            else row for row in lines]
+    # Entered whether or not it earns a stamp key below, and before the rows
+    # that point at it are written: a pointer into a list this pass never
+    # joined reads as unknown.
+    if position is not None:
+        enter_producer(stamp_path,
+                       runner.producer("top-up", runner.LLM_MODEL))
+        stats["documents given a producers entry"] += 1
     tmp = Path(path).with_suffix(".jsonl.tmp")
     tmp.write_text("\n".join(out) + "\n", encoding="utf-8")
     tmp.replace(path)
@@ -436,14 +457,22 @@ def top_up_file(path: Path, spec: Spec, current: dict, deps: dict, *,
         # stamp stays as it was, so the next top-up asks again.
         stats["stamps left, a request ended on 429 or 5xx"] += 1
         return stats
-    if stamp_forward(stamp_path, current, settled,
-                     producer=runner.producer("top-up", runner.LLM_MODEL)):
+    if stamp_forward(stamp_path, current, settled):
         stats["stamps carried forward"] += 1
     return stats
 
 
+def point(claim: dict, slot, position: Optional[int]) -> None:
+    """Say that this pass wrote this coordinate: `<axis>_producer` is the
+    position of its entry in the stamp's list. Nothing to point at, nothing
+    written."""
+    if position is not None:
+        claim[f"{slot.name}{fields.PRODUCER}"] = position
+
+
 def _sweep_one(rows: list, parameter, slot, doc_spec: Spec, deps: dict,
-               stats: Counter, bases: tuple = ()) -> tuple:
+               stats: Counter, bases: tuple = (),
+               position: Optional[int] = None) -> tuple:
     """Re-read one coordinate over these rows.
 
     (every row settled, the rows the verifier refused afterwards). A refused
@@ -453,6 +482,10 @@ def _sweep_one(rows: list, parameter, slot, doc_spec: Spec, deps: dict,
     the claim kept beside the reason for the audit. Keeping the old tuple
     instead would leave in the graph exactly the reading the re-read was
     asked to check.
+
+    A coordinate whose new reading stands points at `position`, this pass's
+    entry in the stamp's list (`point`). One whose old block was put back
+    keeps the pointer that block had, or none.
     """
     slots = [slot]
     refused: list = []
@@ -500,15 +533,23 @@ def _sweep_one(rows: list, parameter, slot, doc_spec: Spec, deps: dict,
         entries = [entry for _row, entry in listed]
         taken = {entry.label: reopen(entry.claim, slot) for entry in entries}
         deps["sweep"](batch, entries, slots, anchor_id)
+        wrote = []
         for _row, entry in listed:
             keep = (KEEP_READ if taken[entry.label].get(f"{slot.name}_state")
                     in KEEP_READ else KEEP_ASKED)
             if restore(entry.claim, slot, taken[entry.label], keep=keep):
                 settled = False
+                # Nothing was there to put back (a spec that gained this
+                # axis): what is written below is this pass's.
+                if taken[entry.label]:
+                    continue
+            wrote.append(entry)
         # After the restores and not before. A spec that GAINED this axis has
         # rows with no block to put back, so `restore` leaves a bare absence
         # -- and the schema requires a state on every coordinate of every row.
         mark_unanswered(entries, slots)
+        for entry in wrote:
+            point(entry.claim, slot, position)
         for row, entry in listed:
             source = batch.sources[entry.item_index]
             fresh = _reverify(row, entry.claim, parameter, source,

@@ -277,6 +277,16 @@ def _slot_properties(name: str, slot, doc: str) -> dict:
                            f"answering 'not stated', or offered as an answer "
                            f"the closed list does not hold. Vocabulary review "
                            f"material, never evidence."},
+        f"{name}{fields.PRODUCER}": {
+            "type": "integer", "minimum": 0,
+            "description": f"Who re-read '{name}': the position of its entry "
+                           f"in the `producers` list of the stamp beside the "
+                           f"harvest. Written by a top-up for each coordinate "
+                           f"it re-read, never by the harvest, so a missing "
+                           f"key means the harvest read it. A position the "
+                           f"stamp has no entry for (the stamps were "
+                           f"deleted) means nobody can say. Recorded and "
+                           f"never compared."},
     }
 
 
@@ -588,11 +598,14 @@ def stamp_schema() -> dict:
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "$id": f"{BASE_ID}/stamp",
         "title": "docpipe extraction resume stamp",
-        "description": "Every key but `spec` makes the document stale, and "
-                       "it is harvested again, when it differs from the "
-                       "current run. `spec` is recorded so a reader can "
-                       "say which file a harvest came from, and is not "
-                       "compared. Withheld when the harvest did not happen. "
+        "description": "The parameter/, value/, axis/ and slot/ keys, and "
+                       "the sha256 in `document`, make the document stale "
+                       "when they differ from the current run: it is "
+                       "named in a warning, skipped, and harvested again "
+                       "with --force-stale. Every other key is recorded and "
+                       "never compared. `spec` is recorded so a reader can "
+                       "say which file a harvest came from. Withheld when "
+                       "the harvest did not happen. "
                        "The parameter/, value/, axis/ and slot/ keys record "
                        "which question changed, so a moving ontology costs "
                        "only the coordinates it touched rather than a full "
@@ -634,17 +647,25 @@ def stamp_schema() -> dict:
                 "description": "Which bytes were read: the sha256 and the "
                                "size of the file as the database recorded "
                                "them. Absent for a database that records "
-                               "none. Recorded and never compared.",
+                               "none. Another sha256 than this one makes "
+                               "the document stale, as a changed ontology "
+                               "key does. The size is recorded and never "
+                               "compared, and a stamp without this key is "
+                               "not compared at all.",
                 "properties": {"sha256": sha,
                                "bytes": {"type": ["integer", "null"]}},
                 "required": ["sha256"], "additionalProperties": False},
             "producers": {
                 "type": "array",
                 "description": "Every pass that wrote into this harvest, in "
-                               "order: the harvest, then each top-up, remap "
-                               "or review that changed a row. `model` above "
-                               "names the first only. Recorded and never "
-                               "compared.",
+                               "order: the harvest, then each top-up that "
+                               "rewrote the file, each remap that carried a "
+                               "key forward and each review that changed a "
+                               "row. Entries are only ever added, so a "
+                               "position is stable: a coordinate a top-up "
+                               "re-read points at its entry with "
+                               "`<axis>_producer`. `model` above names the "
+                               "first only. Recorded and never compared.",
                 "items": {
                     "type": "object",
                     "properties": {
@@ -686,10 +707,13 @@ def stamp_schema() -> dict:
                                "keys of their own."},
             "^value/[^/]+$": {
                 **sha,
-                "description": "The list a category parameter answers from. "
-                               "Its own key, because a moved option can be "
-                               "re-mapped from the wording the harvest kept "
-                               "while a rewritten question cannot."},
+                "description": "The list a category parameter answers from: "
+                               "its classes and their spellings, which is "
+                               "all the rows request shows the model. Not "
+                               "their definitions. Its own key, because a "
+                               "moved option can be re-mapped from the "
+                               "wording the harvest kept while a rewritten "
+                               "question cannot."},
             "^slot/parameter$": {
                 **sha,
                 "description": "The one coordinate that belongs to no "

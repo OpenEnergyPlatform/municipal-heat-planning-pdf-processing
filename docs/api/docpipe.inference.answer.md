@@ -45,6 +45,22 @@ def scopes_are_visual(scopes: list) -> bool
 
 True if the query targets ONLY figure/table scopes → caption-style anchor.
 
+### search_hits
+
+```python
+def search_hits(task: str, phrase: Optional[str], query_vec, corpus: Corpus,
+                document_id: Optional[int], scopes: list, *,
+                image_only: bool = False, exclude=frozenset()) -> list
+```
+
+The passages a turn searches: the hybrid search over the scopes'
+embedding types, TOP_K of them, best first. One definition for the chat
+and for whoever measures its search, so the two cannot drift apart.
+
+The word index is asked with the question and its search anchor: the
+question has the names and numbers, the anchor the wording a document
+would use. An image query has no words to ask it with.
+
 ### answer_question
 
 ```python

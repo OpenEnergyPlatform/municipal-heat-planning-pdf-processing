@@ -17,6 +17,23 @@ statement is written IF NOT EXISTS.
 
 Author: Felix Vossel
 
+## Classes
+
+### MixedIndex
+
+```python
+class MixedIndex(RuntimeError)
+```
+
+Vectors of one model were about to be appended to an index that holds
+vectors of another. Raised before a vector is written; says both.
+
+#### MixedIndex.\_\_init\_\_
+
+```python
+def __init__(self, recorded: str, configured: str)
+```
+
 ## Functions
 
 ### core_sql
@@ -84,17 +101,23 @@ format it had. Adds what is missing and touches nothing that is there.
 
 ```python
 def note_embedding(connection: sqlite3.Connection, model: str, dim: int,
-                   backend: str, max_token_length: int,
-                   version: str) -> Optional[str]
+                   backend: str, max_token_length: int, version: str,
+                   *, allow_mixed: bool = False) -> Optional[str]
 ```
 
 Write down what builds this database's index.
 
-Returns a sentence when the index already holds vectors of another
-model, else None. Vectors of two models do not compare, so that is worth
-a line in the log; it is the caller's line, and nothing is refused here.
-The first model stays the recorded one and the other is recorded beside
-it, so the database says both.
+An index that holds vectors of another model is not continued with this
+one: vectors of two models do not compare, so a search over both is not
+one search, and nothing in a vector says which model it is of. That
+raises `MixedIndex` naming both, and writes nothing. `allow_mixed` is the
+deliberate mixture: the first model stays the recorded one, the other is
+recorded beside it, and the sentence comes back for the caller's log. An
+index that holds no vectors may change its model.
+
+A database that records no model cannot be checked, whatever it holds:
+the configured one is recorded as the one that built it. Where it holds
+vectors the sentence says that, because nothing proved them to be its.
 
 ### recorded_model
 

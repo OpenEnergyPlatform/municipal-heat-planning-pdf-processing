@@ -840,9 +840,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         raise SystemExit(f"{harvest_dir} is not a directory")
     if args.diff is not None:
         return _diff_command(args, harvest_dir, _database(args, profile))
-    # resolve(): "." has no name to stand beside, and ".." has its own.
-    gold_path = args.gold or harvest_dir.resolve().with_name(
-        golden.FILE_NAME)
+    gold_path = args.gold or golden.path_beside(harvest_dir)
     if not Path(gold_path).is_file():
         raise SystemExit(
             f"{gold_path} is not a file: without decisions there is "

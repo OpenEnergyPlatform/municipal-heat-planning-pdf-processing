@@ -25,6 +25,7 @@ from docpipe.profile import add_profile_argument, program, resolve_profile
 from docpipe.store import schema as store_schema
 
 from .config import (
+    ALLOW_MIXED_INDEX,
     EMBED_FLUSH_ITEMS,
     EMBED_PREPARE_AHEAD,
     EMBED_PREPARE_WORKERS,
@@ -62,8 +63,13 @@ log = logging.getLogger(__name__)
 
 
 def note_embedding(db_path: Path, embedder) -> None:
-    """Record in the database which model builds its index, and say so when
-    the index already holds another model's vectors."""
+    """Record in the database which model builds its index.
+
+    Raises `MixedIndex` before any vector is written when the index holds
+    vectors of another model, unless that is allowed on purpose
+    (`EMBEDDING_ALLOW_MIXED_INDEX`); then, like an index that records no
+    model and so cannot be checked, it is a line in the log.
+    """
     import sqlite3
 
     from docpipe import __version__
@@ -72,11 +78,12 @@ def note_embedding(db_path: Path, embedder) -> None:
     if not isinstance(model, str):
         model = EMBEDDING_MODEL
     with sqlite3.connect(str(db_path)) as connection:
-        mixed = store_schema.note_embedding(
+        said = store_schema.note_embedding(
             connection, model, backend.EMBEDDING_DIM, index_backend(),
-            backend.EMBEDDING_MAX_TOKEN_LENGTH, __version__)
-    if mixed:
-        log.warning("%s", mixed)
+            backend.EMBEDDING_MAX_TOKEN_LENGTH, __version__,
+            allow_mixed=ALLOW_MIXED_INDEX)
+    if said:
+        log.warning("%s", said)
 
 
 def peak_rss_gb() -> float:
@@ -401,6 +408,13 @@ def main() -> None:
         sys.exit(0)
     except IncompleteIndex as e:
         log.error("Embedding incomplete: %s", e)
+        sys.exit(1)
+    except store_schema.MixedIndex as e:
+        log.error("Embedding stopped: %s", e)
+        log.error("Set EMBEDDING_MODEL to %s to continue the index, or run "
+                  "without --step and with --force to embed the whole corpus "
+                  "with %s, or set EMBEDDING_ALLOW_MIXED_INDEX=1 to mix them "
+                  "on purpose.", e.recorded, e.configured)
         sys.exit(1)
     except Exception as e:
         log.error("Fatal error: %s", e, exc_info=True)

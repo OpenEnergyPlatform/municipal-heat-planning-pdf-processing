@@ -126,6 +126,31 @@ def _image_requester(corpus: Corpus, document_id: Optional[int],
     return _request
 
 
+def search_hits(task: str, phrase: Optional[str], query_vec, corpus: Corpus,
+                document_id: Optional[int], scopes: list, *,
+                image_only: bool = False, exclude=frozenset()) -> list:
+    """The passages a turn searches: the hybrid search over the scopes'
+    embedding types, TOP_K of them, best first. One definition for the chat
+    and for whoever measures its search, so the two cannot drift apart.
+
+    The word index is asked with the question and its search anchor: the
+    question has the names and numbers, the anchor the wording a document
+    would use. An image query has no words to ask it with.
+    """
+    embedding_types = [t for s in scopes
+                       for t in config.SCOPE_TO_EMBEDDING_TYPES[s]]
+    worded = " ".join(part for part in (task, phrase) if part)
+    hits = hybrid.retrieve(
+        corpus.conn, corpus.index, corpus.id_to_pos, document_id,
+        embedding_types, query_vec, config.TOP_K,
+        text=None if image_only else worded,
+        lexical_index=corpus.lexical, exclude=exclude)
+    if document_id is None:
+        for hit in hits:
+            hit["document_label"] = _whose(corpus, hit.get("document_id"))
+    return hits
+
+
 def answer_question(task: str, corpus: Corpus, document_id: Optional[int],
                     scopes: list, *,
                     image_bytes: Optional[bytes] = None, image_only: bool = False,
@@ -197,19 +222,9 @@ def answer_question(task: str, corpus: Corpus, document_id: Optional[int],
 
     # --- 3) scoped retrieval ---
     with progress("📚 Retrieval"):
-        embedding_types = [t for s in scopes for t in config.SCOPE_TO_EMBEDDING_TYPES[s]]
-        # The word index is asked with the question and its search anchor:
-        # the question has the names and numbers, the anchor the wording a
-        # document would use.
-        worded = " ".join(part for part in (task, phrase) if part)
-        hits = hybrid.retrieve(
-            corpus.conn, corpus.index, corpus.id_to_pos, document_id,
-            embedding_types, query_vec, config.TOP_K,
-            text=None if mode == "image" else worded,
-            lexical_index=corpus.lexical, exclude=exclude)
-        if document_id is None:
-            for hit in hits:
-                hit["document_label"] = _whose(corpus, hit.get("document_id"))
+        hits = search_hits(task, phrase, query_vec, corpus, document_id,
+                           scopes, image_only=mode == "image",
+                           exclude=exclude)
     result["n_hits"] = len(hits)
     if not hits:
         _log(corpus, document_id, task or phrase or "", mode, scopes, start_time,

@@ -15,7 +15,7 @@ SPEC = load({"parameters": [{
     "description": "Endenergieverbrauch je Energieträger, Sektor und Jahr, "
                    "wie im Plan bilanziert.",
     "unit_target": "OEO_00050008",
-    "units_accepted": {"MWh/a": 1.0},
+    "units_accepted": {"MWh/a": {"factor": 1.0, "names_period": True}},
     "axes": {"carrier": {"vocabulary": {"OEO_00000292": ["Erdgas", "Gas"]}},
              "year": {"type": "int"}},
     "example": {"source": "| Erdgas | 42.005 | MWh/a | im Jahr 2020 |",
@@ -54,6 +54,61 @@ def test_parameter_payload_offers_classes_not_a_flat_label_list():
     assert "example" in payload and payload["units_accepted"] == ["MWh/a"]
 
 
+def _row_that_a_top_up_re_read(slots):
+    """A stored row as it is after a top-up: every coordinate with its
+    evidence, and the ones the top-up read pointing at its entry."""
+    row = {"value": 42005, "unit": "MWh/a", "quote": "Erdgas | 42.005"}
+    for position, slot in enumerate(slots, start=1):
+        row.update({slot.name: "x", f"{slot.name}_state": "read",
+                    f"{slot.name}_raw": "wort", f"{slot.name}_quote": "stelle",
+                    f"{slot.name}_source": ["table", 1],
+                    f"{slot.name}_producer": position})
+    return row
+
+
+def test_who_read_a_coordinate_is_not_echoed_to_the_model():
+    """A row the harvest read earlier is handed back as `prior`, so the model
+    does not return the same value from the next passage. A key that says
+    which pass re-read a coordinate says nothing about the value, and shown it
+    would change a request the harvest never wrote it for."""
+    from docpipe.extraction import fields
+    slots = fields.axis_slots(SPEC.parameters[0])
+    row = _row_that_a_top_up_re_read(slots)
+    assert [k for k in row if k.endswith("_producer")], "the row carries them"
+    (shown,) = runner._prior_payload([row])
+    assert not [k for k in shown if k.endswith("_producer")]
+    assert shown["value"] == 42005, "and the filter did not empty the row"
+    # the filter is the suffix list: a key it does not name is echoed
+    (control,) = runner._prior_payload([{**row, "carrier_note": 1}])
+    assert control["carrier_note"] == 1
+
+
+@pytest.mark.parametrize("profile", ["kwp", "scenarios"])
+def test_a_rows_request_is_the_same_whether_or_not_a_row_carries_a_pointer(
+        profile, monkeypatch):
+    """The harvest writes no pointer, so the requests of both profiles are
+    what they were. A top-up that wrote one must not change them either."""
+    import json as _json
+    from pathlib import Path
+    from docpipe.extraction import fields
+    from docpipe.extraction.pipeline import WorkItem, group_items
+    monkeypatch.setenv("DOCPIPE_PROFILE", profile)
+    spec = load(Path(__file__).resolve().parent.parent / "profiles" / profile
+                / "extraction_spec.json")
+    parameter = next(p for p in spec.parameters if fields.axis_slots(p))
+    batch = group_items([WorkItem(7, parameter, Source(
+        "table", 1, "| Erdgas | 42.005 | MWh/a |", {"page": 3}))])[0]
+    slots = fields.axis_slots(parameter)
+    with_pointer = _row_that_a_top_up_re_read(slots)
+    without = {k: v for k, v in with_pointer.items()
+               if not k.endswith("_producer")}
+    sent = [_json.dumps(runner._batch_payload(batch, [row], spec),
+                        ensure_ascii=False, indent=2)
+            for row in (with_pointer, without)]
+    assert sent[0] == sent[1]
+    assert "_producer" not in sent[0]
+
+
 def test_everything_is_stale_without_a_stamp(tmp_path):
     assert stale(tmp_path / "none.json", {"a": "1"}) == ["a"]
 
@@ -69,6 +124,214 @@ def test_only_a_changed_ontology_key_is_stale(tmp_path):
     assert stale(stamp, {**stored, "model": "other", "anchors": "b",
                          "extraction/field": "g"}) == []
     assert stale(stamp, {**stored, "axis/p/carrier": "2"}) == ["axis/p/carrier"]
+
+
+# ---------------------------------------------------------------------------
+# Another PDF under the same name
+#
+# Promised: a stamp that records another sha256 than the one the run reads
+# makes the document stale exactly as a changed ontology key does (named in a
+# warning, skipped, re-read only with --force-stale, then stamped anew), AND a
+# stamp that does not carry the key is not compared, AND neither is a run whose
+# database records no checksum.
+# ---------------------------------------------------------------------------
+def _pdf(sha, size=10):
+    return {"sha256": sha * 64, "bytes": size}
+
+
+def _runner_warnings(caplog):
+    return [r for r in caplog.records
+            if r.levelname == "WARNING" and r.name == runner.log.name]
+
+
+def test_another_sha256_than_the_stored_one_is_stale_and_the_size_alone_is_not(
+        tmp_path):
+    stamp = tmp_path / "s.json"
+    stored = {"axis/p/carrier": "1", "document": _pdf("a")}
+    stamp.write_text(json.dumps(stored), encoding="utf-8")
+    assert stale(stamp, stored) == []
+    assert stale(stamp, {**stored, "document": _pdf("b")}) == ["document"]
+    # the size is recorded and never compared
+    assert stale(stamp, {**stored, "document": _pdf("a", size=99)}) == []
+    # beside an ontology key, both are named
+    assert stale(stamp, {"axis/p/carrier": "2", "document": _pdf("b")}) \
+        == ["axis/p/carrier", "document"]
+
+
+@pytest.mark.parametrize("stored, current", [
+    ({"axis/p/carrier": "1"}, {"document": _pdf("b")}),     # a stamp from before
+    ({"document": _pdf("a")}, {}),                          # a database with none
+    ({"document": None}, {"document": _pdf("b")}),
+    ({"document": {"bytes": 3}}, {"document": _pdf("b")}),  # no sha256 stored
+    ({"document": _pdf("a")}, {"document": {"bytes": 3}}),  # none read
+])
+def test_a_document_that_one_side_cannot_name_is_not_compared(
+        tmp_path, stored, current):
+    """Otherwise the first run after the key arrived would report every stored
+    document stale: about 93 GPU hours over a sentence the stamps never held."""
+    stamp = tmp_path / "s.json"
+    stamp.write_text(json.dumps({"axis/p/carrier": "1", **stored}),
+                     encoding="utf-8")
+    assert stale(stamp, {"axis/p/carrier": "1", **current}) == []
+
+
+def test_a_stamp_that_cannot_be_read_names_no_other_pdf(tmp_path):
+    stamp = tmp_path / "s.json"
+    assert stale(stamp, {"a": "1", "document": _pdf("a")}) == ["a"]
+    stamp.write_text("{broken", encoding="utf-8")
+    assert stale(stamp, {"a": "1", "document": _pdf("a")}) == ["a"]
+
+
+def _harvested_from(tmp_path, monkeypatch, content):
+    """plan_x harvested once while the database says `content` of it."""
+    monkeypatch.setattr(runner.prompts, "versions",
+                        lambda ids: {i: "v1" for i in ids})
+    monkeypatch.setattr(runner, "DOCUMENT_CONTENT", dict(content))
+    calls = []
+
+    def retrieve(query, document_id, exclude):
+        return [] if ("table", 1) in exclude else \
+            [Source("table", 1, "| Erdgas | 42.005 | MWh/a |", {"page": 3})]
+
+    def harvest(batch, prior=None):
+        calls.extend(i.source.owner_id for i in batch.items)
+        return {"tuples": [{"source": "Q1", "value": 42005, "unit_raw": "MWh/a",
+                            "carrier": "Erdgas", "quote": "Erdgas | 42.005"}],
+                "status": "complete", "need_more": []}
+
+    deps = {"retrieve": _per_probe(retrieve), "harvest": harvest}
+    args = (7, "plan_x", tmp_path, SPEC, "sha-1", ["{label}"], deps)
+    runner.run_document(*args)
+    assert calls == [1]
+    return args, calls
+
+
+def test_a_document_with_another_pdf_is_named_skipped_and_redone_only_when_asked(
+        tmp_path, monkeypatch, caplog):
+    args, calls = _harvested_from(tmp_path, monkeypatch,
+                                  {"plan_x": _pdf("a")})
+    stamp = tmp_path / "plan_x.stamp.json"
+    assert json.loads(stamp.read_text())["document"] == _pdf("a")
+
+    # the same file again: current, said so, nothing redone
+    with caplog.at_level("INFO", logger="docpipe.extraction.runner"):
+        runner.run_document(*args)
+    assert calls == [1] and "is current" in caplog.text
+    caplog.clear()
+
+    # another file under the same name
+    runner.DOCUMENT_CONTENT["plan_x"] = _pdf("b")
+    with caplog.at_level("INFO", logger="docpipe.extraction.runner"):
+        runner.run_document(*args)
+    assert calls == [1], "stale without --force-stale only warns"
+    warned = _runner_warnings(caplog)
+    assert len(warned) == 1 and "plan_x" in warned[0].getMessage()
+    assert "another PDF" in warned[0].getMessage()
+    assert "--force-stale" in warned[0].getMessage()
+    assert "is current" not in caplog.text
+    # and the stamp still says what it read
+    assert json.loads(stamp.read_text())["document"] == _pdf("a")
+
+    # redone on request, and stamped anew
+    runner.run_document(*args, force_stale=True)
+    assert calls == [1, 1]
+    assert json.loads(stamp.read_text())["document"] == _pdf("b")
+    caplog.clear()
+    with caplog.at_level("INFO", logger="docpipe.extraction.runner"):
+        runner.run_document(*args)
+    assert calls == [1, 1] and "is current" in caplog.text
+    assert not _runner_warnings(caplog)
+
+
+def test_the_warning_names_the_ontology_key_and_the_pdf_when_both_moved(
+        tmp_path, monkeypatch, caplog):
+    args, calls = _harvested_from(tmp_path, monkeypatch,
+                                  {"plan_x": _pdf("a")})
+    runner.DOCUMENT_CONTENT["plan_x"] = _pdf("b")
+    real = runner.fingerprints
+    monkeypatch.setattr(runner, "fingerprints", lambda spec: {
+        **real(spec), "axis/OEO_00050016/carrier": "moved"})
+    caplog.clear()
+    with caplog.at_level("WARNING", logger="docpipe.extraction.runner"):
+        runner.run_document(*args)
+    assert calls == [1]
+    (warned,) = [r.getMessage() for r in caplog.records]
+    assert "older axis/OEO_00050016/carrier" in warned
+    assert "another PDF" in warned
+
+
+def test_a_stamp_from_before_the_key_is_not_made_stale_by_it(
+        tmp_path, monkeypatch, caplog):
+    """The corpus on disk carries no `document`. Compared, every one of its
+    stamps would read stale on the first run after the upgrade."""
+    args, calls = _harvested_from(tmp_path, monkeypatch, {})
+    stamp = tmp_path / "plan_x.stamp.json"
+    assert "document" not in json.loads(stamp.read_text())
+    runner.DOCUMENT_CONTENT["plan_x"] = _pdf("b")
+    with caplog.at_level("INFO", logger="docpipe.extraction.runner"):
+        runner.run_document(*args)
+    assert calls == [1] and "is current" in caplog.text
+    assert not _runner_warnings(caplog)
+
+
+def test_a_database_that_records_no_checksum_leaves_the_document_current(
+        tmp_path, monkeypatch, caplog):
+    args, calls = _harvested_from(tmp_path, monkeypatch,
+                                  {"plan_x": _pdf("a")})
+    runner.DOCUMENT_CONTENT.clear()
+    with caplog.at_level("INFO", logger="docpipe.extraction.runner"):
+        runner.run_document(*args)
+    assert calls == [1] and "is current" in caplog.text
+
+
+def test_a_harvests_stamp_lists_only_the_harvest(tmp_path, monkeypatch):
+    """Nothing new in a harvest: the position a top-up points at is the one
+    after the harvest's own entry, and a file's rows carry no `_producer` (held
+    in tests/test_extraction_fieldwise.py, where rows are filled)."""
+    _args, _calls = _harvested_from(tmp_path, monkeypatch, {})
+    stamp = json.loads((tmp_path / "plan_x.stamp.json").read_text())
+    assert [p["pass"] for p in stamp["producers"]] == ["harvest"]
+    rows = [json.loads(line) for line in
+            (tmp_path / "plan_x.jsonl").read_text(encoding="utf-8").splitlines()
+            if line.strip()]
+    assert not [k for r in rows for k in r if k.endswith("_producer")]
+
+
+def test_the_pdf_a_run_names_is_the_database_s_and_nothing_when_it_has_none(
+        monkeypatch):
+    monkeypatch.setattr(runner, "DOCUMENT_CONTENT", {"plan_x": _pdf("a")})
+    assert runner.document_current("plan_x") == {"document": _pdf("a")}
+    assert runner.document_current("plan_y") == {}, "no checksum, no claim"
+
+
+@pytest.mark.parametrize("stored, current, moved", [
+    ({"document": _pdf("a")}, {"document": _pdf("b")}, True),
+    ({"document": _pdf("a")}, {"document": _pdf("a")}, False),
+    ({"document": _pdf("a")}, {"document": _pdf("a", size=99)}, False),
+    ({}, {"document": _pdf("b")}, False),                   # a stamp from before
+    ({"document": _pdf("a")}, {}, False),                   # a database with none
+    ({"document": "a" * 64}, {"document": _pdf("b")}, False),   # not a record
+])
+def test_a_pdf_has_moved_only_when_both_sides_name_another_sha256(
+        stored, current, moved):
+    assert runner.document_moved(stored, current) is moved
+
+
+def test_a_stale_pdf_leaves_nothing_to_harvest_and_the_run_does_not_fail(
+        tmp_path, monkeypatch):
+    """What `main` counts: the document is left out of the run, which is the
+    same "nothing to harvest" it ends on, with exit code 0, for any other stale
+    key. --force-stale puts it back."""
+    args, _calls = _harvested_from(tmp_path, monkeypatch,
+                                   {"plan_x": _pdf("a")})
+    documents = [(7, "plan_x.pdf")]
+    assert runner.documents_to_harvest(documents, tmp_path, "sha-1",
+                                       spec=SPEC) == []
+    runner.DOCUMENT_CONTENT["plan_x"] = _pdf("b")
+    assert runner.documents_to_harvest(documents, tmp_path, "sha-1",
+                                       spec=SPEC) == []
+    assert runner.documents_to_harvest(documents, tmp_path, "sha-1", spec=SPEC,
+                                       force_stale=True) == documents
 
 
 def _per_probe(fn):
@@ -398,6 +661,26 @@ def test_the_image_root_follows_the_pdf_root():
         == Path("data/kwp/pdf/processed")
 
 
+def test_the_help_of_pdf_root_says_what_the_option_does(capsys):
+    """It once promised a digit-exact native check, which no code does: the
+    option places a section's quote on its page and says where the crops are.
+    Each sentence of the help is held against the call that does it."""
+    from pathlib import Path
+
+    with pytest.raises(SystemExit):
+        runner.main(["--help"])
+    said = " ".join(capsys.readouterr().out.split())
+    assert "digit-exact" not in said
+    assert "the flag not_located" in said
+    assert "Tables and figures are not compared with the PDF" in said
+    assert "ROOT/processed" in said
+    # "Without it no quote is looked up"
+    assert runner.make_locate(Path("none.db"), None) is None
+    # "the crops are read from ROOT/processed unless --image-root is given"
+    assert runner.resolve_image_root(Path("data/pdf"), Path("elsewhere")) \
+        == Path("data/pdf/processed")
+
+
 def test_the_context_budget_holds_a_full_window_and_a_crop():
     """The number goes to --max-model-len as a floor. It has to cover the
     largest request the run can actually build, or the server rejects it."""
@@ -581,7 +864,8 @@ def test_anchors_that_never_arrive_leave_the_templates_alone():
     spec = load({"parameters": [{
         "uri": "OEO_00050016", "label": "Endenergieverbrauch",
         "description": "the energy delivered to and consumed by end users",
-        "unit_target": "OEO_00050008", "units_accepted": {"MWh/a": 1.0},
+        "unit_target": "OEO_00050008", "units_accepted": {
+            "MWh/a": {"factor": 1.0, "names_period": True}},
         "axes": {"year": {"type": "int", "question": "Welches Jahr?"}},
         "example": {"source": "| x | 5 | MWh/a |",
                     "tuples": [{"value": 5, "unit_raw": "MWh/a"}]}}]})
@@ -1736,7 +2020,7 @@ def _spec(**changes):
             "Endenergieverbrauch je Energieträger, Sektor und Jahr, "
             "wie im Plan bilanziert."),
         "unit_target": "OEO_00050008",
-        "units_accepted": {"MWh/a": 1.0},
+        "units_accepted": {"MWh/a": {"factor": 1.0, "names_period": True}},
         "axes": {"carrier": {"vocabulary": dict(
                      {"OEO_00000292": ["Erdgas", "Gas"]},
                      **({"OEO_00000203": ["Klaergas"]}
@@ -1912,7 +2196,8 @@ def test_a_coordinate_the_spec_no_longer_asks_is_reported(tmp_path,
         "uri": "OEO_00050016", "label": "Endenergieverbrauch",
         "description": "Endenergieverbrauch je Energieträger, Sektor und "
                        "Jahr, wie im Plan bilanziert.",
-        "unit_target": "OEO_00050008", "units_accepted": {"MWh/a": 1.0},
+        "unit_target": "OEO_00050008", "units_accepted": {
+            "MWh/a": {"factor": 1.0, "names_period": True}},
         "axes": {"carrier": {"vocabulary": {"OEO_00000292": ["Erdgas",
                                                              "Gas"]}}},
         "example": {"source": "| Erdgas | 42.005 | MWh/a | im Jahr 2020 |",
@@ -2026,7 +2311,7 @@ def test_the_written_summary_does_not_grade_where_a_passage_stands(
         "description": "Endenergieverbrauch je Energietraeger und Jahr, wie "
                        "im Plan bilanziert.",
         "unit_target": "OEO_00050008",
-        "units_accepted": {"MWh/a": 1.0},
+        "units_accepted": {"MWh/a": {"factor": 1.0, "names_period": True}},
         "axes": {"carrier": {"vocabulary": {"OEO_00000292": ["Erdgas"]}},
                  "year": {"type": "int"}},
         "example": {"source": "| Erdgas | 42.005 | MWh/a | im Jahr 2020 |",
@@ -2066,7 +2351,7 @@ def test_a_parameter_nobody_answered_still_ends_with_a_state(tmp_path,
          "description": "Endenergieverbrauch je Jahr, so wie ihn der Plan "
                         "selbst bilanziert.",
          "unit_target": "OEO_00050008",
-         "units_accepted": {"MWh/a": 1.0},
+         "units_accepted": {"MWh/a": {"factor": 1.0, "names_period": True}},
          "axes": {"year": {"type": "int"}},
          "example": {"source": "| 42.005 | MWh/a | im Jahr 2020 |",
                      "tuples": [{"value": 42005, "unit_raw": "MWh/a"}]}},

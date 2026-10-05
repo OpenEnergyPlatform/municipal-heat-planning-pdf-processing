@@ -493,6 +493,35 @@ def test_extract_counts_the_documents_the_stage_would_harvest(
     assert "--force-stale" in out
 
 
+def test_a_document_read_from_another_pdf_is_left_to_force_stale_as_well(
+        harvest, capsys, ledger):
+    """The run skips it with a warning, so the estimate must not count it as
+    work: its stamp names one file and the database records another."""
+    stamp = json.loads((harvest.out / "a.stamp.json").read_text())
+    _write(harvest.out / "a.stamp.json",
+           {**stamp, "document": {"sha256": "1" * 64, "bytes": 10}})
+
+    def database_says(sha):
+        with sqlite3.connect(str(harvest.db)) as conn:
+            conn.execute("UPDATE Documents SET sha256 = ? "
+                         "WHERE filename = 'a.pdf'", (sha,))
+        conn.close()
+        _, out, _ = _estimate(capsys, "extract", "--db", harvest.db, "--out",
+                              harvest.out)
+        return out
+
+    # the same file: current, so only d is left to --force-stale
+    out = database_says("1" * 64)
+    assert "1 documents were harvested under an older spec" in out
+    # another file under the name: stale as well, and still not work
+    out = database_says("2" * 64)
+    assert _line(out, "work") == ("2 documents, 10 pages, 30 sections, "
+                                  "3 tables, 1 figures")
+    assert "2 documents were harvested under an older spec or from another " \
+           "PDF" in out
+    assert "--force-stale" in out
+
+
 def test_without_a_harvest_directory_every_current_document_is_work(
         harvest, capsys, ledger):
     _, out, _ = _estimate(capsys, "extract", "--db", harvest.db)

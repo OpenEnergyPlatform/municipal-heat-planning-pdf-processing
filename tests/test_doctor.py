@@ -745,3 +745,29 @@ def test_every_line_the_doctor_writes_has_a_known_status_and_its_words(served):
         assert check.status in (OK, WARN, FAIL, SKIP), check
         assert check.area and check.name and check.detail, check
         assert isinstance(check.hint, str)
+
+
+# -------------------------------------------- the chat with no profile named
+
+def test_asked_about_the_chat_with_no_profile_the_doctor_checks_the_built_in_one(
+        monkeypatch):
+    """The chat answers on the built-in profile when none is named, so a
+    failure for the missing name would be a failure of nothing."""
+    from docpipe.profile import ENV_VAR
+    monkeypatch.delenv(ENV_VAR, raising=False)
+    (line,), profile = doctor.check_profile("chat")
+    assert line.status == OK and "default" in line.detail
+    assert "--profile" in line.hint            # and how to name another
+    assert profile is not None and profile.name == "default"
+    # its lines are then checked against that profile, not skipped
+    chat = [c for c in doctor.check_stages("chat", profile) if c.name == "chat"]
+    assert chat and all(c.status != SKIP for c in chat)
+
+
+@pytest.mark.parametrize("stage", [None, "refine", "visuals", "extract"])
+def test_every_other_stage_still_fails_without_a_profile(stage, monkeypatch):
+    from docpipe.profile import ENV_VAR
+    monkeypatch.delenv(ENV_VAR, raising=False)
+    (line,), profile = doctor.check_profile(stage)
+    assert line.status == FAIL and line.detail == "no profile named"
+    assert profile is None

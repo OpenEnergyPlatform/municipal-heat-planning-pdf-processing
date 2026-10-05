@@ -87,6 +87,7 @@ Fields:
 - `unit_target: Optional[str] = None`: numeric parameters only
 - `units_accepted: dict = field(default_factory=dict)`: unit -> factor
 - `integrated: bool = True`: Whether this parameter's unit is an amount over a span or a rate. A consumption in MWh/a is integrated over a year and a plan that states one without saying over what has left something out; a power in MW is not, and has no period to leave out. The verifier flags the first and must not flag the second, or the flag fires on every row of one parameter and means nothing.
+- `unit_names_period: dict = field(default_factory=dict)`: unit -> bool
 - `vocabulary: Optional[dict] = None`: category parameters: uri -> labels
 - `definitions: dict = field(default_factory=dict)`
 - `vocabulary_dynamic: bool = False`: A category whose closed list is real but per document, filled in by the profile before the harvest. Same rule as a dynamic axis, one level up.
@@ -111,6 +112,18 @@ Exact and nothing else. Which entry a document's wording means is
 read by the model with its own passage (`fields.unit_slot`); a
 spelling table here would be a second reader that nothing checks.
 
+#### Parameter.names_period
+
+```python
+def names_period(self, unit) -> bool
+```
+
+Does this entry of units_accepted name a period, as the spec says?
+
+Only the entry's own statement. A parameter whose entries carry none
+(a rate, or one built without `load`) has no answer to give, and
+guessing one would put a claim about a passage on a row.
+
 #### Parameter.value_to_uri
 
 ```python
@@ -134,19 +147,6 @@ Fields:
 - `by_uri: dict = field(default_factory=dict)`
 
 ## Functions
-
-### states_a_year
-
-```python
-def states_a_year(unit) -> bool
-```
-
-Does this entry of units_accepted say the amount is per year?
-
-Asked of the entry the model chose, which is the spec's own spelling. The
-period is part of what the model reads off the passage -- "450 kWh über
-das Jahr" is kWh/a, a storage capacity of 200 kWh is kWh -- so the entry
-carries that reading and nothing looks at the passage a second time.
 
 ### fold_label
 
@@ -214,10 +214,20 @@ def value_fingerprint(parameter: "Parameter") -> str
 
 The list a category parameter answers from, or "" when it has none.
 
-Spellings AND meanings, the same three things an axis fingerprint takes:
-all of them reach the model when it picks (`fields.Slot.answerable`), so
-a changed definition is a changed question. Left out, a term whose
-meaning was rewritten would leave every document current.
+The classes and their spellings, which is all the rows request shows the
+model for this list (`runner._parameter_payload` and
+`_quantities_payload`: the class name and the other spellings). The
+definitions are not in it: no request of the harvest puts them in front of
+the model for a category value, so counting them made a document stale
+over a sentence no model had read. An axis is another case, its field
+request does show them, and `axis_fingerprint` keeps them.
+
+A stamp written while the definitions were counted holds another digest,
+so a stored scenarios stamp reports its `value/<parameter>` keys stale
+once. `--remap` (no model) settles them; `--force-stale` first would read
+the document again for nothing. A document with a wording no list holds
+stays stale in that key (`not listed` in the remap's count) and is the
+one `--force-stale` is left for.
 
 ### parameter_slot_fingerprint
 

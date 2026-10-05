@@ -607,6 +607,50 @@ def test_the_review_keys_reach_only_the_stamps_of_the_documents_it_read(
     assert "review/prompt" not in stored_b and "review/model" not in stored_b
 
 
+def test_a_review_that_changed_a_row_enters_the_stamps_list_and_no_row_points_at_it(
+        tmp_path):
+    """The schema has promised since the list existed that a review which
+    changed a row joins it. The review flags a value and reads no coordinate
+    in its place, so nothing points at the entry."""
+    path, stamp = _stamped(tmp_path, "a")
+    review.run(tmp_path, SPEC, ask=_asker(_agreeing()),
+               sources_for=lambda row: _sources(),
+               prompt_sha="abc123", model="ein-modell",
+               producer=runner.producer("review", "ein-modell"))
+    stored = json.loads(stamp.read_text(encoding="utf-8"))
+    assert [p["pass"] for p in stored["producers"]] == ["harvest", "review"]
+    assert stored["producers"][0] == {"pass": "harvest", "model": "m"}
+    assert stored["producers"][1]["model"] == "ein-modell"
+    assert not [k for row in _rows_of(path) for k in row
+                if k.endswith("_producer")]
+
+
+def test_a_review_that_changed_no_row_enters_nothing(tmp_path):
+    """Read, so it carries the review keys; but no value was flagged, and a
+    list entry for a pass that wrote nothing would say it did."""
+    good = _row(carrier_state=fields.READ)
+    path = _harvest(tmp_path, [good, _summary(levels={"A": 1, "B": 0, "C": 0},
+                                              reasons={})], name="quiet")
+    stamp = tmp_path / "quiet.stamp.json"
+    stamp.write_text(json.dumps({"spec": "sha", "model": "m"}),
+                     encoding="utf-8")
+    review.run(tmp_path, SPEC, ask=_asker(_agreeing()),
+               sources_for=lambda row: _sources(),
+               prompt_sha="abc123", model="ein-modell",
+               producer=runner.producer("review", "ein-modell"))
+    stored = json.loads(stamp.read_text(encoding="utf-8"))
+    assert stored["review/prompt"] == "abc123"
+    assert "producers" not in stored
+
+
+def test_a_document_with_no_stamp_is_given_no_entry_either(tmp_path):
+    _harvest(tmp_path, [_row(), _summary()])
+    review.run(tmp_path, SPEC, ask=_asker(_agreeing()),
+               sources_for=lambda row: _sources(),
+               producer=runner.producer("review", "ein-modell"))
+    assert list(tmp_path.glob("*.stamp.json")) == []
+
+
 def test_a_named_document_is_the_only_one_reviewed(tmp_path):
     """`documents` names harvest files by stem, the way `--document` names
     them through the corpus listing: the others are neither read nor
@@ -666,6 +710,10 @@ def test_each_no_harvest_mode_reaches_its_own_run(tmp_path, monkeypatch):
     assert [what for what, _ in seen] == ["serving", "review", "remap"]
     assert seen[0][1] == "extraction review"
     assert seen[1][1]["documents"] is None
+    # who read the second time, for the stamp's list: without it the review
+    # run from the command line enters nothing, whatever `review.run` can do
+    assert seen[1][1]["producer"]["pass"] == "review"
+    assert seen[1][1]["producer"]["model"] == runner.LLM_MODEL
     assert seen[1][1]["prompt_sha"] == runner.prompts.load(
         runner.REVIEW_PROMPT_ID).sha256
     stamp = seen[2][1][2]

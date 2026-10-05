@@ -332,10 +332,12 @@ resume stamp
 : `<document>.stamp.json`, the record of what produced a document's
   harvest: the spec's sha256, the model, the anchor set, one fingerprint
   key per question asked (`docpipe/extraction/spec.py`'s `fingerprints`),
-  and the recorded sentences a review or a per-document question wrote.
-  `docpipe/extraction/runner.py`'s `stale` compares only the fingerprint
-  keys (`parameter/`, `value/`, `axis/`, `slot/`), and the spec's sha256
-  only where none of those are present; the model, the anchor set and
+  the sha256 of the PDF it was read from, the passes that wrote into it, and
+  the recorded sentences a review or a per-document question wrote.
+  `docpipe/extraction/runner.py`'s `stale` compares the fingerprint
+  keys (`parameter/`, `value/`, `axis/`, `slot/`) and the PDF's sha256
+  where the stamp and the database both carry one, and the spec's sha256
+  only where no fingerprint key is present; the model, the anchor set and
   every prompt id are written for a reader and never compared. The stamp
   is withheld, and the next run harvests the document again, when more than
   half its sources never reached the server, when no batch answered, or when

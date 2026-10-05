@@ -2,10 +2,11 @@
 
 Promised: the sentences are the profile's (`extraction.py: PHRASES`) AND for
 kwp and scenarios they are, byte for byte, what the core said while they
-were German literals in it (EXPECTED is that, for a fixed set of cases);
-the built-in profile says the same things in English: every phrase is in
-all three tables with the same names to fill in; and a profile that lacks
-one is told which.
+were German literals in it, except the two keys of a closed list, which are
+the English ones in every profile (EXPECTED is that, for a fixed set of
+cases); the built-in profile says the same things in English: every phrase
+is in all three tables with the same names to fill in; and a profile that
+lacks one is told which.
 """
 import string
 from types import SimpleNamespace as NS
@@ -20,11 +21,11 @@ from docpipe.profile import Profile, load_profile
 
 # What the core said before the sentences moved into the profiles.
 EXPECTED = {'anchor_labels': [['#parameter', 'Kennzahl'], ['#unit', 'Einheit']],
- 'answerable': [{'Erdgas': {'Schreibweisen': ['Gas H'],
-                            'bedeutet': 'ein Gas'},
-                 'Strom': {'Schreibweisen': ['Elektrizität']},
-                 'out:unstated': {'bedeutet': 'in diesen Passagen steht es '
-                                              'nicht'}},
+ 'answerable': [{'Erdgas': {'means': 'ein Gas',
+                            'spellings': ['Gas H']},
+                 'Strom': {'spellings': ['Elektrizität']},
+                 'out:unstated': {'means': 'in diesen Passagen steht es '
+                                           'nicht'}},
                 {'GHD': ['Gewerbe'],
                  'out:unstated': ['steht in diesen Passagen nicht']}],
  'compute': ['Der Code lief nicht: boom. Antworte jetzt ohne Berechnung, '
@@ -232,12 +233,13 @@ def _reply(content, finish="stop", reasoning=None):
         content=content, reasoning_content=reasoning))
 
 
-def test_the_closed_list_names_meaning_and_spellings_as_before(german):
+def test_the_closed_list_names_meaning_and_spellings_under_english_keys(
+        german):
     assert [WITH_MEANING.answerable(), PLAIN.answerable()] == \
         EXPECTED["answerable"]
     # the order of the two keys is part of the request
     assert list(WITH_MEANING.answerable()["Erdgas"]) == [
-        "bedeutet", "Schreibweisen"]
+        "means", "spellings"]
 
 
 def test_a_reply_that_could_not_be_read_is_told_why_as_before(german):
@@ -363,11 +365,17 @@ def test_every_profile_says_every_sentence_with_the_same_names(name):
         assert _names(text) - free == _names(german[key]) - free, key
 
 
+# The two keys of an entry of a closed list are protocol and not prose: every
+# profile sends the same two English words, and the prompts that name them
+# name these.
+ENGLISH_IN_EVERY_PROFILE = {"option_means", "option_spellings"}
+
+
 def test_the_built_in_profile_says_it_in_english():
     english = load_profile("default")._own("extraction", "PHRASES")
     german = load_profile("kwp")._own("extraction", "PHRASES")
     same = [key for key in english if english[key] == german[key]]
-    assert not same, same
+    assert set(same) == ENGLISH_IN_EVERY_PROFILE, same
     umlauts = [key for key, text in english.items()
                if any(char in text for char in "äöüßÄÖÜ")]
     assert not umlauts, umlauts
@@ -562,12 +570,3 @@ def test_a_profile_that_names_no_mark_is_read_with_the_comma_and_a_wrong_one_is_
     monkeypatch.setattr(Profile, "component", lambda self, module, attr: ";")
     with pytest.raises(ValueError, match="DECIMAL_MARK"):
         verify.decimal_mark()
-
-
-def test_a_spec_s_unit_says_per_year_in_english_too():
-    from docpipe.extraction.spec import states_a_year
-    for unit in ("MWh/a", "t CO2/Jahr", "GWh pro Jahr", "MWh/yr", "t/year",
-                 "kWh per year", "annual MWh", "EUR p.a."):
-        assert states_a_year(unit), unit
-    for unit in ("MWh", "kW", "t", "m²", "kWh/m²", "EUR/yard"):
-        assert not states_a_year(unit), unit

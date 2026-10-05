@@ -19,8 +19,12 @@ Author: Felix Vossel
 def note_embedding(db_path: Path, embedder) -> None
 ```
 
-Record in the database which model builds its index, and say so when
-the index already holds another model's vectors.
+Record in the database which model builds its index.
+
+Raises `MixedIndex` before any vector is written when the index holds
+vectors of another model, unless that is allowed on purpose
+(`EMBEDDING_ALLOW_MIXED_INDEX`); then, like an index that records no
+model and so cannot be checked, it is a line in the log.
 
 ### peak_rss_gb
 

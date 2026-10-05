@@ -46,7 +46,8 @@ log = logging.getLogger(__name__)
 # Read when first used, not when this module is imported: the app, a test
 # and `--help` can import the answer loop before anybody has named a profile.
 # Everything the loop says around the prompts comes from the same profile
-# (`wording.phrases`), and is read the same way.
+# (`wording.phrases`), and is read the same way. Where none is named, that is
+# the built-in one.
 _PROMPTS = {
     "PHRASE_SYSTEM_PROMPT": "inference/phrase",
     "CHUNK_QA_SYSTEM_PROMPT": "inference/chunk_qa",
@@ -74,10 +75,12 @@ def _texts() -> dict:
 
 
 def _prompt(prompt_id: str) -> str:
-    """One prompt of the ambient profile, read once per profile."""
+    """One prompt of the profile in force, read once per profile; without
+    one, of the built-in profile (`wording.chat_profile`)."""
     texts = _texts()
     if prompt_id not in texts:
-        texts[prompt_id] = prompts.text(prompt_id)
+        texts[prompt_id] = prompts.load(prompt_id,
+                                        wording.chat_profile()).text
     return texts[prompt_id]
 
 

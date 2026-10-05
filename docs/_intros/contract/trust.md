@@ -2,7 +2,7 @@
 
 Every accepted tuple already passed a minimum check: `verify.py`'s
 `verify_tuple` checks the number against its quote and the quote against a
-shown source (`verify.py:365-551`). The field sweep in
+shown source (`verify.py:365-552`). The field sweep in
 `docpipe/extraction/pipeline.py` holds each coordinate to the same two
 clauses, its quote stands in a shown source and carries the answer, and
 writes the passage's owner onto the row (`merge_field`,
@@ -30,7 +30,7 @@ description (`verify.py:44-45,488-496`;
 `tests/test_extraction_trust.py:51`); or the document had no text layer
 and was transcribed page by page, passed to `trust()` as a `transcribed`
 keyword read from the `page_text_transcribed` column
-(`profiles/kwp/kg.py:416-418,571,670-671`) and capping a row at `B` even with
+(`profiles/kwp/kg.py:408-410,563,654-655`) and capping a row at `B` even with
 tier `TIER_TEXT` (`trust.py:120-124`;
 `test_the_same_value_from_a_transcribed_plan_never_reaches_a`,
 `tests/test_extraction_trust.py:61`). On the 559 tuples the levels were
@@ -60,7 +60,7 @@ by a profile's own graph serializer resolving two competing readings of
 one coordinate: kwp settles them first (`settle`: by the plan's wording,
 by rounding, by trust), drops every claimant of what stays tied and never
 marks `conflict`, scenarios keeps a chosen reading and marks it `conflict`
-(`profiles/kwp/kg.py:522-588`, `profiles/scenarios/kg.py:698-699`; see
+(`profiles/kwp/kg.py:514-580`, `profiles/scenarios/kg.py:701-702`; see
 [graph](../stages/graph.md)). `page_transcribed` never by itself decides
 the level: it caps a value at `B` rather than pushing it to `C`, since a
 page with no text layer is a fact about the source, not about this reading
@@ -98,7 +98,7 @@ up to six marks in a fixed order: `level`, `image_origin` or
 records the image's file name. Each mark's wording is the profile's own:
 the [kwp](../profiles/kwp.md) and [scenarios](../profiles/scenarios.md)
 serializers each state a `TRUST_PROSE` table, both in English
-(`profiles/kwp/kg.py:595-602`, `profiles/scenarios/kg.py:482-489`), and a
+(`profiles/kwp/kg.py:587-594`, `profiles/scenarios/kg.py:464-471`), and a
 profile missing a mark, or wording one that is not on this list, is
 refused at import (`trust.check_prose`, `trust.py:203-215`;
 `test_every_profile_words_every_mark_the_core_can_produce`,

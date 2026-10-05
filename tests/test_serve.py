@@ -48,7 +48,9 @@ SPEC = {
         "uri": P, "label": "Final energy consumption",
         "description": "Energy delivered to and consumed by end users.",
         "value_type": "float", "unit_target": "MWh/a",
-        "units_accepted": {"MWh/a": 1, "GWh/a": 1000},
+        "units_accepted": {
+            "MWh/a": {"factor": 1, "names_period": True},
+            "GWh/a": {"factor": 1000, "names_period": True}},
         "axes": {
             "carrier": {"vocabulary": {"oeo:gas": ["natural gas", "Erdgas"],
                                        "oeo:coal": ["coal", "Kohle"]}},

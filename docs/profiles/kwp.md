@@ -15,7 +15,7 @@ section text is itself a model reading, one reason their harvested values
 can never clear the run's top trust level. An earlier, 801-document
 snapshot found 184 plans with multi-column pages, so the profile fixes
 `column_layout="auto"` rather than leaving layout detection to guess per
-page (`profiles/kwp/profile.py:13` to `17`).
+page (`profiles/kwp/profile.py:15` to `19`).
 
 One Excel row is one municipality; several rows can point at the same PDF
 when several municipalities plan together as a convoy, so the document is
@@ -68,12 +68,12 @@ table gives kwp's own answer.
 | File processing | `source.py` | `SOURCE`, `backfill_meta` | the KWW register as a `Source`: filtering, convoy grouping, overrides |
 | File processing | `schema.sql`, `store.py` | `OrganisationUnits`, `Municipalities`, `DocumentMeta`, `MunicipalityMeta` | the profile's own tables and their upsert helpers |
 | Layout detection | `profile.py` | `column_layout` | `"auto"`, a multi-column page read column by column |
-| Structure assembly | `preprocessing.py` | `HYPHEN_EXCEPTIONS`, `CAPTION_MAX_WORDS`, `CAPTION_START`, `TITLE_EXCLUDE_PREFIXES`, `DIRECTORY_FIGTAB_WORDS`, `BIBLIOGRAPHY_TITLE_WORDS` | German hyphenation, caption length, what opens a caption (a word, a number and a colon, as `Tabelle 17:`), title and directory rules |
+| Structure assembly | `preprocessing.py` | `HYPHEN_EXCEPTIONS`, `CAPTION_MAX_WORDS`, `CAPTION_START`, `TITLE_EXCLUDE_PREFIXES`, `DIRECTORY_FIGTAB_WORDS`, `DIRECTORY_TITLE_WORDS`, `BIBLIOGRAPHY_TITLE_WORDS` | German hyphenation, caption length, what opens a caption (a word, a number and a colon, as `Tabelle 17:`), title and directory rules (the title words of a table of contents are the profile's: "inhalt", "verzeichnis", "contents", "directory") |
 | Preprocessing (page transcription) | `prompts/preprocessing/page_transcribe.md` | one prompt id | reads a page with no text layer, verbatim, into Markdown |
 | Refinement | `prompts/refinement/*.md` | `refine`, `refine_corrections`, `split` | repairs German extraction artefacts, proposes section cuts |
-| Visuals | `prompts/visuals/*.md` | seven prompt ids | table transcription, figure description and captions, in German |
+| Visuals | `prompts/visuals/*.md` | six prompt ids of its own | table transcription, figure description and captions, in German; `visuals/caption_keep` is the built-in profile's, inherited byte for byte |
 | The picker (app) | `catalog.py`, `profile.py` | `CATALOG`, `facets` | plan-centric labels, convoy membership, three filters |
-| Extraction | `extraction.py` | `SPEC_PATH`, `SLICE`, `FRAME`, `document_context`, `PHRASES`, `PROMPT_CHECKS` | the spec, the slice gate, the frame axes, the German sentences the stage writes to the model (the frame request's list of a closed coordinate stands under `"scenarios"`) and the passages the preflight holds its prompts to |
+| Extraction | `extraction.py` | `SPEC_PATH`, `SLICE`, `FRAME`, `document_context`, `PHRASES`, `PROMPT_CHECKS`, `ALT_LABEL_LANGUAGE` | the spec, the slice gate, the frame axes, the German sentences the stage writes to the model (the frame request's list of a closed coordinate stands under `"scenarios"`) and the passages the preflight holds its prompts to |
 | Extraction | `prompts/extraction/*.md` | eight prompt ids | phrase, frame, rows, field, anchors, queries, harvest, review |
 | The graph | `kg.py` | `make_serializer` and seven more names | MHPKG Turtle, the coordinate query, the trust wording |
 | The answer app | `inference.py` | `PHRASES`, `READOFF_MARKER`, `READOFF_NOTE`, `ROUTE_NOTES` | the German chat wording and the graph route's refusal sentences |
@@ -90,15 +90,21 @@ on a `value` node in the graph. The fourth, `planning_organisation`, is a
 | parameter | value type | unit family | unit target | accepted spellings |
 |---|---|---|---|---|
 | `energy_consumption` | `float` | energy (kWh to TWh) | `OEO_00050008` | 12 |
-| `emission` | `float` | mass, CO2 equivalent | `OEO_00010137` | 42 |
+| `emission` | `float` | mass, CO2 equivalent | `OEO_00010137` | 48 |
 | `heat_load` | `float` | power (kW to GW) | `OEO_00390001` | 5 |
 | `planning_organisation` | `text` | none | none | none |
 
 `heat_load` is split from the two amounts purely by unit family, and the
-spec marks it `integrated=False` (`docpipe/extraction/spec.py:158` to
-`162`), the one field that tells a rate apart from an amount stated over
+spec marks it `integrated=False` (`docpipe/extraction/spec.py:131` to
+`137`), the one field that tells a rate apart from an amount stated over
 a span; the other two numeric parameters leave `integrated` at its
-default of true.
+default of true. An integrated parameter's units each say whether they name a
+period, `names_period`, and the loader refuses an entry that does not say
+(`spec._validate_unit_entry`): of the 12 entries of `energy_consumption` and the
+48 of `emission`, 34 say true ("kWh/a") and 26 say false ("kWh"), and the five
+of `heat_load` stay bare factors. The verifier flags `period:unstated` from that
+statement alone, and it reaches no request and no stamp key, so changing one
+costs no re-read.
 
 All three numeric parameters share the same five non-quantity axes, each
 a closed vocabulary except `year`, a plain integer:
@@ -127,7 +133,7 @@ carries when a passage genuinely does not state it is `out:unstated`
 (`docpipe/extraction/fields.py:38` to `48`), and a profile's own vocabulary
 rides the same prefix so a serializer can refuse every one of them by
 shape rather than by a second, hand-kept list
-(`profiles/kwp/kg.py:103` to `112`, `is_class`). Most of `quantity`'s own
+(`profiles/kwp/kg.py:95` to `104`, `is_class`). Most of `quantity`'s own
 list is such an entry: a potential rather than a delivered amount, a
 share expressed as a percentage, a per-person or per-area figure, and a
 residual catch-all, so the model can name what a number really is
@@ -139,11 +145,11 @@ rather than asking, carried as the `derived` state
 (`docpipe/extraction/fields.py:68` to `75`; [glossary](../glossary.md)):
 every unit `energy_consumption` or `emission` accepts names a span, so
 their aggregation is always the closed list's integral entry, never asked
-(`docpipe/extraction/spec.py:121` to `131`, `Axis.derive`). Before this was
+(`docpipe/extraction/spec.py:94` to `104`, `Axis.derive`). Before this was
 derived, all 452 aggregation answers the model gave for these two
 parameters over one plan were that same entry every time, evidenced
 only by the unit string the request had itself just handed over
-(`docpipe/extraction/spec.py:126` to `128`). `heat_load`'s aggregation is
+(`docpipe/extraction/spec.py:99` to `101`). `heat_load`'s aggregation is
 not derived, since a watt is not integrated over a span the way a
 watt-hour is: this axis is asked instead, with evidence allowed one page
 away, and a peak load can come back distinct from an average one.
@@ -192,7 +198,7 @@ parts and the graph now serializes all three
 
 Every question a run asks carries its own fingerprint, so a resumed run
 can tell exactly which question changed rather than treating the whole
-spec as one block (`docpipe/extraction/spec.py:609` to `634`,
+spec as one block (`docpipe/extraction/spec.py:649` to `674`,
 `fingerprints`): one key for the parameter-choice question itself, one
 for the unit-choice question and the entries it offers, one per
 parameter for its own question, unit list and worked example, one per
@@ -223,7 +229,7 @@ wording of each spec question:
 
 `extraction/rows` and `extraction/field` are the field-wise pair that
 replaces the whole-tuple `extraction/harvest` request by default
-(`EXTRACT_FIELDWISE` defaults to on, `docpipe/extraction/runner.py:306`):
+(`EXTRACT_FIELDWISE` defaults to on, `docpipe/extraction/runner.py:307`):
 one call finds which values a passage states, a second asks each
 coordinate as its own question. `extraction/review` is deliberately
 outside the set the extraction stamp hashes, because a review only ever
@@ -233,10 +239,11 @@ stamp would report an entire corpus stale the day it is edited.
 The profile also carries the full prompt set every other stage's own code
 asks for by id: one for preprocessing's page transcription, three for
 refinement, seven for visuals (a system and a user prompt each for
-tables and figures, plus three caption variants), and fifteen for the
+tables and figures, plus three caption variants, of which `caption_keep` is
+the built-in profile's, inherited byte for byte), and fifteen for the
 answer app, named in one table in `docpipe.inference.llm_client` and read when
 first used, under the names they had as module constants
-(`docpipe/inference/llm_client.py:50` to `66`, `76` to `90`).
+(`docpipe/inference/llm_client.py:51` to `67`, `77` to `93`).
 `test_a_profile_provides_every_prompt_the_core_loads` and
 `test_a_profile_carries_no_prompt_nobody_loads`
 (`tests/test_architecture.py`) hold this set to what the core actually
@@ -250,7 +257,7 @@ once, `rdfs`, `xsd`, `obo`, `mhpo` and `oeo`
 (`profiles/kwp/kg.py:49` to `55`), and every identifier the serializer
 writes is qualified against exactly that header; a predicate whose prefix
 the header does not bind raises rather than silently writing Turtle
-nobody can load (`kg_name`, `docpipe/extraction/spec.py:651` to `667`).
+nobody can load (`kg_name`, `docpipe/extraction/spec.py:683` to `700`).
 The full mechanism is on [stages/graph.md](../stages/graph.md); this
 section names what is specific to kwp's own graph.
 
@@ -279,21 +286,21 @@ A named sub area is linked `part of` the municipality. An organisation
 node is written once per run, with the first spelling in harvest
 order, even when a later plan in the same run spells the office
 differently: a run-level `labelled` set in `make_serializer` keeps a
-second `rdfs:label` off the shared node (`profiles/kwp/kg.py:761` to
-`743`, `935` to `941`; `tests/test_kwp_extraction.py`,
+second `rdfs:label` off the shared node (`profiles/kwp/kg.py:745` to
+`750`, `944` to `946`; `tests/test_kwp_extraction.py`,
 `test_an_office_two_plans_spell_differently_keeps_one_label`).
 
 The IRI base is `https://openenergyplatform.org/id/mhpkg/`
 (`profiles/kwp/kg.py:36`). Every minted collection draws its own UUIDv5
 sub-namespace off that base, and minting always uses UUIDv5 over an
-identifying name, never UUIDv4 (`profiles/kwp/kg.py:355` to `380`,
+identifying name, never UUIDv4 (`profiles/kwp/kg.py:369` to `372`,
 `mint`), so two runs over one document produce byte-identical Turtle
 (`tests/test_kwp_extraction.py`,
 `test_value_minting_matches_the_schema_repo_reference` and
 `test_normalise_and_organisation_minting_match_the_reference`). The plan
 and municipality nodes are not minted at all: their IRIs are built
 directly from the register key, `heatplan/AGS_<ags>_<published>` and
-`municipality/AGS_<ags>` (`profiles/kwp/kg.py:439` to `441`, `826`). A
+`municipality/AGS_<ags>` (`profiles/kwp/kg.py:431` to `433`, `834`). A
 year IRI is likewise unminted, one node per calendar year, keyed by the
 year itself (`profiles/kwp/kg.py:345` to `352`).
 
@@ -302,17 +309,17 @@ the scenario part's IRI, the quantity class, the carrier and sector
 classes where they are real OEO classes (`is_class`; a deliberate
 `out:` answer or an unmapped wording is left out exactly like an
 absent one), the year, the aggregation, and, only for a named sub area,
-the normalised area wording (`profiles/kwp/kg.py:460` to `490`,
+the normalised area wording (`profiles/kwp/kg.py:452` to `482`,
 `_value_iri`). These are the same seven coordinates the schema
 repository's own `mint_slice.py` mints: part, quantity, carrier, sector,
 year, aggregation and the sub-area, so two runs over one document mint
 byte-identical IRIs with no deviation from the published list, which
 `mint_slice.py` must apply the same carrier and sector rule to keep
-matching (`profiles/kwp/kg.py:6` to `8`, `456` to `460`). The area is left out of a
+matching (`profiles/kwp/kg.py:6` to `8`, `448` to `452`). The area is left out of a
 whole-plan-area value's identity, since one 2040 figure stated under
 three different whole-plan-area wordings on three pages of one plan
 became three indistinguishable nodes before this rule, 129 of 1,294 value
-nodes overall (`profiles/kwp/kg.py:470` to `478`); a named sub area keeps
+nodes overall (`profiles/kwp/kg.py:462` to `470`); a named sub area keeps
 its wording, since one plan can carry several sub-area tables whose
 figures would otherwise collide onto one node instead.
 
@@ -321,10 +328,10 @@ read: the wording and quote, the page and its table, figure or section,
 whether the aggregation was read or derived, and a trust line rendered
 from the same six marks `docpipe/extraction/trust.py` defines for every
 profile, in English here, checked against the core's own list at import
-(`check_prose`, `profiles/kwp/kg.py:595` to `602`). Comments only, never
+(`check_prose`, `profiles/kwp/kg.py:587` to `594`). Comments only, never
 triples: MHPKG's shapes are `sh:closed`, and an unanticipated triple
-would invalidate the node it documents (`profiles/kwp/kg.py:606` to
-`600`, `652` to `725`).
+would invalidate the node it documents (`evidence_comment`,
+`profiles/kwp/kg.py:645` to `718`).
 
 What the serializer refuses, briefly (in full on
 [stages/graph.md](../stages/graph.md)): a row failing the quantity,
@@ -366,7 +373,7 @@ graph-route hooks at start-up (`docpipe/inference/kg_route.py:52` to `57`,
 (`docpipe/inference/kg_route.py:66` to `78`, the `Hooks` dataclass): a
 SPARQL template (`VALUE_QUERY`), the five axes a question may fix, in
 order, `(scenario, quantity, carrier, sector, year)`
-(`COORDINATE_AXES`, `profiles/kwp/kg.py:1012` to `1019`), `heatplan_iri`,
+(`COORDINATE_AXES`, `profiles/kwp/kg.py:996` to `1003`), `heatplan_iri`,
 `value_bindings`, `label_of`, and the same `TRUST_PROSE` the serializer
 writes with. `spatial_scope` is left out because the graph has no edge
 yet from a value to its area; `aggregation` is left out because the route

@@ -11,6 +11,11 @@ is, and the one real example every parameter needs. A draft is therefore
 not a spec yet. `todo` says what is missing, and `spec.load` stays the judge
 of the finished file.
 
+For a number's unit the draft only suggests. The units a shape lists itself
+and the unit family the ontology gives the shape's class hang on the number
+under `_drafted`, and `todo` names them; `units_accepted` and the factors
+between the entries stay the author's to write.
+
 The same reading, held against a spec somebody wrote by hand, gives the
 differences: a list entry the shapes have and the spec lacks, a property
 nobody asks for, a parameter the shapes do not know. That is a report and
@@ -27,7 +32,7 @@ from typing import Optional
 
 from ..extraction import spec as spec_module
 from .shapes import Property, Shape
-from .terms import Terms
+from .terms import UNIT_PROPERTIES, Terms, says_unit
 
 XSD = "http://www.w3.org/2001/XMLSchema#"
 RDFS_LABEL = "http://www.w3.org/2000/01/rdf-schema#label"
@@ -113,9 +118,64 @@ def _predicate(prop: Property, label: str, names: Names) -> dict:
     return {"prefix": prefix, "predicate": name, "label": label}
 
 
+def _is_number(prop: Property) -> bool:
+    """A property whose value is a number: a numeric XSD datatype, and no
+    list and no class that would make it something else."""
+    return bool(prop.datatype and prop.datatype.startswith(XSD)
+                and NUMBERS.get(local(prop.datatype))
+                and not prop.choices and not prop.classes
+                and prop.node is None)
+
+
+def unit_listing(shape: Shape, unit_properties=UNIT_PROPERTIES) -> tuple:
+    """(the properties of this shape that list units, the properties that
+    are numbers). The first is empty where there is no number to hang a list
+    of units on."""
+    numbers = [prop for prop in shape.properties if _is_number(prop)]
+    if not numbers:
+        return [], []
+    return [prop for prop in shape.properties
+            if prop.choices and says_unit(prop.path, unit_properties)], numbers
+
+
+def _unit(iri: str, terms: Terms) -> dict:
+    """One unit as a suggestion names it: its label and the other names the
+    ontology has for it, which is where a symbol such as kWh stands."""
+    out = {"iri": iri, "label": terms.label(iri) or local(iri)}
+    others = terms.other_names(iri)
+    if others:
+        out["spellings"] = others
+    return out
+
+
+def _family_suggestions(shape: Shape, terms: Terms,
+                        unit_properties) -> list:
+    """What the ontology says about the unit of a quantity of this shape's
+    class: [{family, family_iri, stated_on, units: [..]}], none where it
+    says nothing."""
+    if not shape.target_class:
+        return []
+    return [{"family": terms.label(one["family"]) or local(one["family"]),
+             "family_iri": one["family"],
+             "stated_on": terms.label(one["stated_on"])
+             or local(one["stated_on"]),
+             "units": sorted((_unit(iri, terms)
+                              for iri in terms.units(one["family"])),
+                             key=lambda unit: unit["label"].casefold())}
+            for one in terms.unit_families(shape.target_class,
+                                           unit_properties)]
+
+
 def draft(shapes: list, prefixes: dict, terms: Optional[Terms] = None, *,
-          base: Optional[str] = None, sources: tuple = ()) -> dict:
-    """The spec these shapes ask for, as far as they and the ontology say."""
+          base: Optional[str] = None, sources: tuple = (),
+          unit_properties=UNIT_PROPERTIES) -> dict:
+    """The spec these shapes ask for, as far as they and the ontology say.
+
+    A number's unit stays open: the author writes `units_accepted` and the
+    factors. What is known about it is hung on the parameter as a suggestion
+    (`_drafted`): the units the shape itself lists, which are no parameter of
+    their own, and the unit family the ontology gives the shape's class.
+    """
     terms = terms or Terms()
     names = Names(prefixes)
     targets = {shape.target_class: shape for shape in shapes
@@ -142,10 +202,21 @@ def draft(shapes: list, prefixes: dict, terms: Optional[Terms] = None, *,
         nodes[shape.name] = {"class": names.curie(shape.target_class),
                              "per": "document"}
         notes += [f"{shape.name}: {note}" for note in shape.notes]
+        listing, numbers = unit_listing(shape, unit_properties)
+        families = _family_suggestions(shape, terms, unit_properties) \
+            if numbers else []
+        listed: list = []       # the units this shape's own list names
+        made: list = []         # the number parameters of this shape
         for prop in shape.properties:
             label, said = _label_of(prop, terms)
             where = f"{shape.name}.{local(prop.path)}"
             notes += [f"{where}: {note}" for note in prop.notes]
+            if prop in listing:
+                # The unit of a number is part of the number, not a value of
+                # its own to ask for: the list hangs on the number.
+                listed += [_unit(iri, terms) if prop.choices_are_terms
+                           else {"label": iri} for iri in prop.choices]
+                continue
             # A property that leads to another node of the graph is the
             # graph's own structure and asks a document nothing.
             linked = [targets[klass] for klass in prop.classes
@@ -227,6 +298,20 @@ def draft(shapes: list, prefixes: dict, terms: Optional[Terms] = None, *,
             if unnamed:
                 raw["_drafted"]["unnamed"] = unnamed
             parameters.append(raw)
+            if raw["value_type"] in spec_module.NUMERIC_TYPES:
+                made.append(raw)
+        for raw in made:
+            if listed:
+                raw["_drafted"]["units_listed"] = copy.deepcopy(listed)
+            if families:
+                raw["_drafted"]["unit_families"] = copy.deepcopy(families)
+        if listing:
+            notes.append(
+                f"{shape.name}: the units listed under "
+                f"{', '.join(local(prop.path) for prop in listing)} hang on "
+                f"{', '.join(raw['uri'] for raw in made)} and are no "
+                f"parameter of their own; the generic graph writer writes no "
+                f"unit statement for a number")
     out = {
         "_comment": (
             "Drafted by `docpipe compile spec`"
@@ -256,6 +341,36 @@ def finished(raw: dict) -> dict:
     return out
 
 
+UNITS_SHOWN = 8         # units named in one line of `todo`; the draft has all
+
+
+def _named(unit: dict) -> str:
+    others = unit.get("spellings") or []
+    return str(unit.get("label") or unit.get("iri") or "") \
+        + (f" ({', '.join(others[:2])})" if others else "")
+
+
+def _unit_suggestion(drafted: dict) -> str:
+    """What the draft knows about a number's unit, said as a suggestion: the
+    author decides, and nothing of it is in the spec until they write it."""
+    said = []
+    listed = drafted.get("units_listed") or []
+    if listed:
+        said.append(f"the shape lists {len(listed)} unit(s): "
+                    + ", ".join(_named(unit) for unit in listed))
+    for family in drafted.get("unit_families") or ():
+        units = family.get("units") or []
+        text = (f"the ontology gives {family.get('stated_on')!r} the unit "
+                f"family {family.get('family')!r} with {len(units)} unit(s)")
+        if units:
+            text += ": " + ", ".join(_named(unit)
+                                     for unit in units[:UNITS_SHOWN])
+            if len(units) > UNITS_SHOWN:
+                text += f" and {len(units) - UNITS_SHOWN} more"
+        said.append(text)
+    return ". Suggestion, not decided: " + "; ".join(said) if said else ""
+
+
 def todo(raw: dict) -> list:
     """What stands between this draft and a spec, one line each.
 
@@ -283,7 +398,27 @@ def todo(raw: dict) -> list:
                     or not parameter.get("units_accepted"):
                 lines.append(f"{name}.unit_target, units_accepted: name the "
                              f"unit the number is kept in and the units a "
-                             f"document may state it in")
+                             f"document may state it in, each with its "
+                             f"factor and, unless the number is a rate "
+                             f"(integrated: false), whether it names a "
+                             f"period (names_period)"
+                             + _unit_suggestion(drafted))
+            elif parameter.get("integrated", True) is not False \
+                    and isinstance(parameter["units_accepted"], dict):
+                # The statement is the author's: the draft cannot read it
+                # off the ontology, and `spec.load` refuses an entry
+                # without it. A null or a non-bool is no statement either,
+                # so the list agrees with the loader.
+                unsaid = [unit for unit, entry in
+                          parameter["units_accepted"].items()
+                          if not (isinstance(entry, dict) and isinstance(
+                              entry.get("names_period"), bool))]
+                if unsaid:
+                    lines.append(
+                        f"{name}.units_accepted: {len(unsaid)} entr"
+                        f"{'y' if len(unsaid) == 1 else 'ies'} without "
+                        f"names_period, which says whether the unit names "
+                        f"a period (first: {unsaid[0]})")
         # the entries nobody named, as long as they still read as their
         # identifier
         vocabulary = parameter.get("vocabulary") or {}
@@ -355,7 +490,8 @@ def _node_classes(spec_raw: dict) -> dict:
 
 
 def differences(shapes: list, spec_raw: dict,
-                terms: Optional[Terms] = None) -> list:
+                terms: Optional[Terms] = None,
+                unit_properties=UNIT_PROPERTIES) -> list:
     """What the spec says differently from the shapes, and what one of them
     does not say at all. [{kind, parameter, path, detail}], nothing changed.
 
@@ -368,6 +504,8 @@ def differences(shapes: list, spec_raw: dict,
 
     An entry of a list that starts with `out:` is the profile's own word for
     "none of these" and no term, so the shapes are not expected to have it.
+    The units a shape lists are no property to ask for where the spec asks
+    for the shape's number.
     """
     terms = terms or Terms()
     by_path: dict = {}
@@ -385,9 +523,12 @@ def differences(shapes: list, spec_raw: dict,
     out: list = []
     asked: set = set()
 
-    def note(kind, parameter, path, detail):
-        out.append({"kind": kind, "parameter": parameter, "path": path,
-                    "detail": detail})
+    def note(kind, parameter, path, detail, shape=None):
+        row = {"kind": kind, "parameter": parameter, "path": path,
+               "detail": detail}
+        if shape is not None:
+            row["shape"] = shape        # a property of a shape, said by it
+        out.append(row)
 
     for parameter in spec_raw.get("parameters") or ():
         name = parameter.get("uri")
@@ -480,8 +621,14 @@ def differences(shapes: list, spec_raw: dict,
                      f"the shapes close this property over "
                      f"{len(prop.choices)} entries and the spec has no list")
     for shape in shapes:
+        listing, numbers = unit_listing(shape, unit_properties)
+        # The units a shape lists belong to its number, as the draft hangs
+        # them: a spec that asks for the number answers them with its units.
+        hung = any((shape.name, number.path) in asked for number in numbers)
         for prop in shape.properties:
             if (shape.name, prop.path) in asked:
+                continue
+            if hung and prop in listing:
                 continue
             if (local(shape.target_class or ""), local(prop.path)) in linked \
                     or (None, local(prop.path)) in linked:
@@ -490,5 +637,5 @@ def differences(shapes: list, spec_raw: dict,
                 if prop.min_count else ""
             note("not_asked", None, local(prop.path),
                  f"{shape.name}: no parameter asks for this property"
-                 + needed)
+                 + needed, shape=shape.name)
     return out

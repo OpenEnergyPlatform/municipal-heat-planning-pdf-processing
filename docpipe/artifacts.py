@@ -32,6 +32,15 @@ REFINEMENT_PARTIAL_JSON = (
 VISUALS_JSON          = f"{DIR_RESULTS}/visuals.json"           # visuals
 DOCUMENT_JSON         = f"{DIR_RESULTS}/document.json"          # chunking (merge) → database
 
+# What the stages after stage 3 and stage 5 read of these two files is written
+# down in docpipe/schemas/<name>.schema.json. Each file carries the version of
+# its own shape under the key "version", counted apart; a file without the key
+# is version 1. The schemas are documentation and tests: no stage opens them,
+# and none refuses a file because it does not fit.
+SECTIONS_VERSION = 1
+VISUALS_VERSION  = 1
+SCHEMA_DIR = Path(__file__).resolve().parent / "schemas"
+
 
 class DuplicateDocumentName(ValueError):
     """Two document directories of one name under different subfolders."""

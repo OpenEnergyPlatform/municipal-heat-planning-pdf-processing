@@ -71,6 +71,7 @@ from docpipe.store.schema import readonly_uri
 
 from . import fields
 from . import replies
+from . import scratch
 from . import trace
 from .wording import say
 from .pipeline import (Source, WorkItem, apply_frame, base_years, batch_uri,
@@ -2329,9 +2330,11 @@ def _image_part(path: str) -> Optional[dict]:
 
 
 # The evidence a row keeps next to each coordinate: what makes it re-checkable,
-# and nothing that tells a repeat from a new value.
+# and nothing that tells a repeat from a new value. Who read the coordinate
+# (`fields.PRODUCER`) is one more: it says nothing about the value, and shown
+# to the model it would change a request the harvest did not write it for.
 _EVIDENCE = ("_raw", "_raw_foreign", "_quote", "_source", "_window", "_state",
-             "_seen", "_link_quote", "_link_source")
+             "_seen", "_link_quote", "_link_source", fields.PRODUCER)
 
 
 def _prior_payload(prior: list) -> list:
@@ -4221,9 +4224,12 @@ def producer(kind: str, model: Optional[str] = None) -> dict:
     """Who wrote into a harvest in one pass. Recorded, never compared.
 
     A harvest is written once and then written into: a top-up reads single
-    coordinates again, possibly under another model or prompt, a remap moves
-    answers without a model at all. The stamp's `model` names the first of
-    them only. This is one entry of the list that names them all.
+    coordinates again, possibly under another model or prompt, a second
+    reading flags values, a remap moves answers without a model at all. The
+    stamp's `model` names the first of them only. This is one entry of the
+    list that names them all. A coordinate a top-up re-read points at its
+    entry by position (`fields.PRODUCER`), so entries are never removed or
+    reordered.
     """
     from docpipe import __version__
     entry = {"pass": kind, "docpipe": __version__,
@@ -4236,8 +4242,14 @@ def producer(kind: str, model: Optional[str] = None) -> dict:
 
 # {document name: {"sha256", "bytes"}} of the database this run reads, for
 # the stamp. Filled by `note_documents`; empty when the database records
-# none, and then the stamp says nothing about it.
+# none, and then the stamp says nothing about it and compares nothing.
 DOCUMENT_CONTENT: dict = {}
+
+# The stamp key that says which PDF a harvest was read from. Compared by its
+# sha256 alone (`document_moved`), and only where both the stamp and this run
+# know one: a stamp from before the key was written, or a database row with no
+# checksum, leaves the document as current as it was.
+DOCUMENT_KEY = "document"
 
 
 def note_documents(db_path) -> int:
@@ -4258,9 +4270,10 @@ def note_documents(db_path) -> int:
     return len(rows)
 
 
-def note_index_model(db_path) -> None:
+def note_index_model(db_path, command: str = "extraction") -> None:
     """Say so when this run embeds its probes with another model than the
-    one the database's index was built with. A line in the log, no more."""
+    one the database's index was built with. A line in the log, no more;
+    `command` is whose line it is."""
     from docpipe.embedding import config as embedding_config
     from docpipe.store import schema as store_schema
     try:
@@ -4270,17 +4283,46 @@ def note_index_model(db_path) -> None:
     except sqlite3.Error:
         return
     if mismatch:
-        log.warning("extraction: %s", mismatch)
+        log.warning("%s: %s", command, mismatch)
 
 
 def stamp_record(name: str) -> dict:
-    """The stamp keys that place a harvest and decide nothing."""
+    """The stamp keys that place a harvest. The version and the producers
+    decide nothing; `document` is compared (`document_moved`)."""
     from docpipe import __version__
     record = {"docpipe": __version__,
               "producers": [producer("harvest", LLM_MODEL)]}
     if name in DOCUMENT_CONTENT:
-        record["document"] = DOCUMENT_CONTENT[name]
+        record[DOCUMENT_KEY] = DOCUMENT_CONTENT[name]
     return record
+
+
+def document_current(name: str) -> dict:
+    """The stamp key this run can say about one document, or {}.
+
+    Per document and not part of `_stamp_current`: that is the key set of the
+    whole run, which a top-up and a remap carry forward, and neither of them
+    reads a PDF. Kept out of it, they neither earn this key nor lose it.
+    """
+    if name in DOCUMENT_CONTENT:
+        return {DOCUMENT_KEY: DOCUMENT_CONTENT[name]}
+    return {}
+
+
+def document_moved(stored: dict, current: dict) -> bool:
+    """True when the stamp and this run both name the document's bytes and
+    the sha256 differs.
+
+    A missing key on either side is not a difference. A stamp written before
+    the key existed cannot say which PDF it read, and calling that stale would
+    report the whole corpus for a sentence it never recorded; a database that
+    records no checksum cannot say which PDF this run reads.
+    """
+    then, now = stored.get(DOCUMENT_KEY), current.get(DOCUMENT_KEY)
+    if not isinstance(then, dict) or not isinstance(now, dict):
+        return False
+    return bool(then.get("sha256") and now.get("sha256")
+                and then["sha256"] != now["sha256"])
 
 
 # Recorded, and compared only while there is nothing finer to go on: the sha
@@ -4329,15 +4371,18 @@ def recorded_questions(questions: Optional[dict]) -> dict:
 
 
 def stale(stamp_path: Path, current: dict) -> list:
-    """Which ontology keys differ from now; everything when unstamped.
+    """Which keys differ from now; everything when unstamped.
 
-    Only the ontology keys are compared (`QUESTION_KEYS`: one per parameter,
-    value list, axis and slot), and the whole-file sha `spec` only for a stamp
-    that has none of them. The model, the anchors, every prompt and every
-    recorded sentence are in the stamp for a reader and decide nothing: the
-    owner's rule of 2026-09-10 is that a stamp rests on the KG/ontology
-    parameters alone, so a reworded prompt or another model leaves a
-    harvested corpus current.
+    The ontology keys are compared (`QUESTION_KEYS`: one per parameter,
+    value list, axis and slot), the whole-file sha `spec` only for a stamp
+    that has none of them, and the sha256 of the PDF the harvest read from
+    (`DOCUMENT_KEY`) where the stamp and `current` both carry one. The model,
+    the anchors, every prompt and every recorded sentence are in the stamp for
+    a reader and decide nothing: the owner's rule of 2026-09-10 is that a
+    stamp rests on the KG/ontology parameters alone, so a reworded prompt or
+    another model leaves a harvested corpus current. The PDF is the one
+    addition the owner decided on: another file under the same name is not
+    the document the ontology keys were read against.
 
     A key the stored stamp does not have counts as changed, which is what
     makes a stamp from before the per-parameter keys read as stale: it cannot
@@ -4350,12 +4395,15 @@ def stale(stamp_path: Path, current: dict) -> list:
     that coordinate -- the whole-file sha used to catch it, and stopped once
     it was no longer compared.
     """
+    # Everything but the PDF: a stamp that is not there names no document, so
+    # there is no other file for this one to be.
+    unstamped = sorted(k for k in current if k != DOCUMENT_KEY)
     if not stamp_path.is_file():
-        return sorted(current)
+        return unstamped
     try:
         stored = json.loads(stamp_path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
-        return sorted(current)
+        return unstamped
     detailed = any(k.startswith(QUESTION_KEYS) for k in current)
 
     def compared(key: str) -> bool:
@@ -4365,6 +4413,8 @@ def stale(stamp_path: Path, current: dict) -> list:
                if compared(k) and stored.get(k) != current[k]}
     if detailed:
         changed |= {k for k in stored if k not in current and compared(k)}
+    if document_moved(stored, current):
+        changed.add(DOCUMENT_KEY)
     return sorted(changed)
 
 
@@ -4425,13 +4475,18 @@ def already_done(name: str, out_dir: Path, spec_sha: str, *,
         # a redo caused every document to be skipped instead.
         log.info("extraction: %s carries no stamp — harvested again", name)
         return False
-    changed = stale(stamp_path, _stamp_current(spec_sha, anchors_sha, spec))
+    changed = stale(stamp_path, {**_stamp_current(spec_sha, anchors_sha, spec),
+                                 **document_current(name)})
     if not changed:
         log.info("extraction: %s is current — skipped", name)
         return True
     if not force_stale:
-        log.warning("extraction: %s was harvested with older %s; re-run "
-                    "with --force-stale to redo it", name, ", ".join(changed))
+        ontology = [k for k in changed if k != DOCUMENT_KEY]
+        said = ([f"older {', '.join(ontology)}"] if ontology else []) \
+            + (["another PDF than the one it was read from (the sha256 "
+                "differs)"] if DOCUMENT_KEY in changed else [])
+        log.warning("extraction: %s was harvested with %s; re-run with "
+                    "--force-stale to redo it", name, " and ".join(said))
         return True
     return False
 
@@ -4820,6 +4875,37 @@ def pair_batches(items: list, pairs: list, pair_plans: list, frame_axes: list,
     return batches, rest, added
 
 
+def run_spec_path(args, profile):
+    """The spec file this run reads: the one --spec names, else the
+    profile's own, None where the profile names none. The stamps are written
+    from this file, so a column of one's own has stamps of its own; the
+    folder it writes into is kept apart by `scratch.folder_problem`."""
+    if args.spec is not None:
+        return args.spec
+    return profile.component("extraction", "SPEC_PATH")
+
+
+def _decisions_file(harvest_dir: Path) -> tuple:
+    """(the decisions of people, where they were read from), for --serialize.
+
+    The file is found where `evaluate` finds it by default, beside the
+    harvest. A file that is not there, or that does not read, leaves the graph
+    without decisions and says so: the graph does not depend on them, so a run
+    must not stop on them either.
+    """
+    from . import gold as golden
+    path = golden.path_beside(harvest_dir)
+    if not path.is_file():
+        log.info("serialize: %s is not a file: no decision is recorded", path)
+        return None, path
+    try:
+        return golden.Gold.load(path), path
+    except (ValueError, OSError) as exc:
+        log.warning("serialize: %s does not read, so no decision is "
+                    "recorded: %s", path, exc)
+        return None, path
+
+
 def main(argv: Optional[list] = None) -> int:
     parser = argparse.ArgumentParser(
         prog=program("docpipe.extraction"),
@@ -4831,7 +4917,16 @@ def main(argv: Optional[list] = None) -> int:
                         help="Processed root holding the table/figure crops "
                              "(default: the profile's processed dir)")
     parser.add_argument("--pdf-root", type=Path, default=None,
-                        help="PDF directory for the digit-exact native check")
+                        help="PDF directory, holding the files the Documents "
+                             "table names. A quote of a section's text is "
+                             "looked up on its page there: the highlight "
+                             "rectangles go into the row, and a quote that "
+                             "is not found on the page gets the flag "
+                             "not_located. Without it no quote is looked up. "
+                             "Tables and figures are not compared with the "
+                             "PDF. It also says where the crops are read "
+                             "from, ROOT/processed, unless --image-root is "
+                             "given")
     parser.add_argument("--document", type=int, action="append", default=None,
                         metavar="ID",
                         help="Restrict the run to this document id. Repeatable, "
@@ -4888,16 +4983,30 @@ def main(argv: Optional[list] = None) -> int:
                              "document's stamp forward for every answer "
                              "space it could fully re-map, so a grown option "
                              "list costs minutes instead of a corpus run")
+    parser.add_argument("--spec", type=Path, default=None, metavar="FILE",
+                        help="read the spec from FILE instead of the "
+                             "profile's SPEC_PATH: a trial harvest of a "
+                             "column of one's own (`docpipe column`). OUT "
+                             "then has to lie below the folder of FILE, so "
+                             "that the harvest has its own stamps and never "
+                             "lands beside the profile's. Such a harvest is "
+                             "not meant for the graph: nothing here hands it "
+                             "to the serializer, and --serialize does not "
+                             "read --spec (it says so)")
     add_profile_argument(parser)
     args = parser.parse_args(argv)
     logging.basicConfig(level=args.log_level,
                         format="%(asctime)s [%(levelname)s] %(name)s %(message)s",
                         datefmt="%H:%M:%S")
+    if args.spec is not None:
+        problem = scratch.folder_problem(args.spec, args.out)
+        if problem:
+            parser.error(problem)
 
     profile = require_profile(args)
     token_usage.begin("extraction")
     if args.recheck:
-        raw_spec_path = profile.component("extraction", "SPEC_PATH")
+        raw_spec_path = run_spec_path(args, profile)
         if raw_spec_path is None:
             parser.error(f"profile {profile.name!r} does not configure the "
                          f"extraction stage")
@@ -4918,7 +5027,7 @@ def main(argv: Optional[list] = None) -> int:
                  100.0 * stats["read"] / total, stats["tuples"])
         return 0
     if args.remap:
-        raw_spec_path = profile.component("extraction", "SPEC_PATH")
+        raw_spec_path = run_spec_path(args, profile)
         if raw_spec_path is None:
             parser.error(f"profile {profile.name!r} does not configure the "
                          f"extraction stage")
@@ -4936,6 +5045,12 @@ def main(argv: Optional[list] = None) -> int:
                  stats["stamps carried forward"])
         return 0
     if args.serialize is not None:
+        if args.spec is not None:
+            # Said, not refused: the graph is the profile's, and a spec file
+            # of one's own is not read for it.
+            log.warning("serialize: --spec is not read here: the graph is "
+                        "written from the profile's own spec and not from "
+                        "%s", args.spec)
         from . import graph, provenance
         factory = profile.component("kg", "make_serializer")
         described = profile.component("kg", "PROVENANCE") or {}
@@ -4943,7 +5058,8 @@ def main(argv: Optional[list] = None) -> int:
             serializer = factory(args.db)
         else:
             # No writer of its own: the graph block of the spec says what
-            # an answer becomes, where the spec has one.
+            # an answer becomes, where the spec has one. The profile's, and
+            # never --spec's: --serialize does not read that option.
             raw_spec_path = profile.component("extraction", "SPEC_PATH")
             if raw_spec_path is None:
                 parser.error(f"profile {profile.name!r} has no extraction "
@@ -4961,9 +5077,10 @@ def main(argv: Optional[list] = None) -> int:
                 and described.get("base"):
             writer = provenance.Writer(described["base"], described)
         from .serialize import run as serialize_run, validate
+        held, gold_path = _decisions_file(args.out)
         try:
             counts = serialize_run(args.out, args.serialize, serializer,
-                                   writer)
+                                   writer, gold=held, gold_source=gold_path)
         except ValueError as exc:
             log.error("serialize: %s", exc)
             return 1
@@ -4996,7 +5113,7 @@ def main(argv: Optional[list] = None) -> int:
     # component, not require: extraction is an optional stage. A profile that
     # does not do OBIE (ar6 today) must stay loadable everywhere else and only
     # fail here, when someone actually asks it to extract.
-    raw_spec_path = profile.component("extraction", "SPEC_PATH")
+    raw_spec_path = run_spec_path(args, profile)
     if raw_spec_path is None:
         parser.error(f"profile {profile.name!r} does not configure the "
                      f"extraction stage (profiles/{profile.name}/extraction.py "
@@ -5043,7 +5160,8 @@ def main(argv: Optional[list] = None) -> int:
                 sources_for=make_review_sources(args.db),
                 documents=wanted, limit=args.review_limit,
                 prompt_sha=review_prompt.sha256, model=LLM_MODEL,
-                spec_for=spec_for)
+                spec_for=spec_for,
+                producer=producer("review", LLM_MODEL))
         if stats[fields.LISTS_UNREADABLE]:
             log.warning("review: %d document(s) left alone, their choice "
                         "lists could not be closed",

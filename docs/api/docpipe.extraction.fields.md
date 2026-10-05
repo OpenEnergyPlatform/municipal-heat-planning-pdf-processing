@@ -82,6 +82,20 @@ of reading a row.
 
 ## Functions
 
+### reader_of
+
+```python
+def reader_of(row: dict, name: str, producers) -> tuple
+```
+
+(who, index, entry) for the coordinate `name` of a stored row.
+
+No key: the harvest read it (BY_HARVEST). A key that points at an entry
+of `producers`: that pass did (BY_PASS). A key that points at none:
+BY_UNKNOWN, and never the harvest. `--recheck` deletes the stamps, so a
+position can outlive the list it was written for; reading that as the
+harvest would put a top-up's answer under a model that never saw it.
+
 ### parameter_slot
 
 ```python

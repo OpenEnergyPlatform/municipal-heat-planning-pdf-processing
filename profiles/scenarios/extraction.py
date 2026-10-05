@@ -52,8 +52,8 @@ _WORD = r"(?<!\w){}(?!\w)"
 
 
 # The entries that are not a thing in the graph. `kg.py` refuses to mint an IRI
-# or a link from any of them (see NOT_IN_GRAPH there) and counts them by name.
-NOT_IN_GRAPH = "out:"
+# or a link from any of them (NOT_IN_GRAPH, one definition for both profiles in
+# docpipe/extraction/graphkit.py) and counts them by name.
 
 # The first label is the answer token: runner._parameter_payload renders a
 # choice list as {labels[0]: labels[1:]} and the prompt says to copy it
@@ -192,6 +192,11 @@ def document_axes(conn: sqlite3.Connection, document_id: int) -> dict:
 # open: "3,251" is 3251 here, and "1.234" is 1.234.
 DECIMAL_MARK = "."
 
+# The language tag of the ontology's alternative labels that the vocabulary
+# snapshot keeps for this profile, the words its spec is held against. "de"
+# is what the committed snapshot was built with.
+ALT_LABEL_LANGUAGE = "de"
+
 
 # What the preflight (`docpipe preflight`) holds this profile's prompts to,
 # beyond the keys the stage reads by name: a wording the run depends on. The
@@ -205,14 +210,97 @@ PROMPT_CHECKS = (
 )
 
 
+def shapes_files() -> list:
+    """The OEKG shapes of the last refresh of the API sources, or none.
+
+    Where the preflight finds the file `NOT_EXTRACTED` is held against.
+    """
+    from docpipe import upstream
+    from profiles.scenarios import oekg_api   # lazy: it reads the spec
+    path = oekg_api._locked("oekg_shapes", upstream.CACHE)
+    return [path] if path else []
+
+
+# The properties of the OEKG shapes that no parameter reads, each left out on
+# purpose and each with its reason. `docpipe compile diff` lists them and the
+# preflight warns about every one that is neither a parameter nor here. Keyed
+# by (shape, property): the shape as the compiler names it, the property by
+# the end of its IRI. The first group is the owner's decision (2026-10-05):
+# nobody asks for these five, though none of them is required. The rest the
+# serializer writes itself or never touches.
+_NO_DATASET_NODE = "the serializer writes no dataset node"
+_NO_FACTSHEET = ("the serializer writes no factsheet of this kind, so there "
+                 "is nothing to give it")
+_OWN_UUID = ("the serializer writes it on every node it mints (kg.P_UUID), "
+             "behind no parameter")
+NOT_EXTRACTED = {
+    # contact person
+    ("study", "OEO_00000508"):
+        "has contact person: optional in the shapes, and the bundle carries "
+        "authors, organisations and funders and no contact person",
+    # the study's energy carrier tag
+    ("study", "OEO_00020432"):
+        "covers energy carrier: optional in the shapes, a closed list; the "
+        "sector and technology tags of the study are asked and its energy "
+        "carrier tag is not",
+    # interacting region
+    ("scenario", "OEO_00020222"):
+        "has interacting region: optional in the shapes; a scenario's study "
+        "region is asked and its interacting region is not",
+    # input and output datasets of a scenario
+    ("scenario", "OEO_00020436"):
+        "has information output: optional in the shapes, and "
+        + _NO_DATASET_NODE,
+    ("scenario", "OEO_00020437"):
+        "has information input: optional in the shapes, and "
+        + _NO_DATASET_NODE,
+    # the publication's reference link
+    ("publication", "OEO_00390078"):
+        "has reference: optional in the shapes; the report carries no link "
+        "to its reference",
+    ("region", "OEO_00390078"):
+        "has reference: optional in the shapes; a region is only referenced "
+        "by its IRI and never written",
+    # written by the serializer itself
+    ("study", "BFO_0000051"):
+        "has part: the serializer writes it from the kg block of the "
+        "scenario coordinate, the bundle holds its report and its "
+        "factsheets, and no parameter asks for it",
+    ("scenario", "OEO_00020220"):
+        "has study region: the serializer writes its parent, has spatial "
+        "region, for scenario_region, and the bundle body for the platform "
+        "writes this one itself",
+    ("publication", "OEO_00390095"): "has uuid: " + _OWN_UUID,
+    ("scenario", "OEO_00390095"): "has uuid: " + _OWN_UUID,
+    ("common", "label"):
+        "label of the objects of the author, organisation, funder, tag and "
+        "scenario type properties: the serializer writes it for the authors, "
+        "organisations and funders it mints, and a tag or a scenario type is "
+        "the IRI of a node the OEKG already holds with its label",
+    ("region", "label"):
+        "label: a region is only referenced by its IRI, the node exists in "
+        "the OEKG with its label, and writing ours would give it a second one",
+    # shapes of nodes the serializer never writes
+    ("dataset", "label"): "label: " + _NO_DATASET_NODE,
+    ("dataset", "has_id"): "has_id: " + _NO_DATASET_NODE,
+    ("dataset", "OEO_00390094"): "has iri: " + _NO_DATASET_NODE,
+    ("dataset", "OEO_00390095"): "has uuid: " + _NO_DATASET_NODE,
+    ("framework", "label"): "label: " + _NO_FACTSHEET,
+    ("framework", "OEO_00390094"): "has iri: " + _NO_FACTSHEET,
+    ("model", "label"): "label: " + _NO_FACTSHEET,
+    ("model", "OEO_00390094"): "has iri: " + _NO_FACTSHEET,
+}
+
+
 # What the stage says to the model outside its prompts: why an answer was not
 # taken, what was wrong with a reply, what stands beside an image. In the
 # language of the prompts, and read by docpipe/extraction/wording.py, which
 # says what each name is filled with.
 PHRASES = {
-    # the closed list as a request shows it
-    "option_means": 'bedeutet',
-    "option_spellings": 'Schreibweisen',
+    # the closed list as a request shows it: protocol keys, so English in
+    # every profile
+    "option_means": 'means',
+    "option_spellings": 'spellings',
     "unstated_means": 'in diesen Passagen steht es nicht',
     "unstated_spelling": 'steht in diesen Passagen nicht',
     # why a coordinate's answer was not taken

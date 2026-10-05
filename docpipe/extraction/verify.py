@@ -36,7 +36,7 @@ from typing import Callable, Optional
 
 from ..profile import ENV_VAR, active_profile
 from .fields import DERIVED, READ, UNBACKED
-from .spec import Parameter, fold_label, states_a_year
+from .spec import Parameter, fold_label
 
 TIER_TEXT = "text_located"
 TIER_VISUAL = "visual_source"
@@ -504,12 +504,13 @@ def verify_tuple(raw: dict, parameter: Parameter, source_text: str, *,
                                 f"in the quote")
 
     if (parameter.is_numeric and parameter.integrated
-            and not states_a_year(value_fields.get("unit") or "")):
-        # The entry the unit question chose is a plain amount. The period is
-        # part of that reading -- a passage saying "über das Jahr" makes the
-        # model choose kWh/a -- so an entry without one says the passage
-        # stated none. An integral needs the period it runs over, and a graph
-        # that writes a year beside a storage capacity has invented it.
+            and not parameter.names_period(value_fields.get("unit"))):
+        # The entry the unit question chose says in the spec that it names no
+        # period. The period is part of that reading, because a passage
+        # saying "over the year" makes the model choose kWh/a, so a plain
+        # entry says the passage stated none. An integral needs the period it
+        # runs over, and a graph that writes a year beside a storage capacity
+        # has invented it.
         #
         # Only for a parameter whose unit IS an amount over a span. A power
         # has no period to state, so this would fire on every row of it and

@@ -135,6 +135,35 @@ def _sources(args) -> tuple:
     return found, prefixes, terms
 
 
+def draft_of(path: Path) -> dict:
+    """The draft `compile spec` writes for one shapes file, with no ontology
+    and the placeholder base: what `docpipe init --shapes` puts into a new
+    project. A file that cannot be read, or that has no node with a property
+    to ask for, stops it with the file's name; no draft is made up instead.
+    rdflib is missing as ModuleNotFoundError, for the caller to say."""
+    import rdflib  # noqa: F401  (a missing one is the caller's to say)
+
+    from . import shapes
+    path = Path(path)
+    if not path.is_file():
+        raise SystemExit(f"{path} is not a file")
+    try:
+        found, prefixes = shapes.read([path])
+    except Exception as exc:
+        # The parsers of rdflib fail in no one family of errors (a cut-off
+        # N3 file ends in an IndexError), so any failure of the reading is
+        # the file's, named with its kind.
+        raise SystemExit(f"{path} cannot be read as SHACL shapes "
+                         f"({type(exc).__name__}: {exc})")
+    raw = drafting.draft(found, prefixes, sources=(path.name,))
+    if not raw["parameters"]:
+        left_out = "; ".join(raw.get("_notes") or ())
+        raise SystemExit(f"{path} holds no shape with a target class and a "
+                         f"property to ask for ({len(found)} shape(s) read"
+                         + (f"; {left_out}" if left_out else "") + ")")
+    return raw
+
+
 def _spec(args) -> int:
     found, prefixes, terms = _sources(args)
     raw = drafting.draft(found, prefixes, terms, base=args.base,
@@ -201,6 +230,9 @@ def _corpus(args, profile):
         if not Path(path).is_file():
             raise SystemExit(f"{path} is not a file: `examples` reads a "
                              f"corpus that `docpipe chunk` has written")
+    # The probes are embedded with the configured model: the same line the
+    # harvest says when the index was built with another.
+    runner.note_index_model(db, "compile")
     conn = inference_db.connect_readonly(db)
     conn.row_factory = sqlite3.Row
     index, id_to_pos = faiss_store.load_global_index(index_path)

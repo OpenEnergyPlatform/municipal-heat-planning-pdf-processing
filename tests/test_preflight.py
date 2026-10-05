@@ -8,6 +8,20 @@ the two profiles of this repository get the checks they always got, by
 name and in order; a profile the audit cannot get through is a failed
 line and not a traceback; and the command ends 1 when a check fails.
 
+Three lines came after, each with its own promise.
+
+The shapes: every property of the profile's shapes that no parameter asks
+AND the profile does not record as left out is a warning, never a failure,
+AND a profile with no shapes file is skipped and not warned.
+
+The pin: every class whose definition in the spec is not the pin's, or which
+only the pin defines, is a note, never a failure, AND an equal definition
+is none.
+
+The field example: the one-line example reply of the field prompt is read by
+the reader of the run and every row of it comes out backed, AND the same
+reply with a quote that stands in no passage comes out unbacked.
+
 Each AND has its own test, and each test has a profile built to break it.
 So has every check on what a spec has to say.
 """
@@ -47,7 +61,7 @@ def _spec(graph=True) -> dict:
     return raw
 
 
-def _project(folder, spec=None, extraction="", **files):
+def _project(folder, spec=None, extraction="", *, name="mine", **files):
     """A profile outside the repository that extends the built-in one."""
     files = dict(files)
     if spec is not None:
@@ -57,7 +71,7 @@ def _project(folder, spec=None, extraction="", **files):
                       "'extraction_spec.json')\n" + extraction)
     if extraction:
         files["extraction.py"] = extraction
-    return _child(folder, "mine", **files)
+    return _child(folder, name, **files)
 
 
 def _rows(name="mine") -> dict:
@@ -68,12 +82,13 @@ def _rows(name="mine") -> dict:
 # -- the two profiles kept here -----------------------------------------------
 
 def test_the_profiles_of_this_repository_are_checked_as_before(clean):
-    """Ninety checks over both, by the names they always had. A check that
-    is added or dropped changes this number and has to say so here."""
+    """Ninety-six checks over both, by the names they always had and the
+    three that came after. A check that is added or dropped changes this
+    number and has to say so here."""
     rows = preflight.audit("kwp") + preflight.audit("scenarios")
     failed = [row for row in rows if row[2] == "FAIL"]
     assert not failed, failed
-    assert len(rows) == 90
+    assert len(rows) == 96
     for name in ("kwp", "scenarios"):
         own = {what: verdict for profile, what, verdict, _d in rows
                if profile == name}
@@ -89,7 +104,7 @@ def test_the_script_runs_the_two_profiles_kept_here(clean, capsys):
     assert script.main([]) == 0
     printed = capsys.readouterr().out
     assert "=== kwp ===" in printed and "=== scenarios ===" in printed
-    assert "90 check(s), 0 failure(s)" in printed
+    assert "96 check(s), 0 failure(s)" in printed
     # and a name given is the one checked
     assert script.main(["default"]) == 1
     assert "=== default ===" in capsys.readouterr().out
@@ -288,27 +303,33 @@ NAMES = [
     "field prompt names 'quote'", "field prompt names 'corrections'",
     "field prompt names 'out:unstated'",
     "field prompt keys the reply by field name",
-    "field prompt asks one field", "rows prompt names 'quantities'",
+    "field prompt asks one field",
+    "field prompt's own example reads back",
+    "rows prompt names 'quantities'",
     "rows prompt no longer fixes one parameter",
     "rows prompt shows a text value", "anchors prompt knows the question",
     "serializer present", "jsonschema importable", "schema present",
     "schema current", "vocabulary snapshot present",
     "every ontology id matches the pin", "pin named",
     "labels from the corpus rather than the ontology",
+    "definitions agree with the pin",
     "every id family has a file that knows it", "sources refreshed",
     "sources unchanged since reviewed",
     "every axis says what it becomes in the graph",
     "every parameter says what it becomes in the graph",
+    "every shape property is asked or left out on purpose",
 ]
 # The checks that only ever warn. Two of them read a file outside the
 # repository (what the last refresh of the sources pulled), so what they say
 # belongs to the machine and is not pinned.
 WARN_ONLY = {
     "labels from the corpus rather than the ontology",
+    "definitions agree with the pin",
     "every id family has a file that knows it", "sources refreshed",
     "sources unchanged since reviewed",
     "every axis says what it becomes in the graph",
     "every parameter says what it becomes in the graph",
+    "every shape property is asked or left out on purpose",
 }
 
 
@@ -369,7 +390,8 @@ def _numeric(**changes) -> dict:
             "description": "A yearly amount the document states for the "
                            "whole area it plans for.",
             "value_type": "float", "unit_target": unit,
-            "units_accepted": {unit: 1.0},
+            "units_accepted": {unit: {"factor": 1.0,
+                                      "names_period": False}},
             "axes": {"carrier": {"vocabulary": {"ex:Gas": ["natural gas"],
                                                 "ex:Oil": ["heating oil"]},
                                  "question": "Which energy carrier?"},
@@ -412,7 +434,8 @@ def test_an_axis_without_a_question_is_named(tmp_path, clean):
 
 def test_a_unit_two_numeric_parameters_share_is_named(tmp_path, clean):
     def share(raw):
-        raw["parameters"][1]["units_accepted"]["GWh"] = 1.0
+        raw["parameters"][1]["units_accepted"]["GWh"] = {
+            "factor": 1.0, "names_period": False}
     rows = _break(tmp_path, clean, share=share)
     assert rows["units of numeric parameters are disjoint"] == ("FAIL", "GWh")
 
@@ -628,3 +651,470 @@ def test_a_profile_is_named_on_the_line_by_its_directory_too(
     printed = capsys.readouterr().out
     assert "=== mine ===" in printed and "X schema present" in printed
     assert "profile found" not in printed
+
+
+# -- the shapes: what nobody asks ---------------------------------------------
+
+SHAPES = """
+@prefix sh: <http://www.w3.org/ns/shacl#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix ex: <https://graph.test/vocab#> .
+@prefix shp: <https://graph.test/shapes#> .
+
+shp:ReportShape a sh:NodeShape ;
+    sh:targetClass ex:Report ;
+    sh:property [ sh:path ex:title ; sh:datatype xsd:string ] ;
+    sh:property [ sh:path ex:inventedProperty ; sh:datatype xsd:string ] .
+"""
+SHAPES_ASKED = """
+@prefix sh: <http://www.w3.org/ns/shacl#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix ex: <https://graph.test/vocab#> .
+@prefix shp: <https://graph.test/shapes#> .
+
+shp:ReportShape a sh:NodeShape ;
+    sh:targetClass ex:Report ;
+    sh:property [ sh:path ex:title ; sh:datatype xsd:string ] .
+"""
+SHAPES_ROW = "every shape property is asked or left out on purpose"
+NOTHING_OPEN = ("0 of 2 shape propert(y/ies) nobody asks and the profile "
+                "does not record")
+
+
+def _shaped(tmp_path, clean, extraction="", text=SHAPES, hook=True,
+            name="mine"):
+    """A project whose profile names a shapes file, written with `text`."""
+    shapes = tmp_path / f"{name}.ttl"
+    shapes.write_text(text, encoding="utf-8")
+    where = (f"def shapes_files():\n    return [Path({str(shapes)!r})]\n"
+             if hook else "")
+    _project(tmp_path, spec=_spec(), extraction=where + extraction,
+             name=name)
+    _bound(clean, tmp_path)
+    return _rows(name)[SHAPES_ROW]
+
+
+def test_a_shape_property_nobody_asks_is_a_warning_and_names_its_shape(
+        tmp_path, clean):
+    pytest.importorskip("rdflib")
+    verdict, detail = _shaped(tmp_path, clean)
+    # a warning and not a failure: the line stops no run
+    assert verdict == "warn"
+    assert "report.inventedProperty" in detail
+    assert "1 of 2 shape propert" in detail
+    # the property the spec asks is not named
+    assert "report.title" not in detail
+
+
+def test_a_shape_property_the_profile_records_is_not_a_warning(
+        tmp_path, clean):
+    pytest.importorskip("rdflib")
+    recorded = ("NOT_EXTRACTED = {('report', 'inventedProperty'): "
+                "'nobody reads it'}\n")
+    assert _shaped(tmp_path, clean, recorded) == ("ok", NOTHING_OPEN)
+
+
+def test_a_record_for_another_shape_does_not_cover_this_one(tmp_path, clean):
+    """The key is the shape and the property: a label left out of one shape
+    is no decision about the same word on a shape that comes later."""
+    pytest.importorskip("rdflib")
+    elsewhere = ("NOT_EXTRACTED = {('dataset', 'inventedProperty'): "
+                 "'nobody reads it'}\n")
+    verdict, detail = _shaped(tmp_path, clean, elsewhere)
+    assert verdict == "warn" and "report.inventedProperty" in detail
+
+
+def test_a_record_that_cannot_be_read_covers_nothing_and_is_named(
+        tmp_path, clean):
+    pytest.importorskip("rdflib")
+    broken = ("NOT_EXTRACTED = {'inventedProperty': 'no shape named', "
+              "('report', 'inventedProperty'): ''}\n")
+    verdict, detail = _shaped(tmp_path, clean, broken)
+    assert verdict == "warn"
+    assert "report.inventedProperty" in detail
+    assert "unreadable NOT_EXTRACTED entries" in detail
+    # even where nothing else is open, an unreadable record is said
+    verdict, detail = _shaped(tmp_path, clean, broken, text=SHAPES_ASKED,
+                              name="again")
+    assert verdict == "warn" and detail.startswith("0 of 1 shape")
+    assert "unreadable NOT_EXTRACTED entries" in detail
+
+
+def test_what_counts_as_a_record_of_a_left_out_property():
+    good, bad = preflight.not_extracted({
+        ("study", "OEO_00000508"): "no contact person is read",
+        ("only one",): "one part",
+        ("a", "b", "c"): "three parts",
+        ("study", ""): "empty part",
+        ("study", "OEO_1"): "",
+        ("study", "OEO_2"): None,
+        "study.OEO_3": "a string",
+    })
+    assert good == {("study", "OEO_00000508"): "no contact person is read"}
+    assert len(bad) == 6
+    assert preflight.not_extracted(None) == ({}, [])
+    # nothing recorded is nothing, in whatever empty form
+    for empty in ({}, [], (), set()):
+        assert preflight.not_extracted(empty) == ({}, [])
+
+
+def test_a_record_that_is_no_mapping_covers_nothing_and_is_named_once():
+    """The profile's record is a mapping of (shape, property) to a reason. A
+    list of names, a number or a text is no record, and the audit has to be
+    able to say so in its line."""
+    for broken in (["a", "b"], 5, "text", [("a", "b", "c")], {("a", "b")},
+                   [(("study", "OEO_1"), "a reason")]):
+        good, bad = preflight.not_extracted(broken)
+        assert good == {}, broken
+        assert len(bad) == 1 and "not a mapping" in bad[0], broken
+
+
+def test_a_record_that_is_no_mapping_is_a_warning_and_not_a_traceback(
+        tmp_path, clean):
+    pytest.importorskip("rdflib")
+    verdict, detail = _shaped(tmp_path, clean, "NOT_EXTRACTED = 5\n")
+    # the property it should have covered is open, and the record is named
+    assert verdict == "warn"
+    assert "report.inventedProperty" in detail
+    assert ("unreadable NOT_EXTRACTED entries: the record itself is of type "
+            "int, not a mapping") in detail
+
+
+def test_a_profile_without_a_shapes_file_is_skipped_and_not_warned(
+        tmp_path, clean):
+    # no hook at all
+    assert _shaped(tmp_path, clean, hook=False) == (
+        "ok", "skipped: the profile names no shapes file")
+    # a hook that names no file, and one that names a file that is not there
+    empty = "def shapes_files():\n    return []\n"
+    assert _shaped(tmp_path, clean, empty, name="two")[0] == "ok"
+    gone = ("def shapes_files():\n"
+            "    return [Path(__file__).with_name('gone.ttl')]\n")
+    verdict, detail = _shaped(tmp_path, clean, gone, name="three")
+    assert verdict == "ok" and detail.startswith("skipped: no shapes file")
+
+
+def test_a_hook_that_does_not_run_and_a_file_that_does_not_parse_warn(
+        tmp_path, clean):
+    pytest.importorskip("rdflib")
+    breaks = "def shapes_files():\n    raise RuntimeError('no cache')\n"
+    verdict, detail = _shaped(tmp_path, clean, breaks)
+    assert verdict == "warn" and "RuntimeError: no cache" in detail
+    verdict, detail = _shaped(tmp_path, clean, name="two",
+                              text="this is no turtle at all {{{")
+    assert verdict == "warn" and "could not be read" in detail
+
+
+# -- the pin: definitions -----------------------------------------------------
+
+DEFINITIONS = "definitions agree with the pin"
+
+
+def _defined(tmp_path, clean, entry, pin_says, name="mine"):
+    """A project whose one class has `entry` in the spec and `pin_says`
+    in the pin."""
+    raw = _numeric()
+    raw["parameters"][0]["axes"]["carrier"]["vocabulary"] = {
+        "OEO_00000292": entry}
+    snapshot = {"pin": {"oeo_version_iri": "https://pin.test/1.0"},
+                "problems": [],
+                "terms": {"OEO_00000292": {
+                    "label": "natural gas", "alt_labels": [],
+                    "definition": pin_says, "deprecated": False,
+                    "kind": "class", "parents": []}}}
+    _project(tmp_path, spec=raw, name=name,
+             **{"vocabulary.py": VOCABULARY,
+                "vocabulary.json": json.dumps(snapshot)})
+    _bound(clean, tmp_path)
+    return _rows(name)[DEFINITIONS]
+
+
+def test_an_equal_definition_is_no_note(tmp_path, clean):
+    said = "Natural gas is a gas mixture."
+    assert _defined(tmp_path, clean, {"label": "natural gas",
+                                      "definition": said}, said) == (
+        "ok", "0 class(es) with a rewritten definition, "
+              "0 class(es) only the pin defines")
+
+
+def test_a_definition_that_differs_only_in_its_white_space_is_no_note(
+        tmp_path, clean):
+    assert _defined(tmp_path, clean, {
+        "label": "natural gas",
+        "definition": "Natural gas is\n a gas  mixture."},
+        "Natural gas is a gas mixture.")[0] == "ok"
+    # on the side of the pin too, which wraps its lines as it likes
+    assert _defined(tmp_path, clean, {
+        "label": "natural gas", "definition": "Natural gas is a gas mixture."},
+        "Natural gas is\na gas  mixture.", name="pin")[0] == "ok"
+
+
+def test_a_rewritten_definition_is_a_note_and_not_a_failure(tmp_path, clean):
+    verdict, detail = _defined(
+        tmp_path, clean,
+        {"label": "natural gas", "definition": "A gas mixture."},
+        "Natural gas is a gas mixture of methane and ethane.")
+    assert verdict == "warn"
+    assert detail.startswith("1 class(es) with a rewritten definition "
+                             "(OEO_00000292), 0 class(es)")
+
+
+def test_a_definition_only_the_pin_has_is_a_note(tmp_path, clean):
+    # the short form of an entry carries no definition at all
+    verdict, detail = _defined(tmp_path, clean, ["natural gas"],
+                               "Natural gas is a gas mixture.")
+    assert verdict == "warn"
+    assert detail == ("0 class(es) with a rewritten definition, 1 class(es) "
+                      "only the pin defines (OEO_00000292)")
+
+
+def test_a_definition_only_the_spec_has_is_not_a_difference(tmp_path, clean):
+    assert _defined(tmp_path, clean, {"label": "natural gas",
+                                      "definition": "Ours."}, "")[0] == "ok"
+
+
+def test_a_profile_without_a_pin_has_no_definition_line(tmp_path, clean):
+    _project(tmp_path, spec=_spec())
+    _bound(clean, tmp_path)
+    assert DEFINITIONS not in _rows()
+
+
+# -- the field prompt's own example -------------------------------------------
+
+EXAMPLE_ROW = "field prompt's own example reads back"
+FRONT = "---\ntemperature: 0\nmax_tokens: 4096\n---\n"
+GOOD = ('{"fields": {"scenario": {"groups": [{"rows": ["R1", "R2"], '
+        '"value": "Baseline", "value_raw": "the Baseline scenario", '
+        '"quote": "In the Baseline scenario, spending is flat until 2030."}], '
+        '"answers": {"R3": {"value": "Option B", "value_raw": "Option B", '
+        '"quote": "Results for Option B are shown in Figure 4."}}}}}')
+
+
+def _scenario_spec() -> dict:
+    """The spec of `_spec` with a closed `scenario` coordinate."""
+    raw = _spec()
+    raw["parameters"][0]["axes"] = {"scenario": {
+        "vocabulary": {"ex:Base": ["Baseline", "the Baseline scenario"],
+                       "ex:B": ["Option B"]},
+        "question": "Which scenario is meant?"}}
+    return raw
+
+
+def _example(tmp_path, clean, line, spec=None, name="mine"):
+    _project(tmp_path, spec=spec or _spec(), name=name, **{
+        "prompts/extraction/field.md":
+            FRONT + "Return one object, on one line:\n\n" + line + "\n"})
+    _bound(clean, tmp_path)
+    return _rows(name)[EXAMPLE_ROW]
+
+
+def test_the_example_of_the_built_in_prompt_reads_back(tmp_path, clean):
+    """The built-in field prompt, over a spec that has no `scenario`: the
+    example is read as free text, and the line says so."""
+    _project(tmp_path, spec=_spec())
+    _bound(clean, tmp_path)
+    verdict, detail = _rows()[EXAMPLE_ROW]
+    assert verdict == "ok", detail
+    assert "3 row(s) read from their quotes, and 3 row(s) unbacked" in detail
+    assert "'scenario' is no coordinate of this spec" in detail
+
+
+def test_the_example_is_read_against_the_list_of_the_spec(tmp_path, clean):
+    verdict, detail = _example(tmp_path, clean, GOOD, _scenario_spec())
+    assert verdict == "ok", detail
+    assert "no coordinate" not in detail
+    # an answer the list does not hold is not backed, for the same example
+    off = GOOD.replace('"value": "Option B"', '"value": "Gloomy"')
+    verdict, detail = _example(tmp_path, clean, off, _scenario_spec(),
+                               name="two")
+    assert verdict == "FAIL" and "R3: not_an_option" in detail
+
+
+def test_an_example_whose_answer_is_not_in_its_quote_fails(tmp_path, clean):
+    wrong = GOOD.replace('"value_raw": "Option B"',
+                         '"value_raw": "Option C"')
+    verdict, detail = _example(tmp_path, clean, wrong)
+    assert verdict == "FAIL"
+    assert "R3: answer_not_in_quote" in detail
+
+
+def test_an_example_without_a_quote_or_with_a_short_one_fails(
+        tmp_path, clean):
+    bare = GOOD.replace(', "quote": "Results for Option B are shown in '
+                        'Figure 4."', "")
+    verdict, detail = _example(tmp_path, clean, bare)
+    assert verdict == "FAIL" and "R3: quote_not_in_source" in detail
+    short = GOOD.replace('"value_raw": "Option B", "quote": "Results for '
+                         'Option B are shown in Figure 4."',
+                         '"value_raw": "B", "quote": "B"')
+    verdict, detail = _example(tmp_path, clean, short, name="two")
+    assert verdict == "FAIL" and "R3: quote_too_short" in detail
+
+
+def test_an_example_that_is_not_exactly_one_object_fails(tmp_path, clean):
+    verdict, detail = _example(tmp_path, clean, GOOD + " and more")
+    assert verdict == "FAIL" and "not exactly one JSON object" in detail
+    two = ('{"fields": {"scenario": {"answers": {}}, "year": {"answers": '
+           '{}}}}')
+    verdict, detail = _example(tmp_path, clean, two, name="two")
+    assert verdict == "FAIL" and "exactly one field" in detail
+    none = '{"fields": {"scenario": {"answers": {}}}}'
+    verdict, detail = _example(tmp_path, clean, none, name="three")
+    assert verdict == "FAIL" and "answers no row" in detail
+
+
+def test_an_example_that_only_says_not_stated_carries_nothing_to_back(
+        tmp_path, clean):
+    only = ('{"fields": {"scenario": {"answers": {"R1": '
+            '{"value": "out:unstated"}}}}}')
+    verdict, detail = _example(tmp_path, clean, only)
+    assert verdict == "FAIL" and "carries a quote" in detail
+    # and one that mixes is read on the rows that have a quote
+    mixed = GOOD.replace('"answers": {', '"answers": {"R4": '
+                         '{"value": "out:unstated"}, ')
+    verdict, detail = _example(tmp_path, clean, mixed, name="two")
+    assert verdict == "ok", detail
+    assert detail.startswith("3 row(s) read")
+
+
+def test_a_prompt_without_an_example_line_warns_and_does_not_fail(
+        tmp_path, clean):
+    verdict, detail = _example(tmp_path, clean,
+                               'Reply with {"fields": ...} as an object.')
+    assert verdict == "warn" and "starts with" in detail
+    # a wrapped example is not found, and the line says so
+    wrapped = '{\n  "fields": {"scenario": {"answers": {}}}\n}'
+    assert _example(tmp_path, clean, wrapped, name="two")[0] == "warn"
+
+
+def test_every_example_line_of_the_prompt_is_read_and_not_only_the_first(
+        tmp_path, clean):
+    broken = GOOD.replace('"value_raw": "Option B"',
+                          '"value_raw": "Option C"')
+    verdict, detail = _example(tmp_path, clean, GOOD + "\n" + broken)
+    assert verdict == "FAIL" and "R3: answer_not_in_quote" in detail
+    # two good ones are two good ones
+    verdict, detail = _example(tmp_path, clean, GOOD + "\n" + GOOD,
+                               name="two")
+    assert verdict == "ok" and detail.startswith("2 example line(s)")
+
+
+def test_an_example_the_reader_cannot_walk_is_a_failed_line_and_no_traceback(
+        tmp_path, clean):
+    """A "groups" that is no list and a group whose "rows" is none: the
+    reader raises on both, and the audit must still get to its other lines."""
+    for name, line in (
+            ("one", '{"fields": {"scenario": {"groups": 5}}}'),
+            ("two", '{"fields": {"scenario": {"groups": [{"rows": 5, '
+                    '"value": "Baseline", "value_raw": "Baseline", '
+                    '"quote": "In the Baseline scenario, spending is flat."'
+                    '}]}}}')):
+        verdict, detail = _example(tmp_path, clean, line, name=name)
+        assert verdict == "FAIL", (name, detail)
+        assert "could not walk the example: TypeError" in detail
+        # and the profile's lines after it are there
+        assert "rows prompt names 'quantities'" in _rows(name)
+
+
+def test_a_reader_that_backs_an_invented_quote_fails_the_line(
+        tmp_path, clean):
+    """The first half of the line holds of any reader that backs
+    everything. The copy with the invented quote is what can fail it."""
+    import importlib
+
+    from docpipe.extraction import fields
+    # the module the audit imports, which is not always the one the package
+    # holds an attribute for: the `clean` fixture forgets modules
+    pipeline = importlib.import_module("docpipe.extraction.pipeline")
+    real = pipeline.merge_field
+
+    def lenient(rows, sources, slot, reply, **kwargs):
+        real(rows, sources, slot, reply, **kwargs)
+        for row in rows:
+            row.claim[f"{slot.name}_state"] = fields.READ
+        return {"failed": []}
+
+    clean.setattr(pipeline, "merge_field", lenient)
+    verdict, detail = _example(tmp_path, clean, GOOD)
+    assert verdict == "FAIL"
+    assert "a quote that stands in no passage is still read" in detail
+
+
+def test_an_example_that_quotes_the_invented_passage_cannot_tell_the_copies_apart(
+        tmp_path, clean):
+    """The copy is only a copy that must fail when its quote stands in no
+    passage. An example that prints that very sentence as a quote has made
+    the sentence a passage, and the line says so instead of passing."""
+    same = GOOD.replace("Results for Option B are shown in Figure 4.",
+                        preflight.INVENTED_QUOTE).replace(
+        '"value_raw": "Option B"', '"value_raw": "passage"')
+    verdict, detail = _example(tmp_path, clean, same)
+    assert verdict == "FAIL" and "invented quote stands in a passage" in detail
+
+
+def test_the_example_lines_are_the_lines_that_open_the_reply():
+    text = ('Intro with "fields" in the middle.\n'
+            '  {"fields": {"a": {}}}  \n'
+            'and {"fields": not at the start}\n'
+            '{"fields": {"b": {}}}\n')
+    assert preflight.example_lines(text) == ['{"fields": {"a": {}}}',
+                                             '{"fields": {"b": {}}}']
+    assert preflight.example_lines(None) == []
+
+
+def test_a_missing_field_prompt_fails_the_example_line_too(tmp_path, clean):
+    _alone(tmp_path, ("rows", "queries", "anchors"))
+    _bound(clean, tmp_path)
+    verdict, detail = _rows("alone")[EXAMPLE_ROW]
+    assert verdict == "FAIL" and "no field prompt" in detail
+
+
+# -- the two helpers on their own ---------------------------------------------
+
+def test_reads_back_says_whether_one_example_line_is_a_reply_the_run_reads(
+        clean):
+    from docpipe.extraction.spec import load
+    clean.setenv(profiles.ENV_VAR, "default")
+    spec = load(_scenario_spec())
+    ok, detail = preflight.reads_back(GOOD, spec)
+    assert ok, detail
+    assert detail.startswith("3 row(s) read from their quotes, and 3 row(s)")
+    # the same line with a quote the passage does not carry is not backed
+    broken = GOOD.replace('"value_raw": "Option B"', '"value_raw": "nothing"')
+    ok, detail = preflight.reads_back(broken, spec)
+    assert not ok and "R3: answer_not_in_quote" in detail
+
+
+def test_example_verdict_is_reads_back_with_a_raise_made_into_a_verdict(clean):
+    from docpipe.extraction.spec import load
+    clean.setenv(profiles.ENV_VAR, "default")
+    spec = load(_scenario_spec())
+    assert preflight.example_verdict(GOOD, spec)[0] is True
+    ok, detail = preflight.example_verdict(
+        '{"fields": {"scenario": {"groups": 5}}}', spec)
+    assert ok is False and "TypeError" in detail
+
+
+def test_shapes_verdict_is_ok_when_nothing_is_run_and_a_warning_when_open(
+        tmp_path):
+    pytest.importorskip("rdflib")
+
+    class Profile:
+        def __init__(self, **parts):
+            self.parts = parts
+
+        def component(self, module, name):
+            return self.parts.get(name)
+
+    raw = _spec()
+    assert preflight.shapes_verdict(Profile(), raw)[0] is True
+    gone = Profile(shapes_files=lambda: [tmp_path / "gone.ttl"])
+    ok, detail = preflight.shapes_verdict(gone, raw)
+    assert ok and detail.startswith("skipped")
+    (tmp_path / "shapes.ttl").write_text(SHAPES, encoding="utf-8")
+    there = Profile(shapes_files=lambda: [tmp_path / "shapes.ttl"])
+    ok, detail = preflight.shapes_verdict(there, raw)
+    assert not ok and "report.inventedProperty" in detail
+    recorded = Profile(shapes_files=lambda: [tmp_path / "shapes.ttl"],
+                       NOT_EXTRACTED={("report", "inventedProperty"): "no"})
+    assert preflight.shapes_verdict(recorded, raw)[0] is True

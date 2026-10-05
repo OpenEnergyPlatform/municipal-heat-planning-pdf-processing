@@ -102,16 +102,34 @@ def migrate(connection: sqlite3.Connection) -> int:
     return had
 
 
+class MixedIndex(RuntimeError):
+    """Vectors of one model were about to be appended to an index that holds
+    vectors of another. Raised before a vector is written; says both."""
+
+    def __init__(self, recorded: str, configured: str):
+        self.recorded, self.configured = recorded, configured
+        super().__init__(
+            f"this index holds vectors of {recorded} and is continued with "
+            f"{configured}: vectors of two models do not compare, so a "
+            f"search over both is not one search. Nothing was written")
+
+
 def note_embedding(connection: sqlite3.Connection, model: str, dim: int,
-                   backend: str, max_token_length: int,
-                   version: str) -> Optional[str]:
+                   backend: str, max_token_length: int, version: str,
+                   *, allow_mixed: bool = False) -> Optional[str]:
     """Write down what builds this database's index.
 
-    Returns a sentence when the index already holds vectors of another
-    model, else None. Vectors of two models do not compare, so that is worth
-    a line in the log; it is the caller's line, and nothing is refused here.
-    The first model stays the recorded one and the other is recorded beside
-    it, so the database says both.
+    An index that holds vectors of another model is not continued with this
+    one: vectors of two models do not compare, so a search over both is not
+    one search, and nothing in a vector says which model it is of. That
+    raises `MixedIndex` naming both, and writes nothing. `allow_mixed` is the
+    deliberate mixture: the first model stays the recorded one, the other is
+    recorded beside it, and the sentence comes back for the caller's log. An
+    index that holds no vectors may change its model.
+
+    A database that records no model cannot be checked, whatever it holds:
+    the configured one is recorded as the one that built it. Where it holds
+    vectors the sentence says that, because nothing proved them to be its.
     """
     said = meta(connection)
     before = said.get("embedding/model")
@@ -119,6 +137,8 @@ def note_embedding(connection: sqlite3.Connection, model: str, dim: int,
     holds = "Embeddings" in tables(connection) and connection.execute(
         'SELECT EXISTS(SELECT 1 FROM "Embeddings")').fetchone()[0]
     if before and before != str(model) and holds:
+        if not allow_mixed:
+            raise MixedIndex(before, str(model))
         others = [m for m in (said.get("embedding/also") or "").split("\n")
                   if m]
         if str(model) not in others:
@@ -132,6 +152,10 @@ def note_embedding(connection: sqlite3.Connection, model: str, dim: int,
                           "embedding/backend": backend,
                           "embedding/max_token_length": max_token_length,
                           "docpipe/version": version})
+    if holds and not before:
+        return (f"this index holds vectors and records no embedding model, so "
+                f"they cannot be checked against {model}: it is recorded as "
+                f"the model that built the index")
     return None
 
 

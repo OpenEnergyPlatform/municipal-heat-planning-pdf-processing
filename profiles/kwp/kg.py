@@ -18,13 +18,13 @@ import json
 import logging
 import re
 import sqlite3
-import unicodedata
-import uuid
 from collections import Counter
 from pathlib import Path
 from typing import Optional
 
+from docpipe.extraction import graphkit
 from docpipe.extraction.fields import DERIVED
+from docpipe.extraction.graphkit import NOT_IN_GRAPH, ttl_comment, ttl_escape
 from docpipe.extraction.identity import tuple_ids
 from docpipe.extraction.spec import kg_name, load as load_spec
 from docpipe.store.schema import readonly_uri
@@ -35,7 +35,7 @@ log = logging.getLogger(__name__)
 
 BASE = "https://openenergyplatform.org/id/mhpkg/"
 OEO = "https://openenergyplatform.org/ontology/oeo/"
-NS_MHPKG = uuid.uuid5(uuid.NAMESPACE_URL, BASE)
+NS_MHPKG = graphkit.base_namespace(BASE)
 
 # Where the provenance of this graph's values is written under, and the
 # vocabulary that says it (docpipe/extraction/provenance.py). The terms are
@@ -90,14 +90,6 @@ LEGAL = r"(gmbh\s*&\s*co\.?\s*kg|gmbh|mbh|ag|kg|ohg|e\.?\s*v\.?|gbr|se|ug)"
 
 _SPEC = json.loads(
     Path(__file__).with_name("extraction_spec.json").read_text(encoding="utf-8"))
-# The target quantity is per OEO class, not per parameter: which class a
-# value is gets decided by the model on the `quantity` axis, and the unit
-# hangs off the class.
-# The classes the graph takes. The remaining entries of the list start with
-# `out:` and are deliberately choosable non-classes: a cumulative sum, an
-# avoided or captured amount, a potential. They stand in the selection so
-# the model can CHOOSE them, instead of reaching for the nearest real class.
-NOT_IN_GRAPH = "out:"
 
 
 def is_class(value) -> bool:
@@ -113,6 +105,14 @@ def is_class(value) -> bool:
 
 
 _OEO_CLASS = re.compile(r"OEO_\d+")
+# The target quantity is per OEO class, not per parameter: which class a
+# value is gets decided by the model on the `quantity` axis, and the unit
+# hangs off the class.
+# The classes the graph takes. The remaining entries of the list start with
+# `out:` (NOT_IN_GRAPH) and are deliberately choosable non-classes: a
+# cumulative sum, an avoided or captured amount, a potential. They stand in
+# the selection so the model can CHOOSE them, instead of reaching for the
+# nearest real class.
 UNIT_TARGET = {uri: par["unit_target"]
                for par in _SPEC["parameters"]
                if par.get("unit_target")
@@ -352,18 +352,9 @@ def year_iri(year) -> str:
     return f"{BASE}year/{int(year)}"
 
 
-def ns(collection: str) -> uuid.UUID:
-    return uuid.uuid5(NS_MHPKG, collection)
-
-
 def normalise(label: str) -> str:
     """The umlaut rule from the policy, applied in order."""
-    s = unicodedata.normalize("NFC", label)
-    s = s.casefold()
-    s = re.sub(r"[^\w\s]", " ", s, flags=re.U)
-    s = re.sub(r"\s+", " ", s).strip()
-    s = re.sub(rf"\s+{LEGAL}$", "", s)
-    return s.strip()
+    return graphkit.normalise(label, LEGAL)
 
 
 def display_name(label: str) -> str:
@@ -377,7 +368,8 @@ def display_name(label: str) -> str:
 
 def mint(collection: str, name: str) -> str:
     """Tier 3: UUIDv5 over the identifying name. Never v4 — v4 is random."""
-    return f"{BASE}{collection}/{uuid.uuid5(ns(collection), name)}"
+    return (f"{BASE}{collection}/"
+            f"{graphkit.mint_uuid(NS_MHPKG, collection, name)}")
 
 
 def _iso_date(raw) -> str:
@@ -603,18 +595,10 @@ TRUST_PROSE = check_prose({
 TRUST_JOIN = " · "
 
 
-def _ttl_comment(text) -> str:
-    """One Turtle comment line, flattened so a quote cannot break the file."""
-    flat = re.sub(r"\s+", " ", str(text or "")).strip()
-    return "# " + flat[:400]
-
-
-def _ttl_string(text) -> str:
-    """The inside of a Turtle "..." literal. A plan's own name for a sub-area
-    is printed as the plan quotes it, and corpus_m5 wrote 18 labels like
-    "Eignungsgebiet "Bad Dürrheim Nord"" that stop every Turtle parser."""
-    return (str(text).replace("\\", "\\\\").replace('"', '\\"')
-            .replace("\n", "\\n").replace("\r", "\\r").replace("\t", "\\t"))
+# A plan's own name for a sub-area is printed as the plan quotes it, and
+# corpus_m5 wrote 18 labels like "Eignungsgebiet "Bad Dürrheim Nord"" that
+# stop every Turtle parser: a label goes through `ttl_escape`, a comment
+# through `ttl_comment`.
 
 
 # Short English labels for the two coordinates that mint no OEO class of
@@ -696,10 +680,10 @@ def evidence_comment(row: dict, document: str, *,
            scope,
            _english_label(row.get("carrier")),
            _english_label(row.get("sector"))]
-    lines = [_ttl_comment(" · ".join(x for x in what if x))] if any(what) else []
+    lines = [ttl_comment(" · ".join(x for x in what if x))] if any(what) else []
     if row.get("quote"):
-        lines.append(_ttl_comment(f'"{row["quote"]}"'))
-    lines.append(_ttl_comment(", ".join(where)))
+        lines.append(ttl_comment(f'"{row["quote"]}"'))
+    lines.append(ttl_comment(", ".join(where)))
     aggregation = row.get("aggregation")
     if aggregation:
         # How this coordinate was arrived at, in the one place a reader of the
@@ -710,27 +694,27 @@ def evidence_comment(row: dict, document: str, *,
         raw = (row.get("aggregation_raw") or "").strip()
         if row.get("aggregation_state") == DERIVED:
             note = f"Aggregation: {aggregation}"
-            lines.append(_ttl_comment(
+            lines.append(ttl_comment(
                 note + (f" (from the unit {raw})" if raw else "")))
         elif raw:
-            lines.append(_ttl_comment(f'Aggregation: {aggregation} "{raw}"'))
+            lines.append(ttl_comment(f'Aggregation: {aggregation} "{raw}"'))
     if row.get("compute"):
         # A value the sandbox computed carries the code and its inputs, so the
         # arithmetic is checkable without re-running anything.
-        lines.append(_ttl_comment(f"computed: {row['compute']}"))
+        lines.append(ttl_comment(f"computed: {row['compute']}"))
     if row.get("flags"):
-        lines.append(_ttl_comment("Flags: " + ", ".join(row["flags"])))
+        lines.append(ttl_comment("Flags: " + ", ".join(row["flags"])))
     if named:
         # Split off another reading of the same coordinates by the plan's
         # own words for them; the words are what makes this node this node.
-        lines.append(_ttl_comment(f'Named by the plan\'s wording: "{named}"'))
+        lines.append(ttl_comment(f'Named by the plan\'s wording: "{named}"'))
     if resolved:
-        lines.append(_ttl_comment(
+        lines.append(ttl_comment(
             {"rounding": "Kept over a rounded reading of the same number",
              "trust": "Kept over a reading of the same coordinates with a "
                       "lower trust level"}[resolved]))
-    lines.append(_ttl_comment(render(verdict, TRUST_PROSE,
-                                     join=TRUST_JOIN, row=row)))
+    lines.append(ttl_comment(render(verdict, TRUST_PROSE,
+                                    join=TRUST_JOIN, row=row)))
     return lines
 
 
@@ -848,7 +832,7 @@ def make_serializer(db_path: Path):
         part_iri = {key: f"{BASE}{segment}/AGS_{ags}_{published}"
                     for key, (_cls, segment, _label) in PARTS.items()}
         municipality_iri = f"{BASE}municipality/AGS_{ags}"
-        place = _ttl_string(municipality or f"AGS {ags}")
+        place = ttl_escape(municipality or f"AGS {ags}")
 
         # Every row that minted one identity, settled together (`settle`):
         # a repeat is one node marked as read twice, and different numbers
@@ -962,7 +946,7 @@ def make_serializer(db_path: Path):
             labelled.add(iri)
             parts.append(f"<{iri}>\n"
                          f"    a {CLS_ORGANISATION} ;\n"
-                         f"    rdfs:label \"{_ttl_string(label)}\" .\n")
+                         f"    rdfs:label \"{ttl_escape(label)}\" .\n")
         # Sub-areas exist as nodes and are part of the municipality area. What
         # is missing is the edge from a VALUE to the area it holds for: the
         # schema has no slot for it, and its TERM REQUEST 1 asks for a
@@ -973,7 +957,7 @@ def make_serializer(db_path: Path):
         for key, label in sorted(areas.items()):
             parts.append(f"<{mint('heatplanarea', f'{ags}|{key}')}>\n"
                          f"    a {CLS_PLAN_AREA} ;\n"
-                         f"    rdfs:label \"{_ttl_string(label)}\" ;\n"
+                         f"    rdfs:label \"{ttl_escape(label)}\" ;\n"
                          f"    {P_PART_OF} <{municipality_iri}> .\n")
         parts.append(f"""\
 <{municipality_iri}>

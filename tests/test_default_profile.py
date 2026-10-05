@@ -4,11 +4,16 @@ Promised: a profile that names another one in `extends` gets that profile's
 part wherever it has none of its own (a module's attribute, a prompt, the
 schema, one phrase) AND a profile that names none gets nothing from anybody;
 the built-in profile is found last, so a project's own of the same name
-wins; a folder of PDFs is a document source; and `docpipe init` leaves a
-project that the next command runs in.
+wins; the two profiles of this repository take from it only the prompts
+listed in INHERITED, each of them what the copy it replaced was; a folder of
+PDFs is a document source; and `docpipe init` leaves a project that the next
+command runs in.
 """
 import ast
+import hashlib
+import json
 import os
+import shutil
 import sqlite3
 import subprocess
 import sys
@@ -132,19 +137,61 @@ def test_a_profile_that_extends_nothing_gets_nothing(tmp_path, clean):
         wording.phrases(alone)
 
 
+# The prompts each of the two profiles does not copy: the built-in one is its
+# prompt, byte for byte, and was before the copy was taken out. A prompt of
+# the built-in profile that is neither on a profile's list nor a file of it
+# fails below, so none is answered for, silently, by the English one.
+INHERITED = {
+    "scenarios": ("inference/answer_spec_json", "inference/answer_spec_text",
+                  "inference/envelope_correction", "inference/json_format",
+                  "inference/readoff_correction", "inference/revise",
+                  "visuals/caption_keep"),
+    "kwp": ("visuals/caption_keep",),
+}
+
+
+def _prompt_faults(home, inherited):
+    """What is wrong with the prompts under *home*, set against the
+    built-in ones: a prompt of the built-in profile that is neither on the
+    list nor a file of the profile, a listed one the profile has a file for
+    (then it is not inherited, whatever its bytes), and a listed name that
+    is no built-in prompt."""
+    built_in = DEFAULT / "prompts"
+    faults = []
+    for path in sorted(built_in.rglob("*.md")):
+        relative = path.relative_to(built_in)
+        prompt_id = f"{relative.parent.as_posix()}/{relative.stem}"
+        own = home / "prompts" / relative
+        if prompt_id in inherited:
+            if own.is_file():
+                faults.append(
+                    f"{prompt_id}: on the inherited list, and a file of the "
+                    "profile with "
+                    + ("other bytes" if own.read_bytes() != path.read_bytes()
+                       else "the built-in bytes"))
+        elif not own.is_file():
+            faults.append(f"{prompt_id}: not on the inherited list and "
+                          "not a file of the profile")
+    faults += [f"{prompt_id}: on the inherited list and no built-in prompt"
+               for prompt_id in inherited
+               if not (built_in / f"{prompt_id}.md").is_file()]
+    return faults
+
+
 @pytest.mark.parametrize("name", ["kwp", "scenarios"])
-def test_the_profiles_of_this_repository_take_nothing_from_the_default(name):
-    """They extend it and write every part of it themselves: each prompt,
-    each name of each module, the schema, every phrase. So extending changed
-    nothing for them, and a prompt one of them loses is seen here instead of
-    being answered for, silently, by the English one."""
+def test_the_profiles_of_this_repository_take_only_the_listed_prompts(name):
+    """They extend it and write every part of it themselves: each prompt but
+    the ones listed in INHERITED, each name of each module, the schema, every
+    phrase. So a prompt one of them loses is seen here instead of being
+    answered for, silently, by the English one, and a listed one is the
+    built-in file itself."""
     profile = load_profile(name)
     assert [p.name for p in profile.lineage()] == [name, "default"]
     theirs = profile.package_dir
-    missing = [path.relative_to(DEFAULT).as_posix()
-               for path in sorted((DEFAULT / "prompts").rglob("*.md"))
-               if not (theirs / path.relative_to(DEFAULT)).is_file()]
-    assert not missing, missing
+    assert _prompt_faults(theirs, INHERITED[name]) == []
+    for prompt_id in INHERITED[name]:
+        assert prompts.path_for(prompt_id, profile) == \
+            DEFAULT / "prompts" / f"{prompt_id}.md"
     assert (theirs / "schema.sql").is_file()
     default = load_profile("default")
     for module in sorted(DEFAULT.glob("*.py")):
@@ -162,6 +209,138 @@ def test_the_profiles_of_this_repository_take_nothing_from_the_default(name):
     own_phrases = profile._own("inference", "PHRASES")
     assert set(default._own("inference", "PHRASES")) <= set(own_phrases)
     assert wording.phrases(profile) == own_phrases
+
+
+def _folder_of_copies(tmp_path):
+    """A profile folder that holds a copy of every built-in prompt."""
+    home = tmp_path / "copies"
+    shutil.copytree(DEFAULT / "prompts", home / "prompts")
+    return home
+
+
+def test_the_guard_of_the_prompts_fails_where_the_promise_is_broken(tmp_path):
+    inherited = ("inference/revise", "visuals/caption_keep")
+    home = _folder_of_copies(tmp_path)
+    # a profile that holds every prompt and lists none passes: it can pass
+    assert _prompt_faults(home, ()) == []
+    # a prompt that is missing and not on the list is named
+    (home / "prompts" / "refinement" / "split.md").unlink()
+    faults = _prompt_faults(home, ())
+    assert len(faults) == 1 and faults[0].startswith("refinement/split:")
+    assert "not on the inherited list" in faults[0]
+    # one that is listed and has no file is what the list promises
+    for prompt_id in inherited:
+        (home / "prompts" / f"{prompt_id}.md").unlink()
+    assert _prompt_faults(home, inherited) == faults
+    # a listed one that reappears with other bytes is named, and so is one
+    # that reappears as it was: then it is not inherited any more
+    changed = home / "prompts" / "inference" / "revise.md"
+    changed.write_bytes((DEFAULT / "prompts" / "inference"
+                         / "revise.md").read_bytes() + b"\nand more")
+    again = home / "prompts" / "visuals" / "caption_keep.md"
+    shutil.copyfile(DEFAULT / "prompts" / "visuals" / "caption_keep.md", again)
+    got = _prompt_faults(home, inherited)
+    assert [fault.split(":")[0] for fault in got] == [
+        "inference/revise", "refinement/split", "visuals/caption_keep"]
+    assert "other bytes" in got[0] and "the built-in bytes" in got[2]
+    # a name on the list that no built-in prompt has is a misspelling
+    assert _prompt_faults(home, inherited + ("visuals/caption_kept",))[-1] \
+        .startswith("visuals/caption_kept:")
+
+
+# The eight prompts the copies were taken out for, as the file the copy was:
+# its sha256 is what a stage records, and no front matter lies before the
+# text, so it is also the text a model reads. Taken from the files before
+# they were deleted, and equal to the built-in ones then too. A built-in
+# prompt that is changed on purpose changes what these profiles ask, and
+# that is where a change of it has to be entered.
+BEFORE = {
+    ("scenarios", "inference/answer_spec_json"):
+        "1f64ff917cecd7553f7d9d81e84f71f51c40c7cb063f1c8179593097c9023444",
+    ("scenarios", "inference/answer_spec_text"):
+        "cee0a6c66804c5db914fab17043ff7a0b2c336f12220aba2d808166e46c79b83",
+    ("scenarios", "inference/envelope_correction"):
+        "a182a5054a1fc0f69e78783a39d32f6ca47611f0ff75b84362811aa7ffb22580",
+    ("scenarios", "inference/json_format"):
+        "b65239b69d87e432452c88d8c339fad4ea359d19974274d2d571ed139ec5e139",
+    ("scenarios", "inference/readoff_correction"):
+        "4eee73db9d2b2f2f7a44813d754647d5a63ac55acd9f19a5f7d22513fef578f5",
+    ("scenarios", "inference/revise"):
+        "a5f80a14bb2821872aab281af7f6b0808668e1f98127bcad3bdbc5c90da3cd2f",
+    ("scenarios", "visuals/caption_keep"):
+        "78b24d39d4af63c1f2acde81cdc7e4d411f85a8ab0fe6005e19f442ad540811f",
+    ("kwp", "visuals/caption_keep"):
+        "78b24d39d4af63c1f2acde81cdc7e4d411f85a8ab0fe6005e19f442ad540811f",
+}
+
+
+def test_every_copy_that_was_taken_out_was_on_the_list():
+    assert {(name, prompt_id) for name, ids in INHERITED.items()
+            for prompt_id in ids} == set(BEFORE)
+
+
+@pytest.mark.parametrize("name, prompt_id", sorted(BEFORE))
+def test_an_inherited_prompt_reads_and_records_as_its_copy_did(name, prompt_id):
+    """The model reads the text the copy had AND the hash a stage records for
+    it is the one the copy had, so no request, no fingerprint and no stamp
+    moved with the copies."""
+    profile = load_profile(name)
+    prompt = prompts.load(prompt_id, profile)
+    assert prompt.path == DEFAULT / "prompts" / f"{prompt_id}.md"
+    assert prompt.meta == {}
+    assert hashlib.sha256(prompt.text.encode("utf-8")).hexdigest() == \
+        BEFORE[name, prompt_id]
+    assert prompt.sha256 == BEFORE[name, prompt_id]
+    assert prompts.versions([prompt_id], profile) == {
+        prompt_id: BEFORE[name, prompt_id]}
+
+
+@pytest.mark.parametrize("name", ["kwp", "scenarios"])
+def test_a_visuals_record_made_with_the_copy_still_holds(name, tmp_path):
+    """Stage 3 compares the hashes it recorded with the ones of today, and
+    a prompt that differs makes it say 'described with older prompts'. A
+    record that holds the hash the copy had is current for that prompt,
+    and a record that holds another one is stale for that prompt only."""
+    from docpipe.visuals import config
+    profile = load_profile(name)
+    stored = prompts.versions(config.PROMPT_IDS, profile)
+    stored["visuals/caption_keep"] = BEFORE[name, "visuals/caption_keep"]
+    folder = tmp_path / "visuals"
+    folder.mkdir()
+    (folder / prompts.VERSION_FILE).write_text(json.dumps(stored),
+                                               encoding="utf-8")
+    assert prompts.check(folder, config.PROMPT_IDS, profile) == []
+    # what a stage writes today is that record
+    prompts.record(tmp_path / "again", config.PROMPT_IDS, profile)
+    assert json.loads((tmp_path / "again" / prompts.VERSION_FILE).read_text(
+        encoding="utf-8")) == stored
+    # a record that holds another hash for it is stale for that prompt only
+    stored["visuals/caption_keep"] = "0" * 64
+    (folder / prompts.VERSION_FILE).write_text(json.dumps(stored),
+                                               encoding="utf-8")
+    assert prompts.check(folder, config.PROMPT_IDS, profile) == [
+        "visuals/caption_keep"]
+
+
+def test_a_copy_with_other_words_is_not_what_the_record_holds(tmp_path, clean):
+    """The case the two tests above are built against: a profile that does
+    write its own caption instruction reads another text and records
+    another hash, which is what 'inherited' keeps from happening."""
+    from docpipe.visuals import config
+    _child(tmp_path, "mine", **{
+        "prompts/visuals/caption_keep.md": "Keep the caption as it is."})
+    _bound(clean, tmp_path)
+    mine = load_profile("mine")
+    prompt = prompts.load("visuals/caption_keep", mine)
+    assert prompt.text == "Keep the caption as it is."
+    assert prompt.sha256 != BEFORE["kwp", "visuals/caption_keep"]
+    folder = tmp_path / "visuals"
+    folder.mkdir()
+    (folder / prompts.VERSION_FILE).write_text(json.dumps(
+        {"visuals/caption_keep": BEFORE["kwp", "visuals/caption_keep"]}),
+        encoding="utf-8")
+    assert "visuals/caption_keep" in prompts.check(
+        folder, config.PROMPT_IDS, mine)
 
 
 def test_a_prompt_is_the_nearest_one(tmp_path, clean):
@@ -255,14 +434,17 @@ def test_a_built_in_prompt_is_filled_and_set_like_the_profiles_own(name):
     own = ROOT / "profiles" / name / "prompts"
     built_in = DEFAULT / "prompts"
     compared = 0
-    for path in sorted(built_in.rglob("*.md")):
+    files = sorted(built_in.rglob("*.md"))
+    for path in files:
         other = own / path.relative_to(built_in)
         if not other.is_file():
             continue
         compared += 1
         assert _prompt_shape(path) == _prompt_shape(other), \
             path.relative_to(built_in).as_posix()
-    assert compared >= 30
+    # an inherited prompt is the built-in file itself: nothing to compare
+    assert len(files) >= 30
+    assert compared == len(files) - len(INHERITED[name])
 
 
 def test_the_built_in_profile_has_every_prompt_a_stage_asks_for():

@@ -1046,9 +1046,12 @@ def producer(kind: str, model: Optional[str] = None) -> dict
 Who wrote into a harvest in one pass. Recorded, never compared.
 
 A harvest is written once and then written into: a top-up reads single
-coordinates again, possibly under another model or prompt, a remap moves
-answers without a model at all. The stamp's `model` names the first of
-them only. This is one entry of the list that names them all.
+coordinates again, possibly under another model or prompt, a second
+reading flags values, a remap moves answers without a model at all. The
+stamp's `model` names the first of them only. This is one entry of the
+list that names them all. A coordinate a top-up re-read points at its
+entry by position (`fields.PRODUCER`), so entries are never removed or
+reordered.
 
 ### note_documents
 
@@ -1062,11 +1065,12 @@ documents have that recorded.
 ### note_index_model
 
 ```python
-def note_index_model(db_path) -> None
+def note_index_model(db_path, command: str = "extraction") -> None
 ```
 
 Say so when this run embeds its probes with another model than the
-one the database's index was built with. A line in the log, no more.
+one the database's index was built with. A line in the log, no more;
+`command` is whose line it is.
 
 ### stamp_record
 
@@ -1074,7 +1078,34 @@ one the database's index was built with. A line in the log, no more.
 def stamp_record(name: str) -> dict
 ```
 
-The stamp keys that place a harvest and decide nothing.
+The stamp keys that place a harvest. The version and the producers
+decide nothing; `document` is compared (`document_moved`).
+
+### document_current
+
+```python
+def document_current(name: str) -> dict
+```
+
+The stamp key this run can say about one document, or {}.
+
+Per document and not part of `_stamp_current`: that is the key set of the
+whole run, which a top-up and a remap carry forward, and neither of them
+reads a PDF. Kept out of it, they neither earn this key nor lose it.
+
+### document_moved
+
+```python
+def document_moved(stored: dict, current: dict) -> bool
+```
+
+True when the stamp and this run both name the document's bytes and
+the sha256 differs.
+
+A missing key on either side is not a difference. A stamp written before
+the key existed cannot say which PDF it read, and calling that stale would
+report the whole corpus for a sentence it never recorded; a database that
+records no checksum cannot say which PDF this run reads.
 
 ### recorded_questions
 
@@ -1099,15 +1130,18 @@ ontology keys alone.
 def stale(stamp_path: Path, current: dict) -> list
 ```
 
-Which ontology keys differ from now; everything when unstamped.
+Which keys differ from now; everything when unstamped.
 
-Only the ontology keys are compared (`QUESTION_KEYS`: one per parameter,
-value list, axis and slot), and the whole-file sha `spec` only for a stamp
-that has none of them. The model, the anchors, every prompt and every
-recorded sentence are in the stamp for a reader and decide nothing: the
-owner's rule of 2026-09-10 is that a stamp rests on the KG/ontology
-parameters alone, so a reworded prompt or another model leaves a
-harvested corpus current.
+The ontology keys are compared (`QUESTION_KEYS`: one per parameter,
+value list, axis and slot), the whole-file sha `spec` only for a stamp
+that has none of them, and the sha256 of the PDF the harvest read from
+(`DOCUMENT_KEY`) where the stamp and `current` both carry one. The model,
+the anchors, every prompt and every recorded sentence are in the stamp for
+a reader and decide nothing: the owner's rule of 2026-09-10 is that a
+stamp rests on the KG/ontology parameters alone, so a reworded prompt or
+another model leaves a harvested corpus current. The PDF is the one
+addition the owner decided on: another file under the same name is not
+the document the ontology keys were read against.
 
 A key the stored stamp does not have counts as changed, which is what
 makes a stamp from before the per-parameter keys read as stale: it cannot
@@ -1318,6 +1352,17 @@ section the passage stands in, which is where a plan writes it. A pair
 chosen for it from outside would be a coordinate with a quote from
 somewhere else, and the owner's rule is that every value says in the plan
 what it refers to.
+
+### run_spec_path
+
+```python
+def run_spec_path(args, profile)
+```
+
+The spec file this run reads: the one --spec names, else the
+profile's own, None where the profile names none. The stamps are written
+from this file, so a column of one's own has stamps of its own; the
+folder it writes into is kept apart by `scratch.folder_problem`.
 
 ### main
 

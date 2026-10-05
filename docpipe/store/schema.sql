@@ -104,6 +104,10 @@ CREATE TABLE IF NOT EXISTS "Segments" (
 -- 'section_text' = it was replaced by the sentence standing before this
 -- item's placeholder in the section text, because the stored one did not
 -- open like a caption. NULL = the backfill has not seen the row.
+-- `qa` is what stage 5 measured of the transcription when it kept it: a JSON
+-- object {passed, coverage, coverage_assessed, duplication, has_rows}, as in
+-- visuals.json. NULL = not checked: a table of a run before this was kept, one
+-- the model answered only in plain text, one it never read. Not a pass.
 CREATE TABLE IF NOT EXISTS "Tables" (
     "id"             INTEGER PRIMARY KEY AUTOINCREMENT,
     "section"        INTEGER NOT NULL REFERENCES "Sections"("id") ON DELETE CASCADE,
@@ -113,7 +117,8 @@ CREATE TABLE IF NOT EXISTS "Tables" (
     "caption"        TEXT,
     "markdown"       TEXT,
     "bbox"           TEXT,  -- JSON [[x0,y0,x1,y1]] region in PDF points
-    "caption_source" TEXT   -- stage | section_text
+    "caption_source" TEXT,  -- stage | section_text
+    "qa"             TEXT   -- JSON, see above
 );
 
 CREATE TABLE IF NOT EXISTS "Images" (

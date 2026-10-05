@@ -137,10 +137,21 @@ def check_project() -> list:
     return out
 
 
-def check_profile() -> tuple:
+def check_profile(stage: Optional[str] = None) -> tuple:
     """(checks, the profile or None)."""
     name = os.environ.get(ENV_VAR)
     found = profile_locations()
+    if not name and stage == "chat":
+        # The chat answers on the built-in profile when none is named, so
+        # that is the one its lines are checked against. Every other stage
+        # stops without a profile, and so does this check.
+        from .inference.wording import BUILT_IN
+        return [Check("profile", "name", OK,
+                      f"no profile named: the chat runs on the built-in "
+                      f"profile {BUILT_IN}",
+                      f"pass --profile, or set `profile` in "
+                      f"{settings.PROJECT_FILE}, to name another (found: "
+                      f"{', '.join(found) or 'none'})")], load_profile(BUILT_IN)
     if not name:
         return [Check("profile", "name", FAIL, "no profile named",
                       f"pass --profile, or set `profile` in "
@@ -675,7 +686,7 @@ def check_data(profile) -> list:
 
 def run(stage: Optional[str] = None, offline: bool = False) -> list:
     checks = check_python() + check_project()
-    found, profile = check_profile()
+    found, profile = check_profile(stage)
     checks += found
     checks += check_packages(stage)
     # Each server is asked once; the lines that need its answer share it.

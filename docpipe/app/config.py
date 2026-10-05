@@ -36,12 +36,15 @@ from pathlib import Path
 # Doing it here would be too late: app.py imports docpipe.inference first.
 
 # The profile decides what the corpus is about — its catalog supplies the
-# picker labels and filters, its data root the paths below. None is allowed
-# for what the pages show: the app then opens on the built-in profile's words,
-# generic labels and the historical data/ paths. The answer loop is not among
-# them: it needs a profile for its prompts and wording, so the app says so
-# when none is in effect and a question raises.
+# picker labels and filters, its data root the paths below. None is allowed:
+# the app then opens on the built-in profile's words, generic labels and the
+# historical data/ paths, and the answer loop reads its prompts and phrases
+# from the built-in profile too (docpipe/inference/wording.py). The app says
+# so when none is in effect.
 from docpipe.profile import active_profile, shared_file
+# Where the decisions file stands beside a harvest is the core's to say, so the
+# review page, `evaluate` and `--serialize` read the same file.
+from docpipe.extraction.gold import path_beside
 
 PROFILE = active_profile()
 
@@ -79,8 +82,7 @@ HARVEST_DIR = (Path(os.environ["INFERENCE_HARVEST_DIR"])
 # this app writes that is not a cache or a log.
 GOLD_PATH = (Path(os.environ["INFERENCE_GOLD_PATH"])
              if os.environ.get("INFERENCE_GOLD_PATH")
-             else (HARVEST_DIR.resolve().with_name("gold.jsonl")
-                   if HARVEST_DIR else None))
+             else (path_beside(HARVEST_DIR) if HARVEST_DIR else None))
 # The worst trust level of a harvested value the chat still shows: A, B or C.
 # Unset shows every value, each with its level.
 VALUES_LEVEL = (os.environ.get("INFERENCE_VALUES_LEVEL") or "").strip() or None

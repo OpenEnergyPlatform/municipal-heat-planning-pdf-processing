@@ -39,7 +39,9 @@ row that reads differently takes it over only when it is the one row the
 decision can be about: the same value read again with another year, and
 not the row beside it.
 
-Nothing here judges a value, drops one or writes into a harvest.
+Nothing here judges a value, drops one or writes into a harvest. What a
+writer does with a decision is to keep it beside the value it concerns
+(`decisions_in`): the value is the same with it and without it.
 
 Author: Felix Vossel
 
@@ -66,6 +68,23 @@ def __init__(self, records: Iterable[dict] = ())
 def load(cls, path) -> "Gold"
 ```
 
+#### Gold.settled
+
+```python
+def settled(self, document: str, row: dict, field: str,
+            rows: Optional[Iterable[dict]] = None) -> Optional[tuple]
+```
+
+(`correct` or `wrong`, the decision that says so) for what *row*
+says in *field* now, or None (nobody decided). *rows* are the rows
+of its document, where other rows of the same name may stand;
+without them the row stands alone.
+
+A field holds one thing. So where somebody found other content
+correct there, or named what is right, that settles this content
+too; where the only decisions are about other content found wrong,
+nothing is known about this one. What was said last counts.
+
 #### Gold.verdict
 
 ```python
@@ -74,13 +93,7 @@ def verdict(self, document: str, row: dict, field: str,
 ```
 
 `correct`, `wrong` or None (nobody decided) for what *row* says
-in *field* now. *rows* are the rows of its document, where other
-rows of the same name may stand; without them the row stands alone.
-
-A field holds one thing. So where somebody found other content
-correct there, or named what is right, that settles this content
-too; where the only decisions are about other content found wrong,
-nothing is known about this one. What was said last counts.
+in *field* now; `settled` says which decision it is.
 
 #### Gold.is_checked
 
@@ -214,6 +227,35 @@ def harvest(directory) -> dict
 ```
 
 {document name: [accepted rows]} of a harvest directory.
+
+### path_beside
+
+```python
+def path_beside(harvest_dir) -> Path
+```
+
+Where the decisions of a harvest are kept unless said otherwise: a
+file of its own next to the harvest directory. `evaluate` and the review
+page of the chat both find them there.
+
+### decisions_in
+
+```python
+def decisions_in(held: Gold, harvest: dict) -> tuple
+```
+
+What people decided about the rows of a harvest, and what about rows
+it does not hold.
+
+({document: {tuple name: [decision]}}, {(document, tuple, parameter):
+decisions}). A decision is the settled verdict of one field of one row
+(`Gold.settled`) with who made it, when and the note; the tuple name is
+the one `identity.tuple_ids` gives the row in its document, which is
+what a writer's `claims` call it. The second holds the field decisions
+whose row (document, `identity.tuple_id` and parameter) is in no row of
+*harvest*: counted by the caller, never applied to another row.
+
+Nothing here changes a row or leaves one out.
 
 ### queue
 

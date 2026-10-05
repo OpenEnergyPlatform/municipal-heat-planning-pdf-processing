@@ -10,7 +10,9 @@ that could not be read, what stands beside an image, how the closed list
 names a meaning. These go back to the model in the next request, so they
 are in the language of the prompts, and the core does not know which that
 is. They stood in the core as German sentences, which nobody saw until a
-profile wrote its prompts in another language.
+profile wrote its prompts in another language. The two keys of an entry of
+a closed list are the exception: they are keys of the request, English in
+every profile.
 
 A profile contributes them in `profiles/<name>/extraction.py: PHRASES`. A
 profile that extends another one writes only the ones it words differently.

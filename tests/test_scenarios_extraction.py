@@ -12,6 +12,7 @@ from pathlib import Path
 
 import pytest
 
+from docpipe.extraction.graphkit import NOT_IN_GRAPH
 from docpipe.extraction.spec import load
 
 SPEC_PATH = Path("profiles/scenarios/extraction_spec.json")
@@ -782,7 +783,7 @@ def test_document_axes_feeds_both_the_coordinate_and_the_value():
     assert axes["scenario"]["EN_NPi2100"] == ["EN_NPi2100"]
     assert axes["scenario_label"] == axes["scenario"]
     assert "Norway" in {v[0] for v in axes["scenario_region"].values()}
-    runs = [k for k in axes["scenario"] if not k.startswith(extraction.NOT_IN_GRAPH)]
+    runs = [k for k in axes["scenario"] if not k.startswith(NOT_IN_GRAPH)]
     assert runs == ["EN_NPi2100"], "the out: entries are the only additions"
 
 
@@ -800,7 +801,7 @@ def test_every_list_offers_a_way_to_say_none_of_these_fit():
     assert "out:family" in axes["scenario"]
     # and the lists exist even where the narrowing found nothing at all
     assert not [k for k in axes["scenario"]
-                if not k.startswith(extraction.NOT_IN_GRAPH)]
+                if not k.startswith(NOT_IN_GRAPH)]
 
 
 def test_the_out_entries_are_short_enough_to_be_retyped_without_a_slip():
@@ -813,7 +814,7 @@ def test_the_out_entries_are_short_enough_to_be_retyped_without_a_slip():
 
     for vocabulary in (extraction.REGION_OUT, extraction.SCENARIO_OUT):
         for key, labels in vocabulary.items():
-            assert key.startswith(extraction.NOT_IN_GRAPH)
+            assert key.startswith(NOT_IN_GRAPH)
             assert labels[0] and len(labels[0]) <= 20, key
             assert len(labels) > 1, f"{key} has no explanation to fall back on"
 
@@ -1008,7 +1009,7 @@ def test_no_out_entry_ever_reaches_the_turtle():
     # WHICH out: entry was chosen, and the pilot's TTL carries 238 of those.
     triples = [line for line in ttl.splitlines()
                if not line.lstrip().startswith("#")]
-    assert extraction.NOT_IN_GRAPH not in chr(10).join(triples)
+    assert NOT_IN_GRAPH not in chr(10).join(triples)
 
 
 def test_what_the_graph_does_not_take_is_counted_by_what_was_chosen(caplog):
@@ -1548,3 +1549,61 @@ def test_no_question_tells_the_model_where_it_may_quote_from(spec):
             for gone in ("aus der Quelle der Zeile", "Nachbarseite",
                          '"section"'):
                 assert gone not in text, (parameter.uri, name, gone)
+
+
+# ---------------------------------------------------------------------------
+# The properties of the shapes that nobody asks
+# ---------------------------------------------------------------------------
+
+def test_what_the_profile_leaves_out_of_the_shapes_is_recorded_with_a_reason():
+    """The five groups the owner confirmed as left out, and the properties
+    the serializer writes itself or never touches, each with a sentence."""
+    from docpipe.extraction import preflight
+    from profiles.scenarios import extraction
+    recorded, unreadable = preflight.not_extracted(extraction.NOT_EXTRACTED)
+    assert not unreadable
+    assert len(recorded) == len(extraction.NOT_EXTRACTED)
+    left = {prop for _shape, prop in recorded}
+    for group, prop in (("contact person", "OEO_00000508"),
+                        ("energy carrier tag", "OEO_00020432"),
+                        ("interacting region", "OEO_00020222"),
+                        ("scenario output", "OEO_00020436"),
+                        ("scenario input", "OEO_00020437"),
+                        ("reference link", "OEO_00390078")):
+        assert prop in left, f"{group} is not recorded as left out"
+    for key, why in recorded.items():
+        assert len(why.split()) >= 5, f"{key}: that is no reason"
+
+
+def test_the_profile_finds_the_shapes_of_its_last_refresh(tmp_path,
+                                                          monkeypatch):
+    from docpipe import upstream
+    from profiles.scenarios import extraction, oekg_api
+    monkeypatch.setattr(upstream, "CACHE", tmp_path)
+    assert extraction.shapes_files() == [], "no refresh has run"
+    shapes = tmp_path / "oekg_shapes.ttl"
+    shapes.write_text("x", encoding="utf-8")
+    upstream.write_lock(oekg_api.LOCK, {"oekg_shapes": {
+        "kind": "repo_files", "version": "abc",
+        "files": [{"path": str(shapes)}]}}, tmp_path)
+    assert extraction.shapes_files() == [shapes]
+    shapes.unlink()
+    assert extraction.shapes_files() == [], "the file is gone"
+
+
+def test_the_shapes_of_the_platform_leave_unasked_exactly_what_is_recorded():
+    """Against the shapes file of the last refresh, where this machine has
+    one: no property is unasked and unrecorded, and none is recorded that a
+    parameter asks or the shapes no longer carry. Without a file there is
+    nothing to compare, and the preflight line says so as well."""
+    pytest.importorskip("rdflib")
+    from docpipe.extraction import preflight
+    from profiles.scenarios import extraction
+    files = [path for path in extraction.shapes_files() if path.is_file()]
+    if not files:
+        pytest.skip("no shapes file of a refresh on this machine")
+    raw = json.loads(SPEC_PATH.read_text(encoding="utf-8"))
+    unasked, _every = preflight.shape_properties(files, raw)
+    recorded = set(extraction.NOT_EXTRACTED)
+    assert not set(unasked) - recorded, "asked by nobody, recorded by nobody"
+    assert not recorded - set(unasked), "recorded, but asked or not in shapes"

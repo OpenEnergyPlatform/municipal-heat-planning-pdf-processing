@@ -1,7 +1,10 @@
 """Record identity: which bytes a document is, which format a database has,
 which model built an index, which row a value is and who wrote a harvest.
 
-Promised: all of it is RECORDED and nothing of it is compared or refused; a
+Promised: all of it is RECORDED and nothing of it is refused, with two
+exceptions that are compared: the sha256 of a document's bytes, by the resume
+(tests/test_extraction_runner.py), and the model of an index that holds
+vectors, which is not continued with another model (the stop names both); a
 database, a stamp and a harvest written before any of it stay readable; a
 row's name survives a re-chunk AND a re-harvest that reads the same thing;
 and a row whose passage moved gets its new address only from a pass of its
@@ -285,10 +288,26 @@ def test_the_database_remembers_what_built_its_index_and_says_both(tmp_path):
         assert schema.meta(conn)["embedding/model"] == "model-b"
         conn.execute("INSERT INTO Embeddings VALUES (1, 'section_text', "
                      "'section', 1)")
-        # one that holds vectors keeps its first model and names the other
-        said = schema.note_embedding(conn, "model-c", 16, "api", 512, "0.1.0")
+        # one that holds vectors is not continued with another model: the
+        # stop names both and writes nothing
+        before = schema.meta(conn)
+        with pytest.raises(schema.MixedIndex) as stopped:
+            schema.note_embedding(conn, "model-c", 16, "api", 512, "0.2.0")
+        assert "model-b" in str(stopped.value) \
+            and "model-c" in str(stopped.value)
+        assert (stopped.value.recorded, stopped.value.configured) \
+            == ("model-b", "model-c")
+        assert schema.meta(conn) == before
+        # the same model goes on, and nothing is said
+        assert schema.note_embedding(conn, "model-b", 16, "api", 512,
+                                     "0.1.0") is None
+        # a mixture wanted on purpose keeps the first model and names the
+        # other, here and beside it in the database
+        said = schema.note_embedding(conn, "model-c", 16, "api", 512, "0.1.0",
+                                     allow_mixed=True)
         assert "model-b" in said and "model-c" in said
-        schema.note_embedding(conn, "model-c", 16, "api", 512, "0.1.0")
+        schema.note_embedding(conn, "model-c", 16, "api", 512, "0.1.0",
+                              allow_mixed=True)
         assert schema.meta(conn)["embedding/model"] == "model-b"
         assert schema.meta(conn)["embedding/also"] == "model-c"
         # the query side: the same model is silent, another is named
@@ -325,6 +344,29 @@ def test_a_database_without_a_table_of_vectors_holds_none(tmp_path):
         assert schema.note_embedding(conn, "model-b", 8, "local", 512,
                                      "0.1.0") is None
         assert schema.meta(conn)["embedding/model"] == "model-b"
+
+
+def test_an_index_that_records_no_model_cannot_be_checked_and_says_so(
+        tmp_path):
+    """A corpus built before the model was recorded: whatever it holds, the
+    configured model is written down as the builder, and the sentence says
+    that nothing proved the vectors to be its."""
+    with sqlite3.connect(tmp_path / "old") as conn:
+        schema.apply(conn)
+        conn.execute("INSERT INTO Embeddings VALUES (1, 'section_text', "
+                     "'section', 1)")
+        assert "embedding/model" not in schema.meta(conn)
+        said = schema.note_embedding(conn, "model-a", 8, "local", 512, "0.1.0")
+        assert "records no embedding model" in said and "model-a" in said
+        assert schema.meta(conn)["embedding/model"] == "model-a"
+        # from then on it is checked like any other
+        with pytest.raises(schema.MixedIndex):
+            schema.note_embedding(conn, "model-b", 8, "local", 512, "0.1.0")
+    # one that holds no vector has nothing to say it cannot check
+    with sqlite3.connect(tmp_path / "empty") as conn:
+        schema.apply(conn)
+        assert schema.note_embedding(conn, "model-a", 8, "local", 512,
+                                     "0.1.0") is None
 
 
 def test_the_reanchor_pass_is_a_command_of_its_own():

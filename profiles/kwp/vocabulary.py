@@ -33,6 +33,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
 from docpipe import ontology, upstream                        # noqa: E402
+from docpipe.profile import load_profile                      # noqa: E402
 
 HERE = Path(__file__).resolve().parent
 VOCABULARY_PATH = HERE / "vocabulary.json"
@@ -81,9 +82,11 @@ AXIS_SETS = {"sector": "sector", "aggregation": "aggregation_type",
 
 def build(closure: Path, mhpo: Path = None) -> dict:
     spec_raw = json.loads(SPEC_PATH.read_text(encoding="utf-8"))
-    return ontology.build(closure, SETS, spec_raw,
-                          extra=[mhpo] if mhpo else None, base=OEO,
-                          also=edge_terms(spec_raw))
+    return ontology.build(
+        closure, SETS, spec_raw, extra=[mhpo] if mhpo else None, base=OEO,
+        also=edge_terms(spec_raw),
+        language=load_profile(PROFILE).require("extraction",
+                                               "ALT_LABEL_LANGUAGE"))
 
 
 def load(path: Path = VOCABULARY_PATH) -> dict:
@@ -238,8 +241,15 @@ def main(argv=None) -> int:
                 continue
             seen.add(uri)
             print(f"  note {where}: offers {label!r} for {uri} {own!r}")
+        # What the pin defines differently from the spec, or defines where
+        # the spec says nothing. A note and never a problem: the model reads
+        # the spec's words, and they change only when somebody edits them.
+        defined = ontology.definition_differences(spec_raw, load())
+        for difference in defined:
+            print(ontology.definition_note(difference))
         print(f"{len(spec_terms(spec_raw))} identifier(s) checked, "
-              f"{len(problems)} problem(s), {len(seen)} corpus label(s)")
+              f"{len(problems)} problem(s), {len(seen)} corpus label(s), "
+              f"{len(defined)} definition(s) that differ from the pin")
         return 1 if problems else 0
     return 0
 

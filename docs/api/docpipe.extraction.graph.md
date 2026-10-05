@@ -78,14 +78,6 @@ def predicate(self, described: dict) -> Optional[str]
 
 ## Functions
 
-### ttl_string
-
-```python
-def ttl_string(text) -> str
-```
-
-A text as a Turtle string literal, quotes included.
-
 ### slug
 
 ```python

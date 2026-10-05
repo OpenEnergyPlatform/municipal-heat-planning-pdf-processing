@@ -39,7 +39,7 @@ from typing import Callable, Optional
 from .. import jsonl
 from . import fields
 from .pipeline import answer_in_quote
-from .remap import stamp_path_of
+from .remap import enter_producer, stamp_path_of
 from .spec import Spec, fold_label
 from .trust import (LEVEL_C, REVIEW_AGREE, REVIEW_DISAGREE, REVIEW_UNBACKED,
                     document_summary, trust)
@@ -335,7 +335,8 @@ def review_file(path: Path, spec: Spec, *, ask: Callable,
 def run(harvest_dir: Path, spec: Spec, *, ask: Callable,
         sources_for: Callable, documents=None, limit: int = 0,
         prompt_sha: str = "", model: str = "",
-        spec_for: Optional[Callable] = None) -> Counter:
+        spec_for: Optional[Callable] = None,
+        producer: Optional[dict] = None) -> Counter:
     """Review a whole harvest directory, or the documents named by stem.
 
     The stamps stay, and none is created. The review changes nothing a resume
@@ -347,6 +348,11 @@ def run(harvest_dir: Path, spec: Spec, *, ask: Callable,
     What the review wrote goes into the stamps of the documents it READ and
     no other: a run cut short by `limit` leaves the rest without a review
     key, which is the only way a later run can tell them apart.
+
+    *producer* (`runner.producer`) joins the list of a stamp whose document the
+    review changed a row of, which is what the schema says the list holds. No
+    coordinate points at it: the review flags a value and reads no coordinate
+    in its place.
     """
     stats: Counter = Counter()
     harvest_dir = Path(harvest_dir)
@@ -354,6 +360,7 @@ def run(harvest_dir: Path, spec: Spec, *, ask: Callable,
     left = limit
     wanted = None if documents is None else set(documents)
     read: list = []
+    changed: list = []
     for path in sorted(harvest_dir.glob("*.jsonl")):
         if path.name.endswith(".trace.jsonl"):
             continue
@@ -367,6 +374,8 @@ def run(harvest_dir: Path, spec: Spec, *, ask: Callable,
             continue
         stats["documents"] += 1
         read.append(path)
+        if got["reviewed"]:
+            changed.append(path)
         if limit:
             left = limit - stats["reviewed"]
             if left <= 0:
@@ -383,6 +392,10 @@ def run(harvest_dir: Path, spec: Spec, *, ask: Callable,
             stored[name] = value
             stamp.write_text(json.dumps(stored, ensure_ascii=False, indent=2),
                              encoding="utf-8")
+    if producer is not None:
+        for path in changed:
+            if enter_producer(stamp_path_of(path), producer) is not None:
+                stats["documents given a producers entry"] += 1
     if working:
         out_path = harvest_dir / "review.csv"
         with out_path.open("w", encoding="utf-8", newline="") as handle:

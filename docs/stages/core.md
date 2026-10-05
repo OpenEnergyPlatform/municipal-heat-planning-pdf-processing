@@ -98,7 +98,9 @@ point then calls `resolve_profile(args)`, which reads `--profile` or
 `os.environ[DOCPIPE_PROFILE]` (`docpipe/profile.py:446-469`);
 `require_profile(args)` is the same call for a stage that has nothing to
 run without a profile, and refuses in one line naming the available
-profiles when none is given (`docpipe/profile.py:472-479`). Code with
+profiles when none is given (`docpipe/profile.py:472-479`); the chat does not go
+through it, its answer loop falls back to the built-in profile
+(`docpipe/inference/wording.py`, `chat_profile`). Code with
 no command line calls `active_profile()` instead, reading only the
 ambient variable (`docpipe/profile.py:376-380`). A third function,
 `profile_value(module, attr)`, resolves through `active_profile()` too,
@@ -133,9 +135,9 @@ request, 30 seconds and one retry by default
 the smallest `max_model_len` reported against the tokens the stage
 needs. It runs once per run, before any document, from four call
 sites: refinement's `run()` (`docpipe/refinement/pipeline.py:160`) and
-`main()` (`:244`); visuals (`docpipe/visuals/pipeline.py:509`, skipped
+`main()` (`:244`); visuals (`docpipe/visuals/pipeline.py:524`, skipped
 under `--dry-run`); and extraction's review pass and harvest
-(`docpipe/extraction/runner.py:5017` and `:5102`). A hosted API is asked the
+(`docpipe/extraction/runner.py:5134` and `:5220`). A hosted API is asked the
 same through `_hosted_serving`, and besides whether the model answers inside
 a reply schema; a replay of a recorded run has no server to ask and takes the
 window the recording was planned for. A server that reports no
@@ -159,7 +161,7 @@ After refinement or visuals writes its output, `prompts.record()` writes
 each prompt's sha256 into `.prompt_versions.json`
 (`docpipe/prompts.py:132-138`, called from
 `docpipe/refinement/pipeline.py:75` and
-`docpipe/visuals/pipeline.py:281`). The next run's `prompts.check()`
+`docpipe/visuals/pipeline.py:283`). The next run's `prompts.check()`
 compares that file against today's prompts and returns the ids changed
 (`docpipe/prompts.py:141-151`, called from
 `docpipe/refinement/pipeline.py:62` and
@@ -208,8 +210,8 @@ As `build_sections` appends a table's or a figure's placeholder to the
 section text it is assembling, it calls `resolve_title(ref.caption,
 current_section.content, block.id)` before the next block, settling the
 caption the moment the section is written
-(`docpipe/preprocessing/stage3_structure.py:402-404` for a table,
-`:425-427` for a figure). What opens a caption is the profile's:
+(`docpipe/preprocessing/stage3_structure.py:418-420` for a table,
+`:441-443` for a figure). What opens a caption is the profile's:
 `captions.py` holds no pattern and reads the list `preprocessing.CAPTION_START`
 of the profile in force (the built-in `default` profile where none is named),
 joins it into one pattern and compiles it once per profile
@@ -220,14 +222,14 @@ joins it into one pattern and compiles it once per profile
 The same rule runs again, without a model, over rows already in SQLite:
 once as a one-time backfill, `enrich_caption`, for the corpus
 built before Stage 3 settled captions at write time
-(`docpipe/chunking/database.py:213-242`), and once on every read, so a
+(`docpipe/chunking/database.py:222-251`), and once on every read, so a
 document the backfill has not reached still shows a resolved title
 (`section_item_captions`, `docpipe/inference/db.py:131-153`;
 `fetch_owner_content`, which keeps the original as `caption_stored`,
 `:273`). `enrich_caption` records the outcome in a `caption_source`
 column, `'stage'` kept, `'section_text'` replaced; the resume logic
 reads the same column: without `force=True` a row already marked is
-skipped (`docpipe/chunking/database.py:228-231,242,259`).
+skipped (`docpipe/chunking/database.py:237-240,251,268`).
 
 ## Data model
 
@@ -237,7 +239,12 @@ byte), `meta` (the parsed front matter, or `{}`; a stage's config reads
 `temperature`/`max_tokens` off it, as refinement's does,
 `docpipe/refinement/config.py:90-98`), `sha256` (over the whole raw
 file) and `path`, which `path_for()` resolves to `<prompts_dir>/<stage>/<name>.md`
-of the profile, else of the nearest profile it extends (`:64-75`);
+of the profile, else of the nearest profile it extends (`:64-75`). That is
+how a profile that extends the built-in one writes every prompt itself except
+those that are the built-in file byte for byte: `kwp` inherits one
+(`visuals/caption_keep`) and `scenarios` seven (that one and six of the chat's),
+so the text read and its sha256 are the ones its own copy had, and
+`tests/test_default_profile.py` holds the list (see [profiles](../profiles.md));
 `placeholders` extracts the
 `{{name}}` tokens in `text` by regex (`:46-48`). `.prompt_versions.json`
 is a JSON object mapping each prompt id to its current sha256, written
@@ -259,7 +266,7 @@ document's own `results/` (`PAGES_JSON` through `DOCUMENT_JSON`), plus
 `DIR_IMAGES` for the sibling `images/` folder
 (`docpipe/artifacts.py:21-33`); the full table of who writes and reads
 each one is on [artifacts](../artifacts.md). `document_dirs(root, *markers)`
-(`docpipe/artifacts.py:40`) lists the document directories under a root at any
+(`docpipe/artifacts.py:49`) lists the document directories under a root at any
 depth, in path order: a directory that holds any of the marker files is a
 document and is not searched further, any other is searched (with a guard
 against links that loop), and with every document directly under the root it
@@ -380,7 +387,7 @@ measured) before the preflight check existed
 Re-preprocessing the corpus's 1,082 documents so Stage 3 could settle
 every caption at write time is stated as costing GPU days, so
 `enrich_caption` runs instead as a one-time, additive backfill over the
-finished database (`docpipe/chunking/database.py:224`).
+finished database (`docpipe/chunking/database.py:222`).
 
 ## Verification
 

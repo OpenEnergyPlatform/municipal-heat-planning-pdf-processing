@@ -185,6 +185,11 @@ SETTINGS = (
       "Base folder of all profile data, one subfolder per profile; default: "
       "<repo>/data.",
       stages=("preprocess", "refine", "visuals", "chunk", "extract", "chat")),
+    S("EMBEDDING_ALLOW_MIXED_INDEX", "embedding.allow_mixed_index", "flag",
+      "0",
+      "Append to an index of another embedding model (both recorded); 0 "
+      "stops before a vector is written.",
+      stages=("chunk",)),
     S("EMBEDDING_API_KEY", "embedding.api_key", "str", "EMPTY",
       "API key of the embedding endpoint (api backend only).",
       secret=True, stages=("extract", "chat")),

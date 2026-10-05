@@ -44,6 +44,7 @@ from typing import Callable, Optional
 from urllib.parse import quote
 
 from . import identity, trust
+from .graphkit import ttl_string
 
 log = logging.getLogger(__name__)
 
@@ -60,14 +61,6 @@ _IRI = re.compile(r"^[A-Za-z][A-Za-z0-9+.-]*://[^\s<>\"{}|\\^`]+$")
 
 class GraphError(ValueError):
     """A spec that does not describe a graph this writer can write."""
-
-
-def ttl_string(text) -> str:
-    """A text as a Turtle string literal, quotes included."""
-    escaped = (str(text).replace("\\", "\\\\").replace('"', '\\"')
-               .replace("\n", "\\n").replace("\r", "\\r")
-               .replace("\t", "\\t"))
-    return f'"{escaped}"'
 
 
 def slug(text) -> str:

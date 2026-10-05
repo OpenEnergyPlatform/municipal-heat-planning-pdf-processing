@@ -12,6 +12,7 @@ Author: Felix Vossel
 """
 from __future__ import annotations
 
+import json
 import os
 import re
 import runpy
@@ -68,6 +69,8 @@ OWN = {
               "prompts, data",
     "config": "every setting, its value and where the value comes from",
     "profiles": "the profiles this installation finds, and where",
+    "column": "a column of one's own: the spec of one question for a "
+              "trial harvest, in a folder of its own",
 }
 USAGE = "docpipe [--profile P] [--config FILE] <command> [arguments]"
 
@@ -200,6 +203,10 @@ profile = "{name}"
 # base_url = "http://localhost:8001/v1"
 # model = ""
 # provider = "openai-compatible"
+
+[refine]
+# Ask for corrections (find and replace) instead of every section retyped.
+return_corrections = true
 """
 
 PROFILE_PY = """\
@@ -239,6 +246,32 @@ SPEC_PATH = _SPEC if _SPEC.is_file() else None
 """
 
 
+DRAFT_FILE = "extraction_spec.draft.json"
+
+
+def _draft_from_shapes(given):
+    """(the draft of a spec, the shapes file it is from). `given` is a file
+    of the user's, or True for the one the package brings. Raises SystemExit
+    before anything is written, naming the file that could not be used."""
+    if given == "":
+        # An unset variable in `--shapes "$FILE"`: not the bundled shape.
+        raise SystemExit("--shapes was given an empty file name; nothing "
+                         "was written")
+    try:
+        from .compile import cli as compiling
+        from .compile import shapes
+        path = shapes.BUNDLED if given is True else Path(given).expanduser()
+        return compiling.draft_of(path), path
+    except ModuleNotFoundError as exc:
+        if (exc.name or "").split(".")[0] != "rdflib":
+            raise
+        raise SystemExit("--shapes reads shapes with rdflib, which is not "
+                         "installed: pip install \"docpipe[kg]\"; nothing "
+                         "was written")
+    except SystemExit as exc:
+        raise SystemExit(f"{exc.code}; nothing was written") from None
+
+
 def _init(rest: Sequence[str]) -> int:
     import argparse
     parser = argparse.ArgumentParser(
@@ -249,6 +282,16 @@ def _init(rest: Sequence[str]) -> int:
                              "name)")
     parser.add_argument("--dir", default=".", help="the project's folder "
                                                    "(default: this one)")
+    parser.add_argument("--shapes", nargs="?", const=True, default=None,
+                        metavar="FILE",
+                        help="also write the draft of an extraction spec "
+                             "into the new profile, from the SHACL shapes in "
+                             "FILE or, without one, from the small metadata "
+                             "shape docpipe brings (title, author, date, "
+                             "...). A draft is no spec: nothing is harvested "
+                             "until `docpipe compile` has finished it. Needs "
+                             "docpipe[kg]. Give the project's name before "
+                             "this option")
     args = parser.parse_args(list(rest))
     home = Path(args.dir).expanduser().resolve()
     name = args.name or re.sub(r"[^a-z0-9]+", "_",
@@ -264,6 +307,9 @@ def _init(rest: Sequence[str]) -> int:
     for path in (project, profile):
         if path.exists():
             raise SystemExit(f"{path} exists already; nothing was written")
+    # Read before anything is made: a file that cannot be used leaves no
+    # half of a project behind.
+    shaped = None if args.shapes is None else _draft_from_shapes(args.shapes)
     pdfs = home / "data" / name / "pdf"
     pdfs.mkdir(parents=True, exist_ok=True)
     profile.mkdir(parents=True)
@@ -274,6 +320,12 @@ def _init(rest: Sequence[str]) -> int:
     (profile / "extraction.py").write_text(EXTRACTION_PY, encoding="utf-8")
     project.write_text(PROJECT_TOML.format(name=name), encoding="utf-8")
     written = [project, profile / "profile.py", profile / "extraction.py"]
+    if shaped is not None:
+        draft, source = shaped
+        (profile / DRAFT_FILE).write_text(
+            json.dumps(draft, ensure_ascii=False, indent=1) + "\n",
+            encoding="utf-8")
+        written.append(profile / DRAFT_FILE)
     example = home / ".env.example"
     if not example.exists():
         lines = ["# Keys and tokens. Copy to .env, which is not checked in."]
@@ -295,6 +347,22 @@ def _init(rest: Sequence[str]) -> int:
           f"document has so far. PDFs lying in another folder: `docpipe "
           f"ingest --source FOLDER`,\nthen `docpipe run --skip ingest`. "
           f"`docpipe <command> --help` shows what each command takes.")
+    if shaped is not None:
+        from .compile import draft as drafting
+        draft_path = profile / DRAFT_FILE
+        spec_path = profile / "extraction_spec.json"
+        print(f"\n{draft_path.name} is the draft of a spec from {source.name}: "
+              f"{len(draft['parameters'])} parameter(s), "
+              f"{len(drafting.todo(draft))} point(s) still open. It is not a "
+              f"spec, so `docpipe extract` stops until {spec_path.name} "
+              f"exists beside it. What the draft lacks:\n\n"
+              f"  docpipe compile check {draft_path}\n\n"
+              f"`docpipe compile examples` proposes the missing examples from "
+              f"a corpus that `docpipe run` has processed, and\n"
+              f"`docpipe compile apply {draft_path} --out {spec_path}` "
+              f"writes the spec once nothing is open. A draft made with "
+              f"`docpipe compile spec --ontology ...` carries the "
+              f"ontology's labels and unit suggestions; this one has none.")
     return 0
 
 
@@ -373,6 +441,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         return _config(rest)
     if command == "profiles":
         return _profiles(rest)
+    if command == "column":
+        from . import column
+        return column.main(rest)
     from . import doctor
     return doctor.main(rest)
 

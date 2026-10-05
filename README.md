@@ -24,6 +24,11 @@ docpipe run        # ingest, preprocess, refine, visuals, chunk and lexical, one
 docpipe status     # which stage has left output for which document
 ```
 
+`docpipe init NAME --shapes [FILE]` also writes the draft of an extraction spec
+into the new profile, from the SHACL shapes in FILE or, without one, from a small
+metadata shape the package brings (it needs `docpipe[kg]`). A draft is no spec:
+`docpipe compile` finishes it, and `docpipe extract` stops until it has.
+
 `docpipe run` takes the PDFs put into `data/<name>/pdf` through to a corpus the
 chat can search; `--from`, `--to` and `--skip` choose the stages, and it stops
 at the first one that ends non-zero. A profile whose source needs a document
@@ -61,7 +66,9 @@ prompt names the corpus it was written for and the language it answers in, and
 neither is something `docpipe/` could guess; a fallback could only be some
 other project's prompt. A profile that stands alone and has no prompt for a
 stage says so and stops. Refinement, visuals and extraction stop with one line
-naming the available profiles when none is given.
+naming the available profiles when none is given. The chat is the one command
+that does not: with no profile named it runs on the built-in `default` profile
+and says so, since nothing it does writes a corpus.
 
 The documentation site is published at
 [municipal-heat-planning-pdf-processing.readthedocs.io](https://municipal-heat-planning-pdf-processing.readthedocs.io/en/latest/).
@@ -101,7 +108,8 @@ re-run in isolation. A tree processed before the rename is brought forward with
 `python -m docpipe.migrate_artifact_names <processed root> --apply`.
 
 Around the stages: `docpipe compile` drafts an extraction spec from the SHACL
-shapes of a graph, `docpipe preflight` checks a profile's spec, prompts and
+shapes of a graph, `docpipe column` writes the spec of one question of one's own
+for a trial harvest, `docpipe preflight` checks a profile's spec, prompts and
 graph writer before a corpus run, `docpipe evaluate` and `docpipe benchmark` count precision and
 recall against what people decided and make a recorded harvest again without a
 model (`docpipe evaluate NEW --diff OLD` compares two harvests without any
@@ -155,11 +163,11 @@ Output: `visuals.json`.
 
 1. **Merge** — Stage-4 sections and Stage-5 enrichments are combined by ID into `document.json`. A document with `sections.json` and no `sections_refined.json` is left out, and the merge warns with its name.
 2. **Database population** — sections, tables, and images are written to SQLite with page-level provenance: each `Sections` row records which pages it spans (`SectionPages`) and an ordered list of page-tagged text/table/figure pieces (`Segments`), so a retrieved chunk can be cited down to the exact source page. A segment also carries the `bbox` it occupied in the source PDF, which lets a citation be highlighted in place rather than searched for by text.
-3. **Embedding** — six embedding types per document (see below) are produced by [Qwen3-VL-Embedding-8B](https://huggingface.co/Qwen/Qwen3-VL-Embedding-8B), loaded in bfloat16 and data-parallel across every visible GPU (one model replica per GPU). Documents are read and prepared in a thread pool while the GPUs work on the items already collected, and each block of them is embedded in batches sorted by text length, so a batch pads to the length of its own members rather than to the longest text in the corpus. Vectors are L2-normalised and added to a single global FAISS index (`IndexIDMap` over `IndexFlatIP`). The database is the source of truth for what has already been embedded, so re-runs only embed missing items. A batch the embedder fails does not end the run: the other batches are finished and saved, and the stage ends non-zero saying how many inputs of which embedding type have no vector, so a re-run embeds exactly those.
+3. **Embedding** — six embedding types per document (see below) are produced by [Qwen3-VL-Embedding-8B](https://huggingface.co/Qwen/Qwen3-VL-Embedding-8B), loaded in bfloat16 and data-parallel across every visible GPU (one model replica per GPU). Documents are read and prepared in a thread pool while the GPUs work on the items already collected, and each block of them is embedded in batches sorted by text length, so a batch pads to the length of its own members rather than to the longest text in the corpus. Vectors are L2-normalised and added to a single global FAISS index (`IndexIDMap` over `IndexFlatIP`). The database is the source of truth for what has already been embedded, so re-runs only embed missing items. An index that holds vectors of another embedding model is not continued with this one: the stage stops with one line, unless `EMBEDDING_ALLOW_MIXED_INDEX` allows the mixture. A batch the embedder fails does not end the run: the other batches are finished and saved, and the stage ends non-zero saying how many inputs of which embedding type have no vector, so a re-run embeds exactly those.
 
 ### 7. Reading the values out (`docpipe.extraction` + profile)
 
-The profile's extraction spec (`profiles/<name>/extraction_spec.json`) says which parameters to look for and which coordinates each value carries (for `kwp`: scenario, year, energy carrier, sector, quantity, aggregation, spatial scope). For every document the stage retrieves the passages that fit, asks the LLM one request per field, and accepts a value only when the quoted passage really sits in the source and carries the answer; refusals are kept beside the accepted tuples, and every coordinate ends in a named state rather than empty. The result is one JSONL harvest and one stamp per document, so a re-run with the same spec, prompts and model skips what is already done and a changed question redoes only the coordinate it touches. A document one of whose requests ended on a 429 or a 5xx is written but not stamped, so the next run harvests it again and this run exits 1. The contract of that file is published on the documentation site, one page per profile.
+The profile's extraction spec (`profiles/<name>/extraction_spec.json`) says which parameters to look for and which coordinates each value carries (for `kwp`: scenario, year, energy carrier, sector, quantity, aggregation, spatial scope). For every document the stage retrieves the passages that fit, asks the LLM one request per field, and accepts a value only when the quoted passage really sits in the source and carries the answer; refusals are kept beside the accepted tuples, and every coordinate ends in a named state rather than empty. The result is one JSONL harvest and one stamp per document, so a re-run with the same spec, prompts and model skips what is already done and a changed question redoes only the coordinate it touches. A document one of whose requests ended on a 429 or a 5xx is written but not stamped, so the next run harvests it again and this run exits 1. A document whose database row names another PDF checksum than its stamp does is reported stale, skipped, and read again only with `--force-stale`. The contract of that file is published on the documentation site, one page per profile.
 
 ### 8. The knowledge graph (`docpipe.extraction --serialize`)
 

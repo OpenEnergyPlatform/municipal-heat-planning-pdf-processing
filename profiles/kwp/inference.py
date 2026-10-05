@@ -159,11 +159,12 @@ UI = {
     "page_failed_draw": ("Seite {page} konnte nicht gezeigt werden: sie ließ "
                          "sich nicht darstellen."),
     "download_pdf": "PDF herunterladen",
-    "no_profile": ("Es ist kein Profil gesetzt, deshalb lässt sich keine "
-                   "Frage beantworten. Starten Sie den Chat mit `docpipe "
-                   "--profile <name> chat` oder setzen Sie `profile = "
-                   "\"<name>\"` in der docpipe.toml oder DOCPIPE_PROFILE; das "
-                   "eingebaute Profil `default` passt für jeden Ordner."),
+    "no_profile": ("Es ist kein Profil benannt, deshalb läuft der Chat mit "
+                   "dem eingebauten Profil `default`: englische Prompts und "
+                   "Texte, die für jeden Ordner passen. Für ein anderes "
+                   "starten Sie den Chat mit `docpipe --profile <name> chat` "
+                   "oder setzen Sie `profile = \"<name>\"` in der "
+                   "docpipe.toml oder DOCPIPE_PROFILE."),
     "values_heading": "Belegte Werte aus der Auswertung der Dokumente",
     "values_note": ("Diese Zahlen wurden vorab aus den Dokumenten gelesen "
                     "und mit Zitat geprüft; sie stammen nicht aus der "

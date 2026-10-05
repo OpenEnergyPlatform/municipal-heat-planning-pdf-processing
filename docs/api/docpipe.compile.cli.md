@@ -20,6 +20,18 @@ Author: Felix Vossel
 
 ## Functions
 
+### draft_of
+
+```python
+def draft_of(path: Path) -> dict
+```
+
+The draft `compile spec` writes for one shapes file, with no ontology
+and the placeholder base: what `docpipe init --shapes` puts into a new
+project. A file that cannot be read, or that has no node with a property
+to ask for, stops it with the file's name; no draft is made up instead.
+rdflib is missing as ModuleNotFoundError, for the caller to say.
+
 ### ask_for_example
 
 ```python

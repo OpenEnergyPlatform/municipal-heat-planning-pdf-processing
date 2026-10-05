@@ -36,7 +36,10 @@ A row is named by its document, its `tuple_id` and its parameter (see
 [extraction](extraction.md)), so a decision made once is found again after a
 new harvest and after a new build of the database. People decide on the review
 page of [the chat](app.md), which appends to the file; nothing in this loop
-judges a value, drops one or writes into a harvest.
+judges a value, drops one or writes into a harvest. A writer of the graph
+keeps a decision beside the value it concerns and leaves the value as it is:
+`docpipe extract --serialize` finds the file where `evaluate` does, beside the
+harvest directory (see [the knowledge graph](graph.md)).
 
 Two rows of one document can share that name: a table row that prints one
 number under two years is one quote and one value, read twice. So a verdict
@@ -209,7 +212,9 @@ row that reads differently takes it over only when it is the one row the
 decision can be about: the same value read again with another year, and
 not the row beside it.
 
-Nothing here judges a value, drops one or writes into a harvest.
+Nothing here judges a value, drops one or writes into a harvest. What a
+writer does with a decision is to keep it beside the value it concerns
+(`decisions_in`): the value is the same with it and without it.
 
 Author: Felix Vossel
 

@@ -13,6 +13,12 @@ Author: Felix Vossel
 # open: "3,251" is 3251 here, and "1.234" is 1.234.
 DECIMAL_MARK = "."
 
+# The language tag of the ontology's alternative labels that a vocabulary
+# snapshot keeps for this profile, the words its spec is held against. This
+# profile has no snapshot of its own; one that extends it and builds one reads
+# the tag here.
+ALT_LABEL_LANGUAGE = "en"
+
 
 # What the preflight (`docpipe preflight`) holds this profile's prompts to,
 # beyond the keys the stage reads by name: a wording the run depends on. The

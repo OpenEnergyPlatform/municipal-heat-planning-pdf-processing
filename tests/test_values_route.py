@@ -31,7 +31,9 @@ def parameter(uri, label):
         "description": "What the document states for it, per year and "
                        "energy carrier.",
         "value_type": "float", "unit_target": "MWh/a",
-        "units_accepted": {"MWh/a": 1, "GWh/a": 1000},
+        "units_accepted": {
+            "MWh/a": {"factor": 1, "names_period": True},
+            "GWh/a": {"factor": 1000, "names_period": True}},
         "axes": {
             "carrier": {"vocabulary": {"oeo:gas": ["natural gas", "Erdgas"],
                                        "oeo:coal": ["coal", "Kohle"]}},

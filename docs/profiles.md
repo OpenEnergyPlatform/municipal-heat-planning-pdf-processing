@@ -42,11 +42,11 @@ one.
 
 `kwp` covers German municipal heat plans, a corpus of
 801 documents at the point its `column_layout` comment was written
-(`profiles/kwp/profile.py:13`), and answers in German; its accepted
+(`profiles/kwp/profile.py:15`), and answers in German; its accepted
 values go into MHPKG on the Open Energy Platform. `scenarios` covers the
 literature the IIASA AR6 scenario database cites
 (`profiles/scenarios/profile.py:1`), a 164-document harvest
-(`profiles/scenarios/kg.py:809`), and answers in English; its values go
+(`profiles/scenarios/kg.py:815`), and answers in English; its values go
 into OEKG on the same platform. Each has its own
 page, [kwp](profiles/kwp.md) and [scenarios](profiles/scenarios.md), for
 what its own modules do beyond the interface points here.
@@ -88,11 +88,13 @@ counts as well as a module-level one) and fails at the exact line of any
 Five entry points, preprocessing, refinement, visuals, extraction, and
 chunking, reach `load_profile` through `resolve_profile(args)` rather than
 calling it directly (`docpipe/preprocessing/pipeline.py:502`,
-`docpipe/chunking/pipeline.py:383`), except that refinement, visuals and
+`docpipe/chunking/pipeline.py:390`), except that refinement, visuals and
 extraction have nothing to run without a profile and go through
 `require_profile(args)`, which refuses in one line naming the available
-profiles when none is given (`docpipe/refinement/pipeline.py:228`,
-`docpipe/visuals/pipeline.py:482`, `docpipe/extraction/runner.py:4897`,
+profiles when none is given (the chat is the one entry point that does not stop:
+`wording.chat_profile` gives it the built-in `default` profile, see [the
+chat](stages/app.md)) (`docpipe/refinement/pipeline.py:228`,
+`docpipe/visuals/pipeline.py:497`, `docpipe/extraction/runner.py:5006`,
 `docpipe/profile.py:472-479`). Each adds the `--profile` flag through
 `add_profile_argument(parser)` (`docpipe/profile.py:409-412`).
 `resolve_profile` reads `args.profile` or, failing that, `$DOCPIPE_PROFILE`,
@@ -112,7 +114,7 @@ read their prompts on first use, once per ambient profile
 imported. What a stage binds on import is the refinement
 `WINDOW_SIZE` (`docpipe/refinement/config.py:39-41`); the answer chat's
 prompts are read on first use too, once per profile
-(`docpipe/inference/llm_client.py:71` to `81`). `resolve_profile`
+(`docpipe/inference/llm_client.py:72` to `84`). `resolve_profile`
 refuses one case rather than running it on a mix of two profiles: a caller
 that imported a stage under one profile, or none, and then names another
 that ships prompts is refused with `SystemExit` naming the fix
@@ -144,7 +146,7 @@ Which of the two a caller uses is a choice, not a fixed rule.
 (`scenarios`) is not forced to provide one; its own comment names why: "a
 require with two constant arguments is read by test_architecture as a
 demand on EVERY profile" (`docpipe/inference/kg_route.py:98-99, 104`).
-`preprocessing.py`'s five constants, by contrast, are all read through
+`preprocessing.py`'s constants, by contrast, are all read through
 `require` or `profile_value`, so their absence is a hard failure for any
 profile the pipeline runs text through.
 
@@ -164,7 +166,7 @@ requested. The fourth check is what `kg_route.py` is written around: every
 `require()` or `profile_value()` anywhere under `docpipe/` must resolve to
 something other than `None`, for every profile `_profile_homes()` finds
 (`tests/test_architecture.py:133-171`). It is a syntactic scan, and that
-literalness is its whole limit: `docpipe/inference/wording.py:89` calls
+literalness is its whole limit: `docpipe/inference/wording.py:118` calls
 `profile.require("inference", attr)` with `attr` a variable, so a profile
 missing `PHRASES` is invisible to it and surfaces only as a
 `LookupError` the first time the answer app is asked a question.
@@ -189,7 +191,20 @@ that stands alone has to word all of `wording.UI_REQUIRED`, those three
 included, or the app and the picker raise a `LookupError` naming what is
 missing. A prompt it does
 not have is the extended profile's, and so is `schema.sql`; a profile that adds
-a column to `DocumentMeta` writes the whole file. `extraction.PROMPT_CHECKS`
+a column to `DocumentMeta` writes the whole file. `kwp` and `scenarios` write
+every prompt themselves except those that are the built-in profile's byte for
+byte, which they inherit: `visuals/caption_keep` for kwp, and for scenarios that
+one and `inference/answer_spec_json`, `answer_spec_text`, `envelope_correction`,
+`json_format`, `readoff_correction` and `revise`. Inherited means the built-in
+file, so the text read, its hash and the stamp are what the copies had, and
+`docpipe doctor` says `36 prompt file(s), 35 of its own` for kwp and `29 of its
+own` for scenarios. The list is held by `tests/test_default_profile.py`
+(`INHERITED`): a built-in prompt that is neither on it nor a file of the profile
+fails, and so does a listed one that returns as a file of the profile. A later
+change to one of the eight built-in prompts therefore reaches kwp and scenarios
+too, and its sha256 is entered in `BEFORE` there; for `visuals/caption_keep` a
+changed hash also makes stage 3 say "described with older prompts" for stored
+documents. `extraction.PROMPT_CHECKS`
 is not laid over entry by entry: a profile that declares it holds the whole
 list, and one that declares none keeps the list of the profile it extends.
 Nothing is taken from a
@@ -208,22 +223,26 @@ shipped profile provides.
 | Getting the documents in | `source.SOURCE` | required to run the stage (`component`, `docpipe/ingest/cli.py:76`) | a class over the KWW Excel sheet | a class over the crawl's `pdf_index.json` |
 | Getting the documents in | `source.backfill_meta` | optional, for `--backfill-meta` (`component`, `docpipe/ingest/cli.py:67`) | provided (`profiles/kwp/source.py:199`) | not provided; the flag ends the run |
 | Reading the page | `preprocessing.HYPHEN_EXCEPTIONS` | required (`profile.require`, `docpipe/preprocessing/stage1_extract.py:45`) | German continuation words ("und", "oder", ...) | English ones ("and", "or", ...) |
-| Reading the page | `preprocessing.CAPTION_MAX_WORDS` | required (`profile_value`, `docpipe/preprocessing/config.py:176`) | 45 (median caption 8 words, 205 past 40, `profiles/kwp/preprocessing.py:35-39`) | 160 (journal/IPCC captions run 60 to 150 words, `profiles/scenarios/preprocessing.py:39-43`) |
+| Reading the page | `preprocessing.CAPTION_MAX_WORDS` | required (`profile_value`, `docpipe/preprocessing/config.py:182`) | 45 (median caption 8 words, 205 past 40, `profiles/kwp/preprocessing.py:35-39`) | 160 (journal/IPCC captions run 60 to 150 words, `profiles/scenarios/preprocessing.py:39-43`) |
 | Reading the page | `preprocessing.CAPTION_START` | required, a non-empty list of regular expressions each carrying its own anchor (`profile.require`, `docpipe/captions.py:64-71`); an empty list, a bare string or a pattern that does not compile or matches the empty text is a `ValueError` naming the profile, a missing list a `LookupError` | one German-shaped pattern: a word, a number, a colon ("Tabelle 17:") | the same pattern; the built-in profile adds letter-numbered forms ("Table A.1:") and the colon-less forms ("Figure 3.", "Fig. 2", "Table 1 Annual totals") only where a text, a line or a sentence begins |
-| Reading the page | `preprocessing.TITLE_EXCLUDE_PREFIXES` | required (`profile_value`, `docpipe/preprocessing/config.py:186`) | "abbildung", "tabelle", and their abbreviations | "figure", "table", "box", "plate", and their abbreviations |
-| Reading the page | `preprocessing.DIRECTORY_FIGTAB_WORDS` | required (`profile_value`, `docpipe/preprocessing/stage3_structure.py:190`) | German figure/table list openers | English ones |
-| Reading the page | `preprocessing.BIBLIOGRAPHY_TITLE_WORDS` | required (`profile_value`, `docpipe/preprocessing/stage3_structure.py:213`) | "literatur", "quellen", ... | "references", "bibliography", ... |
+| Reading the page | `preprocessing.TITLE_EXCLUDE_PREFIXES` | required (`profile_value`, `docpipe/preprocessing/config.py:192`) | "abbildung", "tabelle", and their abbreviations | "figure", "table", "box", "plate", and their abbreviations |
+| Reading the page | `preprocessing.DIRECTORY_FIGTAB_WORDS` | required (`profile_value`, `docpipe/preprocessing/stage3_structure.py:191`) | German figure/table list openers | English ones |
+| Reading the page | `preprocessing.DIRECTORY_TITLE_WORDS` | required (`profile_value`, `docpipe/preprocessing/stage3_structure.py:230`); fragments of a pattern joined with `\|`, matched case-insensitively anywhere in a section title; an empty list never matches | "inhalt", "verzeichnis", "contents", "directory" | the same four, which keeps every verdict where they were |
+| Reading the page | `preprocessing.BIBLIOGRAPHY_TITLE_WORDS` | required (`profile_value`, `docpipe/preprocessing/stage3_structure.py:214`) | "literatur", "quellen", ... | "references", "bibliography", ... |
 | Repairing the text | `refinement.WINDOW_SIZE` | optional (`component`, `docpipe/refinement/config.py:41`) | not set, falls back to 3 | not set, falls back to 3 |
 | The answer app | `catalog.CATALOG` | optional (`component`, `docpipe/inference/catalog.py:158`) | `KwpCatalog`: municipality, Land, year | `Ar6Catalog`: year, venue, AR6 scenario |
-| The answer app | `inference.PHRASES`, `READOFF_MARKER`, `READOFF_NOTE` | required at first use (`profile.require`, variable `attr`, `docpipe/inference/wording.py:89`) | German phrasing, 32 keys checked against `wording.REQUIRED` | English phrasing, same 32 keys |
+| The answer app | `inference.PHRASES`, `READOFF_MARKER`, `READOFF_NOTE` | required at first use (`profile.require`, variable `attr`, `docpipe/inference/wording.py:118`) | German phrasing, 32 keys checked against `wording.REQUIRED` | English phrasing, same 32 keys |
 | Reading the values out | `extraction.PHRASES` | required, laid over the extended profile's (`profile.layers`, `docpipe/extraction/wording.py`) | German sentences the stage writes to the model | German sentences, the language of its extraction prompts |
 | Reading the values out | `extraction.PROMPT_CHECKS` | optional, read by `docpipe preflight` (`component`); a profile that declares none has the extended profile's | two entries: the field prompt says `GENAU EIN Feld`, the rows prompt no longer fixes one parameter | the same two entries |
-| Reading the values out | `extraction.SPEC_PATH` | required in practice; refused with `SystemExit` otherwise (`component`, `docpipe/extraction/runner.py:4999-5003`) | `extraction_spec.json` | `extraction_spec.json` |
-| Reading the values out | `extraction.SLICE` | optional (`component`, `docpipe/extraction/runner.py:5060`) | `{"quantity": None}`, gates a row on its quantity class alone | not provided; no gate |
-| Reading the values out | `extraction.FRAME` | optional (`component`, `docpipe/extraction/runner.py:5083-5084`) | `("scenario", "year")`, found once per document | not provided; nothing repeats that way |
-| Reading the values out | `extraction.document_axes` | optional (`component`, `docpipe/extraction/runner.py:5071`) | not provided | this publication's AR6 scenarios and the study regions it names, out of 249 (`profiles/scenarios/regions.json`) |
-| Reading the values out | `extraction.document_context` | optional (`component`, `docpipe/extraction/runner.py:5076`) | the plan's own municipality name | not provided |
-| The knowledge graph | `kg.make_serializer` | optional for `--serialize` (`component`, `docpipe/extraction/runner.py:4940`); without one the generic writer built from the spec's `graph` block is used, and a profile with neither is refused with `SystemExit` (`docpipe/extraction/runner.py:4947-4951`) | tuples to MHPKG Turtle | tuples to OEKG Turtle |
+| Reading the values out | `extraction.ALT_LABEL_LANGUAGE` | required by the profile's own `vocabulary` module (`profile.require`), not by the core: the language tag of the alternative labels a vocabulary snapshot keeps (`ontology.index` and `ontology.build` take it as `language`, with no default) | `"de"` | `"de"` for scenarios, `"en"` for the built-in profile |
+| Reading the values out | `extraction.NOT_EXTRACTED` | optional (`component`), read by `docpipe preflight`: a mapping `(shape, property)` to one sentence, the properties of the profile's shapes it leaves out on purpose | not provided | 21 entries, each with its reason |
+| Reading the values out | `extraction.shapes_files` | optional (`component`), read by `docpipe preflight`: a callable returning the SHACL files the graph is held against | not provided; the shapes line says "skipped" | the shapes file of the last refresh of the OEKG sources |
+| Reading the values out | `extraction.SPEC_PATH` | required in practice; refused with `SystemExit` otherwise (`component`, `docpipe/extraction/runner.py:5117-5120`) | `extraction_spec.json` | `extraction_spec.json` |
+| Reading the values out | `extraction.SLICE` | optional (`component`, `docpipe/extraction/runner.py:5178`) | `{"quantity": None}`, gates a row on its quantity class alone | not provided; no gate |
+| Reading the values out | `extraction.FRAME` | optional (`component`, `docpipe/extraction/runner.py:5201-5202`) | `("scenario", "year")`, found once per document | not provided; nothing repeats that way |
+| Reading the values out | `extraction.document_axes` | optional (`component`, `docpipe/extraction/runner.py:5189`) | not provided | this publication's AR6 scenarios and the study regions it names, out of 249 (`profiles/scenarios/regions.json`) |
+| Reading the values out | `extraction.document_context` | optional (`component`, `docpipe/extraction/runner.py:5194`) | the plan's own municipality name | not provided |
+| The knowledge graph | `kg.make_serializer` | optional for `--serialize` (`component`, `docpipe/extraction/runner.py:5055`); without one the generic writer built from the spec's `graph` block is used, and a profile with neither is refused with `SystemExit` (`docpipe/extraction/runner.py:5063-5067`) | tuples to MHPKG Turtle | tuples to OEKG Turtle |
 | The answer app | `kg.VALUE_QUERY` plus six more attributes, and `inference.ROUTE_NOTES` | optional; absent returns `None` (`component`, `docpipe/inference/kg_route.py:104-106`), present but missing any of the other seven raises `LookupError` instead (`111-114`), all eight present builds the route | provided; the app can answer a coordinate question straight from the graph | not provided; the app never queries a graph |
 
 Two entries of `extraction` say more than the table. `extraction.PHRASES` names
@@ -245,15 +264,25 @@ together.
 passage, has to be there)`: a passage the profile's prompts have to hold
 (`True`) or must not hold (`False`), in the language of those prompts. The
 built-in profile declares one, that its field prompt says `EXACTLY ONE field`.
+The shapes of a profile's graph are its own as well: `extraction.shapes_files`
+says where they are and `extraction.NOT_EXTRACTED` which of their properties it
+leaves out on purpose, and `docpipe preflight` warns about the rest (see [the
+extraction stage](stages/extraction.md)).
+
+Two more phrases of `extraction.PHRASES` are keys and not sentences:
+`option_means` and `option_spellings`, the keys an entry of a closed list goes
+to the model under. They are `means` and `spellings` in the built-in profile,
+`kwp` and `scenarios` alike; kwp and scenarios said them in German before, and
+a profile that extends one of them has no reason to word them differently.
 
 ## The two profiles in comparison
 
 | | `kwp` | `scenarios` |
 |---|---|---|
-| Corpus | German municipal heat plans, 801 documents (`profiles/kwp/profile.py:13`) | the AR6 scenario literature, a 164-document harvest (`profiles/scenarios/kg.py:809`) |
+| Corpus | German municipal heat plans, 801 documents (`profiles/kwp/profile.py:15`) | the AR6 scenario literature, a 164-document harvest (`profiles/scenarios/kg.py:815`) |
 | Target graph | MHPKG, Open Energy Platform | OEKG, Open Energy Platform |
 | `document_noun` | "Wärmeplan" | "Publikation" |
-| `column_layout` | `"auto"`; 184 of 801 documents carry multi-column pages, 44 throughout (`profiles/kwp/profile.py:13-15`) | `"auto"`; journal and agency layouts run two columns more often still |
+| `column_layout` | `"auto"`; 184 of 801 documents carry multi-column pages, 44 throughout (`profiles/kwp/profile.py:15-17`) | `"auto"`; journal and agency layouts run two columns more often still |
 | Facets in the answer app | `gemeinde`, `bundesland_lang`, `jahr` | `year`, `venue`, `scenario` |
 | `catalog.CATALOG` | `KwpCatalog` | `Ar6Catalog` |
 | `--backfill-meta` | provided, refreshes `MunicipalityMeta` from a re-read KWW sheet | not provided |
@@ -290,7 +319,7 @@ built-in profile declares one, that its field prompt says `EXACTLY ONE field`.
    `profile.component("source", "SOURCE")` comes back `None`.
 
 3. **Teach text extraction the corpus's language, together with the first
-   prompt file.** Add `preprocessing.py`'s five constants (the table
+   prompt file.** Add `preprocessing.py`'s constants (the table
    above), and one file under `prompts/`, because
    `test_a_profile_provides_every_component_the_core_requires` only runs
    once `_profile_homes()` sees this profile. From here,
@@ -372,7 +401,7 @@ raises it for no profile at all (`docpipe/profile.py:475-478`), pinned by
 add their own `SystemExit`, via `parser.error()` for extraction:
 `docpipe/ingest/cli.py:69,78-79` for a missing `SOURCE` or
 `backfill_meta`, and
-`docpipe/extraction/runner.py:4947-4951,4999-5003` for a missing
+`docpipe/extraction/runner.py:5063-5067,5117-5120` for a missing
 `SPEC_PATH` (under `--serialize`, only when `make_serializer` is missing too).
 
 ## What `docpipe/profile.py` says

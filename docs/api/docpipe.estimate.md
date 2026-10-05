@@ -142,7 +142,8 @@ def extract(where: Where) -> Estimate
 
 Stage 7. Its own rule (runner.documents_to_harvest): a current
 document whose harvest is missing, unstamped or, under the ontology's
-keys, current is not to do; the others are.
+keys and the PDF it was read from, current is not to do; the others
+are.
 
 ### report
 

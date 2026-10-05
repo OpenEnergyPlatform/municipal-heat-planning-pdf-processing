@@ -74,7 +74,9 @@ def spec(**changes):
             {"uri": "report_pages", "label": "Pages",
              "description": "How many pages the report has, counted to its last numbered page.",
              "value_type": "int", "unit_target": "pages",
-             "units_accepted": {"pages": 1}, "axes": {},
+             "units_accepted": {
+                 "pages": {"factor": 1, "names_period": False}},
+             "axes": {},
              "example": {"source": "The report has 224 pages.", "tuples": [{
                  "value": 224, "unit_raw": "pages",
                  "quote": "The report has 224 pages."}]},
@@ -710,3 +712,136 @@ def test_the_provenance_of_a_kwp_value_points_at_its_node(tmp_path):
             rdflib.URIRef(mhpx + "total")) in found
     levels = list(found.objects(None, rdflib.URIRef(mhpx + "trustLevel")))
     assert [str(level) for level in levels] == [mhpx + "B"]
+
+
+# ------------------------------------------------- who read a coordinate
+
+PASSES = [{"pass": "harvest", "utc": "2026-10-01T10:00:00+00:00",
+           "model": "first-model"},
+          {"pass": "top-up", "utc": "2026-10-03T09:00:00+00:00",
+           "model": "second-model", "prompts": {"extraction/field": "v9"}}]
+STAMP = {"model": "first-model", "producers": PASSES}
+
+
+def _reading(**more):
+    return row("energy", 241.0, carrier="oeo:gas", carrier_raw="Erdgas",
+               carrier_state=fields.READ, carrier_source=["table", 44],
+               carrier_quote="| Erdgas | 241 |",
+               sector="oeo:home", sector_raw="Haushalte",
+               sector_state=fields.READ, **more)
+
+
+def _provenance_of(reading, stamp=STAMP):
+    writer = provenance.Writer(BASE, None)
+    writer.add("a", _claims([reading], bodies={
+        "carrier": "https://onto.test/gas",
+        "sector": "https://onto.test/home"}), stamp)
+    text = writer.header() + "\n".join(writer.parts)
+    found = rdflib.Graph().parse(data=text, format="turtle")
+    name = identity.tuple_id("a", reading)
+
+    def annotation(coordinate):
+        node = rdflib.URIRef(f"{BASE}prov/annotation/a/{name}/{coordinate}")
+        said = {}
+        for _s, p, o in found.triples((node, None, None)):
+            said.setdefault(str(p), []).append(str(o))
+        return said
+
+    return found, writer, annotation, name
+
+
+def test_a_coordinate_a_top_up_re_read_is_generated_by_that_pass():
+    reading = _reading(carrier_producer=1)
+    found, writer, annotation, name = _provenance_of(reading)
+    run, second = f"{BASE}prov/run/a", f"{BASE}prov/run/a/producer-1"
+    carrier, sector = annotation("carrier"), annotation("sector")
+    assert carrier[PROV + "wasGeneratedBy"] == [second]
+    assert carrier[writer.namespace + "mappedBy"] \
+        == [f"{BASE}prov/agent/second-model"]
+    # the one nobody re-read is the run's, as it always was
+    assert sector[PROV + "wasGeneratedBy"] == [run]
+    assert sector[writer.namespace + "mappedBy"] \
+        == [f"{BASE}prov/agent/first-model"]
+    assert annotation("value")[PROV + "wasGeneratedBy"] == [run]
+    trust = rdflib.URIRef(f"{BASE}prov/trust/a/{name}")
+    assert [str(o) for o in found.objects(
+        trust, rdflib.URIRef(PROV + "wasGeneratedBy"))] == [run]
+    # and the pass is a run of its own, with its model, time and prompts
+    said = {}
+    for _s, p, o in found.triples((rdflib.URIRef(second), None, None)):
+        said.setdefault(str(p), []).append(str(o))
+    assert said[RDF + "type"] == [PROV + "Activity"]
+    assert said["http://www.w3.org/2000/01/rdf-schema#label"] == ["top-up"]
+    assert said[PROV + "used"] == [f"{BASE}plan/a"]
+    assert said[PROV + "wasAssociatedWith"] == [f"{BASE}prov/agent/second-model"]
+    assert said[PROV + "endedAtTime"] == ["2026-10-03T09:00:00+00:00"]
+    assert said[writer.namespace + "promptHash"][0].startswith("sha256:")
+    # written once, however many coordinates point at it
+    twice = _reading(carrier_producer=1, sector_producer=1)
+    again, _w, annotation2, _n = _provenance_of(twice)
+    assert annotation2("sector")[PROV + "wasGeneratedBy"] == [second]
+    assert len(list(again.triples((rdflib.URIRef(second),
+                                   rdflib.URIRef(RDF + "type"), None)))) == 1
+
+
+@pytest.mark.parametrize("pointer, stamp", [
+    (7, STAMP),                                 # past the list
+    (-1, STAMP), (True, STAMP), ("1", STAMP),   # no position at all
+    (1, {"model": "first-model"}),              # the stamp has no list
+    (1, None),                                  # the stamps were deleted
+])
+def test_a_pointer_to_no_entry_is_not_the_harvests_run(pointer, stamp):
+    """Unknown says nothing: no run and no mapper are named for it, and above
+    all not the harvest's, whose model never saw the answer."""
+    reading = _reading(carrier_producer=pointer)
+    found, writer, annotation, name = _provenance_of(reading, stamp)
+    carrier, sector = annotation("carrier"), annotation("sector")
+    assert PROV + "wasGeneratedBy" not in carrier
+    assert writer.namespace + "mappedBy" not in carrier
+    assert writer.namespace + "coordinate" in carrier, "still described"
+    assert [str(o) for o in carrier[writer.namespace + "wording"]] == ["Erdgas"]
+    assert sector[PROV + "wasGeneratedBy"] == [f"{BASE}prov/run/a"]
+    assert not [s for s in found.subjects(rdflib.URIRef(RDF + "type"),
+                                          rdflib.URIRef(PROV + "Activity"))
+                if "producer-" in str(s)]
+
+
+def test_a_harvest_without_pointers_is_described_as_before():
+    """No key anywhere: every coordinate is the run's and no pass is written,
+    whatever else the stamp lists."""
+    found, writer, annotation, _name = _provenance_of(_reading())
+    for coordinate in ("carrier", "sector", "value"):
+        assert annotation(coordinate)[PROV + "wasGeneratedBy"] \
+            == [f"{BASE}prov/run/a"]
+    assert not [s for s in found.subjects(rdflib.URIRef(RDF + "type"),
+                                          rdflib.URIRef(PROV + "Activity"))
+                if "producer-" in str(s)]
+
+
+def test_the_provenance_of_a_kwp_value_names_the_pass_that_re_read_a_coordinate(
+        tmp_path):
+    from profiles.kwp import kg
+    name = "waermeplan_kassel_20240315"
+    reread = _kwp_row(carrier_producer=1, year_producer=9)
+    folder = _harvest(tmp_path, name=name, rows=[reread])
+    (folder / f"{name}.stamp.json").write_text(json.dumps(STAMP),
+                                               encoding="utf-8")
+    out = tmp_path / "graph.ttl"
+    serialize.run(folder, out, kg.make_serializer(_kwp_database(tmp_path)),
+                  provenance.Writer(kg.PROVENANCE["base"], kg.PROVENANCE))
+    found = rdflib.Graph().parse(provenance.path_for(out), format="turtle")
+    base, mhpx = kg.PROVENANCE["base"], "https://purl.org/mhpo/prov/"
+    tuple_name = identity.tuple_id(name, reread)
+    generated = rdflib.URIRef(PROV + "wasGeneratedBy")
+
+    def made_by(coordinate):
+        node = rdflib.URIRef(
+            f"{base}prov/annotation/{name}/{tuple_name}/{coordinate}")
+        return [str(o) for o in found.objects(node, generated)]
+
+    assert made_by("carrier") == [f"{base}prov/run/{name}/producer-1"]
+    assert made_by("quantity") == [f"{base}prov/run/{name}"]
+    assert made_by("year") == [], "a position the list has no entry for"
+    assert (rdflib.URIRef(f"{base}prov/run/{name}/producer-1"),
+            rdflib.URIRef(PROV + "wasAssociatedWith"),
+            rdflib.URIRef(f"{base}prov/agent/second-model")) in found

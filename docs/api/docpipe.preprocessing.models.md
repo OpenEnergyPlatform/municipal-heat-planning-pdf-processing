@@ -138,7 +138,7 @@ Fields:
 - `page_number: Optional[int] = None`
 - `tables: list[TableRef] = field(default_factory=list)`
 - `figures: list[FigureRef] = field(default_factory=list)`
-- `segments: list[dict] = field(default_factory=list)`: Ordered content segments in reading order: {"page": int, "kind": "text"|"table"|"figure", "text": str (text only), "ref": block_id (table/figure only)}.
+- `segments: list[dict] = field(default_factory=list)`: Ordered content segments in reading order: {"page": int, "kind": "text"|"table"|"figure", "text": str (text only), "ref": block_id (table/figure only), "bbox": [[x0, y0, x1, y1], ...] (when the geometry is known)}. The whole file is written down in docpipe/schemas/sections.schema.json.
 - `pages: list[int] = field(default_factory=list)`: Sorted distinct page numbers this section spans (derived from segments).
 
 #### Section.to_dict

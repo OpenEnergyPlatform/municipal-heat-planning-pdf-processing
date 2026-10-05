@@ -417,7 +417,7 @@ def _build_tiny(tmp_path, spec):
     closure.write_text(TINY, encoding="utf-8")
     sets = {"energy_carrier": ("class", "https://openenergyplatform.org/"
                                         "ontology/oeo/OEO_00020039")}
-    return ontology.build(closure, sets, spec,
+    return ontology.build(closure, sets, spec, language="de",
                           base="https://openenergyplatform.org/ontology/oeo/")
 
 
@@ -490,7 +490,7 @@ def test_a_built_snapshot_carries_the_classes_a_writer_names(tmp_path):
     assert ontology.edge_problems(edge, bare) == []     # nothing to ask with
     built = ontology.build(tmp_path / "tiny.ttl", {"energy_carrier": (
         "class", "https://openenergyplatform.org/ontology/oeo/OEO_00020039")},
-        spec, base="https://openenergyplatform.org/ontology/oeo/",
+        spec, language="de", base="https://openenergyplatform.org/ontology/oeo/",
         also=("OEO_00000510", "MHPO_00020003"))
     assert {"OEO_00000510", "MHPO_00020003"} <= set(built["terms"])
     # The predicate brings its domain with it, as a spec's predicate does.
@@ -538,3 +538,137 @@ def test_a_built_snapshot_names_the_families_it_can_speak_for(tmp_path):
     outside = {"parameters": [{"uri": "p", "kg": {"class": "UO_0000111"}}]}
     assert ontology.term_problems(outside, built) == []
     assert set(ontology.uncovered(outside, built)) == {"UO"}
+
+
+# ---------------------------------------------------------------------------
+# What the pin defines and the spec says differently
+# ---------------------------------------------------------------------------
+
+def _pin(**by_class):
+    """A snapshot whose classes have these definitions."""
+    return {"terms": {key: {"label": key.casefold(), "alt_labels": [],
+                            "definition": text, "deprecated": False,
+                            "kind": "class", "parents": []}
+                      for key, text in by_class.items()}}
+
+
+def _listed(entries, value=None):
+    """A spec with one list on an axis, and one on the value if given."""
+    parameter = {"uri": "p", "axes": {"carrier": {"vocabulary": entries}}}
+    if value is not None:
+        parameter["vocabulary"] = value
+    return {"parameters": [parameter]}
+
+
+def test_a_rewritten_definition_is_named_with_both_texts():
+    spec = _listed({"OEO_00000001": {"label": "gas",
+                                     "definition": "Gas is a fuel."}})
+    pin = _pin(OEO_00000001="Gas is a fuel burned for heat.")
+    assert ontology.definition_differences(spec, pin) == [
+        ("p.carrier", "OEO_00000001", ontology.REWRITTEN, "Gas is a fuel.",
+         "Gas is a fuel burned for heat.")]
+
+
+def test_a_definition_only_the_pin_has_is_named_whatever_form_the_entry_has():
+    spec = _listed({"OEO_00000001": ["gas", "natural gas"],
+                    "OEO_00000002": {"label": "oil"}})
+    pin = _pin(OEO_00000001="Gas is a fuel.", OEO_00000002="Oil is a fuel.")
+    assert [(uri, kind, ours) for _where, uri, kind, ours, _theirs
+            in ontology.definition_differences(spec, pin)] == [
+        ("OEO_00000001", ontology.PIN_ONLY, ""),
+        ("OEO_00000002", ontology.PIN_ONLY, "")]
+
+
+def test_an_equal_definition_and_one_the_spec_alone_has_are_no_difference():
+    spec = _listed({"OEO_00000001": {"label": "gas",
+                                     "definition": "Gas is a fuel."},
+                    "OEO_00000002": {"label": "oil",
+                                     "definition": "Oil is ours."},
+                    "OEO_00000003": ["coal"]})
+    pin = _pin(OEO_00000001="Gas is a fuel.", OEO_00000002="",
+               OEO_00000003="")
+    assert ontology.definition_differences(spec, pin) == []
+
+
+def test_a_class_the_pin_does_not_know_has_nothing_to_be_held_to():
+    """The profile's own "none of these" and a term the pin lacks are not
+    differences: the second is `term_problems`' to report."""
+    spec = _listed({"out:other": ["other"], "OEO_09999999": ["unknown"],
+                    "status_quo": ["status quo"]})
+    assert ontology.definition_differences(spec, _pin(OEO_00000001="x")) == []
+
+
+def test_a_class_listed_in_several_places_is_named_once_per_kind():
+    entry = {"label": "gas", "definition": "Gas is a fuel."}
+    spec = _listed({"OEO_00000001": entry}, value={"OEO_00000001": entry})
+    spec["parameters"].append({"uri": "q", "axes": {"carrier": {
+        "vocabulary": {"OEO_00000001": ["gas"]}}}})
+    found = ontology.definition_differences(
+        spec, _pin(OEO_00000001="Gas is a fuel burned for heat."))
+    # rewritten where the spec says it (named at the first place), and only
+    # the pin's where another parameter lists it without
+    assert [(where, kind) for where, _uri, kind, _o, _t in found] == [
+        ("p.carrier", ontology.REWRITTEN), ("q.carrier", ontology.PIN_ONLY)]
+
+
+def test_a_label_that_differs_is_not_a_difference_of_definitions():
+    """The label is `foreign_labels`' to name, and it does."""
+    spec = _listed({"OEO_00000001": {"label": "household",
+                                     "definition": "Gas is a fuel."}})
+    pin = _pin(OEO_00000001="Gas is a fuel.")
+    assert ontology.definition_differences(spec, pin) == []
+    assert [uri for _w, uri, _l, _o in ontology.foreign_labels(spec, pin)] \
+        == ["OEO_00000001"]
+
+
+def test_the_note_for_a_difference_says_which_text_is_whose():
+    rewritten = ontology.definition_note(
+        ("p.carrier", "OEO_00000001", ontology.REWRITTEN, "Ours.", "Theirs."))
+    assert "p.carrier" in rewritten and "'Ours.'" in rewritten
+    assert "'Theirs.'" in rewritten and "pin" in rewritten
+    only = ontology.definition_note(
+        ("p.value", "OEO_00000002", ontology.PIN_ONLY, "", "Theirs."))
+    assert "the pin defines OEO_00000002" in only
+    assert "the spec does not" in only
+    # a long definition is cut and says so, so a refresh stays readable
+    long = ontology.definition_note(
+        ("p.value", "OEO_00000002", ontology.PIN_ONLY, "", "x" * 400))
+    assert "..." in long and len(long) < 250
+
+
+@pytest.mark.parametrize("profile", ["kwp", "scenarios"])
+def test_a_check_prints_one_note_for_each_definition_that_differs(
+        profile, tmp_path, monkeypatch, capsys):
+    """What `--check` and `--refresh` print, for both profiles: a note for a
+    definition the spec rewrote and one for a definition only the pin has,
+    none for an equal one, and a count that says what it counts."""
+    import importlib
+    vocabulary = importlib.import_module(f"profiles.{profile}.vocabulary")
+
+    def term(label, definition):
+        return {"label": label, "alt_labels": [], "definition": definition,
+                "deprecated": False, "kind": "class", "parents": []}
+
+    spec = {"parameters": [{"uri": "p", "axes": {"carrier": {"vocabulary": {
+        "OEO_00000001": {"label": "gas", "definition": "Ours."},
+        "OEO_00000002": ["oil"],
+        "OEO_00000003": {"label": "coal", "definition": "Same."}}}}}]}
+    pin = {"pin": {}, "terms": {
+        "OEO_00000001": term("gas", "Theirs."),
+        "OEO_00000002": term("oil", "Oil is a fuel."),
+        "OEO_00000003": term("coal", "Same.")}}
+    spec_file, pin_file = tmp_path / "spec.json", tmp_path / "pin.json"
+    spec_file.write_text(json.dumps(spec), encoding="utf-8")
+    pin_file.write_text(json.dumps(pin), encoding="utf-8")
+    monkeypatch.setattr(vocabulary, "SPEC_PATH", spec_file)
+    monkeypatch.setattr(vocabulary, "VOCABULARY_PATH", pin_file)
+    monkeypatch.setattr(vocabulary, "load", lambda path=None: pin)
+    monkeypatch.setattr(vocabulary, "check", lambda raw, snapshot: [])
+    assert vocabulary.main(["--check"]) == 0, "a note is no problem"
+    printed = capsys.readouterr().out
+    assert ("p.carrier: the spec defines OEO_00000001 as 'Ours.', the pin "
+            "as 'Theirs.'") in printed
+    assert "p.carrier: the pin defines OEO_00000002 as 'Oil is a fuel.'" \
+        in printed
+    assert "OEO_00000003" not in printed
+    assert "2 definition(s) that differ from the pin" in printed

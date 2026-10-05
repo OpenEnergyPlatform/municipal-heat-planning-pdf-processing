@@ -1,0 +1,279 @@
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd:  <http://www.w3.org/2001/XMLSchema#> .
+@prefix dc:   <http://purl.org/dc/terms/> .
+@prefix obo:  <http://purl.obolibrary.org/obo/> .
+@prefix oeo:  <https://openenergyplatform.org/ontology/oeo/> .
+@prefix oekgprov: <https://openenergyplatform.org/ontology/oekg/provenance/> .
+
+<https://openenergyplatform.org/ontology/oekg/publication/7efb76ae-1bf4-5bbc-9f97-505e33acbda8>
+    a oeo:OEO_00020012 ;
+    oeo:OEO_00390095 "7efb76ae-1bf4-5bbc-9f97-505e33acbda8" ;
+    oekgprov:hasEvidence <https://openenergyplatform.org/ontology/oekg/evidence/1dad8a32-650c-5322-8cc0-8aec3a0758e7> ;
+    # confidence: A
+    rdfs:label "The \"Net Zero\" Pathways \\ Outlook 2050" ;
+    oeo:OEO_00000506 <https://openenergyplatform.org/ontology/oekg/63744527-0cd4-5eea-b37d-24314f67a5b1> ,
+        <https://openenergyplatform.org/ontology/oekg/bd4567bc-3806-5d68-b7eb-13bff84927d9> ;
+    oekgprov:hasEvidence <https://openenergyplatform.org/ontology/oekg/evidence/a75cb9b4-8423-5aed-94b3-4fa70af875a0> ;
+    # confidence: A
+    oeo:OEO_00390096 "2024-01-01T00:00:00"^^xsd:dateTime ;
+    oekgprov:hasEvidence <https://openenergyplatform.org/ontology/oekg/evidence/4f340063-5c3a-5876-838c-8f8d78df0c50> ;
+    # confidence: A
+    oeo:OEO_00390098 "10.1234/outlook.2050" .
+
+<https://openenergyplatform.org/ontology/oekg/6394dba2-4049-51c9-af47-ec9e77b17078>
+    a oeo:OEO_00020227 ;
+    oeo:OEO_00390095 "6394dba2-4049-51c9-af47-ec9e77b17078" ;
+    rdfs:label "Pathways Assessment Project" ;
+    dc:acronym "PAP" ;
+    oekgprov:hasEvidence <https://openenergyplatform.org/ontology/oekg/evidence/c9c58e29-ac3a-52ec-b268-6f46958a1ab5> ;
+    # confidence: A
+    dc:abstract """This report says \"yes\"
+and then goes on.
+A third line.""" ;
+    oeo:OEO_00000510 <https://openenergyplatform.org/ontology/oekg/07a89bdc-d090-53c8-bd71-d735601e555e> ,
+        <https://openenergyplatform.org/ontology/oekg/4780e910-6b3c-5e95-973c-c6785eda79bf> ;
+    oeo:OEO_00000509 <https://openenergyplatform.org/ontology/oekg/57c4502f-d2ec-507c-b7cb-c30410aec10f> ,
+        <https://openenergyplatform.org/ontology/oekg/0560824d-a558-5cd1-90b4-07b35c6e7f65> ;
+    oekgprov:hasEvidence <https://openenergyplatform.org/ontology/oekg/evidence/b92f6c95-347b-57b9-8148-d3315e8047b5> ;
+    # confidence: A
+    oeo:OEO_00020439 <https://openenergyplatform.org/ontology/oeo/OEO_00000367> ;
+    obo:BFO_0000051 <https://openenergyplatform.org/ontology/oekg/publication/7efb76ae-1bf4-5bbc-9f97-505e33acbda8> ;
+    obo:BFO_0000051 <https://openenergyplatform.org/ontology/oekg/scenario/0263dccb-6cc1-5af5-abd6-88311b00b9b4> ;
+    obo:BFO_0000051 <https://openenergyplatform.org/ontology/oekg/scenario/04862d3c-907a-5cda-811d-86d934a4c758> .
+
+<https://openenergyplatform.org/ontology/oekg/scenario/0263dccb-6cc1-5af5-abd6-88311b00b9b4>
+    a oeo:OEO_00000365 ;
+    oeo:OEO_00390095 "0263dccb-6cc1-5af5-abd6-88311b00b9b4" ;
+    oekgprov:hasEvidence <https://openenergyplatform.org/ontology/oekg/evidence/0eb32037-2498-5678-9993-221b1ef3071d> ;
+    # confidence: A
+    rdfs:label "CurPol" ;
+    dc:acronym "Current Policies" ;
+    oekgprov:hasEvidence <https://openenergyplatform.org/ontology/oekg/evidence/ac33becd-41ff-5043-8075-0b5c95858d0b> ;
+    # confidence: A
+    oeo:OEO_00390073 <https://openenergyplatform.org/ontology/oeo/OEO_00020311> ;
+    oeo:OEO_00390073 oeo:OEO_00020517 ;
+    oekgprov:hasEvidence <https://openenergyplatform.org/ontology/oekg/evidence/3cfdbcbe-bb48-5bb2-ac00-cdb219c258ae> ;
+    # confidence: A
+    dc:abstract "assumes no additional policies" ;
+    oekgprov:hasEvidence <https://openenergyplatform.org/ontology/oekg/evidence/d011d940-1d5c-5e46-9cac-00852ddb29e5> ;
+    # confidence: C, repaired, worth checking
+    oeo:OEO_00010378 <https://openenergyplatform.org/ontology/oekg/region/Germany> ;
+    oeo:OEO_00020440 "2050-01-01T00:00:00"^^xsd:dateTime ;
+    oeo:OEO_00020440 "2070-01-01T00:00:00"^^xsd:dateTime .
+
+<https://openenergyplatform.org/ontology/oekg/scenario/04862d3c-907a-5cda-811d-86d934a4c758>
+    a oeo:OEO_00000365 ;
+    oeo:OEO_00390095 "04862d3c-907a-5cda-811d-86d934a4c758" ;
+    oekgprov:hasEvidence <https://openenergyplatform.org/ontology/oekg/evidence/717e1b86-7be0-59f4-87f7-318f0bd18453> ;
+    # confidence: A
+    rdfs:label "NPi" ;
+    dc:acronym "NPi" ;
+    oeo:OEO_00390073 oeo:OEO_00020517 .
+
+<https://openenergyplatform.org/ontology/oekg/63744527-0cd4-5eea-b37d-24314f67a5b1>
+    a oeo:OEO_00000064 ;
+    oekgprov:hasEvidence <https://openenergyplatform.org/ontology/oekg/evidence/0508c43d-2a7d-55ee-8ac1-41258cd162e6> ;
+    # confidence: A
+    rdfs:label "Meyer, A." .
+
+<https://openenergyplatform.org/ontology/oekg/bd4567bc-3806-5d68-b7eb-13bff84927d9>
+    a oeo:OEO_00000064 ;
+    oekgprov:hasEvidence <https://openenergyplatform.org/ontology/oekg/evidence/5d077487-3629-5b55-9b00-430fef816355> ;
+    # confidence: A
+    oekgprov:hasEvidence <https://openenergyplatform.org/ontology/oekg/evidence/7a919843-62dd-5be6-b0f0-5e0d93e0a735> ;
+    # confidence: A
+    rdfs:label "Oeko-Institut" .
+
+<https://openenergyplatform.org/ontology/oekg/07a89bdc-d090-53c8-bd71-d735601e555e>
+    a oeo:OEO_00030022 ;
+    oekgprov:hasEvidence <https://openenergyplatform.org/ontology/oekg/evidence/311a0ded-4f87-57e0-afde-92dc928c0425> ;
+    # confidence: A
+    oekgprov:hasEvidence <https://openenergyplatform.org/ontology/oekg/evidence/9a3bb4ea-a100-5bc5-9ca8-82586744da0b> ;
+    # confidence: A
+    rdfs:label "Beta Research" .
+
+<https://openenergyplatform.org/ontology/oekg/4780e910-6b3c-5e95-973c-c6785eda79bf>
+    a oeo:OEO_00030022 ;
+    oekgprov:hasEvidence <https://openenergyplatform.org/ontology/oekg/evidence/440c4443-bf32-5f0e-a204-34525b6dfed6> ;
+    # confidence: A
+    rdfs:label "Gamma Inc" .
+
+<https://openenergyplatform.org/ontology/oekg/57c4502f-d2ec-507c-b7cb-c30410aec10f>
+    a oeo:OEO_00090001 ;
+    oekgprov:hasEvidence <https://openenergyplatform.org/ontology/oekg/evidence/78f9a4c0-f739-57a7-8c38-3f6a927f0c47> ;
+    # confidence: A
+    rdfs:label "Horizon 2020" .
+
+<https://openenergyplatform.org/ontology/oekg/0560824d-a558-5cd1-90b4-07b35c6e7f65>
+    a oeo:OEO_00090001 ;
+    oekgprov:hasEvidence <https://openenergyplatform.org/ontology/oekg/evidence/9743c944-ed94-51d7-96d7-5acbbaae632b> ;
+    # confidence: A
+    rdfs:label "ACME GmbH" .
+
+<https://openenergyplatform.org/ontology/oekg/evidence/0508c43d-2a7d-55ee-8ac1-41258cd162e6>
+    a oekgprov:ExtractionEvidence ;
+    oekgprov:aboutProperty rdfs:label ;
+    oekgprov:extractedValue "Meyer, A." ;
+    oekgprov:quote "the document says Meyer, A." ;
+    oekgprov:sourceDocument "outlook_2050" ;
+    oekgprov:evidenceTier "text_located" ;
+    oekgprov:page "4"^^xsd:integer .
+
+<https://openenergyplatform.org/ontology/oekg/evidence/5d077487-3629-5b55-9b00-430fef816355>
+    a oekgprov:ExtractionEvidence ;
+    oekgprov:aboutProperty rdfs:label ;
+    oekgprov:extractedValue "Oeko-Institut" ;
+    oekgprov:quote "the document says Oeko-Institut" ;
+    oekgprov:sourceDocument "outlook_2050" ;
+    oekgprov:evidenceTier "text_located" ;
+    oekgprov:page "4"^^xsd:integer .
+
+<https://openenergyplatform.org/ontology/oekg/evidence/7a919843-62dd-5be6-b0f0-5e0d93e0a735>
+    a oekgprov:ExtractionEvidence ;
+    oekgprov:aboutProperty rdfs:label ;
+    oekgprov:extractedValue "Oeko-Institut e.V." ;
+    oekgprov:quote "the document says Oeko-Institut e.V." ;
+    oekgprov:sourceDocument "outlook_2050" ;
+    oekgprov:evidenceTier "text_located" ;
+    oekgprov:page "4"^^xsd:integer .
+
+<https://openenergyplatform.org/ontology/oekg/evidence/311a0ded-4f87-57e0-afde-92dc928c0425>
+    a oekgprov:ExtractionEvidence ;
+    oekgprov:aboutProperty rdfs:label ;
+    oekgprov:extractedValue "Beta Research" ;
+    oekgprov:quote "the document says Beta Research" ;
+    oekgprov:sourceDocument "outlook_2050" ;
+    oekgprov:evidenceTier "text_located" ;
+    oekgprov:page "4"^^xsd:integer .
+
+<https://openenergyplatform.org/ontology/oekg/evidence/9a3bb4ea-a100-5bc5-9ca8-82586744da0b>
+    a oekgprov:ExtractionEvidence ;
+    oekgprov:aboutProperty rdfs:label ;
+    oekgprov:extractedValue "Beta Research Ltd." ;
+    oekgprov:quote "the document says Beta Research Ltd." ;
+    oekgprov:sourceDocument "outlook_2050" ;
+    oekgprov:evidenceTier "text_located" ;
+    oekgprov:page "4"^^xsd:integer .
+
+<https://openenergyplatform.org/ontology/oekg/evidence/440c4443-bf32-5f0e-a204-34525b6dfed6>
+    a oekgprov:ExtractionEvidence ;
+    oekgprov:aboutProperty rdfs:label ;
+    oekgprov:extractedValue "Gamma Inc" ;
+    oekgprov:quote "the document says Gamma Inc" ;
+    oekgprov:sourceDocument "outlook_2050" ;
+    oekgprov:evidenceTier "text_located" ;
+    oekgprov:page "4"^^xsd:integer .
+
+<https://openenergyplatform.org/ontology/oekg/evidence/78f9a4c0-f739-57a7-8c38-3f6a927f0c47>
+    a oekgprov:ExtractionEvidence ;
+    oekgprov:aboutProperty rdfs:label ;
+    oekgprov:extractedValue "Horizon 2020" ;
+    oekgprov:quote "the document says Horizon 2020" ;
+    oekgprov:sourceDocument "outlook_2050" ;
+    oekgprov:evidenceTier "text_located" ;
+    oekgprov:page "4"^^xsd:integer .
+
+<https://openenergyplatform.org/ontology/oekg/evidence/9743c944-ed94-51d7-96d7-5acbbaae632b>
+    a oekgprov:ExtractionEvidence ;
+    oekgprov:aboutProperty rdfs:label ;
+    oekgprov:extractedValue "ACME GmbH" ;
+    oekgprov:quote "the document says ACME GmbH" ;
+    oekgprov:sourceDocument "outlook_2050" ;
+    oekgprov:evidenceTier "text_located" ;
+    oekgprov:page "4"^^xsd:integer .
+
+<https://openenergyplatform.org/ontology/oekg/evidence/1dad8a32-650c-5322-8cc0-8aec3a0758e7>
+    a oekgprov:ExtractionEvidence ;
+    oekgprov:aboutProperty rdfs:label ;
+    oekgprov:extractedValue "The \"Net Zero\" Pathways \\ Outlook 2050" ;
+    oekgprov:quote "The \"Net Zero\" Pathways \\ Outlook 2050" ;
+    oekgprov:sourceDocument "outlook_2050" ;
+    oekgprov:evidenceTier "text_located" ;
+    oekgprov:page "4"^^xsd:integer .
+
+<https://openenergyplatform.org/ontology/oekg/evidence/a75cb9b4-8423-5aed-94b3-4fa70af875a0>
+    a oekgprov:ExtractionEvidence ;
+    oekgprov:aboutProperty oeo:OEO_00390096 ;
+    oekgprov:extractedValue "2024" ;
+    oekgprov:quote "the document says 2024" ;
+    oekgprov:sourceDocument "outlook_2050" ;
+    oekgprov:evidenceTier "text_located" ;
+    oekgprov:page "4"^^xsd:integer .
+
+<https://openenergyplatform.org/ontology/oekg/evidence/4f340063-5c3a-5876-838c-8f8d78df0c50>
+    a oekgprov:ExtractionEvidence ;
+    oekgprov:aboutProperty oeo:OEO_00390098 ;
+    oekgprov:extractedValue "10.1234/outlook.2050" ;
+    oekgprov:quote "the document says 10.1234/outlook.2050" ;
+    oekgprov:sourceDocument "outlook_2050" ;
+    oekgprov:evidenceTier "text_located" ;
+    oekgprov:page "4"^^xsd:integer .
+
+<https://openenergyplatform.org/ontology/oekg/evidence/0eb32037-2498-5678-9993-221b1ef3071d>
+    a oekgprov:ExtractionEvidence ;
+    oekgprov:aboutProperty rdfs:label ;
+    oekgprov:extractedValue "CurPol" ;
+    oekgprov:quote "the Current Policies scenario (CurPol)" ;
+    oekgprov:sourceDocument "outlook_2050" ;
+    oekgprov:evidenceTier "text_located" ;
+    oekgprov:page "9"^^xsd:integer ;
+    oekgprov:region "10.0 20.0 110.5 40.25" .
+
+<https://openenergyplatform.org/ontology/oekg/evidence/ac33becd-41ff-5043-8075-0b5c95858d0b>
+    a oekgprov:ExtractionEvidence ;
+    oekgprov:aboutProperty oeo:OEO_00390073 ;
+    oekgprov:extractedValue "Referenz" ;
+    oekgprov:quote "the document says Referenz" ;
+    oekgprov:sourceDocument "outlook_2050" ;
+    oekgprov:evidenceTier "text_located" ;
+    oekgprov:page "4"^^xsd:integer .
+
+<https://openenergyplatform.org/ontology/oekg/evidence/3cfdbcbe-bb48-5bb2-ac00-cdb219c258ae>
+    a oekgprov:ExtractionEvidence ;
+    oekgprov:aboutProperty dc:abstract ;
+    oekgprov:extractedValue "assumes no additional policies" ;
+    oekgprov:quote """CurPol assumes no additional policies
+at all""" ;
+    oekgprov:sourceDocument "outlook_2050" ;
+    oekgprov:evidenceTier "text_located" ;
+    oekgprov:page "4"^^xsd:integer .
+
+<https://openenergyplatform.org/ontology/oekg/evidence/d011d940-1d5c-5e46-9cac-00852ddb29e5>
+    a oekgprov:ExtractionEvidence ;
+    oekgprov:aboutProperty oeo:OEO_00010378 ;
+    oekgprov:extractedValue "Deutschland" ;
+    oekgprov:quote "the document says Deutschland" ;
+    oekgprov:sourceDocument "outlook_2050" ;
+    oekgprov:evidenceTier "text_located" ;
+    oekgprov:page "4"^^xsd:integer .
+
+<https://openenergyplatform.org/ontology/oekg/evidence/717e1b86-7be0-59f4-87f7-318f0bd18453>
+    a oekgprov:ExtractionEvidence ;
+    oekgprov:aboutProperty rdfs:label ;
+    oekgprov:extractedValue "NPi" ;
+    oekgprov:quote "the NPi scenario" ;
+    oekgprov:sourceDocument "outlook_2050" ;
+    oekgprov:evidenceTier "text_located" ;
+    oekgprov:page "4"^^xsd:integer .
+
+<https://openenergyplatform.org/ontology/oekg/evidence/c9c58e29-ac3a-52ec-b268-6f46958a1ab5>
+    a oekgprov:ExtractionEvidence ;
+    oekgprov:aboutProperty dc:abstract ;
+    oekgprov:extractedValue """This report says \"yes\"
+and then goes on.
+A third line.""" ;
+    oekgprov:quote """the document says This report says \"yes\"
+and then goes on.
+A third line.""" ;
+    oekgprov:sourceDocument "outlook_2050" ;
+    oekgprov:evidenceTier "text_located" ;
+    oekgprov:page "4"^^xsd:integer .
+
+<https://openenergyplatform.org/ontology/oekg/evidence/b92f6c95-347b-57b9-8148-d3315e8047b5>
+    a oekgprov:ExtractionEvidence ;
+    oekgprov:aboutProperty oeo:OEO_00020439 ;
+    oekgprov:extractedValue "Verkehr" ;
+    oekgprov:quote "the document says Verkehr" ;
+    oekgprov:sourceDocument "outlook_2050" ;
+    oekgprov:evidenceTier "text_located" ;
+    oekgprov:page "4"^^xsd:integer .

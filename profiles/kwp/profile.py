@@ -3,8 +3,10 @@ from docpipe.profile import Facet, Profile
 
 PROFILE = Profile(
     name="kwp",
-    # Everything the default profile has, this one writes itself; a test
-    # holds that, so no English prompt ever stands in for a missing one.
+    # Everything the default profile has, this one writes itself, except the
+    # prompts that are the default's byte for byte: those are inherited and
+    # not copied. A test holds that list, so no English prompt ever stands in
+    # for a missing one.
     extends="default",
     # Heat plans are published by the municipalities that adopt them.
     documents_shareable=True,

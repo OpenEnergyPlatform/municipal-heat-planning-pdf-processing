@@ -21,11 +21,14 @@ retrieval and answering decision is made by `docpipe.inference` and
 `docpipe.embedding`; this package adds the pickers, the history, the cited
 page drawn from the source PDF and the optional calculation sandbox. Every word
 on its pages comes from the profile (`inference.UI`). Without a profile the
-pages still open, on the built-in `default` profile's English words and
-generic labels, but a question cannot be answered, because the answer loop has
-no prompts of its own: the app shows one line at the top saying so. A profile
-is named with `--profile`, the `profile` key of `docpipe.toml` or
-`DOCPIPE_PROFILE`, and the built-in `default` works for any folder.
+chat runs on the built-in `default` profile: its English words, and its prompts
+and phrases for the answer loop, so the first question is answered instead of
+stopping (`wording.chat_profile`, the one place that falls back, with one
+warning per process in the log). The app shows one line at the top saying so.
+A profile is named with `--profile`, the `profile` key of `docpipe.toml` or
+`DOCPIPE_PROFILE`. Only the chat does this: `prompts.load` and the stages that
+write a corpus still need a profile, because a forgotten flag there would start
+a real run on the wrong prompts. A profile that is named is never replaced.
 
 ## Position in the pipeline
 
@@ -106,8 +109,11 @@ the PDF is the optional external link below, so it is there only where one is
 configured). Two more
 forms record that the document states a value the harvest lacks, and that
 somebody has read a whole document for one parameter. All three append to
-`gold.jsonl` (`INFERENCE_GOLD_PATH`, by default beside the harvest directory);
-nothing here changes the harvest.
+`gold.jsonl` (`INFERENCE_GOLD_PATH`, by default beside the harvest directory,
+where `gold.path_beside` puts it for `evaluate` and `--serialize` too);
+nothing here changes the harvest. A graph written later keeps a decision beside
+its value only if the file lies beside the harvest (see [the knowledge
+graph](graph.md)): `--serialize` does not read `INFERENCE_GOLD_PATH`.
 
 A row is keyed on the page by `gold.row_name`, its name and what it says
 beside the value, so two rows of one document that share a quote and a value
@@ -175,7 +181,7 @@ the profile's own.
 | setting | what it is |
 |---|---|
 | `INFERENCE_DB_PATH`, `INFERENCE_INDEX_PATH`, `INFERENCE_IMAGE_ROOT`, `INFERENCE_PDF_ROOT` | the corpus database (read-only; `docpipe serve` reads it too, for its passage search, and has no default), the FAISS index, the root of table and figure images, the folder of source PDFs the cited page is drawn from |
-| `INFERENCE_HARVEST_DIR`, `INFERENCE_GOLD_PATH`, `INFERENCE_VALUES_LEVEL`, `INFERENCE_VALUES_LIMIT` | the harvest the values and the review page read, the decisions file, how many and how trustworthy a value must be to be shown |
+| `INFERENCE_HARVEST_DIR`, `INFERENCE_GOLD_PATH`, `INFERENCE_VALUES_LEVEL`, `INFERENCE_VALUES_LIMIT` | the harvest the values and the review page read, the decisions file the review page appends to (`--serialize` reads the one beside the harvest and ignores this setting), how many and how trustworthy a value must be to be shown |
 | `INFERENCE_LEXICAL` | search by word beside the search by meaning where a word index exists |
 | `INFERENCE_KG_TTL_PATH` | the Turtle file a graph route would read; read by nothing while the route is not offered |
 | `QUERY_CACHE_PATH`, `REQUEST_LOG_PATH` | the two files of the app's own |

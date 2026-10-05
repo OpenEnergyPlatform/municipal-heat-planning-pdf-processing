@@ -155,6 +155,39 @@ def test_every_coordinate_a_row_carries_is_described(profile):
                 assert offered == set(axis.vocabulary)
 
 
+def test_a_coordinate_may_say_which_pass_re_read_it_and_nothing_else_may(
+        profile, monkeypatch):
+    """`<axis>_producer` is the position of an entry of the stamp's list: an
+    integer from zero, optional on every coordinate, and the closed tuple
+    branch refuses anything else under that name."""
+    from docpipe.extraction import fields
+    _name, spec = profile
+    harvest = build(spec)["harvest"]
+    validator = VALIDATOR(harvest)
+    tuples = _tuples(monkeypatch, spec)
+    assert tuples
+    for parameter in spec.parameters:
+        branch = harvest["$defs"][f"tuple_{parameter.uri}"]
+        coordinates = {k[:-len("_state")] for k in branch["properties"]
+                       if k.endswith("_state")}
+        assert coordinates
+        for name in coordinates:
+            prop = branch["properties"][f"{name}{fields.PRODUCER}"]
+            assert (prop["type"], prop["minimum"]) == ("integer", 0)
+            assert prop["description"], name
+            assert f"{name}{fields.PRODUCER}" not in branch["required"]
+    row = {"kind": "tuple", **tuples[0]}
+    name = next(k[:-len("_state")] for k in row if k.endswith("_state"))
+    key = f"{name}{fields.PRODUCER}"
+    assert key not in row, "a harvest row carries none"
+    assert validator.is_valid(row)
+    assert validator.is_valid({**row, key: 1})
+    for wrong in (-1, "1", 1.5, True, None, [1]):
+        assert not validator.is_valid({**row, key: wrong}), repr(wrong)
+    # and it is a key of a coordinate, not a free one
+    assert not validator.is_valid({**row, "someone_producer": 1})
+
+
 @pytest.mark.parametrize("what", [
     "state missing", "read without a value", "value without a read state",
     "unknown key", "a tier that no longer exists", "unstated as a value",
@@ -509,9 +542,11 @@ def test_a_stamp_key_moves_for_what_its_description_says_it_does():
 
     # The parameter key: its own question, and NOT the list it answers from.
     assert moved(reword_the_question) == ["parameter/scenario_type"]
-    # The list has keys of its own -- spellings and meanings both.
+    # The list has a key of its own, over the spellings the rows request
+    # shows. The meaning is in no key of a category value: no request of the
+    # harvest shows it there.
     assert moved(add_a_spelling) == ["value/scenario_type"]
-    assert moved(reword_a_meaning) == ["value/scenario_type"]
+    assert moved(reword_a_meaning) == []
     # And an axis moves its axis and nothing else.
     assert moved(reword_an_axis) == ["axis/scenario_type/scenario"]
 

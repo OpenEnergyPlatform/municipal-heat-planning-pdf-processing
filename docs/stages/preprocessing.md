@@ -22,7 +22,7 @@ database through the merged `document.json`; only the standalone
 `enrich-bbox` step reads `sections.json` itself, for its geometry
 (`docpipe/refinement/pipeline.py:91`; `docpipe/visuals/pipeline.py:61-70`,
 164-167; `docpipe/chunking/merge.py:24-25`, `165-177`;
-`docpipe/chunking/database.py:580`).
+`docpipe/chunking/database.py:597`).
 
 Everything here is deterministic, PyMuPDF text extraction, the
 PP-DocLayoutV3 forward pass, and rule-based section assembly, with one
@@ -42,7 +42,7 @@ narrow that resumption.
 | **In** | A PDF file, or a directory of PDF files (`run()`, `docpipe/preprocessing/pipeline.py:392-439`). An active profile supplies the caption, hyphenation and directory word lists plus `Profile.column_layout` (see Configuration). An optional page range (`--pages START END`) narrows a single-PDF run; the optional text fallback needs a reachable vision model server. |
 | **Out** | `results/pages.json` (Stage 1+2 cache), `results/sections.json` (Stage 3 output), `results/page_transcription_report.json` (only, but then always, with `--transcribe-missing-text`), one PNG crop per table or image under `images/`, and, in folder mode, `_index.json`. |
 | **Resumes on** | `results/pages.json` and `results/sections.json`. A run whose Stage 1/2 leaves any page failed does not write the pages cache, and, within that same run, deletes a pre-existing `sections.json` before the Stage 3 cache-hit check runs (`pipeline.py:152-160`). An unreadable cache file is treated as absent. `--rebuild-stage3` resumes only from `pages.json`, skipping the PDF and the layout model. |
-| **Needs** | A GPU for PP-DocLayoutV3 when available, else CPU. `load_model()` fetches the weights via `from_pretrained()`, needing network unless they are already cached (`stage2_layout.py:95,104-105`). Stage 1 and Stage 3 need neither model nor network. |
+| **Needs** | A GPU for PP-DocLayoutV3 when available, else CPU. `load_model()` fetches the weights via `from_pretrained()`, needing network unless they are already cached (`stage2_layout.py:98,107-108`). Stage 1 and Stage 3 need neither model nor network. |
 
 File processing precedes this stage
 ([Getting the documents in](fileprocessing.md)); refinement follows,
@@ -96,8 +96,21 @@ crop; a crop is re-rendered at the higher `PAGE_RENDER_DPI` only when that
 differs from the detection resolution. Once every batch has run,
 `promote_headings_by_font()` upgrades heading-styled text to
 `paragraph_title`, and `resolve_captions()` attaches the nearest caption
-to each table or image (`docpipe/preprocessing/stage2_layout.py:997-1041`).
+to each table or image (`docpipe/preprocessing/stage2_layout.py:1028-1073`).
 
+A text block of the PDF's text layer that lies 90 percent or more inside a box
+of a suppressed class (header, footer, page number, footnote and their image
+forms) is taken off the page, as before. Of those, the footnote class is
+counted: once per document, after the refusal check, stage 2 logs `Stage 2: the
+footnote class removed N text block(s) with M character(s)`, zero included, so
+that "none found" is told from "not counted". `_lies_in` is the one test both
+the removal and the count ask, so the count cannot drift from what is removed.
+The line is logged only for a document stage 2 ran on: none for one loaded
+from `pages.json`, one with no pages, or one the stage refuses. A table's own
+note, class `vision_footnote`, is a caption class and not part of it. Footnote
+text therefore stays out of `pages.json`, `sections.json`, the database, the
+vectors and every harvest passage, as it did, and the count is the only new
+thing.
 ### Caching Stage 1+2
 
 If no page failed, `_save_pages_cache()` writes the cleaned `PageData` list
@@ -136,7 +149,7 @@ block becomes a `TableRef` or `FigureRef` plus a `[block_id]` placeholder
 whose caption is settled by `docpipe.captions.resolve_title()`, and text
 accumulates into `Section.content` and `Section.segments`.
 `drop_directory_sections()` removes table-of-contents-like sections
-(`docpipe/preprocessing/stage3_structure.py:275-471`).
+(`docpipe/preprocessing/stage3_structure.py:291-487`).
 
 ### Folder-mode iteration
 
@@ -172,7 +185,7 @@ never serialised. A `PageData` (`models.py:75-100`) holds `page_number`,
 `width_pt`, `height_pt`, and a list of `Block`.
 
 Stage 3 turns pages into `Section` objects
-(`docpipe/preprocessing/models.py:152-175`): `title`, `content` (joined
+(`docpipe/preprocessing/models.py:152-177`): `title`, `content` (joined
 prose with `[block_id]` placeholders), `page_number`, `tables`
 (`list[TableRef]`), `figures` (`list[FigureRef]`), `segments` (reading-order
 content units), and `pages` (sorted distinct page numbers, derived from
@@ -180,14 +193,15 @@ content units), and `pages` (sorted distinct page numbers, derived from
 `page_number`, and `bbox` (one rect, matching a segment's own `bbox`);
 `TableRef` additionally carries `source_text`. One segment is
 `{"page": int, "kind": "text"|"table"|"figure", "text": str, "ref":
-block_id}`; `stage3_structure.py` also attaches an optional `"bbox"` key to
-every segment kind (`docpipe/preprocessing/stage3_structure.py:318,404,427`),
-a field the `Section` docstring in `models.py:159-161` omits.
+block_id}`; `stage3_structure.py` also attaches an optional `"bbox"` key, a
+list of rectangles, to every segment kind where the geometry is known
+(`docpipe/preprocessing/stage3_structure.py:334,423,446`), which the comment on
+`Section.segments` in `models.py:159-163` names too.
 
 | File | Written by | Holds |
 |---|---|---|
 | `results/pages.json` | Stage 1+2 | a list of `PageData.to_dict()` |
-| `results/sections.json` | Stage 3 | `{"sections": [Section.to_dict(), ...]}` |
+| `results/sections.json` | Stage 3 | `{"version": 1, "sections": [Section.to_dict(), ...]}`; the shape is `docpipe/schemas/sections.schema.json` and a file without `version` is version 1; no stage checks a file against it (see [the files each stage leaves behind](../artifacts.md)) |
 | `results/page_transcription_report.json` | text fallback | `{pages_total, pages_missing_text, pages_transcribed, pages_empty, pages_failed, blocks_added}` |
 | `images/<block_id>.png` | Stage 2 | one PNG crop per table or image block |
 | `_index.json` | folder mode | `{relative_pdf_path: {status, output_dir, sections}}` |
@@ -229,6 +243,7 @@ A profile must additionally supply the following, or a
 | `preprocessing.CAPTION_START` | none; each profile lists its own | a non-empty list of regular expressions, each with its own anchor, that open a caption; `docpipe/captions.py` joins them and compiles once per profile. kwp and scenarios list one pattern (a word, a number, a colon); the built-in profile adds letter-numbered forms (`Table A.1:`) and the colon-less ones (`Figure 3.`, `Fig. 2`, `Table 1`), the latter only where a text, a line or a sentence begins, so `see Table 1.` and `Table 1 shows` stay prose. An empty list, a bare string or a pattern that does not compile or matches the empty text is a `ValueError`, a missing list a `LookupError` |
 | `preprocessing.TITLE_EXCLUDE_PREFIXES` | none | prefixes that keep a block from being read as a heading |
 | `preprocessing.DIRECTORY_FIGTAB_WORDS` | none | words opening a figure/table list entry, for directory-section detection |
+| `preprocessing.DIRECTORY_TITLE_WORDS` | none; "inhalt", "verzeichnis", "contents", "directory" in kwp, scenarios and the built-in profile | the words by which a section title says it is a directory (a table of contents, a list of figures): fragments of a pattern, joined with `\|` and matched case-insensitively anywhere in the title, so a section so titled is dropped at the lower directory score. An empty list gives a pattern that never matches. The core fixes none, and a profile outside this repository that extends nothing and has none stops with a `LookupError` at the first directory candidate |
 | `preprocessing.BIBLIOGRAPHY_TITLE_WORDS` | none | title words routing a section to the literature path instead of directory-stripping |
 
 The colon-less forms of the built-in profile cannot tell every prose line from
@@ -239,7 +254,7 @@ A selection of the module constants that tune detection and assembly:
 
 | Name | Default | Effect |
 |---|---|---|
-| `LAYOUT_DETECT_DPI` / `PAGE_RENDER_DPI` | 150 / 300 | render resolution for the detection pass and for saved table/figure crops; a page is re-rendered only when the two differ (`stage2_layout.py:959-1020`) |
+| `LAYOUT_DETECT_DPI` / `PAGE_RENDER_DPI` | 150 / 300 | render resolution for the detection pass and for saved table/figure crops; a page is re-rendered only when the two differ (`stage2_layout.py:989-1051`) |
 | `LAYOUT_BATCH_SIZE` | 12 | pages per Stage 2 forward pass |
 | `PP_GLOBAL_MIN_CONF` / `PP_CLASS_THRESHOLDS` | 0.4 / per class, 0.40 to 0.85 | confidence floors before and after per-class filtering |
 | `NMS_OVERLAP_THRESHOLD` | 0.5 | IoU above which two overlapping same-class (or cross-class table/image) boxes collapse to the higher-confidence one |
@@ -254,9 +269,9 @@ A selection of the module constants that tune detection and assembly:
 | Condition | Behaviour |
 |---|---|
 | A Stage 1 page raises during extraction, or `n_failed > 0` after Stage 1/2 | the page is skipped and counted; `pages.json` is not written, so the next run retries extraction from scratch (`stage1_extract.py:224-234`; `pipeline.py:119-127`) |
-| A Stage 2 batch's forward pass raises | recorded in `failed_batches`, its pages get no layout; once every batch has run, `detect_layout_all_pages` raises `LayoutDetectionFailed` naming the batch numbers and affected page count (`stage2_layout.py:1005-1012,1061-1068`) |
+| A Stage 2 batch's forward pass raises | recorded in `failed_batches`, its pages get no layout; once every batch has run, `detect_layout_all_pages` raises `LayoutDetectionFailed` naming the batch numbers and affected page count (`stage2_layout.py:1036-1043,1093-1100`) |
 | `LayoutDetectionFailed` reaches `run_folder`'s per-document handler | the document is marked `status="error"` in `_index.json` and the run continues; called directly, the exception propagates unhandled (`pipeline.py:244-263,530-545`) |
-| A page fails to render for Stage 2, its post-detection processing raises, or a crop fails to encode or write | logged and skipped; the page keeps its Stage-1-only data, and a written `Block` can still reference a failed crop (`stage2_layout.py:491-552,992,1032`) |
+| A page fails to render for Stage 2, its post-detection processing raises, or a crop fails to encode or write | logged and skipped; the page keeps its Stage-1-only data, and a written `Block` can still reference a failed crop (`stage2_layout.py:509-570,1023,1064`) |
 | `pages.json` or `sections.json` is unreadable, or a Stage 3 cache was built while `n_failed` was set, or the input path is neither a `.pdf` file nor a directory | treated as absent and rebuilt, deleted before the cache-hit check runs, or `run()` raises `ValueError` and `main()` exits with status 1 (`pipeline.py:59-60,155-169,439,543-545`) |
 | No profile is active but a profile-gated function is called, or a profile is named after the stage was imported under another one | a `LookupError` propagates uncaught, or `resolve_profile` raises `SystemExit` (`stage1_extract.py:41-43`; `profile.py:255-265,386-400,446-469`) |
 | A page-transcription call raises, returns an empty markdown string, or more candidates need transcription than `max_pages` | counted in `pages_failed` or `pages_empty`, or truncated with `pages_missing_text` still reporting the true total (`page_text_fallback.py:196-204`); unreachable through the CLI or `run()`, since `_fill_missing_page_text()` never passes `max_pages` (`pipeline.py:370-375`) |
@@ -276,18 +291,18 @@ A selection of the module constants that tune detection and assembly:
   roughly 1700-pixel page, enough to shift a crop's edge into neighbouring
   text, so Stage 2 casts `logits`/`pred_boxes` back to fp32 after autocast
   while leaving `out_masks`, its largest tensor, in the reduced dtype
-  (`stage2_layout.py:293-312`;
+  (`stage2_layout.py:311-330`;
   `tests/test_stage2_perf.py: test_boxes_come_back_as_float32`).
 - Real text columns measure an aligned-left-edge fraction of at least 0.90,
   labels scattered around a chart at most 0.43, the gap
   `COLUMN_ALIGN_TOL_PT`/`COLUMN_MIN_ALIGNED_FRAC` are set to separate
-  (`docpipe/preprocessing/config.py:133-137`). A bulleted list on one
+  (`docpipe/preprocessing/config.py:139-143`). A bulleted list on one
   two-column page produced 0.71 against the 0.75 single-edge threshold;
   allowing alignment on one or two edges instead of one keeps it from
   reading across the gutter (`docpipe/preprocessing/columns.py:132-150`).
 - 423 sections across 99 documents in a corpus snapshot carry Unicode
   Private Use Area glyphs from a symbol font; `STRIP_PRIVATE_USE` drops
-  them (`docpipe/preprocessing/config.py:189-196`).
+  them (`docpipe/preprocessing/config.py:195-202`).
 - Captions run to a median of 8 words on the kwp corpus, 24 at the 99th
   percentile, so `CAPTION_MAX_WORDS` is 45 there
   (`profiles/kwp/preprocessing.py:35-39`); scenarios panel descriptions and
@@ -445,7 +460,9 @@ those sets are ignored, since the Stage 1 PyMuPDF text blocks already
 cover that content. A detection passes a global confidence filter,
 then a per-class threshold, then per-class non-maximum suppression
 and cross-class suppression among table and image boxes, so one
-region never yields two crops.
+region never yields two crops. The text in a footnote box leaves the
+page like a page number does, and the document's log says how many text
+blocks and characters that was.
 
 Two passes run over the whole document afterward. Font-based heading
 promotion turns a plain text block into a section title when the

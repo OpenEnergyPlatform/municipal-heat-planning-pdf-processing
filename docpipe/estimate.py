@@ -533,7 +533,8 @@ def _trace_of(out: Path, harvested: list, sections_of: dict) -> tuple:
 def extract(where: Where) -> Estimate:
     """Stage 7. Its own rule (runner.documents_to_harvest): a current
     document whose harvest is missing, unstamped or, under the ontology's
-    keys, current is not to do; the others are."""
+    keys and the PDF it was read from, current is not to do; the others
+    are."""
     from docpipe.extraction import runner
 
     profile = where.profile
@@ -561,6 +562,10 @@ def extract(where: Where) -> Estimate:
         pages_of = dict(conn.execute("SELECT id, num_pages FROM Documents"))
     pending = everything = list(documents)
     if where.out is not None:
+        # Which PDF each document is, as the run itself would read it: a
+        # document whose stamp names another file is stale there, so it is
+        # not work to count here.
+        runner.note_documents(where.db)
         with _quiet("docpipe.extraction.runner"):
             pending = runner.documents_to_harvest(
                 documents, where.out, spec_sha, anchors_sha=anchors_sha,
@@ -581,8 +586,8 @@ def extract(where: Where) -> Estimate:
     elif len(everything) > len(pending):
         est.notes.append(
             f"{len(everything) - len(pending):,} documents were harvested "
-            f"under an older spec; `docpipe extract --force-stale` reads them "
-            f"again and they are not counted")
+            f"under an older spec or from another PDF; `docpipe extract "
+            f"--force-stale` reads them again and they are not counted")
     if not pending:
         est.requests = 0
         est.basis = "nothing is to harvest"

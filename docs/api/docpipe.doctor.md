@@ -88,7 +88,7 @@ def check_project() -> list
 ### check_profile
 
 ```python
-def check_profile() -> tuple
+def check_profile(stage: Optional[str] = None) -> tuple
 ```
 
 (checks, the profile or None).

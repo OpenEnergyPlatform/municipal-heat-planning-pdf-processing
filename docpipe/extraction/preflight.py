@@ -20,7 +20,15 @@ the `graph` block of the spec), its `vocabulary` module where it has one.
 The keys of a request and a reply are the stage's and are checked here by
 name. A wording the run depends on is the profile's, in the language of its
 prompts, so the profile says which passages its prompts have to hold
-(`extraction.PROMPT_CHECKS`).
+(`extraction.PROMPT_CHECKS`). The shapes of its graph are the profile's as
+well: it says where they are (`extraction.shapes_files`) and which of their
+properties it leaves out on purpose (`extraction.NOT_EXTRACTED`).
+
+Two lines only say what they find and never fail: the properties of the
+shapes that nobody asks and the definitions of the spec that are not the
+pin's. A third fails when it must: the example reply of the field prompt has
+to read back through the reader of the run, and the same reply with an
+invented quote has to be refused.
 
 Author: Felix Vossel
 """
@@ -31,6 +39,7 @@ import json
 import os
 import re
 import sys
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Optional
 
@@ -74,6 +83,235 @@ def silent_parameters(raw: dict) -> list:
     ones that pass.
     """
     return [p["uri"] for p in raw.get("parameters", ()) if not p.get("kg")]
+
+
+def not_extracted(declared) -> tuple:
+    """A profile's `extraction.NOT_EXTRACTED` as ({(shape, property): why},
+    what is wrong with it).
+
+    The shape properties the profile leaves out on purpose, each with a
+    sentence of reason. An entry that is anything else is named and not
+    counted: a record that cannot be read records nothing, so what it was
+    meant to cover warns as if it were not there. The same holds for a value
+    that is no mapping at all, which is named once.
+    """
+    if not declared:
+        return {}, []
+    if not isinstance(declared, Mapping):
+        return {}, [f"the record itself is of type "
+                    f"{type(declared).__name__}, not a mapping"]
+    good, bad = {}, []
+    for key, why in declared.items():
+        if (isinstance(key, (tuple, list)) and len(key) == 2
+                and all(isinstance(part, str) and part for part in key)
+                and isinstance(why, str) and why.strip()):
+            good[tuple(key)] = why
+        else:
+            bad.append(repr(key))
+    return good, bad
+
+
+def shape_properties(files, raw: dict) -> tuple:
+    """(properties no parameter asks, all properties) of the shapes.
+
+    Both as sorted (shape, property) pairs, the property by the end of its
+    IRI. A property is asked when a parameter's `kg` block names it or the
+    graph block links it: `docpipe compile diff` decides that and this reads
+    what it lists as "not_asked". The shapes file is read as the compiler
+    reads it, which needs rdflib.
+    """
+    from docpipe.compile import draft, shapes
+    found, _prefixes = shapes.read(files)
+    every = sorted({(shape.name, draft.local(prop.path))
+                    for shape in found for prop in shape.properties})
+    unasked = sorted({(row["shape"], row["path"])
+                      for row in draft.differences(found, raw)
+                      if row["kind"] == "not_asked"})
+    return unasked, every
+
+
+def shapes_verdict(profile, raw: dict) -> tuple:
+    """(ok, detail) for the shape properties nobody asks, never a failure.
+
+    The profile says where its shapes are (`extraction.shapes_files`, the
+    files of its last refresh) and which of their properties it leaves out on
+    purpose (`extraction.NOT_EXTRACTED`). Where it names no shapes, or the
+    file is not there, or rdflib is not, the line says it is skipped: a
+    check that was not run is not a gap found.
+    """
+    left_out, unreadable = not_extracted(
+        profile.component("extraction", "NOT_EXTRACTED"))
+    hook = profile.component("extraction", "shapes_files")
+    if hook is None:
+        return True, "skipped: the profile names no shapes file"
+    try:
+        files = [Path(one) for one in hook()]
+    except Exception as exc:              # a hook that does not run names none
+        return False, f"shapes_files: {type(exc).__name__}: {exc}"
+    files = [one for one in files if one.is_file()]
+    if not files:
+        return True, "skipped: no shapes file of the last refresh"
+    try:
+        import rdflib                                          # noqa: F401
+    except ImportError:
+        return True, "skipped: rdflib is not installed"
+    try:
+        unasked, every = shape_properties(files, raw)
+    except Exception as exc:              # a file that does not parse
+        return False, (f"the shapes could not be read: "
+                       f"{type(exc).__name__}: {exc}")
+    open_ = [pair for pair in unasked if pair not in left_out]
+    shown = [f"{shape}.{path}" for shape, path in open_]
+    return not open_ and not unreadable, (
+        f"{len(open_)} of {len(every)} shape propert(y/ies) nobody asks "
+        f"and the profile does not record"
+        + (": " + ", ".join(shown[:8]) + (", ..." if len(shown) > 8 else "")
+           if shown else "")
+        + (f"; unreadable NOT_EXTRACTED entries: "
+           f"{', '.join(unreadable[:3])}" if unreadable else ""))
+
+
+# The passage the example reply is held to when its quote is made up. It has
+# to be long enough to name a place and has to stand in no passage that is
+# shown, which `reads_back` checks before it uses it.
+INVENTED_QUOTE = "A passage that no source of this request contains."
+
+
+def example_lines(text: str) -> list:
+    """The lines of a field prompt that are an example reply.
+
+    The prompt asks for the reply on ONE line, so its example is one: the
+    lines that open the object the reply is. A wrapped example is not found
+    here, which `audit` says and does not pass over.
+    """
+    return [line.strip() for line in (text or "").splitlines()
+            if line.strip().startswith('{"fields"')]
+
+
+def reads_back(line: str, spec) -> tuple:
+    """(ok, detail) for one example reply, read the way a run reads a reply.
+
+    The line goes through `runner._loads_object` and the field it answers
+    through `merge_field`, against passages that are the example's own
+    quotes: every row of it has to come out read, apart from a row the
+    example itself answers "not stated". Then the same reply with every
+    quote replaced by one that stands in none of those passages has to come
+    out unbacked on every row, or the first half would hold of any reply.
+
+    The field is the spec's coordinate of that name. A list that the profile
+    only fills per document is no list here, and a name the spec has no
+    coordinate for is read as free text, which the detail says.
+    """
+    import json
+
+    from . import fields
+    from .pipeline import Row, Source, merge_field
+    from .runner import _loads_object
+    from .verify import quote_in
+
+    data = _loads_object(line)
+    if data is None:
+        return False, "the example is not exactly one JSON object"
+    named = data.get("fields")
+    if not isinstance(named, dict) or len(named) != 1:
+        return False, ('the example does not name exactly one field under '
+                       '"fields"')
+    (field_name, answer), = named.items()
+    if not isinstance(answer, dict):
+        return False, f"the example's answer for {field_name!r} is no object"
+
+    # The rows the way merge_field takes them: "answers" first, the rows of a
+    # group after, and the first mention of a row is the one that counts.
+    said: dict = {}
+    singles = answer.get("answers")
+    for label, one in (singles.items() if isinstance(singles, dict) else ()):
+        said.setdefault(str(label).strip(), one)
+    groups = [one for one in answer.get("groups") or ()
+              if isinstance(one, dict)]
+    for group in groups:
+        for label in group.get("rows") or ():
+            said.setdefault(str(label).strip(), group)
+    if not said:
+        return False, "the example answers no row"
+    unstated = {label for label, one in said.items()
+                if isinstance(one, dict)
+                and str(one.get("value")).strip() == fields.UNSTATED}
+    quotes = []
+    for one in said.values():
+        text = one.get("quote") if isinstance(one, dict) else None
+        if isinstance(text, str) and text not in quotes:
+            quotes.append(text)
+    sources = [Source("section", index, text)
+               for index, text in enumerate(quotes)]
+    if any(quote_in(source.text, INVENTED_QUOTE) for source in sources):
+        return False, "the invented quote stands in a passage of the example"
+
+    if field_name == "parameter":
+        slot = fields.parameter_slot(spec)
+    elif field_name == fields.UNIT:
+        slot = fields.unit_slot(spec)
+    else:
+        slot = next((one for parameter in spec.parameters
+                     for one in fields.axis_slots(parameter)
+                     if one.name == field_name), None)
+    free = slot is None
+    if free:
+        slot = fields.Slot(name=field_name, kind=fields.TEXT)
+    state = f"{slot.name}_state"
+
+    def read(reply):
+        rows = [Row(label, 0) for label in said]
+        return rows, merge_field(rows, sources, slot, reply)
+
+    rows, result = read(answer)
+    wrong = [f"{row['row']}: {row['why']}" for row in result["failed"]]
+    missed = [f"{row.label}: not read" for row in rows
+              if row.label not in unstated
+              and row.claim.get(state) != fields.READ]
+    if wrong or missed:
+        return False, ("row(s) of the example do not come out backed: "
+                       + "; ".join((wrong + missed)[:3]))
+    kept = len(rows) - len(unstated)
+    if kept < 1:
+        return False, "no row of the example carries a quote to be backed"
+
+    # The same reply with every quote made up, in a group and in an answer.
+    made_up = json.loads(json.dumps(answer))
+    entries = list(made_up["answers"].values()) \
+        if isinstance(made_up.get("answers"), dict) else []
+    entries += [one for one in made_up.get("groups") or ()
+                if isinstance(one, dict)]
+    for one in entries:
+        if isinstance(one, dict) and "quote" in one:
+            one["quote"] = INVENTED_QUOTE
+    rows, result = read(made_up)
+    read_anyway = [row.label for row in rows
+                   if row.label not in unstated
+                   and row.claim.get(state) == fields.READ]
+    if read_anyway:
+        return False, ("a quote that stands in no passage is still read on "
+                       f"{len(read_anyway)} row(s): "
+                       + ", ".join(read_anyway[:3]))
+    return True, (f"{kept} row(s) read from their quotes, and "
+                  f"{kept} row(s) unbacked with an invented one"
+                  + (f"; {field_name!r} is no coordinate of this spec, read "
+                     f"as free text" if free else ""))
+
+
+def example_verdict(line: str, spec) -> tuple:
+    """`reads_back` for the audit, which a broken example must not abort.
+
+    An example whose "groups" is no list or whose "rows" is none cannot be
+    walked at all, and the reader says so by raising. For the audit that is
+    a failed line that names the example's fault, as it is for any other
+    example the reader does not read, and not a traceback in place of the
+    other checks of the profile.
+    """
+    try:
+        return reads_back(line, spec)
+    except (TypeError, ValueError, AttributeError, KeyError) as exc:
+        return False, ("the reader could not walk the example: "
+                       f"{type(exc).__name__}: {exc}")
 
 
 def audit(name: str) -> list:
@@ -269,6 +507,32 @@ def audit(name: str) -> list:
           '"fields"' in field_text and '"field":' not in field_text)
     as_the_profile_words_it("extraction/field", field_text)
 
+    # The reply the prompt prints is the one the model imitates, so it has to
+    # be a reply the reader reads and backs. The words above only say the
+    # prompt names its keys; a prompt can name them all and show an example
+    # whose quote is in no passage or whose answer is not in its quote.
+    # Checked on the one-line example of the prompt itself, with the reader
+    # the run uses, and a copy of it with an invented quote has to be refused,
+    # which is what lets this fail.
+    if not field_text.strip():
+        check("field prompt's own example reads back", False,
+              "no field prompt to take an example from")
+    else:
+        examples = example_lines(field_text)
+        if not examples:
+            check("field prompt's own example reads back", False,
+                  'no line of the field prompt starts with {"fields"; its '
+                  "example is not on one line, or it has none",
+                  fatal=False)
+        else:
+            verdicts = [example_verdict(one, spec) for one in examples]
+            failed = [detail for ok, detail in verdicts if not ok]
+            check("field prompt's own example reads back", not failed,
+                  "; ".join(failed[:2]) if failed else
+                  (verdicts[0][1] if len(verdicts) == 1 else
+                   f"{len(verdicts)} example line(s): "
+                   + "; ".join(detail for _ok, detail in verdicts)))
+
     # The value request reads a passage once for every quantity at once, so
     # it must be told about all of them and not about one.
     rows_text = texts.get("extraction/rows", "")
@@ -388,11 +652,38 @@ def audit(name: str) -> list:
                                          "foreign_labels")(raw, snapshot)}
             check("labels from the corpus rather than the ontology",
                   not foreign, f"{len(foreign)} entry/entries", fatal=False)
+            # The words the model reads of a class stand in the spec and the
+            # pin is the yardstick: a refresh that rewrites a definition
+            # moves nothing the model is asked, and the spec is edited by
+            # hand. Said and never refused, like the labels above, which are
+            # the note on a label that differs.
+            from docpipe import ontology as _ontology
+            if "terms" not in snapshot:
+                # A pin of a project's own making, which lists no terms to
+                # hold a definition against: not run, and said so.
+                check("definitions agree with the pin", True,
+                      "skipped: the pin lists no terms")
+            else:
+                defined = _ontology.definition_differences(raw, snapshot)
+                rewritten = [one[1] for one in defined
+                             if one[2] == _ontology.REWRITTEN]
+                only_pin = [one[1] for one in defined
+                            if one[2] == _ontology.PIN_ONLY]
+
+                def some(classes: list) -> str:
+                    return ", ".join(classes[:3]) + (
+                        ", ..." if len(classes) > 3 else "")
+                check("definitions agree with the pin", not defined,
+                      f"{len(rewritten)} class(es) with a rewritten "
+                      f"definition"
+                      + (f" ({some(rewritten)})" if rewritten else "")
+                      + f", {len(only_pin)} class(es) only the pin defines"
+                      + (f" ({some(only_pin)})" if only_pin else ""),
+                      fatal=False)
             # Named rather than silent. A term of an ontology no file of this
             # snapshot covers is neither right nor wrong here. Reporting it
             # as an error would teach everyone to ignore the real ones;
             # reporting nothing would let the gap grow.
-            from docpipe import ontology as _ontology
             open_families = _ontology.uncovered(raw, snapshot)
             check("every id family has a file that knows it",
                   not open_families,
@@ -431,6 +722,15 @@ def audit(name: str) -> list:
     mute = silent_parameters(raw)
     check("every parameter says what it becomes in the graph", not mute,
           ", ".join(mute), fatal=False)
+
+    # What the shapes of the graph hold that nobody asks for. A property a
+    # parameter does not read is either left out on purpose, and the profile
+    # says so with a reason (`extraction.NOT_EXTRACTED`), or nobody decided.
+    # The second is a warning: it stops no run, it makes the gap readable
+    # where it was only a hand command (`docpipe compile diff`).
+    ok, detail = shapes_verdict(profile, raw)
+    check("every shape property is asked or left out on purpose", ok, detail,
+          fatal=False)
     return rows
 
 

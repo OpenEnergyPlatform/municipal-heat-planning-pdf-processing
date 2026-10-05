@@ -45,6 +45,11 @@ CAPTION_MAX_WORDS = 160
 # How a figure/table list entry opens ("Figure 3 Global emissions 27").
 DIRECTORY_FIGTAB_WORDS = ("Figure", "Table", r"Fig\.", r"Tab\.", "Box")
 
+# What a table of contents or a list of figures calls itself: such a title
+# lowers the bar for the directory drop. The four words stage 3 has always
+# used, so no decision moves.
+DIRECTORY_TITLE_WORDS = ("inhalt", "verzeichnis", "contents", "directory")
+
 # Bibliography titles → routed to the Stage-4 [LITERATURE] BibTeX path.
 BIBLIOGRAPHY_TITLE_WORDS = ("references", "bibliography", "works cited",
                             "literature cited")

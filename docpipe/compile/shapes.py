@@ -19,9 +19,13 @@ Author: Felix Vossel
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Optional
 
 SH = "http://www.w3.org/ns/shacl#"
+# The one shape the package brings: what a document says about itself, after
+# schema.org. A package file, so `pyproject.toml` names its extension.
+BUNDLED = Path(__file__).with_name("bundled") / "metadata.shacl.ttl"
 
 
 @dataclass

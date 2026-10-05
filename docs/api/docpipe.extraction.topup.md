@@ -16,7 +16,10 @@ This module instead takes the coordinate off the rows that carry it, walks the
 same sweep the harvest walks (`runner.make_sweeper`, so there is one sweep and
 one set of numbers), and writes the answer back. It then carries that one stamp
 key forward and leaves every other key exactly as it was, so a later run still
-sees what it has to redo.
+sees what it has to redo. Who read is recorded apart from that: the pass enters
+the stamp's `producers` list whether or not it earned a key, and each
+coordinate it re-read points at its entry (`<axis>_producer`), so a file with
+two readings of one coordinate's rows says which is which.
 
 What the module refuses to touch matters more than what it does. A key that
 decided which rows exist, which passages were planned, or which model read them
@@ -160,6 +163,16 @@ def top_up_file(path: Path, spec: Spec, current: dict, deps: dict, *,
 ```
 
 Re-sweep one harvest file's moved coordinates, then carry its stamp.
+
+### point
+
+```python
+def point(claim: dict, slot, position: Optional[int]) -> None
+```
+
+Say that this pass wrote this coordinate: `<axis>_producer` is the
+position of its entry in the stamp's list. Nothing to point at, nothing
+written.
 
 ### run
 

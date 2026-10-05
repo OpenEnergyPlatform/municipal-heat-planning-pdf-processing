@@ -32,9 +32,10 @@ project file say when it is imported, so the command settles both first.
 | `refine` | stage 4: repair the text of each section |
 | `visuals` | stage 5: transcribe tables, describe figures |
 | `chunk` | stage 6: merge, database, embeddings |
-| `extract` | stages 7 and 8: harvest, top up, review, serialize |
+| `extract` | stages 7 and 8: harvest, top up, review, serialize; `--spec FILE` harvests a column of one's own instead of the profile's spec |
 | `reanchor` | after a rebuilt database: find each harvested row's passage again |
 | `compile` | draft an extraction spec from shapes (see [the spec compiler](compile.md)) |
+| `column` | the spec of one question of one's own, for a trial harvest over a few documents (see [a column of one's own](extraction.md)) |
 | `preflight` | before a corpus run: check a profile's spec, prompts, schema and graph writer (see [the extraction stage](extraction.md)) |
 | `evaluate`, `benchmark` | measure a harvest; `evaluate NEW --diff OLD` compares two harvests without decisions (see [measuring a harvest](evaluation.md)) |
 | `export`, `serve` | hand the harvested values on, with the states and refusals beside them and a search over the corpus passages (see [handing the values on](serve.md)) |
@@ -181,11 +182,43 @@ document's search sentences.
 `profiles/NAME/` that extends the built-in `default` profile (see
 [profiles](../profiles.md)), `.env.example`, `.gitignore` and the folder the
 PDFs go into. It stops where a project file or a profile of that name
-exists, and leaves an existing `.env.example` or `.gitignore` as it is. It ends
-by saying what to run next: `docpipe doctor`, `docpipe run` and `docpipe
-chat`, with `docpipe ingest --source FOLDER` and then `docpipe run --skip
-ingest` for PDFs lying in another folder.
+exists, and leaves an existing `.env.example` or `.gitignore` as it is. The
+new `docpipe.toml` carries `[refine] return_corrections = true`, with a
+comment, so a new project asks refinement for corrections (find and replace)
+and not for every section retyped; the setting's own default stays off, so a
+project without the line is unchanged. The command ends by saying what to run
+next: `docpipe doctor`, `docpipe run` and `docpipe chat`, with `docpipe ingest
+--source FOLDER` and then `docpipe run --skip ingest` for PDFs lying in
+another folder.
 
+`docpipe init NAME --shapes [FILE]` also writes the draft of an extraction
+spec, `profiles/NAME/extraction_spec.draft.json`, from SHACL shapes: those in
+FILE, or, with the option alone, the small metadata shape the package brings
+(a node on `schema:CreativeWork` with eight text fields: title, author,
+publisher, date, version, language, abstract, keywords). Give the project's name
+before the option, or the option takes it for its file. The shapes are read
+before any folder is made, so a file that is missing, is a folder, cannot be
+parsed or holds no shape with a target class and a property stops the command
+with a message that names the file and ends "nothing was written"; an empty
+name (what an unset variable gives in `--shapes "$FILE"`) stops it as well and
+does not fall back to the bundled shape. Reading shapes needs `rdflib`
+(`pip install "docpipe[kg]"`).
+
+What the user has after that is a draft and not a spec, and the command says
+so. The file is not called `extraction_spec.json`, so the profile has no spec
+and `docpipe extract` stops (it names the missing `SPEC_PATH`) until one lies
+beside `extraction.py`. `docpipe compile check` lists what the draft lacks: the
+placeholder base IRI of the graph and one example for each field. Examples are
+proposed by `docpipe compile examples`, which needs a corpus that `docpipe run`
+has processed and a model, and `docpipe compile apply ... --out
+profiles/NAME/extraction_spec.json` writes the spec only from the proposals a
+person accepted. A spec written some other way does not pass `docpipe
+preflight` as it stands: the eight fields have no closed list, so `out:unstated
+is selectable` fails, the profile's `extraction_schema.json` has to be written
+first (`python -m docpipe.extraction.schema NAME --write`), and the graph's
+base IRI has to be a real one. `docpipe extract` itself runs no preflight.
+The built-in `default` profile has no `SPEC_PATH` on purpose: a profile that
+extends it would otherwise inherit a spec it never wrote.
 `docpipe doctor` asks, without a GPU or a document: are the Python and the
 packages the chosen stages need installed, does the profile load and what does
 it provide, do the model servers answer and serve the model named, does what
@@ -222,6 +255,10 @@ where the stages themselves say what they ask:
   differs fails, because their vectors do not compare; one the database does
   not record is a warning.
 
+The `profile` line fails when no profile is named. `--stage chat` is the
+exception: the chat runs on the built-in `default` profile then, so the line
+says so and the chat's lines are checked against that profile.
+
 A group never raises: a package that is missing is a warning, a part the profile
 does not provide is skipped, a module of `docpipe` or of the profile that is
 missing is a failure, and anything else is a failure line in its own words.
@@ -237,9 +274,10 @@ all, not a skipped one.
 `docpipe preflight [PROFILE ...]` checks a profile for a corpus run, again
 without a GPU or a model question: the spec the profile names, its extraction
 prompts and the passages it says they hold, the shape it publishes and the
-writer of its graph. It prints one line per check, checks the profile in
-effect when none is named, and exits 1 when a check fails, so it can stand
-before a corpus run. It works for any profile, in this repository or in a
+writer of its graph. It prints one line per check (48 for each of `kwp` and
+`scenarios`, 96 for the two), checks the profile in effect when none is named,
+and exits 1 when a check fails, so it can stand before a corpus run. Lines
+marked as warnings never fail it. It works for any profile, in this repository or in a
 project of one's own, which may be named by its directory as for `--profile`;
 a name that is no profile is one failed line, and so is a profile the audit
 cannot get through, while the tables of the others are still printed (see [the

@@ -61,7 +61,7 @@ database creates nothing (`test_apply_is_idempotent`,
 `DocumentMeta`) carry a foreign key into `Documents`; the core schema
 references no profile column.
 
-`tables(connection)` (`schema.py:198` to `200`) returns the set of table
+`tables(connection)` (`schema.py:222` to `224`) returns the set of table
 names `sqlite_master` reports for the open connection, and
 `columns(connection, table)` (`schema.py:70` to `72`) the set of column names
 `PRAGMA table_info` reports for one table. Inside the package `meta` and
@@ -95,7 +95,7 @@ opened for writing through `apply()`, which `connect()` and file processing's
 `ingest` both do. The existing rows keep everything they had and get `NULL`
 in the new columns, and a second call finds nothing to add and returns
 `FORMAT` (`test_a_database_from_before_is_brought_up_and_loses_nothing`,
-`tests/test_identity.py:35` to `52`). Chunking's own `connect()` never calls
+`tests/test_identity.py:38` to `55`). Chunking's own `connect()` never calls
 `apply()` or `migrate()` (see Failure modes).
 
 `add_missing_column(connection, table, column, kind)` (`schema.py:75` to `89`)
@@ -121,7 +121,7 @@ database says less, and nothing is compared against it or refused.
 
 ### Opening a database
 
-`connect(path, profile)` (`schema.py:188` to `195`) creates `path`'s parent
+`connect(path, profile)` (`schema.py:212` to `219`) creates `path`'s parent
 directory if missing, opens the file, and calls `apply()`
 (`test_connect_creates_the_file`, `tests/test_store.py:69` to `73`). It
 is the only `connect()` that applies the schema; no production code
@@ -144,15 +144,15 @@ Closing a connection is left to whoever opened it; this package tracks
 no handle. File processing's `with sqlite3.connect(db_file) as
 connection:` (`docpipe/ingest/pipeline.py:122`) commits on exit but does
 not close it. Chunking's `connect()` is closed by at least ten call
-sites: `EmbeddingWriter.close()` (`docpipe/chunking/database.py:796` to
-`797`); `_worker_connection`, closing a thread's previous connection
+sites: `EmbeddingWriter.close()` (`docpipe/chunking/database.py:813` to
+`814`); `_worker_connection`, closing a thread's previous connection
 before opening a replacement (`docpipe/chunking/database.py:123` to
 `127`); and eight `with closing(connect(db_path)) as conn:` blocks in
 `enrich_page_source`, `enrich_caption`, `update_database`, `enrich_bbox`,
 `clear_embedding_ids`, `get_document_faiss_ids`,
 `drop_embeddings_missing_from_index` and `next_faiss_id`
-(`docpipe/chunking/database.py:183`, `243`, `477`, `573`, `676`, `697`,
-`736` and `759`). The app caches inference's `connect_readonly()`
+(`docpipe/chunking/database.py:192`, `252`, `493`, `590`, `693`, `714`,
+`753` and `776`). The app caches inference's `connect_readonly()`
 connection in a Streamlit `@st.cache_resource`
 (`get_db` in `docpipe/app/app.py`) and never closes it.
 
@@ -183,7 +183,7 @@ data directory; a different size logs a warning that this is not the file
 that was registered, and nothing is stopped or overwritten, so a file
 edited to the same length is not seen
 (`test_another_file_under_the_old_name_is_said_and_nothing_stops`,
-`tests/test_identity.py:72` to `92`). The extraction stage reads the record
+`tests/test_identity.py:75` to `95`). The extraction stage reads the record
 back: `note_documents` in `docpipe/extraction/runner.py` puts each
 document's `sha256` and `bytes` into the harvest's stamp (`stamp_record`,
 key `document`), and `identity.tuple_id` in
@@ -242,38 +242,44 @@ forward).
 
 `Meta` (`docpipe/store/schema.sql:47` to `55`) is the table where a database
 says what it is: one row per fact, `key` primary key and `value` text, a
-record and never a gate. `set_meta(connection, values)` (`schema.py:177` to
-`189`) creates the table if it is missing, upserts each key and commits,
-storing values as text. `meta(connection)` (`schema.py:168` to `174`) reads
+record and never a gate. `set_meta(connection, values)` (`schema.py:201` to
+`213`) creates the table if it is missing, upserts each key and commits,
+storing values as text. `meta(connection)` (`schema.py:192` to `198`) reads
 the whole table as a dict, empty for a database with no `Meta` table. The
-only writer is `note_embedding` (`schema.py:105` to `135`), which chunking's
+only writer is `note_embedding` (`schema.py:117` to `159`), which chunking's
 `note_embedding` in `docpipe/chunking/pipeline.py` calls on a plain
 connection before it embeds anything; that is why `set_meta` creates the
 table itself instead of relying on `apply()`. It records `embedding/model`,
 `embedding/dim`, `embedding/backend`, `embedding/max_token_length` and
 `docpipe/version`. Vectors of two models do
 not compare, so when `Embeddings` already holds vectors and the model
-differs, the first model stays recorded, the new one is appended to
-`embedding/also` (newline separated), and `note_embedding` returns a
-sentence for the caller to log; nothing is refused. An index with no
-vectors takes the new model as the recorded one.
-`embedding_mismatch(connection, model)` (`schema.py:143` to `152`) is the
+differs, `note_embedding` raises `MixedIndex`, which names the recorded and the
+configured model, before anything is written. With `allow_mixed` (chunking
+passes `EMBEDDING_ALLOW_MIXED_INDEX`) the first model stays recorded, the new
+one is appended to `embedding/also` (newline separated), and `note_embedding`
+returns a sentence for the caller to log. An index with no vectors takes the
+new model as the recorded one. A database that records no model cannot be
+checked, whatever it holds: the configured model is recorded as the one that
+built the index, and where vectors are held the returned sentence says nothing
+proved them to be its.
+`embedding_mismatch(connection, model)` (`schema.py:167` to `176`) is the
 query side: a sentence when `model` is not the recorded `embedding/model`,
 else `None`, which is also what a database that records no model gives.
-`recorded_model(connection)` (`schema.py:138` to `140`) is the recorded model
+`recorded_model(connection)` (`schema.py:162` to `164`) is the recorded model
 or `None`, which the chat reads for its own notice. `dimension_mismatch(connection,
-dim)` (`schema.py:155` to `165`) is the same question about the length of the
+dim)` (`schema.py:179` to `189`) is the same question about the length of the
 vectors: a sentence when queries are embedded to another length than
 `embedding/dim`, else `None`, and `None` for a database that records no
 dimension. The same name can be set to another length, and vectors of two
 lengths do not compare either. `note_index_model` in
 `docpipe/extraction/runner.py` logs the model sentence as a warning when a run
-embeds its probes with another model than the index was built with, the
+embeds its probes with another model than the index was built with (the
+harvest, and `docpipe compile examples` under its own name), the
 doctor reads both checks and the chat the model one
 (`test_the_database_remembers_what_built_its_index_and_says_both`,
 `test_the_length_of_the_vectors_is_compared_like_their_model` and
 `test_a_database_without_a_table_of_vectors_holds_none`,
-`tests/test_identity.py:273` to `327`). `embedding/also`, where an index went on
+`tests/test_identity.py:276` to `346`). `embedding/also`, where an index went on
 with another model, is not looked at by either check. The format is not a
 `Meta` row: it is `PRAGMA user_version` (see Bringing an older database
 forward).
@@ -288,7 +294,7 @@ package:
 | `Sections` | `id`, `document` (FK), `section_number`, `title`, `content`, `page_number` | one retrieval chunk; `UNIQUE(document, section_number)` |
 | `SectionPages` | `section` (FK), `page` (FK) | pages a chunk spans, many to many |
 | `Segments` | `id`, `section` (FK), `ordinal`, `page` (FK), `kind`, `ref`, `text`, `bbox` | ordered text/table/figure pieces of a section, page-tagged; `kind` `CHECK`-constrained; `UNIQUE(section, ordinal)` |
-| `Tables` | `id`, `section` (FK), `block_id`, `path`, `page_number`, `caption`, `markdown`, `bbox`, `caption_source` | one detected table, crop path, Markdown transcription |
+| `Tables` | `id`, `section` (FK), `block_id`, `path`, `page_number`, `caption`, `markdown`, `bbox`, `caption_source`, `qa` | one detected table, crop path, Markdown transcription, and what stage 5 measured of it |
 | `Images` | `id`, `section` (FK), `block_id`, `path`, `page_number`, `caption`, `description`, `bbox`, `caption_source` | one detected figure, crop path, prose description |
 | `Embeddings` | `faiss_id` (PK), `embedding_type`, `owner_kind`, `owner_id` | one FAISS vector; `owner_kind` `CHECK`-constrained; `UNIQUE(owner_kind, owner_id, embedding_type)` |
 
@@ -297,14 +303,18 @@ display-only, never embedded (`docpipe/store/schema.sql:85` to `89`).
 `caption_source` records what a later backfill did to the stored
 caption: `stage` kept, `section_text` replaced, `NULL` untouched
 (`docpipe/store/schema.sql:102` to `106`); this package writes neither.
+`Tables.qa` is the JSON `{passed, coverage, coverage_assessed, duplication,
+has_rows}` stage 5 measured of the transcription it kept, `NULL` for not
+checked (a table of an older run, one read only as plain text, one never read),
+and never a pass; chunking writes it with the table (see [chunking](chunking.md)).
 `Embeddings.owner_id` is polymorphic, pointing at a `Sections`, `Tables` or
 `Images` row depending on `owner_kind`, so it carries no real foreign key,
 the one core table `ON DELETE CASCADE` does not reach (see Failure modes).
 
 The schema also declares nine indexes, one per foreign key or lookup
 column, including `idx_embeddings_owner` on
-`Embeddings("owner_kind", "owner_id")` (`docpipe/store/schema.sql:140` to
-`148`; see Measured behaviour). `Meta` has none, its key being its primary
+`Embeddings("owner_kind", "owner_id")` (`docpipe/store/schema.sql:145` to
+`153`; see Measured behaviour). `Meta` has none, its key being its primary
 key.
 
 ### The profile tables
@@ -351,7 +361,7 @@ Reading the tables back out is not this package's job.
   which is `"document"` unless a profile names its own, falling back to the
   `document_noun_fallback` entry only without a profile object or with an
   empty noun
-  (`docpipe/extraction/runner.py:4727` to `4752`, docstrings;
+  (`docpipe/extraction/runner.py:4782` to `4807`, docstrings;
   `docpipe/inference/catalog.py:70` to `75` and `93` to `103`). A profile
   that stands alone and words its own `UI` has to carry those three entries
   and the others `wording.UI_REQUIRED` lists, or the app and the picker raise
@@ -382,12 +392,14 @@ Reading the tables back out is not this package's job.
 - `apply()` creates a table it does not find, and `migrate()` adds the
   columns in `ADDED_COLUMNS`, `Documents.sha256` and `Documents.bytes`. A
   column added to an existing table's definition that is not listed there,
-  as `bbox`, `page_text_transcribed` and `caption_source` all were, needs an
-  `ALTER TABLE` against a database built earlier, and this package carries
-  none for them: the three retrofits (`_ensure_bbox_columns`,
-  `_ensure_page_source_column`, `_ensure_caption_source_column`) live in
+  as `bbox`, `page_text_transcribed`, `caption_source` and `Tables.qa` all
+  were, needs an `ALTER TABLE` against a database built earlier, and this
+  package carries none for them: the four retrofits (`_ensure_bbox_columns`,
+  `_ensure_page_source_column`, `_ensure_caption_source_column`,
+  `_ensure_table_qa_column`) live in
   `docpipe/chunking/database.py` and run only inside `update_database`,
-  `enrich_bbox`, `enrich_page_source` and `enrich_caption`, so a database
+  `enrich_bbox`, `enrich_page_source` and `enrich_caption` (`_ensure_table_qa_column`
+  in `update_database` alone), so a database
   that none of them has opened is never retrofitted. A missing `bbox` column
   then raises `sqlite3.OperationalError`, which
   `docpipe/inference/db.py`'s `section_segments_geo` catches, returning
@@ -423,10 +435,10 @@ Reading the tables back out is not this package's job.
   comment and assertion).
 - Two processed directories with no `Documents` row put 1,096 dead
   vectors into the FAISS index in one run
-  (`docpipe/chunking/pipeline.py:249` to `252`, comment). The embed step
+  (`docpipe/chunking/pipeline.py:256` to `259`, comment). The embed step
   now checks for a document id before embedding, instead of writing
   vectors no `Embeddings` row can resolve and repeating that work next
-  run (`docpipe/chunking/database.py:844` to `849`, comment).
+  run (`docpipe/chunking/database.py:861` to `866`, comment).
 - Eleven plans in the heat-plan corpus carry no PDF text layer; their
   `page_text_transcribed` count is filled by a model reading the
   rendered page instead of the PDF's own text
@@ -447,22 +459,25 @@ Reading the tables back out is not this package's job.
   `Meta` and no content record, `apply()` sets `user_version` to `FORMAT`
   and adds both columns, the old row survives with `NULL` in them, a second
   `migrate()` returns `FORMAT`, and `set_meta` keeps one row per key, the
-  later value winning (`tests/test_identity.py:35` to `52`).
+  later value winning (`tests/test_identity.py:38` to `55`).
 - `test_a_new_document_is_registered_with_its_bytes` and
   `test_another_file_under_the_old_name_is_said_and_nothing_stops`: a new
   row gets the sha256 and size of its file; a row from before the record
   gets them once; the same file says nothing; another file under the same
   name logs a warning and leaves the record as it was
-  (`tests/test_identity.py:60` to `92`).
+  (`tests/test_identity.py:63` to `95`).
 - `test_the_database_remembers_what_built_its_index_and_says_both` and
   `test_a_database_without_a_table_of_vectors_holds_none`: `note_embedding`
   records the model, replaces it while `Embeddings` is empty or absent, and
-  with vectors held keeps the first model, records the other under
-  `embedding/also` and returns a sentence; `embedding_mismatch` is silent
+  with vectors held raises `MixedIndex` and writes nothing, or, with the mixture
+  allowed, keeps the first model, records the other under `embedding/also` and
+  returns a sentence; `test_an_index_that_records_no_model_cannot_be_checked_and_says_so`
+  holds that an index with vectors and no record cannot be checked and says so;
+  `embedding_mismatch` is silent
   for the recorded model and for a database that records none, and
   `test_the_length_of_the_vectors_is_compared_like_their_model` holds
   `dimension_mismatch` to the same, naming both lengths where they differ
-  (`tests/test_identity.py:273` to `327`).
+  (`tests/test_identity.py:276` to `346`).
 - `test_foreign_keys_are_enforced`, `test_document_meta_follows_its_document`
   and `test_external_id_is_unique`: a `Sections` row against a
   nonexistent document, a `Documents` deletion, and a repeated

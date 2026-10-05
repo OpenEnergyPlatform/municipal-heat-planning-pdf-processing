@@ -4,6 +4,8 @@ config.py – Central configuration for the chunkingandembedding module.
 Author: Felix Vossel
 """
 
+import os
+
 from docpipe.artifacts import (DOCUMENT_JSON,            # noqa: F401  (re-exported)
                                PAGE_TRANSCRIPTION_REPORT_JSON,
                                SECTIONS_JSON, SECTIONS_REFINED_JSON, VISUALS_JSON)
@@ -15,6 +17,11 @@ from docpipe.artifacts import (DOCUMENT_JSON,            # noqa: F401  (re-expor
 from docpipe.embedding.config import (EMBEDDING_DIM,             # noqa: E402,F401
                                       EMBEDDING_MODEL)
 from docpipe.embedding.config import EMBEDDING_MAX_TOKEN_LENGTH as MAX_TOKEN_LENGTH
+
+# An index that holds vectors of another model than the one embedding now is
+# not continued: the vectors of two models do not compare. Set to mix on
+# purpose; the database then records both models.
+ALLOW_MIXED_INDEX = os.environ.get("EMBEDDING_ALLOW_MIXED_INDEX", "0") != "0"
 
 # Hard ceiling for one section's embedding text. Refinement splits sections
 # above SECTION_MAX_WORDS, so this only catches what slipped through; it sits

@@ -1,0 +1,138 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "docpipe sections.json (what stage 3 hands on)",
+  "description": "results/sections.json of one document: its sections in reading order, each with the pages it spans, the text pieces it is made of, and the tables and figures that stand in it. Stage 4 (text repair), stage 5 (tables and figures), the bbox backfill, the estimate and the status read this file and nothing else of stage 2 and 3. A writer other than stage 3 meets the contract by writing this shape and the crops its `path` values name. Keys not listed here are carried or ignored, none is read. No stage checks a file against this schema.",
+  "type": "object",
+  "properties": {
+    "version": {
+      "$ref": "#/$defs/version"
+    },
+    "sections": {
+      "type": "array",
+      "description": "In reading order. A section opens at a heading; what stands before the first heading is a section of its own.",
+      "items": {"$ref": "#/$defs/section"}
+    }
+  },
+  "required": ["sections"],
+  "$defs": {
+    "version": {
+      "const": 1,
+      "description": "The shape of this file. A file without the key is version 1, and so is one that says 1. The number goes up when a key a reader needs changes its meaning or shape, not when one is added."
+    },
+    "page": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "1-based PDF page."
+    },
+    "block_id": {
+      "type": "string",
+      "pattern": "^[a-z0-9_]+$",
+      "description": "Names one table or figure of the document, e.g. p12_tbl0 or p12_img1. Unique in the document. It stands in the section content as [id], and chunking and the app find the placeholder with the pattern [a-z0-9_]+, so an id outside it is never recognised there."
+    },
+    "rect": {
+      "type": "array",
+      "items": {"type": "number"},
+      "minItems": 4,
+      "maxItems": 4,
+      "description": "[x0, y0, x1, y1] in PDF points, origin top left, y downwards, x1 > x0 and y1 > y0."
+    },
+    "rects": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/rect"},
+      "minItems": 1,
+      "description": "A list of rects, never a bare rect. A table or figure has one; a text segment has one per block it was joined from. Left out where the geometry is unknown, and an empty list is read as unknown too."
+    },
+    "segment": {
+      "type": "object",
+      "description": "One piece of a section in reading order, tagged with its page. The database stores them as Segments, which is what lets a quote be shown on its page. A segment of another kind, or without a page, is not stored.",
+      "properties": {
+        "page": {"$ref": "#/$defs/page"},
+        "kind": {"enum": ["text", "table", "figure"]},
+        "text": {
+          "type": "string",
+          "description": "Text segments only. The words of consecutive blocks of one page, joined by single spaces."
+        },
+        "ref": {
+          "$ref": "#/$defs/block_id",
+          "description": "Table and figure segments only: the id of the item that stands here."
+        },
+        "bbox": {"$ref": "#/$defs/rects"}
+      },
+      "required": ["page", "kind"],
+      "if": {
+        "properties": {"kind": {"const": "text"}},
+        "required": ["kind"]
+      },
+      "then": {"required": ["text"]},
+      "else": {"required": ["ref"]}
+    },
+    "table": {
+      "type": "object",
+      "properties": {
+        "id": {"$ref": "#/$defs/block_id"},
+        "path": {
+          "type": "string",
+          "description": "The crop image of the table, relative to the document's directory (the one that holds results/ and images/), e.g. images/p12_tbl0.png. Stage 5 reads it from there and the embedding of the table picture too. Empty where no crop was cut, and such a table is not transcribed: stage 5 joins an empty path to the document's directory, which exists, so it does not count a missing crop but fails on reading that directory as an image, logs the table as crashed and leaves it without a markdown. A writer names a crop for every table."
+        },
+        "caption": {
+          "type": ["string", "null"],
+          "description": "The sentence that names the table. Taken from the section text where the stored one does not open like a caption."
+        },
+        "page_number": {"$ref": "#/$defs/page"},
+        "source_text": {
+          "type": "string",
+          "description": "The text the PDF itself carries inside the table's frame. Stage 5 compares its transcription against it and never shows it to the model; stage 4 drops it. Left out where the page has no text layer there."
+        },
+        "bbox": {"$ref": "#/$defs/rects"}
+      },
+      "required": ["id", "path"]
+    },
+    "figure": {
+      "type": "object",
+      "properties": {
+        "id": {"$ref": "#/$defs/block_id"},
+        "path": {
+          "type": "string",
+          "description": "As for a table: the crop of the figure, relative to the document's directory. Empty where none was cut, and such a figure is not described, for the reason given for a table's path."
+        },
+        "caption": {"type": ["string", "null"]},
+        "page_number": {"$ref": "#/$defs/page"},
+        "bbox": {"$ref": "#/$defs/rects"}
+      },
+      "required": ["id", "path"]
+    },
+    "section": {
+      "type": "object",
+      "properties": {
+        "title": {"type": "string"},
+        "page_number": {
+          "type": ["integer", "null"],
+          "minimum": 1,
+          "description": "The page the section opens on: the page of its heading, else the first page of its segments. Null where there is none to say."
+        },
+        "pages": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/page"},
+          "description": "The distinct pages of its segments, sorted."
+        },
+        "content": {
+          "type": "string",
+          "description": "The text of the section: its text segments and a [id] placeholder where a table or figure stands, joined by single spaces. Stage 4 cuts an oversized section along its segments only where they still say the content."
+        },
+        "segments": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/segment"}
+        },
+        "tables": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/table"}
+        },
+        "figures": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/figure"}
+        }
+      },
+      "required": ["title", "page_number", "pages", "content", "segments", "tables", "figures"]
+    }
+  }
+}

@@ -12,11 +12,12 @@ scripts/inference_app/app.py` still works: that file only hands over to the pack
 itself lives in `docpipe.inference.answer`; the app is the UI around it. What the corpus is about
 comes from the profile (`--profile`, `docpipe.toml` or `DOCPIPE_PROFILE`): its catalog supplies
 the document labels, the sidebar filters and the detail shown for the selected document, and its
-`inference.UI` every word on the pages. Without a profile the pages still open, on the built-in
-`default` profile's English words and on filename-and-date labels with no filters, but a question
-cannot be answered, because the answer loop has no prompts of its own. A profile is needed for
-that (`--profile`, the `profile` key of `docpipe.toml` or `DOCPIPE_PROFILE`; the built-in `default`
-works for any folder), and the app shows one line at the top saying so.
+`inference.UI` every word on the pages. Without a profile the chat runs on the built-in `default`
+profile: its English words and prompts, and filename-and-date labels with no filters. The app
+shows one line at the top saying so, and the log names the profile once. Another one is named
+with `--profile`, the `profile` key of `docpipe.toml` or `DOCPIPE_PROFILE`. Only the chat does
+this: the stages that write a corpus (`ingest`, `refine`, `visuals`, `extract`) still stop
+without a profile.
 
 ## Flow (per query)
 
@@ -109,6 +110,7 @@ is not asked. `INFERENCE_LEXICAL=0` turns the word search off.
 | `scripts/inference_app/Containerfile` | The image the sandbox runs code in. |
 | `scripts/inference_app/requirements.txt` | The app's own pinned set, for a dedicated environment. |
 | `scripts/inference_app_smoketest.py` | Standalone embedder verification (run first). |
+| `scripts/chat_search_recall.py` | How often the chat's search puts the passage and the page a harvested value was read from among its hits; it answers nothing. |
 
 Everything else is core: `docpipe.inference` (`answer`, `catalog`, `db`, `faiss_store`, `hybrid`,
 `lexical`, `values_route`, `chunker`, `llm_client`, `query_cache`, `request_log`, `code_exec`) and
@@ -160,13 +162,13 @@ comes from, and `docpipe.toml` takes them under `[chat]`.
 
 | Var | Default | Meaning |
 | --- | --- | --- |
-| `DOCPIPE_PROFILE` | unset | The project profile. Supplies the catalog (labels + filters), the words of the pages and the corpus paths below. |
+| `DOCPIPE_PROFILE` | unset | The project profile. Supplies the catalog (labels + filters), the words of the pages, the prompts and the corpus paths below. Unset: the built-in `default` profile's words and prompts. |
 | `INFERENCE_DB_PATH` | `<profile>.db_path` | SQLite corpus DB (opened read-only). `docpipe serve` reads it too, for its passage search, and has no default. |
 | `INFERENCE_INDEX_PATH` | `<profile>.index_path` | Global FAISS index. |
 | `INFERENCE_IMAGE_ROOT` | `<profile>.processed_dir` | Root for resolving table/figure PNGs. |
 | `INFERENCE_PDF_ROOT` | `<profile>.pdf_dir` | Folder holding the source PDFs; the cited page is drawn from them. |
 | `INFERENCE_HARVEST_DIR` | unset | Harvest directory. Unset: no values step and no review page. |
-| `INFERENCE_GOLD_PATH` | `gold.jsonl` beside the harvest directory | File the review page appends decisions to. |
+| `INFERENCE_GOLD_PATH` | `gold.jsonl` beside the harvest directory | File the review page appends decisions to. `docpipe extract --serialize` does not read this setting: it keeps decisions beside their values only from the file beside the harvest. |
 | `INFERENCE_VALUES_LEVEL` | unset | Worst trust level (A, B or C) of a harvested value the chat still shows. Unset: every value. |
 | `INFERENCE_VALUES_LIMIT` | `20` | Harvested values one answer shows before it says how many more there are. |
 | `INFERENCE_LEXICAL` | `1` | Search by word beside the search by meaning where a word index exists. `0`: by meaning only. |

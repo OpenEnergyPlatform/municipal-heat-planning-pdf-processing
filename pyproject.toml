@@ -57,4 +57,4 @@ include = ["docpipe*"]
 # builtin/ holds the profile the package brings itself. It is found as a
 # profile is (by its directory), not imported as part of the package.
 docpipe = ["**/*.md", "**/*.json", "**/*.sql", "**/*.toml", "**/*.js",
-           "builtin/**/*.py"]
+           "**/*.ttl", "builtin/**/*.py"]

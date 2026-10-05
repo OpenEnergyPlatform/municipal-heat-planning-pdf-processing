@@ -96,6 +96,10 @@ SEARCH_SHARE = {"sector": 0.5, "aggregation": 0.5}
 # open: "3,251 GWh" is 3.251 here, and "1.234" is 1234.
 DECIMAL_MARK = ","
 
+# The language tag of the ontology's alternative labels that the vocabulary
+# snapshot keeps for this profile, the words its spec is held against.
+ALT_LABEL_LANGUAGE = "de"
+
 
 # What the preflight (`docpipe preflight`) holds this profile's prompts to,
 # beyond the keys the stage reads by name: a wording the run depends on. The
@@ -114,9 +118,10 @@ PROMPT_CHECKS = (
 # language of the prompts, and read by docpipe/extraction/wording.py, which
 # says what each name is filled with.
 PHRASES = {
-    # the closed list as a request shows it
-    "option_means": 'bedeutet',
-    "option_spellings": 'Schreibweisen',
+    # the closed list as a request shows it: protocol keys, so English in
+    # every profile, and the field prompt names them in its rule 7
+    "option_means": 'means',
+    "option_spellings": 'spellings',
     "unstated_means": 'in diesen Passagen steht es nicht',
     "unstated_spelling": 'steht in diesen Passagen nicht',
     # why a coordinate's answer was not taken

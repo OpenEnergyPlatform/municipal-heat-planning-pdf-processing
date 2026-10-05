@@ -80,9 +80,16 @@ def remap_row(row: dict, parameter) -> tuple:
     counts: Counter = Counter()
     open_spaces: set = set()
 
-    def _one(space: str, key: str, label_to_uri: dict, required: bool):
+    def _one(space: str, key: str, label_to_uri: dict, required: bool,
+             holds: Optional[str] = None, named: bool = False):
+        """`holds` is where the class is kept when that is not `key` itself.
+        `named`: the answer is a class name and not a class, so with no
+        wording kept it is the wording to map from."""
+        holds = holds or key
         wording = row.get(f"{key}_raw")
-        current = row.get(key)
+        if wording is None and named:
+            wording = row.get(key)
+        current = row.get(holds)
         if wording is None:
             # Nothing recorded to map from. Only a coordinate that was read
             # is a gap; an empty one has nothing to re-map and hides nothing.
@@ -110,7 +117,7 @@ def remap_row(row: dict, parameter) -> tuple:
             counts["remapped (required)"] += 1
         else:
             counts["remapped"] += 1
-        row[key] = uri
+        row[holds] = uri
         # The flags were written about the OLD list. Both of these say "the
         # spec did not foresee this wording", which just stopped being true.
         stale = (f"unmapped:{key}:", f"mapped:{key}:")
@@ -122,7 +129,11 @@ def remap_row(row: dict, parameter) -> tuple:
         row.pop(f"{key}_raw_foreign", None)
 
     if parameter.vocabulary or parameter.vocabulary_dynamic:
-        _one(f"value/{parameter.uri}", "value", parameter.value_to_uri(), True)
+        # The harvest writes a category answer as the class name in `value`
+        # and the class in `value_uri` (`verify._check_value`); the graph
+        # reads the second, so that is the one this pass moves.
+        _one(f"value/{parameter.uri}", "value", parameter.value_to_uri(), True,
+             holds="value_uri", named=True)
     for slot in axis_slots(parameter):
         if slot.kind != CHOICE:
             continue
@@ -157,12 +168,61 @@ def refused_spaces(refusals: list, spaces: set) -> set:
 
 
 def _producer() -> dict:
-    """This pass, for the stamp's list: it moves answers and asks no model."""
+    """This pass, for the stamp's list: it moves answers and asks no model.
+
+    No coordinate points at this entry (`fields.PRODUCER`): a remap maps a
+    wording somebody else read, so the coordinate keeps whoever read it.
+    """
     from datetime import datetime, timezone
 
     from docpipe import __version__
     return {"pass": "remap", "docpipe": __version__,
             "utc": datetime.now(timezone.utc).isoformat(timespec="seconds")}
+
+
+def producers_of(stored: dict) -> list:
+    """The stamp's list of who wrote into the harvest.
+
+    A stamp from before the list starts it with what it does say: the model of
+    its harvest.
+    """
+    wrote = stored.get("producers")
+    if isinstance(wrote, list):
+        return list(wrote)
+    return [{"pass": "harvest", "model": stored.get("model")}]
+
+
+def _read_stamp(stamp_path: Path) -> Optional[dict]:
+    try:
+        stored = json.loads(stamp_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    return stored if isinstance(stored, dict) else None
+
+
+def next_producer(stamp_path: Path) -> Optional[int]:
+    """The position a pass entered into this stamp now would take, or None when
+    there is no stamp to enter it into. A pass that writes `<axis>_producer`
+    onto rows asks this first, because the rows are written before the list."""
+    stored = _read_stamp(stamp_path)
+    return None if stored is None else len(producers_of(stored))
+
+
+def enter_producer(stamp_path: Path, producer: dict) -> Optional[int]:
+    """Append this pass to the stamp's list, whatever else it earned. Returns
+    its position, or None when there is no readable stamp to write into.
+
+    Unlike `stamp_forward`, which enters a pass only when it earned a stamp
+    key: a top-up that re-read a coordinate has rows that point at it, and a
+    pointer into a list it never joined would read as unknown.
+    """
+    stored = _read_stamp(stamp_path)
+    if stored is None:
+        return None
+    wrote = producers_of(stored)
+    stored["producers"] = [*wrote, producer]
+    stamp_path.write_text(json.dumps(stored, indent=2), encoding="utf-8")
+    return len(wrote)
 
 
 def stamp_forward(stamp_path: Path, current: dict, settled: set,
@@ -189,10 +249,7 @@ def stamp_forward(stamp_path: Path, current: dict, settled: set,
         return False
     stored.update({k: current[k] for k in earned})
     if producer is not None:
-        wrote = stored.get("producers")
-        if not isinstance(wrote, list):
-            wrote = [{"pass": "harvest", "model": stored.get("model")}]
-        stored["producers"] = [*wrote, producer]
+        stored["producers"] = [*producers_of(stored), producer]
     # The whole-file sha is a coarse mirror of the keys under it. It may only
     # move once nothing else it stands for is still stale, or a document would
     # read as current while a changed prompt sits unaddressed.

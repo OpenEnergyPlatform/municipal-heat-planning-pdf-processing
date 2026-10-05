@@ -59,7 +59,9 @@ def numeric(uri, label, unit):
     return {"uri": uri, "label": label, "description": f"{label} of the town as the plan states it for "
                           f"one year and one carrier.",
             "value_type": "float", "unit_target": unit,
-            "units_accepted": {unit: 1}, "axes": {"year": {"type": "int"}},
+            "units_accepted": {unit: {"factor": 1,
+                                      "names_period": unit.endswith("/a")}},
+            "axes": {"year": {"type": "int"}},
             "example": {"source": shown, "tuples": [{
                 "value": 1.0, "unit_raw": unit, "year": 2040,
                 "quote": shown}]}}

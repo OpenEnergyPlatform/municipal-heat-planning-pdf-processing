@@ -15,18 +15,20 @@ fills every key below as a publication is read.
 `parameter_state`, `refusal` and `summary` are the three record kinds
 every profile's contract shares. `parameter_state` closes one
 parameter with its state and tuple and refusal counts
-(`docpipe/extraction/schema.py:553` to `577`); `refusal` records a
+(`docpipe/extraction/schema.py:563` to `587`); `refusal` records a
 claim the run did not accept: why it failed, the claim as returned,
-and its source (`:480` to `511`); `summary`, the file's last line, counts a
-document's tuples and refusals by trust level and reason (`:512` to
-`552`). The remaining `##` sections are `tuple` shapes, one per
+and its source (`:490` to `521`); `summary`, the file's last line, counts a
+document's tuples and refusals by trust level and reason (`:522` to
+`562`). The remaining `##` sections are `tuple` shapes, one per
 parameter.
 
 Such a section opens with how its row becomes a node or an edge of the
 OEKG, where the parameter mints one at all. The `parameter` coordinate
-and every axis expand into eight `###` headings: the value, plus
-seven keys that make it checkable without the run that produced it
-(`docpipe/extraction/schema.py:212` to `280`). Four parameters carry
+and every axis expand into eleven `###` headings: the value, plus
+ten keys that make it checkable without the run that produced it, one of
+them `_producer`, the position in the stamp's `producers` list of the
+top-up that read the coordinate again (a missing key means the harvest
+read it; `docpipe/extraction/schema.py:212` to `290`). Four parameters carry
 the same `scenario` axis, `scenario_type`, `scenario_abstract`,
 `scenario_region` and `scenario_year`, each stating which of the
 publication's AR6 scenarios the row belongs to
@@ -36,7 +38,7 @@ test_a_document_field_carries_no_axes_and_a_scenario_field_carries_one`).
 A tuple's `provenance` names where its `quote` sits: `document_id`,
 `owner_kind` and `owner_id` always present, the rest, page and
 section location among them, filled in as the source allows
-(`docpipe/extraction/schema.py:431` to `479`); a coordinate's
+(`docpipe/extraction/schema.py:441` to `489`); a coordinate's
 `<name>_source` and a refusal's `owner` use the shorter
 `[owner_kind, owner_id]` pair instead (`:147` to `151`).
 
@@ -47,7 +49,7 @@ coordinate answers from a closed list, `x-options` names every entry
 with its ontology uri and definition, and its corpus spellings where
 any are recorded. A tuple section closes with the `allOf` rule: a
 coordinate is `null` unless its own `<name>_state` says `read` or
-`derived` (`docpipe/extraction/schema.py:283` to `297`).
+`derived` (`docpipe/extraction/schema.py:293` to `307`).
 
 ## The lists this page cannot publish
 
@@ -74,8 +76,8 @@ the same four parameters takes a different path: the spec marks it
 `dynamic`, not `vocabulary_dynamic`, and `axis_slots` types it as
 plain text through a path that never calls `_value_uri` at all; that
 call runs earlier in the same function, for the parameter's own
-`value` key (`docpipe/extraction/fields.py:404` to `429`;
-`docpipe/extraction/schema.py:367`, `:387` to `399`).
+`value` key (`docpipe/extraction/fields.py:432` to `457`;
+`docpipe/extraction/schema.py:377`, `:397` to `409`).
 
 What the list holds is decided once, before harvest starts, by
 `document_axes` in `profiles/scenarios/extraction.py:172`. It reads
@@ -97,21 +99,30 @@ row whose value was left out, the wording in `value_raw`, which is how the
 value request says no entry of the list fits, is kept with its wording.
 
 Two sections close the page: `## The stamp`, the schema of
-`<publication>.stamp.json` (four fixed keys, `spec`, `model`,
-`anchors`, `page_text_transcribed`, plus per-question patterns,
-`docpipe/extraction/schema.py:580` to `715`), and `## The trace`, the
+`<publication>.stamp.json` (fixed keys, `spec`, `model`,
+`anchors`, `page_text_transcribed` and the three that place the harvest,
+`docpipe`, `document` (the sha256 and size of the PDF) and `producers`,
+plus per-question patterns,
+`docpipe/extraction/schema.py:594` to `745`), and `## The trace`, the
 schema of `<publication>.trace.jsonl`, one `oneOf` branch per event
 kind: eleven, fixed by the schema for every profile rather than drawn
-from this one's spec (`docpipe/extraction/schema.py:718` to `833`). A
+from this one's spec (`docpipe/extraction/schema.py:746` to `880`). A
 `parameter/`, `value/`, `axis/` or `slot/` key differing from today's
-run makes the document eligible for a full re-harvest under
-`--force-stale`; `model`, `anchors` and every prompt id are written for
-a reader and never compared, so a reworded prompt or another model
-leaves a harvested corpus current (`stale`,
-`docpipe/extraction/runner.py:4331` to `4368`; `already_done`, `:4411`
-to `4430`). `top_up_file` redoes
+run, or another sha256 of the PDF in `document` than the database now
+names, makes the document eligible for a full re-harvest under
+`--force-stale`; `model`, `anchors`, `producers` and every prompt id are
+written for a reader and never compared, so a reworded prompt or another
+model leaves a harvested corpus current. The `value/` key of a list
+parameter counts the classes and their spellings and not their
+definitions, so a stamp of this corpus written before that reads stale
+in those keys once: `--remap`, which needs no model, settles them, and
+`--force-stale` first would read the documents again for nothing. A
+document with a wording that no list holds stays stale after the remap,
+and is what `--force-stale` is left for (`stale`,
+`docpipe/extraction/runner.py:4373` to `4418`; `already_done`, `:4461`
+to `4481`). `top_up_file` redoes
 only the changed question
-(`docpipe/extraction/topup.py:340` to `442`). The trace is read by
+(`docpipe/extraction/topup.py:345` to `462`). The trace is read by
 `scripts/trace_report.py` and, for cost, by `trace_costs`
 (`scripts/harvest_compare.py:135` to `155`), never by a resume.
 
@@ -222,6 +233,10 @@ Only with window `base_year`: the passage where the row names the base state ('p
 
 Which source 'parameter_link_quote' was found in.
 
+### `parameter_producer`
+
+Who re-read 'parameter': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
+
 ### `parameter_quote`
 
 The verbatim passage carrying 'parameter'. Present exactly when parameter_state is 'read'.
@@ -325,6 +340,10 @@ Only with window `base_year`: the passage where the row names the base state ('p
 
 Which source 'parameter_link_quote' was found in.
 
+### `parameter_producer`
+
+Who re-read 'parameter': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
+
 ### `parameter_quote`
 
 The verbatim passage carrying 'parameter'. Present exactly when parameter_state is 'read'.
@@ -426,6 +445,10 @@ Only with window `base_year`: the passage where the row names the base state ('p
 
 Which source 'parameter_link_quote' was found in.
 
+### `parameter_producer`
+
+Who re-read 'parameter': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
+
 ### `parameter_quote`
 
 The verbatim passage carrying 'parameter'. Present exactly when parameter_state is 'read'.
@@ -520,6 +543,10 @@ Only with window `base_year`: the passage where the row names the base state ('p
 ### `parameter_link_source`
 
 Which source 'parameter_link_quote' was found in.
+
+### `parameter_producer`
+
+Who re-read 'parameter': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
 
 ### `parameter_quote`
 
@@ -623,6 +650,10 @@ Only with window `base_year`: the passage where the row names the base state ('p
 
 Which source 'parameter_link_quote' was found in.
 
+### `parameter_producer`
+
+Who re-read 'parameter': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
+
 ### `parameter_quote`
 
 The verbatim passage carrying 'parameter'. Present exactly when parameter_state is 'read'.
@@ -718,6 +749,10 @@ Only with window `base_year`: the passage where the row names the base state ('p
 
 Which source 'parameter_link_quote' was found in.
 
+### `parameter_producer`
+
+Who re-read 'parameter': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
+
 ### `parameter_quote`
 
 The verbatim passage carrying 'parameter'. Present exactly when parameter_state is 'read'.
@@ -778,6 +813,10 @@ Only with window `base_year`: the passage where the row names the base state ('s
 ### `scenario_link_source`
 
 Which source 'scenario_link_quote' was found in.
+
+### `scenario_producer`
+
+Who re-read 'scenario': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
 
 ### `scenario_quote`
 
@@ -877,6 +916,10 @@ Only with window `base_year`: the passage where the row names the base state ('p
 ### `parameter_link_source`
 
 Which source 'parameter_link_quote' was found in.
+
+### `parameter_producer`
+
+Who re-read 'parameter': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
 
 ### `parameter_quote`
 
@@ -979,6 +1022,10 @@ Only with window `base_year`: the passage where the row names the base state ('p
 
 Which source 'parameter_link_quote' was found in.
 
+### `parameter_producer`
+
+Who re-read 'parameter': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
+
 ### `parameter_quote`
 
 The verbatim passage carrying 'parameter'. Present exactly when parameter_state is 'read'.
@@ -1039,6 +1086,10 @@ Only with window `base_year`: the passage where the row names the base state ('s
 ### `scenario_link_source`
 
 Which source 'scenario_link_quote' was found in.
+
+### `scenario_producer`
+
+Who re-read 'scenario': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
 
 ### `scenario_quote`
 
@@ -1137,6 +1188,10 @@ Only with window `base_year`: the passage where the row names the base state ('p
 
 Which source 'parameter_link_quote' was found in.
 
+### `parameter_producer`
+
+Who re-read 'parameter': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
+
 ### `parameter_quote`
 
 The verbatim passage carrying 'parameter'. Present exactly when parameter_state is 'read'.
@@ -1197,6 +1252,10 @@ Only with window `base_year`: the passage where the row names the base state ('s
 ### `scenario_link_source`
 
 Which source 'scenario_link_quote' was found in.
+
+### `scenario_producer`
+
+Who re-read 'scenario': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
 
 ### `scenario_quote`
 
@@ -1332,6 +1391,10 @@ Only with window `base_year`: the passage where the row names the base state ('p
 
 Which source 'parameter_link_quote' was found in.
 
+### `parameter_producer`
+
+Who re-read 'parameter': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
+
 ### `parameter_quote`
 
 The verbatim passage carrying 'parameter'. Present exactly when parameter_state is 'read'.
@@ -1392,6 +1455,10 @@ Only with window `base_year`: the passage where the row names the base state ('s
 ### `scenario_link_source`
 
 Which source 'scenario_link_quote' was found in.
+
+### `scenario_producer`
+
+Who re-read 'scenario': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
 
 ### `scenario_quote`
 
@@ -1483,6 +1550,10 @@ Only with window `base_year`: the passage where the row names the base state ('p
 ### `parameter_link_source`
 
 Which source 'parameter_link_quote' was found in.
+
+### `parameter_producer`
+
+Who re-read 'parameter': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
 
 ### `parameter_quote`
 
@@ -1584,6 +1655,10 @@ Only with window `base_year`: the passage where the row names the base state ('p
 ### `parameter_link_source`
 
 Which source 'parameter_link_quote' was found in.
+
+### `parameter_producer`
+
+Who re-read 'parameter': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
 
 ### `parameter_quote`
 
@@ -1739,6 +1814,10 @@ Only with window `base_year`: the passage where the row names the base state ('p
 
 Which source 'parameter_link_quote' was found in.
 
+### `parameter_producer`
+
+Who re-read 'parameter': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
+
 ### `parameter_quote`
 
 The verbatim passage carrying 'parameter'. Present exactly when parameter_state is 'read'.
@@ -1835,6 +1914,10 @@ Only with window `base_year`: the passage where the row names the base state ('p
 ### `parameter_link_source`
 
 Which source 'parameter_link_quote' was found in.
+
+### `parameter_producer`
+
+Who re-read 'parameter': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
 
 ### `parameter_quote`
 
@@ -1938,6 +2021,10 @@ Only with window `base_year`: the passage where the row names the base state ('p
 
 Which source 'parameter_link_quote' was found in.
 
+### `parameter_producer`
+
+Who re-read 'parameter': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
+
 ### `parameter_quote`
 
 The verbatim passage carrying 'parameter'. Present exactly when parameter_state is 'read'.
@@ -2038,6 +2125,10 @@ Only with window `base_year`: the passage where the row names the base state ('p
 ### `parameter_link_source`
 
 Which source 'parameter_link_quote' was found in.
+
+### `parameter_producer`
+
+Who re-read 'parameter': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
 
 ### `parameter_quote`
 
@@ -2463,6 +2554,10 @@ Only with window `base_year`: the passage where the row names the base state ('p
 
 Which source 'parameter_link_quote' was found in.
 
+### `parameter_producer`
+
+Who re-read 'parameter': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
+
 ### `parameter_quote`
 
 The verbatim passage carrying 'parameter'. Present exactly when parameter_state is 'read'.
@@ -2595,6 +2690,10 @@ Only with window `base_year`: the passage where the row names the base state ('p
 
 Which source 'parameter_link_quote' was found in.
 
+### `parameter_producer`
+
+Who re-read 'parameter': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
+
 ### `parameter_quote`
 
 The verbatim passage carrying 'parameter'. Present exactly when parameter_state is 'read'.
@@ -2713,16 +2812,16 @@ The entry of the parameter's own vocabulary the wording resolved to. Null when t
 
 One `<document>.stamp.json` beside each harvest file, closed like the records (`additionalProperties: false`).
 
-Every key but `spec` makes the document stale, and it is harvested again, when it differs from the current run. `spec` is recorded so a reader can say which file a harvest came from, and is not compared. Withheld when the harvest did not happen. The parameter/, value/, axis/ and slot/ keys record which question changed, so a moving ontology costs only the coordinates it touched rather than a full re-read of the corpus. A stamp written before those keys existed carries none of them, so for it `spec` decides again, and it is stale in all of them.
+The parameter/, value/, axis/ and slot/ keys, and the sha256 in `document`, make the document stale when they differ from the current run: it is named in a warning, skipped, and harvested again with --force-stale. Every other key is recorded and never compared. `spec` is recorded so a reader can say which file a harvest came from. Withheld when the harvest did not happen. The parameter/, value/, axis/ and slot/ keys record which question changed, so a moving ontology costs only the coordinates it touched rather than a full re-read of the corpus. A stamp written before those keys existed carries none of them, so for it `spec` decides again, and it is stale in all of them.
 
 | key | what it records |
 |---|---|
 | `anchors` | The anchor prompt, the model and the version of the target set, together. NOT the questions: which question was asked is carried by the parameter/, value/, axis/ and slot/ keys, and a question that is GONE by the rule that a key the stamp still carries and the run no longer asks makes the document stale. The anchors decide which passages a document was read from, so a document read under one set is not the same result as one read under another. Empty when anchors were off. |
 | `docpipe` | The version that wrote this stamp. Recorded and never compared. |
-| `document` | Which bytes were read: the sha256 and the size of the file as the database recorded them. Absent for a database that records none. Recorded and never compared. |
+| `document` | Which bytes were read: the sha256 and the size of the file as the database recorded them. Absent for a database that records none. Another sha256 than this one makes the document stale, as a changed ontology key does. The size is recorded and never compared, and a stamp without this key is not compared at all. |
 | `model` | the serving model |
 | `page_text_transcribed` | How many pages of this document a model read rather than the PDF. A harvest from a transcribed document is a reading of a reading. |
-| `producers` | Every pass that wrote into this harvest, in order: the harvest, then each top-up, remap or review that changed a row. `model` above names the first only. Recorded and never compared. |
+| `producers` | Every pass that wrote into this harvest, in order: the harvest, then each top-up that rewrote the file, each remap that carried a key forward and each review that changed a row. Entries are only ever added, so a position is stable: a coordinate a top-up re-read points at its entry with `<axis>_producer`. `model` above names the first only. Recorded and never compared. |
 | `spec` | sha256 of extraction_spec.json. A record, not a verdict: it moves on a comment, an indent or a graph annotation, none of which any question is asked through. Compared, it would outvote every key below it. |
 | `^axis/[^/]+/[^/]+$` | What this coordinate asks and what it may answer: the question and the offered list with its spellings and its definitions. Everything the model sees for this axis, and nothing else. |
 | `^extraction/(harvest\|queries\|anchors\|rows\|field\|phrase\|frame)$` | sha256 of the prompt file |
@@ -2730,7 +2829,7 @@ Every key but `spec` makes the document stale, and it is harvested again, when i
 | `^question_text/[^/]+$` | The sentence THIS document was searched with. Recorded and never compared: it is written per document, so the document itself is part of it and no two runs produce the same one. What decides whether the harvest is current is its recipe, and that is already here: the generator prompt, the model, and the annotation inside parameter/. |
 | `^review/(prompt\|model)$` | What read this document a second time. Recorded and never compared: the review does not decide whether the harvest is current, and comparing it would report every reviewed document stale the day the review prompt changes. |
 | `^slot/parameter$` | The one coordinate that belongs to no parameter: which quantity a number is. Its question and the parameters it offers, uri and label. Also the only key that moves when a parameter is dropped. |
-| `^value/[^/]+$` | The list a category parameter answers from. Its own key, because a moved option can be re-mapped from the wording the harvest kept while a rewritten question cannot. |
+| `^value/[^/]+$` | The list a category parameter answers from: its classes and their spellings, which is all the rows request shows the model. Not their definitions. Its own key, because a moved option can be re-mapped from the wording the harvest kept while a rewritten question cannot. |
 
 ## The trace
 

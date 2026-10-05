@@ -21,9 +21,12 @@ Author: Felix Vossel
 """
 from __future__ import annotations
 
+import logging
 from typing import Optional
 
-from ..profile import ENV_VAR, Profile, active_profile
+from ..profile import ENV_VAR, Profile, active_profile, load_profile
+
+log = logging.getLogger(__name__)
 
 # Checked as a set at load time: a profile that forgets one should hear about
 # it when the stage is imported, not three hours into a batch.
@@ -82,11 +85,37 @@ UI_REQUIRED = frozenset({
 })
 
 
-def _component(attr: str, profile: Optional[Profile] = None):
+BUILT_IN = "default"
+_said_fallback: list = []
+
+
+def chat_profile(profile: Optional[Profile] = None) -> Profile:
+    """The profile the answer loop reads from: the one given, else the one
+    in force, else the built-in one.
+
+    The chat starts on any corpus, and its pages already take their words
+    from the built-in profile when none is named; its prompts and phrases
+    follow, so the first question is answered in English instead of stopping.
+    The fallback is here and not in `prompts.load` or `require_profile`: the
+    stages that write a corpus keep their stop without a profile, because a
+    forgotten flag there would start a real run on the wrong prompts. Said
+    once per process, since the loop asks for a profile on every hit.
+    """
     profile = profile or active_profile()
-    if profile is None:
-        raise LookupError(f"the answer loop needs a profile; set ${ENV_VAR}")
-    return profile.require("inference", attr)
+    if profile is not None:
+        return profile
+    profile = load_profile(BUILT_IN)
+    if not _said_fallback:
+        _said_fallback.append(profile.name)
+        log.warning("chat: no profile is named, so the answer loop reads its "
+                    "prompts and phrases from the built-in profile %r; name "
+                    "another with --profile, `profile` in docpipe.toml or "
+                    "$%s", profile.name, ENV_VAR)
+    return profile
+
+
+def _component(attr: str, profile: Optional[Profile] = None):
+    return chat_profile(profile).require("inference", attr)
 
 
 _checked: dict = {}
@@ -98,8 +127,8 @@ def phrases(profile: Optional[Profile] = None) -> dict:
     Cached: citation_label asks once per retrieval hit, and the completeness
     check has nothing new to say the second time.
     """
-    profile = profile or active_profile()
-    key = profile.name if profile is not None else None
+    profile = chat_profile(profile)
+    key = profile.name
     if key in _checked:
         return _checked[key]
     nearest = _component("PHRASES", profile)
@@ -121,8 +150,7 @@ def ui(profile: Optional[Profile] = None) -> dict:
     """The words of the app's pages and of the picker, complete. Without a
     profile they are those of the profile the package brings itself: the app
     starts on any corpus, and what it shows then is in English."""
-    from ..profile import load_profile
-    profile = profile or active_profile() or load_profile("default")
+    profile = profile or active_profile() or load_profile(BUILT_IN)
     if profile.name in _ui_checked:
         return _ui_checked[profile.name]
     got: dict = {}

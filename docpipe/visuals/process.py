@@ -117,7 +117,10 @@ def process_table(
 
     A QA gate checks coverage against *source_text* and row duplication; on
     failure the table is still returned (best effort) but carries a
-    ``qa_warning`` field.
+    ``qa_warning`` field. The result of the check is kept for every table the
+    model answered in JSON, as ``qa`` (the metrics of the kept attempt and
+    whether it passed). A table rescued as plain text or not read at all has
+    none: it was not checked, which is not the same as passed.
 
     *lock* guards the shared ProcessingStats: without it this is not safe to
     call from several threads at once.
@@ -191,6 +194,7 @@ def process_table(
     # Only collapse stutter rows on the failure path: a passing table may
     # legitimately contain identical adjacent rows, so don't touch it.
     result["markdown"] = raw_md if passed else qa.dedup_consecutive_rows(raw_md)
+    result["qa"] = {"passed": passed, **metrics}
     if not passed:
         result["qa_warning"] = metrics
 

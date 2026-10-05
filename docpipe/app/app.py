@@ -314,8 +314,8 @@ def main() -> None:
     st.markdown("<style>[data-testid='stStatusWidget']{display:none !important;}</style>",
                 unsafe_allow_html=True)
     st.title(title)
-    # The pages open on the built-in profile's words, the answer loop does
-    # not: it has no prompts of its own, and a question would stop on that.
+    # No profile named: the pages and the answer loop both run on the
+    # built-in profile (`wording.chat_profile`), and the page says so.
     if config.PROFILE is None:
         st.warning(T["no_profile"])
 

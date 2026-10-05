@@ -63,12 +63,6 @@ One node per calendar year for the whole graph, keyed by the year itself
 rather than minted from a uuid: two plans naming 2030 mean the same 2030,
 and a year is the one coordinate with no document in it.
 
-### ns
-
-```python
-def ns(collection: str) -> uuid.UUID
-```
-
 ### normalise
 
 ```python

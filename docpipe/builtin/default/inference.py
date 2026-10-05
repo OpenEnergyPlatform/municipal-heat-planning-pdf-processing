@@ -136,11 +136,11 @@ UI = {
                           "page."),
     "page_failed_draw": "Page {page} could not be shown: it did not render.",
     "download_pdf": "Download the PDF",
-    "no_profile": ("No profile is in effect, so a question cannot be "
-                   "answered. Start the chat with `docpipe --profile <name> "
-                   "chat`, or set `profile = \"<name>\"` in docpipe.toml or "
-                   "DOCPIPE_PROFILE; the built-in profile `default` works "
-                   "for any folder."),
+    "no_profile": ("No profile is named, so the chat runs on the built-in "
+                   "profile `default`: English prompts and wording that fit "
+                   "any folder. To use another, start the chat with "
+                   "`docpipe --profile <name> chat`, or set `profile = "
+                   "\"<name>\"` in docpipe.toml or DOCPIPE_PROFILE."),
     "values_heading": "Backed values from the reading of the documents",
     "values_note": ("These numbers were read from the documents beforehand "
                     "and checked against their quote; they do not come from "

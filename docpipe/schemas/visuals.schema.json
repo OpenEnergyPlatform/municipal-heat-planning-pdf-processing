@@ -1,0 +1,149 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "docpipe visuals.json (what stage 5 hands on)",
+  "description": "results/visuals.json of one document: the tables and figures of its sections, each with what the vision model read off its crop. Stage 5 writes it and reads it back as its cache; the merge in chunking replaces each table and figure of sections_refined.json by the item of the same id found here, and the database stores the result. Only the tables and figures of the sections are read from this file; the other keys of a section are carried over from the input stage 5 was given, and the merge takes its sections from sections_refined.json. A table or figure is done when it has a markdown or a description, and an item without one is asked again by the next run. Keys not listed here are carried or ignored, none is read. No stage checks a file against this schema.",
+  "type": "object",
+  "properties": {
+    "version": {
+      "$ref": "#/$defs/version"
+    },
+    "sections": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/section"}
+    }
+  },
+  "required": ["sections"],
+  "$defs": {
+    "version": {
+      "const": 1,
+      "description": "The shape of this file, counted on its own and not with sections.json. A file without the key is version 1, and so is one that says 1. The number goes up when a key a reader needs changes its meaning or shape, not when one is added."
+    },
+    "page": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "1-based PDF page."
+    },
+    "block_id": {
+      "type": "string",
+      "pattern": "^[a-z0-9_]+$",
+      "description": "The id the item has in sections.json. The merge matches by it, so it must be the same string."
+    },
+    "rect": {
+      "type": "array",
+      "items": {"type": "number"},
+      "minItems": 4,
+      "maxItems": 4,
+      "description": "[x0, y0, x1, y1] in PDF points, origin top left."
+    },
+    "rects": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/rect"},
+      "minItems": 1,
+      "description": "A list of rects, as in sections.json. Carried over from the input and stored in Tables.bbox and Images.bbox."
+    },
+    "qa_metrics": {
+      "type": "object",
+      "description": "What the check of a table transcription measured: the share of the salient tokens of the PDF text in the table's frame that the transcription holds, and the share of its data rows that are repeats.",
+      "properties": {
+        "coverage": {
+          "type": ["number", "null"],
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Share of the distinct numbers and words of two letters or more in the PDF text of the frame that the transcription also holds. Null where the frame has too few of them (no text layer): unknown, not 1."
+        },
+        "coverage_assessed": {
+          "type": "boolean",
+          "description": "False exactly where coverage is null."
+        },
+        "duplication": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Share of the data rows that repeat an earlier row."
+        },
+        "has_rows": {
+          "type": "boolean",
+          "description": "The transcription holds at least one data row."
+        }
+      },
+      "required": ["coverage", "coverage_assessed", "duplication", "has_rows"],
+      "if": {
+        "properties": {"coverage_assessed": {"const": true}},
+        "required": ["coverage_assessed"]
+      },
+      "then": {"properties": {"coverage": {"type": "number"}}},
+      "else": {"properties": {"coverage": {"type": "null"}}}
+    },
+    "qa": {
+      "type": "object",
+      "description": "The result of the check, passing or failing: the metrics of the attempt that was kept, measured on what the model wrote (a table that failed the check then has its repeated neighbouring rows collapsed, which the metrics do not see), and whether it passed the thresholds of the stage. Written for every table the model transcribed as JSON; a table rescued as plain text, a table the model never answered and a table of an older file have none, which says not checked and not that it passed. Stored as Tables.qa.",
+      "allOf": [
+        {"$ref": "#/$defs/qa_metrics"},
+        {
+          "properties": {"passed": {"type": "boolean"}},
+          "required": ["passed"]
+        }
+      ]
+    },
+    "table": {
+      "type": "object",
+      "properties": {
+        "id": {"$ref": "#/$defs/block_id"},
+        "path": {
+          "type": "string",
+          "description": "The crop image, relative to the document's directory. May be missing where the input was sections_refined.json and stage 4 dropped it; chunking then embeds no picture of the table."
+        },
+        "caption": {
+          "type": ["string", "null"],
+          "description": "The caption of the input, or the one the model wrote where there was none."
+        },
+        "page_number": {"$ref": "#/$defs/page"},
+        "bbox": {"$ref": "#/$defs/rects"},
+        "markdown": {
+          "type": "string",
+          "description": "The table as a Markdown table. Present and not empty: the table is done. Absent: it was not read, and the next run asks again."
+        },
+        "vlm_status": {
+          "const": "plain_text",
+          "description": "The model never answered in JSON and the content is its plain-text answer."
+        },
+        "qa": {"$ref": "#/$defs/qa"},
+        "qa_warning": {
+          "$ref": "#/$defs/qa_metrics",
+          "description": "Kept from before qa existed: the same metrics, present only where the check failed after its retry."
+        }
+      },
+      "required": ["id"]
+    },
+    "figure": {
+      "type": "object",
+      "properties": {
+        "id": {"$ref": "#/$defs/block_id"},
+        "path": {"type": "string"},
+        "caption": {"type": ["string", "null"]},
+        "page_number": {"$ref": "#/$defs/page"},
+        "bbox": {"$ref": "#/$defs/rects"},
+        "description": {
+          "type": "string",
+          "description": "What the figure shows. Present and not empty: the figure is done."
+        },
+        "vlm_status": {"const": "plain_text"}
+      },
+      "required": ["id"]
+    },
+    "section": {
+      "type": "object",
+      "description": "A section of the input. Only its tables and figures are read here.",
+      "properties": {
+        "tables": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/table"}
+        },
+        "figures": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/figure"}
+        }
+      }
+    }
+  }
+}

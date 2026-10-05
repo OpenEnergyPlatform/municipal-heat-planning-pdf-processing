@@ -34,12 +34,12 @@ Trust computation for this profile also has to account for one
 corpus-wide fact: `ar6.db`'s `Documents` table carries no
 `page_text_transcribed` column, so `PAGE_TRANSCRIBED` is fixed `False`
 for every value this profile serializes, never read per document the
-way an axis coordinate is (`profiles/scenarios/kg.py`, lines 496 to
-500). Over the 164-document ar6 harvest the module calls its own, 298 of
+way an axis coordinate is (`profiles/scenarios/kg.py`, lines 479 to
+483). Over the 164-document ar6 harvest the module calls its own, 298 of
 11,129 scenario-scope tuples could not be attached to any scenario: 289
 because the run's window budget was exhausted, 9 because the paper
 itself never states which scenario the value belongs to
-(`profiles/scenarios/kg.py`, lines 808 to 812; the full account is at
+(`profiles/scenarios/kg.py`, lines 811 to 819; the full account is at
 [../stages/graph.md](../stages/graph.md)).
 
 ## What the profile contributes to each stage
@@ -52,12 +52,12 @@ table gives this profile's own answer.
 |---|---|---|---|
 | File processing | `source.py`, `schema.sql`, `store.py` | `SOURCE`, `DocumentMeta`, `Scenarios`, `DocumentScenarios` | the ar6 crawl as a `Source`, and the profile's tables and upsert helpers |
 | Layout detection | `profile.py` | `column_layout` | `"auto"`, a two-column journal or report page read column by column |
-| Structure assembly | `preprocessing.py` | `HYPHEN_EXCEPTIONS`, `CAPTION_MAX_WORDS`, `CAPTION_START`, `TITLE_EXCLUDE_PREFIXES`, `DIRECTORY_FIGTAB_WORDS`, `BIBLIOGRAPHY_TITLE_WORDS` | English hyphenation, caption length, what opens a caption (a word, a number and a colon), heading and bibliography rules |
-| Preprocessing, refinement, visuals | `prompts/preprocessing`, `prompts/refinement`, `prompts/visuals` | 1, 3 and 7 prompt ids | page transcription, English artefact repair, table and figure captioning |
+| Structure assembly | `preprocessing.py` | `HYPHEN_EXCEPTIONS`, `CAPTION_MAX_WORDS`, `CAPTION_START`, `TITLE_EXCLUDE_PREFIXES`, `DIRECTORY_FIGTAB_WORDS`, `DIRECTORY_TITLE_WORDS`, `BIBLIOGRAPHY_TITLE_WORDS` | English hyphenation, caption length, what opens a caption (a word, a number and a colon), heading and bibliography rules; `DIRECTORY_TITLE_WORDS` is the same four words as the other profiles ("inhalt", "verzeichnis", "contents", "directory"), so no verdict moved |
+| Preprocessing, refinement, visuals | `prompts/preprocessing`, `prompts/refinement`, `prompts/visuals` | 1, 3 and 6 prompt ids of its own | page transcription, English artefact repair, table and figure captioning; `visuals/caption_keep` is the built-in profile's, inherited byte for byte |
 | The picker (app) | `catalog.py`, `profile.py` | `CATALOG`, `facets` | publication labels and three filters |
-| Extraction | `extraction.py`, `prompts/extraction/*.md` | `SPEC_PATH`, `document_axes`, `PHRASES`, `PROMPT_CHECKS`, eight prompt ids | the spec (18 parameters, four of them the bundle's tags), the per-document scenario and region lists, the sentences the stage writes to the model and the passages the preflight holds its prompts to, and the harvest's own questions |
+| Extraction | `extraction.py`, `prompts/extraction/*.md` | `SPEC_PATH`, `document_axes`, `PHRASES`, `PROMPT_CHECKS`, `NOT_EXTRACTED`, `shapes_files`, `ALT_LABEL_LANGUAGE`, eight prompt ids | the spec (18 parameters, four of them the bundle's tags), the per-document scenario and region lists, the sentences the stage writes to the model and the passages the preflight holds its prompts to, and the harvest's own questions |
 | The graph | `kg.py`, `oekg_api.py` | `make_serializer`, `make_study_reader`, `dry_run` | OEKG Turtle, the trust wording, and a dry run of the platform's scenario-bundle API (below) |
-| The answer app | `inference.py`, `prompts/inference/*.md` | `PHRASES`, `READOFF_MARKER`, `READOFF_NOTE`, 15 prompt ids | the English chat wording and the answer loop's own prompts |
+| The answer app | `inference.py`, `prompts/inference/*.md` | `PHRASES`, `READOFF_MARKER`, `READOFF_NOTE`, 9 prompt ids of its own | the English chat wording and the answer loop's own prompts; the other six (`answer_spec_json`, `answer_spec_text`, `envelope_correction`, `json_format`, `readoff_correction`, `revise`) are the built-in profile's, inherited byte for byte, so the text, its hash and the request are what the copies gave |
 
 Extraction's `rows` and `field` prompts hold a value's quote to the
 piece that carries it, a clause, a list entry, one table cell, not the
@@ -77,7 +77,7 @@ dataclass); `Parameter.vocabulary_dynamic` marks a parameter's own value
 the same way, and `_validate_parameter` refuses a spec that gives a
 category parameter both a fixed vocabulary and `vocabulary_dynamic` at
 once, or gives `vocabulary_dynamic` to a parameter that is not a category
-at all (`spec.py`, lines 432 to 456). Either way, the vocabulary key
+at all (`spec.py`, lines 431 to 455). Either way, the vocabulary key
 stays out of `extraction_spec.json` and a profile hook fills it in before
 the harvest runs; where no hook fills it, the coordinate degrades to a
 plain wording, the glossary's definition of a dynamic list.
@@ -163,12 +163,12 @@ where one class, `OEO_00010047`, has none and so carries none.
 An `out:` sentinel is a vocabulary entry offered like any real class, but
 one whose identifier begins with the literal prefix `out:` and names a
 deliberate non-class answer, not a reading the graph can hold. The
-prefix is checked in two places that must agree: `NOT_IN_GRAPH = "out:"`
-in `profiles/scenarios/extraction.py` (line 56), telling the harvest
-prompt what counts as no class, and the same constant again in
-`profiles/scenarios/kg.py` (line 261), telling the serializer what it
-refuses to mint; `kg.in_graph()` is the one guard every later mint, link
-and type decision runs through.
+prefix is one definition, `NOT_IN_GRAPH = "out:"` in
+`docpipe/extraction/graphkit.py`, which both profiles' `kg.py` and the
+provenance writer import, so the serializer has nothing to keep in step with
+another copy; `kg.in_graph()` in `profiles/scenarios/kg.py` (line 257) is the
+one guard every later mint, link and type decision runs through, and it refuses
+whatever starts with it.
 
 Three families of sentinel exist, plus the last entry of each fixed
 vocabulary, which behaves the same way. `SCENARIO_OUT` offers
@@ -214,21 +214,21 @@ Once chosen, a sentinel is refused a place in the graph outright.
 class, an IRI or a link; only the document's own wording, carried
 separately as `value_raw`, stands in for it, since the sentinel's own
 label describes why nothing fit, not what the document states (`kg.py`,
-lines 264 to 280). Every chosen sentinel, together with every
+lines 257 to 272). Every chosen sentinel, together with every
 `scenario_label`, `scenario_region`, `scenario_type` or bundle tag row
 that resolved no `value_uri`, is counted once into an `out_of_graph`
-tally, logged per document and never written as a triple (`kg.py`, lines 598 to 616).
+tally, logged per document and never written as a triple (`kg.py`, lines 602 to 620).
 Measured over a corpus run, the model answered with a sentinel 1,171
 times for a wording its own document-scoped AR6 list could resolve
 without a guess, 347 of those a character-for-character spelling match;
 on one document, the wording matched the list's only entry exactly and
-the model still answered `out:not_documented` (`kg.py`, lines 327 to 330,
+the model still answered `out:not_documented` (`kg.py`, lines 320 to 323,
 `resolve_wording`'s own docstring; the sentinel is named by
 `test_the_list_settles_what_the_model_gave_up_on`,
-`tests/test_scenarios_extraction.py`, lines 1166 to 1169). Those readings
+`tests/test_scenarios_extraction.py`, lines 1167 to 1170). Those readings
 are not lost: `resolve_wording()` rescues a link the document's own list
 settles unambiguously even where the model gave up, logged on its own
-line, separate from the sentinel tally (`kg.py`, lines 712 to 720).
+line, separate from the sentinel tally (`kg.py`, lines 716 to 727).
 
 ## The graph: one report, one bundle, a factsheet per run
 
@@ -253,36 +253,36 @@ ahead of the live ones by `merge_regions` (`vocabulary.py`, lines 1 to
 
 Every IRI is minted under `BASE`, which defaults to
 `https://openenergyplatform.org/ontology/oekg/` and can be overridden by
-the `OEKG_ID_BASE` environment variable (`kg.py`, line 53).
+the `OEKG_ID_BASE` environment variable (`kg.py`, line 55).
 `mint(collection, name)` derives the local part as a UUIDv5 over a
 normalised identifying name, never a random UUIDv4, so two serialize
-runs over one document mint byte-identical IRIs (`kg.py`, lines 239 to
-244; `test_the_iri_is_a_pure_function_of_the_name`). Where each class of
+runs over one document mint byte-identical IRIs (`kg.py`, lines 233 to
+239; `test_the_iri_is_a_pure_function_of_the_name`). Where each class of
 node lives was read directly off the running OEKG graph over its SPARQL
-endpoint, 13,700 triples at the time it was checked (`kg.py`, lines 47
-to 49): a study report sits under `publication/`, a scenario factsheet
+endpoint, 13,700 triples at the time it was checked (`kg.py`, lines 49
+to 52): a study report sits under `publication/`, a scenario factsheet
 under `scenario/`, a study region under `region/`, and a scenario
 bundle, an author, an organisation and a funder directly under the base
-with no path segment at all (`COLLECTIONS`, `kg.py`, lines 59 to 67;
+with no path segment at all (`COLLECTIONS`, `kg.py`, lines 61 to 69;
 `test_the_individuals_live_where_the_oekg_puts_them`).
 
 One document mints exactly one study report and one scenario bundle. The
 report's IRI comes from the resolved title; the bundle's comes from
 `study_project_name` where the document names a project, and from the
-title again where it does not (`kg.py`, lines 652 to 655). Both carry a
+title again where it does not (`kg.py`, lines 656 to 659). Both carry a
 fixed has-uuid triple regardless, since the OEKG mints a UUID on every
 node it holds, although that predicate's declared domain names only a
 report or a factsheet, not a bundle; `edges()` records the gap with its
 own stated reason so the ontology check does not flag it as unexplained
-(`kg.py`, lines 182 to 192).
+(`kg.py`, lines 185 to 194).
 
 The bundle also carries its tags, one triple for each entry the model
 picked from the four lists above. `BUNDLE_TAGS` is every category
 parameter whose `kg` block names the bundle, read from the spec as
-`SCENARIO_FIELDS` is (`kg.py`, lines 209 to 216), and every passage that
+`SCENARIO_FIELDS` is (`kg.py`, lines 211 to 218), and every passage that
 named an entry stands above its triple. An `out:` entry or a wording the
 list did not hold writes no triple and is counted in `out_of_graph`, as
-for a scenario type (`kg.py`, lines 941 to 953;
+for a scenario type (`kg.py`, lines 948 to 960;
 `test_a_bundle_tag_is_the_entry_the_model_chose_with_its_passages`). The
 picked IRIs travel on in the study dict as `bundle["tags"]`.
 
@@ -290,15 +290,15 @@ One factsheet is minted per resolved scenario identity. For every
 scenario-scope row, `scenario_key()` decides which run, if any, the row
 belongs to, against the document's own known-scenario list and a synonym
 dict built from whichever rows of the same document already resolved a
-run (`kg.py`, lines 348 to 397, 722 to 732); a wording that resolves to
+run (`kg.py`, lines 341 to 390, 729 to 739); a wording that resolves to
 no run still gets its own factsheet, keyed by the wording alone. A
 factsheet's `rdfs:label` is the AR6 database's own spelling where a run
 was resolved, and the document's own wording is kept alongside as
 `dc:acronym`; with no long name known for a run, both carry the same
-string, the usual case in this corpus (`kg.py`, lines 859 to 862). Every
+string, the usual case in this corpus (`kg.py`, lines 866 to 869). Every
 factsheet also carries a fixed `OEO_00020517` annotation on top of
 whatever `scenario_type` classes the model read off the text
-(`IAM_SCENARIO`, `kg.py`, lines 197, 875).
+(`IAM_SCENARIO`, `kg.py`, lines 199, 882).
 
 A study region is referenced, never minted. A region the model matched
 against the document's own narrowed OEKG list is written as a bare link
@@ -318,11 +318,11 @@ already pinned (`profiles/scenarios/vocabulary.json`, `regions_count`
 Six fields the OEKG shapes allow at most once (`publication_title`,
 `publication_date`, `publication_doi`, `publication_abstract`,
 `study_project_name`, `study_acronym`, the `SINGLE` tuple, `kg.py`, lines
-200 to 201) are settled by `_pick_one()`, which favours the reading the
+202 to 203) are settled by `_pick_one()`, which favours the reading the
 most sources agree on: first dropping any candidate that is a strict
 substring of another (a running header would otherwise outvote a title
 on its own title page), then ranking by vote count, whether the reading
-was located on its PDF page, and length (`kg.py`, lines 410 to 438).
+was located on its PDF page, and length (`kg.py`, lines 393 to 421).
 Runner-up spellings are counted `contested` rather than dropped from the
 log. A read-only connection then cross-checks the chosen title, date and
 DOI against `DocumentMeta`, filled in by the crawl, not this profile's
@@ -333,16 +333,16 @@ evidence, and the crawl's copy is only the cross-check
 
 Every triple this serializer writes about a value carries, immediately
 above it, the passage it was read from. By default that passage is a
-flattened Turtle comment (`_evidence_comment`, `kg.py`, lines 519 to 542)
+flattened Turtle comment (`_evidence_comment`, `kg.py`, lines 514 to 537)
 rather than a linked node, since the OEKG's node shapes are currently
 declared `sh:closed`, and an unanticipated triple on a report or a
 factsheet would invalidate the node it documents. Setting `OEKG_EVIDENCE`
 to anything other than `"0"` switches to a linked
 `oekgprov:ExtractionEvidence` node per passage instead, described in the
 module's own docstring as provisional and ahead of the shapes, so it
-stays off by default (`kg.py`, line 476 and the module docstring). Either
+stays off by default (`kg.py`, line 459 and the module docstring). Either
 branch is followed by one rendered trust line, worded in English
-throughout `TRUST_PROSE` (`kg.py`, lines 481 to 489); the full
+throughout `TRUST_PROSE` (`kg.py`, lines 464 to 471); the full
 trust-level and reason vocabulary is published at
 [../contract/trust.md](../contract/trust.md). The state vocabulary a coordinate ends in,
 `read`, `derived`, `unstated` and the rest, is published in full at
@@ -437,6 +437,10 @@ the verdict is, and only a real create settles it. It also covers only the
 keys `body` writes: the API takes more (energy carriers, contacts and
 more), and `graph()` raises on a body carrying one rather than return a
 verdict over half a body (`test_the_model_refuses_a_key_it_does_not_cover`).
+Which properties of the shapes the profile leaves out on purpose, the contact
+person, the study's energy carrier tag and the interacting region among them,
+and why, is `extraction.NOT_EXTRACTED`; `docpipe preflight` warns about any
+other property that nobody asks.
 The acronym comparison ignores case and outer spaces, which may be
 narrower than the platform's own rule.
 
@@ -496,13 +500,13 @@ A spec that mismatches the two dynamic mechanisms above refuses to load
 before any document is touched: a category parameter naming both a fixed
 vocabulary and `vocabulary_dynamic`, or a non-category parameter naming
 `vocabulary_dynamic` at all, raises `SpecError` naming the offending
-field (`docpipe/extraction/spec.py`, lines 432 to 456). A `kg` block
+field (`docpipe/extraction/spec.py`, lines 431 to 455). A `kg` block
 whose class is not an identifier shape, or whose predicate is not a
 single token, is refused the same way, at spec load time
-(`_validate_kg_ids`, `spec.py`, lines 665 to 698); this rule is shared
+(`_validate_kg_ids`, `spec.py`, lines 702 to 741); this rule is shared
 with the kwp profile. This profile's own `kg.py` calls that same loader
 again, on its own copy of the spec, at import time (`load_spec(_SPEC)`,
-`kg.py`, line 494), so a spec broken this way fails to import the whole
+`kg.py`, line 477), so a spec broken this way fails to import the whole
 serializer before a single document is processed, not partway through a
 run. `kg.py`'s own lookup helpers, `_property`, `_name`, `_class` and
 `_kg`, raise `KeyError` for a key the spec does not carry rather than
@@ -511,15 +515,15 @@ default silently, the narrower guarantee
 
 A document whose `publication_title` never resolved is refused whole:
 the serializer returns `None` and logs at `INFO` level, before a bundle,
-a factsheet or an author node is built (`kg.py`, lines 628 to 630). A
+a factsheet or an author node is built (`kg.py`, lines 632 to 634). A
 missing `publication_date` or `publication_author` is not refused this
 way, only named in the per-document summary line as a missing required
-field (`REQUIRED`, `kg.py`, line 219 and lines 626 to 627, 963).
+field (`REQUIRED`, `kg.py`, line 221 and lines 626 to 627, 963).
 
 A scenario wording absent from its own quoted passage is refused as an
 identity for every scenario-scope parameter alike: `scenario_key()`
 returns no identity and no label, and the row contributes no factsheet,
-comment or number (`kg.py`, lines 302 to 316, 392 to 396); it used to
+comment or number (`kg.py`, lines 295 to 309, 385 to 389); it used to
 mint a factsheet anyway, carrying the invented wording as a stable label
 of its own, which this check exists to prevent. A wording that fits more
 than one run of the document's own known-scenario list, with none
@@ -527,13 +531,13 @@ matching it exactly, is refused as an identity rather than guessed: the
 link is dropped, the wording alone becomes the factsheet's key, and rows
 the model assigned to different runs land together on that one shared
 factsheet, a conflation the module accepts and logs by name rather than
-hides (`ambiguous()`, `kg.py`, lines 283 to 299; the merge report, lines
-825 to 844).
+hides (`ambiguous()`, `kg.py`, lines 276 to 292; the merge report, lines
+837 to 851).
 
 Every `out:` choice, and every unresolved `scenario_label`,
 `scenario_region`, `scenario_type` or bundle tag row, is refused a place
 in the graph the same way: no class, no IRI, no link, only a count and a log
-line (`kg.py`, lines 598 to 616). A region wording the document's own
+line (`kg.py`, lines 602 to 620). A region wording the document's own
 narrowed list did not hold is refused identically rather than minted as
 a new individual.
 
@@ -544,7 +548,7 @@ its later journal version sharing one title, for example, is only
 logged, naming both documents and the shared IRI; both documents'
 single-valued triples land on that one shared subject rather than the
 second document being dropped whole, the way kwp refuses a duplicate
-identity (`kg.py`, lines 652 to 662; the contrast is documented at
+identity (`kg.py`, lines 660 to 666; the contrast is documented at
 [../stages/graph.md](../stages/graph.md)).
 
 ## Verification

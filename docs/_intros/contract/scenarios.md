@@ -11,18 +11,20 @@ fills every key below as a publication is read.
 `parameter_state`, `refusal` and `summary` are the three record kinds
 every profile's contract shares. `parameter_state` closes one
 parameter with its state and tuple and refusal counts
-(`docpipe/extraction/schema.py:553` to `577`); `refusal` records a
+(`docpipe/extraction/schema.py:563` to `587`); `refusal` records a
 claim the run did not accept: why it failed, the claim as returned,
-and its source (`:480` to `511`); `summary`, the file's last line, counts a
-document's tuples and refusals by trust level and reason (`:512` to
-`552`). The remaining `##` sections are `tuple` shapes, one per
+and its source (`:490` to `521`); `summary`, the file's last line, counts a
+document's tuples and refusals by trust level and reason (`:522` to
+`562`). The remaining `##` sections are `tuple` shapes, one per
 parameter.
 
 Such a section opens with how its row becomes a node or an edge of the
 OEKG, where the parameter mints one at all. The `parameter` coordinate
-and every axis expand into eight `###` headings: the value, plus
-seven keys that make it checkable without the run that produced it
-(`docpipe/extraction/schema.py:212` to `280`). Four parameters carry
+and every axis expand into eleven `###` headings: the value, plus
+ten keys that make it checkable without the run that produced it, one of
+them `_producer`, the position in the stamp's `producers` list of the
+top-up that read the coordinate again (a missing key means the harvest
+read it; `docpipe/extraction/schema.py:212` to `290`). Four parameters carry
 the same `scenario` axis, `scenario_type`, `scenario_abstract`,
 `scenario_region` and `scenario_year`, each stating which of the
 publication's AR6 scenarios the row belongs to
@@ -32,7 +34,7 @@ test_a_document_field_carries_no_axes_and_a_scenario_field_carries_one`).
 A tuple's `provenance` names where its `quote` sits: `document_id`,
 `owner_kind` and `owner_id` always present, the rest, page and
 section location among them, filled in as the source allows
-(`docpipe/extraction/schema.py:431` to `479`); a coordinate's
+(`docpipe/extraction/schema.py:441` to `489`); a coordinate's
 `<name>_source` and a refusal's `owner` use the shorter
 `[owner_kind, owner_id]` pair instead (`:147` to `151`).
 
@@ -43,7 +45,7 @@ coordinate answers from a closed list, `x-options` names every entry
 with its ontology uri and definition, and its corpus spellings where
 any are recorded. A tuple section closes with the `allOf` rule: a
 coordinate is `null` unless its own `<name>_state` says `read` or
-`derived` (`docpipe/extraction/schema.py:283` to `297`).
+`derived` (`docpipe/extraction/schema.py:293` to `307`).
 
 ## The lists this page cannot publish
 
@@ -70,8 +72,8 @@ the same four parameters takes a different path: the spec marks it
 `dynamic`, not `vocabulary_dynamic`, and `axis_slots` types it as
 plain text through a path that never calls `_value_uri` at all; that
 call runs earlier in the same function, for the parameter's own
-`value` key (`docpipe/extraction/fields.py:404` to `429`;
-`docpipe/extraction/schema.py:367`, `:387` to `399`).
+`value` key (`docpipe/extraction/fields.py:432` to `457`;
+`docpipe/extraction/schema.py:377`, `:397` to `409`).
 
 What the list holds is decided once, before harvest starts, by
 `document_axes` in `profiles/scenarios/extraction.py:172`. It reads
@@ -93,20 +95,29 @@ row whose value was left out, the wording in `value_raw`, which is how the
 value request says no entry of the list fits, is kept with its wording.
 
 Two sections close the page: `## The stamp`, the schema of
-`<publication>.stamp.json` (four fixed keys, `spec`, `model`,
-`anchors`, `page_text_transcribed`, plus per-question patterns,
-`docpipe/extraction/schema.py:580` to `715`), and `## The trace`, the
+`<publication>.stamp.json` (fixed keys, `spec`, `model`,
+`anchors`, `page_text_transcribed` and the three that place the harvest,
+`docpipe`, `document` (the sha256 and size of the PDF) and `producers`,
+plus per-question patterns,
+`docpipe/extraction/schema.py:594` to `745`), and `## The trace`, the
 schema of `<publication>.trace.jsonl`, one `oneOf` branch per event
 kind: eleven, fixed by the schema for every profile rather than drawn
-from this one's spec (`docpipe/extraction/schema.py:718` to `833`). A
+from this one's spec (`docpipe/extraction/schema.py:746` to `880`). A
 `parameter/`, `value/`, `axis/` or `slot/` key differing from today's
-run makes the document eligible for a full re-harvest under
-`--force-stale`; `model`, `anchors` and every prompt id are written for
-a reader and never compared, so a reworded prompt or another model
-leaves a harvested corpus current (`stale`,
-`docpipe/extraction/runner.py:4331` to `4368`; `already_done`, `:4411`
-to `4430`). `top_up_file` redoes
+run, or another sha256 of the PDF in `document` than the database now
+names, makes the document eligible for a full re-harvest under
+`--force-stale`; `model`, `anchors`, `producers` and every prompt id are
+written for a reader and never compared, so a reworded prompt or another
+model leaves a harvested corpus current. The `value/` key of a list
+parameter counts the classes and their spellings and not their
+definitions, so a stamp of this corpus written before that reads stale
+in those keys once: `--remap`, which needs no model, settles them, and
+`--force-stale` first would read the documents again for nothing. A
+document with a wording that no list holds stays stale after the remap,
+and is what `--force-stale` is left for (`stale`,
+`docpipe/extraction/runner.py:4373` to `4418`; `already_done`, `:4461`
+to `4481`). `top_up_file` redoes
 only the changed question
-(`docpipe/extraction/topup.py:340` to `442`). The trace is read by
+(`docpipe/extraction/topup.py:345` to `462`). The trace is read by
 `scripts/trace_report.py` and, for cost, by `trace_costs`
 (`scripts/harvest_compare.py:135` to `155`), never by a resume.

@@ -36,7 +36,9 @@ row that reads differently takes it over only when it is the one row the
 decision can be about: the same value read again with another year, and
 not the row beside it.
 
-Nothing here judges a value, drops one or writes into a harvest.
+Nothing here judges a value, drops one or writes into a harvest. What a
+writer does with a decision is to keep it beside the value it concerns
+(`decisions_in`): the value is the same with it and without it.
 
 Author: Felix Vossel
 """
@@ -295,11 +297,12 @@ class Gold:
                 if not any(same_signature(record.get("row"), said)
                            for said in standing)]
 
-    def verdict(self, document: str, row: dict, field: str,
-                rows: Optional[Iterable[dict]] = None) -> Optional[str]:
-        """`correct`, `wrong` or None (nobody decided) for what *row* says
-        in *field* now. *rows* are the rows of its document, where other
-        rows of the same name may stand; without them the row stands alone.
+    def settled(self, document: str, row: dict, field: str,
+                rows: Optional[Iterable[dict]] = None) -> Optional[tuple]:
+        """(`correct` or `wrong`, the decision that says so) for what *row*
+        says in *field* now, or None (nobody decided). *rows* are the rows
+        of its document, where other rows of the same name may stand;
+        without them the row stands alone.
 
         A field holds one thing. So where somebody found other content
         correct there, or named what is right, that settles this content
@@ -310,13 +313,22 @@ class Gold:
         now = row.get(field)
         for record in reversed(held):
             if same(record.get("shown"), now):
-                return record["verdict"]
+                return record["verdict"], record
         for record in reversed(held):
             if "expected" in record:
-                return CORRECT if same(record["expected"], now) else WRONG
-        if any(record["verdict"] == CORRECT for record in held):
-            return WRONG
+                return (CORRECT if same(record["expected"], now) else WRONG,
+                        record)
+        for record in reversed(held):
+            if record["verdict"] == CORRECT:
+                return WRONG, record
         return None
+
+    def verdict(self, document: str, row: dict, field: str,
+                rows: Optional[Iterable[dict]] = None) -> Optional[str]:
+        """`correct`, `wrong` or None (nobody decided) for what *row* says
+        in *field* now; `settled` says which decision it is."""
+        found = self.settled(document, row, field, rows)
+        return found[0] if found else None
 
     def is_checked(self, document: str, parameter: str) -> bool:
         marks = self.checked.get(document) or ()
@@ -365,6 +377,53 @@ def harvest(directory) -> dict:
     """{document name: [accepted rows]} of a harvest directory."""
     from .serialize import collect
     return collect(Path(directory))
+
+
+def path_beside(harvest_dir) -> Path:
+    """Where the decisions of a harvest are kept unless said otherwise: a
+    file of its own next to the harvest directory. `evaluate` and the review
+    page of the chat both find them there."""
+    # resolve(): "." has no name to stand beside, and ".." has its own.
+    return Path(harvest_dir).resolve().with_name(FILE_NAME)
+
+
+def decisions_in(held: Gold, harvest: dict) -> tuple:
+    """What people decided about the rows of a harvest, and what about rows
+    it does not hold.
+
+    ({document: {tuple name: [decision]}}, {(document, tuple, parameter):
+    decisions}). A decision is the settled verdict of one field of one row
+    (`Gold.settled`) with who made it, when and the note; the tuple name is
+    the one `identity.tuple_ids` gives the row in its document, which is
+    what a writer's `claims` call it. The second holds the field decisions
+    whose row (document, `identity.tuple_id` and parameter) is in no row of
+    *harvest*: counted by the caller, never applied to another row.
+
+    Nothing here changes a row or leaves one out.
+    """
+    found: dict = {}
+    present: set = set()
+    for document, rows in harvest.items():
+        for name, row in zip(identity.tuple_ids(document, rows), rows):
+            key = row_key(document, row)
+            present.add(key)
+            for field in fields_of(row):
+                if key + (field,) not in held.verdicts:
+                    continue
+                settled = held.settled(document, row, field, rows)
+                if settled is None:
+                    continue
+                verdict, record = settled
+                found.setdefault(document, {}).setdefault(name, []).append(
+                    {"field": field, "verdict": verdict,
+                     "by": record.get("by"), "at": record.get("at"),
+                     "note": record.get("note")})
+    strays: dict = {}
+    for (document, name, parameter, _field), records in held.verdicts.items():
+        if (document, name, parameter) not in present:
+            key = (document, name, parameter)
+            strays[key] = strays.get(key, 0) + len(records)
+    return found, strays
 
 
 def queue(rows_by_document: dict, gold: Gold, *,

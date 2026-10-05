@@ -13,7 +13,7 @@ No model, no GPU, no database.
 """
 import json
 
-from docpipe.extraction import remap
+from docpipe.extraction import remap, runner
 from docpipe.extraction.spec import fingerprints, load as load_spec
 
 
@@ -25,7 +25,7 @@ def _spec(carrier_labels):
                        "Jahr, wie im Plan bilanziert.",
         "value_type": "float",
         "unit_target": "kWh",
-        "units_accepted": {"MWh/a": 1.0},
+        "units_accepted": {"MWh/a": {"factor": 1.0, "names_period": True}},
         "axes": {"carrier": {"vocabulary": carrier_labels},
                  "year": {"type": "int"}},
         "example": {"source": "| Erdgas | 42.005 | MWh/a | im Jahr 2020 |",
@@ -355,23 +355,217 @@ def test_a_category_parameters_own_list_is_its_own_stamp_key(tmp_path):
             == fingerprints(new)["parameter/scenario_type"])
 
 
+def _category_row(spec, **answer):
+    """The row the harvest writes for one category answer: what `verify_tuple`
+    makes of it, with the flags the pipeline puts on the row. Built by the
+    verifier and not by hand, because the shape is the verifier's: the class
+    name in `value`, the class in `value_uri`."""
+    from docpipe.extraction.verify import Refusal, verify_tuple
+    parameter = spec.by_uri["scenario_type"]
+    quote = ("Das Zielszenario, das Trendszenario und das Szenario ohne "
+             "Liste beschreiben den Zustand.")
+    done = verify_tuple({"quote": quote, **answer}, parameter, quote)
+    assert not isinstance(done, Refusal), done.reason
+    row = {"kind": "tuple", "parameter": parameter.uri, **done.tuple}
+    if done.flags:
+        row["flags"] = done.flags
+    return row
+
+
+def _category_harvest(tmp_path, spec, rows, **stamp):
+    stamp = {"spec": "spec-sha", "model": "m", "anchors": "a",
+             "extraction/field": "f", **fingerprints(spec), **stamp}
+    return _harvest(tmp_path, rows, stamp=stamp)
+
+
 def test_a_category_value_is_remapped_from_its_wording(tmp_path):
     old, new = _category_spec(CATEGORY_OLD), _category_spec(CATEGORY_NEW)
-    stamp_old = {"spec": "spec-sha", "model": "m", "anchors": "a",
-                 "extraction/field": "f", **fingerprints(old)}
-    stamp_new = {**stamp_old, **fingerprints(new)}
-    path = _harvest(tmp_path, [{"kind": "tuple", "parameter": "scenario_type",
-                                "value": None, "value_raw": "Trendszenario",
-                                "flags": ["unmapped:value:Trendszenario"]}])
-    remap.stamp_path_of(path).write_text(json.dumps(stamp_old),
-                                         encoding="utf-8")
+    row = _category_row(old, value="Trendszenario", value_raw="Trendszenario")
+    assert row["value_uri"] is None and \
+        "unmapped:value:Trendszenario" in row["flags"], \
+        "the harvest left it unmapped"
+    path = _category_harvest(tmp_path, old, [row])
 
-    stats = remap.remap_file(path, new, stamp_new)
+    stats = remap.remap_file(path, new, {"spec": "spec-sha", **fingerprints(new)})
     row = _rows(path)[0]
-    assert row["value"] == "oeo:wem" and "flags" not in row
+    assert row["value_uri"] == "oeo:wem" and "flags" not in row
+    assert row["value"] == "Trendszenario", "the answer is not rewritten"
     assert stats["newly mapped"] == 1
     stored = json.loads(remap.stamp_path_of(path).read_text(encoding="utf-8"))
     assert stored["value/scenario_type"] == fingerprints(new)["value/scenario_type"]
+
+
+def test_a_remap_leaves_the_name_a_category_row_was_answered_with(tmp_path):
+    """`value` is the class name the model chose and `value_uri` the class the
+    graph reads. A pass that wrote the class into `value` left the graph as it
+    was, took the name off the row and cleared the flag that said the wording
+    was unmapped."""
+    old = _category_spec(CATEGORY_OLD)
+    moved = _category_spec({"oeo:goal": ["Zielszenario"]})
+    rows = [_category_row(old, value="Zielszenario", value_raw="Zielszenario"),
+            _category_row(old, value="Zielszenario")]
+    assert [r["value_uri"] for r in rows] == ["oeo:target"] * 2
+    path = _category_harvest(tmp_path, old, rows)
+
+    stats = remap.remap_file(path, moved,
+                             {"spec": "spec-sha", **fingerprints(moved)})
+    for row in _rows(path)[:2]:
+        assert row["value"] == "Zielszenario"
+        assert row["value_uri"] == "oeo:goal", "the class moved"
+    assert stats["remapped (required)"] == 2
+    # nothing moved: nothing is counted as moved, and the rows are as they were
+    again = remap.remap_file(path, moved,
+                             {"spec": "spec-sha", **fingerprints(moved)})
+    assert again["unchanged"] == 2 and not again["remapped (required)"]
+
+
+def test_a_category_row_with_no_wording_kept_is_mapped_from_its_name(tmp_path):
+    """The model answers with the class name and keeps a wording only when the
+    document's differs, so the name is what there is to map from. Without it
+    the document could never settle its list and `--remap` would leave it
+    stale for good."""
+    old, new = _category_spec(CATEGORY_OLD), _category_spec(CATEGORY_NEW)
+    row = _category_row(old, value="Zielszenario")
+    assert "value_raw" not in row
+    path = _category_harvest(tmp_path, old, [row],
+                             **{"value/scenario_type": "an older digest"})
+    stamp = remap.stamp_path_of(path)
+    current = {"spec": "spec-sha", **fingerprints(new)}
+    assert runner.stale(stamp, current) == ["value/scenario_type"]
+    stats = remap.remap_file(path, new, current)
+    assert stats["unchanged"] == 1 and not stats["no wording"]
+    assert runner.stale(stamp, current) == []
+
+
+def test_a_category_row_whose_name_no_list_holds_leaves_the_key_stale(tmp_path):
+    """The case built to fail the promise: nothing maps, so nothing may be
+    vouched for. The pass counts it and the stamp keeps asking."""
+    old, new = _category_spec(CATEGORY_OLD), _category_spec(CATEGORY_NEW)
+    row = _category_row(old, value="Szenario ohne Liste")
+    assert row["value_uri"] is None
+    path = _category_harvest(tmp_path, old, [row],
+                             **{"value/scenario_type": "an older digest"})
+    current = {"spec": "spec-sha", **fingerprints(new)}
+    stats = remap.remap_file(path, new, current)
+    assert stats["not listed"] == 1 and not stats["stamps carried forward"]
+    assert runner.stale(remap.stamp_path_of(path), current) \
+        == ["value/scenario_type"]
+    assert _rows(path)[0]["value_uri"] is None
+
+
+def test_a_stamp_from_before_reports_a_category_list_stale_once_and_remap_settles_it(
+        tmp_path):
+    """The key counted the definitions until it was held to what the rows
+    request shows. A stored scenarios stamp holds that older digest, so the
+    run reports `value/<parameter>` stale (named, skipped), and the pass that
+    settles it needs no model: --remap, never --force-stale first."""
+    from docpipe.extraction.spec import _digest
+    spec = load_spec({"parameters": [{
+        "uri": "scenario_type", "label": "Art des Szenarios",
+        "description": "Die Art eines Szenarios, gewaehlt aus der Liste der "
+                       "Klassen, die dieses Feld zulaesst.",
+        "value_type": "category",
+        "vocabulary": {"oeo:target": {"label": "Zielszenario",
+                                      "definition": "Ein Szenario mit Ziel."}},
+        "axes": {},
+        "example": {"source": "Das Zielszenario beschreibt den angestrebten "
+                              "Zustand im Jahr 2045.",
+                    "tuples": [{"value": "Zielszenario"}]}}]})
+    older = _digest({"dynamic": False, "options": {"oeo:target": {
+        "spellings": ["Zielszenario"], "definition": "Ein Szenario mit Ziel."}}})
+    now = fingerprints(spec)
+    assert older != now["value/scenario_type"]
+    stored = {"spec": "spec-sha", "model": "m", "anchors": "a",
+              "extraction/field": "f", **now, "value/scenario_type": older}
+    path = _harvest(tmp_path, [_category_row(spec, value="Zielszenario",
+                                             value_raw="Zielszenario")],
+                    stamp=stored)
+    stamp = remap.stamp_path_of(path)
+    assert runner.stale(stamp, {"spec": "spec-sha", **now}) \
+        == ["value/scenario_type"], "named once"
+
+    stats = remap.remap_file(path, spec, {"spec": "spec-sha", **now})
+    assert stats["stamps carried forward"] == 1
+    assert runner.stale(stamp, {"spec": "spec-sha", **now}) == []
+    assert json.loads(stamp.read_text())["value/scenario_type"] \
+        == now["value/scenario_type"]
+
+
+def test_the_list_of_producers_starts_with_the_harvest_a_stamp_names():
+    first = [{"pass": "harvest", "model": "first"}]
+    got = remap.producers_of({"producers": first})
+    assert got == first and got is not first, "a copy: callers append to it"
+    # a stamp from before the list: the harvest, as far as the stamp says
+    assert remap.producers_of({"model": "m"}) \
+        == [{"pass": "harvest", "model": "m"}]
+    # a list that is none is not carried: it would be indexed by a pointer
+    assert remap.producers_of({"producers": "top-up", "model": "m"}) \
+        == [{"pass": "harvest", "model": "m"}]
+
+
+def test_a_pass_asks_the_position_before_it_enters_and_gets_the_same(tmp_path):
+    stamp = tmp_path / "plan.stamp.json"
+    assert remap.next_producer(stamp) is None, "no stamp, nothing to point at"
+    assert remap.enter_producer(stamp, {"pass": "top-up"}) is None
+    assert not stamp.exists(), "and nothing is created"
+    stamp.write_text("{broken", encoding="utf-8")
+    assert remap.next_producer(stamp) is None
+    assert remap.enter_producer(stamp, {"pass": "top-up"}) is None
+    assert stamp.read_text(encoding="utf-8") == "{broken"
+
+    stamp.write_text(json.dumps({"model": "m", "spec": "s"}), encoding="utf-8")
+    asked = remap.next_producer(stamp)
+    assert asked == 1, "a stamp with no list holds the harvest first"
+    assert remap.enter_producer(stamp, {"pass": "top-up"}) == asked
+    assert remap.next_producer(stamp) == 2
+    stored = json.loads(stamp.read_text(encoding="utf-8"))
+    assert [p["pass"] for p in stored["producers"]] == ["harvest", "top-up"]
+    assert stored["spec"] == "s", "nothing else in the stamp moved"
+
+
+def test_a_remap_keeps_its_entry_and_writes_no_pointer(tmp_path):
+    """It maps a wording somebody else read: a coordinate keeps the pointer it
+    had, and one that had none does not get one."""
+    old, new = _spec(OLD_LIST), _spec(NEW_LIST)
+    producers = [{"pass": "harvest", "model": "first"},
+                 {"pass": "top-up", "model": "second"}]
+    path = _harvest(tmp_path, [
+        _tuple(carrier_raw="Klaergas", carrier_producer=1),
+        _tuple(carrier_raw="Klaerschlammgas"),
+    ], stamp=_stamp(old, producers=producers))
+    remap.remap_file(path, new, _stamp(new))
+    first, second = _rows(path)[:2]
+    assert first["carrier"] == second["carrier"] == "oeo:sewage"
+    assert first["carrier_producer"] == 1
+    assert "carrier_producer" not in second
+    stored = json.loads(remap.stamp_path_of(path).read_text(encoding="utf-8"))
+    assert [p["pass"] for p in stored["producers"]] \
+        == ["harvest", "top-up", "remap"]
+    assert "model" not in stored["producers"][2], "a remap asks no model"
+
+
+def test_a_remap_neither_earns_nor_loses_the_pdf_key(tmp_path):
+    """It maps wordings and reads no page. The PDF a stamp names is what the
+    whole document was read from, whatever list the wordings now map onto."""
+    old, new = _spec(OLD_LIST), _spec(NEW_LIST)
+    document = {"sha256": "a" * 64, "bytes": 10}
+    path = _harvest(tmp_path, [_tuple(carrier_raw="Klaergas")],
+                    stamp=_stamp(old, document=document))
+    other = tmp_path / "other"
+    other.mkdir()
+    bare = other / "plan.jsonl"
+    bare.write_text(path.read_text(encoding="utf-8"), encoding="utf-8")
+    remap.stamp_path_of(bare).write_text(json.dumps(_stamp(old)),
+                                         encoding="utf-8")
+
+    for target in (path, bare):
+        stats = remap.remap_file(target, new, _stamp(new))
+        assert stats["stamps carried forward"] == 1
+    stored = json.loads(remap.stamp_path_of(path).read_text(encoding="utf-8"))
+    assert stored["document"] == document
+    assert stored["axis/energy/carrier"] == fingerprints(new)["axis/energy/carrier"]
+    assert "document" not in json.loads(
+        remap.stamp_path_of(bare).read_text(encoding="utf-8"))
 
 
 # ---------------------------------------------------------------------------

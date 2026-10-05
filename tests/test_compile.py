@@ -207,8 +207,10 @@ def test_a_draft_says_what_it_lacks_and_is_a_spec_when_it_lacks_nothing(
                for line in open_points)        # nobody names v:issued
     assert any(line.startswith("report_status.description:")
                for line in open_points)
+    # the draft cannot fill a unit entry, so it says the entry's period
+    # statement is the author's
     assert any(line.startswith("report_number_of_staff.unit_target")
-               for line in open_points)
+               and "names_period" in line for line in open_points)
     assert any("report_has_topic.vocabulary: 1 entry has no label" in line
                for line in open_points)
     assert sum(".example: missing" in line for line in open_points) == len(
@@ -225,7 +227,8 @@ def test_a_draft_says_what_it_lacks_and_is_a_spec_when_it_lacks_nothing(
         numeric = parameter["value_type"] in ("int", "float")
         if numeric:
             parameter["unit_target"] = "persons"
-            parameter["units_accepted"] = {"persons": 1}
+            parameter["units_accepted"] = {
+                "persons": {"factor": 1, "names_period": False}}
         for iri, entry in (parameter.get("vocabulary") or {}).items():
             if isinstance(entry, dict) and entry["label"] == "Energy":
                 entry["label"] = "energy"
@@ -305,6 +308,12 @@ def test_the_differences_are_reported_and_nothing_is_changed(files):
     unasked = {r["path"] for r in by_kind["not_asked"]}
     assert {"status", "publishedBy", "staff"} <= unasked
     assert "hasTopic" not in unasked and "title" not in unasked
+    # a property nobody asks is said with the shape it belongs to, which no
+    # other kind of difference carries
+    assert {("report", "status"), ("report", "staff")} <= {
+        (r["shape"], r["path"]) for r in by_kind["not_asked"]}
+    assert not [r for kind, listed in by_kind.items() if kind != "not_asked"
+                for r in listed if "shape" in r]
 
 
 def test_a_spec_drafted_from_the_shapes_differs_from_them_in_nothing(files):
@@ -332,6 +341,62 @@ def test_a_spec_drafted_from_the_shapes_differs_from_them_in_nothing(files):
                                  if row["kind"] == "not_asked"}
 
 
+def test_a_unit_entry_that_says_nothing_about_a_period_is_an_open_point(
+        drafted):
+    """The draft lists the statement for every entry the author listed
+    without it, and for a rate (`integrated: false`) there is none to list."""
+    unsaid = copy.deepcopy(drafted)
+    parameter = _by_uri(unsaid)["report_number_of_staff"]
+    parameter["unit_target"] = "persons"
+    parameter["units_accepted"] = {
+        "persons": 1, "teams": {"factor": 12, "names_period": False},
+        "persons/a": {"factor": 1}}
+    lines = [line for line in draft.todo(unsaid)
+             if line.startswith("report_number_of_staff.units_accepted")]
+    assert len(lines) == 1 and "2 entries without names_period" in lines[0], lines
+    assert "first: persons)" in lines[0]
+
+    said = copy.deepcopy(unsaid)
+    _by_uri(said)["report_number_of_staff"]["units_accepted"] = {
+        "persons": {"factor": 1, "names_period": False}}
+    assert not [line for line in draft.todo(said)
+                if line.startswith("report_number_of_staff.units_accepted")]
+
+    rate = copy.deepcopy(unsaid)
+    _by_uri(rate)["report_number_of_staff"]["integrated"] = False
+    assert not [line for line in draft.todo(rate)
+                if line.startswith("report_number_of_staff.units_accepted")]
+
+
+def test_the_draft_lists_an_entry_exactly_where_the_loader_refuses_it(drafted):
+    """The list is only worth reading if it agrees with the judge: a shape of
+    statement that `spec.load` refuses is listed, and one it accepts is not.
+    A null and a text are no statement, and the loader says so."""
+    shapes_of_an_entry = {
+        "missing": {"factor": 1}, "null": {"factor": 1, "names_period": None},
+        "text": {"factor": 1, "names_period": "yes"},
+        "number": {"factor": 1, "names_period": 1},
+        "bare factor": 1,
+        "true": {"factor": 1, "names_period": True},
+        "false": {"factor": 1, "names_period": False}}
+    seen = set()
+    for label, entry in shapes_of_an_entry.items():
+        odd = copy.deepcopy(drafted)
+        parameter = _by_uri(odd)["report_number_of_staff"]
+        parameter["unit_target"] = "persons"
+        parameter["units_accepted"] = {"persons": entry}
+        listed = any(line.startswith("report_number_of_staff.units_accepted")
+                     for line in draft.todo(odd))
+        try:
+            spec_module._validate_unit_entry("persons", entry, True)
+            refused = False
+        except spec_module.SpecError:
+            refused = True
+        assert listed is refused, label
+        seen.add(refused)
+    assert seen == {True, False}, "both outcomes were compared"
+
+
 # -- proposals ----------------------------------------------------------------
 
 PASSAGE = ("The annual report was prepared by Riverside Housing Association "
@@ -342,7 +407,8 @@ TEXT = {"uri": "publisher", "label": "publisher", "value_type": "text",
 NUMBER = {"uri": "staff", "label": "staff", "value_type": "int",
           "description": "How many people the organisation employs in "
                          "total.",
-          "unit_target": "persons", "units_accepted": {"persons": 1}}
+          "unit_target": "persons", "units_accepted": {
+              "persons": {"factor": 1, "names_period": False}}}
 
 
 def test_a_proposal_is_kept_only_with_its_own_evidence():

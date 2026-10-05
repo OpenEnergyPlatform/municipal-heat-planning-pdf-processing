@@ -17,7 +17,10 @@ def _minimal():
         "description": "Endenergieverbrauch: die vom Endverbraucher bezogene "
                        "Energiemenge je Träger, Sektor und Jahr.",
         "unit_target": "OEO_00050008",
-        "units_accepted": {"kWh/a": 0.001, "MWh/a": 1.0, "GWh/a": 1000.0},
+        "units_accepted": {
+            "kWh/a": {"factor": 0.001, "names_period": True},
+            "MWh/a": {"factor": 1.0, "names_period": True},
+            "GWh/a": {"factor": 1000.0, "names_period": True}},
         "axes": {
             "carrier": {"vocabulary": {"OEO_00000292": ["Erdgas", "Gas"]}},
             "year": {"type": "int", "required": True},
@@ -92,7 +95,8 @@ def test_an_example_tuple_with_a_foreign_unit_is_refused():
 
 def test_two_spellings_of_one_unit_are_the_point_and_still_load():
     ok = _minimal()
-    ok["parameters"][0]["units_accepted"]["kWh / a"] = 0.001
+    ok["parameters"][0]["units_accepted"]["kWh / a"] = {
+        "factor": 0.001, "names_period": True}
     assert "kWh / a" in load(ok).by_uri["OEO_00050016"].units_accepted
 
 
@@ -190,7 +194,9 @@ def _spec_of(**overrides):
         "description": "Endenergieverbrauch je Energietraeger, Sektor und "
                        "Jahr, wie im Plan bilanziert.",
         "value_type": "float", "unit_target": "kWh",
-        "units_accepted": {"kWh/a": 0.001, "MWh/a": 1.0},
+        "units_accepted": {
+            "kWh/a": {"factor": 0.001, "names_period": True},
+            "MWh/a": {"factor": 1.0, "names_period": True}},
         "example": {
             "source": "| Erdgas | 42.005 | MWh/a | im Jahr 2020 |",
             "tuples": [{"value": 42005, "unit_raw": "MWh/a",
@@ -285,7 +291,9 @@ def test_the_written_order_of_a_list_is_not_part_of_the_question():
     # profile keeps them in.
     assert (spec_mod.fingerprints(_spec_of())["parameter/energy"]
             == spec_mod.fingerprints(_spec_of(
-                units_accepted={"MWh/a": 1.0, "kWh/a": 0.001}))["parameter/energy"])
+                units_accepted={
+                    "MWh/a": {"factor": 1.0, "names_period": True},
+                    "kWh/a": {"factor": 0.001, "names_period": True}}))["parameter/energy"])
 
 
 def test_the_axes_are_not_in_the_parameter_fingerprint():
@@ -329,7 +337,8 @@ def test_a_unit_or_an_example_moves_the_parameter():
     the unit field, and the example is what the model imitates."""
     before = spec_mod.fingerprints(_spec_of())["parameter/energy"]
     units = spec_mod.fingerprints(
-        _spec_of(units_accepted={"MWh/a": 1.0}))["parameter/energy"]
+        _spec_of(units_accepted={
+            "MWh/a": {"factor": 1.0, "names_period": True}}))["parameter/energy"]
     example = spec_mod.fingerprints(_spec_of(
         example={"source": "| Heizoel | 17.300 | MWh/a | 2020 |",
                  "tuples": [{"value": 17300, "unit_raw": "MWh/a",
@@ -371,11 +380,11 @@ def test_value_fingerprint_is_empty_for_a_parameter_with_no_list():
     assert "value/energy" not in spec_mod.fingerprints(_spec_of())
 
 
-def test_a_category_parameters_definitions_are_part_of_its_question():
-    """The meaning reaches the model when it picks, exactly as an axis's
-    does. Left out of the fingerprint, a term whose definition was rewritten
-    leaves every stamped document current -- the drift the key exists to
-    catch, in the one answer space that is not an axis."""
+def test_a_category_parameters_definitions_are_not_part_of_its_question():
+    """The rows request shows the model the classes and their spellings and
+    no definition (tests/test_stamp_requests.py holds that for every key). A
+    rewritten definition is a sentence no model read, so it must not make a
+    stamped document stale; a spelling is shown, so it still does."""
     def _category(vocabulary):
         return spec_mod.load({"parameters": [{
             "uri": "scenario_type", "label": "Art des Szenarios",
@@ -392,9 +401,14 @@ def test_a_category_parameters_definitions_are_part_of_its_question():
                                       "definition": "Ein Szenario mit Ziel."}})
     other = _category({"oeo:target": {"label": "Zielszenario",
                                       "definition": "Etwas ganz anderes."}})
+    respelled = _category({"oeo:target": {"label": "Zielszenario",
+                                          "spellings": ["Ziel-Szenario"],
+                                          "definition": "Ein Szenario mit Ziel."}})
     keys = [spec_mod.value_fingerprint(s.parameters[0])
             for s in (bare, meant, other)]
-    assert len(set(keys)) == 3, "spelling and meaning both decide"
+    assert len(set(keys)) == 1, "a definition decides nothing here"
+    assert spec_mod.value_fingerprint(respelled.parameters[0]) != keys[0], \
+        "a spelling still does"
     # And the parameter itself does not move with its list.
     assert (spec_mod.parameter_fingerprint(meant.parameters[0])
             == spec_mod.parameter_fingerprint(other.parameters[0]))
@@ -408,13 +422,16 @@ def _two(question=None, label="Treibhausgasemissionen", second=True):
         "description": "Endenergieverbrauch je Energietraeger, Sektor und "
                        "Jahr, wie im Plan bilanziert.",
         "value_type": "float", "unit_target": "kWh",
-        "units_accepted": {"kWh/a": 0.001, "MWh/a": 1.0},
+        "units_accepted": {
+            "kWh/a": {"factor": 0.001, "names_period": True},
+            "MWh/a": {"factor": 1.0, "names_period": True}},
         "example": {"source": "| Erdgas | 42.005 | MWh/a | im Jahr 2020 |",
                     "tuples": [{"value": 42005, "unit_raw": "MWh/a"}]},
         "axes": {},
     }
     emission = {**energy, "uri": "emission", "label": label,
-                "unit_target": "t", "units_accepted": {"t CO2-Aeq/a": 1.0},
+                "unit_target": "t", "units_accepted": {
+                    "t CO2-Aeq/a": {"factor": 1.0, "names_period": True}},
                 "description": "Treibhausgasemissionen je Traeger und Jahr, "
                                "wie im Plan bilanziert.",
                 "example": {"source": "| Erdgas | 8.400 | t CO2-Aeq/a |",
@@ -572,3 +589,77 @@ def test_an_axis_that_still_names_an_evidence_rule_is_refused():
                                    "evidence": "own",
                                    "vocabulary": {"oeo:1": ["Erdgas"]}},
                        "year": {"question": "Welches Jahr?", "type": "int"}})
+
+
+# ---------------------------------------------------------------------------
+# Whether a unit entry names a period is the spec's statement, entry by entry
+# ---------------------------------------------------------------------------
+# The verifier used to decide it with a pattern over the entry's spelling.
+# Now the spec says it itself ({"factor": .., "names_period": ..}) and the
+# loader refuses an entry of an integrated parameter that does not.
+
+def _with_units(units, **parameter):
+    spec = _minimal()
+    spec["parameters"][0]["units_accepted"] = units
+    spec["parameters"][0].update(parameter)
+    return spec
+
+
+def test_an_entry_says_whether_it_names_a_period_and_the_factor_stays_a_factor():
+    parameter = load(_with_units({
+        "kWh": {"factor": 0.001, "names_period": False},
+        "kWh/a": {"factor": 0.001, "names_period": True},
+    })).by_uri["OEO_00050016"]
+    assert parameter.units_accepted == {"kWh": 0.001, "kWh/a": 0.001}
+    assert parameter.unit_factor("kWh/a") == 0.001
+    assert parameter.names_period("kWh/a") is True
+    assert parameter.names_period("kWh") is False
+
+
+def test_an_entry_of_an_integrated_parameter_that_does_not_say_is_refused():
+    """The statement is what the flag is read from, so an entry without it
+    would be read as a plain amount by silence. A bare factor, an object
+    without the key and an object with the key left empty all lack it."""
+    for entry in (0.001, {"factor": 0.001}, {"factor": 0.001,
+                                             "names_period": None}):
+        with pytest.raises(SpecError, match=r"units_accepted\.kWh/a"
+                                            r"\.names_period"):
+            load(_with_units({"kWh/a": entry}))
+    # One entry short of the list is as bad as none: the others say, this one
+    # does not.
+    with pytest.raises(SpecError, match=r"units_accepted\.MWh/a\.names_period"):
+        load(_with_units({"kWh/a": {"factor": 0.001, "names_period": True},
+                          "MWh/a": 1.0}))
+
+
+def test_a_statement_that_is_not_a_bool_is_refused_and_a_misspelt_key_says_nothing():
+    """"ja" and 1 are truthy, so a string where a bool belongs would pass as
+    yes; and a misspelt key leaves the entry saying nothing."""
+    for bad in ("ja", 1, 0):
+        with pytest.raises(SpecError, match=r"names_period"):
+            load(_with_units({"kWh/a": {"factor": 0.001,
+                                        "names_period": bad}}))
+    with pytest.raises(SpecError, match=r"names_period: required"):
+        load(_with_units({"kWh/a": {"factor": 0.001,
+                                    "names_periods": True}}))
+
+
+def test_an_entry_object_keeps_the_factor_rule_of_the_bare_form():
+    for factor in (0, -1, "1", None):
+        with pytest.raises(SpecError, match=r"units_accepted\.kWh/a\.factor"):
+            load(_with_units({"kWh/a": {"factor": factor,
+                                        "names_period": True}}))
+    with pytest.raises(SpecError, match=r"units_accepted"):
+        load(_with_units({}))
+
+
+def test_a_rate_needs_no_statement_and_a_bare_entry_answers_nothing():
+    """A power has no period to name. Its entries may stay bare factors, and
+    asking one what it names is an error and not a guess."""
+    parameter = load(_with_units({"kW": 0.001, "MW": 1.0},
+                                 integrated=False)).by_uri["OEO_00050016"]
+    assert parameter.units_accepted == {"kW": 0.001, "MW": 1.0}
+    with pytest.raises(SpecError, match=r"entry 'kW' says nothing"):
+        parameter.names_period("kW")
+    with pytest.raises(SpecError, match=r"entry 'PJ' says nothing"):
+        load(_minimal()).by_uri["OEO_00050016"].names_period("PJ")

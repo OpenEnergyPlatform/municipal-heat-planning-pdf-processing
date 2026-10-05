@@ -134,7 +134,8 @@ wording.
 def run(harvest_dir: Path, spec: Spec, *, ask: Callable,
         sources_for: Callable, documents=None, limit: int = 0,
         prompt_sha: str = "", model: str = "",
-        spec_for: Optional[Callable] = None) -> Counter
+        spec_for: Optional[Callable] = None,
+        producer: Optional[dict] = None) -> Counter
 ```
 
 Review a whole harvest directory, or the documents named by stem.
@@ -148,5 +149,10 @@ would do the opposite and skip a document that was never harvested.
 What the review wrote goes into the stamps of the documents it READ and
 no other: a run cut short by `limit` leaves the rest without a review
 key, which is the only way a later run can tell them apart.
+
+*producer* (`runner.producer`) joins the list of a stamp whose document the
+review changed a row of, which is what the schema says the list holds. No
+coordinate points at it: the review flags a value and reads no coordinate
+in its place.
 
 [Back to the index](../README.md)

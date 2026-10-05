@@ -111,12 +111,16 @@ def _class_names(graph, node) -> set:
     return out
 
 
-def index(graph) -> dict:
+def index(graph, language: str) -> dict:
     """identifier -> {kind, label, alt_labels, definition, parents, deprecated}.
 
     Properties as well as classes and individuals. Without them a spec's `kg`
     blocks -- which name predicates and nothing else -- read as a list of
     terms the ontology does not have.
+
+    `language` is the tag of the alternative labels a term carries: the
+    language the corpus writes its words in, which the profile says
+    (`extraction.ALT_LABEL_LANGUAGE`). The core names none.
     """
     from rdflib import OWL, RDF, RDFS, URIRef
     definition = URIRef(OBO + "IAO_0000115")
@@ -137,11 +141,12 @@ def index(graph) -> dict:
                 # typed both owl:Class and something else is a class here.
                 continue
             foreign = sorted(str(a) for a in graph.objects(subject, alternative)
-                             if getattr(a, "language", None) == "de")
+                             if getattr(a, "language", None) == language)
             if not foreign:
                 # The closure labels most alternatives without a language tag.
-                # Taking them all is worse than taking none: the English
-                # synonym would be offered to the model as a German spelling.
+                # Taking them all is worse than taking none: a synonym of
+                # another language would be offered to the model as a spelling
+                # of this one.
                 foreign = sorted(
                     str(a) for a in graph.objects(subject, alternative)
                     if getattr(a, "language", None) is None)
@@ -253,17 +258,20 @@ def spec_terms(spec_raw: dict) -> dict:
     return {k: v for k, v in sorted(found.items())}
 
 
-def build(closure: Path, sets: dict, spec_raw: dict, *,
+def build(closure: Path, sets: dict, spec_raw: dict, *, language: str,
           extra: Optional[list] = None, base: str = "",
           also: tuple = ()) -> dict:
     """The vocabulary snapshot, from the ontology files as they stand.
 
-    `extra` are further files parsed into the same graph (MHPO, say); `base`
-    is the IRI prefix whose ontology header carries the version to pin.
-    `also` are identifiers the snapshot has to carry although the spec does
-    not name them: the classes a writer's own edges name. `edge_problems`
-    asks whether a subject is under a predicate's domain, and a subject the
-    snapshot does not carry has no parents to answer with.
+    `language` is the tag of the alternative labels the snapshot keeps, the
+    profile's to say (see `index`); there is no default, so a caller cannot
+    leave it to the core. `extra` are further files parsed into the same
+    graph (MHPO, say); `base` is the IRI prefix whose ontology header carries
+    the version to pin. `also` are identifiers the snapshot has to carry
+    although the spec does not name them: the classes a writer's own edges
+    name. `edge_problems` asks whether a subject is under a predicate's
+    domain, and a subject the snapshot does not carry has no parents to
+    answer with.
     """
     from rdflib import OWL, RDF, URIRef
     paths = [closure] + list(extra or [])
@@ -277,7 +285,7 @@ def build(closure: Path, sets: dict, spec_raw: dict, *,
     wanted = {uri for members in reachable.values() for uri in members}
     wanted |= set(spec_terms(spec_raw))
     wanted |= set(also)
-    full = index(graph)
+    full = index(graph, language)
     # Grown to a fixpoint over parents, domains and ranges rather than one
     # generation up. `edge_problems` asks whether a subject class is UNDER a
     # predicate's domain, and a chain that stops early answers "no" for a
@@ -673,6 +681,21 @@ def set_problems(spec_raw: dict, snapshot: dict, rules: dict) -> list:
     return problems
 
 
+def _listed(spec_raw: dict):
+    """(where, uri, entry) for every entry of every closed list of the spec.
+
+    The lists of the axes and the list of a parameter's own value, where
+    `where` is "<parameter>.<axis>" or "<parameter>.value".
+    """
+    for parameter in spec_raw.get("parameters", []):
+        lists = [(name, (axis.get("vocabulary") or {}))
+                 for name, axis in (parameter.get("axes") or {}).items()]
+        lists.append(("value", parameter.get("vocabulary") or {}))
+        for name, vocabulary in lists:
+            for uri, entry in vocabulary.items():
+                yield f"{parameter.get('uri')}.{name}", uri, entry
+
+
 def foreign_labels(spec_raw: dict, snapshot: dict) -> list:
     """Options whose first label is not one the ontology gives the term.
 
@@ -686,26 +709,85 @@ def foreign_labels(spec_raw: dict, snapshot: dict) -> list:
     one. "Klaerschlamm" offered as OEO_00000439 waste fuel does not mean the
     model chose badly -- it means every sewage-sludge reading in the corpus
     becomes a generic waste fuel and nobody looking at the graph can tell.
+
+    This is also the note on a label that differs from the pin's: an entry is
+    named when its first label is neither the pin's label nor one of the pin's
+    alternative labels. A German word the pin records as an alternative label
+    is not named, and that keeps kwp's corpus words, which the pin knows,
+    from being noise. `definition_differences` leaves labels to this.
     """
     terms = snapshot["terms"]
     out: list = []
-    for parameter in spec_raw.get("parameters", []):
-        lists = [(name, (axis.get("vocabulary") or {}))
-                 for name, axis in (parameter.get("axes") or {}).items()]
-        lists.append(("value", parameter.get("vocabulary") or {}))
-        for name, vocabulary in lists:
-            for uri, entry in vocabulary.items():
-                key = identifier(uri)
-                term = terms.get(key) if key else None
-                # Either spec form: a list whose first item is the offered
-                # label, or an object that names it.
-                offered = (entry.get("label") if isinstance(entry, dict)
-                           else (entry or [None])[0])
-                if term is None or not offered:
-                    continue
-                known = {term["label"].casefold()}
-                known |= {a.casefold() for a in term["alt_labels"]}
-                if offered.casefold() not in known:
-                    out.append((f"{parameter.get('uri')}.{name}", key,
-                                offered, term["label"]))
+    for where, uri, entry in _listed(spec_raw):
+        key = identifier(uri)
+        term = terms.get(key) if key else None
+        # Either spec form: a list whose first item is the offered
+        # label, or an object that names it.
+        offered = (entry.get("label") if isinstance(entry, dict)
+                   else (entry or [None])[0])
+        if term is None or not offered:
+            continue
+        known = {term["label"].casefold()}
+        known |= {a.casefold() for a in term["alt_labels"]}
+        if offered.casefold() not in known:
+            out.append((where, key, offered, term["label"]))
     return out
+
+
+# The two ways a definition of the spec differs from the pin's.
+REWRITTEN = "rewritten"       # both have one and the words are not the same
+PIN_ONLY = "pin_only"         # the pin defines the class, the spec does not
+
+
+def definition_differences(spec_raw: dict, snapshot: dict) -> list:
+    """(where, class, kind, spec text, pin text), one per class and kind.
+
+    What the model reads of a class stands in the spec, the pin is the
+    yardstick the spec is held to, so a refresh that moves a definition moves
+    nothing the model is asked until somebody edits the spec. This says where
+    the two have drifted apart and decides nothing:
+
+      REWRITTEN  the spec has a definition and the pin's words are others.
+      PIN_ONLY   the pin defines the class and the spec says nothing of it.
+
+    A definition only the spec has is the author's own words and is not a
+    difference to anything. Words are compared with their white space
+    folded, so a line break is no rewrite. A class that is no term of the pin
+    (the profile's own "out:" entries, a region) has nothing to be held to.
+    Labels are not compared here: `foreign_labels` already names every entry
+    whose first label is neither the pin's nor one of its alternative labels.
+    """
+    terms = snapshot["terms"]
+    out: list = []
+    seen: set = set()
+    for where, uri, entry in _listed(spec_raw):
+        key = identifier(uri)
+        term = terms.get(key) if key else None
+        if term is None:
+            continue
+        theirs = " ".join(str(term.get("definition") or "").split())
+        ours = " ".join(str((entry.get("definition")
+                             if isinstance(entry, dict) else "") or "")
+                        .split())
+        if not theirs or ours == theirs:
+            continue
+        kind = REWRITTEN if ours else PIN_ONLY
+        if (key, kind) in seen:
+            continue
+        seen.add((key, kind))
+        out.append((where, key, kind, ours, theirs))
+    return out
+
+
+def definition_note(difference: tuple) -> str:
+    """The line a refresh prints for one entry of `definition_differences`."""
+    where, uri, kind, ours, theirs = difference
+
+    def shown(text: str, limit: int = 110) -> str:
+        return repr(text if len(text) <= limit else text[:limit - 3] + "...")
+
+    if kind == PIN_ONLY:
+        return (f"  note {where}: the pin defines {uri} as {shown(theirs)} "
+                f"and the spec does not")
+    return (f"  note {where}: the spec defines {uri} as {shown(ours)}, the "
+            f"pin as {shown(theirs)}")

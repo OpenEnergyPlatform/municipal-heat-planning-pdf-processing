@@ -22,7 +22,7 @@ from pathlib import Path
 from typing import Optional
 
 from docpipe import prompts, usage
-from docpipe.artifacts import document_dirs
+from docpipe.artifacts import VISUALS_VERSION, document_dirs
 from docpipe.profile import add_profile_argument, program, require_profile
 
 from docpipe.llm_preflight import assert_serving
@@ -213,6 +213,7 @@ def run_single(
         log.info(stats.summary())
         enriched = _merge_cache(data, cached_items)
         _strip_source_text(enriched)
+        _set_version(enriched)
         dump_json_atomic(enriched, out_path)
         return enriched
 
@@ -276,6 +277,7 @@ def run_single(
 
     # Write unconditionally, to persist partial progress.
     _strip_source_text(enriched)
+    _set_version(enriched)
     log.info("Writing: %s", out_path)
     dump_json_atomic(enriched, out_path)
     prompts.record(output_dir, PROMPT_IDS)
@@ -294,6 +296,19 @@ def _strip_source_text(enriched: dict) -> None:
         for t in section.get("tables", []):
             if isinstance(t, dict):
                 t.pop("source_text", None)
+
+
+def _set_version(enriched: dict) -> None:
+    """Put this file's own version first, in place.
+
+    The output is a copy of its input, and an input read from sections.json
+    carries that file's version: the two are counted apart, so whatever the
+    copy brought is replaced rather than kept.
+    """
+    rest = {k: v for k, v in enriched.items() if k != "version"}
+    enriched.clear()
+    enriched["version"] = VISUALS_VERSION
+    enriched.update(rest)
 
 
 def _merge_cache(data: dict, cached_items: dict[str, dict]) -> dict:

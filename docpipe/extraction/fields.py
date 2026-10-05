@@ -81,6 +81,33 @@ DERIVED = "derived"
 # this module was written to prevent.
 OUT_OF_SLICE = "out_of_slice"
 
+# The key a coordinate carries when a top-up re-read it: `<axis>_producer`,
+# the position of the entry of the stamp's `producers` list that did. The
+# harvest writes none, so a coordinate without it was read by the harvest, and
+# one that no later pass touched must keep reading that way.
+PRODUCER = "_producer"
+BY_HARVEST, BY_PASS, BY_UNKNOWN = "harvest", "pass", "unknown"
+
+
+def reader_of(row: dict, name: str, producers) -> tuple:
+    """(who, index, entry) for the coordinate `name` of a stored row.
+
+    No key: the harvest read it (BY_HARVEST). A key that points at an entry
+    of `producers`: that pass did (BY_PASS). A key that points at none:
+    BY_UNKNOWN, and never the harvest. `--recheck` deletes the stamps, so a
+    position can outlive the list it was written for; reading that as the
+    harvest would put a top-up's answer under a model that never saw it.
+    """
+    if f"{name}{PRODUCER}" not in row:
+        return BY_HARVEST, None, None
+    index = row[f"{name}{PRODUCER}"]
+    if (not isinstance(index, int) or isinstance(index, bool)
+            or not isinstance(producers, list)
+            or not 0 <= index < len(producers)
+            or not isinstance(producers[index], dict)):
+        return BY_UNKNOWN, None, None
+    return BY_PASS, index, producers[index]
+
 
 @dataclass(frozen=True)
 class Option:
@@ -122,8 +149,9 @@ class Slot:
         # meaning rather than by which word looks nearest. Where no entry
         # has a meaning the short form stays, so a profile that has not
         # written any pays nothing for the promise.
-        # The two keys and the gloss of UNSTATED are the profile's words,
-        # as the prompt that explains them is.
+        # The two keys are protocol, the same English pair in every profile
+        # (a prompt that names them names these); the gloss of UNSTATED is
+        # the profile's prose.
         words = wording.phrases()
         means, spellings = words["option_means"], words["option_spellings"]
         if any(opt.definition for opt in self.options):

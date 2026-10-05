@@ -58,20 +58,20 @@ flowchart LR
 
 ### Building the query item and its search anchor
 
-`answer_question` (`answer.py:129`) picks one of three modes: `image_only`
+`answer_question` (`answer.py:154`) picks one of three modes: `image_only`
 searches on an uploaded image alone, an image with text adds a
 caption-style anchor, and text alone anchors on the plain task
-(`answer.py:154-171`). The anchor, `llm_client.make_search_phrase`, is a
+(`answer.py:179-196`). The anchor, `llm_client.make_search_phrase`, is a
 HyDE-style construction: a short hypothetical passage written as it
 would appear in the corpus, not a question. Whatever non-empty phrase the
 model writes is used as the anchor; the function falls back to the raw
 task text only on a transport or parse error, or an empty reply, and it
-never raises (`llm_client.py:333-369`). The same call sets `recheck`, true
+never raises (`llm_client.py:336-372`). The same call sets `recheck`, true
 only when the model marks the task a repetition and history is
-non-empty (`llm_client.py:367`); when true, `answer_question` walks
+non-empty (`llm_client.py:369`); when true, `answer_question` walks
 history backward, folding every `(owner_kind, owner_id)` pair each turn
 examined into one exclude set, stopping at the first non-recheck turn
-(`answer.py:180-186`).
+(`answer.py:205-211`).
 
 ### Retrieval narrowed to one document
 
@@ -133,7 +133,7 @@ into batches under `ANSWER_CONTEXT_TOKENS` tokens each
 instead of truncation. Token counts come from the tokenizer
 named by `LLM_TOKENIZER_ID`; a char/4 heuristic serves as an offline
 fallback only, since German prose runs 3.0 to 3.5 characters per token,
-denser than a flat divide by 4 assumes (`answer.py:222-225`).
+denser than a flat divide by 4 assumes (`answer.py:237-240`).
 
 ### Answering across batches, with computation and image requests
 
@@ -150,44 +150,50 @@ has no table. It parses back `{"ok", "stdout", "stderr", "exit_code", "error"}`
 (`code_exec.py:22-54`), never raising (see Failure modes). An image
 requester may separately return a crop the section text only points at,
 through `db.request_item`. Both draw one shared round budget,
-`CODE_EXEC_MAX_ROUNDS` plus `REQUEST_IMAGE_MAX` (`llm_client.py:637`); a
+`CODE_EXEC_MAX_ROUNDS` plus `REQUEST_IMAGE_MAX` (`llm_client.py:640`); a
 repeated crop id stops the loop and forces an answer
-(`llm_client.py:660-667`). The loop stops once a batch reports complete
-with a citation accepted (`answer.py:296-297`).
+(`llm_client.py:663-670`). The loop stops once a batch reports complete
+with a citation accepted (`answer.py:311-312`).
 
 ### Grounding, image refinement and finishing the turn
 
 Every claim must point at a batch index and either a verbatim quote or,
 for an attached image, a reading. A text quote is accepted only through
 `llm_client.grounded_quote`, a match of at least 12 characters against
-the excerpt shown (`_quote_is_grounded`, `llm_client.py:181-192`). An
-image-based support, `visual_reading` (`llm_client.py:559-576`), is
+the excerpt shown (`_quote_is_grounded`, `llm_client.py:184-195`). An
+image-based support, `visual_reading` (`llm_client.py:562-579`), is
 accepted only when its index was among the crops attached to the call
 and the reading is at least 8 characters, so background knowledge alone
 cannot count as grounded evidence. Citations are deduplicated by
-`(owner_kind, owner_id)` (`answer.py:288-291`); an answer with no
+`(owner_kind, owner_id)` (`answer.py:303-306`); an answer with no
 accepted citation is refused outright, and the log distinguishes "No
 grounded citations" from "Answer ignored the response envelope"
-(`answer.py:348-355`).
+(`answer.py:363-370`).
 
 Every visual citation is then re-read in a focused, single-image call,
 `llm_client.read_off_image`, up to `READOFF_MAX_CALLS` per turn: a first
-pass often misreads a chart (`llm_client.py:496-501`). Readings fold
+pass often misreads a chart (`llm_client.py:499-504`). Readings fold
 back through `revise_with_readings`, unchanged on failure
-(`llm_client.py:541-556`).
+(`llm_client.py:544-559`).
 A JSON answer then goes through `llm_client.format_as_json`
-(`llm_client.py:719-734`), the only call here with no failure handling
+(`llm_client.py:722-737`), the only call here with no failure handling
 of its own (see Failure modes); every turn is logged through
-`request_log.log_request` (`answer.py:374-379`).
+`request_log.log_request` (`answer.py:389-394`).
 
 ### The profile's wording contract
 
 Every phrase and label the loop wraps around the model comes from the
 active profile through `wording.py`. `phrases()` checks a profile's
 `PHRASES` dict against `REQUIRED`, a frozenset of 32 keys
-(`wording.py:30-41`). `llm_client.py` calls `phrases()` on first use
-(`llm_client.py:93-95`), so this package imports with no active profile
-and a lookup with none fails (see Failure modes).
+(`wording.py:33-44`). `llm_client.py` calls `phrases()` on first use
+(`llm_client.py:96-98`), so this package imports with no active profile.
+A lookup with none no longer fails: `wording.chat_profile` is the one place
+that falls back, to the built-in `default` profile, for the phrases, the
+read-off pieces and, through `llm_client._prompt`, every prompt, and it logs one
+warning per process that names the profile. A profile that is named is never
+replaced. `prompts.load` and `require_profile` are untouched, so the stages
+that write a corpus still stop without a profile and only the chat answers on
+the built-in one.
 
 ### The knowledge-graph route
 
@@ -199,7 +205,7 @@ and trust/reason wording, returning `None` where `kg.VALUE_QUERY` is
 absent, so `scenarios` gets no route at all (`kg_route.py:95-122`).
 `to_coordinates` asks one closed
 question per axis over the spec's own vocabulary, through
-`llm_client.choose` in the app (`llm_client.py:262-286`,
+`llm_client.choose` in the app (`llm_client.py:265-289`,
 `app.py:251-254`); an answer outside the vocabulary leaves the axis
 unbound (`kg_route.py:174-216`), and the route proceeds only once a
 coordinate lands on one of the `DECIDING_AXES`, quantity, scenario or
@@ -240,6 +246,34 @@ passage (`compare.py:64-75`, `compare.py:108-113`). A document that
 answered nothing keeps its row (see [What a coordinate's state
 means](../contract/states.md)).
 
+### Measuring the chat's search against a harvest
+
+`scripts/chat_search_recall.py HARVEST_DIR [--profile P] [--db DB] [--index
+INDEX] [--whole-corpus] [--documents N]` counts how often the chat's search puts
+the passage a harvested value was read from, and the page it starts on, among
+its hits, and answers nothing. The harvest's two checks already say that
+passage carries the value, which is a target nobody has to judge. For each
+accepted value the script puts the spec's label of the value's parameter, and
+only that, to the chat's own search path: the search sentence the model writes,
+its embedding and the hybrid search over the scopes the index holds
+(`answer.search_hits`, taken out of `answer_question` so that the chat and the
+script share one definition). It counts the passage and the page among the first
+`MAX_CHUNK_ATTEMPTS` hits (10 by default) and among all the up to `TOP_K` (50),
+split by how the harvest came to read the passage, as far as its trace says:
+found by a search of its own (the plan listed it as a retrieval hit), found by
+structure (the plan listed it so), not in the plan (no plan event of its
+document lists it, for instance a passage the model asked for after the plan,
+which a search found as well) and no plan in the trace. A search sentence equal
+to the question means the model gave none and the chat's own fallback searched
+with the question; that is counted and said. Values the measurement cannot
+speak about are counted apart and named: a value with no address, one whose
+parameter has left the spec, and one whose passage is not in the database under
+its document. The database's ids are counters, so after a rebuild run
+`python -m docpipe.extraction.identity` first or a value's passage is another
+one. The script needs the model server and the embedder, opens the database and
+index read-only and does not cache vectors, so it measures the embedder
+configured now.
+
 ## Data model
 
 `Corpus` (`answer.py:37-47`) is the bundle every turn works on, a
@@ -254,8 +288,8 @@ dataclass this package never builds:
 | `log_conn` | an optional connection to the request-log database |
 
 `answer_question()` returns one dict per turn, most keys fixed in the
-function's own docstring (`answer.py:134-143`); `requested` is not among
-them (`answer.py:147`, populated `answer.py:318`):
+function's own docstring (`answer.py:159-168`); `requested` is not among
+them (`answer.py:172`, populated `answer.py:333`):
 
 | key | holds |
 |---|---|
@@ -300,7 +334,7 @@ opening it brings it forward: the table is made again and every row is carried
 over under its own id.
 
 The logged `cache_hit` column is not the turn's own value: `_log` always
-calls `request_log.log_request` with `cache_hit=False` (`answer.py:379`),
+calls `request_log.log_request` with `cache_hit=False` (`answer.py:394`),
 so a persisted row never reflects the returned dict's `cache_hit` key.
 
 ## Configuration
@@ -335,11 +369,11 @@ chat` lists them all.
 ## Failure modes
 
 An empty hit list is logged as "No hits" and `answer` returns `None`
-before any LLM call runs (`answer.py:214-217`); where hits exist but
+before any LLM call runs (`answer.py:229-232`); where hits exist but
 nothing could be grounded, `answer` comes back `None` (see Method;
-`answer.py:348-355`). An unknown or missing crop id comes back
+`answer.py:363-370`). An unknown or missing crop id comes back
 `None` and is logged (`answer.py:98-126`); a repeated id stops the loop
-and forces an answer (`llm_client.py:660-667`).
+and forces an answer (`llm_client.py:663-670`).
 
 `pdf_locate._have_deps()` checks once for PyMuPDF and rapidfuzz and logs
 an error (`log.error`) if either is missing; when it fails, quote
@@ -352,11 +386,11 @@ session on its own thread and the library is not thread-safe.
 
 Inside `llm_client._chat_json`, a malformed reply or transport error is
 retried up to `LLM_MAX_RETRIES` with backoff capped at 10 seconds before
-raising `RuntimeError` (`llm_client.py:155-259`); callers above it
+raising `RuntimeError` (`llm_client.py:158-262`); callers above it
 degrade instead: `make_search_phrase` falls back to the raw task, and
 `answer_from_sources` comes back `{"found": False}`. `format_as_json`
 has no such wrapper and can raise past this package
-(`llm_client.py:719-734`; `answer.py:357-363`). `code_exec.run_code`
+(`llm_client.py:722-737`; `answer.py:372-378`). `code_exec.run_code`
 degrades without raising: any transport or JSON failure comes back
 `{"ok": False, "error": ...}`, read as no calculation, not a failed turn
 (`code_exec.py:36-62`).
@@ -369,12 +403,11 @@ when the route is built (`kg_route.py:80-92`); a Turtle fragment with no
 
 The wording contract fails the same way: a profile whose `PHRASES` dict
 is missing a required key raises `LookupError` at the first check
-(`wording.py:110-112`), and no active profile raises `LookupError` from
-`wording._component` (`wording.py:85-89`) for any lookup a turn needs.
-`llm_client.py` resolves its own phrases on first use
-(`llm_client.py:93-95`), so the
-missing-profile case surfaces at the first lookup of a turn and not as an
-import error.
+(`wording.py:139-141`). No active profile is not one of its failures:
+`wording._component` (`wording.py:117-118`) asks `chat_profile`, which falls
+back to the built-in profile and says so in the log. `llm_client.py` resolves
+its own phrases on first use (`llm_client.py:96-98`), so a profile that lacks a
+phrase surfaces at the first lookup of a turn and not as an import error.
 
 Answers are deliberately not cached: a follow-up is context-dependent,
 and a cache keyed on the question text alone would misfit a later
@@ -390,8 +423,8 @@ about 470 candidate vectors, and the batched call measured 0.421 to
 0.277 seconds over 50 repetitions, 8.4 milliseconds per document instead
 of 5.5 (`faiss_store.py:76-81`).
 
-The grounding gate's floor of 12 characters (`llm_client.py:181-192`) and
-the image-reading floor of 8 characters (`llm_client.py:559-576`) are
+The grounding gate's floor of 12 characters (`llm_client.py:184-195`) and
+the image-reading floor of 8 characters (`llm_client.py:562-579`) are
 sized the same way, long enough to reject a short stray word standing
 in for evidence; the code names "GmbH" as the concrete case the
 12-character floor rejects.
@@ -833,6 +866,53 @@ passages and citations it had.
 Answers are deliberately NOT cached: follow-up queries ("schau noch einmal
 nach") are context-dependent, and a cache keyed on the query text alone serves
 an answer from a different conversation.
+
+Author: Felix Vossel
+
+</details>
+
+<details>
+<summary><code>scripts/chat_search_recall.py</code></summary>
+
+chat_search_recall.py - How often the chat's search puts the passage and the
+page a harvested value was read from among its hits.
+
+The harvest read every accepted value from one passage, and its two checks
+(the quote stands in a shown passage, the answer stands in the quote) already
+say that passage carries the value. That is a target nobody has to judge. For
+each accepted value this script puts the spec's question for the value's
+parameter, the parameter's label, to the chat's own search path: the search
+sentence the model writes, its embedding, and the hybrid search over the
+scopes the index holds. It then counts whether the value's passage, and the
+page that passage starts on, are among the first hits the chat reads and
+among all the hits it retrieves.
+
+    python scripts/chat_search_recall.py data/extraction/corpus --profile kwp
+    python scripts/chat_search_recall.py <harvest dir> --db <db> --index <index>
+    python scripts/chat_search_recall.py <harvest dir> --whole-corpus
+
+The counts are split by how the harvest came to read the passage, as far as
+its trace says: found by a search of its own (the plan listed the passage as a
+retrieval hit), or by the document's structure (the plan listed it so and not
+as a hit). A passage the harvest found by search is one a search is likely to
+find again, so that row reads better than the other and the two are not one
+number. Two more rows hold what the trace does not say: a passage that no plan
+event of its document lists (read after the plan, for instance from a search
+the model asked for, so not a finding by structure either) and a document
+without a plan in the trace.
+
+It stops after the search. No passage is read, no answer is written, nothing
+judges a number, and so nothing here says whether the chat answers right. A
+passage is named by the database's own ids, which are counters: a database
+built again since the harvest needs `python -m docpipe.extraction.identity`
+first, or a value's passage is another one. A value whose passage is not in the
+database under its document is counted and left out. Where the search sentence
+is the question itself, the model did not answer and the chat's own fallback
+searched with the question: that is counted and said, not hidden.
+
+Needs the model server and the embedder, and reads the corpus database and
+index read-only. The vectors are not cached, so a run measures the embedder
+that is configured now.
 
 Author: Felix Vossel
 

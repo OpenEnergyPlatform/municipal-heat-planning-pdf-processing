@@ -54,6 +54,13 @@ CAPTION_MAX_WORDS = 60
 # How a figure/table list entry opens ("Figure 3 Annual totals 27").
 DIRECTORY_FIGTAB_WORDS = ("Figure", "Table", r"Fig\.", r"Tab\.")
 
+# What a table of contents, a list of figures or an index calls itself: a
+# section with one of these in its title, found anywhere in it, is dropped as a
+# directory at a lower bar than one without. Fragments of a pattern, matched
+# without regard to case. The four words are the ones stage 3 has always used,
+# two English and two German; a profile for another language writes its own.
+DIRECTORY_TITLE_WORDS = ("inhalt", "verzeichnis", "contents", "directory")
+
 # Bibliography titles: routed to the bibliography path of stage 4 rather than
 # dropped as a directory listing.
 BIBLIOGRAPHY_TITLE_WORDS = ("references", "bibliography", "works cited",

@@ -109,6 +109,12 @@ PP_ID2LABEL: dict[int, str] = {
 SUPPRESS_CLASSES = {"header", "header_image", "footer", "footer_image",
                     "number", "footnote"}
 
+# The suppressed classes whose text is prose of the document and not furniture.
+# It is removed all the same, and stage 2 counts it per document so that how
+# much text that is does not stay unknown. A table's own note (vision_footnote)
+# is not one of them: it is a caption class and is not removed here.
+FOOTNOTE_CLASSES = {"footnote"}
+
 # ─── RUNNING HEADER / FOOTER STRIPPING (Stage 3, deterministic) ────────────
 # Removes running headers/footers the layout model mislabelled as plain "text"
 # (SUPPRESS_CLASSES only catches correctly labelled ones). Must run before
