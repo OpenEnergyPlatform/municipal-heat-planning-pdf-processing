@@ -17,6 +17,7 @@ from typing import Optional
 from docpipe.inference.catalog import Catalog, format_published
 
 from .config import PDF_OVERRIDES, SHARED_FILE_OWNERS, link_filename
+from .inference import UI
 
 # Filename prefixes that are not a place name (convoy plans are named after
 # their lead municipality, behind one of these).
@@ -237,7 +238,7 @@ def document_label(row, covered: Optional[list] = None) -> str:
     filename = row["filename"] or ""
     konvoi = "konvoi" in filename.lower()
     published = format_published(row["published"])
-    tail = "(aktuell)" if row["is_current"] else "(alt)"
+    tail = UI["version_current"] if row["is_current"] else UI["version_old"]
 
     if covered and len(covered) > 1:
         anchor = row["organisation_unit_name"] or _konvoi_lead(filename) or covered[0]

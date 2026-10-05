@@ -83,8 +83,9 @@ PHRASES = {
 }
 
 
-# The words of the chat app's pages (docpipe/app/app.py): what a person reads
-# and clicks. Every key is used there, and `wording.UI_REQUIRED` lists them.
+# The words of the chat app's pages (docpipe/app/app.py) and of the picker's
+# labels (docpipe/inference/catalog.py): what a person reads and clicks. Every
+# key is used there, and `wording.UI_REQUIRED` lists them.
 UI = {
     "title_fallback": "docpipe – Recherche",
     "page_chat": "Recherche",
@@ -144,12 +145,35 @@ UI = {
                  "möglich"),
     "open_pdf": "📄 Seite {page} im PDF öffnen",
     "show_context": "Kontext anzeigen",
+    "show_page": "Seite {page} anzeigen",
+    "page_not_located": ("Das Zitat konnte auf dieser Seite nicht lokalisiert "
+                         "werden, es ist nichts markiert."),
+    "page_no_file": ("{file} liegt nicht im PDF-Ordner dieses Servers, die "
+                     "Seite kann deshalb nicht gezeigt werden."),
+    "page_failed_library": ("Seite {page} konnte nicht gezeigt werden: PyMuPDF "
+                            "ist auf diesem Server nicht installiert."),
+    "page_failed_open": ("Seite {page} konnte nicht gezeigt werden: das PDF "
+                         "lässt sich nicht öffnen."),
+    "page_failed_range": ("Seite {page} konnte nicht gezeigt werden: das PDF "
+                          "hat diese Seite nicht."),
+    "page_failed_draw": ("Seite {page} konnte nicht gezeigt werden: sie ließ "
+                         "sich nicht darstellen."),
+    "download_pdf": "PDF herunterladen",
+    "no_profile": ("Es ist kein Profil gesetzt, deshalb lässt sich keine "
+                   "Frage beantworten. Starten Sie den Chat mit `docpipe "
+                   "--profile <name> chat` oder setzen Sie `profile = "
+                   "\"<name>\"` in der docpipe.toml oder DOCPIPE_PROFILE; das "
+                   "eingebaute Profil `default` passt für jeden Ordner."),
     "values_heading": "Belegte Werte aus der Auswertung der Dokumente",
     "values_note": ("Diese Zahlen wurden vorab aus den Dokumenten gelesen "
                     "und mit Zitat geprüft; sie stammen nicht aus der "
                     "Antwort unten."),
     "values_more": "{shown} von {total} Werten gezeigt.",
     "values_level": "Stufe {level}",
+    "index_model_differs": ("Der Index wurde mit {built} aufgebaut, Fragen "
+                            "werden mit {queried} eingebettet: die Vektoren "
+                            "sind nicht vergleichbar, Treffer können falsch "
+                            "sein."),
     "review_heading": "Gelesene Werte prüfen",
     "review_intro": ("Entscheiden Sie für jeden Wert, Feld für Feld, ob das "
                      "Dokument das so sagt. Die Entscheidungen werden in "
@@ -193,4 +217,7 @@ UI = {
         "lässt sich sagen, was der Auswertung fehlt."),
     "review_checked_save": "Als ganz gelesen eintragen",
     "review_checked_all": "für alle Größen",
+    "version_current": "(aktuell)",
+    "version_old": "(alt)",
+    "document_noun_fallback": "Dokument",
 }

@@ -2,8 +2,10 @@
 
 What is promised, sentence by sentence:
 
-  * the store serves every accepted value AND no refusal AND each with its
-    quote, page, level and reasons, as the harvest holds them;
+  * the store serves every accepted value AND no refusal as a value AND
+    each with its quote, page, level and reasons, as the harvest holds them
+    (what it says of the parameters that have none, and of the refusals, is
+    held in test_serve_more.py);
   * a value's id is its `identity` name AND the same after the passage ids
     moved;
   * a value keeps what was read, its wording and how the reading ended for
@@ -16,9 +18,9 @@ What is promised, sentence by sentence:
     content or by label;
   * the table has one line per value, the quote and the page in it, a
     column triple per coordinate AND a cell cannot be taken for a formula;
-  * the HTTP API answers the four questions AND writes nothing AND asks
-    for the token when one is set AND does not listen beyond this machine
-    without one;
+  * the HTTP API answers its questions AND writes nothing AND asks for the
+    token when one is set AND does not listen beyond this machine without
+    one;
   * the MCP server answers initialize, ping, tools/list and tools/call AND
     answers no notification AND reports what a tool cannot answer as a
     tool result AND a protocol error as a JSON-RPC error.
@@ -259,9 +261,12 @@ def test_the_table_has_one_line_per_value_with_quote_and_page(store):
     assert first["source_kind"] == "table"
     header = text.splitlines()[0].split(",")
     assert header[:len(export.FIXED)] == list(export.FIXED)
+    # the columns a table had before the quotes came keep their places, and
+    # the quote of each coordinate is appended after them
     assert header[len(export.FIXED):] == [
         "carrier", "carrier_label", "carrier_state",
-        "year", "year_label", "year_state"]
+        "year", "year_label", "year_state",
+        "carrier_quote", "year_quote"]
     assert lines[2]["reasons"] == "exhausted:year"
 
 
@@ -332,11 +337,12 @@ def test_the_commands_are_commands():
 
 # ------------------------------------------------------------------- HTTP API
 
-def test_the_api_answers_the_four_questions(store):
+def test_the_api_answers_its_questions(store):
     status, body = http.answer(store, "/")
     assert status == 200 and body["values"] == 4
-    assert set(body["endpoints"]) == {"/documents", "/parameters", "/values",
-                                      "/values/<id>"}
+    assert set(body["endpoints"]) == {
+        "/documents", "/parameters", "/values", "/values/<id>", "/states",
+        "/coverage", "/refusals", "/search"}
     assert http.answer(store, "/documents") == (
         200, {"documents": store.documents()})
     assert http.answer(store, "/parameters")[1]["parameters"] \
@@ -457,7 +463,8 @@ def test_ping_and_the_list_of_tools(store):
     assert call(store, "ping")["result"] == {}
     listed = call(store, "tools/list")["result"]["tools"]
     assert [tool["name"] for tool in listed] == [
-        "list_documents", "list_parameters", "find_values", "get_value"]
+        "list_documents", "list_parameters", "find_values", "get_value",
+        "get_states", "get_coverage", "find_refusals", "search"]
     for tool in listed:
         assert tool["description"]
         assert tool["inputSchema"]["type"] == "object"

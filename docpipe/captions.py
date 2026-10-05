@@ -19,24 +19,62 @@ Author: Felix Vossel
 """
 from __future__ import annotations
 
+import os
 import re
+
+from .profile import ENV_VAR, load_profile
 
 
 # A placeholder as Stage 3 writes it: [p85_tbl0], [p17_img1].
 _ITEM_PLACEHOLDER = re.compile(r"\[p\d+_(?:tbl|img)\d+\]")
-# What a caption looks like in any language a report is written in: a word, a
-# number, a colon. NOT a word list — "Tabelle", "Table", "Abbildung", "Figure"
-# are the profile's business and the shape is not. The number is what carries
-# it: "Hinweis:" is a note, "Tabelle 17:" is a caption.
-_CAPTION_START = re.compile(
-    r"(?:^|(?<=[\s\]]))([A-ZÄÖÜ][A-Za-zÄÖÜäöüß.]{2,14}\s+\d+(?:[-.–]\d+)*\s*:)")
 # Past this a "caption" is a paragraph that happens to start with one.
 _CAPTION_LIMIT = 300
+
+# How a caption opens is a fact about the language a corpus is written in,
+# so the core holds no pattern of it. The profile lists them in
+# `preprocessing.CAPTION_START`, each with its own anchor, and a text opens a
+# caption when any of them matches. Compiled once per profile.
+_openers: dict = {}
+
+
+def _compile(name: str, patterns) -> "re.Pattern":
+    """One pattern out of a profile's list. A list that is empty would match
+    every text, so would an empty pattern among the others, and a bare string
+    would be read letter by letter; all three are the profile's mistake and
+    are said so."""
+    if (not isinstance(patterns, (list, tuple)) or not patterns
+            or not all(isinstance(each, str) for each in patterns)):
+        raise ValueError(
+            f"profile {name!r}: preprocessing.CAPTION_START must be a "
+            f"non-empty list of patterns, got {patterns!r}")
+    try:
+        opener = re.compile("|".join(f"(?:{each})" for each in patterns))
+    except re.error as exc:
+        raise ValueError(f"profile {name!r}: a pattern of "
+                         f"preprocessing.CAPTION_START does not compile: "
+                         f"{exc}") from exc
+    if opener.match(""):
+        raise ValueError(
+            f"profile {name!r}: a pattern of preprocessing.CAPTION_START "
+            f"matches the empty text, so every text would open a caption: "
+            f"{patterns!r}")
+    return opener
+
+
+def _caption_start() -> "re.Pattern":
+    """What opens a caption under the profile in force. Where none is named,
+    the read side still runs, on the profile the package brings itself."""
+    name = os.environ.get(ENV_VAR) or "default"
+    if name not in _openers:
+        profile = load_profile(name)
+        _openers[name] = _compile(
+            profile.name, profile.require("preprocessing", "CAPTION_START"))
+    return _openers[name]
 
 
 def looks_like_a_caption(text) -> bool:
     """Does this text open the way a caption opens?"""
-    return bool(_CAPTION_START.match((text or "").strip()))
+    return bool(_caption_start().match((text or "").strip()))
 
 
 def resolve_title(caption, content, block_id) -> str:
@@ -68,7 +106,7 @@ def resolve_title(caption, content, block_id) -> str:
     before = content[:at]
     ends = [m.end() for m in _ITEM_PLACEHOLDER.finditer(before)]
     tail = before[ends[-1]:] if ends else before
-    starts = list(_CAPTION_START.finditer(tail))
+    starts = list(_caption_start().finditer(tail))
     if not starts:
         return caption
     title = tail[starts[-1].start():].strip()

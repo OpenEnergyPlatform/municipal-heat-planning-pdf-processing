@@ -4,7 +4,11 @@ folder.py: A folder of PDFs as a document source.
 The source of a corpus that has no register: every PDF in a folder is one
 document. A file is known by its name, so two files of one name in different
 subfolders are refused and named. The subfolder a file lies in travels as
-its `folder`, which a profile may offer as a filter.
+its `folder`, which a profile may offer as a filter. What the PDF says about
+itself (its title, its creation date) travels as `title` and `created`; a
+PDF that says nothing has the file name for a title and no date. It is read
+for a document that is not registered yet, and a database made before the
+date was kept gets its column on the first run.
 
 The folder may be the data directory itself. Then only what lies directly
 in it is read, because the stages keep their own output underneath. Any
@@ -20,10 +24,15 @@ import logging
 import shutil
 from pathlib import Path
 
+from ..store import documents as docs
+from ..store import schema
+from . import pdf_info
 from .models import Source, SourceDoc
 
 log = logging.getLogger(__name__)
 PDF_SUFFIX = ".pdf"
+# The DocumentMeta column of a PDF's creation date.
+CREATED = "created"
 
 
 class FolderSource(Source):
@@ -80,15 +89,27 @@ class FolderSource(Source):
         return len(self._load())
 
     def documents(self, connection):
+        if connection is not None and schema.add_missing_column(
+                connection, "DocumentMeta", CREATED, "TEXT"):
+            log.info("DocumentMeta of this database had no %s column; added",
+                     CREATED)
         for path in self._load():
             folder = path.parent.relative_to(self.folder).as_posix()
+            # A document that is registered keeps the row it has, so its
+            # file is not opened again for what that row would not take.
+            known = connection is not None and docs.document_exists(
+                path.name, connection)
+            said = {} if known else pdf_info.read(path)
+            meta = {"title": said.get("title") or path.stem,
+                    "folder": None if folder == "." else folder}
+            if CREATED in said:
+                meta[CREATED] = said[CREATED]
             yield SourceDoc(
                 external_id=path.name,
                 filename=path.name,
                 # copied in by `prepare`, or lying in the data directory
                 url=None,
-                meta={"title": path.stem,
-                      "folder": None if folder == "." else folder},
+                meta=meta,
             )
 
 

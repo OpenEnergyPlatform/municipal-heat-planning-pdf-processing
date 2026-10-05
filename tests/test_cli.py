@@ -728,6 +728,7 @@ def _a_harvest(tmp_path):
     # the profile's database, there or not: either way it was looked for
     ("lexical", "docpipe.inference.lexical", ("--check",), "kwp"),
     ("serve", "docpipe.serve", ("--mcp",), ""),
+    ("estimate", "docpipe.estimate", ("ingest",), "estimate for profile kwp"),
 ])
 def test_a_profile_named_after_the_command_reaches_it(tmp_path, command,
                                                      module, rest, says):
@@ -735,7 +736,8 @@ def test_a_profile_named_after_the_command_reaches_it(tmp_path, command,
     H --profile kwp`. Either was refused as named too late, with a message
     that said to do what had just been done."""
     folder = _a_harvest(tmp_path)
-    words = (() if command == "lexical" else (str(folder),)) + rest + (
+    words = (() if command in ("lexical", "estimate")
+             else (str(folder),)) + rest + (
         "--profile", "kwp")
     child = {k: v for k, v in os.environ.items() if k not in STRIP}
     child.update(PYTHONPATH=str(ROOT),

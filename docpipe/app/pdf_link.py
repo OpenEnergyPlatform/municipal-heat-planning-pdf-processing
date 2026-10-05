@@ -1,5 +1,6 @@
 """
-pdf_link.py: Builds deep links into the source PDF for one citation.
+pdf_link.py: Where a citation stands in the source PDF: the deep link into
+an external viewer, and the page drawn here with the quote marked.
 
 A section's chunk text is refined by the LLM and differs from the raw PDF
 text, so a verbatim `#page=N&search=...` term has to come from the raw
@@ -16,6 +17,8 @@ import re
 from difflib import SequenceMatcher
 from typing import Optional
 from urllib.parse import quote as _urlquote
+
+from docpipe.inference.pdf_locate import MUPDF_LOCK
 
 _WORD = re.compile(r"\w+", re.UNICODE)
 
@@ -161,18 +164,19 @@ def best_search_phrase(pdf_path, page_number: int, quote: str,
         return None
     if not (quote or "").strip():
         return None
-    try:
-        doc = fitz.open(str(pdf_path))
-    except Exception:
-        return None
-    try:
-        if not (1 <= int(page_number) <= doc.page_count):
+    with MUPDF_LOCK:
+        try:
+            doc = fitz.open(str(pdf_path))
+        except Exception:
             return None
-        text = doc.load_page(int(page_number) - 1).get_text()
-    except Exception:
-        return None
-    finally:
-        doc.close()
+        try:
+            if not (1 <= int(page_number) <= doc.page_count):
+                return None
+            text = doc.load_page(int(page_number) - 1).get_text()
+        except Exception:
+            return None
+        finally:
+            doc.close()
     if not text.strip():
         return None
     al = fuzz.partial_ratio_alignment(quote, text)
@@ -201,3 +205,74 @@ def best_quote_rects(pdf_path, page_number: int, quote: str,
     from docpipe.inference.pdf_locate import quote_rects
     return quote_rects(pdf_path, page_number, quote,
                        min_score=min_score, max_lines=max_lines)
+
+
+# Pixels per PDF point of the page image: 2.0 is about 150 dpi, where the
+# small print of a table is still legible. A page larger than an A3 sheet is
+# drawn smaller instead, to PAGE_MAX_SIDE pixels on its longest side: a poster
+# at full zoom is a bitmap the server cannot hold.
+PAGE_ZOOM = 2.0
+PAGE_MAX_SIDE = 2600
+
+
+# Why a page was not drawn. The app words each in its profile's language; the
+# message of the exception says it in English, for the log.
+NOT_INSTALLED = "not_installed"
+NOT_OPENED = "not_opened"
+NO_SUCH_PAGE = "no_such_page"
+NOT_DRAWN = "not_drawn"
+
+
+class PageNotRendered(Exception):
+    """A page that could not be drawn. The message names the cause; `reason`
+    is one of the constants above."""
+
+    def __init__(self, message: str, reason: str = NOT_DRAWN):
+        super().__init__(message)
+        self.reason = reason
+
+
+def render_page(pdf_path, page_number: int, rects=None,
+                zoom: float = PAGE_ZOOM) -> bytes:
+    """PNG of a (1-based) PDF page, a highlight over each of `rects`.
+
+    The rects are the ones `best_quote_rects` returns: PDF points in the
+    page as it is shown, which is also the space PyMuPDF takes a highlight
+    annotation in, rotated pages included. The annotations live in memory
+    only; the file is never written.
+
+    The one place the app calls PyMuPDF to draw, under `MUPDF_LOCK`. Raises
+    `PageNotRendered` where it cannot: the library is missing, the file does
+    not open, the page is not in it.
+    """
+    try:
+        import fitz
+    except ImportError as exc:
+        raise PageNotRendered(f"PyMuPDF is not installed ({exc})",
+                              NOT_INSTALLED) from exc
+    with MUPDF_LOCK:
+        try:
+            doc = fitz.open(str(pdf_path))
+        except Exception as exc:
+            raise PageNotRendered(f"the file does not open ({exc})",
+                                  NOT_OPENED) from exc
+        try:
+            number = int(page_number)
+            if not 1 <= number <= doc.page_count:
+                raise PageNotRendered(
+                    f"the file has {doc.page_count} pages, not a page "
+                    f"{number}", NO_SUCH_PAGE)
+            page = doc.load_page(number - 1)
+            for rect in rects or ():
+                page.add_highlight_annot(fitz.Rect(*rect))
+            longest = max(page.rect.width, page.rect.height)
+            zoom = min(zoom, PAGE_MAX_SIDE / longest) if longest else zoom
+            return page.get_pixmap(
+                matrix=fitz.Matrix(zoom, zoom)).tobytes("png")
+        except PageNotRendered:
+            raise
+        except Exception as exc:
+            raise PageNotRendered(f"page {page_number} did not render "
+                                  f"({type(exc).__name__}: {exc})") from exc
+        finally:
+            doc.close()

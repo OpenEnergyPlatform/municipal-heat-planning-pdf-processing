@@ -12,8 +12,10 @@ extends another one writes only the pieces it words differently: its PHRASES
 are laid over those of the profile it extends.
 
 The words of the app's pages come the same way and from the same file: the
-profile's `UI` table, which a person reads where a model reads PHRASES. Both
-are checked for the entries the core asks for (`REQUIRED`, `UI_REQUIRED`).
+profile's `UI` table, which a person reads where a model reads PHRASES. That
+includes the picker's labels, the tag after a document's name and the noun
+for one. Both tables are checked for the entries the core asks for
+(`REQUIRED`, `UI_REQUIRED`).
 
 Author: Felix Vossel
 """
@@ -57,8 +59,11 @@ UI_REQUIRED = frozenset({
     "column_citations", "document_nothing", "show_evidence",
     "show_compute", "compute_no_output", "compute_error",
     "read_off", "open_pdf", "show_context",
+    "show_page", "page_not_located", "page_no_file", "page_failed_library",
+    "page_failed_open", "page_failed_range", "page_failed_draw",
+    "download_pdf", "no_profile",
     "values_heading", "values_note", "values_more",
-    "values_level",
+    "values_level", "index_model_differs",
     "review_heading", "review_intro", "review_no_harvest",
     "review_by", "review_by_missing", "review_progress",
     "review_none_open", "review_parameter_filter", "review_all_parameters",
@@ -71,6 +76,9 @@ UI_REQUIRED = frozenset({
     "review_missing_page", "review_missing_save", "review_missing_needs",
     "review_checked_heading", "review_checked_intro", "review_checked_save",
     "review_checked_all",
+    # The picker's labels (docpipe/inference/catalog.py): the tag after a
+    # document's name, and the noun for a profile that names none.
+    "version_current", "version_old", "document_noun_fallback",
 })
 
 
@@ -110,9 +118,9 @@ _ui_checked: dict = {}
 
 
 def ui(profile: Optional[Profile] = None) -> dict:
-    """The words of the app's pages, complete. Without a profile they are
-    those of the profile the package brings itself: the app starts on any
-    corpus, and what it shows then is in English."""
+    """The words of the app's pages and of the picker, complete. Without a
+    profile they are those of the profile the package brings itself: the app
+    starts on any corpus, and what it shows then is in English."""
     from ..profile import load_profile
     profile = profile or active_profile() or load_profile("default")
     if profile.name in _ui_checked:

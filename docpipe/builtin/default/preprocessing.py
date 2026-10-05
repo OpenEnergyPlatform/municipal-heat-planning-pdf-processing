@@ -26,6 +26,24 @@ TITLE_EXCLUDE_PREFIXES = (
     "tab.",
 )
 
+# What opens a caption (docpipe/captions.py), in three patterns, each with
+# its own anchor. A word, a number, a colon opens one wherever it stands
+# ("Table 3:", "Figure 2-1:", "Fig. 2:"): the number is what carries it,
+# "Note:" is a note. It keeps the umlauts the core's pattern had, so a profile
+# that extends this one for a German corpus still reads "Übersicht 5:". The
+# same with a letter before the number ("Table A.1:") is the second. The
+# third takes the forms without a colon ("Figure 3.", "Fig. 2", "Table 1
+# Annual totals"), but only where a text, a line or a sentence begins: "see
+# Table 1." and "Table 1 shows" are prose, and a title taken from them would
+# replace a caption Stage 2 found.
+CAPTION_START = (
+    r"(?:^|(?<=[\s\]]))([A-ZÄÖÜ][A-Za-zÄÖÜäöüß.]{2,14}\s+\d+(?:[-.–]\d+)*\s*:)",
+    r"(?:^|(?<=[\s\]]))((?:Figure|Fig\.?|Table|Tab\.?|Box|Chart|Map|Plate)"
+    r"\s+[A-Z]\.?\d+(?:[-.–]\d+)*\s*:)",
+    r"(?:^\s*|(?<=\n)|(?<=[.!?\]]\s))((?:Figure|Fig\.?|Table|Tab\.?|Box|Chart|Map"
+    r"|Plate)\s+(?:[A-Z]\.?)?\d+(?:[-.–]\d+)*(?:\.(?=\s|$)|\s*$|(?=\s+[A-Z])))",
+)
+
 # Words. Above this a text block beside a figure is read as prose and not as
 # its caption. The two errors are not alike: a caption read as prose stays in
 # the section's text, while prose read as a caption is taken out of it. So

@@ -54,7 +54,8 @@ def run_folder(
 Processes all PDFs in *input_dir* sequentially, keyed by path relative to
 *input_dir*. The layout model is loaded once and reused; it is not
 thread-safe, so processing must stay sequential. \_index.json is rewritten
-after each PDF so partial results survive an interruption.
+after each PDF so partial results survive an interruption. Raises
+DuplicateDocumentName for two PDFs that would be one document name.
 
 ### rebuild_stage3_from_cache
 
@@ -62,9 +63,9 @@ after each PDF so partial results survive an interruption.
 def rebuild_stage3_from_cache(output_dir: Path, column_layout: str = "auto") -> int
 ```
 
-Re-run ONLY Stage 3 for every doc under *output_dir* that has a readable
-pages cache, overwriting its sections.json. No PDF input and no
-layout model. Returns the number of docs rebuilt.
+Re-run ONLY Stage 3 for every doc under *output_dir*, at any depth, that
+has a readable pages cache, overwriting its sections.json. No PDF input
+and no layout model. Returns the number of docs rebuilt.
 
 ### report_columns
 

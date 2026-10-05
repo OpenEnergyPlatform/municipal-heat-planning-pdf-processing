@@ -8,8 +8,19 @@ http.py: The value store over HTTP, read only.
                           ?document= &parameter= &level= &text=
                           &limit= &offset= &coordinate.<name>=<value>
     GET /values/<id>      one value with everything that backs it
+    GET /states           what the harvest says of a parameter in a document
+                          (unstated, exhausted, ... never asked)
+                          ?document= &parameter= &state= &limit= &offset=
+    GET /coverage         documents by parameters, each cell its state
+                          ?document= &parameter= &limit= &offset=
+    GET /refusals         the claims that were refused, and why
+                          ?document= &parameter= &limit= &offset=
+    GET /search           passages by word: ?text= &document= &limit=
+                          (503 with the reason where there is no corpus
+                          database or word index)
 
-Answers are JSON. Nothing can be written through it.
+Answers are JSON. Nothing can be written through it. A document or a
+parameter the harvest does not have is a 404, not an empty answer.
 
 It listens on this machine only unless told otherwise, and it does not
 listen anywhere else without a token: with DOCPIPE_API_TOKEN set every
@@ -40,6 +51,9 @@ TOKEN_ENV = "DOCPIPE_API_TOKEN"
 LOCAL = ("127.0.0.1", "localhost", "::1")
 DEFAULT_PORT = 8750
 COORDINATE = "coordinate."
+# The questions that are asked by their query string alone.
+ROUTES = {"states": tools.get_states, "coverage": tools.get_coverage,
+          "refusals": tools.find_refusals, "search": tools.search}
 
 
 def token() -> Optional[str]:
@@ -71,7 +85,8 @@ def answer(store: Values, path: str, query: str = "") -> tuple:
         if not parts:
             return 200, {
                 "name": "docpipe", "version": __version__,
-                "values": len(store),
+                "values": len(store), "documents": len(store.harvested),
+                "unreadable_lines": store.unreadable,
                 "endpoints": {
                     "/documents": tools.DESCRIPTIONS[
                         "list_documents"]["description"],
@@ -80,7 +95,15 @@ def answer(store: Values, path: str, query: str = "") -> tuple:
                     "/values": tools.DESCRIPTIONS[
                         "find_values"]["description"],
                     "/values/<id>": tools.DESCRIPTIONS[
-                        "get_value"]["description"]}}
+                        "get_value"]["description"],
+                    "/states": tools.DESCRIPTIONS[
+                        "get_states"]["description"],
+                    "/coverage": tools.DESCRIPTIONS[
+                        "get_coverage"]["description"],
+                    "/refusals": tools.DESCRIPTIONS[
+                        "find_refusals"]["description"],
+                    "/search": tools.described(store)[
+                        "search"]["description"]}}
         if parts == ["documents"]:
             return 200, tools.list_documents(store)
         if parts == ["parameters"]:
@@ -89,8 +112,15 @@ def answer(store: Values, path: str, query: str = "") -> tuple:
             return 200, tools.find_values(store, arguments_of(query))
         if len(parts) == 2 and parts[0] == "values":
             return 200, tools.get_value(store, parts[1])
+        for route, ask in ROUTES.items():
+            if parts == [route]:
+                return 200, ask(store, arguments_of(query))
     except tools.BadRequest as exc:
         return 400, {"error": str(exc)}
+    except tools.NotFound as exc:
+        return 404, {"error": str(exc)}
+    except tools.Unavailable as exc:
+        return 503, {"error": str(exc)}
     except KeyError:
         return 404, {"error": f"no value {parts[-1]!r}"}
     return 404, {"error": f"no such path: {path}"}

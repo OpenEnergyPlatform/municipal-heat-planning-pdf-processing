@@ -72,7 +72,8 @@ def serving_limits(base_url: str, api_key: str, timeout: float = 30.0,
 
 ```python
 def assert_reply_schema(base_url: str, api_key: str, model: str, *,
-                        what: str = "this stage", role: str = "llm") -> None
+                        what: str = "this stage",
+                        role: str = "llm") -> Optional[str]
 ```
 
 Raise PreflightError unless *model* answers inside a reply schema.
@@ -81,26 +82,30 @@ One small request, with the reasoning settings every request carries. A
 model that takes no schema, or refuses a setting, refuses every request
 of the run; here it says so once, with the variable that changes it.
 
+None when it did. When the API could not be asked there is no verdict:
+why, as a sentence, and the run asks anyway.
+
 ### assert_serving
 
 ```python
 def assert_serving(base_url: str, api_key: str, model: str,
                    required_tokens: int, *, what: str = "this stage",
-                   flag: str = "--max-model-len",
+                   flag: str = CONTEXT_FLAG,
                    role: str = "llm") -> Optional[int]
 ```
 
 Raise PreflightError unless *base_url* serves *model* with room for
 *required_tokens*. Logs both numbers on success, so they end up in the
 job's output file where the next person can read them. Returns the
-server's window, or None when it does not report one.
+server's window, or None when it does not report one; such a server is
+asked the request fields all the same.
 
 ### assert_request_extras
 
 ```python
 def assert_request_extras(base_url: str, api_key: str, model: str, *,
                           what: str = "this stage",
-                          role: str = "llm") -> None
+                          role: str = "llm") -> Optional[str]
 ```
 
 Raise PreflightError unless the server accepts the reasoning settings.
@@ -109,5 +114,25 @@ One request of one token. A server that refuses `reasoning_effort`
 refuses every request of the run, and without this it says so as a 400
 per document for as long as the job lives. Named here with the variable
 that turns it off, because that is a restart and not a release.
+
+None when the server took them. A server that could not be asked (down,
+busy, a 5xx) gives no verdict: why, as a sentence, and the settings go out
+anyway. The two are told apart so that a caller who reports "accepted"
+knows it was.
+
+### assert_request_accepted
+
+```python
+def assert_request_accepted(base_url: str, api_key: str, model: str, *,
+                            what: str = "this stage",
+                            role: str = "llm") -> Optional[str]
+```
+
+The probe of the request fields that `assert_serving` sends for this
+role's kind of server: the reply schema of a hosted API, the reasoning
+settings of one's own. For the doctor, which asks it on its own.
+
+Raises PreflightError on a refusal; returns None when the server
+accepted, and a sentence when it could not be asked.
 
 [Back to the index](../README.md)

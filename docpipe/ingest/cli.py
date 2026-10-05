@@ -85,4 +85,14 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
         raise SystemExit(f"profile {profile.name!r} needs --source: its "
                          f"document list")
     db.parent.mkdir(parents=True, exist_ok=True)
-    ingest(source_class(Path(location)), db, data_dir, profile)
+    unreachable: dict = {}
+    ingest(source_class(Path(location)), db, data_dir, profile,
+           unreachable=unreachable)
+    # The run went on past them, so that one run yields the whole worklist.
+    # It ends as it always did: a register carries dead links as a matter of
+    # course, and a chain of stages is not stopped by one.
+    if unreachable:
+        log.warning(
+            "%d (file name, URL) pair(s) could not be fetched or found and "
+            "are not in the corpus; they are listed in %s",
+            len(unreachable), db.parent / "unreachable_pdfs.txt")

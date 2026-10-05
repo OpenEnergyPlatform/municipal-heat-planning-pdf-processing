@@ -12,8 +12,11 @@ scripts/inference_app/app.py` still works: that file only hands over to the pack
 itself lives in `docpipe.inference.answer`; the app is the UI around it. What the corpus is about
 comes from the profile (`--profile`, `docpipe.toml` or `DOCPIPE_PROFILE`): its catalog supplies
 the document labels, the sidebar filters and the detail shown for the selected document, and its
-`inference.UI` every word on the pages. Without a profile the app runs on the built-in `default`
-profile's English words and on filename-and-date labels with no filters.
+`inference.UI` every word on the pages. Without a profile the pages still open, on the built-in
+`default` profile's English words and on filename-and-date labels with no filters, but a question
+cannot be answered, because the answer loop has no prompts of its own. A profile is needed for
+that (`--profile`, the `profile` key of `docpipe.toml` or `DOCPIPE_PROFILE`; the built-in `default`
+works for any folder), and the app shows one line at the top saying so.
 
 ## Flow (per query)
 
@@ -22,7 +25,11 @@ profile's English words and on filename-and-date labels with no filters.
 2. Pick search scopes (multi-select). Tables and figures are each embedded twice, so each is
    offered as two scopes: `*_vl` = the rendered image plus its caption/description; `*_text` =
    only the caption/description text. There is no image-without-text vector. A figure/table-only
-   selection switches the query anchor to a caption style.
+   selection switches the query anchor to a caption style. Only the scopes whose embedding types
+   the index holds are offered, in a fixed order: an index built through a text-only backend
+   shows no `*_vl` scope, and an index with no vectors offers none. Where the database records
+   another embedding model than the one that embeds the questions, a warning above the chat says
+   so; nothing is refused.
 3. Type an extraction task; optionally attach an image (the image+text / image-only toggle
    affects only how the *query embedding* is formed; the text task always drives the final
    question answering).
@@ -30,7 +37,9 @@ profile's English words and on filename-and-date labels with no filters.
    below), as they were read and checked.
 5. The LLM condenses the task into a search phrase.
 6. The query is embedded by the configured backend (`Qwen3-VL-Embedding-8B` by default).
-   Identical queries hit an on-disk cache and skip the embedding.
+   Identical queries hit an on-disk cache and skip the embedding. The cache key holds the model
+   and the vector size as well as the query, so a vector of another model is never found for the
+   same question; entries written before that match nothing and are embedded again.
 7. Retrieval: a temporary sub-index is built from the global index for just the selected document
    and scopes, or, for the whole corpus, the global index is searched. Where a word index exists
    the question's words are searched too and the two rankings are merged. Top-k = 50.
@@ -58,8 +67,9 @@ With `INFERENCE_HARVEST_DIR` set to a harvest directory (`docpipe extract`), a q
 number is answered from the harvest before the documents are searched
 (`docpipe/inference/values_route.py`). The question is turned into the parameter and the
 coordinates it names, one closed question each over the spec's own lists; the values the harvest
-holds for them are shown as they are, each with document, page, trust level and quote, and a link
-into the source PDF. An answer outside a list leaves that coordinate open, and a question that
+holds for them are shown as they are, each with document, page, trust level and quote, and, where
+an external viewer is configured (see below), a link into the source PDF. An answer outside a list
+leaves that coordinate open, and a question that
 names no parameter shows nothing here. `INFERENCE_VALUES_LEVEL` (A, B or C) leaves out values
 below a trust level, and `INFERENCE_VALUES_LIMIT` caps how many are shown before the count of the
 rest.
@@ -68,7 +78,8 @@ rest.
 
 Where a harvest is configured the sidebar offers a second page. A person gives a name and works
 through the rows nobody has decided yet: for each field (the value, the unit, every coordinate)
-the value, its quote and a link to its page are shown, and the field is marked correct or wrong,
+the value, its quote and, where an external viewer is configured, a link to its page are shown,
+and the field is marked correct or wrong,
 with what is right where it is wrong. Two more forms record that the document states a value the
 harvest lacks, and that somebody has read a whole document for one parameter. Everything is
 appended to `gold.jsonl` (`INFERENCE_GOLD_PATH`, by default beside the harvest directory) and
@@ -91,8 +102,8 @@ is not asked. `INFERENCE_LEXICAL=0` turns the word search off.
 | --- | --- |
 | `docpipe/app/app.py` | Streamlit UI and orchestration: the chat page and the review page (the only module importing `streamlit`). |
 | `docpipe/app/config.py` | Env-var configuration; re-exports the core's values, derives the corpus paths from the profile. |
-| `docpipe/app/pdf_link.py` | Source-PDF deep links: quote to page, bbox rects, viewer URL. |
-| `docpipe/app/pdfjs_overlay.js` | pdf.js companion that draws the highlight boxes. |
+| `docpipe/app/pdf_link.py` | Where a citation stands in the source PDF: quote to page, bbox rects, the page drawn with the quote marked, and the optional viewer URL. |
+| `docpipe/app/pdfjs_overlay.js` | pdf.js companion that draws the highlight boxes, for an external viewer that has it. |
 | `docpipe/app/sandbox_service.py` | The code-execution service (`docpipe sandbox`). |
 | `scripts/inference_app/app.py` | Hands `streamlit run scripts/inference_app/app.py` over to the package. |
 | `scripts/inference_app/Containerfile` | The image the sandbox runs code in. |
@@ -150,10 +161,10 @@ comes from, and `docpipe.toml` takes them under `[chat]`.
 | Var | Default | Meaning |
 | --- | --- | --- |
 | `DOCPIPE_PROFILE` | unset | The project profile. Supplies the catalog (labels + filters), the words of the pages and the corpus paths below. |
-| `INFERENCE_DB_PATH` | `<profile>.db_path` | SQLite corpus DB (opened read-only). |
+| `INFERENCE_DB_PATH` | `<profile>.db_path` | SQLite corpus DB (opened read-only). `docpipe serve` reads it too, for its passage search, and has no default. |
 | `INFERENCE_INDEX_PATH` | `<profile>.index_path` | Global FAISS index. |
 | `INFERENCE_IMAGE_ROOT` | `<profile>.processed_dir` | Root for resolving table/figure PNGs. |
-| `INFERENCE_PDF_ROOT` | `<profile>.pdf_dir` | Folder holding the source PDFs. |
+| `INFERENCE_PDF_ROOT` | `<profile>.pdf_dir` | Folder holding the source PDFs; the cited page is drawn from them. |
 | `INFERENCE_HARVEST_DIR` | unset | Harvest directory. Unset: no values step and no review page. |
 | `INFERENCE_GOLD_PATH` | `gold.jsonl` beside the harvest directory | File the review page appends decisions to. |
 | `INFERENCE_VALUES_LEVEL` | unset | Worst trust level (A, B or C) of a harvested value the chat still shows. Unset: every value. |
@@ -171,39 +182,56 @@ comes from, and `docpipe.toml` takes them under `[chat]`.
 | `TOP_K` / `MAX_CHUNK_ATTEMPTS` / `ANSWER_CONTEXT_TOKENS` | 50 / 10 / 10000 | Retrieval depth / max sources examined / per-call source token budget. |
 | `QUERY_CACHE_PATH` | `data/inference_app_query_cache.db` | Separate embedding-vector cache DB (never the corpus DB). |
 | `REQUEST_LOG_PATH` | `data/inference_app_request_log.db` | Separate request log DB (never the corpus DB). |
-| `PDF_URL_PREFIX` | `/app/static/pdf` | URL prefix where the source PDFs are served. Empty: hide the PDF links. |
-| `PDF_VIEWER_PREFIX` | `/app/static/pdfjs/web` | Bundled pdf.js viewer dir. Empty: native browser viewer. |
+| `PDF_URL_PREFIX` | (empty) | URL path an external viewer serves the source PDFs under, for the optional link. Empty: no link. |
+| `PDF_VIEWER_PREFIX` | (empty) | Path of a pdf.js viewer under that prefix. Empty: the browser's own PDF viewer. Nothing is bundled. |
 | `CODE_EXEC_URL` | (empty) | Sandbox `/run` endpoint. **Empty: the calculation feature is OFF.** |
 | `CODE_EXEC_TOKEN` | from `.env` | Bearer token for the sandbox (matches its `KWP_SANDBOX_TOKEN`). |
 | `CODE_EXEC_MAX_ROUNDS` | `2` | Max code runs the model may request per answer batch. |
 | `CODE_EXEC_TIMEOUT` | `45` | HTTP timeout for a sandbox call (s). |
 | `COMPARE_MAX_DOCUMENTS` | `5` | Documents one comparison turn may ask; each costs a full retrieval and answer loop. |
 
-## Source-PDF deep links
+## The cited page and the source PDF
 
-Each citation links into the original PDF at the right page with the matching passage
-highlighted. By default the link goes through a bundled pdf.js viewer so
-`#page=N&search=<phrase>&phrase=true` highlights in every browser; setting `PDF_VIEWER_PREFIX` to
-`""` falls back to the browser's native viewer, which jumps to the page but only highlights in
-Firefox/Adobe.
+Each citation has a page expander next to its context expander. It draws the cited page from the
+PDF in the profile's PDF folder (`INFERENCE_PDF_ROOT`), with a highlight over each rectangle of the
+quote that `pdf_link.best_quote_rects` located, and offers the PDF as a download. Only a section's
+quote is a passage of the page: a table or a figure has no rectangles, and its page is shown
+without a mark and without a note. Where the page shows no mark, the expander says the quote could
+not be located; that is also what shows when `rapidfuzz` is missing, the cause being logged once.
+A PDF that is not in the folder is named in the expander, the folder going to the log and not to
+the page, and a page that cannot be drawn (PyMuPDF missing, a PDF that does not open, a page the
+PDF does not have, a page that did not render) says which, in the profile's words. The download
+stays whenever the file exists.
 
-The chunk text is LLM-refined, so a verbatim `search=` term cannot come from it. Instead
+`pdf_link.render_page` is the one function that calls PyMuPDF to draw. It puts the highlights on in
+memory, which holds for rotated pages, never writes the file, and draws at most 2600 pixels on the
+longest side. Drawn pages are cached by path and modification time (128 of them), so a replaced PDF
+is drawn again, and every call into PyMuPDF holds one lock, because each browser session runs on a
+thread of its own. The page is drawn eagerly inside the collapsed expander of every citation, on
+every rerun, and the download reads the whole file for each citation, which is heavy for a plan of
+50 to 150 MB; once the history holds more distinct cited pages than the cache, each new question
+redraws the evicted ones.
+
+The chunk text is LLM-refined, so a verbatim search term cannot come from it. Instead
 `pdf_link.locate_quote` matches the grounding quote back onto the raw page `Segments` (the
 pre-refinement, page-tagged provenance) and takes the longest shared word-run, which is verbatim
 in the PDF text layer. **`Segments.page` is a FK to `Pages.id`, not the page number**: the real
 page is joined through `Pages`.
 
-**Coordinate overlay (preferred).** When the matched segment carries a stored `bbox`
-(`[[x0,y0,x1,y1],...]` in PDF points, top-left origin), the link uses it instead of a text search:
-`pdf_link.best_segment_rects` picks the matched segment's rects and the URL carries
-`#page=N&mhl=<base64url rects>`. The bundled `pdfjs_overlay.js` companion decodes `mhl` and draws
-the highlight box (`fitz-point x viewport.scale`, no y-flip at rotation 0). `&search=` remains the
-automatic fallback when no `bbox` is stored or no segment matches. `pdfjs_overlay.js` must be
-copied into the pdf.js bundle and referenced from its `viewer.html`.
-
-The PDFs and the pdf.js bundle are exposed via Streamlit static serving. Filenames are stored raw
-in the DB (a few are URL-encoded); the link percent-encodes the name once and the static server
-decodes it back, so every on-disk name resolves.
+**The link into an external viewer (optional).** Nothing here serves a PDF or a viewer, so both
+prefixes are empty and the link button is not shown. A deployment that serves the PDFs sets
+`PDF_URL_PREFIX` to their URL path, and the citation then also carries a link at the right page.
+With `PDF_VIEWER_PREFIX` set to a pdf.js viewer the URL is
+`#page=N&search=<phrase>&phrase=true`, which highlights in every browser; without it the browser's
+own viewer jumps to the page but only highlights in Firefox/Adobe. When the matched segment
+carries a stored `bbox` (`[[x0,y0,x1,y1],...]` in PDF points, top-left origin), the link uses it
+instead of a text search: `pdf_link.best_segment_rects` picks the matched segment's rects and the
+URL carries `#page=N&mhl=<base64url rects>`. `pdfjs_overlay.js` decodes `mhl` and draws the box
+(`fitz-point x viewport.scale`, no y-flip, so it assumes a page that is not rotated); it has to be
+copied into that viewer and referenced from its `viewer.html`. `&search=` remains the fallback when
+no `bbox` is stored or no segment matches. Filenames are stored raw in the DB (a few are
+URL-encoded); the link percent-encodes the name once and the static server decodes it back, so
+every on-disk name resolves.
 
 ## Setup
 
@@ -229,7 +257,8 @@ Two separate SQLite DBs are created automatically (never the authoritative corpu
   cached: a follow-up depends on the
   conversation, and a cache keyed on the question text would serve an answer written for another
   one.
-- **`QUERY_CACHE_PATH`:** embedding-vector cache (query hash to vector).
+- **`QUERY_CACHE_PATH`:** embedding-vector cache (a hash of the model, the vector size and the
+  query to the vector).
 
 Both grow unbounded; neither requires manual eviction. The review page appends to `gold.jsonl`,
 the one file the app writes that is not a cache or a log.

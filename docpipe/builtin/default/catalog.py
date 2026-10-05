@@ -6,6 +6,10 @@ Every filter the profile declares is filled from the DocumentMeta column of
 the same name. So a profile that extends this one adds a column to its
 schema, lets its source fill it, declares the facet, and has the filter.
 
+A document is shown by its title, which the folder source takes from the
+PDF's own information dictionary and sets to the file name where the PDF has
+none, and by its date, the creation date of the same dictionary.
+
 Author: Felix Vossel
 """
 from __future__ import annotations
@@ -52,11 +56,15 @@ class MetaCatalog(Catalog):
         return out
 
     def label(self, row, facets: Optional[dict] = None) -> str:
-        """The title, else the file name. No current/old tag: a folder has
-        no versions, every file is its own document."""
-        title = row["title"] if "title" in row.keys() else None
-        return str(title or Path(row["filename"] or "").stem
+        """The title, else the file name, and the date where there is one.
+        No current/old tag: a folder has no versions, every file is its own
+        document."""
+        columns = row.keys()
+        title = row["title"] if "title" in columns else None
+        name = str(title or Path(row["filename"] or "").stem
                    or row["external_id"] or f"#{row['id']}")
+        created = row["created"] if "created" in columns else None
+        return f"{name} · {created}" if created else name
 
 
 CATALOG = MetaCatalog

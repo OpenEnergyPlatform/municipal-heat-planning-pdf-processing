@@ -54,7 +54,7 @@ table gives this profile's own answer.
 |---|---|---|---|
 | File processing | `source.py`, `schema.sql`, `store.py` | `SOURCE`, `DocumentMeta`, `Scenarios`, `DocumentScenarios` | the ar6 crawl as a `Source`, and the profile's tables and upsert helpers |
 | Layout detection | `profile.py` | `column_layout` | `"auto"`, a two-column journal or report page read column by column |
-| Structure assembly | `preprocessing.py` | `HYPHEN_EXCEPTIONS`, `CAPTION_MAX_WORDS`, `TITLE_EXCLUDE_PREFIXES`, `DIRECTORY_FIGTAB_WORDS`, `BIBLIOGRAPHY_TITLE_WORDS` | English hyphenation, caption length, heading and bibliography rules |
+| Structure assembly | `preprocessing.py` | `HYPHEN_EXCEPTIONS`, `CAPTION_MAX_WORDS`, `CAPTION_START`, `TITLE_EXCLUDE_PREFIXES`, `DIRECTORY_FIGTAB_WORDS`, `BIBLIOGRAPHY_TITLE_WORDS` | English hyphenation, caption length, what opens a caption (a word, a number and a colon), heading and bibliography rules |
 | Preprocessing, refinement, visuals | `prompts/preprocessing`, `prompts/refinement`, `prompts/visuals` | 1, 3 and 7 prompt ids | page transcription, English artefact repair, table and figure captioning |
 | The picker (app) | `catalog.py`, `profile.py` | `CATALOG`, `facets` | publication labels and three filters |
 | Extraction | `extraction.py`, `prompts/extraction/*.md` | `SPEC_PATH`, `document_axes`, `PHRASES`, `PROMPT_CHECKS`, eight prompt ids | the spec (18 parameters, four of them the bundle's tags), the per-document scenario and region lists, the sentences the stage writes to the model and the passages the preflight holds its prompts to, and the harvest's own questions |

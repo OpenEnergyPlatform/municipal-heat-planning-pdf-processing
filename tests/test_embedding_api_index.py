@@ -4,10 +4,14 @@ Promised: with EMBEDDING_INDEX_BACKEND=api the index is built from an
 embeddings endpoint AND needs no model in this process, while the query
 side's EMBEDDING_BACKEND changes nothing here; the vectors are unit vectors;
 an input with a picture is left out and gets no database row; a vector of
-another size than the index never reaches it; and a hosted endpoint that
-says "not now" is asked again.
+another size than the index never reaches it; a hosted endpoint that says
+"not now" is asked again; and the build needs no faiss until it writes the
+index AND no module of the package is left that nothing uses (vLLM's
+pooling runner was one).
 """
+import importlib.util
 import sys
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -218,3 +222,70 @@ def test_a_hosted_endpoint_that_says_not_now_is_asked_again(monkeypatch):
     with pytest.raises(_Busy):                  # and not for ever
         api.embed([{"text": "a"}])
     assert len(calls) == api_module.HOSTED_ATTEMPTS
+
+
+# ------------------------------------------------ faiss, where it is used
+
+def _fresh_copy_of_the_module():
+    """The module read again from its file, under a name of its own, so that
+    what the import does is seen and no other test's module is touched."""
+    spec = importlib.util.spec_from_file_location(
+        "docpipe.chunking._embedding_copy", Path(emb.__file__))
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_the_api_path_needs_no_faiss_until_the_index_is_written(
+        monkeypatch, tmp_path):
+    monkeypatch.setitem(sys.modules, "faiss", None)     # `import faiss` raises
+    module = _fresh_copy_of_the_module()                # imports without it
+
+    class _Writer:
+        def __init__(self, db_path):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+        def write(self, pdf_name, records):
+            pass
+
+    monkeypatch.setattr(module, "EmbeddingWriter", _Writer)
+    index = _Index(3)
+    end = module.create_embeddings(
+        [_inp("text", 0)], index, 0, tmp_path / "db",
+        embedder=module.ApiIndexEmbedder(_Endpoint()))
+    assert end == 1 and index.ids == [0]                 # embedded, no faiss
+    # and it is asked for where the index is read or written, not before
+    with pytest.raises(ImportError):
+        module.save_index(index, tmp_path / "faiss.index")
+    with pytest.raises(ImportError):
+        module.load_or_create_index(tmp_path / "faiss.index")
+
+
+def _referenced(root, needle):
+    """The files under `root` that name `needle`."""
+    return sorted(
+        str(path.relative_to(root)) for path in root.rglob("*")
+        if path.is_file() and path.suffix in (".py", ".toml", ".txt", ".yml")
+        and needle in path.read_text(encoding="utf-8", errors="replace"))
+
+
+def test_nothing_refers_to_the_vllm_embedder_it_was_removed_with(tmp_path):
+    root = Path(__file__).resolve().parent.parent
+    # spelled in pieces, so that this file names neither
+    klass, module = "Vllm" + "Embedder", "vllm" + "_embedding"
+    assert not (root / "docpipe" / "chunking" / (module + ".py")).exists()
+    # the search finds a reference where there is one ...
+    (tmp_path / "module.py").write_text("from x import " + klass + chr(10))
+    assert _referenced(tmp_path, klass) == ["module.py"]
+    # ... and finds none in the code, the tests and the project file
+    for place in ("docpipe", "tests", "scripts", "profiles", "docker"):
+        assert _referenced(root / place, klass) == [], place
+        assert _referenced(root / place, module) == [], place
+    project = (root / "pyproject.toml").read_text(encoding="utf-8")
+    assert klass not in project and module not in project

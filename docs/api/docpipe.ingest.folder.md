@@ -7,7 +7,11 @@ folder.py: A folder of PDFs as a document source.
 The source of a corpus that has no register: every PDF in a folder is one
 document. A file is known by its name, so two files of one name in different
 subfolders are refused and named. The subfolder a file lies in travels as
-its `folder`, which a profile may offer as a filter.
+its `folder`, which a profile may offer as a filter. What the PDF says about
+itself (its title, its creation date) travels as `title` and `created`; a
+PDF that says nothing has the file name for a title and no date. It is read
+for a document that is not registered yet, and a database made before the
+date was kept gets its column on the first run.
 
 The folder may be the data directory itself. Then only what lies directly
 in it is read, because the stages keep their own output underneath. Any

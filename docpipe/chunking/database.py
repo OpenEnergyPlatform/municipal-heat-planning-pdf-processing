@@ -23,6 +23,7 @@ from contextlib import closing
 from pathlib import Path
 from typing import Optional
 
+from docpipe.artifacts import document_dirs
 from docpipe.captions import resolve_title
 from .config import (
     DOCUMENT_JSON,
@@ -172,9 +173,7 @@ def enrich_page_source(db_path: Path, root_dir: Path,
     """
     root_dir = Path(root_dir)
     stats = {"documents": 0, "transcribed": 0, "pages": 0}
-    candidates = sorted(
-        d for d in root_dir.iterdir()
-        if d.is_dir() and (d / PAGE_TRANSCRIPTION_REPORT_JSON).exists())
+    candidates = document_dirs(root_dir, PAGE_TRANSCRIPTION_REPORT_JSON)
     if not candidates:
         log.warning("enrich-page-source: no transcription report under '%s'.",
                     root_dir)
@@ -467,10 +466,7 @@ def update_database(
     """
     root_dir = Path(root_dir)
 
-    candidates = sorted(
-        d for d in root_dir.iterdir()
-        if d.is_dir() and (d / DOCUMENT_JSON).exists()
-    )
+    candidates = document_dirs(root_dir, DOCUMENT_JSON)
 
     if not candidates:
         log.warning("No PDF directories with merged output found in '%s'.", root_dir)
@@ -566,10 +562,7 @@ def enrich_bbox(db_path: Path, root_dir: Path, *, force: bool = False) -> dict:
     root_dir = Path(root_dir)
     stats = {"documents": 0, "segments": 0, "tables": 0, "images": 0}
 
-    candidates = sorted(
-        d for d in root_dir.iterdir()
-        if d.is_dir() and (d / SECTIONS_JSON).exists()
-    )
+    candidates = document_dirs(root_dir, SECTIONS_JSON)
     if not candidates:
         log.warning("enrich-bbox: no Stage-3 outputs found under '%s'.", root_dir)
         return stats

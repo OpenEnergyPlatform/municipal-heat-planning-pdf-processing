@@ -1,7 +1,7 @@
 """
 mcp.py: The value store as a Model Context Protocol server.
 
-An assistant that speaks MCP is given the four questions of `tools.py` as
+An assistant that speaks MCP is given the eight questions of `tools.py` as
 tools and gets the same answers the HTTP API gives. The server talks over
 standard input and output, one JSON-RPC message per line, which is how an
 assistant starts a tool on the machine it runs on:
@@ -38,7 +38,14 @@ INSTRUCTIONS = (
     "Values read from a corpus of documents, each with the quote it stands "
     "in, its page and a trust level. Call list_parameters first: it shows "
     "what can be asked for. Quote the document and the page with every "
-    "value you pass on, and say so when a value is of level C.")
+    "value you pass on, and say so when a value is of level C. A parameter "
+    "with no value is not a miss: get_states says whether the document does "
+    "not state it (unstated), the run ended before it was read (exhausted), "
+    "a value was refused (unbacked), or nobody asked (never_asked), and "
+    "these are different answers. list_parameters shows only parameters "
+    "with values; get_coverage lists every parameter and document. search "
+    "finds passages by word where the "
+    "server has the corpus database; a passage is not a verified value.")
 
 
 def _result(request_id, result: dict) -> dict:
@@ -76,8 +83,8 @@ def respond(store: Values, message) -> Optional[dict]:
         return _result(request_id, {})
     if method == "tools/list":
         return _result(request_id, {"tools": [
-            {"name": name, **described}
-            for name, described in tools.DESCRIPTIONS.items()]})
+            {"name": name, **entry}
+            for name, entry in tools.described(store).items()]})
     if method == "tools/call":
         name = params.get("name")
         if name not in tools.DESCRIPTIONS:
@@ -87,7 +94,7 @@ def respond(store: Values, message) -> Optional[dict]:
         # and act on, not a failure of the protocol.
         try:
             found = tools.call(store, name, params.get("arguments"))
-        except tools.BadRequest as exc:
+        except (tools.BadRequest, tools.NotFound, tools.Unavailable) as exc:
             return _result(request_id, {
                 "content": [{"type": "text", "text": str(exc)}],
                 "isError": True})

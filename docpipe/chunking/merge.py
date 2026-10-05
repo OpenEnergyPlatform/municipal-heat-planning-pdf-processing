@@ -19,6 +19,8 @@ import os
 from pathlib import Path
 from typing import Optional
 
+from docpipe.artifacts import document_dirs
+
 from .config import (SECTIONS_JSON, SECTIONS_REFINED_JSON, VISUALS_JSON,
                      DOCUMENT_JSON)
 from .models import MergeStats
@@ -156,20 +158,18 @@ def merge_single(output_dir: Path, *, force: bool = False) -> Optional[dict]:
 
 
 def merge_batch(root_dir: Path, *, force: bool = False) -> dict[str, bool]:
-    """Run merge for every PDF subdirectory under root_dir."""
+    """Run merge for every document directory under root_dir, at any depth."""
     root_dir = Path(root_dir)
     results: dict[str, bool] = {}
 
-    candidates = sorted(
-        d for d in root_dir.iterdir()
-        if d.is_dir() and (d / SECTIONS_REFINED_JSON).exists()
-    )
+    structured = document_dirs(root_dir, SECTIONS_REFINED_JSON, SECTIONS_JSON)
+    candidates = [d for d in structured
+                  if (d / SECTIONS_REFINED_JSON).exists()]
     # Structured and not refined: left out here, and so missing from the
     # database. An unfinished refinement leaves a document exactly there.
     unrefined = sorted(
-        d.name for d in root_dir.iterdir()
-        if d.is_dir() and (d / SECTIONS_JSON).exists()
-        and not (d / SECTIONS_REFINED_JSON).exists())
+        d.name for d in structured
+        if not (d / SECTIONS_REFINED_JSON).exists())
     if unrefined:
         log.warning("Merge: %d document(s) have no refined output and are "
                     "left out — run the refinement for: %s", len(unrefined),

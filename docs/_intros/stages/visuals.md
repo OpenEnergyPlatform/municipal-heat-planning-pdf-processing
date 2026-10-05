@@ -156,8 +156,9 @@ replaces the target with `os.replace`, so a killed run still leaves
 whatever finished. `_strip_source_text` removes the QA-only
 field from every table, on the normal path and the crash-fallback path
 alike, and `prompts.record` writes `.prompt_versions.json`. `run_batch`
-treats every subdirectory of a root path with a resolvable input file as one
-candidate, runs each through a pool sized `DOC_PARALLEL`, and catches one
+treats every document directory under a root path, at any depth, with a
+resolvable input file as one candidate (`artifacts.document_dirs` over
+`INPUT_JSONS`), runs each through a pool sized `DOC_PARALLEL`, and catches one
 directory's exception without stopping the rest; total in-flight requests
 can reach roughly `DOC_PARALLEL` times `VLM_NUM_PARALLEL` (`pipeline.py`'s
 comment on `DOC_PARALLEL`).

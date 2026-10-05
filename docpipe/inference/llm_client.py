@@ -64,6 +64,8 @@ _PROMPTS = {
     "_READOFF_CORRECTION": "inference/readoff_correction",
     "REVISE_PROMPT": "inference/revise",
 }
+# What the loop loads, for whoever asks whether a profile has all of it.
+PROMPT_IDS = tuple(_PROMPTS.values())
 
 
 @prompts_per_profile

@@ -40,7 +40,11 @@ arguments, and that form keeps working:
 | `docpipe sandbox` | `python -m docpipe.app.sandbox_service` |
 
 `docpipe chat` starts the chat, and `docpipe init`, `doctor`, `config` and
-`profiles` look after the project; they are described below.
+`profiles` look after the project; they are described below. `docpipe run`,
+`status` and `estimate` are commands of their own too: they start the stages
+in one go, say what each document has, and say what a run will cost (see
+Running the stages together, below, and [the command and its
+settings](stages/command.md)).
 
 ## Installation and environment
 
@@ -140,11 +144,41 @@ flowchart LR
     push --> run[Run a stage: mount data, pass endpoints and tokens as env vars]
 ```
 
+## Running the stages together
+
+```bash
+docpipe run
+docpipe status
+docpipe estimate refine visuals chunk
+```
+
+`docpipe run` starts ingest, preprocess, refine, visuals, chunk and the word
+index (`lexical`) one after the other, each as its own `docpipe <stage>`
+process with the arguments the profile gives it, says which stage starts, and
+stops at the first one that ends non-zero, with that stage's exit code.
+`--from`, `--to` and `--skip` choose the stages; an empty or reversed range is
+refused with exit 2. The harvest is not part of it. A stage that lacks an
+argument the profile cannot give is named before anything starts: `kwp` and
+`scenarios` need `--source` for ingest, so run `docpipe ingest --source FILE`
+first and then `docpipe run --skip ingest` (or `--from preprocess`). `docpipe
+status` shows every document once, with an `x` for each stage whose output for
+it is there, and changes nothing; `docpipe estimate` counts the requests,
+tokens and price the named stages still have ahead of them without calling a
+model. The details are on [the command and its
+settings](stages/command.md).
+
+The stages one by one need what `run` supplies from the profile:
+`docpipe preprocess` needs its PDF folder and `docpipe refine` and
+`docpipe visuals` need `--batch`, as the commands below show. `run` does not
+change how a stage behaves: preprocess still ends 0 when single PDFs failed,
+so `docpipe status` is where a gap shows, and it passes no
+`--transcribe-missing-text`.
+
 ## Running each stage
 
 Every stage also accepts `--log-level` (`DEBUG`, `INFO`, `WARNING` or
-`ERROR`, default `INFO`; `docpipe/preprocessing/pipeline.py` lines 485
-to 486), omitted below.
+`ERROR`, default `INFO`; `docpipe/preprocessing/pipeline.py` lines 486
+to 487), omitted below.
 
 ### 1. File processing
 
@@ -154,20 +188,32 @@ docpipe --profile kwp ingest --source kww.xlsx
 
 `--source` is the profile's document list: an Excel export for `kwp`, a
 crawl index for `scenarios`, a folder of PDFs for a profile that extends
-`default` (left out, the PDFs lying in the data directory). `--db` and
+`default` (left out, the PDFs lying in the data directory). For a folder, the
+catalog of the built-in profile shows each PDF's own title and creation date,
+read from its information dictionary, with the file name where it has none. `--db` and
 `--data-dir` default to the profile's own. `--backfill-meta` skips the run
 and only refreshes metadata for municipalities already registered, with no
 downloads (`docpipe/ingest/cli.py`). No
 separate step creates the database: `ingest` applies the core schema,
 then the profile's own `schema.sql`, before registering any document
 (`docpipe/store/schema.py` line 40; `docpipe/ingest/pipeline.py` line
-79). The stage writes rows into `Documents` and, for `kwp` on every run,
+123). The stage writes rows into `Documents` and, for `kwp` on every run,
 `OrganisationUnits`, `Municipalities`, `DocumentMeta` and
 `MunicipalityMeta` (`profiles/kwp/source.py` lines 193 to 196;
-`docpipe/ingest/pipeline.py` line 102). It resumes on the filename
+`docpipe/ingest/pipeline.py` line 150). It resumes on the filename
 already in `Documents` (`docpipe/store/documents.py` lines 29 to 32):
 removing the PDF alone does not trigger a refetch; deleting the row
 does.
+
+A download is streamed to disk, with the `%PDF` check on its first bytes, and
+is refused over `DOCPIPE_MAX_DOWNLOAD_MB` (500 by default) with its size;
+`DOCPIPE_USER_AGENT` sets the User-Agent it sends. The URL a file came from is
+kept beside it as `<name>.url`, and a second, different URL for that file name
+is refused with both URLs named, instead of being read from the first one's
+bytes. A refused download is listed in `unreachable_pdfs.txt` with the files
+that could not be fetched, and the run goes on. `docpipe ingest` still ends 0
+then, logging one warning with the number of (file name, URL) pairs and the
+worklist's path, so a chain of stages is not stopped by one dead link.
 
 ### 2 and 3. Layout and structure (preprocessing)
 
@@ -175,16 +221,17 @@ does.
 docpipe preprocess data/kwp/pdf
 ```
 
-The input is a PDF file or a folder of PDFs
-(`docpipe/preprocessing/pipeline.py` lines 461 to 463); the output
+The input is a PDF file or a folder of PDFs and has no default
+(`docpipe/preprocessing/pipeline.py` lines 462 to 464); `docpipe run` passes
+the profile's PDF folder. The output
 directory defaults to the profile's processed directory. `--glob` filters
 a folder run's files, default `*.pdf`; `--pages START END` limits a
-single-PDF run to a 0-indexed page range (lines 480 to 481).
+single-PDF run to a 0-indexed page range (lines 481 to 482).
 `--force-reextract` reruns layout detection and text extraction from the
 PDF, ignoring both caches; `--rebuild-stage3` reruns only section
 assembly, from a cached `pages.json`, with no PDF and no layout model;
 `--transcribe-missing-text` turns on a vision fallback for pages with no
-text layer (lines 475 to 479), reusing the visuals stage's client at
+text layer (lines 476 to 480), reusing the visuals stage's client at
 `VLM_BASE_URL` (`docpipe/preprocessing/page_text_fallback.py` lines 339
 to 340). The stage writes `pages.json`, then `sections.json`.
 It resumes on those two files existing and loading cleanly; a run that
@@ -197,13 +244,15 @@ document over.
 docpipe refine --batch
 ```
 
-`--batch` refines every document subdirectory under the input path,
-which defaults to the profile's processed directory. `--force`
+`--batch` refines every document directory under the input path, found at any
+depth, which defaults to the profile's processed directory; without `--batch`
+that directory would be taken for one document, which is why `docpipe run`
+passes it. `--force`
 re-refines even where `sections_refined.json` already exists;
 `--force-stale` only where the recorded prompt hash moved;
 `--print-context-budget` prints the worst-case tokens one request needs
 and exits, to size the vLLM server's maximum context length
-(`docpipe/refinement/pipeline.py` lines 210 to 214). The stage writes
+(`docpipe/refinement/pipeline.py` lines 205 to 209). The stage writes
 `sections_refined.json` and resumes on that file already existing; the
 server at `LLM_BASE_URL` is checked for the needed context first
 (`docpipe/llm_preflight.py`).
@@ -229,11 +278,12 @@ partial file, and the next run starts with the cut (lines 908 to 912, 1187 to
 docpipe visuals --batch
 ```
 
-`--batch` processes every subdirectory under the input path; `--dry-run`
+`--batch` processes every document directory under the input path, found at
+any depth; `--dry-run`
 reports cached and pending counts without contacting the server;
 `--force` reprocesses every table and figure regardless of cache,
 `--force-stale` only where the prompt changed
-(`docpipe/visuals/pipeline.py` lines 419 to 451). The stage writes
+(`docpipe/visuals/pipeline.py` lines 428 to 460). The stage writes
 `visuals.json` and resumes per item, not per document: an item already
 carrying a `markdown` or `description` key is copied through unchanged,
 so an interrupted run continues on exactly the items missing one.
@@ -250,18 +300,26 @@ in sequence; the three positional paths default to the profile's own.
 `--step enrich-bbox`, `--step enrich-page-source` and
 `--step enrich-caption` are additive maintenance passes that backfill
 one column family on an already-built corpus without re-embedding
-(`docpipe/chunking/pipeline.py` lines 315 to 326). `--force` reprocesses:
+(`docpipe/chunking/pipeline.py` lines 330 to 341). `--force` reprocesses:
 merge ignores its modification-time cache, db deletes and reinserts a
 document's rows, embed evicts and re-adds its vectors. The stage writes
 `document.json`, then rows in SQLite and vectors in the FAISS index,
 each step resuming on its own marker: merge on `document.json` not
-older than its inputs (`docpipe/chunking/merge.py` lines 47 to
-66), db on the document already having `Sections` rows
-(`docpipe/chunking/database.py` line 305), embed on the database already
+older than its inputs (`docpipe/chunking/merge.py` lines 49 to
+68), db on the document already having `Sections` rows
+(`docpipe/chunking/database.py` line 304), embed on the database already
 recording an item's embedding triple (`docpipe/chunking/database.py`
-line 638). A document with `sections.json` and no `sections_refined.json`
+line 631). A document with `sections.json` and no `sections_refined.json`
 is left out of the merge, and one warning names up to twenty of them
-(`docpipe/chunking/merge.py` lines 167 to 177).
+(`docpipe/chunking/merge.py` lines 168 to 177).
+
+The stage ends 1 when the embed step left inputs without a vector, a batch the
+embedder failed: it finishes the other batches, saves the index with what was
+made, and logs `Embedding incomplete: N input(s) of M document(s) have no
+vector (type=n, ...); a rerun embeds them`. Such an input has no `Embeddings`
+row, so a document with missing vectors is not done and a rerun embeds exactly
+those. Importing the chunking package no longer needs `faiss`; the embed step
+still needs it at its start.
 
 ### 7. Extraction
 
@@ -288,10 +346,10 @@ have no profile default. `--document` restricts the run to one document
 id and is repeatable. `--image-root`, left unset, defaults to
 `<pdf-root>/processed` when `--pdf-root` is given and to the profile's
 processed directory otherwise (`docpipe/extraction/runner.py` lines
-4990 to 4992). `--pdf-root` has no such default: left unset it stays
+4991 to 4993). `--pdf-root` has no such default: left unset it stays
 `None` and disables the digit-exact native check that locates a quote's
-highlight rectangles in the source PDF (lines 4857 to 4858, 4174 to
-4178). `--force` and `--force-stale` behave as in refinement.
+highlight rectangles in the source PDF (lines 4833 to 4834, 4083 to
+4087). `--force` and `--force-stale` behave as in refinement.
 The stage writes one `<doc>.jsonl` harvest and one `<doc>.stamp.json`
 per document, and resumes per question, not per document, detailed in
 [the extraction stage](stages/extraction.md) and below.
@@ -305,7 +363,7 @@ removed before the file is written. A document left unstamped counts as a
 failed document, and the run returns 1 for it (lines 5543 to 5544, 5579). If
 the run's own anchor requests end there, the stage returns 1 before it
 harvests anything, and the next start asks only for the anchors still missing
-(`docpipe/extraction/runner.py` lines 5184 to 5195).
+(`docpipe/extraction/runner.py` lines 5185 to 5196).
 
 ### 8. The knowledge graph
 
@@ -342,11 +400,19 @@ docpipe compile spec --shapes shapes.ttl --out draft.json
   rebuilt (`--dry-run` shows what it would do); see [extraction](stages/extraction.md).
 - `evaluate` counts precision and recall against the decisions people made on
   the chat's review page, and `benchmark` records a harvest once with a model
-  (`--record`) and makes it again without one; see [measuring a
-  harvest](stages/evaluation.md).
+  (`--record`) and makes it again without one. `docpipe evaluate NEW --diff
+  OLD` needs no decisions: it compares two harvests of the same documents and
+  counts, per parameter and per field, the rows that are the same, changed,
+  gone and new, how the coordinate states and the trust levels moved, and the
+  largest changes (`--top`, `--max-changed` and `--max-gone` set a ceiling for
+  an exit 1); see [measuring a harvest](stages/evaluation.md).
 - `export` and `serve` (`--http` or `--mcp`) hand the harvested values on as a
-  table, a JSON API or a tool server; see [handing the values
-  on](stages/serve.md).
+  table, a JSON API or a tool server. `export --what states` and `--what
+  refusals` write what the harvest says where it has no value, and the server
+  answers the same through `get_states`, `get_coverage` and `find_refusals`
+  (HTTP `/states`, `/coverage`, `/refusals`), and searches the corpus passages
+  by word through `search` (`/search`) when it knows the corpus database and
+  the word index; see [handing the values on](stages/serve.md).
 - `lexical` builds the word index beside the database that the chat searches
   with the vectors (`--check` says whether it is current); see [asking the
   corpus](stages/inference.md).
@@ -373,7 +439,7 @@ their values and where each value comes from.
 | Extraction | `EXTRACT_MAX_RETRIES` | `3` | attempts per LLM request before giving up on it | `docpipe/extraction/runner.py:96` |
 | Extraction | `EXTRACT_RETRY_TIMEOUT` | `600` | client timeout (seconds) a retry gets after a request timed out; a request refused at once keeps the client's own timeout | `docpipe/extraction/runner.py:101` |
 | Extraction | `EXTRACT_BATCH_SOURCES` | `6` | sources sharing one harvest request | `docpipe/extraction/runner.py:251` |
-| Extraction | `EXTRACT_BATCH_DOCS` | `64` | documents kept in flight at once, largest first by section count, filename breaking a tie; one written and replaced by the next as soon as it finishes | `docpipe/extraction/runner.py:5177` |
+| Extraction | `EXTRACT_BATCH_DOCS` | `64` | documents kept in flight at once, largest first by section count, filename breaking a tie; one written and replaced by the next as soon as it finishes | `docpipe/extraction/runner.py:5178` |
 | Extraction | `EXTRACT_FIELD_ROWS` | `32` | rows one field request answers at once | `docpipe/extraction/runner.py:416` |
 | Extraction | `EXTRACT_MAX_MODEL_LEN` | `32768` | fallback context window, used only where the server's own preflight reports none | `docpipe/extraction/runner.py:1274` |
 | Extraction | `EXTRACT_LIMIT_ADAPTIVE` | `1` | off (`0`) disables the adaptive request limit; the thread pools alone bound concurrency | `docpipe/extraction/runner.py:1303` |
@@ -388,7 +454,11 @@ their values and where each value comes from.
 | Extraction | `EXTRACT_LIMIT_TPOT_MAX` | unset | seconds per output token above which a sample also counts as pressure; unset, token time never steps the limit down | `docpipe/extraction/throttle.py:61` |
 | Extraction | `EXTRACT_SERVER_DEAD_AFTER` | `180` | seconds without any reply to a `/models` probe before the harvest ends as if stopped, so a dead server is noticed in minutes | `docpipe/extraction/runner.py:1916` |
 | Extraction | `EXTRACT_LOCATE_CACHE_PAGES` | `512` | pages of words cached by `make_locate` across documents; a cache hit is a dict lookup and takes no lock | `docpipe/extraction/runner.py:280` |
-| App | `INFERENCE_DB_PATH` | profile `db_path`, else `data/KWP.db` | SQLite corpus database, opened read-only | `docpipe/app/config.py` |
+| App, serve | `INFERENCE_DB_PATH` | profile `db_path`, else `data/KWP.db` (the chat; `serve` has none) | SQLite corpus database, opened read-only; `docpipe serve` opens it for its passage search | `docpipe/app/config.py` |
+| App | `INFERENCE_PDF_ROOT` | profile `pdf_dir`, else `data/pdf` | folder of the source PDFs, which the cited page is drawn from | `docpipe/app/config.py` |
+| App | `PDF_URL_PREFIX`, `PDF_VIEWER_PREFIX` | empty | URL path an external viewer serves the PDFs and its pdf.js viewer under, for an optional link into it; empty: no link | `docpipe/app/config.py` |
+| Ingest | `DOCPIPE_USER_AGENT` | a Chrome 126 browser string | the User-Agent every PDF download sends | `docpipe/ingest/fetch.py` |
+| Ingest | `DOCPIPE_MAX_DOWNLOAD_MB` | `500` | largest PDF a download keeps, in megabytes; a larger one is refused with its size | `docpipe/ingest/fetch.py` |
 | App | `INFERENCE_INDEX_PATH` | profile `index_path`, else `data/faiss_index.bin` | FAISS index loaded into memory | `docpipe/app/config.py` |
 | App | `INFERENCE_KG_TTL_PATH` | profile `root/graph.ttl`, else `data/graph.ttl` | Turtle file from `--serialize` | `docpipe/app/config.py` |
 | App | `INFERENCE_HARVEST_DIR` | unset | harvest directory the chat shows values from and the review page reads; unset: neither | `docpipe/app/config.py` |
@@ -399,7 +469,7 @@ their values and where each value comes from.
 | Refinement, visuals, extraction, chat | `LLM_PROVIDER`, `VLM_PROVIDER`, `EMBEDDING_PROVIDER` | `openai-compatible` | the API behind a role: a server of one's own, `openai`, `anthropic` or `gemini` (embeddings: not `anthropic`) | `docpipe/providers/__init__.py` |
 | Stages that ask a model | `DOCPIPE_CASSETTE_RECORD`, `DOCPIPE_CASSETTE_REPLAY` | unset | file a run writes its model answers to, or takes them from in place of a server | `docpipe/providers/cassette.py` |
 | Extraction | `EXTRACT_PROVENANCE` | `1` | `0` leaves out the provenance file `--serialize` writes beside the graph | `docpipe/extraction/provenance.py` |
-| Refinement, visuals, chunking, extraction | `DOCPIPE_USAGE_DB` | `data/usage.db` | SQLite file the token/request counts of that process are flushed to | `docpipe/usage.py:75-76` |
+| Refinement, visuals, chunking, extraction | `DOCPIPE_USAGE_DB` | `data/usage.db` | SQLite file the token/request counts of that process are flushed to | `docpipe/usage.py:91-92` |
 
 ## The extraction passes
 
@@ -408,7 +478,7 @@ already-written harvest directory, instead of or before harvesting.
 
 - `--print-context-budget` prints the worst-case tokens one harvest
   request needs and exits before contacting a server
-  (`docpipe/extraction/runner.py` lines 5095 to 5098); the same check
+  (`docpipe/extraction/runner.py` lines 5096 to 5099); the same check
   runs automatically before the first document too.
 - `--recheck` needs no model and no index. It reapplies the
   answer-in-quote rule to a harvest on disk, drops any coordinate whose quote no longer
@@ -429,7 +499,7 @@ already-written harvest directory, instead of or before harvesting.
 - `--review`, bounded with `--review-limit N`, needs the model. It reads
   every value nobody can stand behind a second time, over its own
   passage and section, and records only a disagreement as a trust
-  reason (`docpipe/extraction/runner.py` lines 5004 to 5053); see
+  reason (`docpipe/extraction/runner.py` lines 5005 to 5054); see
   [the trust contract](contract/trust.md). Each document is read against
   its own lists, as in `--recheck`.
 - `--serialize TTL` needs no harvest and no model, as in stage 8 above,
@@ -462,14 +532,22 @@ whole GPU. Optional:
 - the Turtle file a `--serialize` run wrote (`INFERENCE_KG_TTL_PATH`), which no
   route reads while the graph route is not offered;
 - a code-execution sandbox (`CODE_EXEC_URL`, run with `docpipe sandbox`);
-- the source PDFs (`INFERENCE_PDF_ROOT`), for deep links.
+- the source PDFs (`INFERENCE_PDF_ROOT`): every citation then has a page
+  expander that draws the cited page with the quote marked, and a download of
+  the PDF. `PDF_URL_PREFIX` and `PDF_VIEWER_PREFIX` are empty and add a link
+  into an external viewer only where a deployment sets them.
 
 A question goes to one document, to several (each asked by itself, then
 compared) or, with the checkbox in the sidebar, to the whole corpus, where
 only the current version of a document answers but the harvest's values shown
-first come from every harvested document, older versions included. The app
-needs no `DOCPIPE_PROFILE`: without one it runs on the `default` profile's
-English words and generic labels. See [the app](stages/app.md) and [asking a
+first come from every harvested document, older versions included. The search
+scopes offered are the embedding types the index holds, so a text-only index
+shows no image scopes, and a warning above the chat says when the index was
+built with another model than the one that embeds the questions. The app
+opens without a profile, on the `default` profile's English words and generic
+labels, and says in one line that a question cannot be answered until one is
+named (`--profile`, `docpipe.toml` or `DOCPIPE_PROFILE`; the built-in `default`
+works for any folder). See [the app](stages/app.md) and [asking a
 question](stages/inference.md) for the turn itself.
 
 ## Tests and checks
@@ -487,6 +565,9 @@ rather than failing on a missing attribute (`tests/conftest.py`,
 `needs_real`). `DOCPIPE_PROFILE` is `kwp` for the session
 (`tests/conftest.py` line 70); a test needing `scenarios` sets it
 explicitly.
+
+`tests/test_docs_build.py` renders the documentation once per test module and
+every test that reads a page reads that render.
 
 Several procedural gates run manually, outside pytest.
 
@@ -515,8 +596,9 @@ query, an image query and a batch.
 `scripts/curation_list.py`, `scripts/harvest_compare.py` and
 `scripts/trace_report.py` read an extraction harvest on disk, none
 loading a model: the values a curator should look at, with page and
-cited passage; two harvests compared by tuple count and open
-coordinates; and the distribution behind every setting the stage
+cited passage; one harvest measured by tuple count and open
+coordinates (two harvests are compared by `docpipe evaluate NEW --diff OLD`);
+and the distribution behind every setting the stage
 exposes, respectively (each script's own module docstring).
 
 ```bash

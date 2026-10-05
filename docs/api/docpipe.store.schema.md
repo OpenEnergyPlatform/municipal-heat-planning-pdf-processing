@@ -57,6 +57,20 @@ file than the one that was named, and without `mode=ro` makes it.
 def columns(connection: sqlite3.Connection, table: str) -> set
 ```
 
+### add_missing_column
+
+```python
+def add_missing_column(connection: sqlite3.Connection, table: str,
+                       column: str, kind: str) -> bool
+```
+
+Add *column* to *table* where the table is there and lacks it.
+
+For a table of the profile's, which `CREATE TABLE IF NOT EXISTS` leaves
+as it was made: a source that fills a column the table was made without
+adds it first. A table that is not there is left alone, so that the write
+that needed it is the one to fail. Returns whether a column was added.
+
 ### migrate
 
 ```python
@@ -82,6 +96,14 @@ a line in the log; it is the caller's line, and nothing is refused here.
 The first model stays the recorded one and the other is recorded beside
 it, so the database says both.
 
+### recorded_model
+
+```python
+def recorded_model(connection: sqlite3.Connection) -> Optional[str]
+```
+
+The model the database says its index was built with, or None.
+
 ### embedding_mismatch
 
 ```python
@@ -92,6 +114,18 @@ def embedding_mismatch(connection: sqlite3.Connection,
 A sentence when a query would be embedded with another model than the
 index was built with, else None. For the query side to log; a database
 that records no model says nothing.
+
+### dimension_mismatch
+
+```python
+def dimension_mismatch(connection: sqlite3.Connection,
+                       dim: int) -> Optional[str]
+```
+
+A sentence when a query would be embedded to another length than the
+vectors the index holds, else None. The same name can be set to another
+length, and vectors of two lengths do not compare. A database that
+records no dimension says nothing.
 
 ### meta
 

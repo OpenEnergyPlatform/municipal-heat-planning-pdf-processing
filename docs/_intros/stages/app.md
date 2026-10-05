@@ -18,10 +18,14 @@ The app reads the corpus and writes nothing into it. It loads no model of its
 own, keeps a conversation only in the running process, and writes two small
 files of its own: a cache of query vectors and a log of requests. Every
 retrieval and answering decision is made by `docpipe.inference` and
-`docpipe.embedding`; this package adds the pickers, the history, the deep
-links into the source PDF and the optional calculation sandbox. Every word on
-its pages comes from the profile (`inference.UI`); without a profile the app
-runs on the built-in `default` profile's English words and generic labels.
+`docpipe.embedding`; this package adds the pickers, the history, the cited
+page drawn from the source PDF and the optional calculation sandbox. Every word
+on its pages comes from the profile (`inference.UI`). Without a profile the
+pages still open, on the built-in `default` profile's English words and
+generic labels, but a question cannot be answered, because the answer loop has
+no prompts of its own: the app shows one line at the top saying so. A profile
+is named with `--profile`, the `profile` key of `docpipe.toml` or
+`DOCPIPE_PROFILE`, and the built-in `default` works for any folder.
 
 ## Position in the pipeline
 
@@ -48,7 +52,16 @@ package.
 
 The sidebar offers the picker the profile's catalog builds (its filters, the
 document label, the detail shown for one document), a checkbox for the whole
-corpus, the search scopes and the answer format. Changing the selection
+corpus, the search scopes and the answer format. The scopes are those whose
+embedding types the index holds vectors of, in a fixed order, found by one
+query over the `Embeddings` table (`db.available_scopes`): an index built
+through a text-only backend shows no image scopes. An index with no vectors at
+all offers none, and a question then gets the warning to choose a scope. Where
+the database records another embedding model than the one that embeds the
+questions (`EMBEDDING_MODEL`), a warning in the profile's words stands above
+the chat and nothing is refused: the vectors only may not compare. The check
+reads the configured model's name, so a backend loaded by import path whose
+real model differs from that name is not noticed. Changing the selection
 resets the history. A turn then runs in this order:
 
 1. If a harvest is configured (`INFERENCE_HARVEST_DIR`) and the question is
@@ -88,7 +101,9 @@ The review page is how the decisions behind
 a name and works through the queue of rows nobody has decided yet: for each
 field of the row (the value, the unit, every coordinate) the value, its quote
 and a button into the source PDF at its page are shown, and the field is
-marked correct or wrong, with what is right where it is wrong. Two more
+marked correct or wrong, with what is right where it is wrong (the button into
+the PDF is the optional external link below, so it is there only where one is
+configured). Two more
 forms record that the document states a value the harvest lacks, and that
 somebody has read a whole document for one parameter. All three append to
 `gold.jsonl` (`INFERENCE_GOLD_PATH`, by default beside the harvest directory);
@@ -103,17 +118,53 @@ missing, is read with the decimal mark of the profile's documents (`_typed`:
 names none). The form for a missing value is emptied once it is saved (the document and the
 parameter stay chosen), so the same value is not saved twice by a second press.
 
-## Locating a citation in the source PDF
+## Showing a citation's page
 
 A section's chunk text is refined and is not byte-identical to the PDF's text
 layer. So `pdf_link.locate_quote` matches the quote against the raw,
 page-tagged `Segments` and returns a page and a fallback phrase. When a page
 is found, `pdf_link.best_quote_rects` derives highlight rectangles from that
-page with PyMuPDF and `rapidfuzz`. They reach the browser as the `&mhl=`
-parameter of the deep link; `pdfjs_overlay.js`, which goes into the bundled
-pdf.js viewer, decodes them and draws the boxes. Either library missing, or
-a fuzzy match scoring under 55, degrades the link to a bare page link, or to
-none when `PDF_URL_PREFIX` is empty or the file name is unknown.
+page with PyMuPDF and `rapidfuzz`.
+
+Every citation then has a page expander next to its context expander
+(`_show_page`). It draws the cited page from the PDF in the profile's PDF
+folder (`INFERENCE_PDF_ROOT`) with a highlight over each rectangle found, and
+offers the PDF as a download. `pdf_link.render_page` is the one small function
+that calls PyMuPDF to draw: it puts the highlights on in memory, which holds
+for rotated pages, never writes the file, and draws at most 2600 pixels on the
+longest side. Only a section's quote is a passage of the page. The quote of a
+table or a figure is a title or a reading, so its page is shown without a mark
+and without a note. Where the page shows no mark, the expander says so (UI
+word `page_not_located`). Where the file is not in the folder it names the
+file and nothing else, the folder going to the log, and where the page cannot
+be drawn (PyMuPDF missing, a PDF that does not open, a page the PDF does not
+have, a page that did not render) it says which in the profile's words, and the
+English cause goes to the log once per failure. The download stays whenever
+the file exists. Drawn pages are cached by path and modification time, 128 of
+them, and so are the PDF's bytes, 4 of them, so a replaced PDF is drawn again.
+Every entry into PyMuPDF holds one lock (`pdf_locate.MUPDF_LOCK`), because the
+chat runs every session on its own thread and a rerun starts while the script
+it replaced is still drawing.
+
+Its limits: the page is drawn eagerly inside the collapsed
+expander of every citation, on every rerun, and the download reads the whole
+file for each citation, which is heavy for a plan of 50 to 150 MB. Once the
+history holds more distinct cited pages than the cache, each new question
+redraws the evicted ones (about 0.2 to 0.5 seconds each). The note "not
+located" is also what shows when `rapidfuzz` is missing, the cause being
+logged once. Tables and figures get no rectangles. The values block and the
+review page still get only the optional external link.
+
+That link is optional and off by default. `PDF_URL_PREFIX` and
+`PDF_VIEWER_PREFIX` are both empty, and nothing ships that serves a PDF or a
+viewer. Where a deployment sets them, a link button goes into an external
+viewer at the cited page: `PDF_URL_PREFIX` is the URL path the PDFs are served
+under, and `PDF_VIEWER_PREFIX` the path of a pdf.js viewer, through which the
+rectangles reach the browser as the `&mhl=` parameter and
+`pdfjs_overlay.js`, which a deployment copies into that viewer, draws the
+boxes (assuming an unrotated page). With the viewer prefix empty the link is a
+bare page link for the browser's own viewer, and with a missing library or a
+match scoring under 55 it loses its phrase or rectangles.
 
 ## Configuration
 
@@ -123,12 +174,12 @@ the profile's own.
 
 | setting | what it is |
 |---|---|
-| `INFERENCE_DB_PATH`, `INFERENCE_INDEX_PATH`, `INFERENCE_IMAGE_ROOT`, `INFERENCE_PDF_ROOT` | the corpus database (read-only), the FAISS index, the root of table and figure images, the folder of source PDFs |
+| `INFERENCE_DB_PATH`, `INFERENCE_INDEX_PATH`, `INFERENCE_IMAGE_ROOT`, `INFERENCE_PDF_ROOT` | the corpus database (read-only; `docpipe serve` reads it too, for its passage search, and has no default), the FAISS index, the root of table and figure images, the folder of source PDFs the cited page is drawn from |
 | `INFERENCE_HARVEST_DIR`, `INFERENCE_GOLD_PATH`, `INFERENCE_VALUES_LEVEL`, `INFERENCE_VALUES_LIMIT` | the harvest the values and the review page read, the decisions file, how many and how trustworthy a value must be to be shown |
 | `INFERENCE_LEXICAL` | search by word beside the search by meaning where a word index exists |
 | `INFERENCE_KG_TTL_PATH` | the Turtle file a graph route would read; read by nothing while the route is not offered |
 | `QUERY_CACHE_PATH`, `REQUEST_LOG_PATH` | the two files of the app's own |
-| `PDF_URL_PREFIX`, `PDF_VIEWER_PREFIX` | where the PDFs and the pdf.js viewer are served; empty hides the links or uses the browser's viewer |
+| `PDF_URL_PREFIX`, `PDF_VIEWER_PREFIX` | where an external viewer serves the PDFs and its pdf.js viewer, for the optional link; both are empty by default, and empty means no link and the browser's own viewer |
 | `COMPARE_MAX_DOCUMENTS`, `TOP_K`, `MAX_CHUNK_ATTEMPTS`, `ANSWER_CONTEXT_TOKENS` | how many documents one comparison asks, and the retrieval and answer budgets |
 | `CODE_EXEC_URL`, `CODE_EXEC_TOKEN`, `CODE_EXEC_MAX_ROUNDS`, `CODE_EXEC_TIMEOUT` | the calculation sandbox; an empty URL turns the feature off |
 
@@ -147,7 +198,13 @@ excludes another's sources, and a failed turn is kept because that follow-up
 is asked precisely after one.
 
 `QUERY_CACHE_PATH` holds one table, `query_cache` (a key, the vector as a
-float32 blob, a timestamp). `REQUEST_LOG_PATH` holds one table, `requests`
+float32 blob, a timestamp). The key is over the embedding model and the
+vector size as well as the query, read from the configuration at the time of
+the call, so a vector of another model is never found for the same question
+and one file serves whichever model is configured next. Entries written under
+a key without them match nothing and are embedded again; a benchmark
+recording made earlier whose query vectors live in its own query cache no
+longer replays without a model and has to be recorded again. `REQUEST_LOG_PATH` holds one table, `requests`
 (plan, query text, mode, scopes, timestamp, latency, hit and citation counts,
 a truncated hash of the answer, error, `cache_hit`). No answer is cached: a
 follow-up depends on the conversation, and a cache keyed on the question text
@@ -174,10 +231,11 @@ the turn's own result.
 ## Modules
 
 `app.py` is the pages and the orchestration, run with `docpipe chat`.
-`config.py` reads every path and limit of the app. `pdf_link.py` builds the
-deep link into the source PDF; it touches no database and imports no
-Streamlit, so it is tested alone. `pdfjs_overlay.js` is the client side of
-the highlight rectangles. `sandbox_service.py` is a separate HTTP server, not
+`config.py` reads every path and limit of the app. `pdf_link.py` locates a
+quote on its page, draws the page and builds the optional deep link into an
+external viewer; it touches no database and imports no Streamlit, so it is
+tested alone. `pdfjs_overlay.js` is the client side of the highlight
+rectangles in such a viewer. `sandbox_service.py` is a separate HTTP server, not
 imported by the app, that a deployment runs and points `CODE_EXEC_URL` at
 (`docpipe sandbox`): one authenticated `POST /run` at a time, in a fresh
 container with no network, every capability dropped and a memory limit.

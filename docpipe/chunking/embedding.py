@@ -13,23 +13,64 @@ built once with the model on GPUs and queried through an endpoint ever
 after. An endpoint takes text only, so with it the inputs that carry a
 picture are left out and the index holds the text vectors of a corpus.
 
+A batch the embedder could not serve leaves its inputs without a vector. The
+other batches are finished first; the inputs left over are counted by
+embedding type and by document, and the run ends with them named, not with
+them forgotten.
+
 Author: Felix Vossel
 """
 from __future__ import annotations
 
 import logging
 import os
-from collections import defaultdict
+from collections import Counter, defaultdict
 from pathlib import Path
+from typing import TYPE_CHECKING, Optional
 
-import faiss
 import numpy as np
 
 from .config import EMBEDDING_MODEL, EMBEDDING_DIM, EMBEDDING_BATCH_SIZE, MAX_TOKEN_LENGTH
 from .chunking import EmbeddingInput
 from .database import EmbeddingWriter
 
+if TYPE_CHECKING:       # imported where it is used: a build through an api needs none before
+    import faiss
+
 log = logging.getLogger(__name__)
+
+
+class IncompleteIndex(RuntimeError):
+    """A run ended with inputs that have no vector. What was embedded stays;
+    a rerun embeds the rest."""
+
+
+class Unembedded:
+    """The inputs of a run that came back without a vector.
+
+    Counted by embedding type and by document, so the sentence that ends the
+    run says how many inputs of which kind have none. Inputs a text-only
+    backend leaves out on purpose are not here: nothing went wrong with them.
+    """
+
+    def __init__(self) -> None:
+        self.by_type: Counter = Counter()
+        self.documents: set = set()
+
+    def add(self, inputs) -> None:
+        for inp in inputs:
+            self.by_type[inp.embedding_type] += 1
+            self.documents.add(inp.pdf_name)
+
+    def __len__(self) -> int:
+        """How many inputs have no vector."""
+        return sum(self.by_type.values())
+
+    def sentence(self) -> str:
+        kinds = ", ".join(f"{kind}={n}"
+                          for kind, n in sorted(self.by_type.items()))
+        return (f"{len(self)} input(s) of {len(self.documents)} document(s) "
+                f"have no vector ({kinds}); a rerun embeds them")
 
 
 def load_or_create_index(index_path: Path) -> tuple[faiss.Index, int]:
@@ -39,6 +80,7 @@ def load_or_create_index(index_path: Path) -> tuple[faiss.Index, int]:
     Returns (index, next_id). next_id is only a floor derived from ntotal —
     reconcile it with next_faiss_id(db) before allocating.
     """
+    import faiss
     if index_path.exists():
         log.info("Loading existing FAISS index: %s", index_path)
         index = faiss.read_index(str(index_path))
@@ -62,6 +104,7 @@ def index_ids(index: faiss.Index) -> list:
     id_map = getattr(index, "id_map", None)
     if id_map is None:                       # a plain, non-IDMap index
         return []
+    import faiss
     try:
         return [int(i) for i in faiss.vector_to_array(id_map)]
     except Exception:                        # a test double, or an empty map
@@ -70,6 +113,7 @@ def index_ids(index: faiss.Index) -> list:
 
 def save_index(index: faiss.Index, index_path: Path) -> None:
     """Save the FAISS index to disk."""
+    import faiss
     index_path.parent.mkdir(parents=True, exist_ok=True)
     faiss.write_index(index, str(index_path))
     log.info("FAISS index saved: %s (%d vectors)", index_path, index.ntotal)
@@ -155,6 +199,7 @@ def create_embeddings(
     *,
     model_name: str = EMBEDDING_MODEL,
     batch_size: int = EMBEDDING_BATCH_SIZE,
+    unembedded: Optional[Unembedded] = None,
 ) -> int:
     """
     Embed `inputs` (which may mix pdf_names), add the vectors to `index`, and
@@ -162,7 +207,14 @@ def create_embeddings(
 
     Inputs are split into text-only and VL groups and packed into full
     ``batch_size`` batches across documents; each input's ``pdf_name`` keeps the
-    DB writeback grouped per document. A failed batch is logged and skipped.
+    DB writeback grouped per document.
+
+    A batch that fails is logged and the others are finished. Its inputs have
+    no row, so a rerun finds them again. They are added to `unembedded`, which
+    the caller keeps across calls and ends its run on. Without one this call
+    raises IncompleteIndex once every batch has been tried, with the vectors
+    of the others already in `index` and the database: a failure is never
+    only a log line.
 
     Persisting the index is the caller's: this is called once per flush chunk,
     and the index is one file rewritten whole.
@@ -181,6 +233,7 @@ def create_embeddings(
         vl_inputs = []
 
     start_id = next_id
+    missed = Unembedded() if unembedded is None else unembedded
 
     with EmbeddingWriter(db_path) as writer:
         for group_label, group in [("text", text_inputs), ("vl", vl_inputs)]:
@@ -217,6 +270,7 @@ def create_embeddings(
                         group_label, batch_idx + 1, total_batches,
                         batch_start, batch_start + len(batch), e,
                     )
+                    missed.add(batch)
                     continue
 
                 vectors = _as_array(embeddings)
@@ -253,4 +307,6 @@ def create_embeddings(
 
     created = next_id - start_id
     log.info("Created %d/%d embeddings, index now has %d vectors", created, len(inputs), index.ntotal)
+    if unembedded is None and missed:
+        raise IncompleteIndex(missed.sentence())
     return next_id

@@ -25,6 +25,7 @@ from pathlib import Path
 from typing import Optional
 
 from docpipe import prompts, usage
+from docpipe.artifacts import document_dirs
 from docpipe.llm_preflight import assert_serving
 from docpipe.profile import add_profile_argument, program, require_profile
 
@@ -38,11 +39,6 @@ log = logging.getLogger(__name__)
 # Documents refined concurrently.
 # Total in-flight requests ≈ DOC_PARALLEL × LLM_NUM_PARALLEL.
 DOC_PARALLEL = int(os.environ.get("DOC_PARALLEL", "8"))
-
-
-def _has_input(doc_dir: Path) -> bool:
-    """True if the document directory carries a Stage-3 structured output."""
-    return (doc_dir / SECTIONS_JSON).exists()
 
 
 # ---------------------------------------------------------------------------
@@ -87,13 +83,12 @@ def run_single(doc_dir: Path, *, force: bool = False,
 def run_batch(root_dir: Path, *, force: bool = False,
               force_stale: bool = False) -> dict[str, bool]:
     """
-    Refines every document subdirectory under *root_dir* that has a Stage-3
-    structured output. Returns a dict mapping directory name → success boolean.
+    Refines every document directory under *root_dir*, at any depth, that has
+    a Stage-3 structured output. Returns a dict mapping directory name →
+    success boolean.
     """
     root_dir = Path(root_dir)
-    candidates = sorted(
-        d for d in root_dir.iterdir() if d.is_dir() and _has_input(d)
-    )
+    candidates = document_dirs(root_dir, SECTIONS_JSON)
 
     if not candidates:
         log.warning(

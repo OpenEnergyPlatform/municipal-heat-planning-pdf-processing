@@ -18,6 +18,7 @@ import sys
 from pathlib import Path
 from typing import Optional
 
+from docpipe.artifacts import document_dirs, refuse_same_names
 from docpipe.profile import add_profile_argument, program, resolve_profile
 
 from .config import (
@@ -197,12 +198,18 @@ def run_folder(
     Processes all PDFs in *input_dir* sequentially, keyed by path relative to
     *input_dir*. The layout model is loaded once and reused; it is not
     thread-safe, so processing must stay sequential. _index.json is rewritten
-    after each PDF so partial results survive an interruption.
+    after each PDF so partial results survive an interruption. Raises
+    DuplicateDocumentName for two PDFs that would be one document name.
     """
     pdf_files = sorted(input_dir.glob(glob))
     if not pdf_files:
         log.warning(f"No PDFs found in '{input_dir}' (pattern: {glob})")
         return {}
+    # Every stage after this one refuses two documents of one name, so they
+    # are refused here, before the layout model has run over either.
+    refuse_same_names(
+        [output_dir / p.relative_to(input_dir).with_suffix("")
+         for p in pdf_files], output_dir)
 
     log.info(f"{'=' * 60}")
     log.info(f"Folder mode: {len(pdf_files)} PDFs in '{input_dir}'")
@@ -288,15 +295,12 @@ def _write_index(
 
 def rebuild_stage3_from_cache(output_dir: Path, column_layout: str = "auto") -> int:
     """
-    Re-run ONLY Stage 3 for every doc under *output_dir* that has a readable
-    pages cache, overwriting its sections.json. No PDF input and no
-    layout model. Returns the number of docs rebuilt.
+    Re-run ONLY Stage 3 for every doc under *output_dir*, at any depth, that
+    has a readable pages cache, overwriting its sections.json. No PDF input
+    and no layout model. Returns the number of docs rebuilt.
     """
     output_dir = Path(output_dir)
-    doc_dirs = sorted(
-        d for d in output_dir.iterdir()
-        if d.is_dir() and (d / PAGES_JSON).exists()
-    )
+    doc_dirs = document_dirs(output_dir, PAGES_JSON)
     log.info("Rebuild Stage 3: %d docs with a pages cache under '%s'",
              len(doc_dirs), output_dir)
     done = 0
@@ -323,10 +327,7 @@ def report_columns(output_dir: Path, top: int = 20) -> dict[str, tuple[int, int]
     from .columns import count_multi_column_pages
 
     output_dir = Path(output_dir)
-    doc_dirs = sorted(
-        d for d in output_dir.iterdir()
-        if d.is_dir() and (d / PAGES_JSON).exists()
-    )
+    doc_dirs = document_dirs(output_dir, PAGES_JSON)
     found: dict[str, tuple[int, int, int]] = {}
     total_pages = total_multi = 0
     for d in doc_dirs:

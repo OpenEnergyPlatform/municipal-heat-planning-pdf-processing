@@ -100,6 +100,21 @@ different subfolders are refused and named. The subfolder a file lies in
 travels as `DocumentMeta.folder`, which the default profile offers as a
 filter.
 
+What the PDF says about itself travels too (`docpipe/ingest/pdf_info.py`).
+`DocumentMeta.title` is the title in the PDF's information dictionary, else
+the file name without its ending, and `DocumentMeta.created` is the creation
+date of the same dictionary as far as it gives one (`YYYY`, `YYYY-MM` or
+`YYYY-MM-DD`), `NULL` when it gives none or a date that is not on the
+calendar. The built-in profile's catalog labels a document with the title and,
+where there is one, the date. The dictionary is read only for a document that
+is not registered yet, so a second run does not open every file again; one
+that cannot be read gives one warning, and the file is ingested without a
+title or date of its own. A database made before `created` existed gets the
+column added on the first run of the folder source, and a profile that
+extends the built-in one with a whole `DocumentMeta` table of its own has to
+declare the column. Two PDFs with the same title show the same label in the
+picker, because the file name no longer tells them apart.
+
 ### Enumerating documents
 
 `source.documents(connection)` is iterated; each call yields one
@@ -111,9 +126,11 @@ has been fetched or gated at all. `Ar6Source` has no such early write.
 
 ### Registering one document
 
-`register()` first checks `docs.document_exists(doc.filename, connection)`;
-a filename already in `Documents` ends the call immediately, with no fetch
-and no quality check. Otherwise it fetches the PDF (`fetch.download_pdf` if
+`register()` first asks, where `doc.url` is set, whether the file of that
+name came from another URL (`fetch.check_name`, see Handling a refusal or an
+unreachable link), and then checks `docs.document_exists(doc.filename,
+connection)`; a filename already in `Documents` ends the call immediately,
+with no fetch and no quality check. Otherwise it fetches the PDF (`fetch.download_pdf` if
 the file is missing and `doc.url` is set, else `FileNotFoundError`), runs
 the quality gate (`pdf_quality.check`), and on a usable or merely
 text-missing verdict writes the row through `docs.add_document()`, counting
@@ -144,8 +161,24 @@ whole switch between refusing a document and registering it anyway.
 `ingest()` catches it per document, logs the filename once, and continues
 rather than stopping the run. `requests.RequestException` and `OSError`
 (a failed request, a body not starting with `%PDF`, a missing local file
-with no `url`) are caught the same way, keyed by filename, so several rows
-sharing one broken file are reported once.
+with no `url`, a refused download) are caught the same way, keyed by file
+name and URL, so several rows sharing one broken file are reported once while
+two URLs of one name are two entries.
+
+A file is named after the last segment of its URL, so two URLs can claim one
+name. The URL a download came from is written beside the file as
+`<name>.url`, after a good download and before the PDF is moved into place.
+A second, different URL for that name (compared with the scheme and host in
+lower case and the fragment dropped) is refused with both URLs named
+(`NameTaken`), whether or not the first file is registered yet, and goes onto
+the worklist; the first file is kept. A file with no `.url` beside it, such
+as one put there by hand for `PDF_OVERRIDES` or downloaded before the URL
+was kept, is never refused, so a collision with such an old download is
+not seen. A `.url` left by a job killed before the move holds nothing: a name
+is held only by a file that is there. A body over the size limit is refused
+with its size (`TooLarge`), by the length the server announces or by the
+count while streaming, and leaves no file or `.url` behind. Both are
+`OSError`s, so the run goes on.
 
 ### Running the profile hook
 
@@ -170,8 +203,13 @@ document anywhere in a group can change who is current elsewhere in it.
 Finally, `ingest()` writes a worklist for each of the refused, unreachable
 and scanned documents, or deletes a stale one left from an earlier run
 (`_drop_stale`) when that category is empty this time. Only the refused
-dictionary is also returned from `ingest()`; the rest reach a caller only
-through logging and these files.
+dictionary is returned from `ingest()`; the unreachable files reach a caller
+that passes `unreachable=` a dictionary, keyed by (file name, URL), and
+otherwise only through logging and these files. `docpipe ingest` ends 0 when
+files could not be fetched or found, as it always did, because a register
+carries dead links as a matter of course and a chain of stages is not
+stopped by one: it logs one warning line with the number of (file name, URL)
+pairs and the worklist's path.
 
 ## Data model
 
@@ -219,7 +257,7 @@ Each worklist holds one tab-separated line per document, sorted by key:
 | file | line shape |
 |---|---|
 | `rejected_pdfs.txt` | `filename`, `reason` |
-| `unreachable_pdfs.txt` | `group_key`, `filename`, `reason`, `url` |
+| `unreachable_pdfs.txt` | `group_key`, `filename`, `reason`, `url`; the reason of a refused second URL names both URLs, and that of a download over the limit its size |
 | `scanned_pdfs.txt` | `filename`, `reason` |
 
 ## Configuration
@@ -237,7 +275,9 @@ Each worklist holds one tab-separated line per document, sorted by key:
 | `EMPTY_PAGE_CHARS`, `MAX_EMPTY_FRACTION` | module constant | 50 chars, 0.8 | A page below 50 characters counts empty; above 0.8 of the sample empty gives `NO_TEXT` | `docpipe/ingest/pdf_quality.py` |
 | `MIN_TEXT_CHARS`, `MIN_ALPHA_RATIO` | module constant | 2000 chars, 0.5 | Below 2000 sampled characters the letters ratio check is skipped; below 0.5 it is `BROKEN_ENCODING` | `docpipe/ingest/pdf_quality.py` |
 | `PROSE_PAGE_CHARS` | module constant | 200 chars | Minimum text a sampled page needs before its ratio can accept the document | `docpipe/ingest/pdf_quality.py` |
-| `BROWSER_HEADERS`, timeout | module constant, hardcoded | Chrome 126 UA, 30 seconds | Sent on every download; avoids a 403 from municipal servers | `docpipe/ingest/fetch.py` |
+| `DOCPIPE_USER_AGENT` | setting (`ingest.user_agent`) | a Chrome 126 browser string | the User-Agent every download sends; municipal sites answer a plain client with 403 | `docpipe/ingest/fetch.py`, `docpipe/settings.py` |
+| `DOCPIPE_MAX_DOWNLOAD_MB` | setting (`ingest.max_download_mb`) | 500 | largest PDF a download keeps, in megabytes of 1024 x 1024 bytes; a larger one is refused with its size. A value that is not a whole number of 1 or more is a `ValueError` at the first download, inside the run's transaction, so what that run had registered before it is rolled back and a re-run recovers it | `docpipe/ingest/fetch.py`, `docpipe/settings.py` |
+| download timeout | hardcoded | 30 seconds | the timeout of each request | `docpipe/ingest/fetch.py` |
 | `EXCEL_SHEET` | module constant, `kwp` | `"Datensatz Status quo KWP"` | Which sheet of the KWW workbook is read | `profiles/kwp/config.py` |
 | `PDF_OVERRIDES`, `SHARED_FILE_OWNERS` | module constant, `kwp` | 329, 4 entries | Per-municipality filename override; owner of a shared non-convoy file | `profiles/kwp/config.py` |
 | `SCENARIO_FILE`, `PUBLICATION_META_FILE` | module constant, `scenarios` | two JSON filenames | Optional siblings of `pdf_index.json` for scenario names and OpenAlex fields | `profiles/scenarios/config.py` |
@@ -270,12 +310,14 @@ Each worklist holds one tab-separated line per document, sorted by key:
   unreachable `kwp` document can still leave that one row behind, unlike
   `Municipalities`/`MunicipalityMeta`, which wait for `after_document`.
 - A job killed mid-download leaves nothing under the real filename:
-  `download_pdf()` writes to a temporary file, replacing the target only
-  once the write completes.
+  `download_pdf()` streams the body into a `.part` file in the data
+  directory, so a PDF is never held in memory whole, and moves it into place
+  only once the write completes. A failed or refused download removes the
+  `.part` file.
 - `fetch.get_num_pages()` checks for a `%PDF` header before calling
   `fitz.open()`, which can crash on a malformed file, and
-  `fetch.download_pdf()` checks the same header on a downloaded body
-  before ever saving it; `pdf_quality.inspect()` performs no such check
+  `fetch.download_pdf()` checks the same header on the first bytes of the
+  body before it is kept; `pdf_quality.inspect()` performs no such check
   before its own `fitz.open()` call, so a malformed file already in the
   data directory reaches the quality gate unguarded.
 - A worklist left over from an earlier run is deleted once the current
@@ -391,9 +433,14 @@ helpers. It is called by `docpipe/ingest/cli.py:main()` and
 directly by `tests/test_ingest.py`, `tests/test_kwp_source.py`, and
 `tests/test_scenarios_source.py`.
 
-`docpipe/ingest/fetch.py` downloads a PDF to disk, atomically, and counts
-its pages with PyMuPDF, guarding both against a non-PDF file that could
-crash the process. It is called from `register()`.
+`docpipe/ingest/fetch.py` downloads a PDF to disk, streamed and atomically,
+keeps the URL it came from beside it, refuses a second URL for a taken name
+and a body over the size limit, and counts pages with PyMuPDF, guarding
+both against a non-PDF file that could crash the process. It is called from
+`register()`.
+
+`docpipe/ingest/pdf_info.py` reads the title and creation date from a PDF's
+information dictionary, for the folder source.
 
 `docpipe/ingest/pdf_quality.py` grades a PDF's text layer as usable, a
 scan, garbled, or unreadable, by sampling pages with PyMuPDF; it states the
@@ -436,8 +483,11 @@ checks its text layer, writes the Documents row, and links versions.
 A file whose text is unreadable or garbled is refused and left out
 of the corpus. A file with no text layer at all is registered
 anyway and listed for preprocessing to read with the vision model,
-because the pages exist to be read. What the documents are and
-where they come from is defined by the profile's Source.
+because the pages exist to be read. A second URL that ends in the file
+name of a download that came from another URL is refused, and so is a
+download over the size limit; both are listed with the files that
+could not be fetched. What the documents are and where they come from
+is defined by the profile's Source.
 
 Author: Felix Vossel
 
@@ -464,7 +514,11 @@ folder.py: A folder of PDFs as a document source.
 The source of a corpus that has no register: every PDF in a folder is one
 document. A file is known by its name, so two files of one name in different
 subfolders are refused and named. The subfolder a file lies in travels as
-its `folder`, which a profile may offer as a filter.
+its `folder`, which a profile may offer as a filter. What the PDF says about
+itself (its title, its creation date) travels as `title` and `created`; a
+PDF that says nothing has the file name for a title and no date. It is read
+for a document that is not registered yet, and a database made before the
+date was kept gets its column on the first run.
 
 The folder may be the data directory itself. Then only what lies directly
 in it is read, because the stages keep their own output underneath. Any
@@ -481,12 +535,17 @@ Author: Felix Vossel
 
 fetch.py: Downloads a source PDF to disk and counts its pages.
 
-download_pdf sends a browser User-Agent, because municipal sites answer a
-default requests client with 403, and writes the response through a temporary
-file before the atomic rename, so a killed job leaves no partial PDF for a
-later run to reuse. get_num_pages and download_pdf both check the file for a
-%PDF header before handing it to PyMuPDF, which can segfault on a truncated or
-non-PDF file rather than raise.
+download_pdf sends a configurable User-Agent (a browser's by default, because
+municipal sites answer a default requests client with 403) and streams the
+body into a temporary file in the data directory, so a PDF is never held in
+memory whole and a killed job leaves no partial file for a later run to
+reuse. A body over the size limit is refused with its size. A file is named
+after the last segment of its URL, so two URLs can claim one name: the URL a
+file came from is kept beside it, and a second, different URL for that name
+is refused with both named, instead of being read from the first one's
+bytes. get_num_pages and download_pdf both check the file for a %PDF header
+before handing it to PyMuPDF, which can segfault on a truncated or non-PDF
+file rather than raise.
 
 Author: Felix Vossel
 
@@ -506,6 +565,22 @@ page and having the model read it (page_text_fallback).
 lives in the ingest pipeline: garbled text is refused, a scan is registered and
 put on a worklist. Keeping the two apart is the point. This module used to
 decide both, and its verdict on a scan cost the corpus eleven complete plans.
+
+</details>
+
+<details>
+<summary><code>docpipe/ingest/pdf_info.py</code></summary>
+
+pdf_info.py: What a PDF says about itself in its information dictionary.
+
+The software that wrote a PDF usually put the document's title and its
+creation date into the file. A folder of PDFs has no register to say what
+they are called, so this is the one place to learn it. A dictionary that is
+empty, or says neither, gives nothing; so does one that cannot be read, and
+that is said, once, in the log. Nothing here decides whether a document is
+usable: the text layer is graded by pdf_quality.
+
+Author: Felix Vossel
 
 </details>
 

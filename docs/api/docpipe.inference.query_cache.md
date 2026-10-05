@@ -5,6 +5,10 @@
 query_cache.py – On-disk cache mapping a query to its embedding vector, so an
 identical query skips the on-demand model load.
 
+The key names the model and the vector size as well as the query: a vector
+of another model is not an answer to the same question, and one file serves
+whichever model is configured next.
+
 Stored in a separate SQLite file, never the authoritative KWP.db.
 
 Author: Felix Vossel
@@ -27,12 +31,18 @@ times.
 ### make_key
 
 ```python
-def make_key(mode: str, text: Optional[str] = None, image_bytes: Optional[bytes] = None) -> str
+def make_key(mode: str, text: Optional[str] = None,
+             image_bytes: Optional[bytes] = None, *,
+             model: Optional[str] = None, dim: Optional[int] = None) -> str
 ```
 
 Deterministic key over the effective query input. `mode` distinguishes
 text-only / image-only / image+text so the same phrase embedded differently
 does not collide.
+
+`model` and `dim` are the embedding model and the size of its vectors;
+left out, they are the configured ones, read now. Entries written under
+keys without them match nothing and are embedded again.
 
 ### get
 

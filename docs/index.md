@@ -123,7 +123,10 @@ page quotes a corpus passage
 (`test_no_generated_page_quotes_a_corpus_passage`), or the moment a page
 uses a dash as punctuation (`test_no_page_uses_a_dash_as_punctuation`; the
 module pages of the API reference carry the code's docstrings verbatim and
-are left out there).
+are left out there). The module renders the documentation once, and every
+test that reads a page reads that render (under `pytest-xdist` once per
+worker); `test_a_stale_generated_page_fails_the_check` shows the comparison
+still fails on an edited, a deleted or a left-behind page.
 `.github/workflows/docs.yml` runs that check on every pull request that
 touches a documented source and on every `v*` tag, and, on a push to
 `develop`, regenerates the pages instead and commits them when changed.

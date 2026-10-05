@@ -22,6 +22,7 @@ from pathlib import Path
 from typing import Optional
 
 from docpipe import prompts, usage
+from docpipe.artifacts import document_dirs
 from docpipe.profile import add_profile_argument, program, require_profile
 
 from docpipe.llm_preflight import assert_serving
@@ -53,12 +54,16 @@ DOC_PARALLEL = int(os.environ.get("DOC_PARALLEL", "8"))
 # Input resolution
 # ---------------------------------------------------------------------------
 
+# What this stage reads, best first: the Stage-4 output, else the Stage-3 one.
+INPUT_JSONS = (SECTIONS_REFINED_JSON, SECTIONS_JSON)
+
+
 def _resolve_input(output_dir: Path) -> Optional[Path]:
     """
     Best available input JSON inside a preprocessing output_dir: the Stage-4
     output, else the Stage-3 one. None if neither exists.
     """
-    for candidate in (SECTIONS_REFINED_JSON, SECTIONS_JSON):
+    for candidate in INPUT_JSONS:
         p = output_dir / candidate
         if p.exists():
             return p
@@ -88,6 +93,19 @@ def _load_source_texts(output_dir: Path) -> dict[str, str]:
             if t.get("source_text"):
                 out[t["id"]] = t["source_text"]
     return out
+
+
+def collect_cached(data: dict, into: dict) -> None:
+    """Into *into*, by id: every table of *data* that carries its markdown
+    and every figure that carries its description. What a later run does
+    not ask the model for again, and what `docpipe status` counts as done."""
+    for section in data.get("sections", []):
+        for t in section.get("tables", []):
+            if t.get("markdown"):
+                into[t["id"]] = t
+        for fig in section.get("figures", []):
+            if fig.get("description"):
+                into[fig["id"]] = fig
 
 
 # ---------------------------------------------------------------------------
@@ -134,13 +152,7 @@ def run_single(
         try:
             with open(out_path, "r", encoding="utf-8") as f:
                 cached_data = json.load(f)
-            for section in cached_data.get("sections", []):
-                for t in section.get("tables", []):
-                    if t.get("markdown"):
-                        cached_items[t["id"]] = t
-                for fig in section.get("figures", []):
-                    if fig.get("description"):
-                        cached_items[fig["id"]] = fig
+            collect_cached(cached_data, cached_items)
             if cached_items:
                 log.info(
                     "Loaded %d cached items from previous run: %s",
@@ -306,8 +318,8 @@ def run_batch(
     **kwargs,
 ) -> dict[str, bool]:
     """
-    Runs enrichment for every subdirectory under *root_dir* that contains one of
-    the expected structured output JSONs.
+    Runs enrichment for every document directory under *root_dir*, at any
+    depth, that contains one of the expected structured output JSONs.
 
     Returns:
         Dict mapping directory name → success boolean.
@@ -315,10 +327,7 @@ def run_batch(
     root_dir = Path(root_dir)
     results: dict[str, bool] = {}
 
-    candidates = sorted(
-        d for d in root_dir.iterdir()
-        if d.is_dir() and _resolve_input(d) is not None
-    )
+    candidates = document_dirs(root_dir, *INPUT_JSONS)
 
     if not candidates:
         log.warning("No PDF output directories found in '%s'.", root_dir)

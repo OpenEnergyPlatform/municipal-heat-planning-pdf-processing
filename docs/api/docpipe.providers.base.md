@@ -68,10 +68,14 @@ Fields:
 ```python
 def reply(text: str, finish: str, *, prompt_tokens: Optional[int] = None,
           completion_tokens: Optional[int] = None, model: Optional[str] = None,
-          reasoning: Optional[str] = None) -> SimpleNamespace
+          reasoning: Optional[str] = None,
+          cached_tokens: Optional[int] = None) -> SimpleNamespace
 ```
 
 One answer, in the shape the stages read.
+
+`cached_tokens` is the part of `prompt_tokens` the API served from its
+cache; it is on the usage block only where the API said so.
 
 ### facade
 

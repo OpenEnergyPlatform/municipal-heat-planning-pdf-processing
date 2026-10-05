@@ -39,6 +39,25 @@ Returns (faiss_index, id_to_pos) — loaded once, held in RAM.
 def get_db()
 ```
 
+### get_scopes
+
+```python
+@st.cache_resource
+def get_scopes()
+```
+
+The search scopes this index holds vectors of, in the fixed order.
+
+### get_index_notice
+
+```python
+@st.cache_resource
+def get_index_notice()
+```
+
+The profile's sentence for an index built with another model than the
+one that embeds the questions, or None.
+
 ### get_cache
 
 ```python

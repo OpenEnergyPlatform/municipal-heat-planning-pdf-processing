@@ -5,13 +5,25 @@ Covers db.py (candidate-faiss-id UNION + content/citation lookup), chunker.py
 (token-budget packing + citation labels), and query_cache.py (round-trip +
 key derivation). Streamlit / FAISS / torch paths are exercised on the server,
 not here.
+
+What the chat offers is what the index holds: its search scopes are those whose
+embedding types the database has vectors of, in the order of the fixed list;
+the cache key of a query vector names the embedding model and its size, so the
+vectors of two models are never mixed, AND an entry written without them
+matches nothing; and a database that records another model than the one that
+embeds the queries is said so in the profile's sentence, which is a notice and
+refuses nothing.
 """
+import hashlib
 import json
 import sqlite3
+import sys
+import threading
+import types
 
 import pytest
 
-from docpipe.inference import chunker, db, query_cache
+from docpipe.inference import chunker, db, pdf_locate, query_cache
 from docpipe.app import pdf_link
 from docpipe.embedding import config as EC
 from docpipe.inference import config as C
@@ -143,6 +155,107 @@ def test_visual_scopes_are_figure_and_table_only():
         C.SCOPE_FIGURES_VL, C.SCOPE_FIGURES_TEXT})
     assert C.SCOPE_HEADINGS not in C.VISUAL_SCOPES
     assert C.SCOPE_TEXT not in C.VISUAL_SCOPES
+
+
+# ---------------------------------------------------------------------------
+# db.available_scopes: the scopes the index really holds
+# ---------------------------------------------------------------------------
+def _delete_embeddings(db_path, where):
+    con = sqlite3.connect(db_path)
+    con.execute(f"DELETE FROM Embeddings WHERE {where}")
+    con.commit()
+    con.close()
+
+
+def test_an_index_with_every_type_offers_every_scope_in_the_fixed_order(corpus):
+    assert db.available_scopes(db.connect_readonly(corpus)) == C.ALL_SCOPES
+
+
+def test_a_text_only_index_offers_no_scope_over_pictures(corpus):
+    _delete_embeddings(corpus, "embedding_type LIKE '%_vl'")
+    got = db.available_scopes(db.connect_readonly(corpus))
+    assert got == [C.SCOPE_HEADINGS, C.SCOPE_TEXT,
+                   C.SCOPE_TABLES_TEXT, C.SCOPE_FIGURES_TEXT]
+    assert not set(got) & {C.SCOPE_TABLES_VL, C.SCOPE_FIGURES_VL}
+
+
+def test_a_scope_is_offered_for_the_type_the_index_holds_and_no_other(corpus):
+    _delete_embeddings(corpus, "embedding_type != 'table_vl'")
+    assert db.available_scopes(db.connect_readonly(corpus)) == [
+        C.SCOPE_TABLES_VL]
+
+
+def test_an_index_that_holds_nothing_offers_nothing(corpus):
+    _delete_embeddings(corpus, "1 = 1")
+    assert db.available_scopes(db.connect_readonly(corpus)) == []
+
+
+def test_a_type_no_scope_names_opens_no_scope(corpus):
+    _delete_embeddings(corpus, "embedding_type != 'section_text'")
+    con = sqlite3.connect(corpus)
+    con.execute("INSERT INTO Embeddings (faiss_id, embedding_type, owner_kind, "
+                "owner_id) VALUES (900, 'mystery', 'section', 1)")
+    con.commit()
+    con.close()
+    assert db.available_scopes(db.connect_readonly(corpus)) == [C.SCOPE_TEXT]
+
+
+def test_the_scopes_cost_one_query(corpus):
+    conn = db.connect_readonly(corpus)
+    statements = []
+    conn.set_trace_callback(statements.append)
+    db.available_scopes(conn)
+    assert len(statements) == 1
+    assert "embedding_type" in statements[0] and "Embeddings" in statements[0]
+
+
+# ---------------------------------------------------------------------------
+# db.index_model_notice: the model of the index against the one that asks
+# ---------------------------------------------------------------------------
+def _record_model(db_path, model):
+    from docpipe.store import schema
+    con = sqlite3.connect(db_path)
+    schema.set_meta(con, {"embedding/model": model})
+    con.close()
+
+
+def test_a_notice_is_the_sentence_filled_in_when_the_models_differ(corpus):
+    _record_model(corpus, "model-a")
+    conn = db.connect_readonly(corpus)
+    got = db.index_model_notice(
+        conn, "model-b", "Built with {built}, asked with {queried}.")
+    assert got == "Built with model-a, asked with model-b."
+
+
+def test_there_is_no_notice_where_the_models_are_the_same(corpus):
+    _record_model(corpus, "model-a")
+    conn = db.connect_readonly(corpus)
+    assert db.index_model_notice(conn, "model-a", "{built} {queried}") is None
+
+
+def test_a_database_that_records_no_model_says_nothing(corpus):
+    # the shared fixture's database has no Meta table at all, one that was
+    # made before the index said anything
+    conn = db.connect_readonly(corpus)
+    assert db.index_model_notice(conn, "model-b", "{built} {queried}") is None
+    _record_model(corpus, "")
+    assert db.index_model_notice(
+        db.connect_readonly(corpus), "model-b", "{built} {queried}") is None
+
+
+@pytest.mark.parametrize("name, begins", [
+    ("kwp", "Der Index wurde mit "), ("scenarios", "The index was built with "),
+    ("default", "The index was built with ")])
+def test_each_profile_words_the_notice_in_its_own_language(
+        corpus, name, begins):
+    from docpipe.inference import wording
+    from docpipe.profile import load_profile
+    _record_model(corpus, "model-a")
+    sentence = wording.ui(load_profile(name))["index_model_differs"]
+    got = db.index_model_notice(db.connect_readonly(corpus), "model-b",
+                                sentence)
+    assert got.startswith(begins) and "model-a" in got and "model-b" in got
+    assert "{" not in got
 
 
 def test_fetch_section_content(corpus):
@@ -307,6 +420,220 @@ def test_pdf_viewer_url_rects_overlay_supersedes_search():
     assert url.startswith("/app/static/pdfjs/web/viewer.html?file=%2Fapp")
 
 
+# ---------------------------------------------------------------------------
+# pdf_link.py: the cited page, drawn with PyMuPDF
+# ---------------------------------------------------------------------------
+class FakePDF:
+    """What PyMuPDF is to render_page: a file of `pages` pages that notes
+    what is drawn on it and whether it was closed."""
+
+    def __init__(self, pages=3, fail_on_render=False, size=(595, 842)):
+        self.page_count = pages
+        self.rect = types.SimpleNamespace(width=size[0], height=size[1])
+        self.fail_on_render = fail_on_render
+        self.log = []
+        self.closed = False
+
+    def load_page(self, index):
+        self.log.append(("load", index))
+        return self
+
+    def add_highlight_annot(self, rect):
+        self.log.append(("highlight", rect))
+
+    def get_pixmap(self, matrix):
+        if self.fail_on_render:
+            raise RuntimeError("out of memory")
+        self.log.append(("pixmap", matrix))
+        return types.SimpleNamespace(tobytes=lambda form: f"{form}:image".encode())
+
+    def close(self):
+        self.closed = True
+
+
+@pytest.fixture
+def fitz_with(monkeypatch):
+    """Installs a PyMuPDF whose `open` hands out the given file; returns the
+    file so a test can see what was done to it."""
+    def install(pdf=None, opens=None):
+        pdf = pdf or FakePDF()
+
+        def open_(path):
+            if opens is not None:
+                raise opens
+            return pdf
+
+        fake = types.SimpleNamespace(
+            open=open_, Rect=lambda *corners: ("rect",) + corners,
+            Matrix=lambda zoom_x, zoom_y: ("matrix", zoom_x, zoom_y))
+        monkeypatch.setitem(sys.modules, "fitz", fake)
+        return pdf
+    return install
+
+
+def test_render_page_draws_a_highlight_over_each_rect_and_returns_the_png(
+        fitz_with):
+    pdf = fitz_with()
+    rects = [[10, 20, 200, 32], [10, 34, 90, 46]]
+    assert pdf_link.render_page("x.pdf", 2, rects, zoom=1.5) == b"png:image"
+    assert pdf.log == [("load", 1),
+                       ("highlight", ("rect", 10, 20, 200, 32)),
+                       ("highlight", ("rect", 10, 34, 90, 46)),
+                       ("pixmap", ("matrix", 1.5, 1.5))]
+    assert pdf.closed
+
+
+def test_render_page_draws_a_poster_smaller_than_it_is_asked_to(fitz_with):
+    """A page of a size a server cannot hold at full zoom is scaled down to
+    the longest side it may have, and an ordinary one is left alone."""
+    poster = fitz_with(FakePDF(size=(2384, 3370)))          # A0, in points
+    pdf_link.render_page("x.pdf", 1, zoom=2.0)
+    (_, matrix), = [step for step in poster.log if step[0] == "pixmap"]
+    assert matrix[1] == matrix[2]
+    assert matrix[1] * 3370 == pytest.approx(pdf_link.PAGE_MAX_SIDE)
+    sheet = fitz_with(FakePDF(size=(595, 842)))             # A4
+    pdf_link.render_page("x.pdf", 1, zoom=2.0)
+    assert ("pixmap", ("matrix", 2.0, 2.0)) in sheet.log
+
+
+def test_render_page_without_rects_marks_nothing(fitz_with):
+    pdf = fitz_with()
+    pdf_link.render_page("x.pdf", 1, None)
+    pdf_link.render_page("x.pdf", 1, [])
+    assert not [step for step in pdf.log if step[0] == "highlight"]
+
+
+@pytest.mark.parametrize("number", [0, 4, -1])
+def test_render_page_refuses_a_page_the_file_does_not_have(fitz_with, number):
+    pdf = fitz_with(FakePDF(pages=3))
+    with pytest.raises(pdf_link.PageNotRendered) as caught:
+        pdf_link.render_page("x.pdf", number)
+    assert "3 pages" in str(caught.value) and str(number) in str(caught.value)
+    assert caught.value.reason == pdf_link.NO_SUCH_PAGE
+    assert pdf.closed                         # not left open on the way out
+
+
+def test_render_page_says_when_the_file_does_not_open(fitz_with):
+    fitz_with(opens=RuntimeError("no such file"))
+    with pytest.raises(pdf_link.PageNotRendered) as caught:
+        pdf_link.render_page("missing.pdf", 1)
+    assert "does not open" in str(caught.value)
+    assert "no such file" in str(caught.value)
+    assert caught.value.reason == pdf_link.NOT_OPENED
+
+
+def test_render_page_says_when_the_drawing_fails_and_closes_the_file(fitz_with):
+    pdf = fitz_with(FakePDF(fail_on_render=True))
+    with pytest.raises(pdf_link.PageNotRendered) as caught:
+        pdf_link.render_page("x.pdf", 1)
+    assert "did not render" in str(caught.value)
+    assert "out of memory" in str(caught.value)
+    assert caught.value.reason == pdf_link.NOT_DRAWN
+    assert pdf.closed
+
+
+def test_render_page_says_when_pymupdf_is_not_installed(monkeypatch):
+    monkeypatch.setitem(sys.modules, "fitz", None)      # import fails
+    with pytest.raises(pdf_link.PageNotRendered) as caught:
+        pdf_link.render_page("x.pdf", 1)
+    assert "PyMuPDF is not installed" in str(caught.value)
+    assert caught.value.reason == pdf_link.NOT_INSTALLED
+
+
+class Crowd:
+    """A PyMuPDF that counts how many callers are inside it at once."""
+
+    def __init__(self):
+        self.inside = 0
+        self.peak = 0
+        self.guard = threading.Lock()
+        self.page_count = 1
+        self.rect = types.SimpleNamespace(width=595, height=842)
+
+    def open(self, path):
+        with self.guard:
+            self.inside += 1
+            self.peak = max(self.peak, self.inside)
+        # long enough for another thread to arrive; not time.sleep, which the
+        # suite turns into a no-op for every test
+        threading.Event().wait(0.03)
+        return self
+
+    def load_page(self, index):
+        return self
+
+    def get_text(self, *kind):
+        return [] if kind else ""
+
+    def get_pixmap(self, matrix):
+        return types.SimpleNamespace(tobytes=lambda form: b"png")
+
+    def close(self):
+        with self.guard:
+            self.inside -= 1
+
+
+def together(calls):
+    """Every call on a thread of its own, all let go at the same moment; what
+    one of them raised is raised here."""
+    start = threading.Barrier(len(calls))
+    failed = []
+
+    def run(call):
+        try:
+            start.wait()
+            call()
+        except BaseException as exc:
+            failed.append(exc)
+
+    threads = [threading.Thread(target=run, args=(call,)) for call in calls]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+    if failed:
+        raise failed[0]
+
+
+@pytest.fixture
+def crowd(monkeypatch):
+    """The Crowd as `fitz`, with the one other library the locating needs."""
+    found = Crowd()
+    monkeypatch.setitem(sys.modules, "fitz", types.SimpleNamespace(
+        open=found.open, Rect=lambda *corners: corners,
+        Matrix=lambda zoom_x, zoom_y: (zoom_x, zoom_y)))
+    monkeypatch.setitem(sys.modules, "rapidfuzz", types.SimpleNamespace(
+        fuzz=types.SimpleNamespace(partial_ratio_alignment=lambda a, b: None)))
+    monkeypatch.setattr(pdf_locate, "_MISSING", "")      # both libraries here
+    return found
+
+
+def test_the_crowd_shows_two_threads_in_the_library_where_nothing_stops_them(
+        crowd):
+    """The instrument: without the lock, threads do overlap in it."""
+    def enter():
+        crowd.open("x.pdf")
+        crowd.close()
+
+    together([enter] * 4)
+    assert crowd.peak > 1
+
+
+def test_no_two_threads_are_inside_pymupdf_at_once(crowd):
+    """The chat runs a session on each thread, and a rerun starts while the
+    script it replaced is still drawing. Drawing, finding the words of a
+    page and finding a phrase on it each enter the library, and each holds
+    the one lock."""
+    quote = "Der Waermebedarf betraegt 241 GWh im Jahr"
+    together([lambda: pdf_link.render_page("x.pdf", 1),
+              lambda: pdf_locate.page_words("x.pdf", 1),
+              lambda: pdf_link.best_search_phrase("x.pdf", 1, quote),
+              lambda: pdf_link.render_page("x.pdf", 1),
+              lambda: pdf_locate.page_words("x.pdf", 1),
+              lambda: pdf_link.best_search_phrase("x.pdf", 1, quote)])
+    assert crowd.peak == 1 and crowd.inside == 0
+
+
 def test_section_segments_geo_parses_bbox_and_nulls(kwp_db):
     db_path, con = kwp_db
     con.executescript(
@@ -426,6 +753,54 @@ def test_query_cache_key_sensitivity():
     assert k_text != k_other       # text matters
     assert k_text != k_mode        # mode matters
     assert k_img != k_mode         # image bytes matter
+
+
+def test_the_key_names_the_model_and_the_size_of_its_vectors():
+    key = query_cache.make_key("text", text="abc", model="m1", dim=4096)
+    assert key == query_cache.make_key("text", text="abc", model="m1", dim=4096)
+    assert key != query_cache.make_key("text", text="abc", model="m2", dim=4096)
+    assert key != query_cache.make_key("text", text="abc", model="m1", dim=1024)
+
+
+def test_a_key_without_model_and_size_is_the_configured_ones(monkeypatch):
+    dim = EC.EMBEDDING_DIM
+    key = query_cache.make_key("text", text="abc")
+    assert key == query_cache.make_key(
+        "text", text="abc", model=EC.EMBEDDING_MODEL, dim=dim)
+    monkeypatch.setattr(EC, "EMBEDDING_MODEL", "the-next-model")
+    moved = query_cache.make_key("text", text="abc")
+    assert moved != key                                         # read now
+    assert moved == query_cache.make_key(
+        "text", text="abc", model="the-next-model", dim=dim)
+    monkeypatch.setattr(EC, "EMBEDDING_DIM", dim + 1)
+    assert query_cache.make_key("text", text="abc") not in (key, moved)
+
+
+def test_the_vectors_of_two_models_never_mix_in_one_cache_file(tmp_path):
+    import numpy as np
+    conn = query_cache.connect(tmp_path / "cache.db")
+    first = query_cache.make_key("text", text="abc", model="m1", dim=3)
+    second = query_cache.make_key("text", text="abc", model="m2", dim=3)
+    query_cache.put(conn, first, np.array([1, 0, 0], dtype="float32"))
+    assert query_cache.get(conn, second) is None     # the same words, a miss
+    query_cache.put(conn, second, np.array([0, 1, 0], dtype="float32"))
+    assert query_cache.get(conn, first).tolist() == [1, 0, 0]
+    assert query_cache.get(conn, second).tolist() == [0, 1, 0]
+
+
+def test_an_entry_written_under_the_key_without_a_model_matches_nothing(
+        tmp_path):
+    import numpy as np
+    # the key as it was made before it named a model
+    old = hashlib.sha256()
+    for part in (b"text", "abc".encode("utf-8"), b""):
+        old.update(part)
+        old.update(bytes([0]))
+    conn = query_cache.connect(tmp_path / "cache.db")
+    query_cache.put(conn, old.hexdigest(), np.ones(3, dtype="float32"))
+    assert query_cache.get(conn, old.hexdigest()) is not None   # it is there
+    assert query_cache.get(
+        conn, query_cache.make_key("text", text="abc")) is None
 
 
 # ---------------------------------------------------------------------------

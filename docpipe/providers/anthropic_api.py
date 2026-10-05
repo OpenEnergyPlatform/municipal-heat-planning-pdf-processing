@@ -201,4 +201,5 @@ class AnthropicChat:
             STOPS.get(message.stop_reason, base.STOP),
             prompt_tokens=read,
             completion_tokens=getattr(usage, "output_tokens", None),
+            cached_tokens=getattr(usage, "cache_read_input_tokens", None),
             model=getattr(message, "model", model))

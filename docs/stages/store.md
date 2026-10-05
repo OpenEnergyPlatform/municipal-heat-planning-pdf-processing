@@ -18,7 +18,7 @@ Three stages depend on this package, each differently.
 [File processing](fileprocessing.md), stage 1, is the only stage that
 writes a `Documents` row, calling `schema.apply(connection, profile)`
 directly on a plain `sqlite3.connect(db_file)`
-(`docpipe/ingest/pipeline.py:107` to `108`), not through this package's
+(`docpipe/ingest/pipeline.py:122` to `123`), not through this package's
 `connect()` (see Method). [Chunking](chunking.md), stage 6, assumes that
 schema exists, opening the same file through its own `database.py`'s
 separate `connect()` and writing every other core table against it; it
@@ -48,7 +48,7 @@ as they do on [core](core.md), without it appearing as a numbered link.
 
 `core_sql()` reads `docpipe/store/schema.sql` verbatim (`CORE_SCHEMA`,
 `schema.py:41` to `42`); `profile_sql(profile)` does the same for
-`Profile.schema_sql` (`docpipe/profile.py:278` to `287`: the profile's own
+`Profile.schema_sql` (`docpipe/profile.py:279` to `288`: the profile's own
 `schema.sql`, else that of the nearest profile it extends), returning an
 empty string if the file or profile is absent (`schema.py:45` to `48`).
 `apply()` turns `PRAGMA foreign_keys = ON` (see Configuration), runs `BEGIN;
@@ -61,7 +61,7 @@ database creates nothing (`test_apply_is_idempotent`,
 `DocumentMeta`) carry a foreign key into `Documents`; the core schema
 references no profile column.
 
-`tables(connection)` (`schema.py:164` to `166`) returns the set of table
+`tables(connection)` (`schema.py:198` to `200`) returns the set of table
 names `sqlite_master` reports for the open connection, and
 `columns(connection, table)` (`schema.py:70` to `72`) the set of column names
 `PRAGMA table_info` reports for one table. Inside the package `meta` and
@@ -82,7 +82,7 @@ and is raised whenever that shape changes. A database carries it as `PRAGMA
 user_version`, and one made before the counter existed reads 0.
 `ADDED_COLUMNS` (`schema.py:37` to `38`) lists every `(table, column, type)`
 a later format added: `Documents.sha256` and `Documents.bytes`.
-`migrate(connection)` (`schema.py:75` to `86`) reads the version the
+`migrate(connection)` (`schema.py:91` to `102`) reads the version the
 database had, runs `ALTER TABLE ... ADD COLUMN` for each listed column that
 `columns()` does not report, sets `user_version` to `FORMAT` if it was
 lower, commits, and returns the version it found. It only ever adds, a
@@ -98,6 +98,17 @@ in the new columns, and a second call finds nothing to add and returns
 `tests/test_identity.py:35` to `52`). Chunking's own `connect()` never calls
 `apply()` or `migrate()` (see Failure modes).
 
+`add_missing_column(connection, table, column, kind)` (`schema.py:75` to `89`)
+is the same idea for a table of a profile. `CREATE TABLE IF NOT EXISTS` leaves
+a table as it was made, so a source that fills a column the table was made
+without adds it first: the function adds the column where the table is there
+and lacks it, and returns whether it did. A table that is not there is left
+alone, so that the write that needed it is the one to fail. The folder source
+uses it for `DocumentMeta.created`, so a database made before the date was kept
+gets the column on the first run; a profile that extends the built-in one with
+a whole `DocumentMeta` table of its own and uses the folder source has to
+declare `created` itself.
+
 A reader brings nothing forward. Opened through `readonly_uri` it cannot
 alter a table, and the code that reads what a later format added is written
 to find it missing: `content_of` returns `(None, None)` when the column or
@@ -110,7 +121,7 @@ database says less, and nothing is compared against it or refused.
 
 ### Opening a database
 
-`connect(path, profile)` (`schema.py:154` to `161`) creates `path`'s parent
+`connect(path, profile)` (`schema.py:188` to `195`) creates `path`'s parent
 directory if missing, opens the file, and calls `apply()`
 (`test_connect_creates_the_file`, `tests/test_store.py:69` to `73`). It
 is the only `connect()` that applies the schema; no production code
@@ -118,9 +129,9 @@ calls it (see Purpose). `test_connect_creates_the_file`
 (`tests/test_store.py:71`) exercises it, and `tests/test_app_pages.py` uses
 it to build a small database. Two later modules define narrower
 connections against the same file: chunking's
-(`docpipe/chunking/database.py:97` to `107`) adds a busy timeout but
+(`docpipe/chunking/database.py:98` to `108`) adds a busy timeout but
 never calls `apply()` or `migrate()`; inference's
-(`docpipe/inference/db.py:22` to `34`) opens a `mode=ro` URI so the app can
+(`docpipe/inference/db.py:24` to `36`) opens a `mode=ro` URI so the app can
 never take a write lock (see Configuration). That address is built in one
 place, `readonly_uri(path)` in `schema.py`, which the package re-exports:
 the path is made absolute and percent-encoded. Written into an address as
@@ -131,17 +142,17 @@ goes through it: inference's, the extraction stage's, the word index's, the
 
 Closing a connection is left to whoever opened it; this package tracks
 no handle. File processing's `with sqlite3.connect(db_file) as
-connection:` (`docpipe/ingest/pipeline.py:107`) commits on exit but does
+connection:` (`docpipe/ingest/pipeline.py:122`) commits on exit but does
 not close it. Chunking's `connect()` is closed by at least ten call
-sites: `EmbeddingWriter.close()` (`docpipe/chunking/database.py:803` to
-`804`); `_worker_connection`, closing a thread's previous connection
-before opening a replacement (`docpipe/chunking/database.py:122` to
-`126`); and eight `with closing(connect(db_path)) as conn:` blocks in
+sites: `EmbeddingWriter.close()` (`docpipe/chunking/database.py:796` to
+`797`); `_worker_connection`, closing a thread's previous connection
+before opening a replacement (`docpipe/chunking/database.py:123` to
+`127`); and eight `with closing(connect(db_path)) as conn:` blocks in
 `enrich_page_source`, `enrich_caption`, `update_database`, `enrich_bbox`,
 `clear_embedding_ids`, `get_document_faiss_ids`,
 `drop_embeddings_missing_from_index` and `next_faiss_id`
-(`docpipe/chunking/database.py:184`, `244`, `481`, `580`, `683`, `704`,
-`743` and `766`). The app caches inference's `connect_readonly()`
+(`docpipe/chunking/database.py:183`, `243`, `477`, `573`, `676`, `697`,
+`736` and `759`). The app caches inference's `connect_readonly()`
 connection in a Streamlit `@st.cache_resource`
 (`get_db` in `docpipe/app/app.py`) and never closes it.
 
@@ -231,11 +242,11 @@ forward).
 
 `Meta` (`docpipe/store/schema.sql:47` to `55`) is the table where a database
 says what it is: one row per fact, `key` primary key and `value` text, a
-record and never a gate. `set_meta(connection, values)` (`schema.py:143` to
-`155`) creates the table if it is missing, upserts each key and commits,
-storing values as text. `meta(connection)` (`schema.py:134` to `140`) reads
+record and never a gate. `set_meta(connection, values)` (`schema.py:177` to
+`189`) creates the table if it is missing, upserts each key and commits,
+storing values as text. `meta(connection)` (`schema.py:168` to `174`) reads
 the whole table as a dict, empty for a database with no `Meta` table. The
-only writer is `note_embedding` (`schema.py:89` to `119`), which chunking's
+only writer is `note_embedding` (`schema.py:105` to `135`), which chunking's
 `note_embedding` in `docpipe/chunking/pipeline.py` calls on a plain
 connection before it embeds anything; that is why `set_meta` creates the
 table itself instead of relying on `apply()`. It records `embedding/model`,
@@ -246,15 +257,26 @@ differs, the first model stays recorded, the new one is appended to
 `embedding/also` (newline separated), and `note_embedding` returns a
 sentence for the caller to log; nothing is refused. An index with no
 vectors takes the new model as the recorded one.
-`embedding_mismatch(connection, model)` (`schema.py:122` to `131`) is the
+`embedding_mismatch(connection, model)` (`schema.py:143` to `152`) is the
 query side: a sentence when `model` is not the recorded `embedding/model`,
 else `None`, which is also what a database that records no model gives.
-`note_index_model` in `docpipe/extraction/runner.py` logs it as a warning
-when a run embeds its probes with another model than the index was built
-with (`test_the_database_remembers_what_built_its_index_and_says_both` and
+`recorded_model(connection)` (`schema.py:138` to `140`) is the recorded model
+or `None`, which the chat reads for its own notice. `dimension_mismatch(connection,
+dim)` (`schema.py:155` to `165`) is the same question about the length of the
+vectors: a sentence when queries are embedded to another length than
+`embedding/dim`, else `None`, and `None` for a database that records no
+dimension. The same name can be set to another length, and vectors of two
+lengths do not compare either. `note_index_model` in
+`docpipe/extraction/runner.py` logs the model sentence as a warning when a run
+embeds its probes with another model than the index was built with, the
+doctor reads both checks and the chat the model one
+(`test_the_database_remembers_what_built_its_index_and_says_both`,
+`test_the_length_of_the_vectors_is_compared_like_their_model` and
 `test_a_database_without_a_table_of_vectors_holds_none`,
-`tests/test_identity.py:273` to `309`). The format is not a `Meta` row: it
-is `PRAGMA user_version` (see Bringing an older database forward).
+`tests/test_identity.py:273` to `327`). `embedding/also`, where an index went on
+with another model, is not looked at by either check. The format is not a
+`Meta` row: it is `PRAGMA user_version` (see Bringing an older database
+forward).
 
 Seven further core tables hang off `Documents`, directly or through
 `Sections`, written by chunking's `database.py`, not by this
@@ -296,7 +318,7 @@ key.
 | `scenarios` | `DocumentMeta` | `document` (PK, FK), `doi`, `title`, `year`, `venue`, `is_oa`, `scenario_count` | the publication's per-document fields |
 | `scenarios` | `Scenarios` | `id`, `ar6_id` (`UNIQUE`), `name` | one AR6 scenario |
 | `scenarios` | `DocumentScenarios` | `document` (FK), `scenario` (FK) | publication-to-scenario link, many to many; up to 146 scenarios per publication, up to 3 publications per scenario (`profiles/scenarios/schema.sql:27` to `29`, comment) |
-| `default` | `DocumentMeta` | `document` (PK, FK), `title`, `folder` | what the folder source knows about a document: the file name without its ending, and the subfolder it was read from (`docpipe/builtin/default/schema.sql`) |
+| `default` | `DocumentMeta` | `document` (PK, FK), `title`, `folder`, `created` | what the folder source knows about a document: the title in the PDF's own information dictionary, else the file name without its ending; the subfolder it was read from; and the PDF's creation date as far as it gives one (`YYYY`, `YYYY-MM` or `YYYY-MM-DD`, `NULL` without one) (`docpipe/builtin/default/schema.sql`) |
 
 Each of the three names its own per-document table `DocumentMeta`, keyed one
 to one on `document`; `add_document`/`upsert_document_meta` write into
@@ -312,29 +334,40 @@ Reading the tables back out is not this package's job.
 - Chunking's `database.py` writes and reads every table below `Documents`;
   four lookup queries, run once per document, decide what it already has
   embedded, all four `CROSS JOIN` from `Sections` into `Embeddings` rather
-  than a plain `JOIN` (`docpipe/chunking/database.py:54` to `87`; see
+  than a plain `JOIN` (`docpipe/chunking/database.py:55` to `88`; see
   Measured behaviour).
 - Inference's `db.py` opens the database read-only, mirroring those
   lookups at retrieval time and turning a retrieved
   `(owner_kind, owner_id)` pair, or a placeholder id such as `p17_img1`,
   into citable text (`get_candidate_faiss_ids`, `fetch_owner_content`,
-  `request_item`; `docpipe/inference/db.py:36` to `257`).
+  `request_item`; `docpipe/inference/db.py:66` to `287`).
 - Version linking determines what later stages read: extraction (stage 7)
   and the app's document picker both select `is_current = 1` documents by
   default, so a superseded document is never harvested or shown, even
-  when named explicitly; the app labels a row `(aktuell)` or `(alt)`
-  (`docpipe/extraction/runner.py:4726` to `4751`, docstrings;
-  `docpipe/inference/catalog.py:61` to `83`).
+  when named explicitly; the app labels a row with the profile's own words
+  for current and old, the `UI` entries `version_current` and `version_old`
+  (`kwp` says `(aktuell)` and `(alt)`, the built-in profile and `scenarios`
+  say `(current)` and `(old)`), and calls a document by `Profile.document_noun`,
+  which is `"document"` unless a profile names its own, falling back to the
+  `document_noun_fallback` entry only without a profile object or with an
+  empty noun
+  (`docpipe/extraction/runner.py:4727` to `4752`, docstrings;
+  `docpipe/inference/catalog.py:70` to `75` and `93` to `103`). A profile
+  that stands alone and words its own `UI` has to carry those three entries
+  and the others `wording.UI_REQUIRED` lists, or the app and the picker raise
+  a `LookupError` naming what is missing. The catalogs of the built-in profile
+  and of `scenarios` print no tag after a name, so for them the words are
+  reached only through the base `Catalog`.
 
 ## Configuration
 
 | name | kind | default | effect | where |
 |---|---|---|---|---|
-| `DOCPIPE_PROFILE` / `--profile` | environment variable / CLI flag | unset / none | selects which profile's `schema.sql` `apply()` layers on the core schema | `docpipe/profile.py:349` to `372` (env var, `load_profile`), `410` to `413` (`--profile`, `add_profile_argument`) and `447` to `470` (`resolve_profile`) |
-| `PRAGMA foreign_keys` | fixed connection pragma | `ON` | enables foreign-key enforcement, off by default in SQLite, so `ON DELETE CASCADE`/`SET NULL` fire | `docpipe/store/schema.py:53`; re-set independently by `docpipe/chunking/database.py:100` |
-| `PRAGMA busy_timeout` | fixed pragma, chunking's own `connect()` only | 30000 ms | a reader waits for a write lock instead of failing, needed once embedding began preparing documents while writing batches | `docpipe/chunking/database.py:97` to `107` |
+| `DOCPIPE_PROFILE` / `--profile` | environment variable / CLI flag | unset / none | selects which profile's `schema.sql` `apply()` layers on the core schema | `docpipe/profile.py:350` to `373` (env var, `load_profile`), `410` to `413` (`--profile`, `add_profile_argument`) and `447` to `470` (`resolve_profile`) |
+| `PRAGMA foreign_keys` | fixed connection pragma | `ON` | enables foreign-key enforcement, off by default in SQLite, so `ON DELETE CASCADE`/`SET NULL` fire | `docpipe/store/schema.py:53`; re-set independently by `docpipe/chunking/database.py:101` |
+| `PRAGMA busy_timeout` | fixed pragma, chunking's own `connect()` only | 30000 ms | a reader waits for a write lock instead of failing, needed once embedding began preparing documents while writing batches | `docpipe/chunking/database.py:98` to `108` |
 | `CORE_TABLES` | module constant | the 9 core table names, as a tuple | names which tables belong to the core, not a profile; used by tests | `docpipe/store/schema.py:27` to `28` |
-| `FORMAT` / `PRAGMA user_version` | module constant / pragma | `1` / `0` on a database made before the counter | the shape of the core tables; `migrate` sets the pragma to `FORMAT` when it is lower | `docpipe/store/schema.py:35`, `75` to `86` |
+| `FORMAT` / `PRAGMA user_version` | module constant / pragma | `1` / `0` on a database made before the counter | the shape of the core tables; `migrate` sets the pragma to `FORMAT` when it is lower | `docpipe/store/schema.py:35`, `91` to `102` |
 | `ADDED_COLUMNS` | module constant | `Documents.sha256` (`TEXT`) and `Documents.bytes` (`INTEGER`) | the columns a later format added, which `migrate` adds to a database that lacks them | `docpipe/store/schema.py:37` to `38` |
 
 ## Failure modes
@@ -382,7 +415,7 @@ Reading the tables back out is not this package's job.
   stops SQLite driving the query from the whole `Embeddings` table on
   `owner_kind` alone; a plain `JOIN` was measured at 338 ms against
   1.1 ms per document at corpus scale
-  (`docpipe/chunking/database.py:46` to `51`, comment).
+  (`docpipe/chunking/database.py:47` to `52`, comment).
 - The corpus holds on the order of 134,000 `Sections` rows, with far more
   `Segments` beneath them (`tests/test_database.py:80` to `81`,
   docstring). A 150-child test fixture goes out as four `executemany`
@@ -390,10 +423,10 @@ Reading the tables back out is not this package's job.
   comment and assertion).
 - Two processed directories with no `Documents` row put 1,096 dead
   vectors into the FAISS index in one run
-  (`docpipe/chunking/pipeline.py:247` to `250`, comment). The embed step
+  (`docpipe/chunking/pipeline.py:249` to `252`, comment). The embed step
   now checks for a document id before embedding, instead of writing
   vectors no `Embeddings` row can resolve and repeating that work next
-  run (`docpipe/chunking/database.py:851` to `856`, comment).
+  run (`docpipe/chunking/database.py:844` to `849`, comment).
 - Eleven plans in the heat-plan corpus carry no PDF text layer; their
   `page_text_transcribed` count is filled by a model reading the
   rendered page instead of the PDF's own text
@@ -426,8 +459,10 @@ Reading the tables back out is not this package's job.
   records the model, replaces it while `Embeddings` is empty or absent, and
   with vectors held keeps the first model, records the other under
   `embedding/also` and returns a sentence; `embedding_mismatch` is silent
-  for the recorded model and for a database that records none
-  (`tests/test_identity.py:273` to `309`).
+  for the recorded model and for a database that records none, and
+  `test_the_length_of_the_vectors_is_compared_like_their_model` holds
+  `dimension_mismatch` to the same, naming both lengths where they differ
+  (`tests/test_identity.py:273` to `327`).
 - `test_foreign_keys_are_enforced`, `test_document_meta_follows_its_document`
   and `test_external_id_is_unique`: a `Sections` row against a
   nonexistent document, a `Documents` deletion, and a repeated
@@ -444,8 +479,9 @@ Reading the tables back out is not this package's job.
 
 `docpipe/store/__init__.py` re-exports six names from `schema.py`:
 `apply`, `connect`, `core_sql`, `profile_sql`, `readonly_uri` and `tables`.
-`columns`, `migrate`, `meta`, `set_meta`, `note_embedding`,
-`embedding_mismatch`, `FORMAT`, `ADDED_COLUMNS` and `CORE_TABLES` are read
+`columns`, `add_missing_column`, `migrate`, `meta`, `set_meta`,
+`note_embedding`, `recorded_model`, `embedding_mismatch`,
+`dimension_mismatch`, `FORMAT`, `ADDED_COLUMNS` and `CORE_TABLES` are read
 from `docpipe.store.schema` directly.
 
 `docpipe/store/schema.py` implements the six functions `__init__.py`

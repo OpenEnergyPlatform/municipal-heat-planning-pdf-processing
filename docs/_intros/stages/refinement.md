@@ -113,7 +113,7 @@ that cannot be read would fail every attempt and end as `NOT_SERVED`, as if
 the server had not answered; read outside it, the call raises, and the
 dispatch loop keeps the window as failed (`refine.py:961-965`). `main`
 therefore reads `llm_temperature()` and `llm_max_tokens()` once, right after
-the profile is resolved (`docpipe/refinement/pipeline.py:233-237`), so an
+the profile is resolved (`docpipe/refinement/pipeline.py:228-232`), so an
 unparseable value ends the run at the start and does not fail inside every
 request.
 
@@ -339,7 +339,8 @@ over `SECTION_MAX_WORDS` is re-cut mechanically by `_enforce_max`.
 
 `run()`'s preflight (see Method) refuses to start before the first
 document rather than mid-run. A document with no `results/sections.json`
-is not a `--batch`-mode candidate (`_has_input`). A killed `--force` run,
+is not a `--batch`-mode candidate (`run_batch` lists the document directories
+that hold `sections.json` through `artifacts.document_dirs`). A killed `--force` run,
 or one the server did not serve, never leaves a document without refined
 output, since `dump_json_atomic` replaces the old file in one step and
 only a finished pass replaces it. `dump_json_atomic` removes its temporary
@@ -508,8 +509,8 @@ sections and replies to keep or, for an unanswered cut, with nothing.
 Called by `pipeline.py`'s `run_single`.
 
 `pipeline.py` orchestrates the stage: `run_single` decides between a
-cache hit and a fresh run, `run_batch` runs every document subdirectory
-concurrently, and `run` calls `assert_serving` first. `main` resolves the
+cache hit and a fresh run, `run_batch` runs every document directory under
+the root, at any depth, concurrently, and `run` calls `assert_serving` first. `main` resolves the
 profile and then reads `llm_temperature()` and `llm_max_tokens()` once. Entry point for
 `python -m docpipe.refinement`, whose `__main__.py` binds `--profile`
 before it imports the stage, and for library callers of `run()`.

@@ -64,9 +64,9 @@ HyDE-style construction: a short hypothetical passage written as it
 would appear in the corpus, not a question. Whatever non-empty phrase the
 model writes is used as the anchor; the function falls back to the raw
 task text only on a transport or parse error, or an empty reply, and it
-never raises (`llm_client.py:331-367`). The same call sets `recheck`, true
+never raises (`llm_client.py:333-369`). The same call sets `recheck`, true
 only when the model marks the task a repetition and history is
-non-empty (`llm_client.py:365`); when true, `answer_question` walks
+non-empty (`llm_client.py:367`); when true, `answer_question` walks
 history backward, folding every `(owner_kind, owner_id)` pair each turn
 examined into one exclude set, stopping at the first non-recheck turn
 (`answer.py:180-186`).
@@ -148,9 +148,9 @@ has no table. It parses back `{"ok", "stdout", "stderr", "exit_code", "error"}`
 (`code_exec.py:22-54`), never raising (see Failure modes). An image
 requester may separately return a crop the section text only points at,
 through `db.request_item`. Both draw one shared round budget,
-`CODE_EXEC_MAX_ROUNDS` plus `REQUEST_IMAGE_MAX` (`llm_client.py:635`); a
+`CODE_EXEC_MAX_ROUNDS` plus `REQUEST_IMAGE_MAX` (`llm_client.py:637`); a
 repeated crop id stops the loop and forces an answer
-(`llm_client.py:658-665`). The loop stops once a batch reports complete
+(`llm_client.py:660-667`). The loop stops once a batch reports complete
 with a citation accepted (`answer.py:296-297`).
 
 ### Grounding, image refinement and finishing the turn
@@ -158,8 +158,8 @@ with a citation accepted (`answer.py:296-297`).
 Every claim must point at a batch index and either a verbatim quote or,
 for an attached image, a reading. A text quote is accepted only through
 `llm_client.grounded_quote`, a match of at least 12 characters against
-the excerpt shown (`_quote_is_grounded`, `llm_client.py:179-190`). An
-image-based support, `visual_reading` (`llm_client.py:557-574`), is
+the excerpt shown (`_quote_is_grounded`, `llm_client.py:181-192`). An
+image-based support, `visual_reading` (`llm_client.py:559-576`), is
 accepted only when its index was among the crops attached to the call
 and the reading is at least 8 characters, so background knowledge alone
 cannot count as grounded evidence. Citations are deduplicated by
@@ -170,11 +170,11 @@ grounded citations" from "Answer ignored the response envelope"
 
 Every visual citation is then re-read in a focused, single-image call,
 `llm_client.read_off_image`, up to `READOFF_MAX_CALLS` per turn: a first
-pass often misreads a chart (`llm_client.py:494-499`). Readings fold
+pass often misreads a chart (`llm_client.py:496-501`). Readings fold
 back through `revise_with_readings`, unchanged on failure
-(`llm_client.py:539-554`).
+(`llm_client.py:541-556`).
 A JSON answer then goes through `llm_client.format_as_json`
-(`llm_client.py:717-732`), the only call here with no failure handling
+(`llm_client.py:719-734`), the only call here with no failure handling
 of its own (see Failure modes); every turn is logged through
 `request_log.log_request` (`answer.py:374-379`).
 
@@ -183,8 +183,8 @@ of its own (see Failure modes); every turn is logged through
 Every phrase and label the loop wraps around the model comes from the
 active profile through `wording.py`. `phrases()` checks a profile's
 `PHRASES` dict against `REQUIRED`, a frozenset of 32 keys
-(`wording.py:28-39`). `llm_client.py` calls `phrases()` on first use
-(`llm_client.py:91-93`), so this package imports with no active profile
+(`wording.py:30-41`). `llm_client.py` calls `phrases()` on first use
+(`llm_client.py:93-95`), so this package imports with no active profile
 and a lookup with none fails (see Failure modes).
 
 ### The knowledge-graph route
@@ -197,7 +197,7 @@ and trust/reason wording, returning `None` where `kg.VALUE_QUERY` is
 absent, so `scenarios` gets no route at all (`kg_route.py:95-122`).
 `to_coordinates` asks one closed
 question per axis over the spec's own vocabulary, through
-`llm_client.choose` in the app (`llm_client.py:260-284`,
+`llm_client.choose` in the app (`llm_client.py:262-286`,
 `app.py:251-254`); an answer outside the vocabulary leaves the axis
 unbound (`kg_route.py:174-216`), and the route proceeds only once a
 coordinate lands on one of the `DECIDING_AXES`, quantity, scenario or
@@ -266,7 +266,7 @@ them (`answer.py:147`, populated `answer.py:318`):
 | `compute`, `requested` | the sandbox runs made, and the block ids of delivered crop requests |
 | `cache_hit` | whether the query embedding came from `query_cache` |
 
-One citation carries `db.fetch_owner_content`'s fields (`db.py:177-257`)
+One citation carries `db.fetch_owner_content`'s fields (`db.py:207-287`)
 plus what `answer.py` adds:
 
 | field | holds |
@@ -274,7 +274,7 @@ plus what `answer.py` adds:
 | `owner_kind`, `owner_id` | `section`, `table` or `figure`, and that row's id |
 | `title`, `text` | the resolved title and body; a section's placeholders are annotated with their caption, a table's or figure's body is unchanged |
 | `page_number`, `image_path`, `section_number`, `section_title`, `document_id` | citation/scoping fields; `image_path` relative to `IMAGE_ROOT`, `None` for a section |
-| `caption_stored`, `section_id`, `block_id` | table/figure owners only: the stored caption before title resolution, the section's id, and the block id (`db.py:243, 247-248`) |
+| `caption_stored`, `section_id`, `block_id` | table/figure owners only: the stored caption before title resolution, the section's id, and the block id (`db.py:273, 277-278`) |
 | `quote`, `visual`, `requested` | the accepted quote or reading, whether from an image or crop request, added in `answer.py` |
 
 `kg_route.answer_from_graph` returns `{route, reason, values,
@@ -286,8 +286,12 @@ Two more SQLite files stay apart from the corpus: `request_log.py`'s
 `requests` (`request_log.py:26-41`, one row per turn: `plan_id`,
 `query_text`, `mode`, `scopes`, `latency_ms`, `n_hits`, `n_citations`,
 `answer_hash`, `error_message`, `cache_hit`), and `query_cache.py`'s
-`query_cache` (`query_cache.py:18-24`: `query_key`, a sha256 of the
-query mode, text and image bytes, `vector`, `created_at`). `plan_id` is
+`query_cache` (`query_cache.py:24-30`: `query_key`, a sha256 of the embedding
+model, the vector size, the query mode, text and image bytes, `vector`,
+`created_at`; the model and the size default to the configured ones, read at
+the call, so a vector of another model is never found for the same question
+and entries written under the older key match nothing and are embedded
+again). `plan_id` is
 the document the question asked and is empty for a question to the whole
 corpus. A log made when every question named a document refuses such a row, so
 opening it brings it forward: the table is made again and every row is carried
@@ -324,7 +328,7 @@ chat` lists them all.
 | `CODE_EXEC_TOKEN`, `CODE_EXEC_TIMEOUT` | env vars | empty (or `KWP_SANDBOX_TOKEN`), `45` s | bearer token and HTTP timeout for the sandbox | `config.py:65-66` |
 | `CODE_EXEC_MAX_ROUNDS` | env var | `2` | sandbox runs per batch, shared with `REQUEST_IMAGE_MAX` | `config.py:68` |
 | `COORDINATE_PROMPT_ID`, `DECIDING_AXES` | module constants | `"kg/coordinate"`, (quantity, scenario, year) | the axis-question prompt id and the axes that gate the graph route | `kg_route.py:45, 61` |
-| `MIN_SCORE`, `MAX_LINES` | module constants | `55.0`, `10` | fuzzy-match floor and highlight-rectangle cap for a located quote | `pdf_locate.py:26-27` |
+| `MIN_SCORE`, `MAX_LINES` | module constants | `55.0`, `10` | fuzzy-match floor and highlight-rectangle cap for a located quote | `pdf_locate.py:27-28` |
 
 ## Failure modes
 
@@ -333,20 +337,24 @@ before any LLM call runs (`answer.py:214-217`); where hits exist but
 nothing could be grounded, `answer` comes back `None` (see Method;
 `answer.py:348-355`). An unknown or missing crop id comes back
 `None` and is logged (`answer.py:98-126`); a repeated id stops the loop
-and forces an answer (`llm_client.py:658-665`).
+and forces an answer (`llm_client.py:660-667`).
 
 `pdf_locate._have_deps()` checks once for PyMuPDF and rapidfuzz and logs
 an error (`log.error`) if either is missing; when it fails, quote
 location is off for the whole run and every citation loses its
-highlight rectangles (`pdf_locate.py:33-56`).
+highlight rectangles (`pdf_locate.py:41-64`); the chat's page expander then
+says the quote was not located, as it does for a quote that is not on the
+page. Every call into PyMuPDF (`page_words` and the app's own draw and
+phrase lookups) holds `pdf_locate.MUPDF_LOCK`, because the chat runs each
+session on its own thread and the library is not thread-safe.
 
 Inside `llm_client._chat_json`, a malformed reply or transport error is
 retried up to `LLM_MAX_RETRIES` with backoff capped at 10 seconds before
-raising `RuntimeError` (`llm_client.py:153-257`); callers above it
+raising `RuntimeError` (`llm_client.py:155-259`); callers above it
 degrade instead: `make_search_phrase` falls back to the raw task, and
 `answer_from_sources` comes back `{"found": False}`. `format_as_json`
 has no such wrapper and can raise past this package
-(`llm_client.py:717-732`; `answer.py:357-363`). `code_exec.run_code`
+(`llm_client.py:719-734`; `answer.py:357-363`). `code_exec.run_code`
 degrades without raising: any transport or JSON failure comes back
 `{"ok": False, "error": ...}`, read as no calculation, not a failed turn
 (`code_exec.py:36-62`).
@@ -359,10 +367,10 @@ when the route is built (`kg_route.py:80-92`); a Turtle fragment with no
 
 The wording contract fails the same way: a profile whose `PHRASES` dict
 is missing a required key raises `LookupError` at the first check
-(`wording.py:102-104`), and no active profile raises `LookupError` from
-`wording._component` (`wording.py:77-81`) for any lookup a turn needs.
+(`wording.py:110-112`), and no active profile raises `LookupError` from
+`wording._component` (`wording.py:85-89`) for any lookup a turn needs.
 `llm_client.py` resolves its own phrases on first use
-(`llm_client.py:91-93`), so the
+(`llm_client.py:93-95`), so the
 missing-profile case surfaces at the first lookup of a turn and not as an
 import error.
 
@@ -380,13 +388,13 @@ about 470 candidate vectors, and the batched call measured 0.421 to
 0.277 seconds over 50 repetitions, 8.4 milliseconds per document instead
 of 5.5 (`faiss_store.py:76-81`).
 
-The grounding gate's floor of 12 characters (`llm_client.py:179-190`) and
-the image-reading floor of 8 characters (`llm_client.py:557-574`) are
+The grounding gate's floor of 12 characters (`llm_client.py:181-192`) and
+the image-reading floor of 8 characters (`llm_client.py:559-576`) are
 sized the same way, long enough to reject a short stray word standing
 in for evidence; the code names "GmbH" as the concrete case the
 12-character floor rejects.
 
-`pdf_locate`'s match floor, `MIN_SCORE = 55.0` (`pdf_locate.py:26`), is a
+`pdf_locate`'s match floor, `MIN_SCORE = 55.0` (`pdf_locate.py:27`), is a
 `rapidfuzz.fuzz.partial_ratio_alignment` score, not a percentage of the
 page: the corpus text is never byte-identical to what PyMuPDF reads off
 the page, and the floor is tuned to survive that drift, not to demand
@@ -475,7 +483,12 @@ both, the turn's entry point and the dataclass every step reads. `answer_questio
 `catalog.py` holds the generic `Catalog` class, `load_catalog`,
 `facet_options` and `apply_filters`. `profiles/kwp/catalog.py` and
 `profiles/scenarios/catalog.py` each extend `Catalog` with their own
-facets; the app calls `load_catalog` to pick between them.
+facets; the app calls `load_catalog` to pick between them. The words the
+generic label needs, the tag after a document's name (`version_current`,
+`version_old`) and the noun for a document where a profile names none
+(`document_noun_fallback`), are not in the module: it reads them from the
+`inference.UI` table of the profile it is given, through `wording.ui`, so the
+built-in profile says `(current)` and `(old)` and `kwp` `(aktuell)` and `(alt)`.
 
 `chunker.py` holds `pack_chunks`, the token-budgeted batching,
 `citation_label`, the source label the answer text and model's excerpt
@@ -495,7 +508,11 @@ calls `choose` directly (see Method).
 calls `load_global_index` at startup; `answer.py` calls `retrieve`, and
 so does the extraction stage's `runner.py`.
 
-`db.py` holds the SQL: `connect_readonly`, the candidate-vector query
+`db.py` holds the SQL: `connect_readonly`, `available_scopes` (the search
+scopes whose embedding types the `Embeddings` table holds, in the order of
+`ALL_SCOPES`), `index_model_notice` (the profile's sentence when the database
+records another embedding model than the one that embeds the queries, else
+`None`), the candidate-vector query
 `faiss_store.py` reconstructs from, `fetch_owner_content` and
 `request_item`. Called by `faiss_store.py`, `answer.py`, the app, and
 the extraction stage's `runner.py` (as `inference_db`).
@@ -525,7 +542,9 @@ schemas of the chat's requests, for an API that generates inside one.
 `answer.py`'s `_log` helper and directly by the app.
 
 `query_cache.py` holds the `query_cache` table, `get`, `put` and
-`make_key`. Called by the app and, for the same lookup, `runner.py`.
+`make_key`, whose keyword-only `model` and `dim` default to the configured
+embedding model and vector size. Called by the app and, for the same lookup,
+`runner.py`.
 
 `pdf_locate.py` holds `_have_deps`, `quote_rects`, `page_words` and
 `rects_from_words`, the quote-to-rectangle match described in Failure

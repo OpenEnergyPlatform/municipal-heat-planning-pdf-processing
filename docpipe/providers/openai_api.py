@@ -74,8 +74,10 @@ class OpenAIChat:
         if getattr(choice.message, "refusal", None):
             text, finish = "", base.REFUSED
         usage = getattr(response, "usage", None)
+        details = getattr(usage, "prompt_tokens_details", None)
         return base.reply(
             base.decoded(text, decode), finish,
             prompt_tokens=getattr(usage, "prompt_tokens", None),
             completion_tokens=getattr(usage, "completion_tokens", None),
+            cached_tokens=getattr(details, "cached_tokens", None),
             model=getattr(response, "model", model))

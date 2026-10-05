@@ -12,7 +12,7 @@ python scripts/build_docs.py --out docs
 - [Running the pipeline](running.md): hand-written
 - [Glossary](glossary.md): hand-written
 - [API reference](api/index.md): Every public function, class and method of the modules under `docpipe/`, `profiles/` and the two script packages, with its signature as written and its docstring.
-- [What each stage leaves behind](artifacts.md): Names the per-document result files under `<doc>/results/`, in the order the pipeline writes them.
+- [What each stage leaves behind](artifacts.md): Names the per-document result files under `<doc>/results/`, in the order the pipeline writes them, and finds the document directories that hold them.
 - [The harvest contract: kwp](contract/kwp.md)
 - [The harvest contract: scenarios](contract/scenarios.md)
 - [What a coordinate's state means](contract/states.md): Computes the deterministic skeleton of a tuple from the spec.
@@ -24,7 +24,7 @@ python scripts/build_docs.py --out docs
 - [6. Chunking, embedding, indexing](stages/chunking.md): Merges the preprocessing and visuals outputs, embeds them, and indexes them.
 - [The command and its settings](stages/command.md): The one command.
 - [Drafting a spec from shapes](stages/compile.md): An extraction spec drafted from the shapes and the ontology of a graph.
-- [The parts every stage uses](stages/core.md): Names the per-document result files under `<doc>/results/`, in the order the pipeline writes them.
+- [The parts every stage uses](stages/core.md): Names the per-document result files under `<doc>/results/`, in the order the pipeline writes them, and finds the document directories that hold them.
 - [The embedders](stages/embedding.md): Exposes one Embedder interface behind several backends.
 - [Measuring a harvest](stages/evaluation.md): What a person decided about harvested values, kept beside the harvest and never in it.
 - [7. Reading the values out](stages/extraction.md): Marks the extraction package as the OBIE stage.

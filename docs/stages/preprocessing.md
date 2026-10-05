@@ -6,7 +6,7 @@ Preprocessing turns one PDF into two cached JSON artifacts. `results/pages.json`
 (Stages 1 and 2) stays internal to this stage, a per-page inventory of
 content blocks read only by Stage 3, `--rebuild-stage3`, and
 `--report-columns`; no module outside `docpipe/preprocessing/` imports
-`PAGES_JSON` (`docpipe/artifacts.py:15`). `results/sections.json` (Stage 3),
+`PAGES_JSON` (`docpipe/artifacts.py:24`). `results/sections.json` (Stage 3),
 the flat list of assembled sections, is what every later stage eventually
 reads. Stage 1 reads the PDF's own text layer with PyMuPDF. Stage 2 runs
 PP-DocLayoutV3, an object-detection model, over rendered pages to find
@@ -20,16 +20,16 @@ refinement has not produced it yet. Chunking's merge step requires
 document that has one and no refined output, so the content reaches the
 database through the merged `document.json`; only the standalone
 `enrich-bbox` step reads `sections.json` itself, for its geometry
-(`docpipe/refinement/pipeline.py:44-45`; `docpipe/visuals/pipeline.py:56-65`,
-152-155; `docpipe/chunking/merge.py:22-23`, `167-177`;
-`docpipe/chunking/database.py:587`).
+(`docpipe/refinement/pipeline.py:91`; `docpipe/visuals/pipeline.py:61-70`,
+164-167; `docpipe/chunking/merge.py:24-25`, `165-177`;
+`docpipe/chunking/database.py:580`).
 
 Everything here is deterministic, PyMuPDF text extraction, the
 PP-DocLayoutV3 forward pass, and rule-based section assembly, with one
 exception: transcribing a page that carries no PDF text layer through a
 vision model. That path runs only when a caller asks for it with
 `--transcribe-missing-text`; a run that skips the flag makes no model call
-(`docpipe/preprocessing/pipeline.py:82-85`, pinned by
+(`docpipe/preprocessing/pipeline.py:83-86`, pinned by
 `tests/test_page_text_fallback.py: test_the_fallback_is_off_unless_asked_for`).
 Both artifacts are cached under the document's own output directory and
 reused automatically; `--force-reextract` and `--rebuild-stage3` bypass or
@@ -39,9 +39,9 @@ narrow that resumption.
 
 | | |
 |---|---|
-| **In** | A PDF file, or a directory of PDF files (`run()`, `docpipe/preprocessing/pipeline.py:391-438`). An active profile supplies the caption, hyphenation and directory word lists plus `Profile.column_layout` (see Configuration). An optional page range (`--pages START END`) narrows a single-PDF run; the optional text fallback needs a reachable vision model server. |
+| **In** | A PDF file, or a directory of PDF files (`run()`, `docpipe/preprocessing/pipeline.py:392-439`). An active profile supplies the caption, hyphenation and directory word lists plus `Profile.column_layout` (see Configuration). An optional page range (`--pages START END`) narrows a single-PDF run; the optional text fallback needs a reachable vision model server. |
 | **Out** | `results/pages.json` (Stage 1+2 cache), `results/sections.json` (Stage 3 output), `results/page_transcription_report.json` (only, but then always, with `--transcribe-missing-text`), one PNG crop per table or image under `images/`, and, in folder mode, `_index.json`. |
-| **Resumes on** | `results/pages.json` and `results/sections.json`. A run whose Stage 1/2 leaves any page failed does not write the pages cache, and, within that same run, deletes a pre-existing `sections.json` before the Stage 3 cache-hit check runs (`pipeline.py:151-159`). An unreadable cache file is treated as absent. `--rebuild-stage3` resumes only from `pages.json`, skipping the PDF and the layout model. |
+| **Resumes on** | `results/pages.json` and `results/sections.json`. A run whose Stage 1/2 leaves any page failed does not write the pages cache, and, within that same run, deletes a pre-existing `sections.json` before the Stage 3 cache-hit check runs (`pipeline.py:152-160`). An unreadable cache file is treated as absent. `--rebuild-stage3` resumes only from `pages.json`, skipping the PDF and the layout model. |
 | **Needs** | A GPU for PP-DocLayoutV3 when available, else CPU. `load_model()` fetches the weights via `from_pretrained()`, needing network unless they are already cached (`stage2_layout.py:95,104-105`). Stage 1 and Stage 3 need neither model nor network. |
 
 File processing precedes this stage
@@ -53,21 +53,25 @@ reading `sections.json` and writing `sections_refined.json`
 
 ### Resolving the profile and choosing a mode
 
-`resolve_profile(args)` (`docpipe/profile.py:445-468`) loads the `Profile`
+`resolve_profile(args)` (`docpipe/profile.py:446-469`) loads the `Profile`
 named by `--profile` or `$DOCPIPE_PROFILE`; `__main__.py` copies the flag
 into the environment before the stage is imported, and a profile named
 after the stage was imported under another one raises `SystemExit` instead
-of running on a mix of both. `run()` (`docpipe/preprocessing/pipeline.py:391-438`)
+of running on a mix of both. `run()` (`docpipe/preprocessing/pipeline.py:392-439`)
 dispatches to `run_single()` for a `.pdf` file, `run_folder()` for a
 directory, or, with `rebuild_stage3` set, `rebuild_stage3_from_cache()`,
-which ignores the input path.
+which ignores the input path and, like `--report-columns`, finds the document
+directories under the output root at any depth (`artifacts.document_dirs`, by
+`pages.json`). `run_folder` refuses two PDFs that would be documents of one
+name before the layout model has run over either, with both places named
+(`DuplicateDocumentName`).
 
 ### Stage 1: extracting text blocks
 
 `run_single()` calls `_load_pages_cache(output_dir)` unless
 `force_reextract` is set; a missing or unreadable `pages.json` returns
 `None` and falls through to re-extraction
-(`docpipe/preprocessing/pipeline.py:49-60,97-98`). Extraction itself,
+(`docpipe/preprocessing/pipeline.py:50-61,98-99`). Extraction itself,
 `extract_all_pages()`, opens the PDF with `fitz` and, per page, calls
 `_extract_page_text()`, which reads `page.get_text("rawdict")`, joins each
 block's spans into text through `_spans_to_text()` (rejoining a
@@ -99,7 +103,7 @@ to each table or image (`docpipe/preprocessing/stage2_layout.py:997-1041`).
 If no page failed, `_save_pages_cache()` writes the cleaned `PageData` list
 to `results/pages.json` atomically, via a temporary file and
 `os.replace()`; an incomplete extraction is never cached
-(`docpipe/preprocessing/pipeline.py:118-126`).
+(`docpipe/preprocessing/pipeline.py:119-127`).
 
 ### Optional: filling in missing page text
 
@@ -113,14 +117,14 @@ text blocks with the list `synthesize_blocks()` returns
 replacement). `results/page_transcription_report.json` is written
 unconditionally, and the pages cache is rewritten if any page changed. This
 runs after Stage 2, since the media blocks are already known, and before
-Stage 3 (`docpipe/preprocessing/pipeline.py:133-134,353-390`).
+Stage 3 (`docpipe/preprocessing/pipeline.py:134-135,354-391`).
 
 ### Loading, invalidating, or rebuilding the Stage 3 cache
 
 If Stage 1/2 failed, an existing `sections.json` is deleted first, since it
 was built from an incomplete extraction; otherwise it is reused unless
 `force_reextract`, and on a cache miss `build_sections()` runs and
-`save_output()` writes the result (`docpipe/preprocessing/pipeline.py:151-173`).
+`save_output()` writes the result (`docpipe/preprocessing/pipeline.py:152-174`).
 
 ### Stage 3: assembling sections
 
@@ -140,12 +144,12 @@ accumulates into `Section.content` and `Section.segments`.
 It loads the layout model once, up front, only if at least one PDF still
 needs (re-)extraction; when every PDF already has a cached `pages.json`,
 folder mode skips the load entirely and logs that it did so
-(`docpipe/preprocessing/pipeline.py:215-224`). Once loaded, the model is
+(`docpipe/preprocessing/pipeline.py:222-231`). Once loaded, the model is
 reused across every document (not thread-safe, so processing stays
 sequential); `run_folder()` calls `run_single()` per document inside a
 `try`/`except` turning any exception into `status="error"`, and rewrites
 `_index.json` after every document so partial progress survives an
-interruption (`docpipe/preprocessing/pipeline.py:187-266`).
+interruption (`docpipe/preprocessing/pipeline.py:188-271`).
 
 ## Data model
 
@@ -188,7 +192,7 @@ a field the `Section` docstring in `models.py:159-161` omits.
 | `images/<block_id>.png` | Stage 2 | one PNG crop per table or image block |
 | `_index.json` | folder mode | `{relative_pdf_path: {status, output_dir, sections}}` |
 
-(`docpipe/artifacts.py:12-24`; `docpipe/preprocessing/page_text_fallback.py:161-265`.)
+(`docpipe/artifacts.py:21-33`; `docpipe/preprocessing/page_text_fallback.py:161-265`.)
 
 ## Configuration
 
@@ -199,19 +203,19 @@ a field the `Section` docstring in `models.py:159-161` omits.
 | `--report-columns` | CLI flag | off | read-only report of multi-column pages, changes nothing |
 | `--transcribe-missing-text` | CLI flag | off | turns on the vision-model fallback; needs a running vision server |
 | `--pages START END` | CLI flag, 2 ints | whole document | 0-indexed, end-exclusive page range; single-PDF only |
-| `--glob` | CLI flag | `*.pdf` | pattern `run_folder()` matches PDFs against in folder mode (`pipeline.py:482`) |
+| `--glob` | CLI flag | `*.pdf` | pattern `run_folder()` matches PDFs against in folder mode (`pipeline.py:483`) |
 | `--profile` | CLI flag | `$DOCPIPE_PROFILE` | names the active profile |
-| `--log-level` | CLI flag | `INFO` | logging verbosity: `DEBUG`/`INFO`/`WARNING`/`ERROR` (`pipeline.py:485-486`) |
+| `--log-level` | CLI flag | `INFO` | logging verbosity: `DEBUG`/`INFO`/`WARNING`/`ERROR` (`pipeline.py:486-487`) |
 | `DOCPIPE_LAYOUT_AUTOCAST` | env var | `off` | `bf16`, `fp16`, or `off`: reduced-precision Stage 2 pass on CUDA |
 | `DOCPIPE_LAYOUT_PREFETCH` | env var | `1` | Stage 2 batches rendered ahead of the running forward pass, as `LAYOUT_PREFETCH_BATCHES` (`config.py:58`) |
 | `PAGE_TRANSCRIBE_WORKERS` / `PAGE_RENDER_WORKERS` | env vars | `64` / `4` | concurrent transcription calls and page renders in the fallback, bounded separately |
 
 `Profile.column_layout` (`docpipe/profile.py:172`) is optional: it defaults
 to `"auto"`, `run()` falls back to `"auto"` even with no active profile
-(`pipeline.py:537`), and there is no dedicated `--column-layout` CLI flag.
+(`pipeline.py:538`), and there is no dedicated `--column-layout` CLI flag.
 `Profile.__post_init__` raises
 `ValueError` only if it is set to something outside `auto`/`single`/`double`
-(`profile.py:187-193`). `auto` looks for a gutter and accepts one column as
+(`profile.py:188-194`). `auto` looks for a gutter and accepts one column as
 the answer, `double` falls back to a centre split if none is found, and
 `single` never looks.
 
@@ -222,9 +226,14 @@ A profile must additionally supply the following, or a
 |---|---|---|
 | `preprocessing.HYPHEN_EXCEPTIONS` | none | words that keep a line-ending hyphen from gluing to the next line |
 | `preprocessing.CAPTION_MAX_WORDS` | none; kwp = 45, scenarios = 160 | word-count ceiling for a caption |
+| `preprocessing.CAPTION_START` | none; each profile lists its own | a non-empty list of regular expressions, each with its own anchor, that open a caption; `docpipe/captions.py` joins them and compiles once per profile. kwp and scenarios list one pattern (a word, a number, a colon); the built-in profile adds letter-numbered forms (`Table A.1:`) and the colon-less ones (`Figure 3.`, `Fig. 2`, `Table 1`), the latter only where a text, a line or a sentence begins, so `see Table 1.` and `Table 1 shows` stay prose. An empty list, a bare string or a pattern that does not compile or matches the empty text is a `ValueError`, a missing list a `LookupError` |
 | `preprocessing.TITLE_EXCLUDE_PREFIXES` | none | prefixes that keep a block from being read as a heading |
 | `preprocessing.DIRECTORY_FIGTAB_WORDS` | none | words opening a figure/table list entry, for directory-section detection |
 | `preprocessing.BIBLIOGRAPHY_TITLE_WORDS` | none | title words routing a section to the literature path instead of directory-stripping |
+
+The colon-less forms of the built-in profile cannot tell every prose line from
+a caption: `Table 1 Germany leads ...` at the start of a sentence counts as a
+caption, an indented line after a line break does not.
 
 A selection of the module constants that tune detection and assembly:
 
@@ -244,13 +253,13 @@ A selection of the module constants that tune detection and assembly:
 
 | Condition | Behaviour |
 |---|---|
-| A Stage 1 page raises during extraction, or `n_failed > 0` after Stage 1/2 | the page is skipped and counted; `pages.json` is not written, so the next run retries extraction from scratch (`stage1_extract.py:224-234`; `pipeline.py:118-126`) |
+| A Stage 1 page raises during extraction, or `n_failed > 0` after Stage 1/2 | the page is skipped and counted; `pages.json` is not written, so the next run retries extraction from scratch (`stage1_extract.py:224-234`; `pipeline.py:119-127`) |
 | A Stage 2 batch's forward pass raises | recorded in `failed_batches`, its pages get no layout; once every batch has run, `detect_layout_all_pages` raises `LayoutDetectionFailed` naming the batch numbers and affected page count (`stage2_layout.py:1005-1012,1061-1068`) |
-| `LayoutDetectionFailed` reaches `run_folder`'s per-document handler | the document is marked `status="error"` in `_index.json` and the run continues; called directly, the exception propagates unhandled (`pipeline.py:237-256,529-544`) |
+| `LayoutDetectionFailed` reaches `run_folder`'s per-document handler | the document is marked `status="error"` in `_index.json` and the run continues; called directly, the exception propagates unhandled (`pipeline.py:244-263,530-545`) |
 | A page fails to render for Stage 2, its post-detection processing raises, or a crop fails to encode or write | logged and skipped; the page keeps its Stage-1-only data, and a written `Block` can still reference a failed crop (`stage2_layout.py:491-552,992,1032`) |
-| `pages.json` or `sections.json` is unreadable, or a Stage 3 cache was built while `n_failed` was set, or the input path is neither a `.pdf` file nor a directory | treated as absent and rebuilt, deleted before the cache-hit check runs, or `run()` raises `ValueError` and `main()` exits with status 1 (`pipeline.py:58-59,154-168,438,542-544`) |
-| No profile is active but a profile-gated function is called, or a profile is named after the stage was imported under another one | a `LookupError` propagates uncaught, or `resolve_profile` raises `SystemExit` (`stage1_extract.py:41-43`; `profile.py:254-264,385-399,445-468`) |
-| A page-transcription call raises, returns an empty markdown string, or more candidates need transcription than `max_pages` | counted in `pages_failed` or `pages_empty`, or truncated with `pages_missing_text` still reporting the true total (`page_text_fallback.py:196-204`); unreachable through the CLI or `run()`, since `_fill_missing_page_text()` never passes `max_pages` (`pipeline.py:369-374`) |
+| `pages.json` or `sections.json` is unreadable, or a Stage 3 cache was built while `n_failed` was set, or the input path is neither a `.pdf` file nor a directory | treated as absent and rebuilt, deleted before the cache-hit check runs, or `run()` raises `ValueError` and `main()` exits with status 1 (`pipeline.py:59-60,155-169,439,543-545`) |
+| No profile is active but a profile-gated function is called, or a profile is named after the stage was imported under another one | a `LookupError` propagates uncaught, or `resolve_profile` raises `SystemExit` (`stage1_extract.py:41-43`; `profile.py:255-265,386-400,446-469`) |
+| A page-transcription call raises, returns an empty markdown string, or more candidates need transcription than `max_pages` | counted in `pages_failed` or `pages_empty`, or truncated with `pages_missing_text` still reporting the true total (`page_text_fallback.py:196-204`); unreachable through the CLI or `run()`, since `_fill_missing_page_text()` never passes `max_pages` (`pipeline.py:370-375`) |
 | `find_gutters()` cannot support a confident column split | returns `[]`; the page reads as a single column, or, under `column_layout="double"`, falls back to a hard centre split (`columns.py:158-267`) |
 
 ## Measured behaviour
@@ -281,9 +290,9 @@ A selection of the module constants that tune detection and assembly:
   them (`docpipe/preprocessing/config.py:189-196`).
 - Captions run to a median of 8 words on the kwp corpus, 24 at the 99th
   percentile, so `CAPTION_MAX_WORDS` is 45 there
-  (`profiles/kwp/preprocessing.py:28-32`); scenarios panel descriptions and
+  (`profiles/kwp/preprocessing.py:35-39`); scenarios panel descriptions and
   legends routinely run 60 to 150 words, so `CAPTION_MAX_WORDS` is 160
-  there (`profiles/scenarios/preprocessing.py:31-35`).
+  there (`profiles/scenarios/preprocessing.py:39-43`).
 - Eleven plans in the heat-plan corpus carry no PDF text layer, together
   holding 1,270 tables and figures Stage 2 transcribed with no surrounding
   text (`docpipe/preprocessing/page_text_fallback.py:1-11`). Treating the

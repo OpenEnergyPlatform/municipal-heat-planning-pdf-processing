@@ -11,8 +11,19 @@ http.py: The value store over HTTP, read only.
                           ?document= &parameter= &level= &text=
                           &limit= &offset= &coordinate.<name>=<value>
     GET /values/<id>      one value with everything that backs it
+    GET /states           what the harvest says of a parameter in a document
+                          (unstated, exhausted, ... never asked)
+                          ?document= &parameter= &state= &limit= &offset=
+    GET /coverage         documents by parameters, each cell its state
+                          ?document= &parameter= &limit= &offset=
+    GET /refusals         the claims that were refused, and why
+                          ?document= &parameter= &limit= &offset=
+    GET /search           passages by word: ?text= &document= &limit=
+                          (503 with the reason where there is no corpus
+                          database or word index)
 
-Answers are JSON. Nothing can be written through it.
+Answers are JSON. Nothing can be written through it. A document or a
+parameter the harvest does not have is a 404, not an empty answer.
 
 It listens on this machine only unless told otherwise, and it does not
 listen anywhere else without a token: with DOCPIPE_API_TOKEN set every

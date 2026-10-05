@@ -66,7 +66,7 @@ table gives kwp's own answer.
 | File processing | `source.py` | `SOURCE`, `backfill_meta` | the KWW register as a `Source`: filtering, convoy grouping, overrides |
 | File processing | `schema.sql`, `store.py` | `OrganisationUnits`, `Municipalities`, `DocumentMeta`, `MunicipalityMeta` | the profile's own tables and their upsert helpers |
 | Layout detection | `profile.py` | `column_layout` | `"auto"`, a multi-column page read column by column |
-| Structure assembly | `preprocessing.py` | `HYPHEN_EXCEPTIONS`, `CAPTION_MAX_WORDS`, `TITLE_EXCLUDE_PREFIXES`, `DIRECTORY_FIGTAB_WORDS`, `BIBLIOGRAPHY_TITLE_WORDS` | German hyphenation, caption length, title and directory rules |
+| Structure assembly | `preprocessing.py` | `HYPHEN_EXCEPTIONS`, `CAPTION_MAX_WORDS`, `CAPTION_START`, `TITLE_EXCLUDE_PREFIXES`, `DIRECTORY_FIGTAB_WORDS`, `BIBLIOGRAPHY_TITLE_WORDS` | German hyphenation, caption length, what opens a caption (a word, a number and a colon, as `Tabelle 17:`), title and directory rules |
 | Preprocessing (page transcription) | `prompts/preprocessing/page_transcribe.md` | one prompt id | reads a page with no text layer, verbatim, into Markdown |
 | Refinement | `prompts/refinement/*.md` | `refine`, `refine_corrections`, `split` | repairs German extraction artefacts, proposes section cuts |
 | Visuals | `prompts/visuals/*.md` | seven prompt ids | table transcription, figure description and captions, in German |
@@ -234,7 +234,7 @@ refinement, seven for visuals (a system and a user prompt each for
 tables and figures, plus three caption variants), and fifteen for the
 answer app, named in one table in `docpipe.inference.llm_client` and read when
 first used, under the names they had as module constants
-(`docpipe/inference/llm_client.py:50` to `66`, `74` to `88`).
+(`docpipe/inference/llm_client.py:50` to `66`, `76` to `90`).
 `test_a_profile_provides_every_prompt_the_core_loads` and
 `test_a_profile_carries_no_prompt_nobody_loads`
 (`tests/test_architecture.py`) hold this set to what the core actually

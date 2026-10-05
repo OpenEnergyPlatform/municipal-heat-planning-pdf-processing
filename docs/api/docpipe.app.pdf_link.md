@@ -2,7 +2,8 @@
 
 `docpipe/app/pdf_link.py`, read with `ast` by `scripts/build_docs.py`. The docstrings are the code's own: edit them there, not here.
 
-pdf_link.py: Builds deep links into the source PDF for one citation.
+pdf_link.py: Where a citation stands in the source PDF: the deep link into
+an external viewer, and the page drawn here with the quote marked.
 
 A section's chunk text is refined by the LLM and differs from the raw PDF
 text, so a verbatim `#page=N&search=...` term has to come from the raw
@@ -10,6 +11,23 @@ page text: the page-tagged `Segments`, or the PDF file itself.
 
 The module is pure: no database access, no Streamlit import. Database
 reads live in `db.py`.
+
+## Classes
+
+### PageNotRendered
+
+```python
+class PageNotRendered(Exception)
+```
+
+A page that could not be drawn. The message names the cause; `reason`
+is one of the constants above.
+
+#### PageNotRendered.\_\_init\_\_
+
+```python
+def __init__(self, message: str, reason: str = NOT_DRAWN)
+```
 
 ## Functions
 
@@ -120,5 +138,23 @@ Highlight rects for `quote` on a (1-based) PDF page.
 The implementation lives in `docpipe.inference.pdf_locate`, because the
 extraction stage records the same rectangles as a value's provenance and
 two copies would mean two answers to "where does this come from".
+
+### render_page
+
+```python
+def render_page(pdf_path, page_number: int, rects=None,
+                zoom: float = PAGE_ZOOM) -> bytes
+```
+
+PNG of a (1-based) PDF page, a highlight over each of `rects`.
+
+The rects are the ones `best_quote_rects` returns: PDF points in the
+page as it is shown, which is also the space PyMuPDF takes a highlight
+annotation in, rotated pages included. The annotations live in memory
+only; the file is never written.
+
+The one place the app calls PyMuPDF to draw, under `MUPDF_LOCK`. Raises
+`PageNotRendered` where it cannot: the library is missing, the file does
+not open, the page is not in it.
 
 [Back to the index](../README.md)

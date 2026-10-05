@@ -55,8 +55,8 @@ Fields:
 - `data_root: Optional[Path] = None`
 - `home: Optional[Path] = None`: where the profile's own files live; defaults to where it was found
 - `facets: Sequence[Facet] = field(default_factory=tuple)`
-- `title: str = ""`: what the app calls the project and one of its documents
-- `document_noun: str = "Dokument"`
+- `title: str = ""`: what the app calls the project and one of its documents; a profile words it in its own language
+- `document_noun: str = "document"`
 - `extends: Optional[str] = None`: the profile whose parts stand in for the ones this one does not provide
 - `documents_shareable: bool = False`: Whether the text of the documents may be passed on. A recorded run (docpipe/providers/cassette.py) holds what it read, and is refused for a profile that does not say so.
 

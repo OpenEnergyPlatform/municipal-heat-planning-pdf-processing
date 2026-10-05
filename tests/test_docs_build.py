@@ -10,12 +10,19 @@ Offline: no corpus, no network, no model, no database, no GPU. The generator
 imports nothing from `docpipe` on purpose -- one of the modules it documents
 imports OpenCV, PyMuPDF and torch at module level, so a generator that imported
 its subject would need the GPU stack to render a docstring.
+
+The documentation is rendered once for the module, by the `render` fixture,
+and the tests that read pages read that render. A render takes seconds and one
+per test was most of this module's runtime; `builds` holds the module to one.
 """
 import ast
 import io
 import json
+import shutil
 import sys
 from pathlib import Path
+from types import MappingProxyType
+from typing import Mapping, NamedTuple
 
 import pytest
 
@@ -23,13 +30,134 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "scripts"))
 
 import build_docs                                            # noqa: E402
-from build_docs import (SourceMoved, build, check, constants_of,  # noqa: E402
+from build_docs import (SourceMoved, check, constants_of,         # noqa: E402
                         docstring_of, json_at, main, read_source,
                         render_artifacts_page, render_contract_page,
                         render_index, render_stage_page, render_states_page,
                         render_toctree, render_trust_page,
                         render_profiles_page, resolve, states_table,
                         trust_table, write)
+
+
+# ---------------------------------------------------------------------------
+# One render for the module
+# ---------------------------------------------------------------------------
+class _Builds:
+    """`build_docs.build`, counting the renders that ran to the end. A build
+    that raised rendered nothing, which is what the tests of a failed build
+    rely on."""
+
+    def __init__(self, real):
+        self.real, self.done = real, 0
+
+    def __call__(self):
+        pages = self.real()
+        self.done += 1
+        return pages
+
+
+def _held_to_one_render(builds) -> None:
+    assert builds.done <= 1, (
+        f"the documentation was rendered {builds.done} times in this module; "
+        "a test that needs the pages takes the `render` fixture")
+
+
+def _counting_the_renders():
+    """What the `builds` fixture does, as a generator a test can drive: it
+    counts every render that runs to the end and, once the module is done,
+    holds it to one, the `render` fixture's."""
+    with pytest.MonkeyPatch.context() as patch:
+        counted = _Builds(build_docs.build)
+        patch.setattr(build_docs, "build", counted)
+        yield counted
+    _held_to_one_render(counted)
+
+
+@pytest.fixture(scope="module", autouse=True)
+def builds():
+    yield from _counting_the_renders()
+
+
+def _docs_tree() -> dict:
+    """The checked-in docs/, every file by its bytes."""
+    return {p: p.read_bytes() for p in sorted((ROOT / "docs").rglob("*"))
+            if p.is_file()}
+
+
+class Render(NamedTuple):
+    pages: Mapping          # {page relpath: text}, which no test may change
+    out: Path               # the pages as `write` put them, in a temp directory
+    written: list           # what `write` returned
+    docs_before: dict       # docs/ as it was before the render started
+
+
+@pytest.fixture(scope="module")
+def render(tmp_path_factory):
+    """The documentation, rendered once and written into a temporary
+    directory. Read-only, because one test that changed it would change what
+    every later test reads."""
+    before = _docs_tree()
+    pages = build_docs.build()
+    out = tmp_path_factory.mktemp("docs").resolve()
+    return Render(MappingProxyType(pages), out, write(out, pages), before)
+
+
+def test_the_module_renders_the_documentation_once(render, builds):
+    """One completed render, the fixture's, however many tests read pages."""
+    assert render.pages
+    assert builds.done == 1
+
+
+def test_a_second_render_in_the_module_is_reported():
+    """The guard has to be able to fail: a build that completes twice is
+    reported, and one that raised is not counted as a render."""
+    counted = _Builds(lambda: {"a.md": "A"})
+    _held_to_one_render(counted)
+    assert counted() == {"a.md": "A"}
+    _held_to_one_render(counted)
+    counted()
+    with pytest.raises(AssertionError, match="rendered 2 times"):
+        _held_to_one_render(counted)
+
+    def gone():
+        raise SourceMoved("a.md", "x.py", "gone")
+
+    raising = _Builds(gone)
+    for _attempt in range(3):
+        with pytest.raises(SourceMoved):
+            raising()
+    assert raising.done == 0
+
+
+def test_the_module_ends_in_error_when_a_test_renders_a_second_time(
+        monkeypatch):
+    """The guard above is only a promise while the fixture calls it when the
+    module is done. Driven here over a stub, one render ends cleanly and two
+    end in the error that the module's own teardown would report, and the
+    patch on `build` is undone either way."""
+    stub = lambda: {"a.md": "A"}                          # noqa: E731
+    monkeypatch.setattr(build_docs, "build", stub)
+    for renders, error in ((1, None), (2, "rendered 2 times")):
+        watch = _counting_the_renders()
+        counted = next(watch)
+        assert build_docs.build is counted
+        for _render in range(renders):
+            assert build_docs.build() == {"a.md": "A"}
+        if error:
+            with pytest.raises(AssertionError, match=error):
+                next(watch)
+        else:
+            with pytest.raises(StopIteration):
+                next(watch)
+        assert build_docs.build is stub
+
+
+def test_a_test_cannot_change_the_render_the_others_read(render):
+    """One shared render is only safe while it is read-only."""
+    with pytest.raises(TypeError):
+        render.pages["README.md"] = "changed"
+    with pytest.raises(TypeError):
+        render.pages["new.md"] = "new"
 
 
 # ---------------------------------------------------------------------------
@@ -54,7 +182,7 @@ def test_a_moved_source_fails_the_build(tmp_path, monkeypatch):
               (("docpipe/does_not_exist.py", None),)),)
     monkeypatch.setattr(build_docs, "SOURCES", moved)
     with pytest.raises(SourceMoved):
-        build()
+        build_docs.build()
     assert list(tmp_path.iterdir()) == [], "nothing was written"
 
 
@@ -65,22 +193,91 @@ def test_an_emptied_docstring_fails_the_build():
         docstring_of("docpipe/preprocessing/__init__.py")
 
 
-def test_the_checked_in_docs_are_the_generated_ones():
+def test_the_checked_in_docs_are_the_generated_ones(render, monkeypatch):
     """The whole point. Hand-edit a page, change a docstring without
     regenerating, or leave a page behind after removing its manifest entry,
-    and this goes red."""
+    and this goes red. `check` is handed the module's render instead of
+    making its own, so what it compares with docs/ is still the generator's
+    output; that it fails when the two differ is the next test."""
+    monkeypatch.setattr(build_docs, "build", lambda: render.pages)
     assert main(["--check"]) == 0
     assert check() == 0
+
+
+def _untouched(docs, pages):
+    """The checked-in tree is the render, so the check passes."""
+    return pages, "page(s) match their sources"
+
+
+def _hand_edit(docs, pages):
+    """A generated page somebody edited in the checked-in tree."""
+    page = docs / "stages" / "extraction.md"
+    page.write_bytes(page.read_bytes() + b"Edited by hand.\n")
+    return pages, "docs/stages/extraction.md"
+
+
+def _page_removed(docs, pages):
+    """A generated page somebody deleted from the checked-in tree."""
+    (docs / "stages" / "extraction.md").unlink()
+    return pages, "docs/stages/extraction.md"
+
+
+def _docstring_changed(docs, pages):
+    """The code moved on and nobody regenerated: the render says more than
+    the page the tree holds."""
+    page = "stages/extraction.md"
+    return {**pages, page: pages[page] + "A new sentence.\n"}, f"docs/{page}"
+
+
+def _page_left_behind(docs, pages):
+    """A page whose manifest entry was removed and which stayed on disk."""
+    (docs / "stages" / "gone.md").write_text("# Gone\n", encoding="utf-8")
+    return pages, "stages/gone.md: no manifest entry"
+
+
+def _module_removed(docs, pages):
+    """A reference page whose module was renamed or deleted."""
+    (docs / "api" / "docpipe.gone.md").write_text("# docpipe.gone\n",
+                                                  encoding="utf-8")
+    return pages, "docpipe.gone.md: its module is gone"
+
+
+_STALE = [(_untouched, 0), (_hand_edit, 1), (_page_removed, 1),
+          (_docstring_changed, 1), (_page_left_behind, 1),
+          (_module_removed, 1)]
+
+
+@pytest.mark.parametrize("case, code", _STALE,
+                         ids=[case.__name__.strip("_") for case, _c in _STALE])
+def test_a_stale_generated_page_fails_the_check(render, tmp_path, monkeypatch,
+                                                capsys, case, code):
+    """The comparison runs on the module's render, so it has to be shown able
+    to fail. The checked-in tree here is the render's own copy in a tree of
+    its own, with the generator pointed at it. Untouched it passes, so each
+    red case is red for what was done to it: a page edited, a page deleted, a
+    render that moved on, a page whose manifest entry is gone, a page whose
+    module is gone."""
+    root = tmp_path / "tree"
+    shutil.copytree(render.out, root / "docs")
+    root = root.resolve()
+    monkeypatch.setattr(build_docs, "ROOT", root)
+    monkeypatch.setattr(build_docs, "PAGES_DIR", root / "docs")
+    pages, said = case(root / "docs", render.pages)
+    monkeypatch.setattr(build_docs, "build", lambda: pages)
+    assert check() == code
+    assert main(["--check"]) == code
+    heard = capsys.readouterr()
+    assert said in heard.out + heard.err, said
 
 
 # ---------------------------------------------------------------------------
 # The hand-written page
 # ---------------------------------------------------------------------------
-def test_the_hand_written_page_is_never_overwritten(tmp_path):
+def test_the_hand_written_page_is_never_overwritten(render, tmp_path):
     """It is a source, not an output. Generated, it would say what the parts
     do rather than what they are for, which is the one thing no docstring
     carries."""
-    pages = build()
+    pages = render.pages
     assert "pipeline.md" not in pages
     seeded = tmp_path / "pipeline.md"
     seeded.write_text("von Hand", encoding="utf-8")
@@ -92,7 +289,7 @@ def test_a_missing_hand_written_page_fails_the_build(tmp_path, monkeypatch):
     """The index links it. Missing, the site ships a link to a 404."""
     monkeypatch.setattr(build_docs, "PAGES_DIR", tmp_path)
     with pytest.raises(SourceMoved):
-        build()
+        build_docs.build()
 
 
 def test_the_hand_written_page_does_not_restate_the_readme():
@@ -108,12 +305,12 @@ def test_the_hand_written_page_does_not_restate_the_readme():
         assert [line for line in page if line in readme] == [], name
 
 
-def test_the_index_links_every_page_and_nothing_else():
+def test_the_index_links_every_page_and_nothing_else(render):
     """A page nobody links is a page nobody reads, and a link to a page that
     no longer exists is worse than no link. The module pages of the API
     reference are the exception: they are reached through the reference's
     own index, not from the front page."""
-    pages = build()
+    pages = render.pages
     text = pages["README.md"]
     linked = {part.split(")")[0] for part in text.split("](")[1:]}
     linked = {link for link in linked if link.endswith(".md")}
@@ -126,13 +323,13 @@ def test_the_index_links_every_page_and_nothing_else():
     assert render_index({"a.md": "A"}).count("](a.md)") == 1
 
 
-def test_the_index_says_what_each_page_is_about():
+def test_the_index_says_what_each_page_is_about(render):
     """Each index line carries the first sentence of the page's primary
     source's docstring, so a reader picks a page by what it is about and not
     by its title alone. A page whose primary source is a schema has no
     docstring and gets no lede, rather than a made-up one."""
     from build_docs import _lede
-    text = build()["README.md"]
+    text = render.pages["README.md"]
     lines = {line.split("](")[1].split(")")[0]: line
              for line in text.splitlines() if line.startswith("- [")}
     lede = _lede(docstring_of("docpipe/extraction/__init__.py"))
@@ -154,13 +351,13 @@ def test_the_index_says_what_each_page_is_about():
         .count("](a.md): Erste Zeile.") == 1
 
 
-def test_the_site_names_every_page_exactly_once_and_in_order():
+def test_the_site_names_every_page_exactly_once_and_in_order(render):
     """Sphinx builds from one toctree. A page missing from it is built and
     reachable from nothing; a page named twice is a warning, and the Read the
     Docs build treats warnings as errors. The API reference's module pages
     sit in a second layer, the hidden toctrees of `api/index.md`, and are
     checked there."""
-    pages = build()
+    pages = render.pages
     listed = _toctree_entries(pages["index.md"])
     wanted = ({page[:-3] for page in pages
                if page not in ("README.md", "index.md")
@@ -256,7 +453,7 @@ def test_the_generator_reads_through_one_door():
                    for arg in node.args), "write opens for writing only"
 
 
-def test_the_contract_page_is_built_from_the_schema_not_the_spec():
+def test_the_contract_page_is_built_from_the_schema_not_the_spec(render):
     """The spec carries a real corpus table as its few-shot example. The
     schema does not: `grep -c '"example"'` is 0 on both checked-in files."""
     for _page, _title, entries in (build_docs.SOURCES
@@ -266,7 +463,7 @@ def test_the_contract_page_is_built_from_the_schema_not_the_spec():
     # And a contract page really is the schema's own text: its lede is the
     # sentence the generator writes about the published record kinds, and the
     # sections are the schema's own def names.
-    page = build()["contract/kwp.md"]
+    page = render.pages["contract/kwp.md"]
     defs = json_at("profiles/kwp/extraction_schema.json", "harvest/$defs")
     for name in defs:
         if name in ("state", "provenance"):
@@ -276,11 +473,11 @@ def test_the_contract_page_is_built_from_the_schema_not_the_spec():
     assert render_contract_page("kwp", {}).startswith("# The harvest contract")
 
 
-def test_no_generated_page_quotes_a_corpus_passage():
+def test_no_generated_page_quotes_a_corpus_passage(render):
     """The belt to the one door's braces. The examples are the only corpus
     text in this repository, and a page that reproduced one would publish a
     passage of somebody's plan."""
-    pages = "".join(build().values())
+    pages = "".join(render.pages.values())
     for profile in build_docs._profile_names():
         spec = json.loads((ROOT / "profiles" / profile / "extraction_spec.json")
                           .read_text(encoding="utf-8"))
@@ -291,18 +488,15 @@ def test_no_generated_page_quotes_a_corpus_passage():
                     assert line.strip() not in pages, line[:60]
 
 
-def test_the_build_writes_nothing_outside_the_out_directory(tmp_path):
+def test_the_build_writes_nothing_outside_the_out_directory(render, tmp_path):
     """`--check` renders every page. A helper that wrote to `docs/` on the way
-    would make the check mutate the tree it is checking."""
-    before = {p: p.read_bytes() for p in
-              sorted((ROOT / "docs").rglob("*")) if p.is_file()}
-    written = write(tmp_path, build())
-    assert written
-    for path in written:
-        assert tmp_path in path.parents
-    after = {p: p.read_bytes() for p in
-             sorted((ROOT / "docs").rglob("*")) if p.is_file()}
-    assert after == before
+    would make the check mutate the tree it is checking. The tree is read
+    before the module's render started and again here, after the render and
+    its write."""
+    assert render.written
+    for path in render.written:
+        assert render.out in path.parents
+    assert _docs_tree() == render.docs_before
     for bad in ("../x.md", "/x.md"):
         with pytest.raises(ValueError):
             write(tmp_path, {bad: "x"})
@@ -311,7 +505,7 @@ def test_the_build_writes_nothing_outside_the_out_directory(tmp_path):
 # ---------------------------------------------------------------------------
 # What the pages say
 # ---------------------------------------------------------------------------
-def test_every_state_of_fields_is_documented():
+def test_every_state_of_fields_is_documented(render):
     """Seven states and twelve string constants in the same module. Published
     by "every constant", the page offers `out:unstated`, which is an ANSWER a
     model may give and not a state a coordinate can be in."""
@@ -319,7 +513,7 @@ def test_every_state_of_fields_is_documented():
     assert [name for name, _v, _g in rows] == [
         "READ", "DERIVED", "SAID_UNSTATED", "UNANSWERED", "EXHAUSTED",
         "UNBACKED", "OUT_OF_SLICE"]
-    pages = build()
+    pages = render.pages
     page = pages["contract/states.md"]
     # It is an ANSWER a model may give, so it is all over the prompt wording
     # the contract pages quote. It is not a state, so it is not on this page.
@@ -340,13 +534,13 @@ def test_every_state_of_fields_is_documented():
                            "harvest/$defs/state"))
 
 
-def test_every_trust_level_and_reason_family_is_documented():
+def test_every_trust_level_and_reason_family_is_documented(render):
     """The reason that reaches the harvest is the VALUE of the flag mapping,
     not its key: rendered the other way the page publishes `quote_repaired`,
     which matches no pattern the schema accepts."""
     levels, reasons, flags, marks, join = trust_table()
     assert [level for level, _gloss in levels] == ["A", "B", "C"]
-    page = build()["contract/trust.md"]
+    page = render.pages["contract/trust.md"]
     for value in flags.values():
         assert value in page
         assert any(value == pattern.strip("^$") for pattern in reasons), value
@@ -356,7 +550,7 @@ def test_every_trust_level_and_reason_family_is_documented():
                              "x").startswith("# How")
 
 
-def test_the_marks_of_a_trust_line_are_documented_in_their_order():
+def test_the_marks_of_a_trust_line_are_documented_in_their_order(render):
     """The line above a value node is the profile's words in the core's
     order, and the order is a fact about trust.py that no profile can state.
     Read off trust.py by AST here, independently of the generator's reader."""
@@ -368,7 +562,7 @@ def test_the_marks_of_a_trust_line_are_documented_in_their_order():
                and n.targets[0].id in ("MARKS", "REASON_JOIN")}
     _levels, _reasons, _flags, marks, join = trust_table()
     assert marks == tuple(literal["MARKS"]) and join == literal["REASON_JOIN"]
-    page = build()["contract/trust.md"]
+    page = render.pages["contract/trust.md"]
     section = page[page.index("\n## The marks of a trust line\n"):]
     listed = [line.split("`")[1] for line in section.splitlines()
               if line[:1].isdigit()]
@@ -376,12 +570,12 @@ def test_the_marks_of_a_trust_line_are_documented_in_their_order():
     assert f"joined with `{join}`" in section
 
 
-def test_the_contract_page_documents_the_stamp_and_the_trace():
+def test_the_contract_page_documents_the_stamp_and_the_trace(render):
     """Both checked-in schemas carry three top-level branches, and the page
     used to render one. The stamp is what the resume decides on and the
     trace what the cost is read from, so a reader of the contract has to see
     their keys and their record kinds, straight from the JSON."""
-    pages = build()
+    pages = render.pages
     for name in build_docs._profile_names():
         rel = build_docs._contract_rel(name)
         stamp, trace = json_at(rel, "stamp"), json_at(rel, "trace")
@@ -407,12 +601,12 @@ def test_the_contract_page_documents_the_stamp_and_the_trace():
     assert "## The stamp" not in bare and "## The trace" not in bare
 
 
-def test_a_profile_with_a_schema_gets_a_contract_page():
+def test_a_profile_with_a_schema_gets_a_contract_page(render):
     """Discovered, not listed: a third profile added with a schema and no page
     is exactly the kind of gap a hand-maintained list keeps."""
     have = {p.parent.name for p in (ROOT / "profiles")
             .glob("*/extraction_schema.json")}
-    pages = build()
+    pages = render.pages
     assert {page.split("/")[1][:-3] for page in pages
             if page.startswith("contract/")
             and page not in ("contract/states.md",
@@ -457,7 +651,7 @@ def test_the_artifact_constants_carry_the_stage_that_writes_them():
 # ---------------------------------------------------------------------------
 # The published site
 # ---------------------------------------------------------------------------
-def test_the_site_config_and_the_pages_agree():
+def test_the_site_config_and_the_pages_agree(render):
     """Read the Docs builds `docs/conf.py` with `fail_on_warning: true`, and
     Sphinx is not installed here -- so what can be checked without it is
     checked here: that the config parses, that it excludes exactly the files
@@ -480,7 +674,7 @@ def test_the_site_config_and_the_pages_agree():
     for excluded in ("_intros", "README.md"):
         assert excluded in values["exclude_patterns"], excluded
 
-    entries = _toctree_entries(build()["index.md"])
+    entries = _toctree_entries(render.pages["index.md"])
     assert entries
     for entry in entries:
         assert (ROOT / "docs" / f"{entry}.md").is_file(), entry
@@ -503,7 +697,7 @@ def test_the_docs_build_needs_neither_the_corpus_nor_a_gpu():
     assert "fail_on_warning: true" in rtd
 
 
-def test_every_page_says_what_it_is_for(monkeypatch):
+def test_every_page_says_what_it_is_for(render, monkeypatch):
     """A page of docstrings or of tables is a list of parts. What no module
     can say is what the thing is for, so every generated page, the front
     page included, opens with prose from `docs/_intros/`, and a page without
@@ -513,7 +707,7 @@ def test_every_page_says_what_it_is_for(monkeypatch):
     its module's own docstring, and the reference's index carries the
     prose."""
     from build_docs import intro_of
-    pages = build()
+    pages = render.pages
     for page in sorted(pages):
         if page == "README.md" or build_docs.is_api_module(page):
             continue
@@ -525,15 +719,15 @@ def test_every_page_says_what_it_is_for(monkeypatch):
     assert intro_of("stages/gibt_es_nicht.md") == ""
     monkeypatch.setattr(build_docs, "INTRO_DIR", "docs/_gibt_es_nicht")
     with pytest.raises(SourceMoved):
-        build()
+        build_docs.build()
 
 
-def test_the_module_reference_follows_the_chapter_collapsed():
+def test_the_module_reference_follows_the_chapter_collapsed(render):
     """The chapter is the account and the docstrings are the reference: a
     stage page carries every module's docstring after the prose, each in
     its own collapsed block, so the reference is there without being read
     first."""
-    pages = build()
+    pages = render.pages
     for page, _title, entries in build_docs.SOURCES:
         if not page.startswith("stages/"):
             continue
@@ -548,13 +742,13 @@ def test_the_module_reference_follows_the_chapter_collapsed():
         assert reference.count("</details>") == len(entries)
 
 
-def test_a_profile_with_a_schema_gets_a_profile_page():
+def test_a_profile_with_a_schema_gets_a_profile_page(render):
     """Discovered like the contract pages: prose from `docs/_intros/`, then
     the parameters and their axes read off the published contract, never
     off the spec."""
     have = {p.parent.name for p in (ROOT / "profiles")
             .glob("*/extraction_schema.json")}
-    pages = build()
+    pages = render.pages
     assert {page.split("/")[1][:-3] for page in pages
             if page.startswith("profiles/")} == have
     for name in sorted(have):
@@ -576,14 +770,14 @@ def test_a_profile_with_a_schema_gets_a_profile_page():
     assert "| `a` | number | `carrier` (2 options), `year` (integer) | " \
            "`value` |" in bare
 
-def test_the_profiles_page_says_what_a_profile_is_for():
+def test_the_profiles_page_says_what_a_profile_is_for(render):
     """The one page besides the stages that carries an introduction: what a
     profile is FOR is prose no module can state, so it lives in a file of
     its own and the page must carry it whole."""
     from build_docs import intro_of
     intro = intro_of("profiles.md")
     assert len(intro) > 200, len(intro)
-    assert intro in build()["profiles.md"]
+    assert intro in render.pages["profiles.md"]
     # The renderer takes it as an argument and adds none of its own.
     assert intro not in render_profiles_page("x", ["kwp"])
     assert intro in render_profiles_page("x", ["kwp"], intro)
@@ -637,7 +831,7 @@ def _dashes(text: str) -> list:
             if "\u2014" in line or "\u2013" in line or " -- " in line]
 
 
-def test_no_page_uses_a_dash_as_punctuation():
+def test_no_page_uses_a_dash_as_punctuation(render):
     """The register of the site is settled: no em dash, no en dash and no
     double hyphen standing in for one, in the prose of any page, in any
     introduction, in any hand-written page and in any module docstring the
@@ -648,7 +842,7 @@ def test_no_page_uses_a_dash_as_punctuation():
     code's docstrings verbatim, and the register rule reaches a docstring
     only where it is applied at the source, which is the module docstrings
     the chapters render."""
-    for page, text in sorted(build().items()):
+    for page, text in sorted(render.pages.items()):
         if build_docs.is_api_module(page):
             continue
         assert _dashes(_prose_of(text)) == [], page
@@ -690,7 +884,7 @@ def test_the_docs_workflow_regenerates_on_develop_and_checks_everywhere_else():
         assert forbidden not in text, forbidden
 
 
-def test_the_site_turns_every_readme_link_into_an_index_link():
+def test_the_site_turns_every_readme_link_into_an_index_link(render):
     """The repository index and the site's toctree page are two files, and
     the pages link the first. Without the rewrite the site build reports one
     missing cross-reference per page, and warnings are errors there."""
@@ -704,7 +898,7 @@ def test_the_site_turns_every_readme_link_into_an_index_link():
     assert source[0] == ("[Back to the index](index.md) and [up](../index.md#pages) "
                          "and [kept](../README.md.bak) and [other](README.txt)")
     # Every generated page carries the link the rewrite is for.
-    for rel, text in build().items():
+    for rel, text in render.pages.items():
         if rel not in ("README.md", "index.md"):
             assert "](README.md)" in text or "](../README.md)" in text, rel
     # And Sphinx is told to run it on every source it reads.
@@ -775,7 +969,7 @@ def unlisted():
 '''
 
 
-def test_a_module_page_names_every_public_name_and_nothing_private():
+def test_a_module_page_names_every_public_name_and_nothing_private(render):
     """The reference is the code's public surface: every public function,
     class and method with its signature as written, no private name, a
     dataclass field with the comment above it, and a docstring rendered as
@@ -829,19 +1023,19 @@ def test_a_module_page_names_every_public_name_and_nothing_private():
         == "- item\n\n    more \\<name> text"
     # Over the real tree: a module with anything to publish has a page, an
     # empty `__init__.py` has none.
-    pages = build()
+    pages = render.pages
     for rel in build_docs._api_modules():
         module = build_docs.module_api(rel)
         assert (api_page(rel) in pages) == build_docs._publishes(module), rel
 
 
-def test_the_reference_index_names_every_module_page_once():
+def test_the_reference_index_names_every_module_page_once(render):
     """The module pages are not on the front page, which would be a list of
     a hundred lines; they are reached through the reference's own index,
     which names each of them once in its lists and once in its toctrees, and
     the front page names that index."""
     from build_docs import is_api_module, render_api_index
-    pages = build()
+    pages = render.pages
     modules = sorted(page[len("api/"):-3] for page in pages
                      if is_api_module(page))
     # The index is the intro, then one list and one hidden toctree per
@@ -874,11 +1068,11 @@ def test_the_reference_index_names_every_module_page_once():
         assert f"api/{page}" not in _toctree_entries(pages["index.md"])
 
 
-def test_a_removed_module_leaves_no_page_behind(tmp_path):
+def test_a_removed_module_leaves_no_page_behind(render, tmp_path):
     """A module that is renamed or deleted has no page in a fresh render,
     and the page the last render wrote would stay on disk: Sphinx builds it
     outside every toctree, which is a warning, which is a failed site."""
-    pages = build()
+    pages = render.pages
     write(tmp_path, pages)
     stale = tmp_path / "api" / "docpipe.gone.md"
     stale.write_text("# docpipe.gone\n", encoding="utf-8")

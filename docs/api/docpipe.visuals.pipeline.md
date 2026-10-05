@@ -13,6 +13,16 @@ Author: Felix Vossel
 
 ## Functions
 
+### collect_cached
+
+```python
+def collect_cached(data: dict, into: dict) -> None
+```
+
+Into *into*, by id: every table of *data* that carries its markdown
+and every figure that carries its description. What a later run does
+not ask the model for again, and what `docpipe status` counts as done.
+
 ### run_single
 
 ```python
@@ -47,8 +57,8 @@ def run_batch(
 ) -> dict[str, bool]
 ```
 
-Runs enrichment for every subdirectory under *root_dir* that contains one of
-the expected structured output JSONs.
+Runs enrichment for every document directory under *root_dir*, at any
+depth, that contains one of the expected structured output JSONs.
 
 Returns:
     Dict mapping directory name → success boolean.

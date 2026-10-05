@@ -152,6 +152,7 @@ class GeminiChat:
             completion_tokens=((usage.get("candidatesTokenCount") or 0)
                                + (usage.get("thoughtsTokenCount") or 0))
             if usage else None,
+            cached_tokens=usage.get("cachedContentTokenCount"),
             model=got.get("modelVersion") or model)
 
     def embeddings(self, *, model, input):

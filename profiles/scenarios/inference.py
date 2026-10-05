@@ -63,8 +63,9 @@ PHRASES = {
 }
 
 
-# The words of the chat app's pages (docpipe/app/app.py): what a person reads
-# and clicks. Every key is used there, and `wording.UI_REQUIRED` lists them.
+# The words of the chat app's pages (docpipe/app/app.py) and of the picker's
+# labels (docpipe/inference/catalog.py): what a person reads and clicks. Every
+# key is used there, and `wording.UI_REQUIRED` lists them.
 UI = {
     "title_fallback": "docpipe – search",
     "page_chat": "Search",
@@ -123,12 +124,32 @@ UI = {
                  "possible"),
     "open_pdf": "📄 Open page {page} in the PDF",
     "show_context": "Show context",
+    "show_page": "Show page {page}",
+    "page_not_located": ("The quote could not be located on this page, so "
+                         "nothing is marked."),
+    "page_no_file": ("{file} is not in the PDF folder of this server, so "
+                     "its page cannot be shown."),
+    "page_failed_library": ("Page {page} could not be shown: PyMuPDF is not "
+                            "installed on this server."),
+    "page_failed_open": "Page {page} could not be shown: the PDF does not open.",
+    "page_failed_range": ("Page {page} could not be shown: the PDF has no such "
+                          "page."),
+    "page_failed_draw": "Page {page} could not be shown: it did not render.",
+    "download_pdf": "Download the PDF",
+    "no_profile": ("No profile is in effect, so a question cannot be "
+                   "answered. Start the chat with `docpipe --profile <name> "
+                   "chat`, or set `profile = \"<name>\"` in docpipe.toml or "
+                   "DOCPIPE_PROFILE; the built-in profile `default` works "
+                   "for any folder."),
     "values_heading": "Backed values from the reading of the documents",
     "values_note": ("These numbers were read from the documents beforehand "
                     "and checked against their quote; they do not come from "
                     "the answer below."),
     "values_more": "{shown} of {total} values shown.",
     "values_level": "Level {level}",
+    "index_model_differs": ("The index was built with {built}, questions are "
+                            "embedded with {queried}: their vectors do not "
+                            "compare, so what is found may be wrong."),
     "review_heading": "Review the values that were read",
     "review_intro": ("Decide for every value, field by field, whether the "
                      "document says that. The decisions are kept in a file "
@@ -170,4 +191,7 @@ UI = {
         "said what the harvest lacks."),
     "review_checked_save": "Record as read whole",
     "review_checked_all": "for every parameter",
+    "version_current": "(current)",
+    "version_old": "(old)",
+    "document_noun_fallback": "document",
 }

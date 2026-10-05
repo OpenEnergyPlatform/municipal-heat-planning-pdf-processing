@@ -25,6 +25,13 @@ TITLE_EXCLUDE_PREFIXES = (
     "tab.",
 )
 
+# What opens a caption (docpipe/captions.py): a word, a number, a colon.
+# NOT a word list; the number is what carries it: "Hinweis:" is a note,
+# "Tabelle 17:" is a caption. Each pattern carries its own anchor.
+CAPTION_START = (
+    r"(?:^|(?<=[\s\]]))([A-ZÄÖÜ][A-Za-zÄÖÜäöüß.]{2,14}\s+\d+(?:[-.–]\d+)*\s*:)",
+)
+
 # A caption is a label, not a paragraph. Measured on this corpus: 8 words
 # median, 24 at the 99th percentile, 205 captions past 40 words, longest 156.
 # Above this the nearest-text-block fallback adopts whole prose paragraphs —

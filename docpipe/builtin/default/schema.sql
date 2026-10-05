@@ -10,10 +10,14 @@
 CREATE TABLE IF NOT EXISTS "DocumentMeta" (
     "document" INTEGER PRIMARY KEY
                REFERENCES "Documents"("id") ON DELETE CASCADE,
-    -- the file name without its ending, until somebody knows a better one
+    -- the title in the PDF's own information dictionary, else the file name
+    -- without its ending
     "title"    TEXT,
     -- the subfolder the file was read from; NULL for the folder itself
-    "folder"   TEXT
+    "folder"   TEXT,
+    -- the creation date in the same dictionary, as far as it gives one
+    -- (YYYY, YYYY-MM or YYYY-MM-DD); NULL when it gives none
+    "created"  TEXT
 );
 
 CREATE INDEX IF NOT EXISTS "idx_documentmeta_folder" ON "DocumentMeta"("folder");

@@ -60,14 +60,22 @@ class Endpoint:
 
 def reply(text: str, finish: str, *, prompt_tokens: Optional[int] = None,
           completion_tokens: Optional[int] = None, model: Optional[str] = None,
-          reasoning: Optional[str] = None) -> SimpleNamespace:
-    """One answer, in the shape the stages read."""
+          reasoning: Optional[str] = None,
+          cached_tokens: Optional[int] = None) -> SimpleNamespace:
+    """One answer, in the shape the stages read.
+
+    `cached_tokens` is the part of `prompt_tokens` the API served from its
+    cache; it is on the usage block only where the API said so.
+    """
     usage = None
     if isinstance(prompt_tokens, int) or isinstance(completion_tokens, int):
         prompt, completion = prompt_tokens or 0, completion_tokens or 0
         usage = SimpleNamespace(prompt_tokens=prompt,
                                 completion_tokens=completion,
                                 total_tokens=prompt + completion)
+        if isinstance(cached_tokens, int) and not isinstance(cached_tokens,
+                                                             bool):
+            usage.cached_tokens = cached_tokens
     message = SimpleNamespace(role="assistant", content=text,
                               reasoning_content=reasoning)
     return SimpleNamespace(

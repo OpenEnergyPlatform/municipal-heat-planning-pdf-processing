@@ -16,9 +16,53 @@ built once with the model on GPUs and queried through an endpoint ever
 after. An endpoint takes text only, so with it the inputs that carry a
 picture are left out and the index holds the text vectors of a corpus.
 
+A batch the embedder could not serve leaves its inputs without a vector. The
+other batches are finished first; the inputs left over are counted by
+embedding type and by document, and the run ends with them named, not with
+them forgotten.
+
 Author: Felix Vossel
 
 ## Classes
+
+### IncompleteIndex
+
+```python
+class IncompleteIndex(RuntimeError)
+```
+
+A run ended with inputs that have no vector. What was embedded stays;
+a rerun embeds the rest.
+
+### Unembedded
+
+```python
+class Unembedded
+```
+
+The inputs of a run that came back without a vector.
+
+Counted by embedding type and by document, so the sentence that ends the
+run says how many inputs of which kind have none. Inputs a text-only
+backend leaves out on purpose are not here: nothing went wrong with them.
+
+#### Unembedded.\_\_init\_\_
+
+```python
+def __init__(self) -> None
+```
+
+#### Unembedded.add
+
+```python
+def add(self, inputs) -> None
+```
+
+#### Unembedded.sentence
+
+```python
+def sentence(self) -> str
+```
 
 ### ApiIndexEmbedder
 
@@ -117,6 +161,7 @@ def create_embeddings(
     *,
     model_name: str = EMBEDDING_MODEL,
     batch_size: int = EMBEDDING_BATCH_SIZE,
+    unembedded: Optional[Unembedded] = None,
 ) -> int
 ```
 
@@ -125,7 +170,14 @@ write their ids to the DB. Returns the updated next_id.
 
 Inputs are split into text-only and VL groups and packed into full
 ``batch_size`` batches across documents; each input's ``pdf_name`` keeps the
-DB writeback grouped per document. A failed batch is logged and skipped.
+DB writeback grouped per document.
+
+A batch that fails is logged and the others are finished. Its inputs have
+no row, so a rerun finds them again. They are added to `unembedded`, which
+the caller keeps across calls and ends its run on. Without one this call
+raises IncompleteIndex once every batch has been tried, with the vectors
+of the others already in `index` and the database: a failure is never
+only a log line.
 
 Persisting the index is the caller's: this is called once per flush chunk,
 and the index is one file rewritten whole.

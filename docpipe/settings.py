@@ -46,7 +46,7 @@ FREE_TABLE = "env"
 # How the name of a secret ends, for the names of the [env] table.
 SECRET_NAME = re.compile(r"(KEY|TOKEN|SECRET|PASSWORD|PASSWD|CREDENTIALS)$")
 PRICES_TABLE = "prices"
-PRICED = ("input", "output", "embedding")
+PRICED = ("input", "output", "embedding", "cached")
 KINDS = ("str", "int", "float", "flag", "path", "list")
 
 
@@ -102,9 +102,9 @@ SETTINGS = (
       "answer loop.",
       stages=("chat",)),
     S("INFERENCE_DB_PATH", "chat.db_path", "path", None,
-      "Corpus database, opened read-only; default: the profile's database, "
-      "else data/KWP.db.",
-      stages=("chat",)),
+      "Corpus database, opened read-only; default: the profile's, else "
+      "data/KWP.db (chat; `serve` has none).",
+      stages=("chat", "serve")),
     S("INFERENCE_ENV_FILE", "chat.env_file", "path", None,
       "Older name for DOCPIPE_ENV_FILE: the .env-style file to load when "
       "that one is unset.",
@@ -140,13 +140,12 @@ SETTINGS = (
       "Folder holding the source PDFs; default: the profile's PDF folder, "
       "else data/pdf.",
       stages=("chat",)),
-    S("PDF_URL_PREFIX", "chat.pdf_url_prefix", "str", "/app/static/pdf",
-      "URL path the source PDFs are served under; empty hides the PDF "
-      "links.",
+    S("PDF_URL_PREFIX", "chat.pdf_url_prefix", "str", "",
+      "URL path the source PDFs are served under, for a link into an "
+      "external viewer; empty: no link.",
       stages=("chat",)),
-    S("PDF_VIEWER_PREFIX", "chat.pdf_viewer_prefix",
-      "str", "/app/static/pdfjs/web",
-      "Path of the bundled pdf.js viewer; empty uses the browser's own PDF "
+    S("PDF_VIEWER_PREFIX", "chat.pdf_viewer_prefix", "str", "",
+      "Path of a pdf.js viewer for that link; empty: the browser's own PDF "
       "viewer.",
       stages=("chat",)),
     S("QUERY_CACHE_PATH", "chat.query_cache_path", "path", None,
@@ -431,6 +430,16 @@ SETTINGS = (
       "set.",
       secret=True,
       stages=("preprocess", "refine", "visuals", "chunk", "extract", "chat")),
+    S("DOCPIPE_MAX_DOWNLOAD_MB", "ingest.max_download_mb", "int", "500",
+      "Largest PDF a download keeps, in megabytes; a larger one is refused "
+      "and listed as unreachable.",
+      stages=("ingest",)),
+    S("DOCPIPE_USER_AGENT", "ingest.user_agent", "str",
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+      "(KHTML, like Gecko) Chrome/126.0 Safari/537.36",
+      "User-Agent a PDF download sends; municipal sites answer a plain "
+      "client with 403.",
+      stages=("ingest",)),
     S("DOCPIPE_LAYOUT_AUTOCAST", "layout_autocast", "str", "off",
       "Reduced precision for page layout detection on a GPU: bf16, fp16 or "
       "off.",
@@ -718,8 +727,9 @@ def _spell(setting: Setting, value, path: Path) -> str:
 
 
 def _prices(path: Path, table) -> dict:
-    """{model: {"input": .., "output": .., "embedding": ..}} of the file's
-    price table, per million tokens."""
+    """{model: {"input": .., "output": .., "embedding": .., "cached": ..}} of
+    the file's price table, per million tokens. `cached` is what an input
+    token costs that the provider served from its cache."""
     if not isinstance(table, dict):
         raise ConfigError(f"{path}: [{PRICES_TABLE}] must be a table")
     out: dict = {}

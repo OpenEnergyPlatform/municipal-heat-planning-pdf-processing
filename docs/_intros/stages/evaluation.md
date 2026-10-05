@@ -83,6 +83,51 @@ one harvest carries is counted with what was decided about its value.
 below a share, for a pipeline that should stop on it. `--json` also writes
 the report.
 
+## Comparing two harvests without decisions
+
+`docpipe evaluate NEW_DIR --diff OLD_DIR` needs no `gold.jsonl`. It holds a
+harvest against an earlier one of the same documents and says what changed,
+for the day a prompt, a spec or the code has changed and nobody has decided
+the rows yet. `--db` (else the profile's database) tells it which documents
+a model transcribed, so their level is B at best, as `evaluate` counts
+levels; the report says how many documents it took as transcribed, or that
+none is known and every text-located row counts as level A.
+
+Rows are paired as `--baseline` pairs them (`pair_rows`, the one pairing of
+`compare` and `diff`): by document, `tuple_id` and parameter. The quote and
+the written value make the `tuple_id`, so a value that moved is one row gone
+and one new, not one row with two readings. The report counts:
+
+- rows, per parameter, per field (the value, the unit, each coordinate) and
+  over all parameters, as the same, changed, gone (only the old harvest has
+  it) and new (only this one has it);
+- coordinates, for the rows both harvests carry: how many kept their state
+  and how many moved (read to unbacked, and so on);
+- rows, for how the trust levels A, B and C moved, and the level of the rows
+  that are gone or new;
+- documents: in both, only in the old harvest, only in this one, and
+  changed (any row that reads differently, moved a state or a level, is gone
+  or is new).
+
+It lists the largest changes, at most `--top` (20 by default): the paired
+rows that differ, most differences first, each with its quote and both
+readings. Gone and new rows are only counted, so a re-harvest whose largest
+change is a number read anew shows it as a gone and a new row and not in that
+list. In a real harvest `parameter` and `unit` count as coordinates, because
+every `*_state` key does, so the parameter appears in each reading and the
+coordinate totals include states that never move.
+
+The command exits 0 whatever it finds. `--max-changed SHARE` and
+`--max-gone SHARE` set a ceiling, a share of the old harvest's rows, and
+exit 1 above it; a ceiling over an old harvest with no rows also exits 1,
+because it has nothing to hold the share against. A directory that is
+missing or holds no harvest file ends the command instead of printing
+zeros. `--gold`, `--baseline`, `--min-precision` and `--min-recall` are
+refused with `--diff`, and `--top`, `--max-changed` and `--max-gone` are
+refused without it. `--json FILE` writes the report itself (`baseline`,
+`harvest`, `documents`, `rows`, `parameters`, `fields`, `transitions`,
+`levels`, `differing`, `largest`).
+
 ## Benchmarks
 
 `docpipe benchmark DIR --record` harvests once with the configured model and

@@ -296,6 +296,24 @@ def test_the_database_remembers_what_built_its_index_and_says_both(tmp_path):
         assert "model-b" in schema.embedding_mismatch(conn, "model-x")
 
 
+def test_the_length_of_the_vectors_is_compared_like_their_model(tmp_path):
+    with sqlite3.connect(tmp_path / "db") as conn:
+        schema.apply(conn)
+        # a database that records no dimension says nothing about a query's
+        assert schema.dimension_mismatch(conn, 8) is None
+        schema.note_embedding(conn, "model-a", 8, "local", 512, "0.1.0")
+        assert schema.dimension_mismatch(conn, 8) is None
+        # a query embedded to another length is named, with both numbers
+        said = schema.dimension_mismatch(conn, 16)
+        assert "8 dimensions" in said and "to 16" in said
+        # and the model is a different question: same model, other length
+        assert schema.embedding_mismatch(conn, "model-a") is None
+        # a record that is no number does not equal one
+        conn.execute("UPDATE Meta SET value = 'many' WHERE key = "
+                     "'embedding/dim'")
+        assert "many" in schema.dimension_mismatch(conn, 8)
+
+
 def test_a_database_without_a_table_of_vectors_holds_none(tmp_path):
     """The embedding run notes its model before it wrote a vector, also
     into a database whose vector table is not there yet."""

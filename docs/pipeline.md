@@ -60,9 +60,12 @@ PDF and grades whether its text layer is usable. A garbled or unreadable
 document is refused and left out of the corpus, but a scan, a PDF with no
 text layer at all, is registered anyway and listed for stage 2's optional
 `--transcribe-missing-text` pass rather than refused
-(`docpipe/ingest/pipeline.py:53` to `62`). A `kwp` PDF missing from the data
-directory is downloaded; a `scenarios` PDF is expected already staged and
-never fetched over the network. This is the only stage with no model and no
+(`docpipe/ingest/pipeline.py:62` to `71`). A `kwp` PDF missing from the data
+directory is downloaded, streamed to disk and refused over a size limit; a
+second URL that ends in the file name of one already downloaded is refused
+and listed, and a `scenarios` PDF is expected already staged and never
+fetched over the network. For `default`, a folder's PDFs show their own title
+and date in the catalog. This is the only stage with no model and no
 GPU. Resume is keyed on the filename already present in `Documents`
 (`docpipe/store/documents.py:59` to `62`); the profile's own metadata write
 still runs on an already-registered document, which is how a profile
@@ -170,14 +173,16 @@ document (section text, section title, table text, figure text, plus a
 table or figure with its image) with the Qwen3-VL-Embedding-8B model, adds
 them to one shared FAISS index, and writes matching `Embeddings` rows
 recording the vector's
-`faiss_id`, type and owner. Three further, additive steps (`enrich-bbox`,
+`faiss_id`, type and owner. A batch the embedder fails does not end the
+run: the others are finished and the index is saved, and the stage then
+ends non-zero saying how many inputs of which embedding type have no vector. Three further, additive steps (`enrich-bbox`,
 `enrich-page-source`, `enrich-caption`) backfill one column family on an
 already-built corpus without touching a section, an embedding or the FAISS
 index. Resume differs by step: merge on the mtime cache, db on whether a
 document already has `Sections` rows, embed on whether the database
 already has a matching embedding, reconciled against what the FAISS index
 file actually holds so a crash between a database write and an index save
-is never read as done (`docpipe/chunking/database.py:724` to `755`).
+is never read as done (`docpipe/chunking/database.py:717` to `748`).
 
 ### 7. Extraction
 
@@ -228,7 +233,7 @@ Full account: [stages/inference.md](stages/inference.md).
 
 `docpipe.inference`, paired with `docpipe.embedding`, is the
 retrieval-and-answer core the app is built on. It opens the corpus's SQLite
-database read-only (`docpipe/inference/db.py:22` to `34`) and its FAISS
+database read-only (`docpipe/inference/db.py:24` to `36`) and its FAISS
 index once, then answers one question at a time: a search phrase, an
 embedded query, a search over the selected documents or the whole corpus,
 by meaning and, where a word index exists beside the database, by word as
@@ -283,8 +288,9 @@ cropped table and figure PNGs stage 2 produces. Stage 1 writes three
 further worklists at the top of the data directory, each removed before a
 clean run leaves nothing stale on it: `rejected_pdfs.txt` names a garbled
 document refused from the corpus, `unreachable_pdfs.txt` names a link that
-could not be fetched, and `scanned_pdfs.txt` names a document registered
-with no text layer (`docpipe/ingest/pipeline.py:134` to `145`). All three
+could not be fetched or a download that was refused (a second URL for a
+taken file name, a body over the size limit), and `scanned_pdfs.txt` names a document registered
+with no text layer (`docpipe/ingest/pipeline.py:153` to `164`). All three
 are written for an operator to read, in the log and on disk; none is read
 back by any stage. Stage 2's `--transcribe-missing-text` pass instead
 decides, per page and per document, at run time, which pages carry no
@@ -292,7 +298,7 @@ usable text, through `needs_transcription`
 (`docpipe/preprocessing/page_text_fallback.py:76`), called from
 `fill_missing_page_text`
 (`docpipe/preprocessing/page_text_fallback.py:161` to `189`), itself
-called from `docpipe/preprocessing/pipeline.py:353` to `387`.
+called from `docpipe/preprocessing/pipeline.py:354` to `388`.
 
 **The per-document results directory.** Chunking's db step is the last
 one to open anything under `results/`. Extraction, the graph and the app
@@ -301,7 +307,7 @@ or `document.json` again. Refinement (stage 4) reads `sections.json`
 alone. Visuals (stage 5) reads whichever of `sections_refined.json` and
 `sections.json` is already on disk, preferring the refined file, and
 separately rereads `sections.json` on its own for the native table text
-its QA gate needs (`docpipe/visuals/pipeline.py:54` to `63`). This is what
+its QA gate needs (`docpipe/visuals/pipeline.py:58` to `70`). This is what
 lets the two stages run against two separate model servers at the same
 time in the common case, visuals starting on a document before refinement
 has finished it; visuals does read refinement's file once it exists, so
@@ -329,7 +335,7 @@ until it is pushed back through chunking's db step; no later stage rereads
 | 5 visuals | an item already carries `markdown` or `description` | `--force` for every item, `--force-stale` only for stale items |
 | 6, merge | `document.json` is newer than both its inputs | `--force` |
 | 6, db | the document's rows are already in `Sections` | `--force` |
-| 6, embed | the database already has a matching `Embeddings` row | `--force`, which also evicts the item's old FAISS ids first |
+| 6, embed | the database already has a matching `Embeddings` row; an input whose batch failed has none, so the next run embeds exactly those | `--force`, which also evicts the item's old FAISS ids first |
 | 7 extraction | the document's stamp matches what today's run would produce | `--force`, `--force-stale`, or repair one key with `--top-up` |
 | 8 the graph | never; a `--serialize` call always rewalks the harvest | nothing to force |
 | inference and the app | nothing to resume; one question is one turn | nothing to force |
@@ -338,7 +344,7 @@ Running `--force` across the db and embed steps together needs one detail
 the two steps cannot each see on their own: a document's old FAISS ids
 have to be read off before the db step's forced delete removes its
 `Embeddings` rows, or the embed step has nothing left naming which vectors
-to evict from the index (`docpipe/chunking/pipeline.py:167` to `168`).
+to evict from the index (`docpipe/chunking/pipeline.py:173` to `174`).
 
 ## The extraction stamp
 
@@ -348,15 +354,15 @@ per document, so this section documents its stamp on its own.
 written only once `finish_document` decides a harvest actually happened;
 a document is left unstamped, so the next run redoes it, when more than
 half its planned sources came back unreachable (`UNREACHABLE_LIMIT = 0.5`,
-`docpipe/extraction/runner.py:4441`, `:4503` to `4507`), when nothing
-answered at all (`:4508` to `4511`), or when any one of its requests ended
-on a 429 or a 5xx, which is no answer (`:4512` to `4517`).
+`docpipe/extraction/runner.py:4442`, `:4504` to `4508`), when nothing
+answered at all (`:4509` to `4512`), or when any one of its requests ended
+on a 429 or a 5xx, which is no answer (`:4513` to `4518`).
 `finish_document` removes an earlier stamp before it writes the file, so a
 withheld stamp is not replaced by one that vouched for the file it
-overwrote (`:4497` to `4498`), and it returns whether the document is
+overwrote (`:4498` to `4499`), and it returns whether the document is
 stamped. A document written but left unstamped is a failure of the run:
 `harvest_document` returns it as not finished and `main` exits 1
-(`:5549` to `5550`, `5586`). Inside it:
+(`:5550` to `5551`, `5587`). Inside it:
 
 | Key | What it records | Compared on a redo |
 |---|---|---|
@@ -374,7 +380,7 @@ stamped. A document written but left unstamped is a failure of the run:
 
 The owner decided on 2026-09-10 that a stamp rests on the KG/ontology
 parameters alone (`parameter/`, `value/`, `axis/`, `slot/`,
-`docpipe/extraction/runner.py:4298`). The model, the anchors and every
+`docpipe/extraction/runner.py:4299`). The model, the anchors and every
 prompt id are still written into the stamp, so a reader can place a
 harvest, but a reworded prompt or another model no longer makes a
 document stale. The fine keys come from
@@ -382,14 +388,14 @@ document stale. The fine keys come from
 their presence is what licenses ignoring the coarse `spec` key. An earlier
 design hashed the whole spec file as one number, so one new label anywhere
 in it made a whole corpus stale together, about 93 GPU hours to reread
-1,082 documents over one added word (`docpipe/extraction/runner.py:4200`
-to `4294`); the ontology behind the spec is revised repeatedly, so the
+1,082 documents over one added word (`docpipe/extraction/runner.py:4201`
+to `4295`); the ontology behind the spec is revised repeatedly, so the
 same cost would recur each time it is. With one key per parameter, per value list
 and per axis, `stale()` names exactly which question changed and leaves
 the rest of the corpus alone; it checks both directions, so a question
 dropped from the spec counts as changed too, the one case the old
 whole-file hash used to catch that a purely additive scheme would
-otherwise miss (`docpipe/extraction/runner.py:4365` to `4366`). A file
+otherwise miss (`docpipe/extraction/runner.py:4366` to `4367`). A file
 with no stamp at all is read as fully stale, on principle: the opposite
 reading, a missing stamp taken as nothing left to do, had already let a
 run silently skip 165 documents with exit code 0
@@ -441,6 +447,18 @@ with `--profile` on a command, or in the environment:
 ```bash
 export DOCPIPE_PROFILE=kwp
 ```
+
+`docpipe run` starts stages 1 to 6 and the word index one after the other,
+each as its own `docpipe <stage>` process with the arguments the profile gives
+it, and stops at the first that ends non-zero with that stage's exit code;
+`docpipe status` says, for each document, which stage has left its output. The
+commands below are the same stages one at a time. Started by itself,
+`docpipe preprocess` needs its PDF folder and `docpipe refine` and
+`docpipe visuals` need `--batch`, as shown; `docpipe run` supplies exactly
+those from the profile. For a profile whose document list has no default
+place (`kwp`, `scenarios`) it starts nothing and says so: run
+`docpipe ingest --source FILE` first, then `docpipe run --skip ingest`. It
+leaves out the harvest, which has its own command.
 
 File processing, reading the profile's own document list:
 
@@ -549,7 +567,10 @@ from the spec that profile names (`extraction.SPEC_PATH`) by `docpipe/extraction
 schema.py`, never hand-written.
 
 **The tests.** `tests/test_docs_build.py::test_the_checked_in_docs_are_the_generated_ones`
-requires every generated page under `docs/` to equal a fresh render; this
+requires every generated page under `docs/` to equal a fresh render, made
+once per test module for all the tests that read a page
+(`test_a_stale_generated_page_fails_the_check` shows the comparison can
+fail); this
 page, `running.md` and `glossary.md` are the three the build refuses to
 overwrite and refuses to run without
 (`build_docs.HANDWRITTEN`). The commands the hand-written pages print are

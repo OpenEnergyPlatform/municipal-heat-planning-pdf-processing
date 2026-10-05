@@ -38,6 +38,16 @@ Before its first document a stage asks the server what it serves
 (`docpipe/llm_preflight.py`); a hosted model that cannot answer inside a
 reply schema is refused there.
 
+The usage block of a reply carries `cached_tokens` where the API says so: the
+part of the input tokens it served from its cache. The adapters read it from
+`prompt_tokens_details.cached_tokens` (OpenAI), `cache_read_input_tokens`
+(Anthropic, whose input count already includes cache reads and creations) and
+`cachedContentTokenCount` (Gemini); a server of one's own that reports it under
+`prompt_tokens_details` is read the same way. The ledger books it beside the
+input tokens (see [the parts every stage uses](core.md)), and the `cached`
+price of the project file's `[prices]` table prices it. A replayed run books no
+cached tokens, because the cassette holds only prompt and completion tokens.
+
 ## The cassette
 
 A cassette is the answers of one run, each filed under what was asked

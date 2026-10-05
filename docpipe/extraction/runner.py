@@ -2433,7 +2433,8 @@ def _observe_usage(usage) -> None:
         return
     token_usage.add(LLM_MODEL, input_tokens=prompt,
                     output_tokens=completion if isinstance(completion, int)
-                    else 0)
+                    else 0,
+                    cached_tokens=token_usage.cached_of(usage))
     with _USAGE_LOCK:
         _USAGE["n"] += 1
         _USAGE["prompt_sum"] += prompt

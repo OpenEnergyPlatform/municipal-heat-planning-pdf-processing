@@ -53,17 +53,18 @@ it is:
 |---|---|---|
 | `profile.py` | the active `Profile`: paths, prompts directory, `component()`/`require()` | every stage's pipeline or CLI module, plus preprocessing's and refinement's `config.py`; inference only via `wording.py`, no CLI |
 | `prompts.py` | a prompt's text and sha256, plus a staleness check against `.prompt_versions.json` | preprocessing, refinement, visuals, extraction, inference load; refinement and visuals record/check |
-| `artifacts.py` | the filename of every per-document result file, spelled out once | preprocessing, refinement, visuals, chunking |
+| `artifacts.py` | the filename of every per-document result file, spelled out once, and the one listing of the document directories that hold them (`document_dirs`) | preprocessing, refinement, visuals, chunking |
 | `llm_preflight.py` | a check, before a stage's first document, that its server can do what is asked | refinement, visuals, extraction |
-| `captions.py` | the rule for where a table's or figure's real title sits | preprocessing (write time); chunking, inference (read time) |
+| `captions.py` | the rule for where a table's or figure's real title sits, with the patterns that open a caption read from the profile in force | preprocessing (write time); chunking, inference (read time) |
 | `usage.py` | token/request counting, on once a process calls `begin(stage)` | refinement, visuals, chunking and extraction call `begin()`; every reply or embedding call in those four books through `add()`/`reply()` |
 | `jsonl.py` | the lines of a JSON Lines text or file, split at the line feed and nowhere else | extraction (the harvest reader, the decisions file, review, remap, top-up, recheck, identity) and the cassette of [the provider layer](providers.md) |
 
 The closest thing any of the seven holds to a resume rule is
 `prompts.py`'s staleness check (Method). `profile.py` also memoizes
 `profile_value()` in memory for one process, not a resume rule;
-`artifacts.py`, `llm_preflight.py`, `captions.py` and `jsonl.py` keep no
-state of their own; `usage.py` keeps counts in memory and periodically flushes
+`artifacts.py`, `llm_preflight.py` and `jsonl.py` keep no state of their own,
+and `captions.py` keeps only the patterns it compiled once per profile;
+`usage.py` keeps counts in memory and periodically flushes
 them, not a resume rule either since a flush always overwrites the same
 row.
 
@@ -83,7 +84,7 @@ or an unset `LLM_API_KEY` is captured empty.
 
 A stage's `__main__` first calls `bind_command_line()`, which copies a
 `--profile` given on the command line into `os.environ[DOCPIPE_PROFILE]`
-before the stage is imported (`docpipe/profile.py:414-431`). It reads the
+before the stage is imported (`docpipe/profile.py:415-432`). It reads the
 flag with a small argparse parser and `parse_known_args`, as the stage's own
 parser does, so an abbreviation of `--profile` that the stage accepts, with a
 space or an equals sign before the name, is bound too; the parser raises where argparse would print
@@ -92,12 +93,12 @@ the stage's own parser (the `except ValueError` in `bind_command_line`). The CLI
 point then calls `resolve_profile(args)`, which reads `--profile` or
 `DOCPIPE_PROFILE`, imports `profiles/<name>/profile.py` through
 `load_profile()`, and writes the resolved name back into
-`os.environ[DOCPIPE_PROFILE]` (`docpipe/profile.py:445-468`);
+`os.environ[DOCPIPE_PROFILE]` (`docpipe/profile.py:446-469`);
 `require_profile(args)` is the same call for a stage that has nothing to
 run without a profile, and refuses in one line naming the available
-profiles when none is given (`docpipe/profile.py:471-478`). Code with
+profiles when none is given (`docpipe/profile.py:472-479`). Code with
 no command line calls `active_profile()` instead, reading only the
-ambient variable (`docpipe/profile.py:375-379`). A third function,
+ambient variable (`docpipe/profile.py:376-380`). A third function,
 `profile_value(module, attr)`, resolves through `active_profile()` too,
 then caches its result in a module-level dict keyed by profile name,
 module and attribute, so a value is looked up once per process and
@@ -124,18 +125,23 @@ module is first imported; `bind_command_line()` sets it for a
 
 ### Checking the server before the first document
 
-`assert_serving()` calls `serving_limits()`, one `GET {base_url}/models`
+`assert_serving()` (`docpipe/llm_preflight.py:203`) calls `serving_limits()`, one `GET {base_url}/models`
 request, 30 seconds and one retry by default
-(`docpipe/llm_preflight.py:80,85`), and compares served model ids and
+(`docpipe/llm_preflight.py:84,89`), and compares served model ids and
 the smallest `max_model_len` reported against the tokens the stage
 needs. It runs once per run, before any document, from four call
-sites: refinement's `run()` (`docpipe/refinement/pipeline.py:165`) and
-`main()` (`:249`); visuals (`docpipe/visuals/pipeline.py:500`, skipped
+sites: refinement's `run()` (`docpipe/refinement/pipeline.py:160`) and
+`main()` (`:244`); visuals (`docpipe/visuals/pipeline.py:509`, skipped
 under `--dry-run`); and extraction's review pass and harvest
-(`docpipe/extraction/runner.py:5016` and `:5101`). A hosted API is asked the
+(`docpipe/extraction/runner.py:5017` and `:5102`). A hosted API is asked the
 same through `_hosted_serving`, and besides whether the model answers inside
 a reply schema; a replay of a recorded run has no server to ask and takes the
-window the recording was planned for.
+window the recording was planned for. A server that reports no
+`max_model_len` is not let off: the window comparison is skipped with a
+warning, and the one-token request that probes the request fields is sent all
+the same, because a gateway or a local runner is the likeliest to refuse them.
+A window one token short of the budget is refused before any request is sent,
+and one exactly as large is enough.
 
 ### Rendering a prompt for one request
 
@@ -150,33 +156,49 @@ of shipping a literal `{{foo}}` to the model.
 After refinement or visuals writes its output, `prompts.record()` writes
 each prompt's sha256 into `.prompt_versions.json`
 (`docpipe/prompts.py:132-138`, called from
-`docpipe/refinement/pipeline.py:79` and
-`docpipe/visuals/pipeline.py:269`). The next run's `prompts.check()`
+`docpipe/refinement/pipeline.py:75` and
+`docpipe/visuals/pipeline.py:281`). The next run's `prompts.check()`
 compares that file against today's prompts and returns the ids changed
 (`docpipe/prompts.py:141-151`, called from
-`docpipe/refinement/pipeline.py:66` and
-`docpipe/visuals/pipeline.py:122`); a non-empty result decides whether
+`docpipe/refinement/pipeline.py:62` and
+`docpipe/visuals/pipeline.py:140`); a non-empty result decides whether
 `--force-stale` is warranted.
 
 ### Counting tokens across a run
 
-`usage.begin(stage)` (`docpipe/usage.py:93-103`) turns counting on for the
+`usage.begin(stage)` (`docpipe/usage.py:110`) turns counting on for the
 calling process, once; each of the four batch entry points calls it at
-start. From then on, `usage.reply(response, model)` books a chat
+start, and it reads the profile in effect then. From then on,
+`usage.reply(response, model)` books a chat
 completion's `prompt_tokens`/`completion_tokens` straight off the
-server's own usage block (nothing if the reply carries none), and
+server's own usage block (nothing if the reply carries none), together with
+the input tokens the provider served from its cache (`cached_of`: the
+`cached_tokens` the hosted adapters put on the usage block, or the
+`prompt_tokens_details` of a server of one's own, 0 where the reply says
+nothing), and
 `usage.add(model, ...)` books an embedder's real token count, padding
 excluded. Counts accumulate in memory per model and are written into
 `DOCPIPE_USAGE_DB` (default `data/usage.db`, table `token_usage`, one
-row per `run`/`stage`/`model`) every `FLUSH_SECONDS` (60) while requests
+row per `run`/`stage`/`model`, with the `profile` of the run and its
+`cached_tokens`, which are part of `input_tokens`) every `FLUSH_SECONDS` (60) while requests
 keep coming back, and once more at exit (`atexit`); a flush always
-writes the same absolute counts, so writing twice never double-counts.
-`python -m docpipe.usage [path]` or `sqlite3 ... "SELECT * FROM
-token_totals"` sums every row by stage and model. A process that never
+writes the same absolute counts, so writing twice never double-counts. A
+ledger written before the two columns existed gets them on the next write,
+and the view is rebuilt; a read never writes, so an older ledger is read as
+it is, its rows no profile's (`usage.unattributed` counts them).
+`python -m docpipe.usage [path] [--profile P]` or `sqlite3 ... "SELECT * FROM
+token_totals"` sums every row by stage and model (the view gains a
+`cached_tokens` column); `--profile` limits the report to the runs of one
+profile, named as the stages name it, and with a `[prices]` table in the
+project file the report ends with a cost, where `cost(row, prices, cached)`
+prices a cached input token at the model's `cached` price and, without one,
+at its `input` price. A process that never
 calls `begin()` counts nothing: the inference app, the tests, and
 library use are silent by design, as is the 1-token preflight probe in
 `llm_preflight.py`. A database that cannot be written is logged once and
-never stops the run.
+never stops the run. A ledger already upgraded to the new columns cannot be
+written by an older revision of the package, whose insert fails once and loses
+its counts, so jobs that share a ledger need one revision.
 
 ### Resolving a caption while Stage 3 assembles a section
 
@@ -185,21 +207,25 @@ section text it is assembling, it calls `resolve_title(ref.caption,
 current_section.content, block.id)` before the next block, settling the
 caption the moment the section is written
 (`docpipe/preprocessing/stage3_structure.py:402-404` for a table,
-`:425-427` for a figure).
+`:425-427` for a figure). What opens a caption is the profile's:
+`captions.py` holds no pattern and reads the list `preprocessing.CAPTION_START`
+of the profile in force (the built-in `default` profile where none is named),
+joins it into one pattern and compiles it once per profile
+(`docpipe/captions.py:40-71`).
 
 ### Resolving a caption again, from the finished database
 
 The same rule runs again, without a model, over rows already in SQLite:
 once as a one-time backfill, `enrich_caption`, for the corpus
 built before Stage 3 settled captions at write time
-(`docpipe/chunking/database.py:214-243`), and once on every read, so a
+(`docpipe/chunking/database.py:213-242`), and once on every read, so a
 document the backfill has not reached still shows a resolved title
-(`section_item_captions`, `docpipe/inference/db.py:101-123`;
+(`section_item_captions`, `docpipe/inference/db.py:131-153`;
 `fetch_owner_content`, which keeps the original as `caption_stored`,
-`:243`). `enrich_caption` records the outcome in a `caption_source`
+`:273`). `enrich_caption` records the outcome in a `caption_source`
 column, `'stage'` kept, `'section_text'` replaced; the resume logic
 reads the same column: without `force=True` a row already marked is
-skipped (`docpipe/chunking/database.py:229-232,243,260`).
+skipped (`docpipe/chunking/database.py:228-231,242,259`).
 
 ## Data model
 
@@ -216,21 +242,29 @@ is a JSON object mapping each prompt id to its current sha256, written
 by `record()` next to a stage's output and read back by
 `check()`/`stale()`.
 
-`Profile` (`docpipe/profile.py:169-185`) is a frozen dataclass. A profile
+`Profile` (`docpipe/profile.py:169-186`) is a frozen dataclass. A profile
 author's own fields are on [profiles](../profiles.md); what belongs
 here are the properties a stage reads once resolved:
 `package_dir`, `prompts_dir`, `schema_sql`, and, under `root`
 (`<repo>/data/<name>` unless overridden), `pdf_dir`, `processed_dir`
 (`root/pdf/processed`, refinement's default input,
-`docpipe/refinement/pipeline.py:246`), `db_path` (`<name>.db`) and
-`index_path` (`faiss_index.bin`) (`docpipe/profile.py:266-317`). `Facet`
+`docpipe/refinement/pipeline.py:241`), `db_path` (`<name>.db`) and
+`index_path` (`faiss_index.bin`) (`docpipe/profile.py:267-318`). `Facet`
 (`docpipe/profile.py:161-166`) is `field`, `label`, `widget`.
 
 `artifacts.py` names eight plain string constants for files under a
 document's own `results/` (`PAGES_JSON` through `DOCUMENT_JSON`), plus
 `DIR_IMAGES` for the sibling `images/` folder
-(`docpipe/artifacts.py:12-24`); the full table of who writes and reads
-each one is on [artifacts](../artifacts.md).
+(`docpipe/artifacts.py:21-33`); the full table of who writes and reads
+each one is on [artifacts](../artifacts.md). `document_dirs(root, *markers)`
+(`docpipe/artifacts.py:40`) lists the document directories under a root at any
+depth, in path order: a directory that holds any of the marker files is a
+document and is not searched further, any other is searched (with a guard
+against links that loop), and with every document directly under the root it
+gives what iterating the root gave, in the same order. Two directories of one
+name under different subfolders raise `DuplicateDocumentName`, a `ValueError`
+naming both places, unless `distinct=False`; `refuse_same_names` is the
+check on its own.
 
 `resolve_title(caption, content, block_id)` reads three loosely typed
 values, not one record: `caption` is whatever Stage 2 already
@@ -240,23 +274,29 @@ placeholder's id without the brackets. It never raises: `caption`
 already looking like one, a missing `content` or `block_id`, a
 `block_id` absent from `content`, or no caption-like sentence before the
 placeholder, all come back as `caption`, unchanged
-(`docpipe/captions.py:61-73`).
+(`docpipe/captions.py:99-111`). The list of patterns it reads is checked on
+first use: a list that is empty, a bare string, a pattern that does not
+compile or one that matches the empty text (which would make every text a
+caption) is a `ValueError` naming the profile, and a standalone profile with
+no `CAPTION_START` at all is a `LookupError`.
 
 ## Configuration
 
 | Name | Kind | Default | Effect | Where read |
 |---|---|---|---|---|
-| `DOCPIPE_PROFILE` | environment variable | unset | names the active profile; `resolve_profile()` writes it back | `docpipe/profile.py:45,349-372,445-468` |
-| `--profile` | CLI flag | ambient `DOCPIPE_PROFILE` or none | copied into `DOCPIPE_PROFILE` by `bind_command_line()` before a stage is imported; passed through `resolve_profile()`, or `require_profile()` where a profile is needed; refused when named after a stage was imported under another profile and the named one ships prompts | `docpipe/profile.py:408-478` |
-| `DOCPIPE_DATA_ROOT` | environment variable | unset, falls back to `data/` beside the project file, else `<repo>/data` | base directory for `Profile.root`, unless `Profile.data_root` is set | `docpipe/profile.py:297-301`, `322-336` |
+| `DOCPIPE_PROFILE` | environment variable | unset | names the active profile; `resolve_profile()` writes it back | `docpipe/profile.py:45,350-373,446-469` |
+| `--profile` | CLI flag | ambient `DOCPIPE_PROFILE` or none | copied into `DOCPIPE_PROFILE` by `bind_command_line()` before a stage is imported; passed through `resolve_profile()`, or `require_profile()` where a profile is needed; refused when named after a stage was imported under another profile and the named one ships prompts | `docpipe/profile.py:409-479` |
+| `DOCPIPE_DATA_ROOT` | environment variable | unset, falls back to `data/` beside the project file, else `<repo>/data` | base directory for `Profile.root`, unless `Profile.data_root` is set | `docpipe/profile.py:298-302`, `323-337` |
 | `DOCPIPE_ENV_FILE` / `INFERENCE_ENV_FILE` | environment variables | unset; falls back to a bare `.env` | names a `.env` file to load before config reads `os.environ`; only the first readable one is loaded | `docpipe/dotenv.py:76-80` |
-| `Profile.column_layout` | dataclass field | `"auto"` | must be `auto`, `single` or `double`, or `Profile()` raises | `docpipe/profile.py:172,190-191` |
+| `Profile.column_layout` | dataclass field | `"auto"` | must be `auto`, `single` or `double`, or `Profile()` raises | `docpipe/profile.py:172,191-192` |
 | `Profile.data_root` / `Profile.home` | dataclass fields | `None` / `None` | override where a profile's data and package files live | `docpipe/profile.py:173-175` |
-| `timeout` (`serving_limits`) | function parameter | 30.0 seconds | timeout for the preflight `GET /models` call | `docpipe/llm_preflight.py:80-81` |
-| `max_retries` (OpenAI client) | hardcoded constant | 1 | preflight retried once before a connection failure is reported | `docpipe/llm_preflight.py:85` |
-| `what` / `flag` (`assert_serving`) | function parameters | `"this stage"` / `"--max-model-len"` | substituted into the error and success log; each call site names itself | `docpipe/llm_preflight.py:195-196` |
-| `_CAPTION_LIMIT` | module constant | 300 characters | caps the length of a title `resolve_title()` returns | `docpipe/captions.py:34` |
-| `DOCPIPE_USAGE_DB` | environment variable | `data/usage.db` | SQLite file the token counts are written to | `docpipe/usage.py:75-76` |
+| `timeout` (`serving_limits`) | function parameter | 30.0 seconds | timeout for the preflight `GET /models` call | `docpipe/llm_preflight.py:84-85` |
+| `max_retries` (OpenAI client) | hardcoded constant | 1 | preflight retried once before a connection failure is reported | `docpipe/llm_preflight.py:89` |
+| `what` / `flag` (`assert_serving`) | function parameters | `"this stage"` / `CONTEXT_FLAG` (`"--max-model-len"`) | substituted into the error and success log; each call site names itself | `docpipe/llm_preflight.py:204-205`, `:42-43` |
+| `preprocessing.CAPTION_START` | profile component | none; each profile lists its own | the non-empty list of regular expressions, each carrying its own anchor, that open a caption | `docpipe/captions.py:40-71` |
+| `_CAPTION_LIMIT` | module constant | 300 characters | caps the length of a title `resolve_title()` returns | `docpipe/captions.py:31` |
+| `DOCPIPE_USAGE_DB` | environment variable | `data/usage.db` | SQLite file the token counts are written to | `docpipe/usage.py:91-92` |
+| `cached` price | key of a `[prices]` entry in the project file | the model's `input` price | per million tokens, what an input token costs that the provider served from its cache | `docpipe/settings.py` (`PRICED`), `docpipe/usage.py` (`cost`) |
 
 ## Failure modes
 
@@ -272,31 +312,38 @@ stale (`:144-151` and `stale()`, `:160-161`).
 
 `profile.py`: `Profile(name=...)` with an empty name, a slash, an
 unrecognised `column_layout` or an `extends` that names the profile itself
-raises `ValueError` (`docpipe/profile.py:187-193`). `load_profile()` with no
-name resolvable raises `LookupError` (`:351-354`), listing available profiles
-when the name given is unknown (`:363-365`); a module exporting no proper
+raises `ValueError` (`docpipe/profile.py:188-194`). `load_profile()` with no
+name resolvable raises `LookupError` (`:352-355`), listing available profiles
+when the name given is unknown (`:364-366`); a module exporting no proper
 `PROFILE`, or one whose name disagrees with its own directory, raises
-`TypeError` or `ValueError` (`:367-371`). `component()` re-raises
+`TypeError` or `ValueError` (`:368-372`). `component()` re-raises
 `ModuleNotFoundError` for an existing profile module that fails to import, not
-absence (`_own`, `:245-251`); `require()` raises `LookupError` for genuine
-absence (`:254-263`). `resolve_profile()` raises
+absence (`_own`, `:246-252`); `require()` raises `LookupError` for genuine
+absence (`:255-264`). `resolve_profile()` raises
 `SystemExit` when it is given a profile other than the one a stage was
-imported under and that profile ships prompts (`:459-466`);
+imported under and that profile ships prompts (`:460-467`);
 `require_profile()` raises it, naming the available profiles, when no
-profile is given (`:474-477`). `profile_value()` raises the same
+profile is given (`:475-478`). `profile_value()` raises the same
 `LookupError` when no profile is ambient, naming the module, the
-attribute and the environment variable to set (`:394-395`).
+attribute and the environment variable to set (`:395-396`).
 
 `llm_preflight.py`: a missing `openai` package raises `ImportError` with
-an install hint (`docpipe/llm_preflight.py:83-90`). An unreachable
+an install hint (`docpipe/llm_preflight.py:87-94`). An unreachable
 server, or one erroring on `GET /models`, raises `PreflightError`
-wrapping the exception (`:91-95`); one serving zero models likewise
-(`:96-97`). A requested model absent from what the server serves raises
-`PreflightError` listing what it serves (`:212-217`). When no served
-model card reports a usable `max_model_len`, the check warns and
-returns without comparing, not fatally (`:219-222`); when the reported
-limit is smaller than required, `assert_serving()` names both numbers
-and the flag to raise (`:224-231`).
+wrapping the exception (`:95-99`); one serving zero models likewise
+(`:100-101`). A requested model absent from what the server serves raises
+`PreflightError` listing what it serves (`:222-227`). When no served
+model card reports a usable `max_model_len`, the check warns and does not
+compare, not fatally, and still asks the request fields (`:229-231`, `:246`);
+when the reported limit is smaller than required, `assert_serving()` names
+both numbers and the flag to raise (`:232-239`). The two probes of the request
+fields, `assert_request_extras` and `assert_reply_schema`, return `None` when
+the server accepted them and a sentence when it could not be asked (down,
+busy, a 5xx); that is no verdict and the settings go out anyway. A 429 counts
+as no verdict as well and not as a refusal, for every caller of
+`assert_serving`. `assert_request_accepted` picks the probe by role, the
+reply schema for a hosted API and the reasoning settings otherwise; the
+doctor uses it.
 
 `captions.py`: `resolve_title()` never raises; Data model, above, lists
 what leaves `caption` unchanged.
@@ -305,12 +352,12 @@ what leaves `caption` unchanged.
 
 Over one plan (Kassel), Stage 2's nearest-block caption linking attached
 a rounding-note footnote to 15 of 89 tables in place of the sentence
-naming the table (`docpipe/captions.py:8,45-47`; pinned by
+naming the table (`docpipe/captions.py:8,83-85`; pinned by
 `tests/test_table_title.py`). Because the caption is the only line of a
 table a model can quote for its own year, that mislinking propagated to
 240 of 379 tuples read off the twelve titled target tables' captions,
 and to 88 of Kassel's 100 contested value identities
-(`docpipe/captions.py:51-53`).
+(`docpipe/captions.py:89-91`).
 
 Over three of the corpus's eleven textless plans
 `tests/test_table_title.py` measures by name (documents 795 Leipzig,
@@ -318,7 +365,7 @@ Over three of the corpus's eleven textless plans
 169 tables, while 23 had a numbered sentence in the model-transcribed
 text that `resolve_title()` could resolve; one carried 60 characters of
 the following paragraph before the trim rule was added
-(`docpipe/captions.py:76-83`). The figure covers only these three
+(`docpipe/captions.py:114-121`). The figure covers only these three
 plans, not all eleven.
 
 A `--max-model-len` set too small for a stage's worst-case request was
@@ -331,7 +378,7 @@ measured) before the preflight check existed
 Re-preprocessing the corpus's 1,082 documents so Stage 3 could settle
 every caption at write time is stated as costing GPU days, so
 `enrich_caption` runs instead as a one-time, additive backfill over the
-finished database (`docpipe/chunking/database.py:225`).
+finished database (`docpipe/chunking/database.py:224`).
 
 ## Verification
 
@@ -407,10 +454,11 @@ and written back: `test_a_line_ends_at_a_line_feed_and_nowhere_else`,
 ## Modules
 
 `artifacts.py` names the per-document result files under `<doc>/results/`
-as string constants and performs no I/O, so a filename spelled out once
-cannot drift between the module that writes it and the one that reads
-it. Re-exported by four stages' `config.py` modules and by the
-standalone `migrate_artifact_names.py`, which renames old filenames.
+as string constants, so a filename spelled out once cannot drift between the
+module that writes it and the one that reads it, and lists the document
+directories that hold them (`document_dirs`), the one listing every stage and
+the migration use. Re-exported by four stages' `config.py` modules and used by
+the standalone `migrate_artifact_names.py`, which renames old filenames.
 
 `profile.py` defines `Profile` and `Facet`, resolves the active profile,
 and provides the `component()`/`require()`/`profile_value()` lookup the
@@ -435,17 +483,20 @@ before the first document if the model or the window is unsuitable. A hosted
 model that cannot answer inside a reply schema is refused there too (see
 [the provider layer](providers.md)).
 Called once per run from refinement, extraction (review and harvest)
-and visuals (skipped under `--dry-run`).
+and visuals (skipped under `--dry-run`); the doctor sends its request-field
+probe on its own.
 
 `captions.py` decides whether a stored caption already looks like one
 (`looks_like_a_caption`) and, if not, resolves the real title from the
-sentence before its placeholder (`resolve_title`). Called from the write
+sentence before its placeholder (`resolve_title`), by the patterns of the
+profile in force (`preprocessing.CAPTION_START`) and none of its own. Called from the write
 side while Stage 3 assembles a section, and from the read side both as
 `chunking/database.py`'s one-time backfill and on every read by
 `inference/db.py`.
 
 `usage.py` counts each stage's chat and embedding requests in memory and
-writes them, one row per run/stage/model, into a SQLite file
+writes them, one row per run/stage/model, with the run's profile and the
+cached input tokens, into a SQLite file
 (`DOCPIPE_USAGE_DB`, default `data/usage.db`), flushed periodically and
 at exit. Turned on by `begin()` at each of the four call sites in
 Position in the pipeline, above, and booked from every reply and

@@ -41,16 +41,19 @@ STAGES = {
                 "shapes and the ontology of a graph"),
     "preflight": ("docpipe.extraction.preflight", "before a corpus run: "
                   "the profile's spec, prompts, schema and graph writer"),
+    "estimate": ("docpipe.estimate", "before a run: the requests, tokens and "
+                 "price each stage still has ahead of it, no model called"),
     "extract": ("docpipe.extraction", "stage 7: harvest values, top up, "
                                       "review, serialize"),
     "evaluate": ("docpipe.extraction.evaluate", "precision and recall of a "
-                 "harvest, against what people decided"),
+                 "harvest against what people decided; --diff: two "
+                 "harvests compared"),
     "benchmark": ("docpipe.extraction.benchmark", "record one harvest with "
                   "a model, or make it again without one"),
-    "export": ("docpipe.serve.export", "the harvested values as a table "
-               "(CSV, JSON lines)"),
-    "serve": ("docpipe.serve", "answer questions about the harvested "
-              "values: HTTP API or MCP server"),
+    "export": ("docpipe.serve.export", "values, states or refusals of a "
+               "harvest as a table (CSV, JSON lines)"),
+    "serve": ("docpipe.serve", "answer questions about a harvest, its "
+              "states and the corpus passages: HTTP API or MCP server"),
     "lexical": ("docpipe.inference.lexical", "build the word index the chat "
                 "searches beside the vectors"),
     "sandbox": ("docpipe.app.sandbox_service", "the service that runs code "
@@ -58,8 +61,11 @@ STAGES = {
 }
 OWN = {
     "init": "start a project here: a project file and a profile of its own",
+    "run": "ingest to lexical in one go, each as its own command runs it",
+    "status": "which stage has left output for which document",
     "chat": "the chat over a processed corpus",
-    "doctor": "check this installation: packages, profile, endpoints, data",
+    "doctor": "check this installation: packages, profile, servers, "
+              "prompts, data",
     "config": "every setting, its value and where the value comes from",
     "profiles": "the profiles this installation finds, and where",
 }
@@ -281,13 +287,14 @@ def _init(rest: Sequence[str]) -> int:
         written.append(ignore)
     for path in written:
         print(f"wrote {path}")
-    print(f"\nPut the PDFs into {pdfs}\n(or name their folder: docpipe "
-          f"ingest --source FOLDER), say in {settings.PROJECT_FILE} where "
+    print(f"\nPut the PDFs into {pdfs}, say in {settings.PROJECT_FILE} where "
           f"the models are,\nand run:\n\n"
-          f"  docpipe doctor\n  docpipe ingest\n  docpipe preprocess\n"
-          f"  docpipe refine\n  docpipe visuals\n  docpipe chunk\n"
-          f"  docpipe chat\n\n`docpipe <command> --help` shows what each "
-          f"one takes.")
+          f"  docpipe doctor\n  docpipe run\n  docpipe chat\n\n"
+          f"`docpipe run` is ingest, preprocess, refine, visuals, chunk and "
+          f"lexical one after the other,\n`docpipe status` says what each "
+          f"document has so far. PDFs lying in another folder: `docpipe "
+          f"ingest --source FOLDER`,\nthen `docpipe run --skip ingest`. "
+          f"`docpipe <command> --help` shows what each command takes.")
     return 0
 
 
@@ -354,6 +361,12 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         return _run_stage(command, rest)
     if command == "init":
         return _init(rest)
+    if command == "run":
+        from . import run as running
+        return running.main(rest)
+    if command == "status":
+        from . import status
+        return status.main(rest)
     if command == "chat":
         return _chat(rest)
     if command == "config":

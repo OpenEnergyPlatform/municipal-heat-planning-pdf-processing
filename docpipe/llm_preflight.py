@@ -39,6 +39,10 @@ class PreflightError(RuntimeError):
     """The server cannot serve what this stage is about to ask of it."""
 
 
+# The flag a self-hosted server is started with to set its context size.
+CONTEXT_FLAG = "--max-model-len"
+
+
 # What every chat request of this pipeline carries. Thinking off, and where
 # the server takes it the smallest reasoning effort: what these stages want
 # back is a quote and a number, and a think block in front of that truncates
@@ -146,12 +150,16 @@ PROBE_SCHEMA = {"type": "object",
 
 
 def assert_reply_schema(base_url: str, api_key: str, model: str, *,
-                        what: str = "this stage", role: str = "llm") -> None:
+                        what: str = "this stage",
+                        role: str = "llm") -> Optional[str]:
     """Raise PreflightError unless *model* answers inside a reply schema.
 
     One small request, with the reasoning settings every request carries. A
     model that takes no schema, or refuses a setting, refuses every request
     of the run; here it says so once, with the variable that changes it.
+
+    None when it did. When the API could not be asked there is no verdict:
+    why, as a sentence, and the run asks anyway.
     """
     name = providers.provider(role)
     client = providers.client(role, base_url=base_url, api_key=api_key,
@@ -171,7 +179,7 @@ def assert_reply_schema(base_url: str, api_key: str, model: str, *,
                 and status != 429):
             log.warning("%s: could not probe the reply schema (%s); asking "
                         "anyway", name, exc)
-            return
+            return f"the probe request was not answered: {exc}"
         raise PreflightError(
             f"the {name} API refuses what {what} sends to {model}.\n"
             f"  {exc}\n"
@@ -189,16 +197,18 @@ def assert_reply_schema(base_url: str, api_key: str, model: str, *,
             f"{model} did not answer inside the reply schema: {text[:120]!r}"
             f" (finish: {answer.choices[0].finish_reason})")
     log.info("Preflight ok: %s answers inside a reply schema", model)
+    return None
 
 
 def assert_serving(base_url: str, api_key: str, model: str,
                    required_tokens: int, *, what: str = "this stage",
-                   flag: str = "--max-model-len",
+                   flag: str = CONTEXT_FLAG,
                    role: str = "llm") -> Optional[int]:
     """Raise PreflightError unless *base_url* serves *model* with room for
     *required_tokens*. Logs both numbers on success, so they end up in the
     job's output file where the next person can read them. Returns the
-    server's window, or None when it does not report one."""
+    server's window, or None when it does not report one; such a server is
+    asked the request fields all the same."""
     if providers.replaying():
         # No server: the window is the one the recorded run was planned
         # for, and the run is planned for it again.
@@ -219,9 +229,7 @@ def assert_serving(base_url: str, api_key: str, model: str,
     if max_len is None:
         log.warning("%s: server does not report its context size; cannot "
                     "check the %d tokens %s needs", base_url, required_tokens, what)
-        return None
-
-    if max_len < required_tokens:
+    elif max_len < required_tokens:
         raise PreflightError(
             f"{what} needs up to {required_tokens} tokens per request, "
             f"{base_url} was started with {max_len}.\n"
@@ -229,9 +237,12 @@ def assert_serving(base_url: str, api_key: str, model: str,
             f"lower the stage's window/max-tokens settings.\n"
             f"  (a request over the limit is rejected mid-run and the "
             f"document keeps its unrefined text)")
-
-    log.info("Preflight ok: %s needs %d tokens, %s offers %d",
-             what, required_tokens, model, max_len)
+    else:
+        log.info("Preflight ok: %s needs %d tokens, %s offers %d",
+                 what, required_tokens, model, max_len)
+    # Every server is asked the request fields, one that reports no context
+    # size too: it is the likeliest to refuse them (a gateway, a local
+    # runner).
     assert_request_extras(base_url, api_key, model, what=what, role=role)
     from docpipe.providers import cassette
     cassette.note_limits(model, max_len)
@@ -240,13 +251,18 @@ def assert_serving(base_url: str, api_key: str, model: str,
 
 def assert_request_extras(base_url: str, api_key: str, model: str, *,
                           what: str = "this stage",
-                          role: str = "llm") -> None:
+                          role: str = "llm") -> Optional[str]:
     """Raise PreflightError unless the server accepts the reasoning settings.
 
     One request of one token. A server that refuses `reasoning_effort`
     refuses every request of the run, and without this it says so as a 400
     per document for as long as the job lives. Named here with the variable
     that turns it off, because that is a restart and not a release.
+
+    None when the server took them. A server that could not be asked (down,
+    busy, a 5xx) gives no verdict: why, as a sentence, and the settings go out
+    anyway. The two are told apart so that a caller who reports "accepted"
+    knows it was.
     """
     extras = request_extras()
     client = providers.client(role, base_url=base_url, api_key=api_key,
@@ -257,10 +273,12 @@ def assert_request_extras(base_url: str, api_key: str, model: str, *,
             messages=[{"role": "user", "content": "ok"}], extra_body=extras)
     except Exception as exc:
         status = getattr(exc, "status_code", None)
-        if not (isinstance(status, int) and 400 <= status < 500):
+        # 429 says not now, which is no answer about the fields.
+        if not (isinstance(status, int) and 400 <= status < 500
+                and status != 429):
             log.warning("%s: could not probe the reasoning settings (%s); "
                         "sending them anyway", base_url, exc)
-            return
+            return f"the one-token request was not answered: {exc}"
         raise PreflightError(
             f"{base_url} refuses the reasoning settings {what} sends "
             f"({extras}).\n  {exc}\n"
@@ -268,3 +286,21 @@ def assert_request_extras(base_url: str, api_key: str, model: str, *,
             f"LLM_ENABLE_THINKING=1 if this model has no thinking switch") \
             from exc
     log.info("Preflight ok: %s accepts %s", model, extras)
+    return None
+
+
+def assert_request_accepted(base_url: str, api_key: str, model: str, *,
+                            what: str = "this stage",
+                            role: str = "llm") -> Optional[str]:
+    """The probe of the request fields that `assert_serving` sends for this
+    role's kind of server: the reply schema of a hosted API, the reasoning
+    settings of one's own. For the doctor, which asks it on its own.
+
+    Raises PreflightError on a refusal; returns None when the server
+    accepted, and a sentence when it could not be asked.
+    """
+    if providers.hosted(role):
+        return assert_reply_schema(base_url, api_key, model, what=what,
+                                   role=role)
+    return assert_request_extras(base_url, api_key, model, what=what,
+                                 role=role)

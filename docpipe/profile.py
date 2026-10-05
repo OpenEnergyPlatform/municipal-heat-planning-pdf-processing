@@ -174,9 +174,10 @@ class Profile:
     # where the profile's own files live; defaults to where it was found
     home: Optional[Path] = None
     facets: Sequence[Facet] = field(default_factory=tuple)
-    # what the app calls the project and one of its documents
+    # what the app calls the project and one of its documents; a profile
+    # words it in its own language
     title: str = ""
-    document_noun: str = "Dokument"
+    document_noun: str = "document"
     # the profile whose parts stand in for the ones this one does not provide
     extends: Optional[str] = None
     # Whether the text of the documents may be passed on. A recorded run

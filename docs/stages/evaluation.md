@@ -85,6 +85,51 @@ one harvest carries is counted with what was decided about its value.
 below a share, for a pipeline that should stop on it. `--json` also writes
 the report.
 
+## Comparing two harvests without decisions
+
+`docpipe evaluate NEW_DIR --diff OLD_DIR` needs no `gold.jsonl`. It holds a
+harvest against an earlier one of the same documents and says what changed,
+for the day a prompt, a spec or the code has changed and nobody has decided
+the rows yet. `--db` (else the profile's database) tells it which documents
+a model transcribed, so their level is B at best, as `evaluate` counts
+levels; the report says how many documents it took as transcribed, or that
+none is known and every text-located row counts as level A.
+
+Rows are paired as `--baseline` pairs them (`pair_rows`, the one pairing of
+`compare` and `diff`): by document, `tuple_id` and parameter. The quote and
+the written value make the `tuple_id`, so a value that moved is one row gone
+and one new, not one row with two readings. The report counts:
+
+- rows, per parameter, per field (the value, the unit, each coordinate) and
+  over all parameters, as the same, changed, gone (only the old harvest has
+  it) and new (only this one has it);
+- coordinates, for the rows both harvests carry: how many kept their state
+  and how many moved (read to unbacked, and so on);
+- rows, for how the trust levels A, B and C moved, and the level of the rows
+  that are gone or new;
+- documents: in both, only in the old harvest, only in this one, and
+  changed (any row that reads differently, moved a state or a level, is gone
+  or is new).
+
+It lists the largest changes, at most `--top` (20 by default): the paired
+rows that differ, most differences first, each with its quote and both
+readings. Gone and new rows are only counted, so a re-harvest whose largest
+change is a number read anew shows it as a gone and a new row and not in that
+list. In a real harvest `parameter` and `unit` count as coordinates, because
+every `*_state` key does, so the parameter appears in each reading and the
+coordinate totals include states that never move.
+
+The command exits 0 whatever it finds. `--max-changed SHARE` and
+`--max-gone SHARE` set a ceiling, a share of the old harvest's rows, and
+exit 1 above it; a ceiling over an old harvest with no rows also exits 1,
+because it has nothing to hold the share against. A directory that is
+missing or holds no harvest file ends the command instead of printing
+zeros. `--gold`, `--baseline`, `--min-precision` and `--min-recall` are
+refused with `--diff`, and `--top`, `--max-changed` and `--max-gone` are
+refused without it. `--json FILE` writes the report itself (`baseline`,
+`harvest`, `documents`, `rows`, `parameters`, `fields`, `transitions`,
+`levels`, `differing`, `largest`).
+
 ## Benchmarks
 
 `docpipe benchmark DIR --record` harvests once with the configured model and
@@ -178,6 +223,8 @@ evaluate.py: Holds a harvest against what people decided about it.
     docpipe evaluate HARVEST_DIR --gold gold.jsonl
     docpipe evaluate HARVEST_DIR --gold gold.jsonl --baseline OTHER_DIR
     docpipe evaluate HARVEST_DIR --gold gold.jsonl --min-precision 0.9
+    docpipe evaluate HARVEST_DIR --diff OTHER_DIR
+    docpipe evaluate HARVEST_DIR --diff OTHER_DIR --top 10 --max-gone 0.05
 
 Precision is counted field by field over the rows somebody decided
 (`gold.py`): of the values, units and coordinates a person looked at, how
@@ -199,6 +246,21 @@ of a graph is a question about the precision of level C.
 `--baseline` holds a second harvest of the same documents beside this one,
 row by row: which rows both carry, which only one does, and what was
 decided about those. That is the comparison a replayed run is made for.
+
+`--diff` needs no decisions. It holds this harvest against another one of
+the same documents, OTHER_DIR being the baseline, and says what changed:
+per parameter and per field (the value, the unit, each coordinate) how
+many rows are the same, read differently, gone (only the baseline has
+them) and new (only this harvest has them); how the states of the
+coordinates of the rows both carry moved (read to unbacked, counted in
+coordinates); how their trust levels moved; and the largest changes, each
+with its quote and both readings side by side. Rows are paired as
+`--baseline` pairs them, by document, `identity.tuple_id` and parameter. It
+exits with 0 whatever it finds; only a ceiling (`--max-changed`,
+`--max-gone`, shares of the baseline's rows) makes it exit with 1. Levels
+are counted as `evaluate` counts them: a document is transcribed only if a
+database (`--db`, else the profile's) says so, and the report says how many
+it took as transcribed.
 
 Nothing here writes into a harvest or decides anything about a value.
 

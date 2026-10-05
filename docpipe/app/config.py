@@ -36,9 +36,11 @@ from pathlib import Path
 # Doing it here would be too late: app.py imports docpipe.inference first.
 
 # The profile decides what the corpus is about — its catalog supplies the
-# picker labels and filters, its data root the paths below. None is allowed:
-# without DOCPIPE_PROFILE the app still runs, on generic labels and the
-# historical data/ paths.
+# picker labels and filters, its data root the paths below. None is allowed
+# for what the pages show: the app then opens on the built-in profile's words,
+# generic labels and the historical data/ paths. The answer loop is not among
+# them: it needs a profile for its prompts and wording, so the app says so
+# when none is in effect and a question raises.
 from docpipe.profile import active_profile, shared_file
 
 PROFILE = active_profile()
@@ -142,14 +144,17 @@ REQUEST_LOG_PATH = Path(os.environ.get("REQUEST_LOG_PATH") or shared_file(
 # ---------------------------------------------------------------------------
 # Source-PDF deep links
 # ---------------------------------------------------------------------------
-# URL path prefix under which the source PDFs are reachable. Set to "" to hide
-# the PDF links.
-PDF_URL_PREFIX = os.environ.get("PDF_URL_PREFIX", "/app/static/pdf")
-# Bundled pdf.js viewer directory (contains viewer.html). When set, PDF links go
-# through pdf.js so #page + #search highlight in every browser (Chrome's native
-# viewer ignores #search). Set to "" to use the browser's own PDF viewer.
-PDF_VIEWER_PREFIX = os.environ.get("PDF_VIEWER_PREFIX", "/app/static/pdfjs/web")
-# Filesystem directory holding the source PDFs. Not required for building links.
+# A citation shows its page itself, drawn from the PDF under PDF_ROOT. The two
+# prefixes only add a link into an external viewer, and nothing ships that
+# serves one: both are empty until a deployment that does sets them.
+#
+# URL path prefix under which the source PDFs are reachable. Empty: no link.
+PDF_URL_PREFIX = os.environ.get("PDF_URL_PREFIX", "")
+# Directory of a pdf.js viewer (contains viewer.html) under that prefix. When
+# set, the link goes through it so #page + #search highlight in every browser
+# (Chrome's native viewer ignores #search). Empty: the browser's own viewer.
+PDF_VIEWER_PREFIX = os.environ.get("PDF_VIEWER_PREFIX", "")
+# Filesystem directory holding the source PDFs: where the cited page is read.
 PDF_ROOT = _path("INFERENCE_PDF_ROOT", lambda p: p.pdf_dir, "data/pdf")
 
 # ---------------------------------------------------------------------------

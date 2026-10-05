@@ -28,6 +28,14 @@ TITLE_EXCLUDE_PREFIXES = (
     "plate",
 )
 
+# What opens a caption (docpipe/captions.py): a word, a number, a colon. The
+# pattern the core carried before it asked the profile, kept word for word so
+# that every caption decision for this corpus stays what it was. The English
+# forms without a colon ("Table 1", "Fig. 2") are the built-in profile's.
+CAPTION_START = (
+    r"(?:^|(?<=[\s\]]))([A-ZÄÖÜ][A-Za-zÄÖÜäöüß.]{2,14}\s+\d+(?:[-.–]\d+)*\s*:)",
+)
+
 # Journal and IPCC captions are not labels: panel descriptions, data sources
 # and scenario legends routinely run 60-150 words, where a municipal heat plan
 # sits at 8. Set high enough that those survive as captions instead of being

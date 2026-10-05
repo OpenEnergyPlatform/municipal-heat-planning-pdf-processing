@@ -6,12 +6,13 @@
 is everything a project contributes to the generic pipeline, where its
 documents come from, what extra tables it needs, which prompts it
 overrides, and which filters its app offers (`docpipe/profile.py:2-4`). In
-code that is one frozen dataclass, `Profile` (`docpipe/profile.py:169-185`):
+code that is one frozen dataclass, `Profile` (`docpipe/profile.py:169-186`):
 `name` (required, and may hold neither `/` nor `\`), `column_layout` (one of
 `"auto"`, `"single"`, `"double"`, default `"auto"`), `data_root` and `home`
 (both optional path overrides), `facets` (a tuple of `Facet(field, label,
 widget)` entries the answer app turns into filters), `title`,
-`document_noun`, `extends` (the profile whose parts stand in for the ones this
+`document_noun` (default `"document"`; a profile words it in its own language),
+`extends` (the profile whose parts stand in for the ones this
 one does not provide, see Extending a profile) and `documents_shareable`
 (whether the text of the documents may be passed on; a recorded run is refused
 without it, see [the provider layer](stages/providers.md)). `__post_init__`
@@ -24,7 +25,7 @@ A profile is not a subclass to write against. It is a directory,
 `profiles/<name>/`, holding exactly one thing the core reads directly: a
 `profile.py` exporting a module-level `PROFILE` whose own `name` field
 matches the directory it lives in, checked by `load_profile()`
-(`docpipe/profile.py:349-372`); a mismatch raises `ValueError` rather than
+(`docpipe/profile.py:350-373`); a mismatch raises `ValueError` rather than
 running a profile under the wrong identity. Everything else the directory
 holds, source code, prompts, a spec, an ontology snapshot, is read only by
 that profile's own modules or by the specific piece of `docpipe/` that asks
@@ -59,7 +60,7 @@ schema inside `apply()`'s one transaction
 (`docpipe/store/schema.py:45-48,43`), and
 `root`, `pdf_dir`, `processed_dir`, `db_path` and `index_path` all sit
 under `data/<name>/` (or `$DOCPIPE_DATA_ROOT/<name>` or `data_root`) if set
-(`docpipe/profile.py:266-317`). Two profiles run from the same checkout
+(`docpipe/profile.py:267-318`). Two profiles run from the same checkout
 therefore never share a file by accident.
 
 ## How the core finds and asks a profile
@@ -74,7 +75,7 @@ directory itself. `docpipe profiles` lists what is found and where.
 `load_profile(name)` resolves the profile: `name`, or failing that
 `$DOCPIPE_PROFILE`, names a directory whose `profiles.<name>.profile`
 module it imports; an unknown name raises `LookupError` listing the
-profile directories that exist (`docpipe/profile.py:349-365`). Nothing
+profile directories that exist (`docpipe/profile.py:350-366`). Nothing
 under `docpipe/` imports a profile itself: its own docstring states the
 rule in one line, "the core never imports a profile; it receives one"
 (`docpipe/profile.py:6`), and `tests/test_architecture.py` holds it
@@ -86,56 +87,56 @@ counts as well as a module-level one) and fails at the exact line of any
 
 Five entry points, preprocessing, refinement, visuals, extraction, and
 chunking, reach `load_profile` through `resolve_profile(args)` rather than
-calling it directly (`docpipe/preprocessing/pipeline.py:501`,
-`docpipe/chunking/pipeline.py:368`), except that refinement, visuals and
+calling it directly (`docpipe/preprocessing/pipeline.py:502`,
+`docpipe/chunking/pipeline.py:383`), except that refinement, visuals and
 extraction have nothing to run without a profile and go through
 `require_profile(args)`, which refuses in one line naming the available
-profiles when none is given (`docpipe/refinement/pipeline.py:233`,
-`docpipe/visuals/pipeline.py:473`, `docpipe/extraction/runner.py:4896`,
-`docpipe/profile.py:471-478`). Each adds the `--profile` flag through
-`add_profile_argument(parser)` (`docpipe/profile.py:408-411`).
+profiles when none is given (`docpipe/refinement/pipeline.py:228`,
+`docpipe/visuals/pipeline.py:482`, `docpipe/extraction/runner.py:4897`,
+`docpipe/profile.py:472-479`). Each adds the `--profile` flag through
+`add_profile_argument(parser)` (`docpipe/profile.py:409-412`).
 `resolve_profile` reads `args.profile` or, failing that, `$DOCPIPE_PROFILE`,
 loads the named profile, and writes the resolved name back into
-`$DOCPIPE_PROFILE` (`docpipe/profile.py:445-468`).
+`$DOCPIPE_PROFILE` (`docpipe/profile.py:446-469`).
 
 The flag reaches the environment before the stage is imported. Each of the
 five `docpipe/*/__main__.py` calls `bind_command_line()` first, which reads
 the flag off `sys.argv` with a small argparse parser (`parse_known_args`), the way
 the stage's own parser reads it, so an abbreviation of `--profile` that the stage
 accepts, with a space or an equals sign before the name, is bound too, and sets `$DOCPIPE_PROFILE`
-(`docpipe/profile.py:414-431`). A line it cannot read is left to the stage's own
-parser to report (`:428-429`). So `--profile` alone
+(`docpipe/profile.py:415-432`). A line it cannot read is left to the stage's own
+parser to report (`:429-430`). So `--profile` alone
 is enough, and a stage's usage text needs no profile: refinement and visuals
 read their prompts on first use, once per ambient profile
 (`prompts.per_profile`, `docpipe/prompts.py:100-117`), not when the module is
 imported. What a stage binds on import is the refinement
 `WINDOW_SIZE` (`docpipe/refinement/config.py:39-41`); the answer chat's
 prompts are read on first use too, once per profile
-(`docpipe/inference/llm_client.py:69` to `79`). `resolve_profile`
+(`docpipe/inference/llm_client.py:71` to `81`). `resolve_profile`
 refuses one case rather than running it on a mix of two profiles: a caller
 that imported a stage under one profile, or none, and then names another
 that ships prompts is refused with `SystemExit` naming the fix
-(`docpipe/profile.py:459-466`). Code with no command line calls
+(`docpipe/profile.py:460-467`). Code with no command line calls
 `active_profile()` instead, reading only `$DOCPIPE_PROFILE` and returning
-`None` when the variable is unset (`docpipe/profile.py:375-379`).
+`None` when the variable is unset (`docpipe/profile.py:376-380`).
 
 | Name | Kind | Default | Effect | Where read |
 |---|---|---|---|---|
-| `--profile` | CLI flag | ambient `$DOCPIPE_PROFILE` or none | names the profile `resolve_profile` loads for this run; `bind_command_line()` copies it into `$DOCPIPE_PROFILE` before a stage is imported | `docpipe/profile.py:408-411`, `416-433` |
+| `--profile` | CLI flag | ambient `$DOCPIPE_PROFILE` or none | names the profile `resolve_profile` loads for this run; `bind_command_line()` copies it into `$DOCPIPE_PROFILE` before a stage is imported | `docpipe/profile.py:409-412`, `417-434` |
 | `$DOCPIPE_PROFILE` | environment variable | unset | read by `load_profile`, `active_profile`, and `resolve_profile`; the last writes it back once a name is resolved | `docpipe/profile.py:45` |
-| `$DOCPIPE_DATA_ROOT` | environment variable | unset, falls back to `data/` beside the project file, else `<repo>/data` | base directory for every profile's `root` (and therefore `pdf_dir`, `db_path`, `index_path`), unless `Profile.data_root` overrides it | `docpipe/profile.py:297-301`, `322-336` |
+| `$DOCPIPE_DATA_ROOT` | environment variable | unset, falls back to `data/` beside the project file, else `<repo>/data` | base directory for every profile's `root` (and therefore `pdf_dir`, `db_path`, `index_path`), unless `Profile.data_root` overrides it | `docpipe/profile.py:298-302`, `323-337` |
 
 Once a `Profile` object exists, the core asks it through exactly two
 lookups. `Profile.component(module, attr)` imports
 `profiles.<name>.<module>` and returns `getattr(loaded, attr, None)`; a
 module the profile lacks is an absence, returning `None`, but one that
 exists and fails to import is the profile's own bug and re-raises rather
-than being swallowed as absence (`docpipe/profile.py:217-252`).
+than being swallowed as absence (`docpipe/profile.py:218-253`).
 `Profile.require(module, attr)` is the same lookup with `LookupError` in
 place of `None`, for a part the pipeline cannot run without
-(`docpipe/profile.py:254-264`); `profile_value(module, attr)` is `require()`
+(`docpipe/profile.py:255-265`); `profile_value(module, attr)` is `require()`
 against the ambient profile, cached once per `(profile.name, module,
-attr)` for the process's life (`docpipe/profile.py:385-399`).
+attr)` for the process's life (`docpipe/profile.py:386-400`).
 
 Which of the two a caller uses is a choice, not a fixed rule.
 `docpipe/inference/kg_route.py`'s `hooks()` reads `kg.VALUE_QUERY` through
@@ -163,7 +164,7 @@ requested. The fourth check is what `kg_route.py` is written around: every
 `require()` or `profile_value()` anywhere under `docpipe/` must resolve to
 something other than `None`, for every profile `_profile_homes()` finds
 (`tests/test_architecture.py:133-171`). It is a syntactic scan, and that
-literalness is its whole limit: `docpipe/inference/wording.py:81` calls
+literalness is its whole limit: `docpipe/inference/wording.py:89` calls
 `profile.require("inference", attr)` with `attr` a variable, so a profile
 missing `PHRASES` is invisible to it and surfaces only as a
 `LookupError` the first time the answer app is asked a question.
@@ -180,7 +181,13 @@ of profiles nearest first and returns the first attribute it finds;
 `Profile.layers` returns the value of every profile along the line, for a
 table a profile lays over the one it extends entry by entry. The wording
 tables `extraction.PHRASES`, `inference.PHRASES` and `inference.UI` work that
-way: a profile writes only the phrases it words differently. A prompt it does
+way: a profile writes only the phrases it words differently. The words of the
+picker are in that table too (`version_current`, `version_old` and
+`document_noun_fallback`): `kwp` says `(aktuell)`, `(alt)` and `Dokument`, the
+built-in profile and `scenarios` `(current)`, `(old)` and `document`. A profile
+that stands alone has to word all of `wording.UI_REQUIRED`, those three
+included, or the app and the picker raise a `LookupError` naming what is
+missing. A prompt it does
 not have is the extended profile's, and so is `schema.sql`; a profile that adds
 a column to `DocumentMeta` writes the whole file. `extraction.PROMPT_CHECKS`
 is not laid over entry by entry: a profile that declares it holds the whole
@@ -201,21 +208,22 @@ shipped profile provides.
 | Getting the documents in | `source.SOURCE` | required to run the stage (`component`, `docpipe/ingest/cli.py:76`) | a class over the KWW Excel sheet | a class over the crawl's `pdf_index.json` |
 | Getting the documents in | `source.backfill_meta` | optional, for `--backfill-meta` (`component`, `docpipe/ingest/cli.py:67`) | provided (`profiles/kwp/source.py:199`) | not provided; the flag ends the run |
 | Reading the page | `preprocessing.HYPHEN_EXCEPTIONS` | required (`profile.require`, `docpipe/preprocessing/stage1_extract.py:45`) | German continuation words ("und", "oder", ...) | English ones ("and", "or", ...) |
-| Reading the page | `preprocessing.CAPTION_MAX_WORDS` | required (`profile_value`, `docpipe/preprocessing/config.py:176`) | 45 (median caption 8 words, 205 past 40, `profiles/kwp/preprocessing.py:28-32`) | 160 (journal/IPCC captions run 60 to 150 words, `profiles/scenarios/preprocessing.py:31-35`) |
+| Reading the page | `preprocessing.CAPTION_MAX_WORDS` | required (`profile_value`, `docpipe/preprocessing/config.py:176`) | 45 (median caption 8 words, 205 past 40, `profiles/kwp/preprocessing.py:35-39`) | 160 (journal/IPCC captions run 60 to 150 words, `profiles/scenarios/preprocessing.py:39-43`) |
+| Reading the page | `preprocessing.CAPTION_START` | required, a non-empty list of regular expressions each carrying its own anchor (`profile.require`, `docpipe/captions.py:64-71`); an empty list, a bare string or a pattern that does not compile or matches the empty text is a `ValueError` naming the profile, a missing list a `LookupError` | one German-shaped pattern: a word, a number, a colon ("Tabelle 17:") | the same pattern; the built-in profile adds letter-numbered forms ("Table A.1:") and the colon-less forms ("Figure 3.", "Fig. 2", "Table 1 Annual totals") only where a text, a line or a sentence begins |
 | Reading the page | `preprocessing.TITLE_EXCLUDE_PREFIXES` | required (`profile_value`, `docpipe/preprocessing/config.py:186`) | "abbildung", "tabelle", and their abbreviations | "figure", "table", "box", "plate", and their abbreviations |
 | Reading the page | `preprocessing.DIRECTORY_FIGTAB_WORDS` | required (`profile_value`, `docpipe/preprocessing/stage3_structure.py:190`) | German figure/table list openers | English ones |
 | Reading the page | `preprocessing.BIBLIOGRAPHY_TITLE_WORDS` | required (`profile_value`, `docpipe/preprocessing/stage3_structure.py:213`) | "literatur", "quellen", ... | "references", "bibliography", ... |
 | Repairing the text | `refinement.WINDOW_SIZE` | optional (`component`, `docpipe/refinement/config.py:41`) | not set, falls back to 3 | not set, falls back to 3 |
-| The answer app | `catalog.CATALOG` | optional (`component`, `docpipe/inference/catalog.py:140`) | `KwpCatalog`: municipality, Land, year | `Ar6Catalog`: year, venue, AR6 scenario |
-| The answer app | `inference.PHRASES`, `READOFF_MARKER`, `READOFF_NOTE` | required at first use (`profile.require`, variable `attr`, `docpipe/inference/wording.py:81`) | German phrasing, 32 keys checked against `wording.REQUIRED` | English phrasing, same 32 keys |
+| The answer app | `catalog.CATALOG` | optional (`component`, `docpipe/inference/catalog.py:158`) | `KwpCatalog`: municipality, Land, year | `Ar6Catalog`: year, venue, AR6 scenario |
+| The answer app | `inference.PHRASES`, `READOFF_MARKER`, `READOFF_NOTE` | required at first use (`profile.require`, variable `attr`, `docpipe/inference/wording.py:89`) | German phrasing, 32 keys checked against `wording.REQUIRED` | English phrasing, same 32 keys |
 | Reading the values out | `extraction.PHRASES` | required, laid over the extended profile's (`profile.layers`, `docpipe/extraction/wording.py`) | German sentences the stage writes to the model | German sentences, the language of its extraction prompts |
 | Reading the values out | `extraction.PROMPT_CHECKS` | optional, read by `docpipe preflight` (`component`); a profile that declares none has the extended profile's | two entries: the field prompt says `GENAU EIN Feld`, the rows prompt no longer fixes one parameter | the same two entries |
-| Reading the values out | `extraction.SPEC_PATH` | required in practice; refused with `SystemExit` otherwise (`component`, `docpipe/extraction/runner.py:4998-5002`) | `extraction_spec.json` | `extraction_spec.json` |
-| Reading the values out | `extraction.SLICE` | optional (`component`, `docpipe/extraction/runner.py:5059`) | `{"quantity": None}`, gates a row on its quantity class alone | not provided; no gate |
-| Reading the values out | `extraction.FRAME` | optional (`component`, `docpipe/extraction/runner.py:5082-5083`) | `("scenario", "year")`, found once per document | not provided; nothing repeats that way |
-| Reading the values out | `extraction.document_axes` | optional (`component`, `docpipe/extraction/runner.py:5070`) | not provided | this publication's AR6 scenarios and the study regions it names, out of 249 (`profiles/scenarios/regions.json`) |
-| Reading the values out | `extraction.document_context` | optional (`component`, `docpipe/extraction/runner.py:5075`) | the plan's own municipality name | not provided |
-| The knowledge graph | `kg.make_serializer` | optional for `--serialize` (`component`, `docpipe/extraction/runner.py:4939`); without one the generic writer built from the spec's `graph` block is used, and a profile with neither is refused with `SystemExit` (`docpipe/extraction/runner.py:4946-4950`) | tuples to MHPKG Turtle | tuples to OEKG Turtle |
+| Reading the values out | `extraction.SPEC_PATH` | required in practice; refused with `SystemExit` otherwise (`component`, `docpipe/extraction/runner.py:4999-5003`) | `extraction_spec.json` | `extraction_spec.json` |
+| Reading the values out | `extraction.SLICE` | optional (`component`, `docpipe/extraction/runner.py:5060`) | `{"quantity": None}`, gates a row on its quantity class alone | not provided; no gate |
+| Reading the values out | `extraction.FRAME` | optional (`component`, `docpipe/extraction/runner.py:5083-5084`) | `("scenario", "year")`, found once per document | not provided; nothing repeats that way |
+| Reading the values out | `extraction.document_axes` | optional (`component`, `docpipe/extraction/runner.py:5071`) | not provided | this publication's AR6 scenarios and the study regions it names, out of 249 (`profiles/scenarios/regions.json`) |
+| Reading the values out | `extraction.document_context` | optional (`component`, `docpipe/extraction/runner.py:5076`) | the plan's own municipality name | not provided |
+| The knowledge graph | `kg.make_serializer` | optional for `--serialize` (`component`, `docpipe/extraction/runner.py:4940`); without one the generic writer built from the spec's `graph` block is used, and a profile with neither is refused with `SystemExit` (`docpipe/extraction/runner.py:4947-4951`) | tuples to MHPKG Turtle | tuples to OEKG Turtle |
 | The answer app | `kg.VALUE_QUERY` plus six more attributes, and `inference.ROUTE_NOTES` | optional; absent returns `None` (`component`, `docpipe/inference/kg_route.py:104-106`), present but missing any of the other seven raises `LookupError` instead (`111-114`), all eight present builds the route | provided; the app can answer a coordinate question straight from the graph | not provided; the app never queries a graph |
 
 Two entries of `extraction` say more than the table. `extraction.PHRASES` names
@@ -342,29 +350,29 @@ and `docpipe.extraction.schema`'s generator and `docpipe.extraction`'s
 
 A misconfigured profile fails more than one way. `Profile.__post_init__`
 raises `ValueError` on an unusable `name` or unknown `column_layout`
-(`docpipe/profile.py:187-191`), pinned by `tests/test_profile.py`'s
+(`docpipe/profile.py:188-192`), pinned by `tests/test_profile.py`'s
 `test_rejects_unusable_names` and `test_rejects_unknown_column_layout`.
 `load_profile` raises `LookupError` for a name given nowhere
-(`docpipe/profile.py:352-354`) or unknown on disk
-(`docpipe/profile.py:363-365`), pinned by
+(`docpipe/profile.py:353-355`) or unknown on disk
+(`docpipe/profile.py:364-366`), pinned by
 `test_no_profile_is_an_explicit_error` and
 `test_unknown_profile_lists_the_available_ones`; it also raises
 `ValueError`, unpinned by any test, when `PROFILE.name` does not match its
-directory (`docpipe/profile.py:370`). `Profile.require` and
+directory (`docpipe/profile.py:371`). `Profile.require` and
 `profile_value` raise `LookupError` for a missing attribute or an unset
-`$DOCPIPE_PROFILE` (`docpipe/profile.py:254-264,394-395`), the case
+`$DOCPIPE_PROFILE` (`docpipe/profile.py:255-265,395-396`), the case
 `kg_route.hooks()` turns into its own `LookupError` for a partial
 `kg.VALUE_QUERY` route (above). `resolve_profile` raises `SystemExit` for a
 profile named after a stage was imported under another one, when the named
-profile ships prompts (`docpipe/profile.py:459-466`), pinned by
+profile ships prompts (`docpipe/profile.py:460-467`), pinned by
 `test_late_profile_is_refused_when_it_overrides_prompts`; `require_profile`
-raises it for no profile at all (`docpipe/profile.py:474-477`), pinned by
+raises it for no profile at all (`docpipe/profile.py:475-478`), pinned by
 `test_a_stage_that_cannot_run_without_a_profile_says_which_there_are`
 (`tests/test_entry_points.py`). Two entry points
 add their own `SystemExit`, via `parser.error()` for extraction:
 `docpipe/ingest/cli.py:69,78-79` for a missing `SOURCE` or
 `backfill_meta`, and
-`docpipe/extraction/runner.py:4946-4950,4998-5002` for a missing
+`docpipe/extraction/runner.py:4947-4951,4999-5003` for a missing
 `SPEC_PATH` (under `--serialize`, only when `make_serializer` is missing too).
 
 ## What `docpipe/profile.py` says

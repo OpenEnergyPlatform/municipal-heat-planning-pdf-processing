@@ -2,14 +2,14 @@
 
 `scripts/harvest_compare.py`, read with `ast` by `scripts/build_docs.py`. The docstrings are the code's own: edit them there, not here.
 
-harvest_compare.py – What a harvest is worth, without a GPU.
+harvest_compare.py: What one harvest is worth, without a GPU.
 
-Two harvests of the same plans differ in ways a log line cannot show. This
+Despite its name this does not compare two harvests: it measures one. It
 reads the JSONL a run wrote, puts it through the profile's own serializer and
 prints the numbers a decision is made on: how many tuples survived into the
 graph, how many were lost to a contested identity, which coordinate is still
-open how often, and what the run cost in requests. Run it on the old
-directory and on the new one and the diff is the answer.
+open how often, and what the run cost in requests. Two harvests are held
+against each other by `docpipe evaluate NEW_DIR --diff OLD_DIR`, not by this.
 
 It never loads a model and never touches the index. The one thing it needs
 besides the harvest is the document database, because value IRIs are minted

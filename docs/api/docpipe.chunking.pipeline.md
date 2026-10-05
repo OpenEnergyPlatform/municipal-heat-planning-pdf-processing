@@ -70,6 +70,9 @@ Run the pipeline over the PDF subdirectories of `data_dir`.
 merge → db → embed (the db step backfills the page source and the
 captions itself). `force` ignores caches and clears old embeddings.
 
+The embed step raises IncompleteIndex when inputs were left without a
+vector, after it saved the index with the ones that have one.
+
 ### main
 
 ```python

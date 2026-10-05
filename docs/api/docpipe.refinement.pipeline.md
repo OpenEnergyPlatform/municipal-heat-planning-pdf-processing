@@ -39,8 +39,9 @@ def run_batch(root_dir: Path, *, force: bool = False,
               force_stale: bool = False) -> dict[str, bool]
 ```
 
-Refines every document subdirectory under *root_dir* that has a Stage-3
-structured output. Returns a dict mapping directory name → success boolean.
+Refines every document directory under *root_dir*, at any depth, that has
+a Stage-3 structured output. Returns a dict mapping directory name →
+success boolean.
 
 ### run
 

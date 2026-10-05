@@ -1820,3 +1820,82 @@ def test_the_preflight_of_a_hosted_role_asks_that_role_and_names_its_options(
     other = "vlm" if role == "llm" else "llm"
     assert providers.ROLES[role]["options"] in str(refused.value)
     assert providers.ROLES[other]["options"] not in str(refused.value)
+
+
+# ---------------------------------------------------------------------------
+# What the cache served
+# ---------------------------------------------------------------------------
+
+def _booked(client_reply, monkeypatch, tmp_path):
+    """What the ledger holds after the stages' own counter saw this reply."""
+    import sqlite3
+
+    from docpipe import usage
+    monkeypatch.setenv("DOCPIPE_USAGE_DB", str(tmp_path / "usage.db"))
+    monkeypatch.setattr(usage, "_stage", None)
+    monkeypatch.setattr(usage, "_counts", {})
+    monkeypatch.setattr(usage.atexit, "register", lambda fn: None)
+    usage.begin("extraction")
+    usage.reply(client_reply, "m")
+    usage.flush()
+    with sqlite3.connect(str(tmp_path / "usage.db")) as conn:
+        row = conn.execute("SELECT input_tokens, cached_tokens "
+                           "FROM token_usage").fetchone()
+    conn.close()
+    return row
+
+
+def test_a_cache_hit_the_anthropic_api_reports_reaches_the_ledger(
+        anthropic, monkeypatch, tmp_path):
+    anthropic.answers.append(_message('{"markdown": "m"}',
+                                      cache_read_input_tokens=80,
+                                      cache_creation_input_tokens=7))
+    reply = _claude(anthropic).chat.completions.create(
+        model="claude-haiku-4-5", max_tokens=10, temperature=0,
+        messages=[{"role": "user", "content": "x"}])
+    # the cached tokens are a part of the input, which counts all three kinds
+    assert (reply.usage.prompt_tokens, reply.usage.cached_tokens) == (97, 80)
+    assert _booked(reply, monkeypatch, tmp_path) == (97, 80)
+
+
+def test_a_cache_hit_the_gemini_api_reports_reaches_the_ledger(
+        monkeypatch, tmp_path):
+    web = _Web({"candidates": [{"content": {"parts": [{"text": "{}"}]},
+                                "finishReason": "STOP"}],
+                "usageMetadata": {"promptTokenCount": 90,
+                                  "candidatesTokenCount": 7,
+                                  "cachedContentTokenCount": 64}})
+    reply = _gemini(web).chat.completions.create(
+        model="g", max_tokens=10, messages=[{"role": "user", "content": "x"}])
+    assert reply.usage.cached_tokens == 64
+    assert _booked(reply, monkeypatch, tmp_path) == (90, 64)
+
+
+def test_a_cache_hit_the_openai_api_reports_reaches_the_ledger(
+        monkeypatch, tmp_path):
+    answer = _completion("{}")
+    answer.usage.prompt_tokens_details = NS(cached_tokens=8)
+    client, _sent, _built = _openai(monkeypatch, answer)
+    reply = client.chat.completions.create(
+        model="gpt-x", max_tokens=10, messages=[{"role": "user",
+                                                 "content": "x"}])
+    assert reply.usage.cached_tokens == 8
+    assert _booked(reply, monkeypatch, tmp_path) == (11, 8)
+
+
+def test_an_api_that_says_nothing_of_a_cache_has_none_booked(
+        anthropic, monkeypatch, tmp_path):
+    """The violating case: no cache fields, or a null where the count would
+    be. Nothing is invented, and the input is still counted."""
+    anthropic.answers.append(_message('{"markdown": "m"}'))
+    reply = _claude(anthropic).chat.completions.create(
+        model="claude-haiku-4-5", max_tokens=10, temperature=0,
+        messages=[{"role": "user", "content": "x"}])
+    assert _booked(reply, monkeypatch, tmp_path) == (10, 0)
+    answer = _completion("{}")
+    answer.usage.prompt_tokens_details = NS(cached_tokens=None)
+    client, _sent, _built = _openai(monkeypatch, answer)
+    reply = client.chat.completions.create(
+        model="gpt-x", max_tokens=10, messages=[{"role": "user",
+                                                 "content": "x"}])
+    assert not hasattr(reply.usage, "cached_tokens")

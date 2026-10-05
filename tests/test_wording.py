@@ -71,6 +71,8 @@ def test_an_incomplete_set_says_which_pieces_are_missing(monkeypatch):
 # -- the words of the app's pages ---------------------------------------------
 
 APP = ROOT / "docpipe" / "app" / "app.py"
+# The picker's labels are words of the pages too, read from the same table.
+CATALOG = ROOT / "docpipe" / "inference" / "catalog.py"
 
 
 def _fields(text):
@@ -102,15 +104,17 @@ def test_the_three_tables_take_the_same_values():
 
 def test_the_pages_use_every_word_and_only_words_there_are():
     import ast
-    tree = ast.parse(APP.read_text(encoding="utf-8"))
     used = set()
-    for node in ast.walk(tree):
-        if isinstance(node, ast.Subscript)                 and isinstance(node.value, ast.Name) and node.value.id == "T":
-            key = node.slice
-            key = getattr(key, "value", key)        # Python 3.8: ast.Index
-            key = getattr(key, "value", key)
-            assert isinstance(key, str), "a page word is named literally"
-            used.add(key)
+    for source in (APP, CATALOG):
+        for node in ast.walk(ast.parse(source.read_text(encoding="utf-8"))):
+            if (isinstance(node, ast.Subscript)
+                    and isinstance(node.value, ast.Name)
+                    and node.value.id == "T"):
+                key = node.slice
+                key = getattr(key, "value", key)    # Python 3.8: ast.Index
+                key = getattr(key, "value", key)
+                assert isinstance(key, str), "a page word is named literally"
+                used.add(key)
     assert used == set(wording.UI_REQUIRED), (
         sorted(used - wording.UI_REQUIRED),
         sorted(wording.UI_REQUIRED - used))
@@ -124,7 +128,8 @@ def test_the_pages_say_nothing_that_is_not_in_a_table():
     shows = {"markdown", "caption", "header", "subheader", "warning",
              "error", "info", "checkbox", "multiselect", "radio",
              "selectbox", "text_input", "text_area", "button",
-             "link_button", "expander", "toast", "chat_input",
+             "link_button", "download_button", "expander", "toast",
+             "chat_input",
              "file_uploader", "title"}
     found = []
     for node in ast.walk(ast.parse(APP.read_text(encoding="utf-8"))):

@@ -4,7 +4,7 @@
 
 mcp.py: The value store as a Model Context Protocol server.
 
-An assistant that speaks MCP is given the four questions of `tools.py` as
+An assistant that speaks MCP is given the eight questions of `tools.py` as
 tools and gets the same answers the HTTP API gives. The server talks over
 standard input and output, one JSON-RPC message per line, which is how an
 assistant starts a tool on the machine it runs on:

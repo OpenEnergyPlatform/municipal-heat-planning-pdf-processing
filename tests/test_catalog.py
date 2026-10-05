@@ -4,7 +4,7 @@ import sqlite3
 import pytest
 
 from docpipe.inference import catalog
-from docpipe.profile import Facet, Profile
+from docpipe.profile import Facet, Profile, load_profile
 
 
 @pytest.fixture
@@ -27,8 +27,10 @@ def test_current_documents_only_unless_asked(conn):
 
 
 def test_generic_label_is_the_filename_and_the_date(conn):
-    (entry,) = catalog.Catalog().entries(conn)
-    assert entry.label == "doc · 2024-07-08 · (aktuell)"
+    """In the words of the profile it is asked under; the built-in one is
+    English. The German tag is kwp's (tests/test_core_language.py)."""
+    (entry,) = catalog.Catalog(load_profile("default")).entries(conn)
+    assert entry.label == "doc · 2024-07-08 · (current)"
 
 
 @pytest.mark.parametrize("stored,shown", [
@@ -40,7 +42,8 @@ def test_published_tokens_are_printed_readably(stored, shown):
 
 
 def test_core_offers_no_facets_even_when_the_profile_declares_them(conn):
-    cat = catalog.Catalog(Profile(name="x", facets=(Facet("gemeinde", "Gemeinde"),)))
+    cat = catalog.Catalog(Profile(name="x", extends="default",
+                                  facets=(Facet("gemeinde", "Gemeinde"),)))
     entries = cat.entries(conn)
     # declared, but nothing fills it → not offered, rather than offered empty
     assert catalog.facet_options(entries, cat.facets) == {}

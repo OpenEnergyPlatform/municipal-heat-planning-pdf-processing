@@ -20,6 +20,7 @@ Author: Felix Vossel
 """
 from __future__ import annotations
 
+import itertools
 import json
 import logging
 import mimetypes
@@ -27,9 +28,9 @@ import os
 import sys
 from pathlib import Path
 
-# The bundled pdf.js viewer is served as ES modules; some Python installs don't
-# map .mjs → a JS MIME type, and browsers refuse to execute modules served as
-# octet-stream.
+# A pdf.js viewer behind PDF_VIEWER_PREFIX is served as ES modules; some Python
+# installs don't map .mjs → a JS MIME type, and browsers refuse to execute
+# modules served as octet-stream.
 mimetypes.add_type("text/javascript", ".mjs")
 
 # `streamlit run` executes this file as a top-level script (no package
@@ -63,6 +64,9 @@ log = logging.getLogger(__name__)
 WORDS_PROFILE = config.PROFILE or load_profile("default")
 # The words of the pages, filled in by main().
 T: dict = {}
+# Streamlit refuses two widgets of one identity in a run, and two citations of
+# one document are two download buttons of the same label: each takes a key.
+_downloads = itertools.count()
 
 
 # ---------------------------------------------------------------------------
@@ -79,6 +83,20 @@ def get_index():
 @st.cache_resource
 def get_db():
     return db.connect_readonly(config.DB_PATH)
+
+
+@st.cache_resource
+def get_scopes():
+    """The search scopes this index holds vectors of, in the fixed order."""
+    return db.available_scopes(get_db())
+
+
+@st.cache_resource
+def get_index_notice():
+    """The profile's sentence for an index built with another model than the
+    one that embeds the questions, or None."""
+    return db.index_model_notice(get_db(), config.EMBEDDING_MODEL,
+                                 T["index_model_differs"])
 
 
 @st.cache_resource
@@ -296,6 +314,10 @@ def main() -> None:
     st.markdown("<style>[data-testid='stStatusWidget']{display:none !important;}</style>",
                 unsafe_allow_html=True)
     st.title(title)
+    # The pages open on the built-in profile's words, the answer loop does
+    # not: it has no prompts of its own, and a question would stop on that.
+    if config.PROFILE is None:
+        st.warning(T["no_profile"])
 
     # The review page is offered where there is something to review.
     if config.HARVEST_DIR is not None and config.GOLD_PATH is not None:
@@ -311,6 +333,10 @@ def main() -> None:
 def chat_page() -> None:
     cat = get_catalog()
     conn = get_db()
+    notice = get_index_notice()
+    if notice:
+        st.warning(notice)
+    offered = get_scopes()
 
     # ---- Sidebar: document + scopes ----
     with st.sidebar:
@@ -360,7 +386,7 @@ def chat_page() -> None:
                     with st.expander(heading):
                         st.markdown("\n".join(f"- {line}" for line in lines))
         scopes = st.multiselect(
-            T["scopes"], options=config.ALL_SCOPES, default=config.ALL_SCOPES,
+            T["scopes"], options=offered, default=offered,
             help=T["scopes_help"],
         )
         out_fmt = st.radio(T["format"], [T["format_prose"], "JSON"],
@@ -487,7 +513,7 @@ def chat_page() -> None:
         _render_notes(message)
         _render_compute(message["compute"])
         # Rendered directly (not inside an expander) so each citation can carry
-        # its own context expander without illegal nesting.
+        # its own page and context expanders without illegal nesting.
         for cit in message["citations"]:
             _render_citation(cit)
     history.append(message)
@@ -671,22 +697,23 @@ def _pdf_url(filename: str, page, quote=None, phrase=None, rects=None):
                 config.PDF_ROOT / filename, page, quote)
             if pdf_phrase:
                 phrase = pdf_phrase
-    if config.PDF_VIEWER_PREFIX:      # bundled pdf.js → highlight in every browser
+    if config.PDF_VIEWER_PREFIX:      # a pdf.js viewer → highlight in every browser
         return pdf_link.pdf_viewer_url(config.PDF_VIEWER_PREFIX, prefix,
                                        filename, page, phrase, rects)
     # native browser viewer (no overlay; phrase only)
     return pdf_link.pdf_page_url(prefix, filename, page, phrase)
 
 
-def _pdf_link_for(cit: dict):
+def _cited_page(cit: dict):
+    """(filename, page, phrase, quote) of the page a citation stands on, or
+    None where its document or its page is unknown.
+
+    A section's quote is matched back onto the raw segments, which gives the
+    exact page and a phrase. It is also the only quote that is a passage of
+    the page: that of a table or a figure is a title or a reading, so *quote*
+    is None there and the page is shown unmarked.
     """
-    (url, page) deep link into the source PDF for a citation, or None if no PDF
-    area is configured, the filename is unknown, or no page could be resolved.
-    """
-    if not config.PDF_URL_PREFIX:
-        return None
-    conn = get_db()
-    filename = db.document_filename(conn, cit.get("document_id"))
+    filename = db.document_filename(get_db(), cit.get("document_id"))
     if not filename:
         return None
     page = cit.get("page_number")
@@ -695,20 +722,78 @@ def _pdf_link_for(cit: dict):
     located = cit.get("owner_kind") == "section" and quote \
         and cit.get("owner_id")
     if located:
-        loc = pdf_link.locate_quote(quote, db.section_segments(conn, cit["owner_id"]))
+        loc = pdf_link.locate_quote(
+            quote, db.section_segments(get_db(), cit["owner_id"]))
         if loc:
             page, phrase = loc            # exact page (+ a fallback phrase)
     if not page:
         return None
-    url = _pdf_url(filename, page, quote if located else None, phrase)
-    return (url, page) if url else None
+    return filename, page, phrase, (quote if located else None)
+
+
+@st.cache_data(show_spinner=False, max_entries=128)
+def _page_image(path: str, stamp: int, page: int, quote):
+    """(PNG, whether the quote was located) of one page of a PDF. *stamp* is
+    the file's modification time: a PDF replaced on disk is drawn again and
+    not remembered. A page that cannot be drawn raises, and is not cached."""
+    rects = pdf_link.best_quote_rects(path, page, quote) if quote else None
+    return pdf_link.render_page(path, page, rects), bool(rects)
+
+
+@st.cache_data(show_spinner=False, max_entries=4)
+def _pdf_bytes(path: str, stamp: int) -> bytes:
+    """The PDF as it lies on disk, for the download; *stamp* as above."""
+    return Path(path).read_bytes()
+
+
+def _page_failure(page, why) -> str:
+    """Why a page was not drawn, in the profile's words. The exception says it
+    in English, and that goes to the log."""
+    if why.reason == pdf_link.NOT_INSTALLED:
+        return T["page_failed_library"].format(page=page)
+    if why.reason == pdf_link.NOT_OPENED:
+        return T["page_failed_open"].format(page=page)
+    if why.reason == pdf_link.NO_SUCH_PAGE:
+        return T["page_failed_range"].format(page=page)
+    return T["page_failed_draw"].format(page=page)
+
+
+def _show_page(filename: str, page, quote) -> None:
+    """The cited page, drawn here from the PDF under PDF_ROOT with the quote
+    marked, and the PDF to download. Where the page cannot be shown the
+    expander says what is missing; where the quote cannot be located the page
+    is shown without a mark and says so."""
+    path = config.PDF_ROOT / filename
+    with st.expander(T["show_page"].format(page=page)):
+        if not path.is_file():
+            # the folder is the server's own and goes to the log, not to a reader
+            log.warning("%s is not in the PDF folder %s", filename,
+                        config.PDF_ROOT)
+            st.caption(T["page_no_file"].format(file=filename))
+            return
+        stamp = path.stat().st_mtime_ns
+        try:
+            image, located = _page_image(str(path), stamp, int(page), quote)
+        except pdf_link.PageNotRendered as why:
+            log.warning("page %s of %s was not drawn: %s", page, filename, why)
+            st.caption(_page_failure(page, why))
+        else:
+            st.image(image)
+            if quote and not located:
+                st.caption(T["page_not_located"])
+        st.download_button(T["download_pdf"],
+                           data=_pdf_bytes(str(path), stamp),
+                           file_name=Path(filename).name,
+                           mime="application/pdf",
+                           key=f"download_pdf:{next(_downloads)}")
 
 
 def _render_citation(cit: dict) -> None:
-    """Render one citation: source label, quote, expandable context, image.
+    """Render one citation: source label, quote, its page, expandable
+    context, image.
 
     Must NOT be called inside another st.expander (Streamlit forbids nesting the
-    context expander below).
+    page and context expanders below).
     """
     label = chunker.citation_label(cit)
     st.caption(f"📄 {label}")
@@ -717,10 +802,14 @@ def _render_citation(cit: dict) -> None:
         st.markdown("> " + str(quote).replace("\n", " "))
     if cit.get("visual"):
         st.caption(T["read_off"])
-    link = _pdf_link_for(cit)
-    if link:
-        url, page = link
-        st.link_button(T["open_pdf"].format(page=page), url)
+    where = _cited_page(cit)
+    if where:
+        filename, page, phrase, marked = where
+        # None where no prefix is configured: nothing to link to
+        url = _pdf_url(filename, page, marked, phrase)
+        if url:
+            st.link_button(T["open_pdf"].format(page=page), url)
+        _show_page(filename, page, marked)
     context = (cit.get("text") or "").strip()
     if context:
         with st.expander(T["show_context"]):

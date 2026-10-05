@@ -56,7 +56,8 @@ citation
 : One retrieved source shown under an inference-app answer: a dict of its
   content, a grounded quote and a `visual` flag, appended to the
   `citations` list `docpipe/inference/answer.py` builds and, through
-  `pdf_link.py`, given a deep link into the source PDF; see
+  `pdf_link.py`, shown in the app with its page drawn from the source PDF
+  (and a link into an external viewer where one is configured); see
   [app](stages/app.md).
 
 claim

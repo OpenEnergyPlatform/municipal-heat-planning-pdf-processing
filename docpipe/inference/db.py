@@ -12,8 +12,10 @@ from pathlib import Path
 from typing import Optional
 
 from ..captions import resolve_title
-from ..store.schema import readonly_uri
+from ..store.schema import readonly_uri, recorded_model
 from .config import (
+    ALL_SCOPES,
+    SCOPE_TO_EMBEDDING_TYPES,
     SECTION_EMBEDDING_TYPES,
     TABLE_EMBEDDING_TYPES,
     FIGURE_EMBEDDING_TYPES,
@@ -32,6 +34,34 @@ def connect_readonly(db_path: Path) -> sqlite3.Connection:
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
     return conn
+
+def available_scopes(conn: sqlite3.Connection) -> list[str]:
+    """The search scopes whose embedding types the database holds vectors of,
+    in the order of ALL_SCOPES.
+
+    An index built through a text-only backend has no *_vl vectors, and a
+    scope offered over none of them can only come back empty.
+    """
+    held = {row[0] for row in conn.execute(
+        "SELECT DISTINCT embedding_type FROM Embeddings")}
+    return [scope for scope in ALL_SCOPES
+            if held & set(SCOPE_TO_EMBEDDING_TYPES[scope])]
+
+
+def index_model_notice(conn: sqlite3.Connection, model: str,
+                       sentence: str) -> Optional[str]:
+    """`sentence` filled in when the database records another embedding model
+    than `model`, the one that embeds the queries; else None.
+
+    `sentence` is the profile's wording and takes {built} and {queried}. A
+    database that records no model says nothing. This is for a notice: the
+    search is not refused, its vectors only may not compare.
+    """
+    built = recorded_model(conn)
+    if built and built != str(model):
+        return sentence.format(built=built, queried=model)
+    return None
+
 
 def get_candidate_faiss_ids(
     conn: sqlite3.Connection,

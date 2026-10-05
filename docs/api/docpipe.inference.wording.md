@@ -15,8 +15,10 @@ extends another one writes only the pieces it words differently: its PHRASES
 are laid over those of the profile it extends.
 
 The words of the app's pages come the same way and from the same file: the
-profile's `UI` table, which a person reads where a model reads PHRASES. Both
-are checked for the entries the core asks for (`REQUIRED`, `UI_REQUIRED`).
+profile's `UI` table, which a person reads where a model reads PHRASES. That
+includes the picker's labels, the tag after a document's name and the noun
+for one. Both tables are checked for the entries the core asks for
+(`REQUIRED`, `UI_REQUIRED`).
 
 Author: Felix Vossel
 
@@ -39,9 +41,9 @@ check has nothing new to say the second time.
 def ui(profile: Optional[Profile] = None) -> dict
 ```
 
-The words of the app's pages, complete. Without a profile they are
-those of the profile the package brings itself: the app starts on any
-corpus, and what it shows then is in English.
+The words of the app's pages and of the picker, complete. Without a
+profile they are those of the profile the package brings itself: the app
+starts on any corpus, and what it shows then is in English.
 
 ### readoff
 
