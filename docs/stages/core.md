@@ -85,7 +85,7 @@ or an unset `LLM_API_KEY` is captured empty.
 
 A stage's `__main__` first calls `bind_command_line()`, which copies a
 `--profile` given on the command line into `os.environ[DOCPIPE_PROFILE]`
-before the stage is imported (`docpipe/profile.py:416-433`). It reads the
+before the stage is imported (`docpipe/profile.py:414-431`). It reads the
 flag with a small argparse parser and `parse_known_args`, as the stage's own
 parser does, so an abbreviation of `--profile` that the stage accepts, with a
 space or an equals sign before the name, is bound too; the parser raises where argparse would print
@@ -94,12 +94,12 @@ the stage's own parser (the `except ValueError` in `bind_command_line`). The CLI
 point then calls `resolve_profile(args)`, which reads `--profile` or
 `DOCPIPE_PROFILE`, imports `profiles/<name>/profile.py` through
 `load_profile()`, and writes the resolved name back into
-`os.environ[DOCPIPE_PROFILE]` (`docpipe/profile.py:447-470`);
+`os.environ[DOCPIPE_PROFILE]` (`docpipe/profile.py:445-468`);
 `require_profile(args)` is the same call for a stage that has nothing to
 run without a profile, and refuses in one line naming the available
-profiles when none is given (`docpipe/profile.py:473-480`). Code with
+profiles when none is given (`docpipe/profile.py:471-478`). Code with
 no command line calls `active_profile()` instead, reading only the
-ambient variable (`docpipe/profile.py:377-381`). A third function,
+ambient variable (`docpipe/profile.py:375-379`). A third function,
 `profile_value(module, attr)`, resolves through `active_profile()` too,
 then caches its result in a module-level dict keyed by profile name,
 module and attribute, so a value is looked up once per process and
@@ -134,7 +134,7 @@ needs. It runs once per run, before any document, from four call
 sites: refinement's `run()` (`docpipe/refinement/pipeline.py:165`) and
 `main()` (`:249`); visuals (`docpipe/visuals/pipeline.py:500`, skipped
 under `--dry-run`); and extraction's review pass and harvest
-(`docpipe/extraction/runner.py:5010` and `:5095`). A hosted API is asked the
+(`docpipe/extraction/runner.py:5016` and `:5101`). A hosted API is asked the
 same through `_hosted_serving`, and besides whether the model answers inside
 a reply schema; a replay of a recorded run has no server to ask and takes the
 window the recording was planned for.
@@ -218,14 +218,14 @@ is a JSON object mapping each prompt id to its current sha256, written
 by `record()` next to a stage's output and read back by
 `check()`/`stale()`.
 
-`Profile` (`docpipe/profile.py:169-187`) is a frozen dataclass. A profile
+`Profile` (`docpipe/profile.py:169-185`) is a frozen dataclass. A profile
 author's own fields are on [profiles](../profiles.md); what belongs
 here are the properties a stage reads once resolved:
 `package_dir`, `prompts_dir`, `schema_sql`, and, under `root`
 (`<repo>/data/<name>` unless overridden), `pdf_dir`, `processed_dir`
 (`root/pdf/processed`, refinement's default input,
 `docpipe/refinement/pipeline.py:246`), `db_path` (`<name>.db`) and
-`index_path` (`faiss_index.bin`) (`docpipe/profile.py:268-319`). `Facet`
+`index_path` (`faiss_index.bin`) (`docpipe/profile.py:266-317`). `Facet`
 (`docpipe/profile.py:161-166`) is `field`, `label`, `widget`.
 
 `artifacts.py` names eight plain string constants for files under a
@@ -248,12 +248,12 @@ placeholder, all come back as `caption`, unchanged
 
 | Name | Kind | Default | Effect | Where read |
 |---|---|---|---|---|
-| `DOCPIPE_PROFILE` | environment variable | unset | names the active profile; `resolve_profile()` writes it back | `docpipe/profile.py:45,351-374,447-470` |
-| `--profile` | CLI flag | ambient `DOCPIPE_PROFILE` or none | copied into `DOCPIPE_PROFILE` by `bind_command_line()` before a stage is imported; passed through `resolve_profile()`, or `require_profile()` where a profile is needed; refused when named after a stage was imported under another profile and the named one ships prompts | `docpipe/profile.py:410-480` |
-| `DOCPIPE_DATA_ROOT` | environment variable | unset, falls back to `data/` beside the project file, else `<repo>/data` | base directory for `Profile.root`, unless `Profile.data_root` is set | `docpipe/profile.py:299-303`, `322-336` |
+| `DOCPIPE_PROFILE` | environment variable | unset | names the active profile; `resolve_profile()` writes it back | `docpipe/profile.py:45,349-372,445-468` |
+| `--profile` | CLI flag | ambient `DOCPIPE_PROFILE` or none | copied into `DOCPIPE_PROFILE` by `bind_command_line()` before a stage is imported; passed through `resolve_profile()`, or `require_profile()` where a profile is needed; refused when named after a stage was imported under another profile and the named one ships prompts | `docpipe/profile.py:408-478` |
+| `DOCPIPE_DATA_ROOT` | environment variable | unset, falls back to `data/` beside the project file, else `<repo>/data` | base directory for `Profile.root`, unless `Profile.data_root` is set | `docpipe/profile.py:297-301`, `322-336` |
 | `DOCPIPE_ENV_FILE` / `INFERENCE_ENV_FILE` | environment variables | unset; falls back to a bare `.env` | names a `.env` file to load before config reads `os.environ`; only the first readable one is loaded | `docpipe/dotenv.py:76-80` |
-| `Profile.column_layout` | dataclass field | `"auto"` | must be `auto`, `single` or `double`, or `Profile()` raises | `docpipe/profile.py:174,192-193` |
-| `Profile.data_root` / `Profile.home` | dataclass fields | `None` / `None` | override where a profile's data and package files live | `docpipe/profile.py:175-177` |
+| `Profile.column_layout` | dataclass field | `"auto"` | must be `auto`, `single` or `double`, or `Profile()` raises | `docpipe/profile.py:172,190-191` |
+| `Profile.data_root` / `Profile.home` | dataclass fields | `None` / `None` | override where a profile's data and package files live | `docpipe/profile.py:173-175` |
 | `timeout` (`serving_limits`) | function parameter | 30.0 seconds | timeout for the preflight `GET /models` call | `docpipe/llm_preflight.py:80-81` |
 | `max_retries` (OpenAI client) | hardcoded constant | 1 | preflight retried once before a connection failure is reported | `docpipe/llm_preflight.py:85` |
 | `what` / `flag` (`assert_serving`) | function parameters | `"this stage"` / `"--max-model-len"` | substituted into the error and success log; each call site names itself | `docpipe/llm_preflight.py:195-196` |
@@ -274,20 +274,20 @@ stale (`:144-151` and `stale()`, `:160-161`).
 
 `profile.py`: `Profile(name=...)` with an empty name, a slash, an
 unrecognised `column_layout` or an `extends` that names the profile itself
-raises `ValueError` (`docpipe/profile.py:189-195`). `load_profile()` with no
-name resolvable raises `LookupError` (`:353-356`), listing available profiles
-when the name given is unknown (`:365-367`); a module exporting no proper
+raises `ValueError` (`docpipe/profile.py:187-193`). `load_profile()` with no
+name resolvable raises `LookupError` (`:351-354`), listing available profiles
+when the name given is unknown (`:363-365`); a module exporting no proper
 `PROFILE`, or one whose name disagrees with its own directory, raises
-`TypeError` or `ValueError` (`:369-373`). `component()` re-raises
+`TypeError` or `ValueError` (`:367-371`). `component()` re-raises
 `ModuleNotFoundError` for an existing profile module that fails to import, not
-absence (`_own`, `:247-253`); `require()` raises `LookupError` for genuine
-absence (`:256-265`). `resolve_profile()` raises
+absence (`_own`, `:245-251`); `require()` raises `LookupError` for genuine
+absence (`:254-263`). `resolve_profile()` raises
 `SystemExit` when it is given a profile other than the one a stage was
-imported under and that profile ships prompts (`:461-468`);
+imported under and that profile ships prompts (`:459-466`);
 `require_profile()` raises it, naming the available profiles, when no
-profile is given (`:476-479`). `profile_value()` raises the same
+profile is given (`:474-477`). `profile_value()` raises the same
 `LookupError` when no profile is ambient, naming the module, the
-attribute and the environment variable to set (`:396-397`).
+attribute and the environment variable to set (`:394-395`).
 
 `llm_preflight.py`: a missing `openai` package raises `ImportError` with
 an install hint (`docpipe/llm_preflight.py:83-90`). An unreachable

@@ -125,7 +125,7 @@ never compared, in the stamp as `question_text/<key>`.
 Dropping query templates for it was measured directly: with templates
 included alongside the anchor, a value's real source sat at median rank
 84; without them, rank 26 (`pipeline.py:246`). `plan_document` falls back to
-`queries.expand`'s templates only when no anchor exists. `make_anchors` (`runner.py:1765`) is the second,
+`queries.expand`'s templates only when no anchor exists. `make_anchors` (`runner.py:1771`) is the second,
 corpus-wide mechanism: one set per question the field sweep asks, each
 axis question and the parameter choice, written once per run and cached
 per question. The value itself has no set: the plan searches with the
@@ -147,7 +147,17 @@ for year-shaped numbers the model did not name and offers them back once,
 never adding a year on its own. Which coordinates form a frame is named
 by the profile: kwp sets `FRAME = ("scenario", "year")`
 (`profiles/kwp/extraction.py:73`); the scenarios profile sets none. A frame axis is built from the run's
-spec, so a list closed per document is not supported on one.
+spec, so a list closed per document is not supported on one. The frame
+request puts the entries of a closed frame coordinate under a key of its body
+that the profile names: `_frame_payload` says the phrase `frame_options` with
+the coordinate's name as `slot`. `kwp` and `scenarios` say `"scenarios"`, one list
+for every closed coordinate; the built-in profile says `"{slot}_options"`, one
+list per coordinate. Its frame prompt names no key ("the list the request
+gives for `scenario`"), and its `frame_not_an_option` phrase is handed the key
+that was sent, as `{options}`, so a profile that extends it and words only
+`frame_options` differently has moved the request, the correction and the
+prompt together. The frame prompts of `kwp` and `scenarios` and their
+`frame_not_an_option` phrase name `"scenarios"` in their own words.
 `pipeline.apply_frame` projects each pair onto its rows, state `read`,
 before any field job is queued; a row that already answered better keeps
 its own reading. A passage that prints several pairs, a table with a
@@ -162,9 +172,9 @@ helpers get a look at the claim first now: `pair_of_claim`
 (`pipeline.py:591`) asks the whole passage whether exactly one OTHER pair
 of the document is named there; if so the claim becomes a row carrying
 that pair in its own `pair` and `pair_index` fields (`Row`,
-`pipeline.py:452`), for `project` (`runner.py:3566`) to stamp instead of
+`pipeline.py:452`), for `project` (`runner.py:3572`) to stamp instead of
 the request's own, drawn from `Batch.pairs` (`pipeline.py:135`), set by
-`pair_batches` (`runner.py:4753`). Exactly one, or the claim still stays
+`pair_batches` (`runner.py:4759`). Exactly one, or the claim still stays
 refused. Measured on corpus_m5: of 120,442 claims refused this way, 52.8%
 came back later under the same quote, 17.8% as the same value under
 another quote, and 29.4%, 35,407 values, were never read under any pair
@@ -173,7 +183,7 @@ t CO2eq/a (3,836), from tables (14,227), figures (11,869) and prose
 (9,311). The gain from the frame itself was measured directly: before it
 existed, the year axis alone produced 1,849 refusals against 0 readings,
 since every window after the first excluded the row's own source
-(`runner.py:3572`).
+(`runner.py:3578`).
 
 ### Base years
 
@@ -185,7 +195,7 @@ pair is that state is named by the profile, kwp's `BASE_YEAR =
 pair, one entry per year with the frame's own quote and source, and every
 batch of the document carries them as `Batch.bases`, framed or not, since
 a passage naming only "Basisjahr" is exactly the one that needs them
-(`runner.py:5516`, `:5521`).
+(`runner.py:5522`, `:5527`).
 
 A year answer whose quote carries this wording but not the number now
 reads (`base_year_named`, `pipeline.py:908`) when the number given is one
@@ -198,9 +208,9 @@ Before this reading existed, corpus_m5 dropped 127,233 year answers whose
 wording stood in their quote and whose number did not, "Basisjahr" among
 the most common (`profiles/kwp/extraction.py:80-82`). The year field's
 own request is shown the plan's base years alongside the question,
-`"base_years"` (`runner.py:2727-2730`), and the trace's `field` event
+`"base_years"` (`runner.py:2733-2736`), and the trace's `field` event
 counts how many of a window's answers came this way, `via_base`
-(`runner.py:3386-3403`).
+(`runner.py:3392-3409`).
 
 ### The row request
 
@@ -224,7 +234,7 @@ print it, with the reason `text value not in its quote`. A `Row` is
 created only here, never later. The
 request can turn to a code sandbox, bounded to `CODE_ROUNDS` rounds. A
 reply that will not parse is asked again with the cause named,
-`_reply_fault` (`runner.py:2107`), rather than the same message twice, and
+`_reply_fault` (`runner.py:2113`), rather than the same message twice, and
 with the retried attempt's sampling temperature raised a step: on
 corpus_m5, a field retry asked again at temperature 0
 repeated its first reply byte for byte and lost all three tries. Every
@@ -233,9 +243,9 @@ review) raises the step, `retry_temperature` (`runner.py:115`, env
 `EXTRACT_RETRY_TEMPERATURE_STEP`, default `0.1`), once per fault and
 capped at `1.0`. One cut off at the token ceiling is asked again as two
 halves instead of kept half-read, its labels renumbered onto the whole
-batch, `_split_harvest` (`runner.py:2197`). A single passage still too
+batch, `_split_harvest` (`runner.py:2203`). A single passage still too
 long for that gets its own ceiling doubled, up to four times, before it
-is written as a `_why: cut_off` sentinel instead (`runner.py:2659`).
+is written as a `_why: cut_off` sentinel instead (`runner.py:2665`).
 
 A profile may close a choice list per document (`document_axes`; the AR6
 profile closes its scenarios and its regions). `runner.fill_dynamic_axes`
@@ -266,7 +276,7 @@ overlapping by `FIELD_OVERLAP` (1): once retrieval has nothing new,
 `rest_of_document` reads the document's own remaining sections in
 order, each followed by its own tables and figures in page order, not
 sections alone, rotated to start near the open rows, until the
-coordinate closes or the document runs out (`runner.py:3477`). A
+coordinate closes or the document runs out (`runner.py:3483`). A
 coordinate the search or the rest stage cannot close before its budget
 runs out is `exhausted`, never `unstated`: the first is a finding about
 the run, the second about the document. The budget sums to
@@ -277,23 +287,23 @@ rest allowance by a fraction, at least one window staying either way
 `profiles/kwp/extraction.py:93`). Every request now
 asks one coordinate, not several at once: five coordinates for every
 row of a batch in one request wanted up to 27,311 prompt tokens and
-came back refused or cut off (`runner.py:2857`). Its rows are chunked
+came back refused or cut off (`runner.py:2863`). Its rows are chunked
 to at most `FIELD_ROWS` (32, env `EXTRACT_FIELD_ROWS`), about 2,600
 answer tokens at the measured p90, sized against the server's own
 window before the request is sent rather than shrunk after a refusal,
-`answer_room` (`runner.py:1338`); a chunk still too large for its room
-is halved before it is sent (`runner.py:2900-2910`).
+`answer_room` (`runner.py:1343`); a chunk still too large for its room
+is halved before it is sent (`runner.py:2906-2916`).
 
 ### The reply grammar
 
 A field request now goes out with `response_format`, a JSON schema built
-by `field_response_format` (`runner.py:2793`) from the coordinate's own
+by `field_response_format` (`runner.py:2799`) from the coordinate's own
 contract: the asked field under its own name, `groups` and `answers`, and
 a `value` that is one of the slot's options (`out:unstated` included) or,
 for a number, an integer, nothing beyond that: `additionalProperties:
 False` throughout. vLLM generates the reply inside that shape rather than
-around it, sent on every attempt (`make_field_asker`, `runner.py:2846`,
-`:2935`). Nothing in the grammar is a check: every key stays as optional
+around it, sent on every attempt (`make_field_asker`, `runner.py:2852`,
+`:2941`). Nothing in the grammar is a check: every key stays as optional
 as the field prompt leaves it, and what the reply says is still verified
 by `merge_field` exactly as before. 70,395 field replies of corpus_m5
 carried text beside the object and were asked again for it; under the
@@ -318,13 +328,13 @@ writes one sentinel per source with `_why: "unserved"` (the harvest
 schema's `_why` has four values: `unreachable`, `unserved`, `no_answer`,
 `cut_off`; `docpipe/extraction/schema.py:505-506`), and such a sentinel
 counts towards the dead-server streak like an `unreachable` one
-(`runner.py:2632-2635`, `4127-4129`). A coordinate request, the frame
+(`runner.py:2638-2641`, `4127-4129`). A coordinate request, the frame
 request and a search-sentence request return nothing, as they do for any
 failure; what marks the document is `UNSERVED.note(document_id)`, which
 counts it in the registry `UNSERVED` (`runner.py:210-237`, noted at
 `1160-1161`, `1454-1455` and `3076-3079`). The coordinate request's own streak counts it
-too (`runner.py:2982`). The run's anchor requests belong to no document and
-are counted under `None` (`runner.py:1842-1845`).
+too (`runner.py:2988`). The run's anchor requests belong to no document and
+are counted under `None` (`runner.py:1848-1851`).
 
 ### The adaptive request limit
 
@@ -332,7 +342,7 @@ A fixed thread pool bounds how many requests can be sent at once; how many the
 server can usefully answer at once moves with what is asked and with its own
 queue. `throttle.start` (`throttle.py:332`) reads vLLM's `/metrics` every
 `EXTRACT_LIMIT_POLL` seconds and steers one `AdaptiveLimit` every client waits
-in (`runner._client`, `runner.py:1963`), additive increase / multiplicative
+in (`runner._client`, `runner.py:1969`), additive increase / multiplicative
 decrease: it grows while nothing is waiting, the KV cache stays under
 `EXTRACT_LIMIT_KV_GROW` and the limit is actually being reached, and steps back
 on two consecutive waiting samples, the KV cache at `EXTRACT_LIMIT_KV_HIGH`, or
@@ -340,7 +350,7 @@ a preemption (`throttle.Controller.decide`, `throttle.py:237`).
 `EXTRACT_LLM_PARALLEL` and `EXTRACT_FIELD_PARALLEL` stay ceilings it cannot
 rise past, and a server with no `/metrics` gets no adaptive limit at all, the
 pools alone deciding as before. `EXTRACT_LIMIT_ADAPTIVE=0` turns it off
-(`runner.start_limit`, `runner.py:1295`).
+(`runner.start_limit`, `runner.py:1300`).
 
 ### Merging a coordinate
 
@@ -453,7 +463,7 @@ states and closing summary to a temp file and only replaces the real
 harvest; every rewrite in this stage follows the same rule. The stamp is
 withheld until `runner.finish_document` decides a harvest genuinely
 happened, not merely that a file was written, and it removes an earlier
-stamp before it writes the file (`runner.py:4491-4492`); see Failure modes
+stamp before it writes the file (`runner.py:4497-4498`); see Failure modes
 for when it withholds one. What the stamp records,
 `_stamp_current`, is deliberately not one hash over the whole spec file:
 `spec.fingerprints` computes one sha per question, so `runner.stale`
@@ -470,13 +480,16 @@ Every tuple, refusal, parameter state and summary line is checked
 against the published schema before it is written:
 `_harvest_validators` builds one `jsonschema` validator per branch from
 `schema.build(spec)["harvest"]`, run by `check_against_schema` inside
-`finish_document` on every call carrying a spec (`runner.py:4489-4490`). A
+`finish_document` on every call carrying a spec (`runner.py:4495-4496`). A
 row the schema refuses is counted
 and logged as an `invalid` trace event, never withheld, since blocking on
 a schema mismatch would turn a documentation defect into a data loss.
-`scripts/preflight_profiles.py` calls `schema.build` directly, ahead of
-any run, to confirm a profile's published schema file is current
-(`scripts/preflight_profiles.py:220`).
+The preflight (`docpipe preflight`, see The check before a run) calls
+`schema.build` directly, ahead of any run, to confirm a profile's published
+schema file is current (`preflight.audit`, the checks `schema present` and
+`schema current`). `python -m docpipe.extraction.schema <name> --write` writes
+that file into the profile's directory, from the spec the profile names
+(`extraction.SPEC_PATH`), wherever it lies.
 
 ### The passes that revisit a harvest
 
@@ -581,7 +594,39 @@ not taken, what was wrong with a reply that could not be read, how the closed
 list names a meaning) go back to the model in the next request, so they are
 in the language of the prompts and belong to the profile: its
 `extraction.PHRASES`, where a profile that extends another one writes only
-the ones it words differently (`wording.py`).
+the ones it words differently (`wording.py`). One of them, `frame_options`,
+is not a sentence but the key of the frame request's list of a closed
+coordinate (see The frame).
+
+### The check before a run
+
+`docpipe preflight [PROFILE ...]` (`preflight.audit`) holds a profile to what a
+corpus run rests on before a GPU is spent. It prints one line per check, takes
+the profile in effect when none is named, and ends 1 when a check fails, which
+a line marked as a warning does not. A profile may be named by its directory,
+as for `--profile`. A name that is no profile is one failed line
+(`profile found`); a profile the audit cannot get through is one failed line
+(`the audit ran to its end`), the tables of the other profiles are still
+printed, and the command still ends 1. It reads what the run reads: the spec
+the profile names (`extraction.SPEC_PATH`, and no other: a profile that names
+none fails on `spec present`, as the built-in profile does, also when an
+`extraction_spec.json` lies beside it, and the line says so), the extraction
+prompts (one that cannot be loaded fails its own line and every line about
+what it has to hold), the writer of the graph (the profile's own
+`kg.make_serializer`, else the generic writer, built as the run builds it by
+`graph.make_serializer` from the `graph` block of the spec; a block it refuses,
+such as the placeholder base that `docpipe compile spec` drafts, fails
+`serializer present`) and, for a profile that has a `vocabulary` module, its
+ontology pin; a module that has `check` but not `load` or `foreign_labels`
+fails `vocabulary module is whole`.
+The keys of a request and of a reply belong to the stage and are checked by
+name. A passage a prompt has to hold belongs to the profile, in the language
+of its prompts, and is declared in `extraction.PROMPT_CHECKS` as entries
+`(what is checked, prompt id, passage, has to be there)`; a profile that
+extends another one inherits the checks until it declares its own. An entry of
+any other shape is named as a failure and not run (`preflight.prompt_checks`).
+`scripts/preflight_profiles.py` runs the same checks for the two profiles kept
+in this repository, `kwp` and `scenarios`.
 
 How precision and recall are counted and how a recorded run is made again
 without a model is on [measuring a harvest](evaluation.md); how the values
@@ -673,6 +718,7 @@ run, `anchors.json` and `query_cache.db`; and, only after `--top-up`,
 | `--serialize TTL` / `--print-context-budget` | CLI flag | none / off | `--serialize`: no harvest, hands `--out` to `serialize.run`, which calls the profile's `kg.make_serializer`. `--print-context-budget`: prints the tokens one harvest request needs, then exits | `serialize.run`, `runner.main` |
 | `SLICE` / `FRAME` | profile hook | none / none (every coordinate per row) | `SLICE`: gate coordinate(s) asked first, a row that fails them never asked its others. `FRAME`: document-level coordinates found once and projected onto every row | `runner.main`, `topup.actionable` |
 | `SEARCH_SHARE` | profile hook | none (every coordinate gets the whole budget) | Fraction of the retrieval and rest allowance a named coordinate gets; kwp halves `sector` and `aggregation`. At least one window stays per stage | `runner.make_sweeper` |
+| `PROMPT_CHECKS` | profile hook | the extended profile's, else none | Entries `(what is checked, prompt id, passage, has to be there)`: passages the profile's prompts have to hold or must not. Read by `docpipe preflight` and by nothing in a run | `preflight.audit`, `preflight.prompt_checks` |
 
 The context budget (`runner.context_budget`, printed by
 `--print-context-budget`) is the tokens one request needs at worst. Its
@@ -713,57 +759,57 @@ on.
 At the document level, `finish_document` writes the JSONL file every time
 and withholds the stamp entirely, forcing a full redo on the next run, in
 three cases: more than half a document's planned sources came back from a
-server it could not reach (`UNREACHABLE_LIMIT`, `0.5`, `runner.py:4435`,
-`:4497-4501`), not one batch answered at all (`runner.py:4502-4505`), or any
-one of its requests ended on a 429 or a 5xx (`runner.py:4506-4511`). The last
+server it could not reach (`UNREACHABLE_LIMIT`, `0.5`, `runner.py:4441`,
+`:4503-4507`), not one batch answered at all (`runner.py:4508-4511`), or any
+one of its requests ended on a 429 or a 5xx (`runner.py:4512-4517`). The last
 count adds the `unserved` sentinels to the document's entry in `UNSERVED`,
-which the callers pass as `lost` (`runner.py:4400`, `5378`); one is enough,
+which the callers pass as `lost` (`runner.py:4406`, `5378`); one is enough,
 because such a request was never answered and nothing says it cannot be.
 Only a resume, not a byte count, tells these cases apart from a genuinely
 finished document. In all three cases an earlier stamp is removed before the
-file is written (`runner.py:4491-4492`): it vouched for the file this one
+file is written (`runner.py:4497-4498`): it vouched for the file this one
 replaces, and left in place it would have a resume skip a document whose
 stamp was just withheld.
 
 `finish_document` returns whether the document is stamped, and a document
 written but left unstamped is a failed document. `verify` hands the
-value on (`runner.py:5372-5377`), `harvest_document` returns
+value on (`runner.py:5378-5383`), `harvest_document` returns
 `(stamped, failures)` with one failure added when the document is not stamped
-(`runner.py:5543-5544`), `harvest_documents` adds the failures up
-(`runner.py:3893-3894`), and `main` returns 1 when there are any
-(`runner.py:5580`). The exit code is 1 for a document written and left
+(`runner.py:5549-5550`), `harvest_documents` adds the failures up
+(`runner.py:3899-3900`), and `main` returns 1 when there are any
+(`runner.py:5586`). The exit code is 1 for a document written and left
 unstamped as it is for a server that stopped answering
-(`runner.py:5557-5562`). The run's own anchor requests are the other case:
+(`runner.py:5563-5568`). The run's own anchor requests are the other case:
 if any ended on a 429 or a 5xx, `main` returns 1 before anything is
 harvested, and the anchors already written stay in `anchors.json`, so the
-next start asks only for the rest (`runner.py:5181-5192`). A document left
+next start asks only for the rest (`runner.py:5187-5198`). A document left
 with batches never harvested is not written at all and adds no failure of
-its own (`runner.py:5537-5540`); the dead server or the SIGTERM that left it
+its own (`runner.py:5543-5546`); the dead server or the SIGTERM that left it
 decides the exit code. `run_document`, the one-document path for a caller
 outside the run's own loop, withholds the stamp the same way and returns
-what `finish_document` returned (`runner.py:4383-4401`).
+what `finish_document` returned (`runner.py:4389-4407`).
 
 A time limit ends a run the same careful way. `install_stop_handler`
 (`runner.py:124`) puts a SIGTERM handler in place, so that a time-limit
 trap or a manual kill sets `STOP` (`runner.py:112`)
 instead of letting the interpreter die where it stood. Documents run
-under rolling admission, `harvest_documents` (`runner.py:3849`), at
+under rolling admission, `harvest_documents` (`runner.py:3855`), at
 most `EXTRACT_BATCH_DOCS` in flight at once, their batches sharing one
-`batch_pool` and one `DeadStreak` (`runner.py:3829`) across every
+`batch_pool` and one `DeadStreak` (`runner.py:3835`) across every
 document in flight and across the field sweep's own requests too,
 rather than a separate dead-server count per document or per pool: the
 run gives up once `max(64, EXTRACT_LLM_PARALLEL)` requests in a row
 were not served by the server (not reached, or a 429 or a 5xx). The rows
 pool and the field pool log it as "requests in a row the server did not
-serve" (`runner.py:4032`, `3081`). Once
-`STOP` or a dead server sets `Halted` (`runner.py:5387-5392`), no new
+serve" (`runner.py:4038`, `3081`). Once
+`STOP` or a dead server sets `Halted` (`runner.py:5393-5398`), no new
 document starts, and a document already in flight leaves its own
 `harvest_batches` call at once instead of waiting out its open
 requests; such a document lands in `unfinished` and is not written, so
 a resume harvests it whole instead of the run stamping it as though
 every batch had come back. Once `STOP` is set the run logs, closes the
 trace and exits hard with `STOPPED_EXIT` (`143`, `runner.py:120`,
-`:5573`) rather than waiting on the field-sweep threads still open,
+`:5579`) rather than waiting on the field-sweep threads still open,
 which are not daemons and could hold the process for minutes.
 
 Among the four maintenance passes, `--recheck` and `--remap` never call a
@@ -792,7 +838,7 @@ never sends leaves no trace, so the row is offered again later.
   (`fields.py:308-335`).
 - Letting the passage a coordinate was last read in drop out of the
   window after one use, rather than remaining in the window, cost one
-  batch 520 dropped readings against 31 kept (`runner.py:3341`).
+  batch 520 dropped readings against 31 kept (`runner.py:3347`).
 - On the 20-plan draft where the slice gate was measured, of 6,763
   harvested tuples the serializer dropped 1,554 for a quantity the graph
   does not hold and, while the scenario axis still gated a row, 2,510
@@ -896,6 +942,19 @@ disk: `test_only_the_lists_differ_in_a_documents_spec`,
 `test_a_year_its_quote_does_not_print_is_dropped_before_it_is_asked`,
 `test_every_batch_of_a_document_reads_against_its_lists` and
 `test_a_recheck_leaves_a_document_whose_lists_cannot_be_closed`.
+`tests/test_preflight.py` builds a profile to break each promise of the
+preflight: `test_a_profile_without_a_spec_fails_on_that_and_is_told_what_drafts_one`,
+`test_the_spec_read_is_the_named_one_and_not_the_one_beside_the_profile`,
+`test_a_profile_with_neither_writer_nor_graph_block_fails`,
+`test_a_graph_block_the_generic_writer_refuses_fails_before_the_harvest`,
+`test_a_prompt_in_another_language_is_held_to_the_inherited_passage`,
+`test_a_check_that_cannot_be_read_is_named_and_not_run` and
+`test_a_profile_the_audit_cannot_finish_fails_and_the_others_are_printed`.
+`tests/test_extraction_wording.py` pins where the frame request puts a closed
+list: `test_a_profile_that_names_the_coordinate_keeps_two_lists_apart`,
+`test_the_german_frame_prompts_read_the_list_where_the_request_puts_it`,
+`test_the_built_in_frame_prompt_names_no_key_that_could_go_stale` and
+`test_a_project_words_the_key_of_the_list_itself`.
 
 For the four maintenance passes, `tests/test_extraction_recheck.py` pins
 `test_a_coordinate_its_quote_carries_survives`,
@@ -951,7 +1010,7 @@ produce, never aggregating anything itself; `schema.py` generates the
 published JSON Schema for a harvest line, a stamp and a trace event from
 the spec and from `trust.py`'s own constants, so the two cannot drift
 apart. Called by the tests, its own CLI entry point, `runner.py`'s
-schema self-check, and `scripts/preflight_profiles.py`. `serialize.py`
+schema self-check, and `preflight.py`. `serialize.py`
 walks a harvest
 directory, keeps only the rows a run accepted (`collect`), and hands
 each document's rows to the profile's own `kg.make_serializer`; `run`
@@ -972,7 +1031,9 @@ adaptive request limit under Method.
 
 `identity.py` names a harvested row from what it says and finds its passage
 again after a rebuild; `wording.py` is where the stage's own sentences come
-from, per profile; `replies.py` holds the reply schemas of the stage's
+from, per profile; `preflight.py` is the check a profile passes before a
+corpus run (see The check before a run), started by `docpipe preflight`;
+`replies.py` holds the reply schemas of the stage's
 requests, for an API that generates inside one (see [the provider
 layer](providers.md)). `gold.py`, `evaluate.py` and `benchmark.py` are
 [measuring a harvest](evaluation.md).

@@ -27,7 +27,7 @@ named `tuple_<uri>` and shown here after the uri.
 A tuple section opens with how its row becomes a node of MHPKG
 (`profiles/kwp/kg.py:2`, `:36`), then lists one `###` heading per key,
 sorted alphabetically rather than grouped by coordinate
-(`scripts/build_docs.py:681`). Eight belong to the `parameter`
+(`scripts/build_docs.py:682`). Eight belong to the `parameter`
 coordinate and to every axis: the value, plus seven keys that make it
 checkable without the run that produced it: state, raw wording, a flag
 for a wording naming no class, a wording merely noticed and never
@@ -79,8 +79,8 @@ question instead (`docpipe/extraction/schema.py:580` to `715`).
 The owner decided on 2026-09-10 that a stamp rests on the KG/ontology
 parameters alone: `stale` compares only the `parameter/`, `value/`,
 `axis/` and `slot/` families (`QUESTION_KEYS`,
-`docpipe/extraction/runner.py:4292`), and the whole-file sha `spec`
-only for a stamp that carries none of them (`COARSE`, `:4286`;
+`docpipe/extraction/runner.py:4298`), and the whole-file sha `spec`
+only for a stamp that carries none of them (`COARSE`, `:4292`;
 `tests/test_extraction_runner.py::test_a_stamp_from_before_the_detail_is_stale_in_all_of_it`).
 `model`, `anchors`, every `extraction/*` prompt, `page_text_transcribed`,
 `review/*` and `question_text/*` are written into the stamp so a reader
@@ -88,7 +88,7 @@ can place a harvest, and are never compared
 (`tests/test_extraction_runner.py::test_what_the_stamp_records_about_the_document_never_redoes_it`).
 Only the `parameter/`, `value/`, `axis/` and `slot/` families make a
 document eligible for `--force-stale`'s full re-harvest (`stale`,
-`docpipe/extraction/runner.py:4324` to `4361`, `already_done`, `:4404`
+`docpipe/extraction/runner.py:4330` to `4367`, `already_done`, `:4410`
 to `4429`); redoing only the changed question is
 `top_up_file`'s job (`docpipe/extraction/topup.py:340` to `442`). The
 trace is `<document>.trace.jsonl`: eleven event kinds told apart by

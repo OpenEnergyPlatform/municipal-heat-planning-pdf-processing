@@ -193,6 +193,18 @@ def document_axes(conn: sqlite3.Connection, document_id: int) -> dict:
 DECIMAL_MARK = "."
 
 
+# What the preflight (`docpipe preflight`) holds this profile's prompts to,
+# beyond the keys the stage reads by name: a wording the run depends on. The
+# prompts are in the profile's language, so the passage is too.
+# (what is checked, prompt, passage, True: has to be there, False: must not)
+PROMPT_CHECKS = (
+    ("field prompt asks one field", "extraction/field",
+     "GENAU EIN Feld", True),
+    ("rows prompt no longer fixes one parameter", "extraction/rows",
+     '"parameter": die gesucht', False),
+)
+
+
 # What the stage says to the model outside its prompts: why an answer was not
 # taken, what was wrong with a reply, what stands beside an image. In the
 # language of the prompts, and read by docpipe/extraction/wording.py, which
@@ -226,6 +238,9 @@ PHRASES = {
     "answer_not_in_quote": (
         'Dein "quote" enthält {answer!r} nicht. Zitier die Stelle, an '
         'der es wirklich steht, oder antworte mit "{unstated}".'),
+    # The key of the frame request that holds the entries of a closed frame
+    # coordinate. The frame prompt reads them there.
+    "frame_options": "scenarios",
     # why a pair of the document's frame was not taken
     "frame_missing": 'In einem Paar fehlte "{slot}".',
     "frame_no_quote": 'Zu {slot}={given!r} fehlte "{slot}_quote".',

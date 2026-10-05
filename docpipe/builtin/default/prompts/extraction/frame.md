@@ -10,7 +10,7 @@ A frame pair is a combination that really occurs. Not a cross product: if the do
 
 For each pair:
 
-- `scenario` is one of the keys of "scenarios". Choose, do not generate.
+- `scenario` is one of the keys of the list the request gives for `scenario`. Choose, do not generate.
 - `scenario_raw` is the name the document itself uses ("Baseline", "Forecast", "Option B").
 - `year` is a four-digit year.
 - `scenario_quote` and `year_quote` are each one passage, copied character for character from "sources". Two separate pieces of evidence, because a table header carries the years and the figure caption carries the scenario. If both stand in the same passage, take the same one twice.
@@ -28,7 +28,7 @@ If the object contains a field "candidates", these are four-digit numbers that s
 
 If the object contains a field "known", these are pairs that have already been found. Do not repeat them, look for further ones.
 
-If the object contains a field "corrections", these are the reasons why pairs of your last answer were rejected. Read each one and answer again: with the evidence that was missing, or with the key from "scenarios" that would have fit. A pair you cannot back with evidence, you leave out.
+If the object contains a field "corrections", these are the reasons why pairs of your last answer were rejected. Read each one and answer again: with the evidence that was missing, or with the key from that list that would have fit. A pair you cannot back with evidence, you leave out.
 
 Answer with ONLY one JSON object, no Markdown, no text before or after:
 {"pairs": [{"scenario": "<key>", "scenario_raw": "<name used by the document>", "scenario_quote": "<passage>", "scenario_source": "<id>", "year": <year>, "year_quote": "<passage>", "year_source": "<id>"}], "status": "complete", "need_more": []}

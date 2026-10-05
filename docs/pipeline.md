@@ -348,15 +348,15 @@ per document, so this section documents its stamp on its own.
 written only once `finish_document` decides a harvest actually happened;
 a document is left unstamped, so the next run redoes it, when more than
 half its planned sources came back unreachable (`UNREACHABLE_LIMIT = 0.5`,
-`docpipe/extraction/runner.py:4435`, `:4497` to `4501`), when nothing
-answered at all (`:4502` to `4505`), or when any one of its requests ended
-on a 429 or a 5xx, which is no answer (`:4506` to `4511`).
+`docpipe/extraction/runner.py:4441`, `:4503` to `4507`), when nothing
+answered at all (`:4508` to `4511`), or when any one of its requests ended
+on a 429 or a 5xx, which is no answer (`:4512` to `4517`).
 `finish_document` removes an earlier stamp before it writes the file, so a
 withheld stamp is not replaced by one that vouched for the file it
-overwrote (`:4491` to `4492`), and it returns whether the document is
+overwrote (`:4497` to `4498`), and it returns whether the document is
 stamped. A document written but left unstamped is a failure of the run:
 `harvest_document` returns it as not finished and `main` exits 1
-(`:5543` to `5544`, `5580`). Inside it:
+(`:5549` to `5550`, `5586`). Inside it:
 
 | Key | What it records | Compared on a redo |
 |---|---|---|
@@ -374,7 +374,7 @@ stamped. A document written but left unstamped is a failure of the run:
 
 The owner decided on 2026-09-10 that a stamp rests on the KG/ontology
 parameters alone (`parameter/`, `value/`, `axis/`, `slot/`,
-`docpipe/extraction/runner.py:4292`). The model, the anchors and every
+`docpipe/extraction/runner.py:4298`). The model, the anchors and every
 prompt id are still written into the stamp, so a reader can place a
 harvest, but a reworded prompt or another model no longer makes a
 document stale. The fine keys come from
@@ -382,14 +382,14 @@ document stale. The fine keys come from
 their presence is what licenses ignoring the coarse `spec` key. An earlier
 design hashed the whole spec file as one number, so one new label anywhere
 in it made a whole corpus stale together, about 93 GPU hours to reread
-1,082 documents over one added word (`docpipe/extraction/runner.py:4194`
+1,082 documents over one added word (`docpipe/extraction/runner.py:4200`
 to `4294`); the ontology behind the spec is revised repeatedly, so the
 same cost would recur each time it is. With one key per parameter, per value list
 and per axis, `stale()` names exactly which question changed and leaves
 the rest of the corpus alone; it checks both directions, so a question
 dropped from the spec counts as changed too, the one case the old
 whole-file hash used to catch that a purely additive scheme would
-otherwise miss (`docpipe/extraction/runner.py:4359` to `4360`). A file
+otherwise miss (`docpipe/extraction/runner.py:4365` to `4366`). A file
 with no stamp at all is read as fully stale, on principle: the opposite
 reading, a missing stamp taken as nothing left to do, had already let a
 run silently skip 165 documents with exit code 0
@@ -473,6 +473,13 @@ Chunking, embedding and the database, merge, db and embed in one call:
 docpipe chunk
 ```
 
+Before extraction, the profile's spec, prompts and graph writer are checked
+without a GPU; the command exits 1 when a check fails:
+
+```bash
+docpipe preflight
+```
+
 Extraction, over the corpus the previous steps built:
 
 ```bash
@@ -523,6 +530,10 @@ profile default and always have to be spelled out.
   an assistant's tool; see [handing the values on](stages/serve.md).
 - **Drafting a spec.** `docpipe compile` drafts an extraction spec from the
   shapes and the ontology of a graph; see [the spec compiler](stages/compile.md).
+- **Checking a profile.** `docpipe preflight` holds any profile to what a
+  corpus run rests on, without a GPU: its spec, its prompts, the shape it
+  publishes and the writer of its graph; see [the check before a
+  run](stages/extraction.md).
 
 ## Where the promises are written down
 
@@ -534,7 +545,7 @@ behind](contract/trust.md) names the three trust levels and the closed
 list of reasons behind the lowest one. The harvest contract per profile,
 [kwp](contract/kwp.md) and [scenarios](contract/scenarios.md), is
 generated from `profiles/<name>/extraction_schema.json`, itself generated
-from that profile's `extraction_spec.json` by `docpipe/extraction/
+from the spec that profile names (`extraction.SPEC_PATH`) by `docpipe/extraction/
 schema.py`, never hand-written.
 
 **The tests.** `tests/test_docs_build.py::test_the_checked_in_docs_are_the_generated_ones`

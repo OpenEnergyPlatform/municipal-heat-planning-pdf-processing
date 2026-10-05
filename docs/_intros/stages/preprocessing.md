@@ -51,7 +51,7 @@ reading `sections.json` and writing `sections_refined.json`
 
 ### Resolving the profile and choosing a mode
 
-`resolve_profile(args)` (`docpipe/profile.py:447-470`) loads the `Profile`
+`resolve_profile(args)` (`docpipe/profile.py:445-468`) loads the `Profile`
 named by `--profile` or `$DOCPIPE_PROFILE`; `__main__.py` copies the flag
 into the environment before the stage is imported, and a profile named
 after the stage was imported under another one raises `SystemExit` instead
@@ -204,12 +204,12 @@ a field the `Section` docstring in `models.py:159-161` omits.
 | `DOCPIPE_LAYOUT_PREFETCH` | env var | `1` | Stage 2 batches rendered ahead of the running forward pass, as `LAYOUT_PREFETCH_BATCHES` (`config.py:58`) |
 | `PAGE_TRANSCRIBE_WORKERS` / `PAGE_RENDER_WORKERS` | env vars | `64` / `4` | concurrent transcription calls and page renders in the fallback, bounded separately |
 
-`Profile.column_layout` (`docpipe/profile.py:174`) is optional: it defaults
+`Profile.column_layout` (`docpipe/profile.py:172`) is optional: it defaults
 to `"auto"`, `run()` falls back to `"auto"` even with no active profile
 (`pipeline.py:537`), and there is no dedicated `--column-layout` CLI flag.
 `Profile.__post_init__` raises
 `ValueError` only if it is set to something outside `auto`/`single`/`double`
-(`profile.py:189-195`). `auto` looks for a gutter and accepts one column as
+(`profile.py:187-193`). `auto` looks for a gutter and accepts one column as
 the answer, `double` falls back to a centre split if none is found, and
 `single` never looks.
 
@@ -247,7 +247,7 @@ A selection of the module constants that tune detection and assembly:
 | `LayoutDetectionFailed` reaches `run_folder`'s per-document handler | the document is marked `status="error"` in `_index.json` and the run continues; called directly, the exception propagates unhandled (`pipeline.py:237-256,529-544`) |
 | A page fails to render for Stage 2, its post-detection processing raises, or a crop fails to encode or write | logged and skipped; the page keeps its Stage-1-only data, and a written `Block` can still reference a failed crop (`stage2_layout.py:491-552,992,1032`) |
 | `pages.json` or `sections.json` is unreadable, or a Stage 3 cache was built while `n_failed` was set, or the input path is neither a `.pdf` file nor a directory | treated as absent and rebuilt, deleted before the cache-hit check runs, or `run()` raises `ValueError` and `main()` exits with status 1 (`pipeline.py:58-59,154-168,438,542-544`) |
-| No profile is active but a profile-gated function is called, or a profile is named after the stage was imported under another one | a `LookupError` propagates uncaught, or `resolve_profile` raises `SystemExit` (`stage1_extract.py:41-43`; `profile.py:256-266,387-401,447-470`) |
+| No profile is active but a profile-gated function is called, or a profile is named after the stage was imported under another one | a `LookupError` propagates uncaught, or `resolve_profile` raises `SystemExit` (`stage1_extract.py:41-43`; `profile.py:254-264,385-399,445-468`) |
 | A page-transcription call raises, returns an empty markdown string, or more candidates need transcription than `max_pages` | counted in `pages_failed` or `pages_empty`, or truncated with `pages_missing_text` still reporting the true total (`page_text_fallback.py:196-204`); unreachable through the CLI or `run()`, since `_fill_missing_page_text()` never passes `max_pages` (`pipeline.py:369-374`) |
 | `find_gutters()` cannot support a confident column split | returns `[]`; the page reads as a single column, or, under `column_layout="double"`, falls back to a hard centre split (`columns.py:158-267`) |
 

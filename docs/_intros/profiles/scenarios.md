@@ -6,16 +6,16 @@ cites, staged from a crawl over that citation list, each entry's PDF
 placed by hand and the AR6 scenarios it documents becoming the
 `DocumentScenarios` link table described next
 (`profiles/scenarios/source.py`'s module docstring).
-`profiles/scenarios/profile.py` sets the source and answer language to
-English for the whole profile, `document_noun` to `Publikation`, and
-three catalog facets a reader can filter by: publication year, venue, and
-the AR6 scenarios a publication documents. That setting covers
-`profile.py`'s own fields only: `extraction_spec.json`'s
-`parameter_question` and every parameter's label and description are
-German sentences, and the spec's `_comment` states that
-`out:not_in_list`'s meaning is worded in the language of its prompts,
-German here, not the profile's declared English (`extraction_spec.json`,
-lines 40 to 41).
+`profiles/scenarios/profile.py` sets `document_noun` to `Publikation`
+and three catalog facets a reader can filter by: publication year, venue,
+and the AR6 scenarios a publication documents. It declares no language:
+the language of a request and of an answer is that of the profile's
+prompts and phrase tables, which for extraction is German.
+`extraction_spec.json`'s `parameter_question` and every parameter's label
+and description are German sentences, and the spec's `_comment` states
+that `out:not_in_list`'s meaning is worded in the language of its prompts
+(`extraction_spec.json`, lines 40 to 41). The publications themselves, and
+the chat's wording, are English.
 
 The corpus's own schema carries this identity in three tables, applied by
 `profiles/scenarios/schema.sql` after the core schema. `DocumentMeta` holds
@@ -55,7 +55,7 @@ table gives this profile's own answer.
 | Structure assembly | `preprocessing.py` | `HYPHEN_EXCEPTIONS`, `CAPTION_MAX_WORDS`, `TITLE_EXCLUDE_PREFIXES`, `DIRECTORY_FIGTAB_WORDS`, `BIBLIOGRAPHY_TITLE_WORDS` | English hyphenation, caption length, heading and bibliography rules |
 | Preprocessing, refinement, visuals | `prompts/preprocessing`, `prompts/refinement`, `prompts/visuals` | 1, 3 and 7 prompt ids | page transcription, English artefact repair, table and figure captioning |
 | The picker (app) | `catalog.py`, `profile.py` | `CATALOG`, `facets` | publication labels and three filters |
-| Extraction | `extraction.py`, `prompts/extraction/*.md` | `SPEC_PATH`, `document_axes`, eight prompt ids | the spec (18 parameters, four of them the bundle's tags), the per-document scenario and region lists, and the harvest's own questions |
+| Extraction | `extraction.py`, `prompts/extraction/*.md` | `SPEC_PATH`, `document_axes`, `PHRASES`, `PROMPT_CHECKS`, eight prompt ids | the spec (18 parameters, four of them the bundle's tags), the per-document scenario and region lists, the sentences the stage writes to the model and the passages the preflight holds its prompts to, and the harvest's own questions |
 | The graph | `kg.py`, `oekg_api.py` | `make_serializer`, `make_study_reader`, `dry_run` | OEKG Turtle, the trust wording, and a dry run of the platform's scenario-bundle API (below) |
 | The answer app | `inference.py`, `prompts/inference/*.md` | `PHRASES`, `READOFF_MARKER`, `READOFF_NOTE`, 15 prompt ids | the English chat wording and the answer loop's own prompts |
 

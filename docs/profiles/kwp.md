@@ -15,7 +15,7 @@ section text is itself a model reading, one reason their harvested values
 can never clear the run's top trust level. An earlier, 801-document
 snapshot found 184 plans with multi-column pages, so the profile fixes
 `column_layout="auto"` rather than leaving layout detection to guess per
-page (`profiles/kwp/profile.py:15` to `19`).
+page (`profiles/kwp/profile.py:13` to `17`).
 
 One Excel row is one municipality; several rows can point at the same PDF
 when several municipalities plan together as a convoy, so the document is
@@ -73,7 +73,7 @@ table gives kwp's own answer.
 | Refinement | `prompts/refinement/*.md` | `refine`, `refine_corrections`, `split` | repairs German extraction artefacts, proposes section cuts |
 | Visuals | `prompts/visuals/*.md` | seven prompt ids | table transcription, figure description and captions, in German |
 | The picker (app) | `catalog.py`, `profile.py` | `CATALOG`, `facets` | plan-centric labels, convoy membership, three filters |
-| Extraction | `extraction.py` | `SPEC_PATH`, `SLICE`, `FRAME`, `document_context` | the spec, the slice gate, the frame axes |
+| Extraction | `extraction.py` | `SPEC_PATH`, `SLICE`, `FRAME`, `document_context`, `PHRASES`, `PROMPT_CHECKS` | the spec, the slice gate, the frame axes, the German sentences the stage writes to the model (the frame request's list of a closed coordinate stands under `"scenarios"`) and the passages the preflight holds its prompts to |
 | Extraction | `prompts/extraction/*.md` | eight prompt ids | phrase, frame, rows, field, anchors, queries, harvest, review |
 | The graph | `kg.py` | `make_serializer` and seven more names | MHPKG Turtle, the coordinate query, the trust wording |
 | The answer app | `inference.py` | `PHRASES`, `READOFF_MARKER`, `READOFF_NOTE`, `ROUTE_NOTES` | the German chat wording and the graph route's refusal sentences |

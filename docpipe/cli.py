@@ -39,6 +39,8 @@ STAGES = {
                  "find each harvested row's passage again"),
     "compile": ("docpipe.compile", "draft an extraction spec from the "
                 "shapes and the ontology of a graph"),
+    "preflight": ("docpipe.extraction.preflight", "before a corpus run: "
+                  "the profile's spec, prompts, schema and graph writer"),
     "extract": ("docpipe.extraction", "stage 7: harvest values, top up, "
                                       "review, serialize"),
     "evaluate": ("docpipe.extraction.evaluate", "precision and recall of a "
@@ -210,8 +212,6 @@ PROFILE = Profile(
     extends="default",
     title="{title}",
     document_noun="document",
-    source_language="en",
-    answer_language="en",
     facets=(
         Facet("folder", "Folder"),
     ),

@@ -10,8 +10,6 @@ PROFILE = Profile(
     name="default",
     title="Document collection",
     document_noun="document",
-    source_language="en",
-    answer_language="en",
     column_layout="auto",
     # Filled by catalog.py from DocumentMeta: the subfolder a file came from.
     facets=(

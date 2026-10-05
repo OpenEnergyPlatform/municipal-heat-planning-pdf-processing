@@ -13,6 +13,17 @@ Author: Felix Vossel
 # open: "3,251" is 3251 here, and "1.234" is 1.234.
 DECIMAL_MARK = "."
 
+
+# What the preflight (`docpipe preflight`) holds this profile's prompts to,
+# beyond the keys the stage reads by name: a wording the run depends on. The
+# prompts are in the profile's language, so the passage is too. A profile
+# that words a prompt of its own says its own passages.
+# (what is checked, prompt, passage, True: has to be there, False: must not)
+PROMPT_CHECKS = (
+    ("field prompt asks one field", "extraction/field",
+     "EXACTLY ONE field", True),
+)
+
 PHRASES = {
     # the closed list as a request shows it
     "option_means": 'means',
@@ -42,6 +53,12 @@ PHRASES = {
     "answer_not_in_quote": (
         'Your "quote" does not contain {answer!r}. Quote the place where '
         'it really stands, or answer with "{unstated}".'),
+    # The key of the frame request that holds the entries of a closed frame
+    # coordinate, one list per coordinate. The frame prompt of this profile
+    # names no key of its own ("the list the request gives for ..."), and
+    # the correction below is handed the key that was sent, so a profile
+    # that words this one phrase differently has moved all of it.
+    "frame_options": "{slot}_options",
     # why a pair of the document's frame was not taken
     "frame_missing": 'A pair lacked "{slot}".',
     "frame_no_quote": 'For {slot}={given!r}, "{slot}_quote" was missing.',
@@ -53,7 +70,7 @@ PHRASES = {
         '{slot}={given!r} does not stand in its quote {quote!r}. Write '
         'the wording of the document into "{slot}_raw".'),
     "frame_not_an_option": (
-        '{given!r} is none of the keys of "scenarios". Choose exactly '
+        '{given!r} is none of the keys of "{options}". Choose exactly '
         'one of them, copied character for character, and write the word '
         'of the document into "{slot}_raw".'),
     "frame_not_a_year": (

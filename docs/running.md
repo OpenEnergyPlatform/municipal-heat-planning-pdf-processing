@@ -31,6 +31,7 @@ arguments, and that form keeps working:
 | `docpipe extract` | `python -m docpipe.extraction` |
 | `docpipe reanchor` | `python -m docpipe.extraction.identity` |
 | `docpipe compile` | `python -m docpipe.compile` |
+| `docpipe preflight` | `python -m docpipe.extraction.preflight` |
 | `docpipe evaluate` | `python -m docpipe.extraction.evaluate` |
 | `docpipe benchmark` | `python -m docpipe.extraction.benchmark` |
 | `docpipe export` | `python -m docpipe.serve.export` |
@@ -264,6 +265,20 @@ is left out of the merge, and one warning names up to twenty of them
 
 ### 7. Extraction
 
+Before a corpus run, and after a change to the spec, a prompt or the
+profile's `extraction.py`, the profile is checked without a GPU or a model:
+
+```bash
+docpipe preflight kwp
+```
+
+It reads the spec the profile names (`extraction.SPEC_PATH`, and no other),
+its extraction prompts, the shape it publishes and the writer of its graph,
+prints one line per check and exits 1 when one fails. With no name it checks
+the profile in effect, and it holds for any profile, one of this repository or
+a project's own, which may be named by its directory (see [the extraction
+stage](stages/extraction.md)). Then the harvest:
+
 ```bash
 docpipe extract data/kwp/kwp.db data/kwp/faiss_index.bin data/kwp/extraction
 ```
@@ -358,10 +373,10 @@ their values and where each value comes from.
 | Extraction | `EXTRACT_MAX_RETRIES` | `3` | attempts per LLM request before giving up on it | `docpipe/extraction/runner.py:96` |
 | Extraction | `EXTRACT_RETRY_TIMEOUT` | `600` | client timeout (seconds) a retry gets after a request timed out; a request refused at once keeps the client's own timeout | `docpipe/extraction/runner.py:101` |
 | Extraction | `EXTRACT_BATCH_SOURCES` | `6` | sources sharing one harvest request | `docpipe/extraction/runner.py:251` |
-| Extraction | `EXTRACT_BATCH_DOCS` | `64` | documents kept in flight at once, largest first by section count, filename breaking a tie; one written and replaced by the next as soon as it finishes | `docpipe/extraction/runner.py:5171` |
+| Extraction | `EXTRACT_BATCH_DOCS` | `64` | documents kept in flight at once, largest first by section count, filename breaking a tie; one written and replaced by the next as soon as it finishes | `docpipe/extraction/runner.py:5177` |
 | Extraction | `EXTRACT_FIELD_ROWS` | `32` | rows one field request answers at once | `docpipe/extraction/runner.py:416` |
-| Extraction | `EXTRACT_MAX_MODEL_LEN` | `32768` | fallback context window, used only where the server's own preflight reports none | `docpipe/extraction/runner.py:1269` |
-| Extraction | `EXTRACT_LIMIT_ADAPTIVE` | `1` | off (`0`) disables the adaptive request limit; the thread pools alone bound concurrency | `docpipe/extraction/runner.py:1298` |
+| Extraction | `EXTRACT_MAX_MODEL_LEN` | `32768` | fallback context window, used only where the server's own preflight reports none | `docpipe/extraction/runner.py:1274` |
+| Extraction | `EXTRACT_LIMIT_ADAPTIVE` | `1` | off (`0`) disables the adaptive request limit; the thread pools alone bound concurrency | `docpipe/extraction/runner.py:1303` |
 | Extraction | `EXTRACT_LIMIT_START` | `128` | requests the adaptive limit opens with | `docpipe/extraction/throttle.py:50` |
 | Extraction | `EXTRACT_LIMIT_MIN` | `16` | floor the limit backs off to | `docpipe/extraction/throttle.py:51` |
 | Extraction | `EXTRACT_LIMIT_MAX` | `512` | ceiling the limit grows to; the server's own max-num-seqs cap must be at least this, or requests queue there instead | `docpipe/extraction/throttle.py:52` |
@@ -371,7 +386,7 @@ their values and where each value comes from.
 | Extraction | `EXTRACT_LIMIT_KV_GROW` | `0.80` | KV cache fraction below which the limit may grow | `docpipe/extraction/throttle.py:57` |
 | Extraction | `EXTRACT_LIMIT_KV_HIGH` | `0.92` | KV cache fraction at or above which the limit steps down | `docpipe/extraction/throttle.py:58` |
 | Extraction | `EXTRACT_LIMIT_TPOT_MAX` | unset | seconds per output token above which a sample also counts as pressure; unset, token time never steps the limit down | `docpipe/extraction/throttle.py:61` |
-| Extraction | `EXTRACT_SERVER_DEAD_AFTER` | `180` | seconds without any reply to a `/models` probe before the harvest ends as if stopped, so a dead server is noticed in minutes | `docpipe/extraction/runner.py:1910` |
+| Extraction | `EXTRACT_SERVER_DEAD_AFTER` | `180` | seconds without any reply to a `/models` probe before the harvest ends as if stopped, so a dead server is noticed in minutes | `docpipe/extraction/runner.py:1916` |
 | Extraction | `EXTRACT_LOCATE_CACHE_PAGES` | `512` | pages of words cached by `make_locate` across documents; a cache hit is a dict lookup and takes no lock | `docpipe/extraction/runner.py:280` |
 | App | `INFERENCE_DB_PATH` | profile `db_path`, else `data/KWP.db` | SQLite corpus database, opened read-only | `docpipe/app/config.py` |
 | App | `INFERENCE_INDEX_PATH` | profile `index_path`, else `data/faiss_index.bin` | FAISS index loaded into memory | `docpipe/app/config.py` |
@@ -487,10 +502,12 @@ range, else compares the working tree against `HEAD`.
 python scripts/preflight_profiles.py
 ```
 
-audits a profile's spec, prompts, schema and ontology pin before a
-corpus run, exiting non-zero on the first hard failure; with no
-arguments it audits `kwp` and `scenarios` together, or one alone when
-named.
+runs `docpipe preflight` for the two profiles kept in this repository: it
+audits a profile's spec, prompts, schema, graph writer and ontology pin
+before a corpus run and exits 1 when a check fails, after printing every
+check. With no arguments it audits `kwp` and `scenarios` together, or the
+profiles named when given any; `docpipe preflight` itself takes any profile
+and checks the one in effect when none is named.
 
 `scripts/inference_app_smoketest.py` checks that `EMBEDDING_BACKEND`
 returns vectors of the right dimension, L2-normalized, for a text

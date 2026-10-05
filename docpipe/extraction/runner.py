@@ -1240,7 +1240,12 @@ def _frame_payload(sources: list, slots: list, known: Optional[list] = None,
     for slot in slots:
         options = slot.answerable() if slot.kind == fields.CHOICE else None
         if options:
-            payload.setdefault("scenarios", {}).update(
+            # Under the key the profile's frame prompt reads them from. The
+            # core does not know what a frame coordinate is called there: a
+            # profile whose phrase names the coordinate keeps two closed
+            # coordinates in two lists, one that names a single key has one.
+            payload.setdefault(say("frame_options", slot=slot.name),
+                               {}).update(
                 {k: v for k, v in options.items()
                  if not str(k).startswith("out:")})
     if known:
@@ -1551,7 +1556,8 @@ def frame_pairs(reply: Optional[dict], slots: list, sources: list,
                 # ar6's tuples carry an unmapped scenario label for exactly
                 # this reason. Asked again instead, and told which list.
                 refuse(say("frame_not_an_option", given=given,
-                                   slot=slot.name))
+                           slot=slot.name,
+                           options=say("frame_options", slot=slot.name)))
                 break
             if slot.kind == fields.NUMBER:
                 try:

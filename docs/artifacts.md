@@ -13,7 +13,7 @@ so the files below let a later run resume or reuse an earlier one's work.
 
 Every PDF preprocessing takes in gets one directory under a profile's
 `processed_dir` (`<data root>/<profile>/pdf/processed`,
-`Profile.processed_dir`, `docpipe/profile.py:309-311`), named after the
+`Profile.processed_dir`, `docpipe/profile.py:307-309`), named after the
 PDF's filename stem and kept relative to the input folder so two
 same-named PDFs in different subfolders never collide
 (`docpipe/preprocessing/pipeline.py:233-235`). Inside it sit two

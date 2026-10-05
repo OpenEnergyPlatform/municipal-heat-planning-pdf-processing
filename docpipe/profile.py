@@ -169,8 +169,6 @@ class Facet:
 @dataclass(frozen=True)
 class Profile:
     name: str
-    source_language: str = "de"     # language of the documents
-    answer_language: str = "de"     # language the app answers in
     column_layout: str = "auto"     # auto | single | double
     data_root: Optional[Path] = None
     # where the profile's own files live; defaults to where it was found

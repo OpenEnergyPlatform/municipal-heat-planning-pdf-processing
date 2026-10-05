@@ -48,7 +48,7 @@ as they do on [core](core.md), without it appearing as a numbered link.
 
 `core_sql()` reads `docpipe/store/schema.sql` verbatim (`CORE_SCHEMA`,
 `schema.py:41` to `42`); `profile_sql(profile)` does the same for
-`Profile.schema_sql` (`docpipe/profile.py:280` to `289`: the profile's own
+`Profile.schema_sql` (`docpipe/profile.py:278` to `287`: the profile's own
 `schema.sql`, else that of the nearest profile it extends), returning an
 empty string if the file or profile is absent (`schema.py:45` to `48`).
 `apply()` turns `PRAGMA foreign_keys = ON` (see Configuration), runs `BEGIN;
@@ -323,14 +323,14 @@ Reading the tables back out is not this package's job.
   and the app's document picker both select `is_current = 1` documents by
   default, so a superseded document is never harvested or shown, even
   when named explicitly; the app labels a row `(aktuell)` or `(alt)`
-  (`docpipe/extraction/runner.py:4720` to `4745`, docstrings;
+  (`docpipe/extraction/runner.py:4726` to `4751`, docstrings;
   `docpipe/inference/catalog.py:61` to `83`).
 
 ## Configuration
 
 | name | kind | default | effect | where |
 |---|---|---|---|---|
-| `DOCPIPE_PROFILE` / `--profile` | environment variable / CLI flag | unset / none | selects which profile's `schema.sql` `apply()` layers on the core schema | `docpipe/profile.py:351` to `374` (env var, `load_profile`), `410` to `413` (`--profile`, `add_profile_argument`) and `447` to `470` (`resolve_profile`) |
+| `DOCPIPE_PROFILE` / `--profile` | environment variable / CLI flag | unset / none | selects which profile's `schema.sql` `apply()` layers on the core schema | `docpipe/profile.py:349` to `372` (env var, `load_profile`), `410` to `413` (`--profile`, `add_profile_argument`) and `447` to `470` (`resolve_profile`) |
 | `PRAGMA foreign_keys` | fixed connection pragma | `ON` | enables foreign-key enforcement, off by default in SQLite, so `ON DELETE CASCADE`/`SET NULL` fire | `docpipe/store/schema.py:53`; re-set independently by `docpipe/chunking/database.py:100` |
 | `PRAGMA busy_timeout` | fixed pragma, chunking's own `connect()` only | 30000 ms | a reader waits for a write lock instead of failing, needed once embedding began preparing documents while writing batches | `docpipe/chunking/database.py:97` to `107` |
 | `CORE_TABLES` | module constant | the 9 core table names, as a tuple | names which tables belong to the core, not a profile; used by tests | `docpipe/store/schema.py:27` to `28` |

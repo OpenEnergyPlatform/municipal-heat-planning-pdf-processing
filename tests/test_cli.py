@@ -764,3 +764,22 @@ def test_the_inference_package_loads_the_answer_loop_only_when_asked():
     assert package.answer_question is answer.answer_question
     with pytest.raises(AttributeError):
         package.no_such_thing
+
+
+def test_preflight_is_a_command_and_ends_one_on_a_failure(tmp_path):
+    """The gate before a corpus run, for whoever has only installed the
+    package. The built-in profile has no spec, which is a hard failure."""
+    shown = _docpipe("preflight", "--help", cwd=tmp_path, stubs=False)
+    assert shown.returncode == 0, shown.stderr[-800:]
+    assert "usage: docpipe preflight" in shown.stdout
+    run = _docpipe("preflight", "default", cwd=tmp_path)
+    assert run.returncode == 1, run.stderr[-800:]
+    assert "=== default ===" in run.stdout
+    assert "X spec present" in run.stdout
+    # the profile in effect is the one checked when none is named
+    same = _docpipe("--profile", "default", "preflight", cwd=tmp_path)
+    assert same.returncode == 1 and "=== default ===" in same.stdout
+    # and one that passes ends 0
+    passing = _docpipe("preflight", "kwp", cwd=tmp_path)
+    assert passing.returncode == 0, passing.stdout[-1500:]
+    assert "0 failure(s)" in passing.stdout

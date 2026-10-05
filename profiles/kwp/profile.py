@@ -10,8 +10,6 @@ PROFILE = Profile(
     documents_shareable=True,
     title="Kommunale Wärmeplanung – Recherche",
     document_noun="Wärmeplan",
-    source_language="de",
-    answer_language="de",
     # Measured over the 801-document corpus: 184 plans have multi-column pages,
     # 44 of them throughout. Mostly two columns, a handful of three, one of
     # four. Those pages read as interleaved nonsense without this.

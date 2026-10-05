@@ -93,7 +93,8 @@ re-run in isolation. A tree processed before the rename is brought forward with
 `python -m docpipe.migrate_artifact_names <processed root> --apply`.
 
 Around the stages: `docpipe compile` drafts an extraction spec from the SHACL
-shapes of a graph, `docpipe evaluate` and `docpipe benchmark` count precision and
+shapes of a graph, `docpipe preflight` checks a profile's spec, prompts and
+graph writer before a corpus run, `docpipe evaluate` and `docpipe benchmark` count precision and
 recall against what people decided and make a recorded harvest again without a
 model, and `docpipe export` and `docpipe serve` hand the values on as a table, an
 HTTP API or an MCP server. Every model request goes through one provider layer: a

@@ -34,6 +34,7 @@ project file say when it is imported, so the command settles both first.
 | `extract` | stages 7 and 8: harvest, top up, review, serialize |
 | `reanchor` | after a rebuilt database: find each harvested row's passage again |
 | `compile` | draft an extraction spec from shapes (see [the spec compiler](compile.md)) |
+| `preflight` | before a corpus run: check a profile's spec, prompts, schema and graph writer (see [the extraction stage](extraction.md)) |
 | `evaluate`, `benchmark` | measure a harvest (see [measuring a harvest](evaluation.md)) |
 | `export`, `serve` | hand the harvested values on (see [handing the values on](serve.md)) |
 | `lexical` | build the word index the chat searches beside the vectors |
@@ -83,6 +84,17 @@ holds it (`LLM_API_KEY`, `VLM_API_KEY`), not the project file's key, which
 takes no secret. A stage whose packages are missing is a warning, so
 an installation that only chats needs no layout model; named with `--stage`
 the same finding fails. `--offline` skips the servers.
+
+`docpipe preflight [PROFILE ...]` checks a profile for a corpus run, again
+without a GPU or a model question: the spec the profile names, its extraction
+prompts and the passages it says they hold, the shape it publishes and the
+writer of its graph. It prints one line per check, checks the profile in
+effect when none is named, and exits 1 when a check fails, so it can stand
+before a corpus run. It works for any profile, in this repository or in a
+project of one's own, which may be named by its directory as for `--profile`;
+a name that is no profile is one failed line, and so is a profile the audit
+cannot get through, while the tables of the others are still printed (see [the
+extraction stage](extraction.md)).
 
 ## Installing
 

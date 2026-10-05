@@ -8,8 +8,6 @@ PROFILE = Profile(
     extends="default",
     title="IPCC-AR6-Szenarienliteratur – Recherche",
     document_noun="Publikation",
-    source_language="en",
-    answer_language="en",
     # Journal articles and agency reports are typeset in two columns far more
     # often than heat plans are, and a two-column page read line by line is
     # interleaved nonsense. Takes effect on the next Stage 3 (--rebuild-stage3).

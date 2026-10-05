@@ -12,6 +12,7 @@ from types import SimpleNamespace as NS
 
 import pytest
 
+from docpipe import prompts
 from docpipe.extraction import fields, pipeline, runner, wording
 from docpipe.extraction.pipeline import Row, Source
 from docpipe.extraction.spec import load as load_spec
@@ -344,6 +345,13 @@ def _names(text) -> set:
     return {name for _, name, _, _ in string.Formatter().parse(text) if name}
 
 
+# A name the stage hands a phrase and a profile may use or leave out: one
+# key for every closed frame coordinate or one per coordinate, and a
+# correction that names that key by what was sent or by its own words.
+MAY_LEAVE_OUT = {"frame_options": {"slot"},
+                 "frame_not_an_option": {"options"}}
+
+
 @pytest.mark.parametrize("name", ["kwp", "scenarios", "default"])
 def test_every_profile_says_every_sentence_with_the_same_names(name):
     own = load_profile(name)._own("extraction", "PHRASES")
@@ -351,7 +359,8 @@ def test_every_profile_says_every_sentence_with_the_same_names(name):
     german = load_profile("kwp")._own("extraction", "PHRASES")
     for key, text in own.items():
         assert isinstance(text, str) and text, key
-        assert _names(text) == _names(german[key]), key
+        free = MAY_LEAVE_OUT.get(key, set())
+        assert _names(text) - free == _names(german[key]) - free, key
 
 
 def test_the_built_in_profile_says_it_in_english():
@@ -379,22 +388,142 @@ def test_a_profile_that_lacks_a_sentence_is_told_which(monkeypatch):
 
 def test_one_sentence_is_laid_over_the_extended_profile_s(tmp_path,
                                                           monkeypatch):
-    home = tmp_path / "mine"
+    home = tmp_path / "worded"
     home.mkdir()
     (home / "__init__.py").write_text("", encoding="utf-8")
     (home / "profile.py").write_text(
         "from docpipe.profile import Profile\n"
-        "PROFILE = Profile(name='mine', extends='default')\n",
+        "PROFILE = Profile(name='worded', extends='default')\n",
         encoding="utf-8")
     (home / "extraction.py").write_text(
         "PHRASES = {'empty': 'Nothing came back.'}\n", encoding="utf-8")
     monkeypatch.setenv("DOCPIPE_PROFILE_PATH", str(tmp_path))
     monkeypatch.setattr(wording, "_checked", {})
-    got = wording.phrases(load_profile("mine"))
+    got = wording.phrases(load_profile("worded"))
     base = load_profile("default")._own("extraction", "PHRASES")
     assert got["empty"] == "Nothing came back."
     assert {k: v for k, v in got.items() if k != "empty"} == \
         {k: v for k, v in base.items() if k != "empty"}
+
+
+# -- where the frame request puts a closed list -------------------------------
+
+REGION = fields.Slot(name="region", kind=fields.CHOICE, options=(
+    fields.Option(label="north", uri="n", synonyms=("the North",)),))
+
+
+def test_the_frame_request_names_its_list_as_before(german):
+    """What the two German profiles send did not move: one key, and it is
+    the one their frame prompts read."""
+    payload = runner._frame_payload([SOURCE], [SCENARIO, YEAR])
+    assert list(payload) == ["sources", "scenarios"]
+    assert "target" in payload["scenarios"]
+    # and two closed coordinates share that one list, as they always did
+    both = runner._frame_payload([SOURCE], [SCENARIO, REGION, YEAR])
+    assert list(both) == ["sources", "scenarios"]
+    assert {"target", "north"} <= set(both["scenarios"])
+
+
+def test_a_profile_that_names_the_coordinate_keeps_two_lists_apart(
+        monkeypatch):
+    monkeypatch.setenv("DOCPIPE_PROFILE", "default")
+    payload = runner._frame_payload([SOURCE], [SCENARIO, REGION, YEAR])
+    assert list(payload) == ["sources", "scenario_options", "region_options"]
+    assert "target" in payload["scenario_options"]
+    assert "north" not in payload["scenario_options"]
+    assert "north" in payload["region_options"]
+    assert "target" not in payload["region_options"]
+    # the open coordinate has no list to choose from, under any name
+    assert not [key for key in payload if key.startswith("year")]
+
+
+def _frame_prompt(name) -> str:
+    return (load_profile(name).prompts_dir / "extraction"
+            / "frame.md").read_text(encoding="utf-8")
+
+
+def _refused_choice(slot) -> str:
+    """The correction a pair gets that chose something off the list, as the
+    stage itself words it."""
+    rejected: list = []
+    runner.frame_pairs(
+        {"pairs": [{slot.name: "not on the list", f"{slot.name}_quote": QUOTE,
+                    f"{slot.name}_raw": "Stadtgebiet",
+                    f"{slot.name}_source": "Q1"}]},
+        [slot], [SOURCE], rejected)
+    return rejected[0]["reason"]
+
+
+def test_the_german_frame_prompts_read_the_list_where_the_request_puts_it(
+        german):
+    """The key is said in four places: by the request, twice by the prompt
+    (where to choose from, and what to do about a correction), and by the
+    correction itself. Each is the profile's, and each is held on its own:
+    one that went stale alone would tell the model of a list that is not
+    there."""
+    key = wording.say("frame_options", slot="scenario")
+    assert key in runner._frame_payload([SOURCE], [SCENARIO, YEAR])
+    prompt = _frame_prompt(german)
+    choose = [line for line in prompt.splitlines()
+              if line.startswith("- `scenario`")]
+    correct = [line for line in prompt.splitlines() if '"corrections"' in line]
+    assert len(choose) == 1 and f'"{key}"' in choose[0]
+    assert len(correct) == 1 and f'"{key}"' in correct[0]
+    assert prompt.count(f'"{key}"') == 2
+    assert f'"{key}"' in _refused_choice(SCENARIO)
+
+
+def test_the_built_in_frame_prompt_names_no_key_that_could_go_stale(
+        monkeypatch):
+    """The built-in profile is the one others extend. Its prompt says where
+    to choose without a key of its own, and its correction is handed the
+    key that was sent, for whichever coordinate."""
+    monkeypatch.setenv("DOCPIPE_PROFILE", "default")
+    prompt = _frame_prompt("default")
+    assert "_options" not in prompt and '"scenarios"' not in prompt
+    assert "the list the request gives for `scenario`" in prompt
+    for slot in (SCENARIO, REGION):
+        key = wording.say("frame_options", slot=slot.name)
+        assert key in runner._frame_payload([SOURCE], [slot])
+        assert f'"{key}"' in _refused_choice(slot)
+
+
+def test_a_profile_without_the_key_of_the_list_is_told(monkeypatch):
+    monkeypatch.setattr(wording, "_checked", {})
+    rest = {key: text for key, text
+            in load_profile("kwp")._own("extraction", "PHRASES").items()
+            if key != "frame_options"}
+    monkeypatch.setattr(
+        Profile, "_own",
+        lambda self, module, attr: rest
+        if (module, attr) == ("extraction", "PHRASES") else None)
+    with pytest.raises(LookupError) as refused:
+        wording.phrases(Profile(name="kwp"))
+    assert "frame_options" in str(refused.value)
+
+
+def test_a_project_words_the_key_of_the_list_itself(tmp_path, monkeypatch):
+    home = tmp_path / "regional"
+    home.mkdir()
+    (home / "__init__.py").write_text("", encoding="utf-8")
+    (home / "profile.py").write_text(
+        "from docpipe.profile import Profile\n"
+        "PROFILE = Profile(name='regional', extends='default')\n",
+        encoding="utf-8")
+    (home / "extraction.py").write_text(
+        "PHRASES = {'frame_options': 'choices_for_{slot}'}\n",
+        encoding="utf-8")
+    monkeypatch.setenv("DOCPIPE_PROFILE_PATH", str(tmp_path))
+    monkeypatch.setenv("DOCPIPE_PROFILE", "regional")
+    monkeypatch.setattr(wording, "_checked", {})
+    payload = runner._frame_payload([SOURCE], [SCENARIO, REGION])
+    assert list(payload) == ["sources", "choices_for_scenario",
+                             "choices_for_region"]
+    # the one phrase moved all of it: the correction it inherits names the
+    # key that was sent, and the prompt it inherits names none
+    assert '"choices_for_region"' in _refused_choice(REGION)
+    assert "_options" not in _refused_choice(REGION)
+    assert "_options" not in prompts.load("extraction/frame").text
 
 
 # -- how a corpus writes its numbers ------------------------------------------

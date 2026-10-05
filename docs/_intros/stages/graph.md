@@ -481,7 +481,7 @@ call; it never imports a profile. `docpipe/upstream.py` is the
 profile free source puller (see Method above): it resolves a
 profile's `SOURCES` to a version, caches what it fetched, and writes
 the lock both `vocabulary.py --refresh` and
-`scripts/preflight_profiles.py` read back; it never imports a profile
+`docpipe preflight` read back; it never imports a profile
 either.
 
 `profiles/kwp/kg.py` is the `kwp` MHPKG serializer (see Method above),

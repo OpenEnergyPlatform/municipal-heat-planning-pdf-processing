@@ -882,14 +882,29 @@ def schema_path(profile_name: str) -> Path:
     return _profile_dir(profile_name) / SCHEMA_NAME
 
 
+def _spec_file(profile_name: str) -> Path:
+    """The spec the run reads: the one the profile names
+    (`extraction.SPEC_PATH`), wherever it lies. For a name that is no
+    profile yet, the file where a profile keeps it."""
+    from docpipe.profile import load_profile
+    try:
+        named = load_profile(profile_name).component("extraction",
+                                                     "SPEC_PATH")
+    except (LookupError, ImportError, ValueError):
+        named = None
+    return (Path(named) if named
+            else _profile_dir(profile_name) / "extraction_spec.json")
+
+
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("profile", help="profile name, e.g. kwp")
     parser.add_argument("--write", action="store_true",
-                        help=f"write profiles/<profile>/{SCHEMA_NAME}")
+                        help=f"write {SCHEMA_NAME} into the profile's "
+                             f"directory")
     args = parser.parse_args(argv)
 
-    spec_file = _profile_dir(args.profile) / "extraction_spec.json"
+    spec_file = _spec_file(args.profile)
     if not spec_file.is_file():
         print(f"no spec: {spec_file}")
         return 1
