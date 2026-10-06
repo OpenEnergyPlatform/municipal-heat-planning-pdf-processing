@@ -186,22 +186,34 @@ def test_the_rows_prompt_calls_the_front_page_what_it_is():
         assert gegenprobe in text, gegenprobe
 
 
-def test_the_rows_prompt_may_answer_as_long_as_the_batch_was_sized_for():
+def test_the_batch_is_sized_for_the_reply_the_rows_prompt_allows(monkeypatch):
     """How many sources a request reads and how much may be written about them
-    are set in two files, and the run mixes them: fit_batch_sources sizes the
-    batch from extraction/harvest's ceiling (runner.py hardwires
-    HARVEST_PROMPT_ID) while the field-wise path answers under
-    extraction/rows. A lower ceiling here means the batch is deliberately
-    sized for a reply the prompt forbids -- 43 replies were cut off at it in
-    the corpus run of 2026-08-31."""
-    import re as regex
+    are set in two files, and the run has to take them from the same one: the
+    rows request reads the batch, so the batch follows the ceiling of the rows
+    prompt. A batch sized from a prompt that allows more than the rows prompt
+    does is sized for a reply the request forbids: 43 replies were cut off at
+    it in the corpus run of 2026-08-31. The field prompt of this profile allows
+    less than the rows prompt (5120 against 6144), and sizing from it would
+    give two sources and not three."""
+    import dataclasses
 
-    def ceiling(path):
-        head = Path(path).read_text(encoding="utf-8").split("---")[1]
-        return int(regex.search(r"max_tokens:\s*(\d+)", head).group(1))
+    from docpipe import prompts
+    from docpipe.extraction import runner
 
-    assert ceiling(ROWS_PROMPT) >= ceiling(
-        "profiles/scenarios/prompts/extraction/harvest.md")
+    monkeypatch.setenv("DOCPIPE_PROFILE", "scenarios")
+    spec = load(SPEC_PATH)
+    rows = prompts.load(runner.ROWS_PROMPT_ID)
+    field = prompts.load(runner.FIELD_PROMPT_ID)
+    assert int(field.meta["max_tokens"]) < int(rows.meta["max_tokens"])
+    assert runner.fit_batch_sources(field, spec) < runner.batch_sources_for(spec)
+    assert runner.batch_sources_for(spec) == runner.fit_batch_sources(rows, spec)
+    # And it follows the rows prompt, by construction: one with half the
+    # ceiling reads fewer sources.
+    smaller = dataclasses.replace(
+        rows, meta={**rows.meta,
+                    "max_tokens": int(rows.meta["max_tokens"]) // 2})
+    assert runner.fit_batch_sources(smaller, spec) < runner.batch_sources_for(
+        spec)
 
 
 def test_the_probes_expand_without_a_vocabulary_axis(monkeypatch):
@@ -819,30 +831,73 @@ def test_the_out_entries_are_short_enough_to_be_retyped_without_a_slip():
             assert len(labels) > 1, f"{key} has no explanation to fall back on"
 
 
-def test_the_prompt_quotes_the_out_entries_exactly_as_the_list_spells_them():
-    """A sentinel printed in the prompt in a spelling the vocabulary does not
-    hold is worse than no sentinel: the model copies the prompt, the exact
-    lookup misses, and the gloss itself is published as a scenario name or a
-    region name. Both halves are checked — every entry is named, and the
-    paragraph that names them quotes nothing else."""
-    from pathlib import Path
+FIELD_PROMPT = Path("profiles/scenarios/prompts/extraction/field.md")
 
+
+def _named(prompt: str, vocabulary: dict) -> list:
+    """The keys of *vocabulary* whose first label the prompt does not quote."""
+    return [key for key, labels in vocabulary.items()
+            if f'"{labels[0]}"' not in prompt]
+
+
+def _unknown(quoted_in: str, known: set) -> list:
+    """What a text quotes that no vocabulary holds."""
+    return [quoted for quoted in re.findall(r'"([^"]+)"', quoted_in)
+            if quoted.casefold() not in known]
+
+
+def _known_labels() -> set:
     from profiles.scenarios import extraction
 
-    prompt = Path("profiles/scenarios/prompts/extraction/harvest.md").read_text(
-        encoding="utf-8")
-    known = {label.casefold()
-             for vocabulary in (extraction.REGION_OUT, extraction.SCENARIO_OUT)
-             for labels in vocabulary.values() for label in labels}
-    for vocabulary in (extraction.REGION_OUT, extraction.SCENARIO_OUT):
-        for key, labels in vocabulary.items():
-            assert f'"{labels[0]}"' in prompt, f"{key} is not named in the prompt"
+    return {label.casefold()
+            for vocabulary in (extraction.REGION_OUT, extraction.SCENARIO_OUT)
+            for labels in vocabulary.values() for label in labels}
 
+
+def test_the_rows_prompt_quotes_the_region_entries_exactly_as_the_list_spells_them():
+    """A sentinel printed in the prompt in a spelling the vocabulary does not
+    hold is worse than no sentinel: the model copies the prompt, the exact
+    lookup misses, and the gloss itself is published as a region name. Both
+    halves are checked: every region entry is named, and the paragraph that
+    names them quotes nothing else. The rows request carries the regions; the
+    scenario entries are the field request's."""
+    from profiles.scenarios import extraction
+
+    prompt = ROWS_PROMPT.read_text(encoding="utf-8")
+    assert _named(prompt, extraction.REGION_OUT) == []
     paragraph = [line for line in prompt.splitlines()
                  if "KEINE Klasse sind" in line]
     assert paragraph, "the paragraph that introduces the entries moved"
-    for quoted in re.findall(r'"([^"]+)"', paragraph[0]):
-        assert quoted.casefold() in known, f"{quoted!r} is in no vocabulary"
+    assert _unknown(paragraph[0], _known_labels()) == []
+
+
+def test_the_field_prompt_quotes_the_scenario_entries_exactly_as_the_list_spells_them():
+    """The same promise for the scenario entries, which only the field request
+    names: every entry is quoted, and what the sentence that offers an entry
+    quotes after the word is an entry of the list."""
+    from profiles.scenarios import extraction
+
+    prompt = FIELD_PROMPT.read_text(encoding="utf-8")
+    assert _named(prompt, extraction.SCENARIO_OUT) == []
+    offered = re.findall(r'Eintrag "([^"]+)"', prompt)
+    assert len(offered) >= len(extraction.SCENARIO_OUT), offered
+    assert _unknown(" ".join(f'"{name}"' for name in offered),
+                    _known_labels()) == []
+
+
+def test_the_entry_checks_find_a_spelling_the_list_does_not_hold():
+    """Built to fail: a prompt that spells an entry another way, and a
+    paragraph that quotes a gloss the vocabulary has no label for."""
+    from profiles.scenarios import extraction
+
+    misspelt = ('der Eintrag "Szenario Familie" und der Eintrag '
+                '"nicht in AR 6"')
+    assert _named(misspelt, extraction.SCENARIO_OUT) == [
+        "out:family", "out:not_documented"]
+    assert _unknown('bei der Region "global" und "ganz anders"',
+                    _known_labels()) == ["ganz anders"]
+    assert _named("nothing quoted", extraction.REGION_OUT) == list(
+        extraction.REGION_OUT)
 
 
 def test_filling_turns_the_markers_into_a_real_choice(spec):

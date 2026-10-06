@@ -5870,7 +5870,7 @@
     "type": "string"
    },
    "^extraction/(harvest|queries|anchors|rows|field|phrase|frame)$": {
-    "description": "sha256 of the prompt file",
+    "description": "sha256 of the prompt file; `harvest` is in stamps of an older release",
     "pattern": "^[0-9a-f]{64}$",
     "type": "string"
    },
@@ -5997,7 +5997,6 @@
    "spec",
    "model",
    "anchors",
-   "extraction/harvest",
    "extraction/queries",
    "extraction/anchors",
    "extraction/rows",

@@ -104,24 +104,26 @@ Two sections close the page: `## The stamp`, the schema of
 `anchors`, `page_text_transcribed` and the three that place the harvest,
 `docpipe`, `document` (the sha256 and size of the PDF) and `producers`,
 plus per-question patterns,
-`docpipe/extraction/schema.py:602` to `763`), and `## The trace`, the
+`docpipe/extraction/schema.py:602` to `764`), and `## The trace`, the
 schema of `<publication>.trace.jsonl`, one `oneOf` branch per event
 kind: eleven, fixed by the schema for every profile rather than drawn
-from this one's spec (`docpipe/extraction/schema.py:766` to `898`). A
+from this one's spec (`docpipe/extraction/schema.py:767` to `899`). A
 `parameter/`, `value/`, `axis/` or `slot/` key differing from today's
 run, or another sha256 of the PDF in `document` than the database now
 names, makes the document eligible for a full re-harvest under
 `--force-stale`; `model`, `anchors`, `producers` and every prompt id are
 written for a reader and never compared, so a reworded prompt or another
-model leaves a harvested corpus current. The `value/` key of a list
+model leaves a harvested corpus current. A stamp of an older release also
+carries the key `extraction/harvest`; the schema accepts it without
+requiring it, and a document whose stamp holds it stays current. The `value/` key of a list
 parameter counts the classes and their spellings and not their
 definitions, so a stamp of this corpus written before that reads stale
 in those keys once: `--remap`, which needs no model, settles them, and
 `--force-stale` first would read the documents again for nothing. A
 document with a wording that no list holds stays stale after the remap,
 and is what `--force-stale` is left for (`stale`,
-`docpipe/extraction/runner.py:4417` to `4462`; `already_done`, `:4507`
-to `4546`). `top_up_file` redoes
+`docpipe/extraction/runner.py:4404` to `4449`; `already_done`, `:4494`
+to `4533`). `top_up_file` redoes
 only the changed question
 (`docpipe/extraction/topup.py:419` to `537`), and `append_document` reads a
 parameter the spec has gained without reading the document again
@@ -2828,7 +2830,7 @@ The parameter/, value/, axis/ and slot/ keys, and the sha256 in `document`, make
 | `producers` | Every pass that wrote into this harvest, in order: the harvest, then each top-up that rewrote the file, each pass that appended a new parameter, each remap that carried a key forward and each review that changed a row. Entries are only ever added, so a position is stable: a coordinate a top-up re-read points at its entry with `<axis>_producer`. `model` above names the first only. Recorded and never compared. |
 | `spec` | sha256 of extraction_spec.json. A record, not a verdict: it moves on a comment, an indent or a graph annotation, none of which any question is asked through. Compared, it would outvote every key below it. |
 | `^axis/[^/]+/[^/]+$` | What this coordinate asks and what it may answer: the question and the offered list with its spellings and its definitions. Everything the model sees for this axis, and nothing else. |
-| `^extraction/(harvest\|queries\|anchors\|rows\|field\|phrase\|frame)$` | sha256 of the prompt file |
+| `^extraction/(harvest\|queries\|anchors\|rows\|field\|phrase\|frame)$` | sha256 of the prompt file; `harvest` is in stamps of an older release |
 | `^parameter/[^/]+$` | What this parameter asks, without its axes and without its own list: label, description, value type, accepted units and the example. A new option on ONE axis, or in the list the parameter answers from, must not make every value of the parameter stale. Those have keys of their own. |
 | `^question_text/[^/]+$` | The sentence THIS document was searched with. Recorded and never compared: it is written per document, so the document itself is part of it and no two runs produce the same one. What decides whether the harvest is current is its recipe, and that is already here: the generator prompt, the model, and the annotation inside parameter/. |
 | `^review/(prompt\|model)$` | What read this document a second time. Recorded and never compared: the review does not decide whether the harvest is current, and comparing it would report every reviewed document stale the day the review prompt changes. |

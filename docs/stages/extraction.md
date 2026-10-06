@@ -108,7 +108,7 @@ document, not asked again with everything already found excluded. The
 single call fuses every probe into one ranked
 list rather than concatenating a ranking per probe: over 65 documents and
 15,082 values, concatenation put a value's real source at median rank 77,
-fusion at rank 26 (`runner.py:509`).
+fusion at rank 26 (`runner.py:503`).
 
 That single cut is not a plain slice of the ranking either.
 `with_visual_share` (`pipeline.py:185`) holds a share of `top`'s room,
@@ -130,19 +130,19 @@ everywhere else.
 
 The plan searches not with the spec's query templates but a sentence
 written as a document would state the answer, a HyDE anchor; two
-mechanisms produce them. `document_anchor` (`runner.py:1126`) writes the
+mechanisms produce them. `document_anchor` (`runner.py:1120`) writes the
 plan's own probe per document and parameter, from the parameter's
 label, description, the document's name and an early caption; recorded,
 never compared, in the stamp as `question_text/<key>`.
 Dropping query templates for it was measured directly: with templates
 included alongside the anchor, a value's real source sat at median rank
 84; without them, rank 26 (`pipeline.py:246`). `plan_document` falls back to
-`queries.expand`'s templates only when no anchor exists. `make_anchors` (`runner.py:1816`) is the second,
+`queries.expand`'s templates only when no anchor exists. `make_anchors` (`runner.py:1810`) is the second,
 corpus-wide mechanism: one set per question the field sweep asks, each
 axis question and the parameter choice, written once per run and cached
 per question. The value itself has no set: the plan searches with the
 one short sentence `document_anchor` writes (`anchor_targets`,
-`runner.py:1097`). This set backs the field sweep once a
+`runner.py:1091`). This set backs the field sweep once a
 coordinate is not in the value's own passage, and is fingerprinted as
 one `anchors` stamp key.
 
@@ -184,9 +184,9 @@ helpers get a look at the claim first now: `pair_of_claim`
 (`pipeline.py:591`) asks the whole passage whether exactly one OTHER pair
 of the document is named there; if so the claim becomes a row carrying
 that pair in its own `pair` and `pair_index` fields (`Row`,
-`pipeline.py:452`), for `project` (`runner.py:3620`) to stamp instead of
+`pipeline.py:452`), for `project` (`runner.py:3607`) to stamp instead of
 the request's own, drawn from `Batch.pairs` (`pipeline.py:135`), set by
-`pair_batches` (`runner.py:4898`). Exactly one, or the claim still stays
+`pair_batches` (`runner.py:4921`). Exactly one, or the claim still stays
 refused. Measured on corpus_m5: of 120,442 claims refused this way, 52.8%
 came back later under the same quote, 17.8% as the same value under
 another quote, and 29.4%, 35,407 values, were never read under any pair
@@ -195,7 +195,7 @@ t CO2eq/a (3,836), from tables (14,227), figures (11,869) and prose
 (9,311). The gain from the frame itself was measured directly: before it
 existed, the year axis alone produced 1,849 refusals against 0 readings,
 since every window after the first excluded the row's own source
-(`runner.py:3626`).
+(`runner.py:3613`).
 
 ### Base years
 
@@ -207,7 +207,7 @@ pair is that state is named by the profile, kwp's `BASE_YEAR =
 pair, one entry per year with the frame's own quote and source, and every
 batch of the document carries them as `Batch.bases`, framed or not, since
 a passage naming only "Basisjahr" is exactly the one that needs them
-(`plan_batches`, `runner.py:5082`, `:5088`).
+(`plan_batches`, `runner.py:5105`, `:5111`).
 
 A year answer whose quote carries this wording but not the number now
 reads (`base_year_named`, `pipeline.py:912`) when the number given is one
@@ -220,15 +220,15 @@ Before this reading existed, corpus_m5 dropped 127,233 year answers whose
 wording stood in their quote and whose number did not, "Basisjahr" among
 the most common (`profiles/kwp/extraction.py:80-82`). The year field's
 own request is shown the plan's base years alongside the question,
-`"base_years"` (`runner.py:2781-2784`), and the trace's `field` event
+`"base_years"` (`runner.py:2768-2771`), and the trace's `field` event
 counts how many of a window's answers came this way, `via_base`
-(`runner.py:3440-3457`).
+(`runner.py:3427-3444`).
 
 ### The row request
 
 Which values exist at all is decided once, by the value request
-(`make_harvester` with `ROWS_PROMPT_ID`, `find_rows` inside
-`make_fieldwise_harvester`). `pipeline.rows_from_reply` turns its claims
+(`make_harvester`, which sends the rows prompt and no other, called as
+`find_rows` inside `make_fieldwise_harvester`). `pipeline.rows_from_reply` turns its claims
 into `Row` objects through `route_claims`: the quote decides which source
 a value belongs to, a label only breaks a tie, and a claim naming no real
 source and quoting nothing findable is an orphan rather than filed under
@@ -246,18 +246,18 @@ print it, with the reason `text value not in its quote`. A `Row` is
 created only here, never later. The
 request can turn to a code sandbox, bounded to `CODE_ROUNDS` rounds. A
 reply that will not parse is asked again with the cause named,
-`_reply_fault` (`runner.py:2158`), rather than the same message twice, and
+`_reply_fault` (`runner.py:2152`), rather than the same message twice, and
 with the retried attempt's sampling temperature raised a step: on
 corpus_m5, a field retry asked again at temperature 0
 repeated its first reply byte for byte and lost all three tries. Every
-retry loop of this stage (phrase, frame, anchors, harvest, field and
+retry loop of this stage (phrase, frame, anchors, rows, field and
 review) raises the step, `retry_temperature` (`runner.py:117`, env
 `EXTRACT_RETRY_TEMPERATURE_STEP`, default `0.1`), once per fault and
 capped at `1.0`. One cut off at the token ceiling is asked again as two
 halves instead of kept half-read, its labels renumbered onto the whole
-batch, `_split_harvest` (`runner.py:2248`). A single passage still too
+batch, `_split_harvest` (`runner.py:2242`). A single passage still too
 long for that gets its own ceiling doubled, up to four times, before it
-is written as a `_why: cut_off` sentinel instead (`runner.py:2713`).
+is written as a `_why: cut_off` sentinel instead (`runner.py:2700`).
 
 A profile may close a choice list per document (`document_axes`; the AR6
 profile closes its scenarios and its regions). `runner.fill_dynamic_axes`
@@ -272,9 +272,9 @@ spec.
 
 Every coordinate a row still needs is asked for on its own by
 `sweep_field` (`runner.make_sweeper`). Asking per field is why a
-whole-tuple request cannot quietly drop an unsure coordinate: on a
-204-document run, one combined request left the year missing on 63.5%
-of values (`fields.py:15`). The sweep walks three stages, each with its own
+request cannot quietly drop an unsure coordinate: on a 204-document
+run, one request for every coordinate at once left the year missing on
+63.5% of values (`fields.py:15`). The sweep walks three stages, each with its own
 allowance rather than a shared pool. **Own** reads
 the value's own sources and the section its table stands in, for up to
 `FIELD_ATTEMPTS` (3) attempts, each retry naming the reason. **Retrieval**
@@ -288,7 +288,7 @@ overlapping by `FIELD_OVERLAP` (1): once retrieval has nothing new,
 `rest_of_document` reads the document's own remaining sections in
 order, each followed by its own tables and figures in page order, not
 sections alone, rotated to start near the open rows, until the
-coordinate closes or the document runs out (`runner.py:3531`). A
+coordinate closes or the document runs out (`runner.py:3518`). A
 coordinate the search or the rest stage cannot close before its budget
 runs out is `exhausted`, never `unstated`: the first is a finding about
 the run, the second about the document. The budget sums to
@@ -299,23 +299,23 @@ rest allowance by a fraction, at least one window staying either way
 `profiles/kwp/extraction.py:93`). Every request now
 asks one coordinate, not several at once: five coordinates for every
 row of a batch in one request wanted up to 27,311 prompt tokens and
-came back refused or cut off (`runner.py:2911`). Its rows are chunked
+came back refused or cut off (`runner.py:2898`). Its rows are chunked
 to at most `FIELD_ROWS` (32, env `EXTRACT_FIELD_ROWS`), about 2,600
 answer tokens at the measured p90, sized against the server's own
 window before the request is sent rather than shrunk after a refusal,
-`answer_room` (`runner.py:1382`); a chunk still too large for its room
-is halved before it is sent (`runner.py:2954-2964`).
+`answer_room` (`runner.py:1376`); a chunk still too large for its room
+is halved before it is sent (`runner.py:2941-2951`).
 
 ### The reply grammar
 
 A field request now goes out with `response_format`, a JSON schema built
-by `field_response_format` (`runner.py:2847`) from the coordinate's own
+by `field_response_format` (`runner.py:2834`) from the coordinate's own
 contract: the asked field under its own name, `groups` and `answers`, and
 a `value` that is one of the slot's options (`out:unstated` included) or,
 for a number, an integer, nothing beyond that: `additionalProperties:
 False` throughout. vLLM generates the reply inside that shape rather than
-around it, sent on every attempt (`make_field_asker`, `runner.py:2900`,
-`:2989`). Nothing in the grammar is a check: every key stays as optional
+around it, sent on every attempt (`make_field_asker`, `runner.py:2887`,
+`:2976`). Nothing in the grammar is a check: every key stays as optional
 as the field prompt leaves it, and what the reply says is still verified
 by `merge_field` exactly as before. 70,395 field replies of corpus_m5
 carried text beside the object and were asked again for it; under the
@@ -340,13 +340,13 @@ writes one sentinel per source with `_why: "unserved"` (the harvest
 schema's `_why` has four values: `unreachable`, `unserved`, `no_answer`,
 `cut_off`; `docpipe/extraction/schema.py:517-518`), and such a sentinel
 counts towards the dead-server streak like an `unreachable` one
-(`runner.py:2686-2689`, `4083-4085`). A coordinate request, the frame
+(`runner.py:2673-2676`, `4070-4072`). A coordinate request, the frame
 request and a search-sentence request return nothing, as they do for any
 failure; what marks the document is `UNSERVED.note(document_id)`, which
 counts it in the registry `UNSERVED` (`runner.py:212-239`, noted at
-`1214-1215`, `1519-1520` and `3032-3035`). The coordinate request's own streak counts it
-too (`runner.py:3036`). The run's anchor requests belong to no document and
-are counted under `None` (`runner.py:1893-1896`).
+`1208-1209`, `1513-1514` and `3019-3022`). The coordinate request's own streak counts it
+too (`runner.py:3023`). The run's anchor requests belong to no document and
+are counted under `None` (`runner.py:1887-1890`).
 
 ### The adaptive request limit
 
@@ -354,7 +354,7 @@ A fixed thread pool bounds how many requests can be sent at once; how many the
 server can usefully answer at once moves with what is asked and with its own
 queue. `throttle.start` (`throttle.py:332`) reads vLLM's `/metrics` every
 `EXTRACT_LIMIT_POLL` seconds and steers one `AdaptiveLimit` every client waits
-in (`runner._client`, `runner.py:2014`), additive increase / multiplicative
+in (`runner._client`, `runner.py:2008`), additive increase / multiplicative
 decrease: it grows while nothing is waiting, the KV cache stays under
 `EXTRACT_LIMIT_KV_GROW` and the limit is actually being reached, and steps back
 on two consecutive waiting samples, the KV cache at `EXTRACT_LIMIT_KV_HIGH`, or
@@ -362,7 +362,7 @@ a preemption (`throttle.Controller.decide`, `throttle.py:237`).
 `EXTRACT_LLM_PARALLEL` and `EXTRACT_FIELD_PARALLEL` stay ceilings it cannot
 rise past, and a server with no `/metrics` gets no adaptive limit at all, the
 pools alone deciding as before. `EXTRACT_LIMIT_ADAPTIVE=0` turns it off
-(`runner.start_limit`, `runner.py:1339`).
+(`runner.start_limit`, `runner.py:1333`).
 
 ### Merging a coordinate
 
@@ -475,7 +475,7 @@ states and closing summary to a temp file and only replaces the real
 harvest; every rewrite in this stage follows the same rule. The stamp is
 withheld until `runner.finish_document` decides a harvest genuinely
 happened, not merely that a file was written, and it removes an earlier
-stamp before it writes the file (`runner.py:4638-4639`); see Failure modes
+stamp before it writes the file (`runner.py:4625-4626`); see Failure modes
 for when it withholds one. What the stamp records,
 `_stamp_current`, is deliberately not one hash over the whole spec file:
 `spec.fingerprints` computes one sha per question, so `runner.stale`
@@ -490,7 +490,7 @@ absent from it, the document reads stale in that key, and a harvest would
 read it again from its first passage for the sake of one parameter. A
 resume that finds such a document says so beside the usual warning, naming
 the parameters and `--top-up-parameters` (`already_done`,
-`runner.py:4536-4544`), and that pass appends them without reading the
+`runner.py:4523-4531`), and that pass appends them without reading the
 document again where nothing else moved. The `value/<uri>` key of a category parameter
 counts the classes of its list and their spellings, which is all the rows
 request shows the model, and not their definitions. A stored scenarios stamp
@@ -522,7 +522,7 @@ Every tuple, refusal, parameter state and summary line is checked
 against the published schema before it is written:
 `_harvest_validators` builds one `jsonschema` validator per branch from
 `schema.build(spec)["harvest"]`, run by `check_against_schema` inside
-`finish_document` on every call carrying a spec (`runner.py:4636-4637`), and
+`finish_document` on every call carrying a spec (`runner.py:4623-4624`), and
 by the pass that appends a parameter before it writes. A
 row the schema refuses is counted
 and logged as an `invalid` trace event, never withheld, since blocking on
@@ -634,7 +634,7 @@ coordinate of a stored row or for a refusal of the first pass. Like
 `--top-up` it needs the model, the index, the embedder and the database.
 It runs in the harvest's own loop and not beside it: `main` binds
 `plan_batches` once as `plan_for` and `harvest_batches` once as
-`harvest_all` (`runner.py:5841-5848`), the harvest's `harvest_document` and
+`harvest_all` (`runner.py:5864-5871`), the harvest's `harvest_document` and
 the pass's `DocumentPass` both call them, and so the pools, the stop, the
 dead-server cut and the exit code are the harvest's. It is refused
 together with `--top-up` (the parser ends with exit 2 and nothing runs);
@@ -644,7 +644,7 @@ together with `--top-up` (the parser ends with exit 2 and nothing runs);
 in `--out` is left to the harvest, the log saying how many
 (`topup_parameter.with_harvest`). Its traces go to `trace-topup/` and
 never into the harvest's `trace/`, which the run does not open
-(`TOPUP_TRACE_DIR`, `runner.py:4391`, `:5756`).
+(`TOPUP_TRACE_DIR`, `runner.py:4378`, `:5780`).
 
 Whether a document may be taken is decided by its stamp alone
 (`topup_parameter.addition`, `classify`). A parameter is new when its
@@ -918,6 +918,10 @@ extends another one inherits the checks until it declares its own. An entry of
 any other shape is named as a failure and not run (`preflight.prompt_checks`).
 `scripts/preflight_profiles.py` runs the same checks for the two profiles kept
 in this repository, `kwp` and `scenarios`: 48 lines each, 96 in all.
+`scripts/render_prompts.py` is the other look at a profile's prompts before a
+run: it renders them before and after a change and sets the text, the window
+and the passages per request of the two sides next to each other (see
+[Running the pipeline](../running.md)).
 
 Three lines read more than the keys. `every shape property is asked or left out
 on purpose` holds the shapes of the profile's graph against its spec, the way
@@ -999,8 +1003,9 @@ their definitions. `model`, `anchors`, one entry per
 `PROMPT_IDS` prompt, `question_text/<key>`, `review/*`, `docpipe` (the version)
 and `producers` (every pass that wrote into the harvest, in order) are written
 into the stamp too, so a reader can place a harvest, and are never
-compared. A coordinate a top-up read again, and every coordinate of a row the
-pass for a new parameter appended, carries `<name>_producer`, the position of
+compared. A stamp of an older release also carries `extraction/harvest`; it
+stays valid and stays as it is. A coordinate a top-up read again, and every
+coordinate of a row the pass for a new parameter appended, carries `<name>_producer`, the position of
 that pass in `producers`; the harvest writes none. An entry of the second
 pass also carries `parameters` (their uris) and `frame`. A trace event is one JSON
 line, `{"t": kind, "doc": document_id, ...}`, of one of eleven kinds
@@ -1020,7 +1025,7 @@ run, `anchors.json` and `query_cache.db`; and, only after `--top-up` or
 
 | Name | Kind | Default | Effect | Where read |
 |---|---|---|---|---|
-| `EXTRACT_FIELDWISE` / `EXTRACT_FIELD_WINDOW` / `_OVERLAP` | env var | `1` / `2` / `1` | `FIELDWISE`: one request per coordinate, not one per whole tuple. `WINDOW`: sources per retrieval- or rest-stage window. `OVERLAP`: how many of a rest-stage window repeat in the next one; a retrieval-stage window never repeats one | `runner.main`, `runner.make_sweeper` |
+| `EXTRACT_FIELD_WINDOW` / `EXTRACT_FIELD_OVERLAP` | env var | `2` / `1` | `WINDOW`: sources per retrieval- or rest-stage window. `OVERLAP`: how many of a rest-stage window repeat in the next one; a retrieval-stage window never repeats one | `runner.main`, `runner.make_sweeper` |
 | `EXTRACT_MAX_RETRIES` / `EXTRACT_RETRY_TIMEOUT` | env var | `3` / `600` | `MAX_RETRIES`: attempts every retry loop of this stage gets per request. `RETRY_TIMEOUT`: client timeout (seconds) a row- or field-request retry gets after a request timed out; one refused at once keeps the client's own timeout instead | `runner.py`, `runner.make_harvester`, `runner.make_field_asker` |
 | `EXTRACT_RETRY_WAIT` / `_MAX` / `EXTRACT_TRANSPORT_WAIT` / `_MAX` | env var | `2` / `6` / `15` / `120` | Seconds before the next attempt. The short curve, `RETRY_WAIT` times the attempt up to `RETRY_WAIT_MAX`, follows the model's own mistake. The long curve, `TRANSPORT_WAIT` doubling per attempt up to `TRANSPORT_WAIT_MAX`, follows a request that never arrived or ended on a 429 or a 5xx | `runner.retry_wait` |
 | `EXTRACT_FIELD_ROWS` | env var | `32` | Rows one field request answers at once; a coordinate's open rows are chunked to this many per request, halved again if the chunk still leaves too little room for its answer | `runner.make_field_asker` |
@@ -1035,7 +1040,7 @@ run, `anchors.json` and `query_cache.db`; and, only after `--top-up` or
 | `EXTRACT_LOCATE_CACHE_PAGES` | env var | `512` | Pages of words `make_locate` keeps across documents; a cache hit is a dict lookup and takes no lock, only a miss enters MuPDF under one | `runner.make_locate` |
 | `EXTRACT_BATCH_DOCS` | env var | `64` | Documents kept in flight at once under rolling admission, largest first by section count, filename breaking a tie; a finished one is written at once and the next starts, so no document waits on a group | `runner.main`, `runner.harvest_documents`, `runner._documents` |
 | `EXTRACT_MAX_MODEL_LEN` | env var | `32768` | Fallback context window a request's answer room is sized against; overwritten by `set_model_len` from the server's own preflight report where it gives one | `runner.set_model_len`, `runner.answer_room` |
-| `EXTRACT_RETRY_TEMPERATURE_STEP` | env var | `0.1` | Sampling temperature of a retried attempt raised by this step, once per unreadable reply, capped at `1.0`; every retry loop of this stage applies it (phrase, frame, anchors, harvest, field, review) | `runner.retry_temperature` |
+| `EXTRACT_RETRY_TEMPERATURE_STEP` | env var | `0.1` | Sampling temperature of a retried attempt raised by this step, once per unreadable reply, capped at `1.0`; every retry loop of this stage applies it (phrase, frame, anchors, rows, field, review) | `runner.retry_temperature` |
 | `EXTRACT_TRACE` | env var | `1` | Off, every trace call returns immediately and no trace file is written | `trace.py` (`ENABLED`) |
 | `--document ID` / `--force` / `--force-stale` | CLI flag (ID repeatable) | none / off / off | `--document` restricts a run to named ids; `--force` redoes every document, `--force-stale` only those `stale` | `runner.main`, `runner.stale` |
 | `--image-root` / `--pdf-root` | CLI flag | profile's processed dir / none | `--image-root`: crop directory for `EXTRACT_ATTACH_IMAGES`. `--pdf-root`: the PDF directory the `Documents` table names. A quote of a section's text is looked up on its page there, the highlight rectangles go into the row, and a quote not found on the page gets the flag `not_located`; without the option no quote is looked up, and tables and figures are never compared with the PDF. It also names `ROOT/processed` as the crop directory unless `--image-root` is given | `runner.main`, `resolve_image_root`, `make_locate` |
@@ -1045,7 +1050,7 @@ run, `anchors.json` and `query_cache.db`; and, only after `--top-up` or
 | `--top-up-parameters` | CLI flag | off | Appends the parameters the spec has gained since a document was harvested to the harvest in `--out`, per document, with the harvest's own loop, instead of harvesting it again; needs the model and index. Refused together with `--top-up` (exit 2); `--top-up-key`, `--force` and `--force-stale` change nothing for it; its traces go to `trace-topup/`. Exit 1 when a document was not read completely, and nothing is written for it | `runner.main`, `topup_parameter.append_document` |
 | `--review` / `--review-limit N` | CLI flag | off / `0` | Runs `review.run`, one request per level-C value, up to N total | `review.run` |
 | `--profile NAME` | CLI flag | `$DOCPIPE_PROFILE` | names the profile whose spec, prompts and hooks the run reads; the stage refuses to run without one, in a line naming the available profiles, and `__main__.py` binds the flag before `runner` is imported | `runner.main`, `docpipe/profile.py` |
-| `--serialize TTL` / `--print-context-budget` | CLI flag | none / off | `--serialize`: no harvest, hands `--out` to `serialize.run`, which calls the profile's `kg.make_serializer`. `--print-context-budget`: prints the tokens one harvest request needs, then exits | `serialize.run`, `runner.main` |
+| `--serialize TTL` / `--print-context-budget` | CLI flag | none / off | `--serialize`: no harvest, hands `--out` to `serialize.run`, which calls the profile's `kg.make_serializer`. `--print-context-budget`: prints the tokens, per request, that the largest request of a harvest needs, then exits | `serialize.run`, `runner.main` |
 | `SLICE` / `FRAME` | profile hook | none / none (every coordinate per row) | `SLICE`: gate coordinate(s) asked first, a row that fails them never asked its others. `FRAME`: document-level coordinates found once and projected onto every row | `runner.main`, `topup.actionable` |
 | `SEARCH_SHARE` | profile hook | none (every coordinate gets the whole budget) | Fraction of the retrieval and rest allowance a named coordinate gets; kwp halves `sector` and `aggregation`. At least one window stays per stage | `runner.make_sweeper` |
 | `PROMPT_CHECKS` | profile hook | the extended profile's, else none | Entries `(what is checked, prompt id, passage, has to be there)`: passages the profile's prompts have to hold or must not. Read by `docpipe preflight` and by nothing in a run | `preflight.audit`, `preflight.prompt_checks` |
@@ -1053,17 +1058,34 @@ run, `anchors.json` and `query_cache.db`; and, only after `--top-up` or
 | `shapes_files` | profile hook | none (the check is skipped) | A callable that returns the SHACL files the profile's graph is held against, those of its last refresh. Scenarios finds its own there; kwp names none | `preflight.shapes_verdict` |
 | `ALT_LABEL_LANGUAGE` | profile hook | required by the profile's `vocabulary` module | The language tag of the alternative labels a vocabulary snapshot keeps: `de` for kwp and scenarios, `en` for the built-in profile. The core fixes none | `profiles/*/vocabulary.py`, `ontology.build` |
 
-The context budget (`runner.context_budget`, printed by
-`--print-context-budget`) is the tokens one request needs at worst. Its
-payload term is the larger of the widest single parameter, which a
-request planned for one parameter carries whole, and all parameters'
-class lists together, which a request planned for no parameter carries at
-once. A profile with several long lists, as scenarios has, can therefore
-need a window above the 32768 that `EXTRACT_MAX_MODEL_LEN` falls back to,
-and the model is then served with the larger of the budget and 32768.
+The context budget (`runner.context_budget`) is the tokens one request of
+one prompt needs at worst. Its payload term is the larger of the widest
+single parameter, which a request planned for one parameter carries whole,
+and all parameters' class lists together, which a request planned for no
+parameter carries at once. A run needs the largest of these budgets over
+the prompts it sends (`runner.request_budget`): the rows, field, phrase
+and anchors prompts, and the frame prompt only where the profile names
+frame axes (`runner.sent_prompt_ids`). The queries prompt is a list of
+search templates no request carries, and the review prompt has a line of
+its own in the doctor, so neither counts. That number, in tokens per
+request, is what `--print-context-budget` prints, what the doctor's extract
+line shows and what the check of the served window before the first
+document holds the server to: it is what the model server's
+`--max-model-len` has to cover. For kwp it is 28,511 tokens per request,
+set by the field prompt; for scenarios 37,387, set by the rows prompt. A
+profile with several long lists, as scenarios has, can therefore need a
+window above the 32768 that `EXTRACT_MAX_MODEL_LEN` falls back to.
 `tests/test_extraction_runner.py` states the ceiling a profile may ask
 for, 40960, and keeps kwp within 32768
 (`test_every_profile_fits_the_window_it_will_be_served`).
+
+How many passages one rows request reads comes from the rows prompt alone
+(`runner.batch_sources_for`): its `max_tokens` bounds the reply, and the
+profile's own example tuple says what a passage costs, so a profile whose
+tuples are long reads fewer than `EXTRACT_BATCH_SOURCES` (6) at a time. kwp
+reads 6 passages per rows request, scenarios 3. The field prompt reads
+`EXTRACT_FIELD_WINDOW` passages and answers a row at a time, so its
+ceiling does not enter.
 
 ## Failure modes
 
@@ -1091,64 +1113,64 @@ on.
 
 At the document level, `finish_document` writes the JSONL file every time
 and withholds the stamp entirely, forcing a full redo on the next run, in
-three cases, which `not_happened` (`runner.py:4555-4582`) tells apart and the
+three cases, which `not_happened` (`runner.py:4542-4569`) tells apart and the
 pass that appends a parameter asks as well: more than half a document's
 planned sources came back from a server it could not reach
-(`UNREACHABLE_LIMIT`, `0.5`, `runner.py:4552`, `:4574-4575`), not one batch
-answered at all (`runner.py:4576-4577`), or any one of its requests ended on
-a 429 or a 5xx (`runner.py:4578-4581`). The last
+(`UNREACHABLE_LIMIT`, `0.5`, `runner.py:4539`, `:4561-4562`), not one batch
+answered at all (`runner.py:4563-4564`), or any one of its requests ended on
+a 429 or a 5xx (`runner.py:4565-4568`). The last
 count adds the `unserved` sentinels to the document's entry in `UNSERVED`,
-which the callers pass as `lost` (`runner.py:4503`, `5768-5771`); one is
+which the callers pass as `lost` (`runner.py:4490`, `5792-5795`); one is
 enough, because such a request was never answered and nothing says it cannot
 be.
 Only a resume, not a byte count, tells these cases apart from a genuinely
 finished document. In all three cases an earlier stamp is removed before the
-file is written (`runner.py:4638-4639`): it vouched for the file this one
+file is written (`runner.py:4625-4626`): it vouched for the file this one
 replaces, and left in place it would have a resume skip a document whose
 stamp was just withheld.
 
 `finish_document` returns whether the document is stamped, and a document
 written but left unstamped is a failed document. `verify` hands the
-value on (`runner.py:5768-5773`), `harvest_document` returns
+value on (`runner.py:5792-5797`), `harvest_document` returns
 `(stamped, failures)` with one failure added when the document is not stamped
-(`runner.py:5870-5871`), `harvest_documents` adds the failures up
-(`runner.py:3947-3948`), and `main` returns 1 when there are any
-(`runner.py:5927`). The exit code is 1 for a document written and left
+(`runner.py:5893-5894`), `harvest_documents` adds the failures up
+(`runner.py:3934-3935`), and `main` returns 1 when there are any
+(`runner.py:5950`). The exit code is 1 for a document written and left
 unstamped as it is for a server that stopped answering
-(`runner.py:5904-5909`). The run's own anchor requests are the other case:
+(`runner.py:5927-5932`). The run's own anchor requests are the other case:
 if any ended on a 429 or a 5xx, `main` returns 1 before anything is
 harvested, and the anchors already written stay in `anchors.json`, so the
-next start asks only for the rest (`runner.py:5606-5617`). A document left
+next start asks only for the rest (`runner.py:5630-5641`). A document left
 with batches never harvested is not written at all and adds no failure of
-its own (`runner.py:5864-5867`); the dead server or the SIGTERM that left it
+its own (`runner.py:5887-5890`); the dead server or the SIGTERM that left it
 decides the exit code. `run_document`, the one-document path for a caller
 outside the run's own loop, withholds the stamp the same way and returns
-what `finish_document` returned (`runner.py:4486-4504`). The pass that
+what `finish_document` returned (`runner.py:4473-4491`). The pass that
 appends a parameter takes the place of `harvest_document` in this loop
-(`parameter_pass`, `runner.py:5873-5889`) and returns `(written, failures)`
+(`parameter_pass`, `runner.py:5896-5912`) and returns `(written, failures)`
 the same way, so `harvest_documents` and `main` count it by these rules.
 
 A time limit ends a run the same careful way. `install_stop_handler`
 (`runner.py:126`) puts a SIGTERM handler in place, so that a time-limit
 trap or a manual kill sets `STOP` (`runner.py:114`)
 instead of letting the interpreter die where it stood. Documents run
-under rolling admission, `harvest_documents` (`runner.py:3903`), at
+under rolling admission, `harvest_documents` (`runner.py:3890`), at
 most `EXTRACT_BATCH_DOCS` in flight at once, their batches sharing one
-`batch_pool` and one `DeadStreak` (`runner.py:3883`) across every
+`batch_pool` and one `DeadStreak` (`runner.py:3870`) across every
 document in flight and across the field sweep's own requests too,
 rather than a separate dead-server count per document or per pool: the
 run gives up once `max(64, EXTRACT_LLM_PARALLEL)` requests in a row
 were not served by the server (not reached, or a 429 or a 5xx). The rows
 pool and the field pool log it as "requests in a row the server did not
-serve" (`runner.py:4086`, `3037`). Once
-`STOP` or a dead server sets `Halted` (`runner.py:5783-5788`), no new
+serve" (`runner.py:4073`, `3024`). Once
+`STOP` or a dead server sets `Halted` (`runner.py:5807-5812`), no new
 document starts, and a document already in flight leaves its own
 `harvest_batches` call at once instead of waiting out its open
 requests; such a document lands in `unfinished` and is not written, so
 a resume harvests it whole instead of the run stamping it as though
 every batch had come back. Once `STOP` is set the run logs, closes the
 trace and exits hard with `STOPPED_EXIT` (`143`, `runner.py:122`,
-`:5920`) rather than waiting on the field-sweep threads still open,
+`:5943`) rather than waiting on the field-sweep threads still open,
 which are not daemons and could hold the process for minutes.
 
 Among the five maintenance passes, `--recheck` and `--remap` never call a
@@ -1181,7 +1203,7 @@ never sends leaves no trace, so the row is offered again later.
   (`fields.py:337-364`).
 - Letting the passage a coordinate was last read in drop out of the
   window after one use, rather than remaining in the window, cost one
-  batch 520 dropped readings against 31 kept (`runner.py:3395`).
+  batch 520 dropped readings against 31 kept (`runner.py:3382`).
 - On the 20-plan draft where the slice gate was measured, of 6,763
   harvested tuples the serializer dropped 1,554 for a quantity the graph
   does not hold and, while the scenario axis still gated a row, 2,510
@@ -1248,7 +1270,7 @@ contract. `tests/test_extraction_unserved.py` pins the 429 and 5xx rule:
 `test_a_forced_run_that_loses_a_request_is_not_hidden_by_the_old_stamp`,
 `test_a_lost_search_sentence_leaves_its_document_unstamped` and
 `test_nothing_is_harvested_without_the_anchors_the_server_did_not_serve`.
-`tests/test_extraction_runner.py`, 120 tests, pins `runner.py`
+`tests/test_extraction_runner.py`, 129 tests, pins `runner.py`
 itself: among them `test_a_document_the_server_never_answered_for_is_not_stamped`,
 `test_a_document_no_reply_ever_came_back_for_is_not_stamped`,
 `test_the_image_root_follows_the_pdf_root`,
@@ -1279,7 +1301,7 @@ harvest, the lists a document closes:
 `test_switched_off_it_writes_nothing_at_all`,
 `test_a_document_harvested_twice_does_not_leave_two_traces_in_one_file` and
 `test_a_second_trace_writes_under_its_own_directory`.
-`tests/test_extraction_document_lists.py`, 10 tests, pins the lists a
+`tests/test_extraction_document_lists.py`, 14 tests, pins the lists a
 document closes from the copy of the spec to the passes over a harvest on
 disk: `test_only_the_lists_differ_in_a_documents_spec`,
 `test_a_choice_outside_the_documents_list_is_not_taken_for_one`,
@@ -1367,6 +1389,25 @@ harvest, its prompt and its reply grammar to the bytes captured before that
 code was shared, for kwp and scenarios (`tests/golden/`;
 `test_a_normal_harvest_request_is_byte_for_byte_what_it_was`), and shows that
 the comparison can fail (`test_the_golden_file_can_fail`).
+`tests/test_extraction_requests.py` builds each of the six kinds of request a
+harvest sends (the rows, one field, the frame, the search sentence, the
+anchors and the second reading of a value) against a recording client and
+holds that each carries exactly the text of its own prompt and the
+temperature of that prompt's front matter, and that the rows request asks in
+the reply grammar it always did, to a digest
+(`test_a_request_carries_exactly_the_text_of_its_prompt`,
+`test_the_rows_grammar_is_the_one_it_was`); a builder that appends text to its
+prompt is found (`test_a_builder_that_appends_text_to_its_prompt_is_found`).
+`tests/test_legacy_stamp.py` holds that a stamp which still carries
+`extraction/harvest` is current and its document skipped, that no pass that
+writes into a stamp drops the key, that the stamp schema takes it without
+requiring it, and that the stamp a run writes today lacks it
+(`test_a_stamp_with_the_removed_prompt_is_current_and_its_document_skipped`).
+`tests/test_removed_harvest_path.py` holds that a row of the reply grammar has
+no form in which it carries its coordinates and that a run builds the one
+harvester there is
+(`test_a_row_of_the_reply_grammar_has_no_coordinates_of_its_own`,
+`test_a_run_builds_the_one_harvester_and_the_module_has_no_switch`).
 `tests/test_extraction_review.py` pins
 `test_only_the_values_nobody_can_stand_behind_are_reviewed`,
 `test_a_row_is_reviewed_once`,
@@ -1410,7 +1451,7 @@ refuses to write when no document produced anything, so an empty or
 unreadable directory cannot overwrite a valid graph from an earlier
 run. Called only by `runner.py`'s `--serialize` branch.
 
-`runner.py` is the harvest CLI, 5,927 lines against the next-largest
+`runner.py` is the harvest CLI, 5,950 lines against the next-largest
 module's 1,675 (`pipeline.py`): the retrieval, anchor and frame
 machinery described above, the field sweep, the resume-stamp
 comparison, and the argparse branches dispatching `--recheck`,
@@ -1598,8 +1639,8 @@ shape is identical for every value in the corpus. So the shape is
 computed here, from the spec, and the model is never asked for it. It
 is asked, one field at a time, to fill the shape in.
 
-Asking per field is the point. One request for a whole tuple lets a
-model quietly drop a coordinate it is unsure of, and dropping is
+Asking per field is the point. One request for every coordinate lets a
+model quietly drop one it is unsure of, and dropping is
 free: the field stays nullable, nothing refuses it, nothing counts
 it. Measured on the 204 document corpus run, the year was missing on
 63.5 percent of all values, and on 13 percent of those it stood in

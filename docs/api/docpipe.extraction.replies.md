@@ -52,13 +52,12 @@ with its wording and its quote; the value also with its unit.
 ### rows
 
 ```python
-def rows(spec=None, *, whole: bool = False, sandbox: bool = True) -> dict
+def rows(*, sandbox: bool = True) -> dict
 ```
 
 The harvest reply: the values of the passages, or a sandbox action.
 
-*whole* is the contract in which a row carries its coordinates itself;
-otherwise a row is a value with its wording, its unit's wording and its
-quote, and the coordinates are asked per field afterwards.
+A row is a value with its wording, its unit's wording and its quote; the
+coordinates are asked per field afterwards.
 
 [Back to the index](../README.md)

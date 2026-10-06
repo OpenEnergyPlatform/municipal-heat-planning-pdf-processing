@@ -36,20 +36,12 @@ import pytest
 from docpipe import llm_preflight, providers
 from docpipe.extraction import fields, replies as extraction_replies, runner
 from docpipe.extraction import throttle
-from docpipe.extraction.spec import load as load_spec
 from docpipe.inference import replies as chat_replies
 from docpipe.providers import base, gemini_api, governor, openai_api, schema
 from docpipe.refinement import replies as refinement_replies
 from docpipe.visuals import replies as visual_replies
 
 ROOT = Path(__file__).resolve().parent.parent
-PROFILES = sorted(p.parent.name
-                  for p in (ROOT / "profiles").glob("*/extraction_spec.json"))
-
-
-def _spec(profile):
-    return load_spec(json.loads((ROOT / "profiles" / profile
-                                 / "extraction_spec.json").read_text("utf-8")))
 
 
 @pytest.fixture(autouse=True)
@@ -387,25 +379,15 @@ def _every_shape():
         ("answer, last call", chat_replies.answer(actions=False)[1],
          {"statements": [], "complete": False}),
     ]
-    for profile in PROFILES:
-        spec = _spec(profile)
-        out.append((f"rows {profile}", extraction_replies.rows(spec), {
-            "tuples": [{"source": "Q1", "value": 12.5, "unit_raw": "GWh/a",
-                        "quote": "12,5 GWh/a", "computed": True},
-                       {"source": "Q2", "value": "Stadtwerke",
-                        "value_raw": None, "quote": "die Stadtwerke"}],
-            "defaults": {"source": "Q1"}, "status": "partial",
-            "need_more": ["die Tabelle auf Seite 4"]}))
-        out.append((f"rows action {profile}", extraction_replies.rows(spec),
-                    {"action": "python", "code": "print(2)"}))
-        whole = {"source": "Q1", "parameter": spec.parameters[0].uri,
-                 "value": 3, "quote": "drei Anlagen"}
-        for name in spec.parameters[0].axes:
-            whole[name] = "x"
-            whole[f"{name}_raw"] = None
-        out.append((f"whole tuples {profile}",
-                    extraction_replies.rows(spec, whole=True),
-                    {"tuples": [whole]}))
+    out.append(("rows", extraction_replies.rows(), {
+        "tuples": [{"source": "Q1", "value": 12.5, "unit_raw": "GWh/a",
+                    "quote": "12,5 GWh/a", "computed": True},
+                   {"source": "Q2", "value": "Stadtwerke",
+                    "value_raw": None, "quote": "die Stadtwerke"}],
+        "defaults": {"source": "Q1"}, "status": "partial",
+        "need_more": ["die Tabelle auf Seite 4"]}))
+    out.append(("rows action", extraction_replies.rows(),
+                {"action": "python", "code": "print(2)"}))
     return out
 
 
@@ -427,12 +409,7 @@ def test_every_request_kind_has_a_shape_a_hosted_api_generates_in(
     assert _said(read) == _said(answer)
     # The dialect that takes optional keys: the stage's own reply, with a
     # keyed object as a list, validates against it and reads back the same.
-    try:
-        counted, decode = schema.strict(natural, schema.OPTIONAL, (24, 16))
-    except schema.SchemaError:
-        # the one contract that asks more of a row than this API compiles
-        assert name.startswith("whole tuples"), name
-        return
+    counted, decode = schema.strict(natural, schema.OPTIONAL, (24, 16))
     assert _in_subset(counted, optional=True) == []
     lean = _lean(_encode_keyed(_said(answer), natural), counted)
     jsonschema.validate(lean, counted)

@@ -149,8 +149,8 @@ def test_a_pair_whose_quote_is_in_no_shown_passage_is_not_a_pair():
 
 def test_a_pair_whose_quote_does_not_carry_the_answer_is_not_a_pair():
     """The quote is in a shown passage and says nothing about 2050. That is
-    the answer a whole-tuple request used to hide inside a tuple some other
-    quote had already justified."""
+    the answer that used to hide inside a tuple some other quote had
+    already justified."""
     assert runner.frame_pairs(_reply(year=2050), _slots(), _shown()) == []
 
 

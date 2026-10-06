@@ -65,7 +65,7 @@ Recheck a whole harvest directory.
 The stamps go with it. A file rewritten by a rule the harvest did not
 apply is not the output of the run its stamp names, and leaving the stamp
 would make the next run skip the document — which is exactly how 205 plans
-kept a whole-tuple harvest through a field-wise corpus run. A file left
+kept an old harvest through a corpus run meant to redo them. A file left
 alone keeps its stamp: it still is that run's output.
 
 [Back to the index](../README.md)

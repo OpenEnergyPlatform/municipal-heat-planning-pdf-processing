@@ -139,9 +139,9 @@ def _harvest(tmp_path, rows, stamp=None, name="plan"):
 def _stamp(**overrides):
     from docpipe.extraction.spec import fingerprints
     stamp = {"spec": "spec-sha", "model": "m", "anchors": "a",
-             "extraction/harvest": "h", "extraction/queries": "q",
-             "extraction/anchors": "an", "extraction/rows": "r",
-             "extraction/field": "f", **fingerprints(SPEC)}
+             "extraction/queries": "q", "extraction/anchors": "an",
+             "extraction/rows": "r", "extraction/field": "f",
+             **fingerprints(SPEC)}
     stamp.update(overrides)
     return stamp
 
@@ -831,9 +831,9 @@ def test_a_dynamic_axis_is_swept_against_this_documents_own_list(tmp_path):
                "refusals": 0, "levels": {"A": 1, "B": 0, "C": 0},
                "reasons": {}, "image_origin": 0}
     base = {"spec": "s", "model": "m", "anchors": "a",
-            "extraction/harvest": "h", "extraction/queries": "q",
-            "extraction/anchors": "an", "extraction/rows": "r",
-            "extraction/field": "f", **fingerprints(other)}
+            "extraction/queries": "q", "extraction/anchors": "an",
+            "extraction/rows": "r", "extraction/field": "f",
+            **fingerprints(other)}
     moved = {**base, "axis/scenario_region/scenario": "moved"}
     lists = {"scenario": {"EN_NPi2020_300f": ["Current Policies", "CurPol"]},
              "scenario_region": {region: ["Germany"]}}

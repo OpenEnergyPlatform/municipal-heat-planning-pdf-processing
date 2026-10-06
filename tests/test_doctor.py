@@ -18,13 +18,14 @@ from types import SimpleNamespace as NS
 
 import pytest
 
-from docpipe import doctor, llm_preflight, prompts
+from docpipe import doctor, llm_preflight
 from docpipe.doctor import FAIL, OK, SKIP, WARN, Asked, Check
 from docpipe.profile import Profile, load_profile
 from docpipe.providers import base
 from docpipe.refinement import config as refine_config
 from docpipe.store import schema as store_schema
 from docpipe.visuals import config as visuals_config
+from tests.prompt_ceilings import with_max_tokens
 
 
 @pytest.fixture
@@ -102,14 +103,73 @@ def test_the_budget_is_the_one_the_stage_computes(kwp, monkeypatch):
     assert "needs 3456 tokens" in lines["extract --review"].detail
 
 
-def test_the_extraction_budget_is_its_harvests_own(kwp):
-    from docpipe.extraction import runner
-    spec = runner.load_spec(Path(kwp.component("extraction", "SPEC_PATH")))
-    need = runner.context_budget(
-        prompts.load(runner.HARVEST_PROMPT_ID, kwp), spec)
+def _extraction_need(profile) -> int:
+    """What the run of this profile asks of its server: the largest request
+    over the prompts it sends, a frame request only with frame axes."""
+    from docpipe.extraction import fields, runner
+    spec = runner.load_spec(Path(profile.component("extraction", "SPEC_PATH")))
+    framed = bool(fields.frame_slots(
+        spec, profile.component("extraction", "FRAME") or ()))
+    return runner.request_budget(spec, framed, profile)
+
+
+@pytest.mark.parametrize("name", ["kwp", "scenarios"])
+def test_the_extraction_budget_is_the_one_its_run_asks_for(name):
+    """The line says what `--print-context-budget` prints, and a window one
+    token short of it fails."""
+    profile = load_profile(name)
+    need = _extraction_need(profile)
     line = _by_name(doctor.check_context(
-        "extract", kwp, [_server(window=need - 1)]))["extract"]
+        "extract", profile, [_server(window=need - 1)]))["extract"]
     assert line.status == FAIL and f"needs {need} tokens" in line.detail
+    held = _by_name(doctor.check_context(
+        "extract", profile, [_server(window=need)]))["extract"]
+    assert held.status == OK
+
+
+@pytest.mark.parametrize("name, prompt_id, moves", [
+    ("kwp", "extraction/field", True),
+    ("scenarios", "extraction/rows", True),
+    # The frame request is sent by a profile with frame axes and by no other.
+    ("kwp", "extraction/frame", True),
+    ("scenarios", "extraction/frame", False),
+    # And a prompt no request of the run carries is not in the number.
+    ("kwp", "extraction/queries", False)])
+def test_the_doctors_extraction_line_follows_the_prompts_the_run_sends(
+        monkeypatch, name, prompt_id, moves):
+    """Built to fail: a prompt is given an answer ceiling of 30000 tokens,
+    and the line moves when the run sends that prompt and stays when it
+    does not."""
+    profile = load_profile(name)
+    before = _extraction_need(profile)
+    with_max_tokens(monkeypatch, {prompt_id: 30000})
+    after = _extraction_need(profile)
+    line = _by_name(doctor.check_context(
+        "extract", profile, [_server(window=10 ** 6)]))["extract"]
+    assert f"needs {after} tokens" in line.detail
+    assert (after > before) is moves, (name, prompt_id, before, after)
+
+
+def test_the_doctors_review_line_follows_the_review_prompt_and_no_other(
+        monkeypatch):
+    """The review is a request of its own and has a line of its own: it is
+    not part of the extraction line, and the extraction line is not its. Built
+    to fail both ways: a ceiling of 30000 tokens on the review prompt moves
+    its line and only that one, and on the rows prompt the other one."""
+    profile = load_profile("kwp")
+
+    def need(line: str) -> str:
+        found = _by_name(doctor.check_context(
+            "extract", profile, [_server(window=10 ** 6)]))[line]
+        return found.detail.split(" tokens")[0]
+
+    review, extract = need("extract --review"), need("extract")
+    with_max_tokens(monkeypatch, {"extraction/review": 30000})
+    assert need("extract --review") != review
+    assert need("extract") == extract
+    with_max_tokens(monkeypatch, {"extraction/rows": 30000})
+    assert need("extract") != extract
+    assert need("extract --review") == review
 
 
 def test_each_stage_is_held_to_the_window_of_its_own_role(kwp):
@@ -440,19 +500,35 @@ def test_the_profiles_the_package_ships_hold_what_their_stages_ask(name):
 def test_a_prompt_that_is_not_there_is_named_with_how_many_are_missing(
         tmp_path):
     """Built to fail: a profile of the name kwp whose prompts folder holds one
-    of the eight extraction prompts."""
+    of the seven extraction prompts."""
     kept = tmp_path / "prompts" / "extraction"
     kept.mkdir(parents=True)
-    (kept / "harvest.md").write_text("only this one", encoding="utf-8")
+    (kept / "rows.md").write_text("only this one", encoding="utf-8")
     profile = Profile(name="kwp", home=tmp_path)
     lines = _by_name([c for c in doctor.check_stages("extract", profile)
                       if c.area == "prompts"])
     line = lines["extract"]
     assert line.status == FAIL
-    assert line.detail.startswith("7 of 8 prompt(s) missing")
+    assert line.detail.startswith("6 of 7 prompt(s) missing")
     assert "extraction/field" in line.detail
-    assert "extraction/harvest" not in line.detail
+    assert "extraction/rows" not in line.detail
     assert str(tmp_path / "prompts") in line.hint
+
+
+def test_a_prompt_the_stage_no_longer_asks_for_is_not_missing_and_not_found(
+        tmp_path):
+    """Built to fail: a folder that holds only a file of a prompt the
+    extraction stage does not load. It does not count as one of the seven, so
+    the stage is still short of all of them."""
+    kept = tmp_path / "prompts" / "extraction"
+    kept.mkdir(parents=True)
+    (kept / "harvest.md").write_text("no request carries this", encoding="utf-8")
+    profile = Profile(name="kwp", home=tmp_path)
+    line = _by_name([c for c in doctor.check_stages("extract", profile)
+                     if c.area == "prompts"])["extract"]
+    assert line.status == FAIL
+    assert line.detail.startswith("7 of 7 prompt(s) missing")
+    assert "harvest" not in line.detail
 
 
 def test_a_stage_that_has_all_its_prompts_says_how_many(kwp):

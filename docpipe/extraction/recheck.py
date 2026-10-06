@@ -59,7 +59,7 @@ def recheck_row(row: dict, slots: list) -> Counter:
             dropped["derived"] += 1
             continue
         if not quote:
-            # Written by the whole-tuple contract, which never asked for one.
+            # A harvest from before each coordinate carried a quote has none.
             # It is not evidence and was never checked, so it does not stay.
             dropped["no evidence at all"] += 1
         elif not answer_in_quote(slot, given,
@@ -162,7 +162,7 @@ def run(harvest_dir: Path, spec: Spec, *, drop_stamps: bool = True,
     The stamps go with it. A file rewritten by a rule the harvest did not
     apply is not the output of the run its stamp names, and leaving the stamp
     would make the next run skip the document — which is exactly how 205 plans
-    kept a whole-tuple harvest through a field-wise corpus run. A file left
+    kept an old harvest through a corpus run meant to redo them. A file left
     alone keeps its stamp: it still is that run's output.
     """
     stats: Counter = Counter()

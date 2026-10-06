@@ -86,17 +86,20 @@ one row. The stamp is `<document>.stamp.json`: whole-run keys (`spec`,
 version), `document` (the sha256 and size of the PDF it was read from)
 and `producers` (who wrote into it)) beside the `parameter/`, `value/`,
 `axis/*/*`, `slot/parameter` and `question_text/` families, written one
-per question instead (`docpipe/extraction/schema.py:602` to `763`).
+per question instead (`docpipe/extraction/schema.py:602` to `764`).
 The owner decided on 2026-09-10 that a stamp rests on the KG/ontology
 parameters alone: `stale` compares the `parameter/`, `value/`,
 `axis/` and `slot/` families (`QUESTION_KEYS`,
-`docpipe/extraction/runner.py:4385`), and the whole-file sha `spec`
-only for a stamp that carries none of them (`COARSE`, `:4379`;
+`docpipe/extraction/runner.py:4372`), and the whole-file sha `spec`
+only for a stamp that carries none of them (`COARSE`, `:4366`;
 `tests/test_extraction_runner.py::test_a_stamp_from_before_the_detail_is_stale_in_all_of_it`).
 `model`, `anchors`, every `extraction/*` prompt, `page_text_transcribed`,
 `review/*`, `question_text/*`, `docpipe` and `producers` are written into
 the stamp so a reader can place a harvest, and are never compared
 (`tests/test_extraction_runner.py::test_what_the_stamp_records_about_the_document_never_redoes_it`).
+A stamp of an older release also carries the key `extraction/harvest`; the
+schema accepts it without requiring it, and a document whose stamp holds it
+stays current.
 `document` is the one key beside the ontology's that is compared: where the
 stamp and the database both name the sha256 of the PDF and the two differ,
 the document is stale like a changed question (see [the extraction
@@ -106,15 +109,15 @@ their definitions, because the rows request shows the model no more.
 A moved `parameter/`, `value/`, `axis/` or `slot/` key, or a moved PDF,
 makes a
 document eligible for `--force-stale`'s full re-harvest (`stale`,
-`docpipe/extraction/runner.py:4417` to `4462`, `already_done`, `:4507`
-to `4546`); redoing only the changed question is
+`docpipe/extraction/runner.py:4404` to `4449`, `already_done`, `:4494`
+to `4533`); redoing only the changed question is
 `top_up_file`'s job (`docpipe/extraction/topup.py:419` to `537`), and
 reading a parameter the spec has gained, without reading the document again,
 `append_document`'s (`docpipe/extraction/topup_parameter.py:336` to `462`),
 which `already_done` names in a second warning for such a document. The
 trace is `<document>.trace.jsonl`: eleven event kinds told apart by
 `t`, `plan` through `invalid` in source order
-(`docpipe/extraction/schema.py:775` to `877`), read by
+(`docpipe/extraction/schema.py:776` to `878`), read by
 `scripts/trace_report.py` and, for a cost report, by `trace_costs` in
 `scripts/harvest_compare.py:135` to `155`, never by a resume.
 
@@ -2411,7 +2414,7 @@ The parameter/, value/, axis/ and slot/ keys, and the sha256 in `document`, make
 | `producers` | Every pass that wrote into this harvest, in order: the harvest, then each top-up that rewrote the file, each pass that appended a new parameter, each remap that carried a key forward and each review that changed a row. Entries are only ever added, so a position is stable: a coordinate a top-up re-read points at its entry with `<axis>_producer`. `model` above names the first only. Recorded and never compared. |
 | `spec` | sha256 of extraction_spec.json. A record, not a verdict: it moves on a comment, an indent or a graph annotation, none of which any question is asked through. Compared, it would outvote every key below it. |
 | `^axis/[^/]+/[^/]+$` | What this coordinate asks and what it may answer: the question and the offered list with its spellings and its definitions. Everything the model sees for this axis, and nothing else. |
-| `^extraction/(harvest\|queries\|anchors\|rows\|field\|phrase\|frame)$` | sha256 of the prompt file |
+| `^extraction/(harvest\|queries\|anchors\|rows\|field\|phrase\|frame)$` | sha256 of the prompt file; `harvest` is in stamps of an older release |
 | `^parameter/[^/]+$` | What this parameter asks, without its axes and without its own list: label, description, value type, accepted units and the example. A new option on ONE axis, or in the list the parameter answers from, must not make every value of the parameter stale. Those have keys of their own. |
 | `^question_text/[^/]+$` | The sentence THIS document was searched with. Recorded and never compared: it is written per document, so the document itself is part of it and no two runs produce the same one. What decides whether the harvest is current is its recipe, and that is already here: the generator prompt, the model, and the annotation inside parameter/. |
 | `^review/(prompt\|model)$` | What read this document a second time. Recorded and never compared: the review does not decide whether the harvest is current, and comparing it would report every reviewed document stale the day the review prompt changes. |

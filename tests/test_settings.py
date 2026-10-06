@@ -250,12 +250,14 @@ def test_a_second_file_takes_back_what_the_first_put_in(tmp_path, clean):
 GONE = {"EXTRACT_POOL_TOP": "extract.pool_top",
         "EXTRACT_TOP_K": "extract.top_k",
         "EXTRACT_MAX_ROUNDS": "extract.max_rounds",
-        "EXTRACT_EDGE_SECTIONS": "extract.edge_sections"}
+        "EXTRACT_EDGE_SECTIONS": "extract.edge_sections",
+        "EXTRACT_FIELDWISE": "extract.fieldwise"}
 
 
-def test_a_setting_that_decided_nothing_is_not_listed():
+def test_a_setting_that_is_gone_is_not_listed():
     """Four names were listed and decided nothing: one was read and never
     used, two were only printed, one was read by a function nobody called.
+    The fifth chose between two ways of asking, and one of them is no more.
     A list that shows them offers a knob that turns nothing."""
     for name, key in GONE.items():
         assert name not in settings.BY_ENV, name
@@ -268,7 +270,7 @@ def test_no_setting_says_of_itself_that_it_does_nothing():
     assert not said, said
 
 
-def test_a_setting_that_decided_nothing_is_not_read():
+def test_a_setting_that_is_gone_is_not_read():
     read = _names_read()
     for name in GONE:
         assert name not in read, (name, read.get(name))

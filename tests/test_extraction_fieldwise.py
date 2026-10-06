@@ -1,7 +1,7 @@
 """The field-wise harvest, with the model stubbed and nothing else.
 
-The defect this replaces was silent by construction. One request asked for a
-whole tuple, every coordinate was nullable, and a coordinate the model skipped
+The defect this replaces was silent by construction. One request asked for
+every coordinate, every one was nullable, and a coordinate the model skipped
 looked exactly like a coordinate the document does not state. Measured on the
 204-document corpus run: 63.5% of all values carried no year, and on 13% of
 those the year stood in the very quote the model had itself cited.
@@ -11,7 +11,7 @@ request asks for the values, and one request per coordinate fills them, each
 answer carrying the passage it was read in. What these tests hold to is that
 contract: the skeleton is the spec's, an answer without evidence in its own
 source is not written, and an answer that has it survives the same verifier
-the whole-tuple path used.
+the earlier harvest used.
 
 No GPU, no database.
 """
@@ -228,7 +228,7 @@ def test_the_example_survives_the_field_wise_round_trip(profile):
 
     Each field answers with the example's own coordinate and cites the tuple's
     own quote, which is the one passage we know is verbatim in the source. What
-    comes out has to be what the whole-tuple contract produced, coordinates
+    comes out has to be what the earlier contract produced, coordinates
     included — otherwise the change traded a silent gap for a silent loss.
     """
     _name, spec = profile
@@ -1694,7 +1694,7 @@ def test_the_request_says_what_each_option_means(profile):
     """field.md rule 7 says "decide by the meaning, the spellings are only
     examples" and the request never carried a meaning: the model was handed a
     class identifier and a list of German words. The rule was unfollowable,
-    and which class a number is is the decision the whole tuple hangs on. The
+    and which class a number is is the decision the whole value hangs on. The
     entry carries them under the keys "means" and "spellings", the words that
     rule names."""
     name, spec = profile
@@ -2328,7 +2328,7 @@ def test_the_axis_sweeps_of_one_batch_run_concurrently(monkeypatch):
     """The promise: the sweeps of a batch's several coordinates are not asked
     one after another.
 
-    One field per request replaced one request for a whole tuple, and the
+    One field per request replaced one request for every field, and the
     concurrency that used to come for free inside that one request has to
     come from somewhere else now: `make_fieldwise_harvester` runs every
     axis's sweep as its own job in the shared field pool. Two stubbed asks

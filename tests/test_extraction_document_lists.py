@@ -13,6 +13,7 @@ stubbed and nothing else.
 """
 import json
 import logging
+import shutil
 import sqlite3
 from collections import Counter
 from pathlib import Path
@@ -24,6 +25,7 @@ from docpipe.extraction.pipeline import (DocumentReport, Source, WorkItem,
                                          fold_batch, group_items,
                                          rows_from_reply)
 from docpipe.extraction.spec import fingerprints, load as load_spec
+from tests.prompt_ceilings import with_max_tokens
 
 PROFILES = Path(__file__).resolve().parent.parent / "profiles"
 RUN = "EN_NPi2100"
@@ -330,7 +332,6 @@ def test_every_batch_of_a_document_reads_against_its_lists(tmp_path,
 
     monkeypatch.setattr(runner, "make_retrieve", make_retrieve)
     monkeypatch.setattr(runner, "make_fieldwise_harvester", make_fieldwise)
-    monkeypatch.setattr(runner, "FIELDWISE", True)
     monkeypatch.setattr(runner, "fit_batch_sources", lambda *a, **k: 1)
     monkeypatch.setattr(runner, "LLM_PARALLEL", 1)
 
@@ -353,6 +354,107 @@ def test_every_batch_of_a_document_reads_against_its_lists(tmp_path,
     assert labels and all(row["value_uri"] == RUN for row in labels)
     assert not any(flag.startswith("unmapped:value")
                    for row in labels for flag in row.get("flags") or ())
+
+
+# ---------------------------------------------------------------------------
+# What the run takes off the prompts it sends
+# ---------------------------------------------------------------------------
+
+def _observed_run(monkeypatch, tmp_path, corpus_run, ceilings=None) -> dict:
+    """`runner.main` over one document, saying what it asked its server for
+    and how many sources the harvester was built to read: the window the
+    serving check got, the sources per request in force when the harvester
+    was made, and the budget the closing line of the run reports. Every call
+    is a run of its own, over an output folder that is empty again."""
+    db, out = corpus_run
+    shutil.rmtree(out, ignore_errors=True)
+    seen: dict = {}
+
+    def serving(base_url, key, model, need, **kw):
+        seen["window"] = need
+        return 40960
+
+    def make_fieldwise(*a, **k):
+        seen["sources"] = runner.BATCH_SOURCES
+        return lambda batch, prior=None: {"tuples": [], "status": "complete",
+                                          "need_more": []}
+
+    monkeypatch.setattr(runner, "assert_serving", serving)
+    monkeypatch.setattr(runner, "log_usage",
+                        lambda budget=None: seen.update(usage=budget))
+    monkeypatch.setattr(runner, "make_fieldwise_harvester", make_fieldwise)
+    monkeypatch.setattr(runner, "make_retrieve", lambda *a, **k: (
+        lambda probes, document_id, exclude: [Source(
+            "section", 10, TEXT, {"document_id": document_id, "page": 1})]))
+    monkeypatch.setattr(runner, "LLM_PARALLEL", 1)
+    # The batch as the profile's prompts allow it, not as an earlier run left
+    # it: `main` writes the fitted size to the module.
+    monkeypatch.setattr(runner, "BATCH_SOURCES", 6)
+    # A crop is a term of the budget, and the term that follows the sources.
+    monkeypatch.setattr(runner, "ATTACH_IMAGES", True)
+    with_max_tokens(monkeypatch, ceilings or {})
+    # What each request kind of the run needs as the run starts, before `main`
+    # lowers the batch.
+    spec = load_spec(json.loads((PROFILES / "scenarios"
+                                 / "extraction_spec.json").read_text(
+        encoding="utf-8")))
+    seen["each"] = {pid: runner.context_budget(runner.prompts.load(pid), spec)
+                    for pid in (*runner.PROMPT_IDS, runner.REVIEW_PROMPT_ID)}
+    try:
+        assert runner.main([str(db), "no.index", str(out), "--image-root",
+                            str(tmp_path), "--document", "1"]) == 0
+    finally:
+        trace.close()
+    return seen
+
+
+def test_a_run_asks_its_server_for_the_window_of_the_largest_request_it_sends(
+        monkeypatch, tmp_path, corpus_run, spec):
+    """Each prompt in turn answers more than any other, and the window the
+    serving check is given is the one of that request; a prompt the run does
+    not send answers more than all of them and the window stays."""
+    sent = runner.sent_prompt_ids(False)
+    seen = _observed_run(monkeypatch, tmp_path, corpus_run)
+    plain = max(seen["each"][pid] for pid in sent)
+    assert seen["window"] == plain
+    for prompt_id in sent:
+        seen = _observed_run(monkeypatch, tmp_path, corpus_run,
+                             {prompt_id: 30000})
+        assert seen["window"] == seen["each"][prompt_id] > plain, prompt_id
+    for unsent in (runner.FRAME_PROMPT_ID, runner.QUERIES_PROMPT_ID):
+        seen = _observed_run(monkeypatch, tmp_path, corpus_run,
+                             {unsent: 30000})
+        assert seen["window"] == plain, unsent
+
+
+def test_a_run_reads_as_many_sources_per_request_as_its_rows_prompt_allows(
+        monkeypatch, tmp_path, corpus_run, spec):
+    others = {pid: 1024 for pid in (*runner.PROMPT_IDS,
+                                    runner.REVIEW_PROMPT_ID)
+              if pid != runner.ROWS_PROMPT_ID}
+    # The rows prompt as the profile writes it: 3 sources, whatever every
+    # other prompt of the folder may write.
+    seen = _observed_run(monkeypatch, tmp_path, corpus_run, others)
+    assert seen["sources"] == runner.batch_sources_for(spec) == 3
+    # And only that one: the same ceiling on the rows prompt alone gives one.
+    seen = _observed_run(monkeypatch, tmp_path, corpus_run,
+                         {runner.ROWS_PROMPT_ID: 1024})
+    assert seen["sources"] == 1
+
+
+def test_the_budget_a_run_reports_at_its_end_is_the_one_of_the_batch_it_read(
+        monkeypatch, tmp_path, corpus_run, spec):
+    """The window is asked for before the batch is lowered and counts a crop
+    for every source of the unfitted batch, and the line at the end counts
+    the crops of the batch that was read. Built to fail on the order: with
+    the batch lowered to one source the two differ by five crops."""
+    seen = _observed_run(monkeypatch, tmp_path, corpus_run,
+                         {runner.ROWS_PROMPT_ID: 1024})
+    assert seen["window"] == max(seen["each"][pid]
+                                 for pid in runner.sent_prompt_ids(False))
+    assert runner.BATCH_SOURCES == 1
+    assert seen["usage"] == runner.request_budget(spec, False)
+    assert seen["window"] - seen["usage"] == 5 * 1200
 
 
 # ---------------------------------------------------------------------------
@@ -467,7 +569,6 @@ def test_a_run_that_asked_what_a_recording_does_not_hold_fails(
 
     monkeypatch.setattr(runner, "make_retrieve", make_retrieve)
     monkeypatch.setattr(runner, "make_fieldwise_harvester", make_fieldwise)
-    monkeypatch.setattr(runner, "FIELDWISE", True)
     monkeypatch.setattr(runner, "fit_batch_sources", lambda *a, **k: 1)
     monkeypatch.setattr(runner, "LLM_PARALLEL", 1)
     assert runner.main([str(db), "no.index", str(out), "--image-root",

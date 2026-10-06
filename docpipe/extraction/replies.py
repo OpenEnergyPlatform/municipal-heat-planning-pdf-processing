@@ -80,27 +80,13 @@ def review(slots) -> dict:
             "additionalProperties": False}
 
 
-def _coordinates(spec) -> dict:
-    """The keys a whole tuple carries beside its value: the parameter, the
-    unit and every axis any parameter of the spec has, each with its wording."""
-    keys: dict = {"parameter": TEXT_OR_NULL, "unit": TEXT_OR_NULL}
-    for parameter in spec.parameters:
-        for name in parameter.axes:
-            keys.setdefault(name, {"type": ["string", "integer", "null"]})
-            keys.setdefault(f"{name}_raw", TEXT_OR_NULL)
-    return keys
-
-
-def rows(spec=None, *, whole: bool = False, sandbox: bool = True) -> dict:
+def rows(*, sandbox: bool = True) -> dict:
     """The harvest reply: the values of the passages, or a sandbox action.
 
-    *whole* is the contract in which a row carries its coordinates itself;
-    otherwise a row is a value with its wording, its unit's wording and its
-    quote, and the coordinates are asked per field afterwards.
+    A row is a value with its wording, its unit's wording and its quote; the
+    coordinates are asked per field afterwards.
     """
     shared: dict = {"source": TEXT, "unit_raw": TEXT_OR_NULL}
-    if whole and spec is not None:
-        shared.update(_coordinates(spec))
     row = {**shared,
            "value": NUMBER_OR_TEXT, "value_raw": TEXT_OR_NULL,
            "quote": TEXT, "computed": {"type": "boolean"}}

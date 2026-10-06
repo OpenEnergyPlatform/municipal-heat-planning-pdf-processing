@@ -705,7 +705,8 @@ def stamp_schema() -> dict:
         },
         "patternProperties": {
             "^extraction/(harvest|queries|anchors|rows|field|phrase|frame)$":
-                {**sha, "description": "sha256 of the prompt file"},
+                {**sha, "description": "sha256 of the prompt file; `harvest` "
+                                       "is in stamps of an older release"},
             "^question_text/[^/]+$": {
                 "type": "array", "items": {"type": "string"},
                 "description": "The sentence THIS document was searched "
@@ -756,9 +757,9 @@ def stamp_schema() -> dict:
                                "with its spellings and its definitions. "
                                "Everything the model sees for this axis, and "
                                "nothing else."}},
-        "required": ["spec", "model", "anchors", "extraction/harvest",
-                     "extraction/queries", "extraction/anchors",
-                     "extraction/rows", "extraction/field"],
+        "required": ["spec", "model", "anchors", "extraction/queries",
+                     "extraction/anchors", "extraction/rows",
+                     "extraction/field"],
         "additionalProperties": False,
     }
 

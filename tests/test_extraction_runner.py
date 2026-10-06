@@ -8,6 +8,7 @@ from docpipe.extraction import runner
 from docpipe.extraction.pipeline import Source
 from docpipe.extraction.runner import _parameter_payload, _parse_reply, stale
 from docpipe.extraction.spec import load
+from tests.prompt_ceilings import with_max_tokens
 
 SPEC = load({"parameters": [{
     "uri": "OEO_00050016",
@@ -1141,37 +1142,44 @@ CHARS_PER_TOKEN = 2.62
 
 
 def _profile_specs():
-    """Every profile that has an extraction spec, as (name, Spec, prompt)."""
+    """Every profile that has an extraction spec, as (name, Spec, framed):
+    whether the profile names frame axes, which decides if its harvest sends
+    a frame request."""
     import json
     import os
     from pathlib import Path
+    from docpipe.extraction import fields
     from docpipe.extraction.spec import load as load_spec
+    from docpipe.profile import load_profile
     root = Path(__file__).resolve().parent.parent / "profiles"
     for spec_file in sorted(root.glob("*/extraction_spec.json")):
         name = spec_file.parent.name
         os.environ["DOCPIPE_PROFILE"] = name
-        yield (name,
-               load_spec(json.loads(spec_file.read_text(encoding="utf-8"))),
-               runner.prompts.load("extraction/harvest"))
+        spec = load_spec(json.loads(spec_file.read_text(encoding="utf-8")))
+        yield (name, spec, bool(fields.frame_slots(
+            spec, load_profile(name).component("extraction", "FRAME") or ())))
 
 
 def test_every_profile_fits_the_window_it_will_be_served(monkeypatch):
     """The test that was missing. max_tokens lives in a prompt's frontmatter
     and BATCH_SOURCES lives in this module, and until a pilot burned five GPUs
     nothing had ever compared them. The job script serves
-    max(context_budget, 32768) as --max-model-len, so a budget that grows
+    max(request_budget, 32768) as --max-model-len, so a budget that grows
     unnoticed is a window that grows unnoticed, and a run that loses the
     parallelism it was sized for."""
     monkeypatch.setenv("DOCPIPE_PROFILE", "kwp")
     checked = 0
-    for name, spec, prompt in _profile_specs():
-        budget = runner.context_budget(prompt, spec)
+    for name, spec, framed in _profile_specs():
+        budget = runner.request_budget(spec, framed)
         limit = SERVED_WINDOW if name in WITHIN_SERVED else WINDOW_CEILING
         assert budget <= limit, (
             f"{name}: budget {budget} over the {limit} this profile may ask "
             f"the job to serve")
-        assert budget > int(prompt.meta["max_tokens"]), (
-            f"{name}: the answer cannot be the whole request")
+        for prompt_id in runner.sent_prompt_ids(framed):
+            assert budget > int(runner.prompts.load(
+                prompt_id).meta["max_tokens"]), (
+                f"{name}: the answer of {prompt_id} cannot be the whole "
+                f"request")
         checked += 1
     assert checked >= 2, "the profiles stopped being found"
 
@@ -1182,8 +1190,8 @@ def test_the_answer_budget_covers_a_full_batch(monkeypatch):
     source per request 4096 was already marginal; at six it was the defect
     that killed a pilot."""
     monkeypatch.setenv("DOCPIPE_PROFILE", "kwp")
-    for name, spec, prompt in _profile_specs():
-        fitted = runner.fit_batch_sources(prompt, spec)
+    for name, spec, _framed in _profile_specs():
+        fitted = runner.batch_sources_for(spec)
         assert fitted >= 1, f"{name}: not even one source fits the answer budget"
         # Sizing is the profile's own: the spec's example IS the contract the
         # prompt shows the model, so a batch that fits it is a batch the model
@@ -1192,8 +1200,159 @@ def test_the_answer_budget_covers_a_full_batch(monkeypatch):
         if fitted < runner.BATCH_SOURCES:
             # It fits because it was made to. Check the next size up really
             # does not, or the clamp is just pessimism.
-            bigger = runner.fit_batch_sources(prompt, spec, wanted=fitted + 1)
+            bigger = runner.fit_batch_sources(
+                runner.prompts.load(runner.ROWS_PROMPT_ID), spec,
+                wanted=fitted + 1)
             assert bigger == fitted, f"{name}: the clamp is too tight"
+
+
+# What a prompt's max_tokens does to the two numbers a run takes from the
+# prompts it sends. Promised: the sources per request follow the rows request
+# AND no other, the window follows the largest of the requests the run sends
+# AND nothing it does not send. Each half is asserted by itself, with a case
+# that breaks it by construction: a prompt given a ceiling of its own.
+
+def _spec_of(name, monkeypatch):
+    # First, so that the variable `_profile_specs` sets is put back as it was.
+    monkeypatch.setenv("DOCPIPE_PROFILE", name)
+    for found, spec, framed in _profile_specs():
+        if found == name:
+            monkeypatch.setenv("DOCPIPE_PROFILE", name)
+            return spec, framed
+    raise AssertionError(f"no profile {name}")
+
+
+@pytest.mark.parametrize("name, sources", [("kwp", 6), ("scenarios", 3)])
+def test_the_sources_per_request_of_a_profile_are_the_ones_its_rows_prompt_allows(
+        monkeypatch, name, sources):
+    spec, _framed = _spec_of(name, monkeypatch)
+    assert runner.batch_sources_for(spec) == sources
+
+
+@pytest.mark.parametrize("name", ["kwp", "scenarios"])
+def test_the_sources_per_request_ignore_every_prompt_but_the_rows_one(
+        monkeypatch, name):
+    spec, framed = _spec_of(name, monkeypatch)
+    before = runner.batch_sources_for(spec)
+    others = [pid for pid in (*runner.PROMPT_IDS, runner.REVIEW_PROMPT_ID)
+              if pid != runner.ROWS_PROMPT_ID]
+    with_max_tokens(monkeypatch, {pid: 1024 for pid in others})
+    assert runner.batch_sources_for(spec) == before
+
+
+@pytest.mark.parametrize("name", ["kwp", "scenarios"])
+def test_a_rows_prompt_that_may_write_less_takes_sources_from_the_batch(
+        monkeypatch, name):
+    """The case that violates the half above by construction: the same ceiling
+    on the rows prompt is the one that moves the number, down to one source."""
+    spec, _framed = _spec_of(name, monkeypatch)
+    with_max_tokens(monkeypatch, {runner.ROWS_PROMPT_ID: 1024})
+    assert runner.batch_sources_for(spec) == 1
+
+
+def test_the_window_is_the_largest_of_the_requests_the_run_sends(monkeypatch):
+    for name in ("kwp", "scenarios"):
+        spec, framed = _spec_of(name, monkeypatch)
+        each = {pid: runner.context_budget(runner.prompts.load(pid), spec)
+                for pid in runner.sent_prompt_ids(framed)}
+        assert runner.request_budget(spec, framed) == max(each.values()), name
+        assert len(each) == (5 if framed else 4), each
+
+
+def test_the_window_follows_the_prompt_that_asks_for_the_most(monkeypatch):
+    """Built to fail: each request kind in turn answers more than any other,
+    and the window has to move to it, by the same amount."""
+    spec, framed = _spec_of("kwp", monkeypatch)
+    base = {pid: runner.context_budget(runner.prompts.load(pid), spec)
+            for pid in runner.sent_prompt_ids(framed)}
+    for pid in runner.sent_prompt_ids(framed):
+        with_max_tokens(monkeypatch, {pid: 30000})
+        grown = runner.context_budget(runner.prompts.load(pid), spec)
+        assert grown > max(base.values())
+        assert runner.request_budget(spec, framed) == grown, pid
+
+
+def test_a_frame_request_counts_for_a_framed_profile_and_for_no_other(
+        monkeypatch):
+    """The frame prompt is sent only when the profile has frame axes. A huge
+    one moves the window of a framed profile, and leaves an unframed
+    profile's alone: nothing there ever asks for a frame."""
+    spec, framed = _spec_of("kwp", monkeypatch)
+    assert framed
+    plain = runner.request_budget(spec, False)
+    with_max_tokens(monkeypatch, {runner.FRAME_PROMPT_ID: 30000})
+    huge = runner.context_budget(runner.prompts.load(runner.FRAME_PROMPT_ID),
+                                 spec)
+    assert runner.request_budget(spec, True) == huge
+    assert runner.request_budget(spec, False) == plain < huge
+    spec, framed = _spec_of("scenarios", monkeypatch)
+    assert not framed
+    assert runner.request_budget(spec, framed) == runner.request_budget(
+        spec, False)
+
+
+def test_a_prompt_no_request_carries_does_not_size_the_window(monkeypatch):
+    """The queries and the review are not sent by a harvest as one of its
+    requests: a huge one changes nothing."""
+    spec, framed = _spec_of("kwp", monkeypatch)
+    base = runner.request_budget(spec, framed)
+    with_max_tokens(monkeypatch, {runner.QUERIES_PROMPT_ID: 30000,
+                                   runner.REVIEW_PROMPT_ID: 30000})
+    assert runner.request_budget(spec, framed) == base
+
+
+def _printed(tmp_path, capsys) -> int:
+    code = runner.main([str(tmp_path / "db"), str(tmp_path / "ix"),
+                        str(tmp_path / "out"), "--print-context-budget"])
+    assert code == 0
+    return int(capsys.readouterr().out.split()[-1])
+
+
+@pytest.mark.parametrize("name, widest", [("kwp", runner.FIELD_PROMPT_ID),
+                                          ("scenarios", runner.ROWS_PROMPT_ID)])
+def test_the_command_prints_the_window_of_the_requests_it_sends(
+        monkeypatch, capsys, tmp_path, name, widest):
+    """`--print-context-budget` is what the job serves the model with: the
+    largest request of the run, which for kwp is the field request and for
+    scenarios the rows request."""
+    spec, framed = _spec_of(name, monkeypatch)
+    printed = _printed(tmp_path, capsys)
+    assert printed == runner.request_budget(spec, framed)
+    assert printed == runner.context_budget(runner.prompts.load(widest), spec)
+
+
+@pytest.mark.parametrize("name", ["kwp", "scenarios"])
+def test_the_printed_window_moves_with_the_largest_prompt(
+        monkeypatch, capsys, tmp_path, name):
+    """Built to fail: the prompt the number rests on is given a ceiling of
+    30000 tokens, and a command that took its number from anywhere else would
+    print the old one."""
+    spec, framed = _spec_of(name, monkeypatch)
+    before = _printed(tmp_path, capsys)
+    with_max_tokens(monkeypatch, {pid: 30000
+                                   for pid in runner.sent_prompt_ids(framed)})
+    after = _printed(tmp_path, capsys)
+    assert after > before
+    assert after == runner.request_budget(spec, framed)
+
+
+def test_the_printed_window_counts_the_frame_request_of_a_framed_profile_only(
+        monkeypatch, capsys, tmp_path):
+    """The command hands `request_budget` whether the profile has frame axes.
+    Built to fail: a frame prompt of 30000 tokens is the largest request of a
+    framed profile, so its window is that prompt's budget; for a profile with
+    no frame axes it is not a request and the printed window stays. A command
+    that always said 'no frame' would print the old number for the first."""
+    spec, framed = _spec_of("kwp", monkeypatch)
+    assert framed
+    with_max_tokens(monkeypatch, {runner.FRAME_PROMPT_ID: 30000})
+    huge = runner.context_budget(runner.prompts.load(runner.FRAME_PROMPT_ID),
+                                 spec)
+    assert _printed(tmp_path, capsys) == huge
+    spec, framed = _spec_of("scenarios", monkeypatch)
+    assert not framed
+    assert _printed(tmp_path, capsys) == runner.request_budget(spec, False)
+    assert _printed(tmp_path, capsys) < huge
 
 
 def test_the_computed_switch_can_never_be_shared():
@@ -2891,7 +3050,7 @@ def test_the_value_request_offers_the_documents_own_lists(monkeypatch):
     text = "The Current Policies scenario (CurPol) covers Germany."
     seen = _stub_client(monkeypatch, [json.dumps(
         {"tuples": [], "status": "complete", "need_more": []})] * 2, "stop")
-    harvest = runner.make_harvester(prompt_id=runner.ROWS_PROMPT_ID, spec=spec)
+    harvest = runner.make_harvester(spec=spec)
 
     def request(own):
         batch = group_items([WorkItem(7, None, Source(
@@ -2928,7 +3087,7 @@ def test_the_halves_of_a_cut_off_request_keep_the_documents_lists(monkeypatch):
     batch.spec = filled
     done = json.dumps({"tuples": [], "status": "complete", "need_more": []})
     seen = _stub_client(monkeypatch, ['{"tuples": [', done, done], "length")
-    runner.make_harvester(prompt_id=runner.ROWS_PROMPT_ID, spec=spec)(batch, [])
+    runner.make_harvester(spec=spec)(batch, [])
     assert len(seen) == 3, "the whole request, then one per half"
     for messages in seen:
         user = messages[1]["content"]

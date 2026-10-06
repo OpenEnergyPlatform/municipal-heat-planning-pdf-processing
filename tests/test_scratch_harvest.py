@@ -305,7 +305,6 @@ def _corpus(monkeypatch, tmp_path, harvester_stubbed):
                         lambda *a, **k: (lambda d: []))
     monkeypatch.setattr(faiss_store, "load_global_index",
                         lambda p: (None, {}))
-    monkeypatch.setattr(runner, "FIELDWISE", True)
     monkeypatch.setattr(runner, "LLM_PARALLEL", 1)
 
     def make_retrieve(conn, index, id_to_pos, cache_conn, fetch, limit=0):

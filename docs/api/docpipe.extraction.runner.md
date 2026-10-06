@@ -854,17 +854,12 @@ One line at the end of a run: what the window was really asked for.
 ### make_harvester
 
 ```python
-def make_harvester(image_root: Optional[Path] = None,
-                   prompt_id: str = HARVEST_PROMPT_ID,
-                   spec=None) -> Callable
+def make_harvester(image_root: Optional[Path] = None, spec=None) -> Callable
 ```
 
-The request loop, for either contract.
-
-The whole-tuple prompt and the field-wise value prompt differ in what they
-ask for and in nothing else: same sources, same crops, same sandbox, same
-splitting of a request whose answer did not fit. So the prompt is the
-argument and the loop is shared.
+The rows request: the values of a batch of passages, with the crops of
+its tables and figures, a sandbox round for a number the model computes,
+and the split of a request whose answer did not fit.
 
 ### keeps_row
 
@@ -984,11 +979,11 @@ def make_fieldwise_harvester(image_root: Optional[Path] = None,
                              ) -> Callable
 ```
 
-A harvest(batch, prior) that asks per field and answers like the old one.
+A harvest(batch, prior) that asks the rows once and then every
+coordinate of them, one field to a request.
 
-Same signature as make_harvester's, so the scheduler above it does not
-change: the batch is still the unit in flight, and the sweep over the
-fields happens inside one batch's turn.
+The batch is the unit in flight, and the sweep over the fields happens
+inside one batch's turn.
 
 ### split_long_sources
 
@@ -1381,6 +1376,46 @@ off — every time, deterministically, on five GPUs.
 So the batch follows the answer budget rather than a hand-picked
 constant, and what one tuple costs comes from the profile's own example,
 which is the very contract the prompt shows the model.
+
+### sent_prompt_ids
+
+```python
+def sent_prompt_ids(framed: bool) -> tuple
+```
+
+The prompts a harvest sends to the model as a system message.
+
+The rows request, the field request, the sentence a document is searched
+with and the anchor questions; the frame request only when the profile has
+frame axes, because `ask_frame` does not exist otherwise. Not the queries
+(a list of search templates, never sent) and not the review, which has a
+line of its own in the doctor.
+
+### request_budget
+
+```python
+def request_budget(spec, framed: bool, profile=None) -> int
+```
+
+Tokens the largest request this run sends needs, per request.
+
+The window a server is started with has to hold every request kind of the
+run, so it follows the largest of them, and the largest is the field
+request for one profile and the rows request for the other. Read off the
+prompts the run sends and never off one that no request carries.
+
+### batch_sources_for
+
+```python
+def batch_sources_for(spec, profile=None) -> int
+```
+
+How many passages one rows request reads for this profile.
+
+The rows request is the only one that reads BATCH_SOURCES passages, and its
+max_tokens is what bounds that reply. The field request reads
+FIELD_WINDOW passages and answers a row at a time, so its ceiling says
+nothing about how many tuples a batch yields.
 
 ### select_documents
 

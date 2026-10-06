@@ -124,15 +124,6 @@ def test_query_templates_expand_for_every_parameter():
         assert not any("{" in p for p in probes)
 
 
-def test_the_harvest_prompt_states_the_contract():
-    from docpipe import prompts
-    prompt = prompts.load("extraction/harvest", _profile())
-    assert prompt.meta.get("max_tokens")
-    for needle in ('"tuples"', '"quote"', '"unit_raw"', '"quantity"',
-                   '"carrier_raw"', 'classes'):
-        assert needle in prompt.text, f"prompt never names {needle}"
-
-
 # --- IRI minting against the published reference ---------------------------
 
 def test_value_minting_matches_the_schema_repo_reference():

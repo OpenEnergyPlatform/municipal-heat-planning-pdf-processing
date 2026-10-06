@@ -73,7 +73,7 @@ table gives kwp's own answer.
 | Refinement, visuals, page transcription, the answer app | `reading.py` | `PHRASES` | the ten sentences these stages and the chat say to the model when its reply was not the one JSON object, in English like the prompts of the first three (`reading.REQUIRED`), laid over the built-in profile's |
 | The picker (app) | `catalog.py`, `profile.py` | `CATALOG`, `facets` | plan-centric labels, convoy membership, three filters |
 | Extraction | `extraction.py` | `SPEC_PATH`, `SLICE`, `FRAME`, `document_context`, `PHRASES`, `PROMPT_CHECKS`, `ALT_LABEL_LANGUAGE` | the spec, the slice gate, the frame axes, the German sentences the stage writes to the model (the frame request's list of a closed coordinate stands under `"scenarios"`) and the passages the preflight holds its prompts to |
-| Extraction | `prompts/extraction/*.md` | eight prompt ids | phrase, frame, rows, field, anchors, queries, harvest, review |
+| Extraction | `prompts/extraction/*.md` | seven prompt ids | phrase, frame, rows, field, anchors, queries, review |
 | The graph | `kg.py` | `make_serializer` and seven more names | MHPKG Turtle, the coordinate query, the trust wording |
 | The answer app | `inference.py` | `PHRASES`, `READOFF_MARKER`, `READOFF_NOTE`, `ROUTE_NOTES` | the German chat wording and the graph route's refusal sentences |
 | The answer app | `prompts/inference/*.md`, `prompts/kg/coordinate.md` | 10 plus 1 prompt ids | the answer loop's own prompts and the graph route's closed question |
@@ -211,7 +211,7 @@ that same file.
 
 ## The prompts
 
-Nine prompt ids belong to extraction and the graph route, kwp's own
+Eight prompt ids belong to extraction and the graph route, kwp's own
 wording of each spec question:
 
 | id | loaded | asks for |
@@ -220,17 +220,14 @@ wording of each spec question:
 | `extraction/frame` | once per document, before any row | which scenario and year pairs the plan actually carries |
 | `extraction/anchors` | once per run, per question the field sweep asks | six hypothetical sentences a passage stating this coordinate could read |
 | `extraction/queries` | once per run, as a plain template list | one retrieval query template per parameter or per vocabulary entry |
-| `extraction/rows` | per retrieved window, the default field-wise contract | which values a passage states, without their coordinates |
-| `extraction/field` | once per row per coordinate, the field-wise contract | one axis's own answer, from its closed list or its type |
-| `extraction/harvest` | per retrieved window, only when `EXTRACT_FIELDWISE=0` | a whole tuple at once, coordinates included |
+| `extraction/rows` | per retrieved window | which values a passage states, without their coordinates |
+| `extraction/field` | once per row per coordinate | one axis's own answer, from its closed list or its type |
 | `extraction/review` | only under `--review`; excluded from the extraction stamp | a second reading of one value, over a window narrowed to its own passage and the section it stands in |
 | `kg/coordinate` | once per chat turn the graph route tries | one closed answer to one coordinate axis, for the SPARQL query |
 
-`extraction/rows` and `extraction/field` are the field-wise pair that
-replaces the whole-tuple `extraction/harvest` request by default
-(`EXTRACT_FIELDWISE` defaults to on, `docpipe/extraction/runner.py:308`):
-one call finds which values a passage states, a second asks each
-coordinate as its own question. `extraction/review` is deliberately
+`extraction/rows` and `extraction/field` are the pair every value is
+read with: one call finds which values a passage states, a second asks
+each coordinate as its own question. `extraction/review` is deliberately
 outside the set the extraction stamp hashes, because a review only ever
 adds a flag and never changes a value, so folding its prompt into the
 stamp would report an entire corpus stale the day it is edited.

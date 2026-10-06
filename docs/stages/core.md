@@ -144,7 +144,7 @@ refinement's `run()` (`docpipe/refinement/pipeline.py:200`) and
 under `--dry-run`); page transcription (`docpipe/preprocessing/pipeline.py:478`),
 asked before the first page that lacks its text and not before the first
 document; and extraction's review pass and harvest
-(`docpipe/extraction/runner.py:5426` and `:5512`). A hosted API is asked the
+(`docpipe/extraction/runner.py:5450` and `:5538`). A hosted API is asked the
 same through `_hosted_serving`, and besides whether the model answers inside
 a reply schema; a replay of a recorded run has no server to ask and takes the
 window the recording was planned for. A server that reports no

@@ -58,16 +58,16 @@ def _run_stamp(spec=SPEC, **overrides):
     """What the run would stamp now: another model and other prompts than
     the harvest had, which a stamp records and never compares."""
     stamp = {"spec": "new-sha", "model": "second", "anchors": "00000000000000a2",
-             "extraction/harvest": "h2", "extraction/rows": "r2",
-             "extraction/field": "f2", **fingerprints(spec)}
+             "extraction/rows": "r2", "extraction/field": "f2",
+             **fingerprints(spec)}
     stamp.update(overrides)
     return stamp
 
 
 def _stored_stamp(spec, **overrides):
     stamp = {"spec": "old-sha", "model": "first", "anchors": "00000000000000a1",
-             "extraction/harvest": "h1", "extraction/rows": "r1",
-             "extraction/field": "f1", **fingerprints(spec),
+             "extraction/rows": "r1", "extraction/field": "f1",
+             **fingerprints(spec),
              "producers": [{"pass": "harvest", "model": "first"}]}
     stamp.update(overrides)
     return stamp
@@ -1044,8 +1044,8 @@ def test_the_stamp_carries_exactly_what_the_pass_answered_for(tmp_path):
         f"axis/heat_load/{n}" for n in SPEC.by_uri["heat_load"].axes}
     assert answered == owned | {"slot/parameter", "slot/unit", "producers",
                                 "question_text/heat_load"}
-    for key in ("model", "anchors", "extraction/harvest", "extraction/rows",
-                "extraction/field", "spec"):
+    for key in ("model", "anchors", "extraction/rows", "extraction/field",
+                "spec"):
         assert after[key] == first[key], f"{key} is recorded, not rewritten"
     entry = after["producers"][-1]
     assert entry["pass"] == "top-up-parameter"

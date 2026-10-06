@@ -392,17 +392,17 @@ per document, so this section documents its stamp on its own.
 written only once `finish_document` decides a harvest actually happened;
 a document is left unstamped, so the next run redoes it, when more than
 half its planned sources came back unreachable (`UNREACHABLE_LIMIT = 0.5`,
-`docpipe/extraction/runner.py:4552`, `:4574` to `4575`), when nothing
-answered at all (`:4576` to `4577`), or when any one of its requests ended
-on a 429 or a 5xx, which is no answer (`:4578` to `4581`); `not_happened`
-(`:4555` to `4582`) tells the three apart, and the pass that appends a
+`docpipe/extraction/runner.py:4539`, `:4561` to `4562`), when nothing
+answered at all (`:4563` to `4564`), or when any one of its requests ended
+on a 429 or a 5xx, which is no answer (`:4565` to `4568`); `not_happened`
+(`:4542` to `4569`) tells the three apart, and the pass that appends a
 parameter asks it too.
 `finish_document` removes an earlier stamp before it writes the file, so a
 withheld stamp is not replaced by one that vouched for the file it
-overwrote (`:4638` to `4639`), and it returns whether the document is
+overwrote (`:4625` to `4626`), and it returns whether the document is
 stamped. A document written but left unstamped is a failure of the run:
 `harvest_document` returns it as not finished and `main` exits 1
-(`:5870` to `5871`, `5927`). Inside it:
+(`:5893` to `5894`, `5950`). Inside it:
 
 | Key | What it records | Compared on a redo |
 |---|---|---|
@@ -422,22 +422,25 @@ stamped. A document written but left unstamped is a failure of the run:
 
 The owner decided on 2026-09-10 that a stamp rests on the KG/ontology
 parameters alone (`parameter/`, `value/`, `axis/`, `slot/`,
-`docpipe/extraction/runner.py:4385`). The model, the anchors and every
+`docpipe/extraction/runner.py:4372`). The model, the anchors and every
 prompt id are still written into the stamp, so a reader can place a
 harvest, but a reworded prompt or another model no longer makes a
-document stale. The fine keys come from
+document stale. A stamp of an older release also carries the key
+`extraction/harvest`; no pass that writes into a stamp drops it, nothing
+compares it, and a document whose stamp holds it stays current. The fine
+keys come from
 `spec.fingerprints()` (`docpipe/extraction/spec.py:649` to `674`), and
 their presence is what licenses ignoring the coarse `spec` key. An earlier
 design hashed the whole spec file as one number, so one new label anywhere
 in it made a whole corpus stale together, about 93 GPU hours to reread
-1,082 documents over one added word (`docpipe/extraction/runner.py:4248`
-to `4381`); the ontology behind the spec is revised repeatedly, so the
+1,082 documents over one added word (`docpipe/extraction/runner.py:4235`
+to `4368`); the ontology behind the spec is revised repeatedly, so the
 same cost would recur each time it is. With one key per parameter, per value list
 and per axis, `stale()` names exactly which question changed and leaves
 the rest of the corpus alone; it checks both directions, so a question
 dropped from the spec counts as changed too, the one case the old
 whole-file hash used to catch that a purely additive scheme would
-otherwise miss (`docpipe/extraction/runner.py:4458` to `4459`). A parameter
+otherwise miss (`docpipe/extraction/runner.py:4445` to `4446`). A parameter
 added to the spec is the one change with no stored key to compare: the stamp has
 never seen `parameter/<uri>`, so every stored document reads stale in it, and a
 harvest would read each from its first passage for the sake of one parameter.
@@ -458,7 +461,7 @@ The review prompt (`extraction/review`) is deliberately left out of
 `PROMPT_IDS` itself, not merely out of the comparison: a review leaves a
 value unchanged, only its `flags` grow, so folding the review prompt's sha
 into every stamp would report the whole corpus stale the day that one
-prompt is edited (`docpipe/extraction/runner.py:300` to `302`).
+prompt is edited (`docpipe/extraction/runner.py:298` to `300`).
 
 Four passes act on a moved or missing key without harvesting the document
 again.

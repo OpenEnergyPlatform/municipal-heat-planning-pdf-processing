@@ -13,6 +13,7 @@ import ast
 import hashlib
 import json
 import os
+import re
 import shutil
 import sqlite3
 import subprocess
@@ -561,7 +562,8 @@ def test_init_leaves_a_project_the_next_command_runs_in(tmp_path):
     doctor = _docpipe("doctor", "--offline", cwd=home)
     assert f"{name}:" in doctor.stdout and "(extends default)" in doctor.stdout
     assert "0 of its own" in doctor.stdout
-    assert "0 prompt file(s)" not in doctor.stdout
+    # None, and not a count that ends in a zero, as thirty does.
+    assert not re.search(r"(?<!\d)0 prompt file\(s\)", doctor.stdout)
     assert "Traceback" not in doctor.stderr
 
     again = _docpipe("init", cwd=home)

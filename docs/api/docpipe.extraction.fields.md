@@ -11,8 +11,8 @@ shape is identical for every value in the corpus. So the shape is
 computed here, from the spec, and the model is never asked for it. It
 is asked, one field at a time, to fill the shape in.
 
-Asking per field is the point. One request for a whole tuple lets a
-model quietly drop a coordinate it is unsure of, and dropping is
+Asking per field is the point. One request for every coordinate lets a
+model quietly drop one it is unsure of, and dropping is
 free: the field stays nullable, nothing refuses it, nothing counts
 it. Measured on the 204 document corpus run, the year was missing on
 63.5 percent of all values, and on 13 percent of those it stood in

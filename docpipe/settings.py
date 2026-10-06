@@ -279,10 +279,6 @@ SETTINGS = (
     S("EXTRACT_FIELD_WINDOW", "extract.field_window", "int", "2",
       "Passages in one window of the field sweep.",
       stages=("extract",)),
-    S("EXTRACT_FIELDWISE", "extract.fieldwise", "flag", "1",
-      "One request per coordinate of a value; 0 asks for whole tuples at "
-      "once.",
-      stages=("extract",)),
     S("EXTRACT_FOLLOWUP_ROUNDS", "extract.followup_rounds", "int", "1",
       "Times the model may ask for more passages on a topic and receive "
       "them.",

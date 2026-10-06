@@ -478,7 +478,6 @@ def corpus_run(monkeypatch, tmp_path):
                         lambda *a, **k: (lambda d: []))
     monkeypatch.setattr(faiss_store, "load_global_index",
                         lambda p: (None, {}))
-    monkeypatch.setattr(runner, "FIELDWISE", True)
     monkeypatch.setattr(runner, "fit_batch_sources", lambda *a, **k: 1)
     monkeypatch.setattr(runner, "LLM_PARALLEL", 1)
 

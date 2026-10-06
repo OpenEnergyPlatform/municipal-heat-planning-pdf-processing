@@ -617,9 +617,9 @@ def rows_from_reply(batch: Batch, reply: Optional[dict],
                     frame_axes: Optional[list] = None, spec=None) -> tuple:
     """(rows, orphans) from the value request - the only request that counts.
 
-    Routing is the same as for a whole tuple: the quote decides which source a
-    value belongs to, the label breaks a tie, and a claim that neither quotes
-    nor names any source of the batch is an orphan.
+    Routing: the quote decides which source a value belongs to, the label
+    breaks a tie, and a claim that neither quotes nor names any source of the
+    batch is an orphan.
 
     Under a frame, a passage that does not print the request's pair gives no
     row of THAT pair: `apply_frame` writes the pair onto every row, so the
@@ -948,8 +948,8 @@ def merge_field(rows: list, sources: list, slot, reply: Optional[dict],
     that were SHOWN, AND it contains the answer. A field that fails either is
     left empty rather than written unbacked — the point of asking per field is
     that each coordinate is evidenced, and an answer that cannot show where it
-    read the year is exactly the answer a whole-tuple request used to hide
-    inside a tuple the value's quote had already justified.
+    read the year is exactly the answer that used to hide inside a tuple the
+    value's quote had already justified.
 
     Shown, not the row's own source: the year of a table is in its caption and
     the scenario is in the section heading, so a coordinate's evidence is

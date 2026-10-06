@@ -361,7 +361,7 @@ Reading the tables back out is not this package's job.
   which is `"document"` unless a profile names its own, falling back to the
   `document_noun_fallback` entry only without a profile object or with an
   empty noun
-  (`docpipe/extraction/runner.py:4865` to `4890`, docstrings;
+  (`docpipe/extraction/runner.py:4888` to `4913`, docstrings;
   `docpipe/inference/catalog.py:70` to `75` and `93` to `103`). A profile
   that stands alone and words its own `UI` has to carry those three entries
   and the others `wording.UI_REQUIRED` lists, or the app and the picker raise

@@ -448,10 +448,10 @@ have no profile default. `--document` restricts the run to one document
 id and is repeatable. `--image-root`, left unset, defaults to
 `<pdf-root>/processed` when `--pdf-root` is given and to the profile's
 processed directory otherwise (`docpipe/extraction/runner.py` lines
-5401 to 5403). `--pdf-root` has no such default: left unset it stays
+5425 to 5427). `--pdf-root` has no such default: left unset it stays
 `None` and disables the digit-exact native check that locates a quote's
-highlight rectangles in the source PDF (`make_locate`, lines 4130 to 4134,
-called at line 5561). `--force` and `--force-stale` behave as in refinement.
+highlight rectangles in the source PDF (`make_locate`, lines 4117 to 4121,
+called at line 5585). `--force` and `--force-stale` behave as in refinement.
 The stage writes one `<doc>.jsonl` harvest and one `<doc>.stamp.json`
 per document, and resumes per question, not per document, detailed in
 [the extraction stage](stages/extraction.md) and below.
@@ -462,10 +462,10 @@ there counts towards the dead-server streak. A document with such a
 request is written but not stamped, so the next run harvests it again, and
 `--top-up` leaves that file's stamp as it was. A stamp from an earlier run is
 removed before the file is written. A document left unstamped counts as a
-failed document, and the run returns 1 for it (lines 5870 to 5871, 5927). If
+failed document, and the run returns 1 for it (lines 5893 to 5894, 5950). If
 the run's own anchor requests end there, the stage returns 1 before it
 harvests anything, and the next start asks only for the anchors still missing
-(`docpipe/extraction/runner.py` lines 5606 to 5617).
+(`docpipe/extraction/runner.py` lines 5630 to 5641).
 
 A parameter added to the spec leaves every stored document without that
 parameter's key in its stamp. A run that skips such a document warns twice:
@@ -547,11 +547,11 @@ their values and where each value comes from.
 | Extraction | `LLM_MODEL` | `Qwen/Qwen3.5-122B-A10B-FP8` | harvesting model's name | `docpipe/extraction/runner.py:96` |
 | Extraction | `EXTRACT_MAX_RETRIES` | `3` | attempts per LLM request before giving up on it | `docpipe/extraction/runner.py:98` |
 | Extraction | `EXTRACT_RETRY_TIMEOUT` | `600` | client timeout (seconds) a retry gets after a request timed out; a request refused at once keeps the client's own timeout | `docpipe/extraction/runner.py:103` |
-| Extraction | `EXTRACT_BATCH_SOURCES` | `6` | sources sharing one harvest request | `docpipe/extraction/runner.py:253` |
-| Extraction | `EXTRACT_BATCH_DOCS` | `64` | documents kept in flight at once, largest first by section count, filename breaking a tie; one written and replaced by the next as soon as it finishes | `docpipe/extraction/runner.py:5596` |
-| Extraction | `EXTRACT_FIELD_ROWS` | `32` | rows one field request answers at once | `docpipe/extraction/runner.py:418` |
-| Extraction | `EXTRACT_MAX_MODEL_LEN` | `32768` | fallback context window, used only where the server's own preflight reports none | `docpipe/extraction/runner.py:1313` |
-| Extraction | `EXTRACT_LIMIT_ADAPTIVE` | `1` | off (`0`) disables the adaptive request limit; the thread pools alone bound concurrency | `docpipe/extraction/runner.py:1342` |
+| Extraction | `EXTRACT_BATCH_SOURCES` | `6` | sources sharing one rows request; lowered at the start where the rows prompt's `max_tokens` cannot hold the reply for that many | `docpipe/extraction/runner.py:253` |
+| Extraction | `EXTRACT_BATCH_DOCS` | `64` | documents kept in flight at once, largest first by section count, filename breaking a tie; one written and replaced by the next as soon as it finishes | `docpipe/extraction/runner.py:5620` |
+| Extraction | `EXTRACT_FIELD_ROWS` | `32` | rows one field request answers at once | `docpipe/extraction/runner.py:412` |
+| Extraction | `EXTRACT_MAX_MODEL_LEN` | `32768` | fallback context window, used only where the server's own preflight reports none | `docpipe/extraction/runner.py:1307` |
+| Extraction | `EXTRACT_LIMIT_ADAPTIVE` | `1` | off (`0`) disables the adaptive request limit; the thread pools alone bound concurrency | `docpipe/extraction/runner.py:1336` |
 | Extraction | `EXTRACT_LIMIT_START` | `128` | requests the adaptive limit opens with | `docpipe/extraction/throttle.py:50` |
 | Extraction | `EXTRACT_LIMIT_MIN` | `16` | floor the limit backs off to | `docpipe/extraction/throttle.py:51` |
 | Extraction | `EXTRACT_LIMIT_MAX` | `512` | ceiling the limit grows to; the server's own max-num-seqs cap must be at least this, or requests queue there instead | `docpipe/extraction/throttle.py:52` |
@@ -561,7 +561,7 @@ their values and where each value comes from.
 | Extraction | `EXTRACT_LIMIT_KV_GROW` | `0.80` | KV cache fraction below which the limit may grow | `docpipe/extraction/throttle.py:57` |
 | Extraction | `EXTRACT_LIMIT_KV_HIGH` | `0.92` | KV cache fraction at or above which the limit steps down | `docpipe/extraction/throttle.py:58` |
 | Extraction | `EXTRACT_LIMIT_TPOT_MAX` | unset | seconds per output token above which a sample also counts as pressure; unset, token time never steps the limit down | `docpipe/extraction/throttle.py:61` |
-| Extraction | `EXTRACT_SERVER_DEAD_AFTER` | `180` | seconds without any reply to a `/models` probe before the harvest ends as if stopped, so a dead server is noticed in minutes | `docpipe/extraction/runner.py:1961` |
+| Extraction | `EXTRACT_SERVER_DEAD_AFTER` | `180` | seconds without any reply to a `/models` probe before the harvest ends as if stopped, so a dead server is noticed in minutes | `docpipe/extraction/runner.py:1955` |
 | Extraction | `EXTRACT_LOCATE_CACHE_PAGES` | `512` | pages of words cached by `make_locate` across documents; a cache hit is a dict lookup and takes no lock | `docpipe/extraction/runner.py:282` |
 | App, serve | `INFERENCE_DB_PATH` | profile `db_path`, else `data/KWP.db` (the chat; `serve` has none) | SQLite corpus database, opened read-only; `docpipe serve` opens it for its passage search | `docpipe/app/config.py` |
 | App | `INFERENCE_PDF_ROOT` | profile `pdf_dir`, else `data/pdf` | folder of the source PDFs, which the cited page is drawn from | `docpipe/app/config.py` |
@@ -585,10 +585,14 @@ their values and where each value comes from.
 `docpipe extract` accepts flags acting on an
 already-written harvest directory, instead of or before harvesting.
 
-- `--print-context-budget` prints the worst-case tokens one harvest
-  request needs and exits before contacting a server
-  (`docpipe/extraction/runner.py` lines 5507 to 5510); the same check
-  runs automatically before the first document too.
+- `--print-context-budget` prints the worst-case tokens, per request, of
+  the largest request a harvest sends (the rows, field, phrase and anchors
+  prompts, and the frame prompt where the profile names frame axes) and
+  exits before contacting a server
+  (`docpipe/extraction/runner.py` lines 5533 to 5536). The number is what
+  the model server's maximum context length (vLLM's --max-model-len) has to
+  cover, and the same check runs automatically before the first document
+  too.
 - `--recheck` needs no model and no index. It reapplies the
   answer-in-quote rule to a harvest on disk, drops any coordinate whose quote no longer
   carries the answer, and clears the affected stamps unless
@@ -621,7 +625,7 @@ already-written harvest directory, instead of or before harvesting.
 - `--review`, bounded with `--review-limit N`, needs the model. It reads
   every value nobody can stand behind a second time, over its own
   passage and section, and records only a disagreement as a trust
-  reason (`docpipe/extraction/runner.py` lines 5414 to 5465); see
+  reason (`docpipe/extraction/runner.py` lines 5438 to 5489); see
   [the trust contract](contract/trust.md). Each document is read against
   its own lists, as in `--recheck`.
 - `--serialize TTL` needs no harvest and no model, as in stage 8 above,
@@ -711,6 +715,33 @@ before a corpus run and exits 1 when a check fails, after printing every
 check. With no arguments it audits `kwp` and `scenarios` together, or the
 profiles named when given any; `docpipe preflight` itself takes any profile
 and checks the one in effect when none is named.
+
+```bash
+python scripts/render_prompts.py --profile kwp --profile scenarios --before HEAD
+```
+
+reads a change to a profile's prompts before anything runs. `--before` is a
+git ref, unpacked and read by that tree's own loader; the other side is the
+working tree, read the same way. For each profile and prompt it writes
+`<profile>/<stage>/<name>.before.txt` and `.after.txt`, the text the loader
+makes of the file, and `.sentences.diff`, the sentences that differ, one per
+line. `summary.md` at the top of the output folder gives, per prompt, the
+sizes, `max_tokens`, temperature and sha256 of both sides, and per profile the
+sources one rows request reads, the window the server is asked for and the
+budget of each prompt, in tokens per request, each by the rule of its own
+side. The numbers are taken at the settings' defaults: the caller's
+`EXTRACT_*` variables, a project file and a `.env` are not read. `--out` names
+the output folder, a new or an empty one (by default a folder named by the
+time in the system's temporary folder); `--what-if` also renders each block a
+composed prompt leaves out back in (a loader that does not compose prompts has
+nothing to show, and the summary says so); `--check-domain FILE` holds a
+rewrite to "the domain stays word for word" against a JSON file of old line
+ranges per profile and prompt, whose shape the script's module docstring
+gives; `--repo DIR` names another checkout for the working-tree side. The tool
+reads files and imports the two trees; it asks no model, reads no `data/` and
+writes nothing into the repository, and it refuses an output folder inside the
+repository or one that already holds files, with exit 2. It exits 1 when a
+prompt or a side could not be rendered or a domain line is missing.
 
 `scripts/inference_app_smoketest.py` checks that `EMBEDDING_BACKEND`
 returns vectors of the right dimension, L2-normalized, for a text

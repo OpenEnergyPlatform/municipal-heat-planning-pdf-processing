@@ -71,7 +71,7 @@ def request_bodies(profile: str) -> dict:
         "rows_request_unframed": json.dumps(
             runner._batch_payload(unframed, [], spec), ensure_ascii=False,
             indent=2),
-        "rows_reply_grammar": replies.rows(spec, whole=False, sandbox=True),
+        "rows_reply_grammar": replies.rows(sandbox=True),
         "rows_prompt_sha256": hashlib.sha256(
             prompts.load("extraction/rows").text.encode("utf-8")).hexdigest(),
     }

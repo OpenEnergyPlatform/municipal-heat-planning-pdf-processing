@@ -237,9 +237,11 @@ where the stages themselves say what they ask:
 
 - `context`: the tokens per request that refine, extract, `extract --review`
   and visuals compute for their own budget, against the window the server
-  reports (the vision stage against the vision server). One that is too small
-  fails, one that is not reported is a warning, and a hosted API is told to
-  check the model and not to start a server.
+  reports (the vision stage against the vision server). For extract that is
+  the largest request over the prompts a harvest sends, the number
+  `--print-context-budget` prints; `extract --review` counts the review prompt
+  alone. One that is too small fails, one that is not reported is a warning,
+  and a hosted API is told to check the model and not to start a server.
 - `request`: the one request of one token that the stages' preflight sends,
   sent on its own to each server asked, to see whether the server takes the
   request fields (the reasoning settings, or the reply schema of a hosted

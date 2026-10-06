@@ -320,24 +320,31 @@ def check_endpoints(stage: Optional[str], offline: bool,
 # What each stage needs of the servers
 # ---------------------------------------------------------------------------
 
-def _harvest_budget(profile, prompt_id: str) -> int:
-    from . import prompts
+def _extraction_spec(profile):
     from .extraction import runner
     path = profile.component("extraction", "SPEC_PATH")
     if path is None:
         raise Unconfigured("the profile configures no extraction stage")
-    return runner.context_budget(prompts.load(prompt_id, profile),
-                                 runner.load_spec(Path(path)))
+    return runner.load_spec(Path(path))
 
 
 def _extract_budget(profile) -> int:
-    from .extraction import runner
-    return _harvest_budget(profile, runner.HARVEST_PROMPT_ID)
+    """What `extract --print-context-budget` prints: the largest request of
+    the prompts the run sends. A frame request counts when the profile names
+    frame axes, as it does in the run."""
+    from .extraction import fields, runner
+    spec = _extraction_spec(profile)
+    framed = bool(fields.frame_slots(
+        spec, profile.component("extraction", "FRAME") or ()))
+    return runner.request_budget(spec, framed, profile)
 
 
 def _review_budget(profile) -> int:
+    from . import prompts
     from .extraction import runner
-    return _harvest_budget(profile, runner.REVIEW_PROMPT_ID)
+    spec = _extraction_spec(profile)            # first: no extraction, no line
+    return runner.context_budget(
+        prompts.load(runner.REVIEW_PROMPT_ID, profile), spec)
 
 
 def _refine_budget(profile) -> int:

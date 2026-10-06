@@ -100,24 +100,26 @@ Two sections close the page: `## The stamp`, the schema of
 `anchors`, `page_text_transcribed` and the three that place the harvest,
 `docpipe`, `document` (the sha256 and size of the PDF) and `producers`,
 plus per-question patterns,
-`docpipe/extraction/schema.py:602` to `763`), and `## The trace`, the
+`docpipe/extraction/schema.py:602` to `764`), and `## The trace`, the
 schema of `<publication>.trace.jsonl`, one `oneOf` branch per event
 kind: eleven, fixed by the schema for every profile rather than drawn
-from this one's spec (`docpipe/extraction/schema.py:766` to `898`). A
+from this one's spec (`docpipe/extraction/schema.py:767` to `899`). A
 `parameter/`, `value/`, `axis/` or `slot/` key differing from today's
 run, or another sha256 of the PDF in `document` than the database now
 names, makes the document eligible for a full re-harvest under
 `--force-stale`; `model`, `anchors`, `producers` and every prompt id are
 written for a reader and never compared, so a reworded prompt or another
-model leaves a harvested corpus current. The `value/` key of a list
+model leaves a harvested corpus current. A stamp of an older release also
+carries the key `extraction/harvest`; the schema accepts it without
+requiring it, and a document whose stamp holds it stays current. The `value/` key of a list
 parameter counts the classes and their spellings and not their
 definitions, so a stamp of this corpus written before that reads stale
 in those keys once: `--remap`, which needs no model, settles them, and
 `--force-stale` first would read the documents again for nothing. A
 document with a wording that no list holds stays stale after the remap,
 and is what `--force-stale` is left for (`stale`,
-`docpipe/extraction/runner.py:4417` to `4462`; `already_done`, `:4507`
-to `4546`). `top_up_file` redoes
+`docpipe/extraction/runner.py:4404` to `4449`; `already_done`, `:4494`
+to `4533`). `top_up_file` redoes
 only the changed question
 (`docpipe/extraction/topup.py:419` to `537`), and `append_document` reads a
 parameter the spec has gained without reading the document again

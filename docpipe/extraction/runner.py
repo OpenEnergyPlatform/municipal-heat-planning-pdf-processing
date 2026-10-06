@@ -281,11 +281,10 @@ LOCATE_MAX_PAGES = int(os.environ.get("EXTRACT_LOCATE_MAX_PAGES", "3"))
 # Pages whose words stay in memory for the locator, across documents.
 LOCATE_CACHE_PAGES = int(os.environ.get("EXTRACT_LOCATE_CACHE_PAGES", "512"))
 
-HARVEST_PROMPT_ID = "extraction/harvest"
 QUERIES_PROMPT_ID = "extraction/queries"
 ANCHORS_PROMPT_ID = "extraction/anchors"
-# The field-wise pair that replaces the single whole-tuple request: one call
-# finds the values, one call per coordinate fills them in.
+# The pair a value is read with: one call finds the values, one call per
+# coordinate fills them in.
 ROWS_PROMPT_ID = "extraction/rows"
 FIELD_PROMPT_ID = "extraction/field"
 # The one sentence a document is searched with, written for THAT document.
@@ -294,18 +293,13 @@ PHRASE_PROMPT_ID = "extraction/phrase"
 # document, before any value: the pair is the frame every value hangs in, and
 # a frame the run discovers first is one the value request cannot get wrong.
 FRAME_PROMPT_ID = "extraction/frame"
-PROMPT_IDS = (HARVEST_PROMPT_ID, QUERIES_PROMPT_ID, ANCHORS_PROMPT_ID,
-              ROWS_PROMPT_ID, FIELD_PROMPT_ID, PHRASE_PROMPT_ID,
-              FRAME_PROMPT_ID)
+PROMPT_IDS = (QUERIES_PROMPT_ID, ANCHORS_PROMPT_ID, ROWS_PROMPT_ID,
+              FIELD_PROMPT_ID, PHRASE_PROMPT_ID, FRAME_PROMPT_ID)
 # The second reading of one value, under a window narrowed to the two passages
 # the row may legally quote from. Not in PROMPT_IDS, which are the harvest's
 # own prompts: what the review writes into a stamp goes under `review/`.
 REVIEW_PROMPT_ID = "extraction/review"
 
-# One request per field, or one request per tuple. The old way is kept
-# reachable because it is what every measured number so far was taken with,
-# and a comparison needs both.
-FIELDWISE = os.environ.get("EXTRACT_FIELDWISE", "1") != "0"
 # The anchors.json key of the "which quantity is this" question. It belongs to
 # no single parameter, so it cannot be keyed by one.
 PARAMETER_ANCHOR = "#parameter"
@@ -2502,17 +2496,12 @@ def log_usage(budget: Optional[int] = None) -> None:
              seen["completion_max"], budget if budget is not None else "-")
 
 
-def make_harvester(image_root: Optional[Path] = None,
-                   prompt_id: str = HARVEST_PROMPT_ID,
-                   spec=None) -> Callable:
-    """The request loop, for either contract.
-
-    The whole-tuple prompt and the field-wise value prompt differ in what they
-    ask for and in nothing else: same sources, same crops, same sandbox, same
-    splitting of a request whose answer did not fit. So the prompt is the
-    argument and the loop is shared.
+def make_harvester(image_root: Optional[Path] = None, spec=None) -> Callable:
+    """The rows request: the values of a batch of passages, with the crops of
+    its tables and figures, a sandbox round for a number the model computes,
+    and the split of a request whose answer did not fit.
     """
-    prompt = prompts.load(prompt_id)
+    prompt = prompts.load(ROWS_PROMPT_ID)
     client = _client()
     temperature = float(prompt.meta.get("temperature", 0.1))
     max_tokens = int(prompt.meta.get("max_tokens", 4096))
@@ -2569,7 +2558,7 @@ def make_harvester(image_root: Optional[Path] = None,
                             "token(s) in a window of %d -- not sent",
                             first.owner_kind, first.owner_id,
                             len(batch.items) - 1, limit, MAX_MODEL_LEN)
-                trace.event("error", batch.document_id, where=prompt_id,
+                trace.event("error", batch.document_id, where=ROWS_PROMPT_ID,
                             kind="too_long", attempt=attempt, room=limit,
                             owner=[first.owner_kind, first.owner_id])
                 break
@@ -2590,8 +2579,6 @@ def make_harvester(image_root: Optional[Path] = None,
                     extra_body=request_extras(),
                     **({"timeout": RETRY_TIMEOUT} if timed_out else {}),
                     **providers.formatted("llm", "rows_reply", replies.rows(
-                        spec_of(batch, spec),
-                        whole=prompt_id == HARVEST_PROMPT_ID,
                         sandbox=CODE_ROUNDS > 0)),
                 )
                 transport = False
@@ -2626,7 +2613,7 @@ def make_harvester(image_root: Optional[Path] = None,
                             if isinstance(t, dict):
                                 t.setdefault("compute", compute)
                     usage = getattr(response, "usage", None)
-                    trace.event("rows", batch.document_id, prompt=prompt_id,
+                    trace.event("rows", batch.document_id, prompt=ROWS_PROMPT_ID,
                                 attempt=attempt, rows=len(answer["tuples"]),
                                 status=answer.get("status"),
                                 sources=[[it.source.owner_kind,
@@ -2648,7 +2635,7 @@ def make_harvester(image_root: Optional[Path] = None,
                             first.owner_kind, first.owner_id,
                             len(batch.items) - 1, attempt, cause,
                             _unparsable(reply))
-                trace.event("error", batch.document_id, where=prompt_id,
+                trace.event("error", batch.document_id, where=ROWS_PROMPT_ID,
                             kind="unreadable", cause=cause, attempt=attempt,
                             owner=[first.owner_kind, first.owner_id],
                             finish=getattr(reply, "finish_reason", None))
@@ -2657,7 +2644,7 @@ def make_harvester(image_root: Optional[Path] = None,
                                              max_tokens, first, depth)
                     if smaller is not None:
                         trace.event("error", batch.document_id,
-                                    where=prompt_id, kind="split",
+                                    where=ROWS_PROMPT_ID, kind="split",
                                     attempt=attempt,
                                     owner=[first.owner_kind, first.owner_id])
                         return smaller
@@ -2675,7 +2662,7 @@ def make_harvester(image_root: Optional[Path] = None,
                             first.owner_kind, first.owner_id,
                             len(batch.items) - 1, attempt, exc)
                 status = getattr(exc, "status_code", None)
-                trace.event("error", batch.document_id, where=prompt_id,
+                trace.event("error", batch.document_id, where=ROWS_PROMPT_ID,
                             kind="exception", attempt=attempt,
                             status=status, detail=str(exc)[:300],
                             owner=[first.owner_kind, first.owner_id])
@@ -2705,7 +2692,7 @@ def make_harvester(image_root: Optional[Path] = None,
         # that answered nothing are the same row in the output and must not
         # be the same thing to the resume: an unreachable server would
         # otherwise stamp every remaining document as harvested.
-        trace.event("error", batch.document_id, where=prompt_id,
+        trace.event("error", batch.document_id, where=ROWS_PROMPT_ID,
                     kind="gave_up", why=why[0],
                     sources=[[it.source.owner_kind, it.source.owner_id]
                              for it in batch.items],
@@ -3589,15 +3576,15 @@ def make_fieldwise_harvester(image_root: Optional[Path] = None,
                              dead=None,
                              on_give_up: Optional[Callable] = None
                              ) -> Callable:
-    """A harvest(batch, prior) that asks per field and answers like the old one.
+    """A harvest(batch, prior) that asks the rows once and then every
+    coordinate of them, one field to a request.
 
-    Same signature as make_harvester's, so the scheduler above it does not
-    change: the batch is still the unit in flight, and the sweep over the
-    fields happens inside one batch's turn.
+    The batch is the unit in flight, and the sweep over the fields happens
+    inside one batch's turn.
     """
     from concurrent.futures import ThreadPoolExecutor, as_completed
 
-    find_rows = make_harvester(image_root, prompt_id=ROWS_PROMPT_ID, spec=spec)
+    find_rows = make_harvester(image_root, spec=spec)
     # Only what was given: a stub asker without the streak still fits.
     ask = make_field_asker(image_root, **{k: v for k, v in
                            (('dead', dead), ('on_give_up', on_give_up))
@@ -4862,6 +4849,42 @@ def fit_batch_sources(prompt, spec, wanted: int = BATCH_SOURCES) -> int:
     return max(1, min(wanted, allowed))
 
 
+def sent_prompt_ids(framed: bool) -> tuple:
+    """The prompts a harvest sends to the model as a system message.
+
+    The rows request, the field request, the sentence a document is searched
+    with and the anchor questions; the frame request only when the profile has
+    frame axes, because `ask_frame` does not exist otherwise. Not the queries
+    (a list of search templates, never sent) and not the review, which has a
+    line of its own in the doctor.
+    """
+    return (ROWS_PROMPT_ID, FIELD_PROMPT_ID, PHRASE_PROMPT_ID,
+            ANCHORS_PROMPT_ID, *((FRAME_PROMPT_ID,) if framed else ()))
+
+
+def request_budget(spec, framed: bool, profile=None) -> int:
+    """Tokens the largest request this run sends needs, per request.
+
+    The window a server is started with has to hold every request kind of the
+    run, so it follows the largest of them, and the largest is the field
+    request for one profile and the rows request for the other. Read off the
+    prompts the run sends and never off one that no request carries.
+    """
+    return max(context_budget(prompts.load(prompt_id, profile), spec)
+               for prompt_id in sent_prompt_ids(framed))
+
+
+def batch_sources_for(spec, profile=None) -> int:
+    """How many passages one rows request reads for this profile.
+
+    The rows request is the only one that reads BATCH_SOURCES passages, and its
+    max_tokens is what bounds that reply. The field request reads
+    FIELD_WINDOW passages and answers a row at a time, so its ceiling says
+    nothing about how many tuples a batch yields.
+    """
+    return fit_batch_sources(prompts.load(ROWS_PROMPT_ID, profile), spec)
+
+
 def _documents(conn: sqlite3.Connection) -> list:
     """Every current document, the largest first.
 
@@ -5214,8 +5237,9 @@ def main(argv: Optional[list] = None) -> int:
     parser.add_argument("--log-level", default="INFO",
                         choices=["DEBUG", "INFO", "WARNING", "ERROR"])
     parser.add_argument("--print-context-budget", action="store_true",
-                        help="Print the tokens one harvest request needs and "
-                             "exit — job scripts feed this to --max-model-len")
+                        help="Print the tokens the largest request of a "
+                             "harvest needs and exit (feed it to the "
+                             "server's --max-model-len)")
     parser.add_argument("--serialize", type=Path, default=None, metavar="TTL",
                         help="No harvest: hand the JSONL in OUT to the "
                              "profile's kg.make_serializer and write TTL")
@@ -5504,7 +5528,9 @@ def main(argv: Optional[list] = None) -> int:
     # document's stamp for a reader; `stale` compares the ontology keys alone.
     asked: dict = {}
 
-    required = context_budget(prompts.load(HARVEST_PROMPT_ID), spec)
+    # The largest request of the run, over the prompts it sends: what the
+    # server is started with, what the doctor checks and what it is asked for.
+    required = request_budget(spec, bool(frame_axes))
     if args.print_context_budget:
         print(required)
         return 0
@@ -5531,33 +5557,31 @@ def main(argv: Optional[list] = None) -> int:
                      f"--image-root, or EXTRACT_ATTACH_IMAGES=0 to harvest "
                      f"from the transcriptions alone")
     # The batch follows what the model is allowed to say about it, not the
-    # other way round. Said out loud, because a run that quietly reads three
+    # other way round: what the rows request may write, since that request
+    # reads the batch. Said out loud, because a run that quietly reads three
     # sources where the constant says six is a run whose numbers mean
     # something else than the last one's.
     global BATCH_SOURCES
-    fitted = fit_batch_sources(prompts.load(HARVEST_PROMPT_ID), spec)
+    fitted = batch_sources_for(spec)
     if fitted != BATCH_SOURCES:
         log.info("extraction: %d source(s) per request, not %d — that is what "
                  "max_tokens allows this profile to answer for",
                  fitted, BATCH_SOURCES)
         BATCH_SOURCES = fitted
 
-    if FIELDWISE:
-        budget = window_budget()
-        log.info("extraction: one request per field, swept in windows of %d "
-                 "(overlap %d) until read; %d batch thread(s), %d field "
-                 "thread(s), at most %d own + %d retrieval + %d rest = %d "
-                 "window(s) per coordinate",
-                 FIELD_WINDOW, FIELD_OVERLAP, LLM_PARALLEL, FIELD_PARALLEL,
-                 budget["own"], budget["retrieval"], budget["rest"],
-                 sum(budget.values()))
-        shares = profile.component("extraction", "SEARCH_SHARE") or {}
-        if shares:
-            log.info("extraction: search share per coordinate: %s",
-                     ", ".join(f"{name} {share:g}"
-                               for name, share in sorted(shares.items())))
-    else:
-        log.info("extraction: one request per tuple (EXTRACT_FIELDWISE=0)")
+    budget = window_budget()
+    log.info("extraction: one request per field, swept in windows of %d "
+             "(overlap %d) until read; %d batch thread(s), %d field "
+             "thread(s), at most %d own + %d retrieval + %d rest = %d "
+             "window(s) per coordinate",
+             FIELD_WINDOW, FIELD_OVERLAP, LLM_PARALLEL, FIELD_PARALLEL,
+             budget["own"], budget["retrieval"], budget["rest"],
+             sum(budget.values()))
+    shares = profile.component("extraction", "SEARCH_SHARE") or {}
+    if shares:
+        log.info("extraction: search share per coordinate: %s",
+                 ", ".join(f"{name} {share:g}"
+                           for name, share in sorted(shares.items())))
     locate = make_locate(args.db, args.pdf_root)
     note_documents(args.db)
     note_index_model(args.db)
@@ -5823,15 +5847,14 @@ def main(argv: Optional[list] = None) -> int:
     # is not in the value's own passage is looked for further out in the same
     # document. After the streak and the give-up, because the field pool
     # shares them with the rows pool. OpenAI client is thread-safe.
-    harvest = (make_fieldwise_harvester(args.image_root, more_sources,
-                                        make_rest_of_document(args.db),
-                                        spec=spec, anchors=anchors,
-                                        slice_gate=slice_gate,
-                                        parents=make_parents(args.db),
-                                        frame_axes=frame_axes,
-                                        search_share=search_share,
-                                        dead=dead, on_give_up=give_up)
-               if FIELDWISE else make_harvester(args.image_root, spec=spec))
+    harvest = make_fieldwise_harvester(args.image_root, more_sources,
+                                       make_rest_of_document(args.db),
+                                       spec=spec, anchors=anchors,
+                                       slice_gate=slice_gate,
+                                       parents=make_parents(args.db),
+                                       frame_axes=frame_axes,
+                                       search_share=search_share,
+                                       dead=dead, on_give_up=give_up)
 
     # The two halves of a document that the harvest and the pass over a stored
     # harvest have in common, each bound once: the plan with the run's frame,
@@ -5920,7 +5943,7 @@ def main(argv: Optional[list] = None) -> int:
         _hard_exit(STOPPED_EXIT)
         return STOPPED_EXIT
 
-    log_usage(context_budget(prompts.load(HARVEST_PROMPT_ID), spec))
+    log_usage(request_budget(spec, bool(frame_axes)))
     failures += unheld_requests()
     log.info("extraction: done in %.0f s, %d failure(s)",
              time.time() - started, failures)

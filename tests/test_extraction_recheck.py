@@ -7,8 +7,8 @@ one whose quote does not — including one that never had a quote at all — is
 removed rather than left standing as if it had been checked.
 
 And the stamps go with it, because a file rewritten by a rule its run never
-applied is not that run's output. Leaving the stamp is how 205 plans kept a
-whole-tuple harvest through a field-wise corpus run.
+applied is not that run's output. Leaving the stamp is how 205 plans kept an
+old harvest through a corpus run meant to redo them.
 """
 import json
 from pathlib import Path
@@ -69,7 +69,7 @@ def test_a_year_whose_caption_names_no_year_does_not_stay(tmp_path):
 
 
 def test_a_coordinate_with_no_quote_at_all_does_not_stay(tmp_path):
-    """What the whole-tuple contract produced: a coordinate and no passage.
+    """A coordinate and no passage, as an older harvest holds it.
 
     It was never checked and cannot be, so it does not get to look like a
     reading that was.
