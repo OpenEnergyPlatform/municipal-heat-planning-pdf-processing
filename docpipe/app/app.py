@@ -50,7 +50,7 @@ from docpipe.extraction import gold, trust
 from docpipe.extraction.verify import canonical_number
 from docpipe.inference import (
     answer, catalog, chunker, compare, faiss_store, kg_route, lexical,
-    llm_client, query_cache, request_log, values_route, wording,
+    llm_client, query_cache, replies, request_log, values_route, wording,
 )
 from docpipe.inference import db
 from docpipe.profile import load_profile
@@ -422,6 +422,8 @@ def chat_page() -> None:
                 _render_values(msg["values"])
             if msg["role"] == "assistant":
                 _render_answer(msg["content"], msg.get("as_json", False))
+                _render_dropped(msg.get("made"), msg.get("dropped"))
+                _render_faults(msg.get("faults"))
             else:
                 st.markdown(msg["content"])
             _render_notes(msg)
@@ -490,12 +492,19 @@ def chat_page() -> None:
 
     # Compose assistant reply
     answered = result["answer"] is not None
+    faults = list(result.get("faults") or [])
+    unread = _unread_replies(result)
+    told: list = []      # faults the reply says itself, and the page not twice
     if answered:
         reply = result["answer"]
     elif result["n_hits"] == 0:
         reply = (T["all_examined"]
                  if result.get("recheck") and result.get("n_excluded")
                  else T["no_hits"])
+    elif unread:
+        reply = T["answer_unreadable"].format(
+            causes=llm_client.describe_faults(unread))
+        told = unread
     else:
         reply = T["nothing_backed"]
     message = {
@@ -505,11 +514,16 @@ def chat_page() -> None:
         "as_json": result["as_json"] if answered else False,
         "recheck_note": recheck_note, "route_note": route_note,
         "compute": result.get("compute", []), "values": values,
+        "made": result.get("statements_made", 0),
+        "dropped": result.get("statements_dropped", 0),
+        "faults": [f for f in faults if f not in told],
     }
     with st.chat_message("assistant"):
         if values is not None:
             _render_values(values)
         _render_answer(reply, message["as_json"])
+        _render_dropped(message["made"], message["dropped"])
+        _render_faults(message["faults"])
         _render_notes(message)
         _render_compute(message["compute"])
         # Rendered directly (not inside an expander) so each citation can carry
@@ -519,6 +533,34 @@ def chat_page() -> None:
     history.append(message)
 
     _remember(by_doc, doc_id, task, result)
+
+
+def _unread_replies(turn: dict) -> list:
+    """The answer requests of a turn that stayed unreadable, where the turn
+    made no statement at all: the model's replies could not be read, so the
+    sources were not looked at, which is not the same as nothing standing in
+    them. A turn that made statements has its answer, and says the rest in
+    the faults under it."""
+    if turn.get("statements_made"):
+        return []
+    return [f for f in turn.get("faults") or []
+            if f["request"] == replies.ANSWER]
+
+
+def _render_dropped(made, dropped) -> None:
+    """How many of the statements the model made were removed because their
+    quote does not stand in the source they cite, directly under the answer
+    (also where every one of them was)."""
+    if dropped:
+        st.caption(T["statements_dropped"].format(dropped=dropped, made=made))
+
+
+def _render_faults(faults) -> None:
+    """The requests of the turn that stayed unreadable, with their causes: what
+    they would have said is missing from the answer above."""
+    if faults:
+        st.warning(T["replies_unreadable"].format(
+            n=len(faults), causes=llm_client.describe_faults(faults)))
 
 
 def _render_notes(msg: dict) -> None:
@@ -604,6 +646,7 @@ def _render_comparison(outcome: dict) -> None:
         st.markdown(T["compare_too_few"])
     else:
         st.markdown(T["compare_failed"])
+    _render_faults(outcome.get("faults"))
     st.dataframe(
         [{T["column_document"]: r["label"],
           T["column_answer"]: compare.summary(r),
@@ -611,11 +654,22 @@ def _render_comparison(outcome: dict) -> None:
         hide_index=True, use_container_width=True)
     for row in rows:
         st.subheader(row["label"])
+        unread = []
         if row.get("answer") is None:
-            st.markdown(T["document_nothing"] if row.get("n_hits")
-                        else T["no_hits"])
+            unread = _unread_replies(row) if row.get("n_hits") else []
+            if unread:
+                # Not a document that holds nothing: its replies were not read.
+                st.markdown(T["answer_unreadable"].format(
+                    causes=llm_client.describe_faults(unread)))
+            else:
+                st.markdown(T["document_nothing"] if row.get("n_hits")
+                            else T["no_hits"])
         else:
-            _render_answer(row["answer"], outcome.get("as_json", False))
+            _render_answer(row["answer"],
+                           row.get("as_json", outcome.get("as_json", False)))
+        _render_dropped(row.get("statements_made"),
+                        row.get("statements_dropped"))
+        _render_faults([f for f in row.get("faults") or [] if f not in unread])
         if row.get("phrase"):
             st.caption(T["anchor"].format(phrase=row["phrase"]))
         _render_compute(row.get("compute"))
@@ -658,7 +712,8 @@ def _render_compute(compute: list | None) -> None:
     if not compute:
         return
     with st.expander(T["show_compute"].format(n=len(compute))):
-        for step in compute:
+        for number, step in enumerate(compute, start=1):
+            st.caption(T["run_label"].format(n=number))
             st.code(step.get("code", ""), language="python")
             out = step.get("output") or {}
             if out.get("ok"):
@@ -796,12 +851,15 @@ def _render_citation(cit: dict) -> None:
     page and context expanders below).
     """
     label = chunker.citation_label(cit)
-    st.caption(f"📄 {label}")
+    number = f"[{cit['n']}] " if cit.get("n") else ""
+    st.caption(f"{number}📄 {label}")
     quote = cit.get("quote")
     if quote:
         st.markdown("> " + str(quote).replace("\n", " "))
     if cit.get("visual"):
         st.caption(T["read_off"])
+    if cit.get("computed"):
+        st.caption(T["computed_from"].format(n=cit["run"]))
     where = _cited_page(cit)
     if where:
         filename, page, phrase, marked = where

@@ -10,7 +10,7 @@ import unicodedata
 from pathlib import Path
 from re import compile
 
-from docpipe import prompts
+from docpipe import llm_preflight, prompts
 from docpipe.profile import active_profile
 from docpipe.artifacts import (DIR_RESULTS,               # noqa: F401  (re-exported)
                                REFINEMENT_PARTIAL_JSON,   # output (unfinished)
@@ -130,17 +130,36 @@ def reply_tokens(user_words: int) -> int:
     return max(llm_max_tokens(), min(wanted, REPLY_TOKENS_CEILING))
 
 
+def largest_reply_tokens() -> int:
+    """The largest reply a request of this stage asks for: the one reply the
+    context budget counts."""
+    return llm_max_tokens() if REFINE_RETURN_CORRECTIONS else REPLY_TOKENS_CEILING
+
+
 def max_request_tokens() -> int:
     """Worst case for one window: prompt + a full window of maximum-size
-    sections + the largest reply we would ever ask for.
+    sections + the largest reply we would ever ask for, once.
 
-    Rests on split.py holding SECTION_MAX_WORDS on its output. The one case it
-    cannot hold — a single segment longer than the limit — is logged there.
+    A section that cannot be split any further, whose reply was cut off, is
+    asked once more with more room, but the room is bounded by what the served
+    window leaves beyond this number (`further_room`), so the budget does not
+    count a second reply. Rests on split.py holding SECTION_MAX_WORDS on its
+    output. The one case it cannot hold, a single segment longer than the
+    limit, is logged there.
     """
     system = len(system_prompt().split()) * TOKENS_PER_WORD
     window = WINDOW_SIZE * SECTION_MAX_WORDS * TOKENS_PER_WORD
-    reply = llm_max_tokens() if REFINE_RETURN_CORRECTIONS else REPLY_TOKENS_CEILING
-    return int(system + window + reply)
+    return int(system + window + largest_reply_tokens())
+
+
+def further_room(asked: int):
+    """The token limit of the one further attempt of a window or an outline
+    that was cut off at *asked* tokens and cannot be split, or None when the
+    served window leaves it no more room than it had. See
+    `llm_preflight.further_room`."""
+    return llm_preflight.further_room(
+        asked, reply=largest_reply_tokens(), budget=max_request_tokens(),
+        role="llm")
 
 # ---------------------------------------------------------------------------
 # Unicode cleaning + atomic JSON I/O

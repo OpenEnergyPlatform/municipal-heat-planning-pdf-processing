@@ -68,10 +68,12 @@ export of states and refusals exits non-zero. A coordinate of a value
 carries its quote, and where the reading was linked from another passage
 that passage as well.
 
-A state line is written by the run that harvested the document. A
-`--recheck` keeps it as it was and a `--top-up` does not rewrite it, and a
-top-up can move a value to the refusals, so a cell can say `read` while
-`find_values` serves fewer values than the line counts. The server reports
+A state line is written by the run that harvested the parameter in the
+document: the harvest, or `--top-up-parameters` for a parameter the spec gained
+afterwards, which writes the line of each parameter it appends and leaves the
+others as they were. A `--recheck` keeps a line as it was and a `--top-up` does
+not rewrite it, and a top-up can move a value to the refusals, so a cell can
+say `read` while `find_values` serves fewer values than the line counts. The server reports
 the line as it stands.
 
 ## Searching the passages

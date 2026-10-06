@@ -315,11 +315,12 @@ def test_a_probe_that_breaks_is_a_line_and_not_a_crash(monkeypatch):
 
 @pytest.mark.parametrize("stage, probed", [
     (None, True), ("refine", True), ("extract", True), ("visuals", True),
-    ("chat", False), ("chunk", False)])
+    ("chat", True), ("chunk", False)])
 def test_only_the_commands_that_send_the_fields_probe_them(
         monkeypatch, stage, probed):
-    """The chat sends no reasoning settings: a server it talks to is not
-    failed for refusing what the chat never sends."""
+    """The chat sends the reasoning settings with every request, as every
+    stage does, so the server it talks to is asked about them; a command that
+    sends no request to a model is not failed for what it never sends."""
     sent = _chat(monkeypatch, _raises(_Status(400, "unknown field")))
     lines = doctor.check_request(stage, [_server()])
     assert bool(lines) is probed
@@ -456,7 +457,7 @@ def test_a_prompt_that_is_not_there_is_named_with_how_many_are_missing(
 
 def test_a_stage_that_has_all_its_prompts_says_how_many(kwp):
     line = _by_name(doctor.check_stages("chat", kwp))["chat"]
-    assert line.status == OK and line.detail == "15 prompt(s) found"
+    assert line.status == OK and line.detail == "10 prompt(s) found"
 
 
 def test_a_prompt_that_is_there_but_cannot_be_read_fails_as_one_that_is_not(
@@ -676,10 +677,12 @@ def test_each_server_is_asked_once_however_many_lines_use_its_answer(served):
     assert {"endpoint", "context", "request", "prompts", "wording"} <= areas
 
 
-def test_the_chat_alone_asks_its_server_for_models_and_sends_it_no_probe(served):
+def test_the_chat_alone_asks_its_server_for_models_and_probes_it_for_the_fields(
+        served):
+    """Its requests carry the reasoning settings, so the probe is sent."""
     checks = doctor.run("chat", offline=False)
-    assert served["models"] == ["llm"] and served["probes"] == []
-    assert not [c for c in checks if c.area == "request"]
+    assert served["models"] == ["llm"] and served["probes"] == ["llm"]
+    assert [c.name for c in checks if c.area == "request"] == ["llm"]
 
 
 def test_offline_no_server_is_asked_and_each_group_says_it_was_skipped(served):

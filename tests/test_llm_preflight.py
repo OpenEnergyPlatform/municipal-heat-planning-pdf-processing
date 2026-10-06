@@ -233,3 +233,100 @@ def test_a_hosted_api_that_cannot_be_asked_gives_no_verdict(monkeypatch):
 
     _server(monkeypatch, down, role_provider="gemini")
     assert assert_request_accepted("http://x/v1", "EMPTY", "m")
+
+
+# ---------------------------------------------------------------------------
+# The reply schemas a stage sends as its grammar
+# ---------------------------------------------------------------------------
+
+SHAPES = {"table_reply": {"type": "object", "properties": {
+              "markdown": {"type": "string"}}, "required": ["markdown"]},
+          "figure_reply": {"type": "object", "properties": {
+              "description": {"type": "string"}}, "required": ["description"]},
+          "page_reply": {"type": "object", "properties": {
+              "markdown": {"type": "string"}}, "required": ["markdown"]}}
+
+
+def _refuses(*names, status=400):
+    """A server that answers 400 to the schemas of these names only."""
+    def create(**kwargs):
+        shape = (kwargs.get("response_format") or {}).get("json_schema") or {}
+        if shape.get("name") in names:
+            raise _Status(status, f"cannot compile {shape['name']}")
+        return _accepts()
+
+    return create
+
+
+def test_an_own_server_that_refuses_a_schema_is_refused_at_once(monkeypatch):
+    """The promise: the server is asked every schema the stage will send, and
+    one it refuses ends the run before the first document, naming it."""
+    sent = _server(monkeypatch, _refuses("page_reply"))
+    with pytest.raises(PreflightError) as refused:
+        assert_serving("http://x/v1", "EMPTY", "m", 1000, what="page "
+                       "transcription", shapes=SHAPES)
+    text = str(refused.value)
+    assert "page_reply" in text and "HTTP 400" in text
+    assert "JSON schema" in text and "response_format" in text
+    assert "page transcription" in text
+    # the three shapes were asked, and the refused one is the third
+    asked = [r["response_format"]["json_schema"]["name"] for r in sent
+             if r.get("response_format")]
+    assert asked == ["table_reply", "figure_reply", "page_reply"]
+
+
+def test_a_server_that_takes_every_schema_passes_with_the_stages_own_shapes(
+        monkeypatch):
+    sent = _server(monkeypatch, _accepts, window=8192)
+    assert assert_serving("http://x/v1", "EMPTY", "m", 4096,
+                          shapes=SHAPES) == 8192
+    probes = [r for r in sent if r.get("response_format")]
+    assert [r["response_format"] for r in probes] == [
+        {"type": "json_schema", "json_schema": {"name": name, "schema": schema}}
+        for name, schema in SHAPES.items()]
+    # as small as the reasoning probe: capped, cold, with the same fields
+    assert {(r["max_tokens"], r["temperature"]) for r in probes} == {(32, 0)}
+    assert all(r["extra_body"] == llm_preflight.request_extras()
+               for r in probes)
+
+
+def test_a_stage_without_shapes_asks_nothing_more(monkeypatch):
+    sent = _server(monkeypatch, _accepts, window=8192)
+    assert_serving("http://x/v1", "EMPTY", "m", 4096)
+    assert not [r for r in sent if r.get("response_format")]
+
+
+@pytest.mark.parametrize("status", [429, 500, 503])
+def test_a_server_that_cannot_be_asked_the_schemas_gives_no_verdict(
+        monkeypatch, status):
+    """Only a 4xx that is not a 429 is a refusal: busy or down is no answer
+    about the schema, and the run's own retries deal with an outage."""
+    sent = _server(monkeypatch, _refuses(*SHAPES, status=status))
+    why = llm_preflight.assert_reply_schemas(
+        "http://x/v1", "EMPTY", "m", SHAPES, what="refinement")
+    assert isinstance(why, str) and "table_reply" in why
+    assert len(sent) == len(SHAPES), "every shape was tried"
+
+
+def test_an_unreachable_server_only_warns(monkeypatch, caplog):
+    def down(**kwargs):
+        raise OSError("connection refused")
+
+    _server(monkeypatch, down)
+    with caplog.at_level("WARNING"):
+        why = llm_preflight.assert_reply_schemas(
+            "http://x/v1", "EMPTY", "m", {"page_reply": SHAPES["page_reply"]},
+            what="page transcription")
+    assert "connection refused" in why
+    assert "asking anyway" in caplog.text
+
+
+def test_a_hosted_api_is_asked_the_stages_shapes_too(monkeypatch):
+    sent = _server(monkeypatch,
+                   lambda **kw: base.reply('{"ok": true}', "stop"),
+                   role_provider="gemini")
+    assert llm_preflight.assert_reply_schemas(
+        "http://x/v1", "EMPTY", "m", SHAPES, what="image enrichment",
+        role="llm") is None
+    assert [r["response_format"]["json_schema"]["name"] for r in sent] == \
+        list(SHAPES)

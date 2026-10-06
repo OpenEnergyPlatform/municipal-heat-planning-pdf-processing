@@ -194,8 +194,8 @@ so `docpipe status` is where a gap shows, and it passes no
 ## Running each stage
 
 Every stage also accepts `--log-level` (`DEBUG`, `INFO`, `WARNING` or
-`ERROR`, default `INFO`; `docpipe/preprocessing/pipeline.py` lines 486
-to 487), omitted below.
+`ERROR`, default `INFO`; `docpipe/preprocessing/pipeline.py` lines 583
+to 584), omitted below.
 
 ### 1. File processing
 
@@ -239,21 +239,45 @@ docpipe preprocess data/kwp/pdf
 ```
 
 The input is a PDF file or a folder of PDFs and has no default
-(`docpipe/preprocessing/pipeline.py` lines 462 to 464); `docpipe run` passes
+(`docpipe/preprocessing/pipeline.py` lines 559 to 561); `docpipe run` passes
 the profile's PDF folder. The output
 directory defaults to the profile's processed directory. `--glob` filters
 a folder run's files, default `*.pdf`; `--pages START END` limits a
-single-PDF run to a 0-indexed page range (lines 481 to 482).
+single-PDF run to a 0-indexed page range (lines 578 to 579).
 `--force-reextract` reruns layout detection and text extraction from the
 PDF, ignoring both caches; `--rebuild-stage3` reruns only section
 assembly, from a cached `pages.json`, with no PDF and no layout model;
 `--transcribe-missing-text` turns on a vision fallback for pages with no
-text layer (lines 476 to 480), reusing the visuals stage's client at
-`VLM_BASE_URL` (`docpipe/preprocessing/page_text_fallback.py` lines 339
-to 340). The stage writes `pages.json`, then `sections.json`.
+text layer (lines 573 to 577), reusing the visuals stage's client at
+`VLM_BASE_URL` (`docpipe/preprocessing/page_text_fallback.py` lines 392
+to 393). The stage writes `pages.json`, then `sections.json`.
 It resumes on those two files existing and loading cleanly; a run that
 dies partway through a document leaves no cache for it and starts that
 document over.
+
+With `--transcribe-missing-text` the vision server is not asked before the
+first document but before the first page that lacks its text, once per run:
+it has to serve `VLM_MODEL`, hold a page request (`page_request_tokens`: the
+prompt, one page image and one reply, 9,260 tokens with the `kwp` profile and
+9,449 with `scenarios`) and take the page reply schema. A server that
+is not there, or refuses the schema, ends the run with exit 1 at that page;
+a run in which every page has its text asks no server and ends 0 as before.
+The profile's `reading.PHRASES` is checked first, and a profile without one of
+its sentences stops the run with a `LookupError`. A page the model gave no
+readable reply for keeps no text and is listed with its cause under
+`failed_pages` in `page_transcription_report.json`; that does not change the
+exit code, the run says in one line how many pages of how many documents could
+not be read, and the next run with the flag asks for them again. A page cannot
+be split, so a reply cut off at its token limit is asked once more, once, with
+the room the served window allows: the smaller of twice what the request asked
+for and what it asked for plus what the window holds beyond the page request's
+tokens. Where the window is not known that is twice, and where the window leaves
+no more room than the request had, the page is a hole `cut_off` at once, no
+second request is sent, and the log names the window in tokens. A run that
+transcribed a page deletes the `sections.json` built before it, so stage 3 is
+built again from the pages that now have text; a `sections_refined.json`
+already written from the earlier one stays until stage 4 is run with
+`--force`.
 
 ### 4. LLM refinement
 
@@ -269,25 +293,52 @@ re-refines even where `sections_refined.json` already exists;
 `--force-stale` only where the recorded prompt hash moved;
 `--print-context-budget` prints the worst-case tokens one request needs
 and exits, to size the vLLM server's maximum context length
-(`docpipe/refinement/pipeline.py` lines 205 to 209). The stage writes
-`sections_refined.json` and resumes on that file already existing; the
-server at `LLM_BASE_URL` is checked for the needed context first
-(`docpipe/llm_preflight.py`).
+(`docpipe/refinement/pipeline.py` lines 245 to 249). The number is the prompt,
+the largest input (a full window of maximum-size sections) and one largest
+reply: 28,543 tokens with the `kwp` profile and 29,065 with `scenarios`. That
+reply is `REFINE_REPLY_CEILING` tokens (16,384 by default; in edit mode
+`LLM_MAX_TOKENS`, 8,192 by default). A server whose maximum context length is
+smaller than the number is refused by the preflight. The stage writes
+`sections_refined.json` and
+resumes on that file already existing with no `sections_refined.partial.json`
+beside it; the server at `LLM_BASE_URL` is checked first
+(`docpipe/llm_preflight.py`), for the needed context and for taking each reply
+schema of the stage as the `response_format` of a request, and a server that
+refuses one ends the run with exit 1 before the first document. The profile's
+`reading.PHRASES` is checked then too.
+
+Every request sends its reply schema as the grammar, and the reply is read as
+exactly one JSON object (`docpipe/reading.py`); nothing is stripped, cut out or
+closed. A reply that is not that object is asked again with its cause named; a
+reply cut off at its token limit is asked in halves by sections. A unit that
+cannot be halved (a window of one section, or the outline of one segment in the
+cut of an oversized section) is asked once more, once, with the room the served
+window allows: the smaller of twice what the request asked for and the largest
+reply the budget counts plus what the window holds beyond the budget, in
+tokens. Where the window is not known that is twice what the request asked for,
+and where the window leaves no more room than the request had, the unit is a
+hole `cut_off` at once, no second request is sent, and the log names the window
+in tokens. A window still unread after that is a hole with its cause: it keeps its original text, `sections_refined.json` is
+still written, `refinement_report.json` lists it under `failed_windows` with the
+cause, and `sections_refined.partial.json` stays beside the output. The next
+plain run asks exactly the windows the report lists. A hole does not change the
+exit code; the run says in one line how many windows, sections and documents
+kept their original text, by cause.
 
 A window the server does not serve (no connection, a timeout, a 429, a
 5xx) leaves the document unrefined, and the stage exits non-zero: no
 `sections_refined.json` is written, the usable replies are kept in
 `sections_refined.partial.json`, which also names the missing windows under
-`unserved_windows` (`docpipe/refinement/refine.py` lines 1186 to 1205);
+`unserved_windows` (`docpipe/refinement/refine.py` lines 1412 to 1419);
 `refinement_report.json` is left as it was. The next run, with or without
 `--force`, asks only for those windows, provided the sections, the prompts,
 `WINDOW_SIZE` and the model name are as they were; otherwise it drops the
-partial file and starts over (lines 1160 to 1179). A
+partial file and starts over (lines 1375 to 1381). A
 `sections_refined.json` from an earlier pass stays in place until a pass
 finishes. The cut of an oversized section is asked again while the server does
 not answer; if it stays unanswered the stage writes nothing at all, not even a
-partial file, and the next run starts with the cut (lines 908 to 912, 1187 to
-1191).
+partial file, and the next run starts with the cut (lines 1043 to 1048, 1405 to
+1409).
 
 ### 5. Image processing (visuals)
 
@@ -300,10 +351,36 @@ any depth; `--dry-run`
 reports cached and pending counts without contacting the server;
 `--force` reprocesses every table and figure regardless of cache,
 `--force-stale` only where the prompt changed
-(`docpipe/visuals/pipeline.py` lines 443 to 475). The stage writes
+(`docpipe/visuals/pipeline.py` lines 503 to 518). The stage writes
 `visuals.json` and resumes per item, not per document: an item already
 carrying a `markdown` or `description` key is copied through unchanged,
 so an interrupted run continues on exactly the items missing one.
+
+`--print-context-budget` prints the worst-case tokens one vision request needs:
+the longer of the two system prompts, one image and one reply of
+`VLM_MAX_TOKENS` tokens (8,192 by default), 13,992 tokens with the `kwp` profile
+and 14,163 with `scenarios`. A vision server whose maximum context length is
+smaller is refused by the preflight. The preflight also puts the two
+reply schemas to the server, and a profile without a `reading.PHRASES` sentence
+stops the run before the first request; neither is asked of a dry run.
+
+An image has no halves, so a reply cut off at its limit is asked once more,
+once, with the room the served window allows: the smaller of twice `max_tokens`
+and `max_tokens` plus what the window holds beyond the budget above, in tokens.
+Where the window is not known (no preflight ran, or the server reports none)
+that is twice `max_tokens`, and where the window leaves no more room than the
+request had, the item is a hole `cut_off` at once, no second request is sent,
+and the log names the window in tokens.
+
+A reply is read as exactly one JSON object whose `markdown` or `description` is
+text; nothing is stripped, cut out or salvaged, and no plain-text request fills
+in for a reply that could not be read. An item the model gave no object for has
+neither key, says why in `vlm_why`, is written with the document, and is asked
+again by the next run; it does not change the exit code, and the run says in one
+line how many tables and figures of how many documents have no content, by
+cause. An item an older run stored as plain text (`vlm_status`) is no longer
+taken as read: one warning names how many there are, and they are asked again
+only with `--force-stale`. The setting `VLM_RUNAWAY_CELL_RUN` is gone.
 
 ### 6. Chunking, embedding, database
 
@@ -371,10 +448,10 @@ have no profile default. `--document` restricts the run to one document
 id and is repeatable. `--image-root`, left unset, defaults to
 `<pdf-root>/processed` when `--pdf-root` is given and to the profile's
 processed directory otherwise (`docpipe/extraction/runner.py` lines
-5108 to 5110). `--pdf-root` has no such default: left unset it stays
+5401 to 5403). `--pdf-root` has no such default: left unset it stays
 `None` and disables the digit-exact native check that locates a quote's
-highlight rectangles in the source PDF (lines 4833 to 4834, 4083 to
-4087). `--force` and `--force-stale` behave as in refinement.
+highlight rectangles in the source PDF (`make_locate`, lines 4130 to 4134,
+called at line 5561). `--force` and `--force-stale` behave as in refinement.
 The stage writes one `<doc>.jsonl` harvest and one `<doc>.stamp.json`
 per document, and resumes per question, not per document, detailed in
 [the extraction stage](stages/extraction.md) and below.
@@ -385,10 +462,17 @@ there counts towards the dead-server streak. A document with such a
 request is written but not stamped, so the next run harvests it again, and
 `--top-up` leaves that file's stamp as it was. A stamp from an earlier run is
 removed before the file is written. A document left unstamped counts as a
-failed document, and the run returns 1 for it (lines 5543 to 5544, 5579). If
+failed document, and the run returns 1 for it (lines 5870 to 5871, 5927). If
 the run's own anchor requests end there, the stage returns 1 before it
 harvests anything, and the next start asks only for the anchors still missing
-(`docpipe/extraction/runner.py` lines 5303 to 5314).
+(`docpipe/extraction/runner.py` lines 5606 to 5617).
+
+A parameter added to the spec leaves every stored document without that
+parameter's key in its stamp. A run that skips such a document warns twice:
+once for the older keys, naming `--force-stale`, and once for the parameters
+the stamp has never seen, naming `--top-up-parameters`, which appends their
+rows to the stored files instead of harvesting the documents again (see
+The extraction passes, below).
 
 ### 8. The knowledge graph
 
@@ -459,15 +543,15 @@ their values and where each value comes from.
 | Visuals | `VLM_MODEL` | `Qwen/Qwen3.5-122B-A10B-FP8` | served model name requested | `docpipe/visuals/config.py:43` |
 | Chunking | `EMBEDDING_BACKEND` | `local` | `local`, `api`, or an import path | `docpipe/embedding/config.py:19` |
 | Chunking | `EMBEDDING_MODEL` | `Qwen/Qwen3-VL-Embedding-8B` | HF model id for every embedding | `docpipe/embedding/config.py:21` |
-| Extraction | `LLM_BASE_URL` | `http://localhost:8000/v1` | harvesting model's endpoint | `docpipe/extraction/runner.py:93` |
-| Extraction | `LLM_MODEL` | `Qwen/Qwen3.5-122B-A10B-FP8` | harvesting model's name | `docpipe/extraction/runner.py:95` |
-| Extraction | `EXTRACT_MAX_RETRIES` | `3` | attempts per LLM request before giving up on it | `docpipe/extraction/runner.py:97` |
-| Extraction | `EXTRACT_RETRY_TIMEOUT` | `600` | client timeout (seconds) a retry gets after a request timed out; a request refused at once keeps the client's own timeout | `docpipe/extraction/runner.py:102` |
-| Extraction | `EXTRACT_BATCH_SOURCES` | `6` | sources sharing one harvest request | `docpipe/extraction/runner.py:252` |
-| Extraction | `EXTRACT_BATCH_DOCS` | `64` | documents kept in flight at once, largest first by section count, filename breaking a tie; one written and replaced by the next as soon as it finishes | `docpipe/extraction/runner.py:5296` |
-| Extraction | `EXTRACT_FIELD_ROWS` | `32` | rows one field request answers at once | `docpipe/extraction/runner.py:417` |
-| Extraction | `EXTRACT_MAX_MODEL_LEN` | `32768` | fallback context window, used only where the server's own preflight reports none | `docpipe/extraction/runner.py:1275` |
-| Extraction | `EXTRACT_LIMIT_ADAPTIVE` | `1` | off (`0`) disables the adaptive request limit; the thread pools alone bound concurrency | `docpipe/extraction/runner.py:1304` |
+| Extraction | `LLM_BASE_URL` | `http://localhost:8000/v1` | harvesting model's endpoint | `docpipe/extraction/runner.py:94` |
+| Extraction | `LLM_MODEL` | `Qwen/Qwen3.5-122B-A10B-FP8` | harvesting model's name | `docpipe/extraction/runner.py:96` |
+| Extraction | `EXTRACT_MAX_RETRIES` | `3` | attempts per LLM request before giving up on it | `docpipe/extraction/runner.py:98` |
+| Extraction | `EXTRACT_RETRY_TIMEOUT` | `600` | client timeout (seconds) a retry gets after a request timed out; a request refused at once keeps the client's own timeout | `docpipe/extraction/runner.py:103` |
+| Extraction | `EXTRACT_BATCH_SOURCES` | `6` | sources sharing one harvest request | `docpipe/extraction/runner.py:253` |
+| Extraction | `EXTRACT_BATCH_DOCS` | `64` | documents kept in flight at once, largest first by section count, filename breaking a tie; one written and replaced by the next as soon as it finishes | `docpipe/extraction/runner.py:5596` |
+| Extraction | `EXTRACT_FIELD_ROWS` | `32` | rows one field request answers at once | `docpipe/extraction/runner.py:418` |
+| Extraction | `EXTRACT_MAX_MODEL_LEN` | `32768` | fallback context window, used only where the server's own preflight reports none | `docpipe/extraction/runner.py:1313` |
+| Extraction | `EXTRACT_LIMIT_ADAPTIVE` | `1` | off (`0`) disables the adaptive request limit; the thread pools alone bound concurrency | `docpipe/extraction/runner.py:1342` |
 | Extraction | `EXTRACT_LIMIT_START` | `128` | requests the adaptive limit opens with | `docpipe/extraction/throttle.py:50` |
 | Extraction | `EXTRACT_LIMIT_MIN` | `16` | floor the limit backs off to | `docpipe/extraction/throttle.py:51` |
 | Extraction | `EXTRACT_LIMIT_MAX` | `512` | ceiling the limit grows to; the server's own max-num-seqs cap must be at least this, or requests queue there instead | `docpipe/extraction/throttle.py:52` |
@@ -477,8 +561,8 @@ their values and where each value comes from.
 | Extraction | `EXTRACT_LIMIT_KV_GROW` | `0.80` | KV cache fraction below which the limit may grow | `docpipe/extraction/throttle.py:57` |
 | Extraction | `EXTRACT_LIMIT_KV_HIGH` | `0.92` | KV cache fraction at or above which the limit steps down | `docpipe/extraction/throttle.py:58` |
 | Extraction | `EXTRACT_LIMIT_TPOT_MAX` | unset | seconds per output token above which a sample also counts as pressure; unset, token time never steps the limit down | `docpipe/extraction/throttle.py:61` |
-| Extraction | `EXTRACT_SERVER_DEAD_AFTER` | `180` | seconds without any reply to a `/models` probe before the harvest ends as if stopped, so a dead server is noticed in minutes | `docpipe/extraction/runner.py:1917` |
-| Extraction | `EXTRACT_LOCATE_CACHE_PAGES` | `512` | pages of words cached by `make_locate` across documents; a cache hit is a dict lookup and takes no lock | `docpipe/extraction/runner.py:281` |
+| Extraction | `EXTRACT_SERVER_DEAD_AFTER` | `180` | seconds without any reply to a `/models` probe before the harvest ends as if stopped, so a dead server is noticed in minutes | `docpipe/extraction/runner.py:1961` |
+| Extraction | `EXTRACT_LOCATE_CACHE_PAGES` | `512` | pages of words cached by `make_locate` across documents; a cache hit is a dict lookup and takes no lock | `docpipe/extraction/runner.py:282` |
 | App, serve | `INFERENCE_DB_PATH` | profile `db_path`, else `data/KWP.db` (the chat; `serve` has none) | SQLite corpus database, opened read-only; `docpipe serve` opens it for its passage search | `docpipe/app/config.py` |
 | App | `INFERENCE_PDF_ROOT` | profile `pdf_dir`, else `data/pdf` | folder of the source PDFs, which the cited page is drawn from | `docpipe/app/config.py` |
 | App | `PDF_URL_PREFIX`, `PDF_VIEWER_PREFIX` | empty | URL path an external viewer serves the PDFs and its pdf.js viewer under, for an optional link into it; empty: no link | `docpipe/app/config.py` |
@@ -490,7 +574,7 @@ their values and where each value comes from.
 | App | `INFERENCE_GOLD_PATH` | `gold.jsonl` beside the harvest directory | file the review page appends decisions to | `docpipe/app/config.py` |
 | App | `INFERENCE_VALUES_LEVEL`, `INFERENCE_VALUES_LIMIT` | unset, `20` | worst trust level of a value the chat still shows; how many it shows before the count of the rest | `docpipe/app/config.py` |
 | App | `INFERENCE_LEXICAL` | `1` | search by word beside the search by meaning where a word index exists; `0` turns it off | `docpipe/app/config.py` |
-| App | `CODE_EXEC_URL` | `""` (off) | calculation sandbox endpoint | `docpipe/inference/config.py:64` |
+| App | `CODE_EXEC_URL` | `""` (off) | calculation sandbox endpoint | `docpipe/inference/config.py:65` |
 | Refinement, visuals, extraction, chat | `LLM_PROVIDER`, `VLM_PROVIDER`, `EMBEDDING_PROVIDER` | `openai-compatible` | the API behind a role: a server of one's own, `openai`, `anthropic` or `gemini` (embeddings: not `anthropic`) | `docpipe/providers/__init__.py` |
 | Stages that ask a model | `DOCPIPE_CASSETTE_RECORD`, `DOCPIPE_CASSETTE_REPLAY` | unset | file a run writes its model answers to, or takes them from in place of a server | `docpipe/providers/cassette.py` |
 | Extraction | `EXTRACT_PROVENANCE` | `1` | `0` leaves out the provenance file `--serialize` writes beside the graph | `docpipe/extraction/provenance.py` |
@@ -503,7 +587,7 @@ already-written harvest directory, instead of or before harvesting.
 
 - `--print-context-budget` prints the worst-case tokens one harvest
   request needs and exits before contacting a server
-  (`docpipe/extraction/runner.py` lines 5214 to 5217); the same check
+  (`docpipe/extraction/runner.py` lines 5507 to 5510); the same check
   runs automatically before the first document too.
 - `--recheck` needs no model and no index. It reapplies the
   answer-in-quote rule to a harvest on disk, drops any coordinate whose quote no longer
@@ -520,11 +604,24 @@ already-written harvest directory, instead of or before harvesting.
   model and the index. It re-reads only the coordinates a document's
   stamp says moved, instead of harvesting the document again from its
   first passage. A document whose stamp moved outside a coordinate is
-  skipped whole.
+  skipped whole; a parameter the spec has gained is no such move, and the
+  document is counted as left to `--top-up-parameters`.
+- `--top-up-parameters` needs the model and the index, and cannot be given
+  beside `--top-up` (exit 2). For a parameter added to the spec since a
+  document was harvested it searches the document for that parameter alone
+  and appends its rows, its refusals and its state line after the stored
+  lines, which stay as they were, and it carries the stamp keys of the
+  addition forward. A document whose stamp moved in anything but the addition
+  (a reworded, renamed or removed parameter, another PDF, a moved list or
+  question, no stamp) is left stale as a whole. A document the pass did not
+  read completely, one with a request that ended on a 429 or a 5xx for
+  instance, is left as it was, nothing is written, and the run returns 1. A
+  second run asks nothing about a document that has the key. Traces go to
+  `trace-topup/`; see [extraction](stages/extraction.md).
 - `--review`, bounded with `--review-limit N`, needs the model. It reads
   every value nobody can stand behind a second time, over its own
   passage and section, and records only a disagreement as a trust
-  reason (`docpipe/extraction/runner.py` lines 5122 to 5172); see
+  reason (`docpipe/extraction/runner.py` lines 5414 to 5465); see
   [the trust contract](contract/trust.md). Each document is read against
   its own lists, as in `--recheck`.
 - `--serialize TTL` needs no harvest and no model, as in stage 8 above,
@@ -588,7 +685,7 @@ stubbed when not installed, so the suite mostly runs without the GPU
 stack; a module needing real tensor arithmetic or vector search skips
 rather than failing on a missing attribute (`tests/conftest.py`,
 `needs_real`). `DOCPIPE_PROFILE` is `kwp` for the session
-(`tests/conftest.py` line 70); a test needing `scenarios` sets it
+(`tests/conftest.py` line 78); a test needing `scenarios` sets it
 explicitly.
 
 `tests/test_docs_build.py` renders the documentation once per test module and
@@ -646,7 +743,7 @@ the checked-in extraction schemas, and named constants
 python scripts/build_docs.py --out docs
 ```
 
-(`scripts/build_docs.py` lines 1440 to 1442).
+(`scripts/build_docs.py` lines 1485 to 1487).
 
 Sphinx then builds the HTML site, warnings promoted to errors:
 `.github/workflows/docs.yml` runs `-W --keep-going -b html docs

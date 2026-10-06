@@ -226,7 +226,8 @@ def enter_producer(stamp_path: Path, producer: dict) -> Optional[int]:
 
 
 def stamp_forward(stamp_path: Path, current: dict, settled: set,
-                  producer: Optional[dict] = None) -> bool:
+                  producer: Optional[dict] = None,
+                  record: Optional[dict] = None) -> bool:
     """Write the stamp keys this pass earned; keep the rest. True if it wrote.
 
     Everything outside `settled` stays exactly as the old stamp had it, so a
@@ -236,6 +237,11 @@ def stamp_forward(stamp_path: Path, current: dict, settled: set,
     stamp's list when the pass wrote, so a harvest that two models wrote
     into names both. A stamp from before the list starts it with what it
     does say: the model of its harvest.
+
+    *record* is what this pass says about itself and is never compared, the
+    sentences it searched with for instance. It goes into the same write as
+    the keys, so a stamp never holds the keys without the record of the pass
+    that earned them. Callers that record nothing pass none.
     """
     if not stamp_path.is_file():
         return False
@@ -250,6 +256,8 @@ def stamp_forward(stamp_path: Path, current: dict, settled: set,
     stored.update({k: current[k] for k in earned})
     if producer is not None:
         stored["producers"] = [*producers_of(stored), producer]
+    if record:
+        stored.update(record)
     # The whole-file sha is a coarse mirror of the keys under it. It may only
     # move once nothing else it stands for is still stale, or a document would
     # read as current while a changed prompt sits unaddressed.

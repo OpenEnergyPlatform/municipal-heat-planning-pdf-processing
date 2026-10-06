@@ -32,7 +32,7 @@ log = logging.getLogger(__name__)
 # it when the stage is imported, not three hours into a batch.
 REQUIRED = frozenset({
     "task_heading", "history_heading", "history_task", "history_phrase",
-    "history_answer", "empty_reply", "parse_error",
+    "history_answer",
     "code_heading", "exec_stdout", "exec_empty", "exec_failed",
     "exec_unknown", "exec_recover",
     "compute_heading", "compute_guide", "compute_guide_final",
@@ -57,6 +57,8 @@ UI_REQUIRED = frozenset({
     "chat_input", "choose_scope", "with_image",
     "preparing", "recheck", "all_examined",
     "no_hits", "nothing_backed", "no_answer_context",
+    "statements_dropped", "replies_unreadable", "answer_unreadable",
+    "computed_from", "run_label",
     "compare_dropped", "compare_note", "compare_too_few",
     "compare_failed", "column_document", "column_answer",
     "column_citations", "document_nothing", "show_evidence",

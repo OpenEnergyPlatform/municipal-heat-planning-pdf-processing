@@ -111,8 +111,9 @@ def refine(where: Where) -> Estimate
 
 Stage 4. Its own rule (refine.run_refine): a document with a stage-3
 result and no refined result is still to do, and so is one with an
-unfinished pass of the same input, of which only the windows the server
-did not serve are asked.
+unfinished pass of the same input (windows the server did not serve, or
+that ended as a hole), of which only the windows without a reply are
+asked.
 
 ### visuals
 

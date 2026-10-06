@@ -44,9 +44,15 @@ without a profile.
 7. Retrieval: a temporary sub-index is built from the global index for just the selected document
    and scopes, or, for the whole corpus, the global index is searched. Where a word index exists
    the question's words are searched too and the two rankings are merged. Top-k = 50.
-8. The hits are fed to the LLM one chunk at a time (max 10 chunks). The first chunk that yields
-   `{"found": true, ...}` produces the answer and the citation (document / section / page).
-   Otherwise: "not found in the selected scope".
+8. The hits are fed to the LLM in batches that fit its context (at most `MAX_CHUNK_ATTEMPTS`
+   sources). It answers in statements, each with its own quote. A statement is shown only if its
+   quote stands in the passage it cites (12 characters at least); the page says how many of the
+   statements the model made were removed. A later batch is told the statements already checked
+   and adds only new ones. The answer is the checked statements in the order they were made, a
+   sentence or a list, each with the number of its citation (document / section / page). Where
+   no statement stood its check the page says that nothing backs an answer; where the model's
+   replies could not be read it says that instead. A reply is read as one JSON object and
+   nothing is repaired: anything else is asked again with its cause named.
 9. With several documents selected, steps 5-8 run once per document, each with its own retrieval
    and its own citations, and one final call compares the finished answers. There is no values
    step and no image in a comparison.
@@ -147,8 +153,10 @@ and image+text queries, and batch consistency against whatever backend is config
 
 When `CODE_EXEC_URL` is set, `answer_from_sources` runs a ReAct loop: the model may reply
 `{"action":"python","code":...}`, the app POSTs it to the sandbox (`code_exec.py` to
-`sandbox_service.py`), feeds the printed output back, and the model then gives the grounded
-answer, up to `CODE_EXEC_MAX_ROUNDS` runs and only when the model asks. The batch's retrieved
+`sandbox_service.py`), feeds the printed output back, and the model then answers with
+statements, up to `CODE_EXEC_MAX_ROUNDS` runs and only when the model asks. A statement about a
+calculated number names the run that printed it and quotes its inputs; it is shown only for a
+run that ended without an error. The batch's retrieved
 tables are injected as a `tables` variable (list of `{caption, markdown}`); numpy, pandas and
 pymupdf are available; there is no network inside the sandbox. The executed code and its output
 are shown under the answer. The feature is OFF unless `CODE_EXEC_URL` is configured. The service
@@ -254,8 +262,10 @@ set and brings the whole stack. The API key is read from a `.env` (`LLM_API_KEY=
 Two separate SQLite DBs are created automatically (never the authoritative corpus DB):
 
 - **`REQUEST_LOG_PATH`:** request metadata (plan_id, which is empty for a question to the whole
-  corpus, query, mode, scopes, timestamp, latency_ms, n_hits, n_citations, error_message). A log
-  made when every question named a document is brought forward when it is opened. No answer is
+  corpus, query, mode, scopes, timestamp, latency_ms, n_hits, n_citations, n_statements, n_dropped,
+  error_message; the two counts are statements, what the model made and how many of them did not
+  stand their check). A log made when every question named a document, or before the statements
+  were counted, is brought forward when it is opened. No answer is
   cached: a follow-up depends on the
   conversation, and a cache keyed on the question text would serve an answer written for another
   one.

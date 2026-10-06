@@ -114,16 +114,17 @@ def test_an_unwritable_database_does_not_take_the_run_down(db, monkeypatch,
 
 
 def test_the_vision_call_books_its_reply(db, make_client, tmp_path):
-    from docpipe.visuals import vision
+    from docpipe.visuals import replies, vision
 
     png = tmp_path / "t.png"
     png.write_bytes(b"\x89PNG\r\n")
     reply = _reply(900, 40)
     reply.choices = [types.SimpleNamespace(
-        message=types.SimpleNamespace(content='{"a": 1}'))]
+        message=types.SimpleNamespace(content='{"markdown": "m"}'))]
     usage.begin("visuals")
     client = make_client(lambda _kw: reply)
-    assert vision.call_vision(client, "sys", "user", png, model="vlm") == {"a": 1}
+    assert vision.call_vision(client, "sys", "user", png, model="vlm",
+                              reply=replies.TABLE) == {"markdown": "m"}
     usage.flush()
     assert _rows(db) == [("visuals", "vlm", 1, 900, 40, 0)]
 
@@ -133,11 +134,40 @@ def test_the_refinement_splitter_books_its_reply(db, make_client, monkeypatch):
 
     reply = _reply(300, 20)
     reply.choices = [types.SimpleNamespace(
-        message=types.SimpleNamespace(content="{}"))]
+        message=types.SimpleNamespace(content='{"cuts": []}'))]
     usage.begin("refinement")
     refine._make_splitter(make_client(lambda _kw: reply))("sys", "user")
     usage.flush()
     assert _rows(db) == [("refinement", refine.LLM_MODEL, 1, 300, 20, 0)]
+
+
+def test_every_window_request_books_its_reply_and_a_cut_one_too(
+        db, make_client, monkeypatch):
+    """A reply that was cut off cost its tokens all the same, and a window
+    asked in halves is three requests: the ledger counts what the server was
+    asked, not what was used."""
+    from docpipe.refinement import refine
+
+    def answer(content, finish, prompt, completion):
+        reply = _reply(prompt, completion)
+        reply.choices = [types.SimpleNamespace(
+            finish_reason=finish, message=types.SimpleNamespace(
+                content=content, reasoning_content=None))]
+        return reply
+
+    replies = iter([
+        answer('{"sections": [', "length", 300, 20),
+        answer('{"sections": [{"_action": "keep", "title": "A"}]}', "stop",
+               100, 10),
+        answer('{"sections": [{"_action": "keep", "title": "B"}]}', "stop",
+               100, 10)])
+    usage.begin("refinement")
+    client = make_client(lambda _kw: next(replies))
+    got = refine._ask_window([{"title": "A", "content": "a"},
+                              {"title": "B", "content": "b"}], client, None)
+    assert [s["title"] for s in got] == ["A", "B"]
+    usage.flush()
+    assert _rows(db) == [("refinement", refine.LLM_MODEL, 3, 500, 40, 0)]
 
 
 def test_the_extraction_counter_books_under_the_run_model(db):

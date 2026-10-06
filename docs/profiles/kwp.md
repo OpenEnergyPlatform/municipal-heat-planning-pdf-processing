@@ -7,7 +7,7 @@ publish under the federal Wärmeplanungsgesetz, sourced from the KWW
 register, an Excel sheet the source module filters to rows marked
 "abgeschlossen" (completed) that carry a usable PDF link
 (`profiles/kwp/source.py:34` to `44`, `load_and_filter_excel`). The corpus
-stands at 1,082 documents (`docpipe/extraction/trust.py:232`,
+stands at 1,082 documents (`docpipe/extraction/trust.py:234`,
 `docpipe/extraction/remap.py:6`). Eleven carry no PDF text layer and are
 read page by page by a vision model instead
 (`docpipe/store/schema.sql:31` to `37`, `page_text_transcribed`); their
@@ -72,12 +72,13 @@ table gives kwp's own answer.
 | Preprocessing (page transcription) | `prompts/preprocessing/page_transcribe.md` | one prompt id | reads a page with no text layer, verbatim, into Markdown |
 | Refinement | `prompts/refinement/*.md` | `refine`, `refine_corrections`, `split` | repairs German extraction artefacts, proposes section cuts |
 | Visuals | `prompts/visuals/*.md` | six prompt ids of its own | table transcription, figure description and captions, in German; `visuals/caption_keep` is the built-in profile's, inherited byte for byte |
+| Refinement, visuals, page transcription, the answer app | `reading.py` | `PHRASES` | the ten sentences these stages and the chat say to the model when its reply was not the one JSON object, in English like the prompts of the first three (`reading.REQUIRED`), laid over the built-in profile's |
 | The picker (app) | `catalog.py`, `profile.py` | `CATALOG`, `facets` | plan-centric labels, convoy membership, three filters |
 | Extraction | `extraction.py` | `SPEC_PATH`, `SLICE`, `FRAME`, `document_context`, `PHRASES`, `PROMPT_CHECKS`, `ALT_LABEL_LANGUAGE` | the spec, the slice gate, the frame axes, the German sentences the stage writes to the model (the frame request's list of a closed coordinate stands under `"scenarios"`) and the passages the preflight holds its prompts to |
 | Extraction | `prompts/extraction/*.md` | eight prompt ids | phrase, frame, rows, field, anchors, queries, harvest, review |
 | The graph | `kg.py` | `make_serializer` and seven more names | MHPKG Turtle, the coordinate query, the trust wording |
 | The answer app | `inference.py` | `PHRASES`, `READOFF_MARKER`, `READOFF_NOTE`, `ROUTE_NOTES` | the German chat wording and the graph route's refusal sentences |
-| The answer app | `prompts/inference/*.md`, `prompts/kg/coordinate.md` | 15 plus 1 prompt ids | the answer loop's own prompts and the graph route's closed question |
+| The answer app | `prompts/inference/*.md`, `prompts/kg/coordinate.md` | 10 plus 1 prompt ids | the answer loop's own prompts and the graph route's closed question |
 
 ## The extraction spec
 
@@ -229,7 +230,7 @@ wording of each spec question:
 
 `extraction/rows` and `extraction/field` are the field-wise pair that
 replaces the whole-tuple `extraction/harvest` request by default
-(`EXTRACT_FIELDWISE` defaults to on, `docpipe/extraction/runner.py:307`):
+(`EXTRACT_FIELDWISE` defaults to on, `docpipe/extraction/runner.py:308`):
 one call finds which values a passage states, a second asks each
 coordinate as its own question. `extraction/review` is deliberately
 outside the set the extraction stamp hashes, because a review only ever
@@ -240,10 +241,10 @@ The profile also carries the full prompt set every other stage's own code
 asks for by id: one for preprocessing's page transcription, three for
 refinement, seven for visuals (a system and a user prompt each for
 tables and figures, plus three caption variants, of which `caption_keep` is
-the built-in profile's, inherited byte for byte), and fifteen for the
+the built-in profile's, inherited byte for byte), and ten for the
 answer app, named in one table in `docpipe.inference.llm_client` and read when
 first used, under the names they had as module constants
-(`docpipe/inference/llm_client.py:51` to `67`, `77` to `93`).
+(`docpipe/inference/llm_client.py:66` to `77`, `82` to `103`).
 `test_a_profile_provides_every_prompt_the_core_loads` and
 `test_a_profile_carries_no_prompt_nobody_loads`
 (`tests/test_architecture.py`) hold this set to what the core actually
@@ -349,17 +350,31 @@ stands. Trust levels and their closed reason list are on
 ## The chat wording and the graph route
 
 `profiles/kwp/inference.py` supplies the German wording the answer app
-wraps around every turn. `PHRASES`, 32 keys matching
+wraps around every turn. `PHRASES`, 30 keys matching
 `docpipe.inference.wording.REQUIRED` exactly, covers the task and history
-headings, JSON parse-error recovery, the code-execution sandbox's own
-headings, the image read-off headings, and how a citation names its page,
-section, table or figure (`profiles/kwp/inference.py:33` to `83`).
+headings, the code-execution sandbox's own headings, the image read-off
+headings, and how a citation names its page, section, table or figure
+(`profiles/kwp/inference.py:33` to `80`).
 `READOFF_MARKER` and `READOFF_NOTE` mark a value read off a chart image
 rather than table text. `make_search_phrase` (see
 [inference](../stages/inference.md)) no longer filters the model's anchor
 sentence for a refusal or an evaluation; it takes whatever non-empty
 phrase the model wrote and falls back to the raw task only on an error or
 an empty reply.
+
+What the chat says to the model when a reply was not the one JSON object it asked
+for is not in that table. It is `profiles/kwp/reading.py`, `PHRASES`, the ten
+sentences of `docpipe.reading.REQUIRED` that refinement, the visuals stage and
+page transcription use as well: what was wrong with the reply (no object, text
+beside it, a syntax error at a character, a missing key) and the shape that was
+asked for. They are English, because the instructions of those stages are
+English in this profile and only what the model reads off a German page is
+German; so the correction the chat appends to a request is English although its
+prompts and its answers are German. The table is laid over the built-in
+profile's entry by entry (`profile.layers("reading", "PHRASES")`), and
+`test_every_profile_says_every_sentence_with_the_same_names`
+(`tests/test_reading_wording.py`) holds it to the same ten names and the same
+names to fill in.
 
 `ROUTE_NOTES` words the five reasons `docpipe.inference.kg_route` can give
 for not answering from the graph at all: no graph loaded, no plan node for

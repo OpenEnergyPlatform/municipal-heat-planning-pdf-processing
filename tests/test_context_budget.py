@@ -34,7 +34,8 @@ def test_split_holds_its_own_limit():
     limit = refine_config.SECTION_MAX_WORDS          # 1000, the real bound
     # An LLM splitter that cuts once, far too late — exactly the failure seen
     # in the ar6 run, where an 11596-word section came back with a 2392 part.
-    lazy = MagicMock(return_value='{"cuts": [{"at": 10}], "first_title": null}')
+    lazy = MagicMock(return_value={"cuts": [{"at": 10, "title": "T"}],
+                                   "first_title": None})
     out = split_oversized([_section(3000, n_segments=30)], ask=lazy,
                           max_words=limit)
     assert len(out) > 2, "one lazy cut must not be the final answer"
@@ -75,6 +76,9 @@ def test_budget_reacts_to_the_knobs_it_names():
     base = refine_config.max_request_tokens()
     with patch.object(refine_config, "WINDOW_SIZE", refine_config.WINDOW_SIZE + 1):
         assert refine_config.max_request_tokens() > base
+    # The ceiling counts once: the room a section is given after a cut comes
+    # out of what the served window leaves beyond this number, never out of
+    # the number itself (tests/test_room.py).
     with patch.object(refine_config, "REPLY_TOKENS_CEILING",
                       refine_config.REPLY_TOKENS_CEILING + 1000):
         assert refine_config.max_request_tokens() == base + 1000
@@ -179,6 +183,24 @@ def test_reply_budget_is_capped():
     """One runaway window must not demand a context nobody serves."""
     assert (refine_config.reply_tokens(10 ** 6)
             == refine_config.REPLY_TOKENS_CEILING)
+
+
+def test_the_budget_is_the_prompt_the_largest_input_and_one_largest_reply():
+    """What the server is started for. A section that cannot be split any
+    further and was cut off is asked once more with more room, but that room
+    is what the served window leaves beyond this number, so a second reply is
+    not part of it (a doubled reply took the budget of the profile kwp to 44927
+    tokens, a server of 32768 refused)."""
+    words = refine_config.SECTION_MAX_WORDS
+    system = (len(refine_config.system_prompt().split())
+              * refine_config.TOKENS_PER_WORD)
+    largest_input = (refine_config.WINDOW_SIZE * words
+                     * refine_config.TOKENS_PER_WORD)
+    assert refine_config.max_request_tokens() == int(
+        system + largest_input + refine_config.REPLY_TOKENS_CEILING)
+    # the case built to violate it: a budget with a second reply in it
+    assert refine_config.max_request_tokens() < int(
+        system + largest_input + 2 * refine_config.REPLY_TOKENS_CEILING)
 
 
 def test_the_budget_covers_the_largest_reply_it_would_ask_for():

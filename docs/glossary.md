@@ -54,7 +54,9 @@ chunk
 
 citation
 : One retrieved source shown under an inference-app answer: a dict of its
-  content, a grounded quote and a `visual` flag, appended to the
+  content, a grounded quote, a `visual` flag, the number `n` the statement
+  that stands on it is shown with, and, for a value the sandbox computed,
+  `computed` and the number of the `run` that printed it, appended to the
   `citations` list `docpipe/inference/answer.py` builds and, through
   `pdf_link.py`, shown in the app with its page drawn from the source PDF
   (and a link into an external viewer where one is configured); see
@@ -198,6 +200,20 @@ harvest
   `parameter_state` line per spec parameter, and a closing summary.
   Written by `docpipe.extraction.pipeline.write_report`; see
   [extraction](stages/extraction.md).
+
+hole
+: A unit that ended without a result, together with the cause it has none:
+  a window of refinement, the cut of an oversized section, a table or figure
+  of the visuals stage, a page of page transcription. The cause is one of
+  `docpipe.reading.HOLE_CAUSES` (`cut_off`, `reasoning_only`, `empty`,
+  `no_object`, `syntax`, `outside_text`, `not_an_object`, `missing_key`,
+  `wrong_shape`, `refused`, `not_served`, `error`). A hole is written down with
+  its cause in the stage's own output (`failed_windows`, `mechanical_cuts`,
+  `vlm_why`, `failed_pages`); the window, item or page that is a hole is asked
+  again by the next run (a section cut mechanically is not: the cut stands), and
+  a hole changes no exit code. Distinct from `exhausted`, `unstated` and `unanswered`, which are
+  states of a harvest's coordinate. Defined as `Hole` in `docpipe/reading.py`;
+  see [the parts every stage uses](stages/core.md).
 
 index
 : The FAISS vector index a corpus is searched through, an
@@ -424,6 +440,15 @@ state
   `docpipe/extraction/fields.py`; published at
   [states](contract/states.md).
 
+statement
+: One claim of an answer of the chat with its own quote: the answer is a list
+  of statements, and a statement is shown only if its quote stands whole in the
+  excerpt it cites (an image reading, a computed value: see the page for the
+  other two bases). One statement is shown as a sentence, two or more as a list
+  with the number of each citation, and the reader is told how many of those the
+  model made were removed. `docpipe/inference/statements.py` decides which
+  stand; see [asking the corpus](stages/inference.md).
+
 sweep
 : The repeated, windowed ask-and-fold loop that reads one coordinate of
   one or more rows until it is answered or the window budget runs out. The
@@ -443,8 +468,22 @@ top-up
 : The `--top-up` pass that re-reads only the coordinates a resume stamp
   says moved, over the harvest's own sweep logic, instead of harvesting a
   document from its first passage again. Implemented in
-  `docpipe/extraction/topup.py`, the only one of the three repair passes
-  that needs the model and the index. See
+  `docpipe/extraction/topup.py`; with `--top-up-parameters`, one of the two
+  passes over a stored harvest that need the model and the index. The keys
+  that only a parameter the spec gained moved are left to the other one. See
+  [extraction](stages/extraction.md).
+
+top-up-parameters
+: The `--top-up-parameters` pass for a parameter added to the spec after
+  documents were harvested, instead of harvesting them again. Per stored
+  document it plans, asks the frame (with the stored pairs as its start) and
+  reads for the new parameter alone, and appends the new tuples, refusals and
+  one `parameter_state` line after the stored lines, which stay the same
+  bytes, with the summary built again last. It carries forward the stamp keys
+  of the addition only and enters itself into the stamp's `producers`. A
+  document whose stamp moved in anything but the addition stays stale as a
+  whole; one that was not read completely is left as it was and the run ends
+  with exit 1. Implemented in `docpipe/extraction/topup_parameter.py`. See
   [extraction](stages/extraction.md).
 
 trace

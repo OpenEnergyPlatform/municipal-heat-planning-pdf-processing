@@ -23,7 +23,13 @@ stages:
 - JSON is asked for only inside a reply schema, which the API enforces while
   it generates. Each stage writes the schemas of its requests in a
   `replies.py`; `schema.strict` rewrites one into the dialect an API takes
-  and reads the reply back in the shape the stage asked for. A server of
+  and reads the reply back in the shape the stage asked for. Refinement, the
+  visuals stage, page transcription and the chat's answer requests send their
+  schema as the grammar of every request, whatever the server is
+  (`providers.grammar`): a server of one's own and a hosted API get the same
+  `response_format`, no value of `LLM_SCHEMA` turns it off, and the stage reads
+  the reply as exactly one JSON object (see [the parts every stage
+  uses](core.md)). The harvest's requests go through `reply_format`: a server of
   one's own gets a schema where it always did, and everywhere with
   `LLM_SCHEMA=all`.
 - A rate limit is waited out once for everybody: one gate per endpoint,
@@ -36,7 +42,10 @@ stages:
 
 Before its first document a stage asks the server what it serves
 (`docpipe/llm_preflight.py`); a hosted model that cannot answer inside a
-reply schema is refused there.
+reply schema is refused there. A stage that sends its schema with every request
+has each of its schemas put to the server once as well
+(`assert_reply_schemas`): a server that refuses one with a 4xx other than 429
+ends the run before the first document.
 
 The usage block of a reply carries `cached_tokens` where the API says so: the
 part of the input tokens it served from its cache. The adapters read it from

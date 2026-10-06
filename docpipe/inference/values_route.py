@@ -76,9 +76,6 @@ def answer_from_values(task: str, store, *, ask,
 def as_passages(values: list) -> list:
     """The values as lines a model can be shown and a reader can check:
     what was read, for which coordinates, on which page, from which words.
-
-    For the answer of a chat that also searches: the numbers come from
-    here, so the model quotes them and does not read them off a page again.
     """
     lines = []
     for value in values:

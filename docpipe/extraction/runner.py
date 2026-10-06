@@ -38,8 +38,8 @@ the same alignment the app highlights with. Resume stamps (`_stamp_current`,
 `stale`) record a fingerprint per question a spec asks (`spec.fingerprints`),
 so an ontology edit restales only the documents asked through the coordinate it
 touched, not the whole corpus. `main` is the CLI: a normal harvest, and the
-`--recheck`, `--remap`, `--serialize`, `--review` and `--top-up` maintenance
-passes over a harvest already written.
+`--recheck`, `--remap`, `--serialize`, `--review`, `--top-up` and
+`--top-up-parameters` maintenance passes over a harvest already written.
 
 Author: Felix Vossel
 """
@@ -56,9 +56,10 @@ import signal
 import sqlite3
 import threading
 import time
+from concurrent.futures import as_completed
 from datetime import datetime, timezone
 from contextlib import contextmanager
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Callable, Optional
 
@@ -961,6 +962,24 @@ def spec_of(batch, spec):
     return spec if own is None else own
 
 
+def narrow_spec(spec: Spec, only) -> Spec:
+    """A copy of *spec* that asks these parameters (by uri) and no other.
+
+    The spec itself when `only` is empty, so a harvest that names no
+    parameter reads what it always read. Every request is built from the spec
+    its batch carries (`spec_of`): the quantities the rows request offers,
+    the units, the parameter question and the grammar of the reply. A batch
+    that carries the narrowed copy therefore offers the model the named
+    parameters and their units alone, which is how a pass for a new parameter
+    keeps every row of a stored parameter from arising.
+    """
+    wanted = set(only or ())
+    if not wanted:
+        return spec
+    return replace(spec, parameters=[p for p in spec.parameters
+                                     if p.uri in wanted])
+
+
 def make_document_spec(conn, spec: Spec,
                        document_axes: Optional[Callable]) -> Callable:
     """(document id) -> this document's spec, or None when its lists cannot
@@ -982,6 +1001,25 @@ def make_document_spec(conn, spec: Spec,
                         document_id, exc)
             return None
         return fill_dynamic_axes(spec, filled) if filled else None
+
+    return document_spec
+
+
+def document_spec_per_call(db_path, spec: Spec,
+                           document_axes: Optional[Callable]) -> Callable:
+    """`make_document_spec` for a caller that runs one document per thread.
+
+    A SQLite connection belongs to the thread that opened it, so each call
+    opens its own, reads the document's lists and closes it again. Nothing
+    is open between two calls.
+    """
+    def document_spec(document_id):
+        conn = sqlite3.connect(readonly_uri(db_path), uri=True)
+        conn.row_factory = sqlite3.Row
+        try:
+            return make_document_spec(conn, spec, document_axes)(document_id)
+        finally:
+            conn.close()
 
     return document_spec
 
@@ -1611,7 +1649,8 @@ def frame_windows(sources: list, max_sources: int = 0,
 
 def find_frame(sources: list, slots: list, document_id: int, ask: Callable,
                more_sources: Optional[Callable] = None,
-               probes: Optional[list] = None) -> tuple:
+               probes: Optional[list] = None,
+               start: Optional[list] = None) -> tuple:
     """(pairs, status, missed) - which scenarios and years this document has.
 
     Asked once per document and over every window of the plan, before any
@@ -1623,12 +1662,17 @@ def find_frame(sources: list, slots: list, document_id: int, ask: Callable,
     passages that no pair names. It is a finding for the second pass, never an
     addition to the frame, and the second pass shows the window that CARRIES
     the missed year instead of the first window again.
+
+    `start` is the pairs a harvest already read for this document. They stand
+    first and in their order, the model is shown them as known, and a pair it
+    names again is not added a second time (`take`), so what comes back is
+    the stored pairs and then the ones these passages print in addition.
     """
     if not slots:
         return [], "complete", []
     number = [s for s in slots if s.kind == fields.NUMBER]
     windows = frame_windows(sources)
-    pairs: list = []
+    pairs: list = list(start or ())
     finished = True
 
     def take(found) -> None:
@@ -4427,7 +4471,9 @@ def documents_to_harvest(documents, out_dir: Path, spec_sha: str, *,
     A top-up is the exception and it is not a small one: this filter drops
     exactly the documents whose stamp moved, which is the entire population a
     top-up exists to re-read. Filtered, the flag is a no-op that logs
-    "nothing to harvest" unless --force-stale is also given.
+    "nothing to harvest" unless --force-stale is also given. The pass that
+    appends a parameter (`--top-up-parameters`) asks for the same, for the
+    same reason.
     """
     if top_up:
         return list(documents)
@@ -4487,6 +4533,15 @@ def already_done(name: str, out_dir: Path, spec_sha: str, *,
                 "differs)"] if DOCUMENT_KEY in changed else [])
         log.warning("extraction: %s was harvested with %s; re-run with "
                     "--force-stale to redo it", name, " and ".join(said))
+        if spec is not None:
+            from .topup_parameter import gained
+            new = gained(stamp_path, spec)
+            if new:
+                log.warning("extraction: %s has never been asked %d "
+                            "parameter(s) of the spec: %s; --top-up-"
+                            "parameters appends them without reading the "
+                            "document again, where nothing else moved",
+                            name, len(new), ", ".join(new))
         return True
     return False
 
@@ -4495,6 +4550,36 @@ def already_done(name: str, out_dir: Path, spec_sha: str, *,
 # harvested, whatever its file says. Half is the line: below it a plan really
 # can be mostly holes, above it the server was gone.
 UNREACHABLE_LIMIT = 0.5
+
+
+def not_happened(report, *, answered: Optional[int] = None,
+                 lost: int = 0) -> Optional[tuple]:
+    """(cause, requests, of) when the reading of this document did not happen.
+
+    The three ways a document comes back with a file and no reading, counted
+    in the unit the message needs: "unreachable" is the sources that never
+    reached the server, of the sources the plan held; "no_reply" is the
+    sources planned, when not one batch came back (`answered` is how many did;
+    None means the caller does not track it and the count is not checked);
+    "unserved" is the requests that ended on a 429 or a 5xx, `lost` of them
+    noted beside the report and the rest in its sentinels. None when the
+    reading happened. `finish_document` withholds the stamp on any of them
+    and the pass for a new parameter writes nothing.
+    """
+    failed = [r for r in report.refusals
+              if r.get("claim", {}).get("_harvest_failed")]
+    unreachable = sum(1 for r in failed
+                      if r.get("claim", {}).get("_why") == "unreachable")
+    sources = max(report.owners_harvested, len(failed))
+    if sources and unreachable > sources * UNREACHABLE_LIMIT:
+        return "unreachable", unreachable, sources
+    if sources and answered == 0:
+        return "no_reply", sources, sources
+    lost += sum(1 for r in failed
+                if r.get("claim", {}).get("_why") == "unserved")
+    if lost:
+        return "unserved", lost, lost
+    return None
 
 
 def finish_document(report, name: str, out_dir: Path, spec_sha: str,
@@ -4553,23 +4638,21 @@ def finish_document(report, name: str, out_dir: Path, spec_sha: str,
     stamp = out_dir / f"{name}.stamp.json"
     stamp.unlink(missing_ok=True)
     write_report(report, out_dir / f"{name}.jsonl", states)
-    unreachable = sum(1 for r in failed
-                      if r.get("claim", {}).get("_why") == "unreachable")
-    sources = max(report.owners_harvested, len(failed))
-    if sources and unreachable > sources * UNREACHABLE_LIMIT:
-        log.error("extraction: %s: %d of %d source(s) never reached the "
-                  "server — not stamped, so a resume harvests it again",
-                  name, unreachable, sources)
-        return False
-    if sources and answered == 0:
-        log.error("extraction: %s: %d source(s) planned and not one reply — "
-                  "not stamped, so a resume harvests it again", name, sources)
-        return False
-    lost += sum(1 for r in failed
-                if r.get("claim", {}).get("_why") == "unserved")
-    if lost:
-        log.error("extraction: %s: %d request(s) ended on a 429 or a 5xx — "
-                  "not stamped, so a resume harvests it again", name, lost)
+    verdict = not_happened(report, answered=answered, lost=lost)
+    if verdict is not None:
+        cause, found, of = verdict
+        if cause == "unreachable":
+            log.error("extraction: %s: %d of %d source(s) never reached the "
+                      "server — not stamped, so a resume harvests it again",
+                      name, found, of)
+        elif cause == "no_reply":
+            log.error("extraction: %s: %d source(s) planned and not one "
+                      "reply — not stamped, so a resume harvests it again",
+                      name, of)
+        else:
+            log.error("extraction: %s: %d request(s) ended on a 429 or a "
+                      "5xx — not stamped, so a resume harvests it again",
+                      name, found)
         return False
     stamp.write_text(
         json.dumps({**_stamp_current(spec_sha, anchors_sha, spec),
@@ -4875,6 +4958,199 @@ def pair_batches(items: list, pairs: list, pair_plans: list, frame_axes: list,
     return batches, rest, added
 
 
+@dataclass
+class PlannedDocument:
+    """One document planned, as `plan_batches` hands it to the harvest."""
+    name: str                   # the file stem
+    report: object              # the plan's DocumentReport, still empty
+    batches: list               # every batch of the document, framed or not
+    doc_spec: Spec              # this document's spec, its lists closed
+    pairs: list                 # the frame's pairs, in the order of `indices`
+    indices: list               # the index each pair stands under in the file
+    failed: int = 0             # frame and pair plans that raised
+
+
+def plan_batches(document_id: int, filename: str, *, plan: Callable,
+                 plan_pool, ask_frame: Optional[Callable], frame_axes: list,
+                 more_sources: Optional[Callable], base_state,
+                 anchor_texts: dict, only=(),
+                 stored_pairs: Optional[dict] = None) -> PlannedDocument:
+    """One document from its first search to its batches: the plan, the frame,
+    one plan per pair and the batches that read them.
+
+    The planning half of the harvest of a document, shared by the run and by
+    the pass that appends a parameter to a stored harvest. *only* names the
+    parameters (by uri) the document is searched for and the batches ask for;
+    empty is every parameter, which is the harvest. *stored_pairs* is
+    {index: pair} of a harvest already on disk: the frame is asked over this
+    plan's passages with those pairs seeded, they keep their index and the
+    pairs the passages print in addition are numbered after them. Without it
+    the pairs stand under 0, 1, 2 as the frame found them.
+    """
+    failed = 0
+    name, items, report, doc_spec = plan_pool.submit(
+        plan, document_id, filename, only=only).result()
+    # ---- Frame: which scenarios and years, once per document -------------
+    # Before any value. Every value request below asks for ONE of these
+    # pairs, so the coordinate is never something the model has to decide
+    # while it is reading a number.
+    seeds = sorted(stored_pairs or {})
+    pairs: list = []
+    if ask_frame is not None:
+        try:
+            if seeds:
+                pairs, status, missed = find_frame(
+                    [item.source for item in items], frame_axes,
+                    report.document_id, ask_frame, more_sources,
+                    start=[stored_pairs[i] for i in seeds])
+            else:
+                pairs, status, missed = find_frame(
+                    [item.source for item in items], frame_axes,
+                    report.document_id, ask_frame, more_sources)
+        except Exception:
+            failed += 1
+            pairs = []
+            log.exception("extraction: frame %s failed", name)
+        else:
+            if missed:
+                # A year the deterministic scan found in the very passages
+                # the model was shown and it did not name. Reported, never
+                # added: "2045 MWh/a" is year-shaped and is not a year.
+                log.info("extract: %s: frame %d pair(s), %s, %d "
+                         "year-shaped number(s) not named: %s",
+                         name, len(pairs), status, len(missed),
+                         ", ".join(str(y) for y in missed[:8]))
+            else:
+                log.info("extract: %s: frame %d pair(s), %s",
+                         name, len(pairs), status)
+    pairs = list(pairs or ())
+    # The seeds come back first and in order, so position says which index a
+    # pair stands under; a pair found in addition takes the next free one.
+    free = seeds[-1] + 1 if seeds else 0
+    indices = (seeds + [free + k for k in range(len(pairs))])[:len(pairs)]
+
+    # ---- Plan again, once per pair: the pair is a search, not a label ----
+    # "Nutzwaermebedarf 2040 im Zielszenario" is a sentence the plan can
+    # print and the value request for 2040 is asked over what THAT
+    # sentence finds.
+    pair_items: dict = {}
+    if pairs:
+        futures = {plan_pool.submit(plan, document_id, filename, pair,
+                                    indices[position], only=only): position
+                   for position, pair in enumerate(pairs)}
+        for future in as_completed(futures):
+            position = futures[future]
+            try:
+                _name, found, pair_report, _spec = future.result()
+            except Exception:
+                failed += 1
+                log.exception("extraction: planning %s for pair %d "
+                              "failed", name, indices[position])
+                continue
+            pair_items[position] = found
+            # The pair's own anchors found passages of their own; they are
+            # that parameter's too.
+            for uri, keys in pair_report.sources_of.items():
+                report.sources_of.setdefault(uri, set()).update(keys)
+
+    framed, rest, added = pair_batches(
+        items, pairs, [pair_items.get(i) for i in range(len(pairs))],
+        frame_axes, [anchor_texts.get((name, indices[i]), ())
+                     for i in range(len(pairs))],
+        max_sources=BATCH_SOURCES, max_chars=BATCH_CHARS)
+    # The rest: what prints none of the pairs. A value the frame search has
+    # no pair for is harvested here without one, and its year is read per
+    # row or ends `unstated`, so a year the search missed is a countable
+    # gap and not a silent loss.
+    if pairs:
+        log.info("extract: %s: %d pair(s), %d passage(s) print none of "
+                 "them, %d read under a pair its own search had not kept",
+                 name, len(pairs), len(rest), added)
+    batches = list(framed) + list(group_items(
+        rest, max_sources=BATCH_SOURCES, max_chars=BATCH_CHARS))
+    # The pairs by the index they stand under, a gap staying a gap: a base
+    # year and a row filed under another pair name the pair by it, and
+    # `["frame", i]` then means the same pair everywhere in the file. The
+    # batches above were built from the compact list, which is what keeps a
+    # gap from naming every passage.
+    ordered: list = [None] * ((max(indices) + 1) if indices else 0)
+    for pair, index in zip(pairs, indices):
+        ordered[index] = pair
+    for batch in framed:
+        batch.frame_index = indices[batch.frame_index]
+        batch.pairs = tuple(ordered)
+    bases = tuple(base_years(ordered, frame_axes, base_state))
+    if bases:
+        log.info("extract: %s: base year(s) %s", name,
+                 ", ".join(str(b["year"]) for b in bases))
+    asked = narrow_spec(doc_spec, only)
+    for batch in batches:
+        batch.bases = bases
+        # What the plan searched with is what the requests offer and
+        # what their answers are checked against.
+        batch.spec = asked
+    log.info("extraction: %s planned — %d batch(es) over %d source(s)",
+             name, len(batches), sum(len(b.items) for b in batches))
+    return PlannedDocument(name=name, report=report, batches=batches,
+                           doc_spec=doc_spec, pairs=pairs, indices=indices,
+                           failed=failed)
+
+
+def accepted_rows(batch, reply, spec) -> list:
+    """What of one reply survives checking: the next batch's `prior`.
+
+    The same verify_tuple the fold runs, against the same source text, so
+    the two cannot drift apart. It skips only `locate`, which turns a
+    quote into highlight rectangles and has never decided whether a
+    claim is accepted.
+    """
+    from .verify import Refusal, verify_tuple
+
+    routed, _orphans = route_claims(
+        batch, [claim for claim in reply.get("tuples") or ()
+                if not refused_upstream(claim)])
+    rows: list = []
+    for item, claims in zip(batch.items, routed):
+        for claim in claims:
+            parameter = item.parameter or spec_of(
+                batch, spec).by_uri.get(str(claim.get("parameter") or ""))
+            if parameter is None:
+                continue
+            outcome = verify_tuple(dict(claim), parameter,
+                                   item.source.text,
+                                   owner_kind=item.source.owner_kind)
+            if not isinstance(outcome, Refusal):
+                rows.append(dict(outcome.tuple))
+    return rows
+
+
+def fold_answers(answered: list, report, *, locate: Optional[Callable],
+                 spec: Spec) -> None:
+    """Every answered batch of a document folded into its report, and the
+    rows and refusals that came of it traced.
+
+    The harvest and the pass for a new parameter fold the same way: the same
+    `fold_batch` against the spec the batch carries, so the checks a row
+    meets are the harvest's own whichever of them read it.
+    """
+    for batch, reply in answered:
+        fold_batch(batch, reply, report, locate=locate,
+                   spec=spec_of(batch, spec))
+    for row in report.tuples:
+        prov = row.get("provenance") or {}
+        trace.event("coord", report.document_id,
+                    parameter=row.get("parameter"), value=row.get("value"),
+                    unit=row.get("unit"), tier=row.get("tier"),
+                    kind=prov.get("owner_kind"), owner=prov.get("owner_id"),
+                    states={k[:-6]: v for k, v in row.items()
+                            if k.endswith("_state")})
+    for refusal in report.refusals:
+        trace.event("refusal", report.document_id,
+                    parameter=refusal.get("parameter"),
+                    reason=refusal.get("reason"),
+                    owner=refusal.get("owner"))
+
+
 def run_spec_path(args, profile):
     """The spec file this run reads: the one --spec names, else the
     profile's own, None where the profile names none. The stamps are written
@@ -4967,6 +5243,18 @@ def main(argv: Optional[list] = None) -> int:
                         help="--top-up only: sweep this stamp key and no "
                              "other, e.g. axis/energy_consumption/sector. "
                              "Repeatable")
+    parser.add_argument("--top-up-parameters", action="store_true",
+                        help="append the parameters the spec has gained "
+                             "since a document was harvested, over the "
+                             "harvest in --out, instead of harvesting those "
+                             "documents again: each is searched for the new "
+                             "parameter alone and its rows follow the stored "
+                             "lines, which stay as they are. A document "
+                             "whose stamp moved in anything but the addition "
+                             "is left stale as a whole, and one that was not "
+                             "read completely is left as it was and ends the "
+                             "run non-zero. Needs the model and the index. "
+                             "Not combined with --top-up")
     parser.add_argument("--review", action="store_true",
                         help="read every value nobody can stand behind a "
                              "second time, over its own passage and the "
@@ -4995,6 +5283,10 @@ def main(argv: Optional[list] = None) -> int:
                              "read --spec (it says so)")
     add_profile_argument(parser)
     args = parser.parse_args(argv)
+    if args.top_up_parameters and args.top_up:
+        # Two passes over one harvest that write their trace into one folder
+        # and truncate it per document: one command, one of them.
+        parser.error("--top-up-parameters is not combined with --top-up")
     logging.basicConfig(level=args.log_level,
                         format="%(asctime)s [%(levelname)s] %(name)s %(message)s",
                         datefmt="%H:%M:%S")
@@ -5222,7 +5514,7 @@ def main(argv: Optional[list] = None) -> int:
                                  flag="--max-model-len", role="llm"))
     start_limit()
 
-    from concurrent.futures import ThreadPoolExecutor, as_completed
+    from concurrent.futures import ThreadPoolExecutor
 
     from docpipe.inference import faiss_store, query_cache
     # Not `index`. `plan` below closes over this name and reads it when it
@@ -5285,7 +5577,15 @@ def main(argv: Optional[list] = None) -> int:
     documents = documents_to_harvest(
         documents, args.out, spec_sha, force=args.force,
         force_stale=args.force_stale, anchors_sha=anchors_sha, spec=spec,
-        top_up=args.top_up)
+        top_up=args.top_up or args.top_up_parameters)
+    if args.top_up_parameters:
+        from . import topup_parameter
+        documents, unharvested = topup_parameter.with_harvest(documents,
+                                                              args.out)
+        if unharvested:
+            log.info("top-up-parameters: %d document(s) have no harvest file "
+                     "in %s and are left to the harvest", unharvested,
+                     args.out)
     if not documents:
         log.info("extraction: nothing to harvest")
         return 0
@@ -5371,7 +5671,7 @@ def main(argv: Optional[list] = None) -> int:
     anchor_texts: dict = {}
 
     def plan(document_id: int, filename: str, frame: Optional[dict] = None,
-             frame_index: int = 0) -> tuple:
+             frame_index: int = 0, only=()) -> tuple:
         # Both connections per thread, cache included. Sharing one across the
         # pool would rest on SQLite being built serialized, and the priming
         # above already means every read here is a hit.
@@ -5395,6 +5695,10 @@ def main(argv: Optional[list] = None) -> int:
                     log.info("extract: %s: choice lists %s", Path(filename).stem,
                              ", ".join(f"{k}={len(v)}"
                                        for k, v in sorted(lists.items())))
+            # What this search is for: the whole spec, or only the parameters
+            # `only` names. The document's spec itself is handed back either
+            # way, so the caller still reads every list the document closes.
+            wanted = narrow_spec(doc_spec, only)
             retrieve = make_retrieve(conn, faiss_index, id_to_pos,
                                      cache_conn, fetch, limit=PLAN_TOP)
             # The anchor is written for THIS document, so the document has to
@@ -5403,13 +5707,13 @@ def main(argv: Optional[list] = None) -> int:
             # this plan uses for the thing, which is what the anchor is for.
             context = dict(document_context(conn, document_id)
                            if document_context is not None else {})
-            seed = [q for parameter in doc_spec.parameters
+            seed = [q for parameter in wanted.parameters
                     for q in list(expand_queries(templates, parameter))[:1]]
             first = retrieve(seed, document_id, set()) if seed else []
             if first:
                 context.setdefault(
                     "caption", (first[0].provenance or {}).get("title") or "")
-            probes = document_anchor(doc_spec, context, frame=frame,
+            probes = document_anchor(wanted, context, frame=frame,
                                      document_id=document_id)
             name = Path(filename).stem
             for uri, texts in sorted(probes.items()):
@@ -5428,7 +5732,7 @@ def main(argv: Optional[list] = None) -> int:
                 anchor_texts[(name, frame_index)] = [
                     text for texts in probes.values() for text in texts]
             items, report = plan_document(
-                document_id, doc_spec, templates, extra_probes=probes,
+                document_id, wanted, templates, extra_probes=probes,
                 retrieve=retrieve,
                 structure=make_structure(conn, fetch), top=PLAN_TOP)
             for item in items:
@@ -5445,55 +5749,22 @@ def main(argv: Optional[list] = None) -> int:
 
     document_name = {did: Path(fn).stem for did, fn in documents}
     # Every event carries the document it belongs to and lands in that
-    # document's own file, so a redone document overwrites its own trace.
-    trace.open_trace(args.out / "trace", document_name.get)
+    # document's own file, so a redone document overwrites its own trace. A
+    # pass over a stored harvest writes beside the harvest's traces and not
+    # into them: they say what the harvest cost, and are opened for writing.
+    if args.top_up_parameters:
+        trace.open_trace(args.out / TOPUP_TRACE_DIR, document_name.get)
+    else:
+        trace.open_trace(args.out / "trace", document_name.get)
 
-    def accepted_rows(batch, reply) -> list:
-        """What of one reply survives checking — the next batch's `prior`.
-
-        The same verify_tuple the fold runs, against the same source text, so
-        the two cannot drift apart. It skips only `locate`, which turns a
-        quote into highlight rectangles and has never decided whether a
-        claim is accepted.
-        """
-        from .verify import Refusal, verify_tuple
-
-        routed, _orphans = route_claims(
-            batch, [claim for claim in reply.get("tuples") or ()
-                    if not refused_upstream(claim)])
-        rows: list = []
-        for item, claims in zip(batch.items, routed):
-            for claim in claims:
-                parameter = item.parameter or spec_of(
-                    batch, spec).by_uri.get(str(claim.get("parameter") or ""))
-                if parameter is None:
-                    continue
-                outcome = verify_tuple(dict(claim), parameter,
-                                       item.source.text,
-                                       owner_kind=item.source.owner_kind)
-                if not isinstance(outcome, Refusal):
-                    rows.append(dict(outcome.tuple))
-        return rows
+    # The hint the next batch of a sweep is told: what survived checking so
+    # far, with the run's spec for a batch that carries none of its own.
+    prior_rows = functools.partial(accepted_rows, spec=spec)
 
     def verify(entry: tuple) -> bool:
         name, report, answered = entry
         replies = len(answered)
-        for batch, reply in answered:
-            fold_batch(batch, reply, report, locate=locate,
-                       spec=spec_of(batch, spec))
-        for row in report.tuples:
-            prov = row.get("provenance") or {}
-            trace.event("coord", report.document_id,
-                        parameter=row.get("parameter"), value=row.get("value"),
-                        unit=row.get("unit"), tier=row.get("tier"),
-                        kind=prov.get("owner_kind"), owner=prov.get("owner_id"),
-                        states={k[:-6]: v for k, v in row.items()
-                                if k.endswith("_state")})
-        for refusal in report.refusals:
-            trace.event("refusal", report.document_id,
-                        parameter=refusal.get("parameter"),
-                        reason=refusal.get("reason"),
-                        owner=refusal.get("owner"))
+        fold_answers(answered, report, locate=locate, spec=spec)
         stamped = finish_document(report, name, args.out, spec_sha,
                                   anchors_sha, answered=replies, spec=spec,
                                   questions=asked.pop(name, None),
@@ -5562,103 +5833,34 @@ def main(argv: Optional[list] = None) -> int:
                                         dead=dead, on_give_up=give_up)
                if FIELDWISE else make_harvester(args.image_root, spec=spec))
 
+    # The two halves of a document that the harvest and the pass over a stored
+    # harvest have in common, each bound once: the plan with the run's frame,
+    # and the batches in the pools every document shares, with the stop and the
+    # dead-server cut. Two bindings would be two places to wire a pool or a
+    # cut differently from each other.
+    plan_for = functools.partial(
+        plan_batches, plan=plan, plan_pool=plan_pool, ask_frame=ask_frame,
+        frame_axes=frame_axes, more_sources=more_sources,
+        base_state=base_state, anchor_texts=anchor_texts)
+    harvest_all = functools.partial(
+        harvest_batches, harvest=harvest, more_sources=more_sources,
+        verify=prior_rows, workers=LLM_PARALLEL, on_give_up=give_up,
+        stop=Halted, pool=batch_pool, dead=dead, progress=False)
+
     def harvest_document(document_id: int, filename: str) -> tuple:
         """One document from its plan to its file: (written, failures).
 
         Planned, framed and harvested on its own, its batches in the pool all
         documents share, and written the moment its last batch is back.
         """
-        failed = 0
-        name, items, report, doc_spec = plan_pool.submit(
-            plan, document_id, filename).result()
-        # ---- Frame: which scenarios and which years, once per document --
-        # Before any value. Every value request below asks for ONE of these
-        # pairs, so the coordinate is never something the model has to decide
-        # while it is reading a number.
-        pairs: list = []
-        if ask_frame is not None:
-            try:
-                pairs, status, missed = find_frame(
-                    [item.source for item in items], frame_axes,
-                    report.document_id, ask_frame, more_sources)
-            except Exception:
-                failed += 1
-                pairs = []
-                log.exception("extraction: frame %s failed", name)
-            else:
-                if missed:
-                    # A year the deterministic scan found in the very passages
-                    # the model was shown and it did not name. Reported, never
-                    # added: "2045 MWh/a" is year-shaped and is not a year.
-                    log.info("extract: %s: frame %d pair(s), %s, %d "
-                             "year-shaped number(s) not named: %s",
-                             name, len(pairs), status, len(missed),
-                             ", ".join(str(y) for y in missed[:8]))
-                else:
-                    log.info("extract: %s: frame %d pair(s), %s",
-                             name, len(pairs), status)
-        pairs = list(pairs or ())
-
-        # ---- Plan again, once per pair: the pair is a search, not a label
-        # "Nutzwaermebedarf 2040 im Zielszenario" is a sentence the plan can
-        # print and the value request for 2040 is asked over what THAT
-        # sentence finds.
-        pair_items: dict = {}
-        if pairs:
-            futures = {plan_pool.submit(plan, document_id, filename, pair,
-                                        pair_index): pair_index
-                       for pair_index, pair in enumerate(pairs)}
-            for future in as_completed(futures):
-                pair_index = futures[future]
-                try:
-                    _name, found, pair_report, _spec = future.result()
-                except Exception:
-                    failed += 1
-                    log.exception("extraction: planning %s for pair %d "
-                                  "failed", name, pair_index)
-                    continue
-                pair_items[pair_index] = found
-                # The pair's own anchors found passages of their own; they are
-                # that parameter's too.
-                for uri, keys in pair_report.sources_of.items():
-                    report.sources_of.setdefault(uri, set()).update(keys)
-
-        framed, rest, added = pair_batches(
-            items, pairs, [pair_items.get(i) for i in range(len(pairs))],
-            frame_axes, [anchor_texts.get((name, i), ())
-                         for i in range(len(pairs))],
-            max_sources=BATCH_SOURCES, max_chars=BATCH_CHARS)
-        # The rest: what prints none of the pairs. A value the frame search has
-        # no pair for is harvested here without one, and its year is read per
-        # row or ends `unstated`, so a year the search missed is a countable
-        # gap and not a silent loss.
-        if pairs:
-            log.info("extract: %s: %d pair(s), %d passage(s) print none of "
-                     "them, %d read under a pair its own search had not kept",
-                     name, len(pairs), len(rest), added)
-        batches = list(framed) + list(group_items(
-            rest, max_sources=BATCH_SOURCES, max_chars=BATCH_CHARS))
-        bases = tuple(base_years(pairs, frame_axes, base_state))
-        if bases:
-            log.info("extract: %s: base year(s) %s", name,
-                     ", ".join(str(b["year"]) for b in bases))
-        for batch in batches:
-            batch.bases = bases
-            # What the plan searched with is what the requests offer and
-            # what their answers are checked against.
-            batch.spec = doc_spec
-        log.info("extraction: %s planned — %d batch(es) over %d source(s)",
-                 name, len(batches), sum(len(b.items) for b in batches))
+        planned = plan_for(document_id, filename)
+        name, report, batches, failed = (planned.name, planned.report,
+                                         planned.batches, planned.failed)
         if Halted.is_set():
             return False, failed
 
         unfinished: set = set()
-        answered = harvest_batches(batches, harvest,
-                                   more_sources=more_sources,
-                                   verify=accepted_rows, workers=LLM_PARALLEL,
-                                   on_give_up=give_up, stop=Halted,
-                                   unfinished=unfinished, pool=batch_pool,
-                                   dead=dead, progress=False)
+        answered = harvest_all(batches, unfinished=unfinished)
         if report.document_id in unfinished:
             log.error("extraction: %s left with batches never harvested — not "
                       "written, so a resume harvests it again", name)
@@ -5667,6 +5869,24 @@ def main(argv: Optional[list] = None) -> int:
         # run says so in its exit code, as it does for a server that is gone.
         stamped = verify((name, report, answered))
         return stamped, failed + (0 if stamped else 1)
+
+    parameter_pass = None
+    if args.top_up_parameters:
+        from . import topup_parameter
+
+        # The same loop, the same pools, the same stop, dead-server and exit
+        # code as the harvest: only what is done for one document differs.
+        parameter_pass = topup_parameter.DocumentPass(
+            args.out, spec, _stamp_current(spec_sha, anchors_sha, spec),
+            {"document_spec": document_spec_per_call(args.db, spec,
+                                                     document_axes),
+             "plan": plan_for, "harvest": harvest_all,
+             "questions": lambda name: asked.pop(name, None),
+             "locate": locate, "frame_axes": frame_axes,
+             "frame_names": [slot.name for slot in frame_axes],
+             "dynamic_ok": document_axes is not None,
+             "halted": Halted.is_set})
+        harvest_document = parameter_pass
 
     install_stop_handler()
     try:
@@ -5678,6 +5898,8 @@ def main(argv: Optional[list] = None) -> int:
         stopped = STOP.is_set()
         batch_pool.shutdown(wait=not stopped, cancel_futures=stopped)
         plan_pool.shutdown(wait=not stopped, cancel_futures=stopped)
+    if parameter_pass is not None:
+        parameter_pass.report()
 
     if server_gone[0]:
         log.error("extraction: the model server stopped answering — the run "

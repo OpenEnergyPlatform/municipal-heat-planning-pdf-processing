@@ -7,8 +7,9 @@
 that imports Streamlit. Where the numbered stages turn PDFs into a corpus once,
 offline, this turns that corpus into a running chat: a person opens a
 profile's database and FAISS index, asks a question in ordinary language, and
-reads back an answer grounded in a citation that traces to a page and, where
-possible, to the passage on it. It has two pages:
+reads back an answer made of statements, each grounded in a quote, with
+citations that trace to a page and, where possible, to the passage on it. It has
+two pages:
 
 - the chat, over one document, several (each asked by itself, then compared)
   or the whole corpus;
@@ -77,16 +78,55 @@ resets the history. A turn then runs in this order:
    question that names no parameter shows nothing here. `INFERENCE_VALUES_LEVEL`
    leaves out values below a trust level and `INFERENCE_VALUES_LIMIT` caps how
    many are shown before the count of the rest.
-2. The answer from the documents follows, as before: a search anchor, the
-   query embedding, retrieval, and the answer across token-budgeted batches.
+2. The answer from the documents follows: a search anchor, the query
+   embedding, retrieval, and the answer across token-budgeted batches.
    Retrieval is by meaning and, where a word index exists beside the database
    and is current, also by word, and the two rankings are merged
    (`docpipe/inference/hybrid.py`). `INFERENCE_LEXICAL=0` turns the word
-   search off.
+   search off. The model answers in statements, each with its own quote, and a
+   statement is shown only if its quote stands in the passage it cites (see
+   [Asking the corpus](inference.md)). The page shows of that:
+   - The answer, which is the statements that stood. One statement is a
+     sentence, two or more are a list, and each ends with the number of its
+     citation, `[1]`. A JSON answer has no such marks, and its citations carry
+     no number.
+   - Directly under the answer, one sentence in the profile's words
+     (`statements_dropped`) that says how many of the statements the model made
+     were removed because their quote does not stand in the source they cite,
+     "2 of 5 statement(s) removed". It does not say which or why: the cause per
+     statement goes to the log. It stands also where every statement was
+     removed.
+   - Where sources were found and no statement stood there is no answer, and the
+     page says one of two things. `nothing_backed` says the examined sources hold nothing that backs
+     an answer: statements were made and none stood, or the model's replies were
+     read and held none. `answer_unreadable` says the model's replies could not
+     be read, with the cause of each request (`answer_reply: cut_off`), and that
+     nothing can be said about what the sources contain: no statement was made
+     and the requests that would have made them stayed unreadable, so the
+     sources were not looked at, which is not that they hold nothing.
+   - Under the answer, where other requests of the turn stayed unreadable, a
+     warning (`replies_unreadable`) with their number and causes: a search anchor
+     that fell back to the question, a focused read-off that kept the first
+     reading, a batch of sources whose reply could not be read while another
+     batch made statements, a JSON answer that could not be made. It says that
+     what they would have said is missing from the answer. A request that the
+     reply itself names (`answer_unreadable`) is not repeated in it.
+   - Each citation shows its number, `[n]`, before its label. A value
+     calculated by the sandbox says which run printed it (`computed_from`), and
+     the calculation expander numbers its runs in the order the turn made them
+     (`run_label`, "Run 1", "Run 2"), so that the number in the caption can be
+     found. A value read off a figure keeps its own caption.
 3. With several documents selected there is no values step and no joint
    search: `run_comparison` asks each document by itself and one more call
    compares the finished answers, since one top-k over several plans would
-   give the longest chapter most of the slots.
+   give the longest chapter most of the slots. The comparison is given only
+   the statements that stood, as plain text. Each document's own row carries its
+   own caption of removed statements and its own warning of unreadable requests,
+   and a row with no answer says `answer_unreadable` where its replies could not
+   be read, `no_hits` where nothing was retrieved, and `document_nothing`
+   (nothing in this document backs an answer) only where its replies were read.
+   The comparison call's own unreadable requests are in a warning above the
+   table.
 
 Over the whole corpus every source names its document (the label of the
 catalog, or the name of the document's file without its ending where it gives none), only the
@@ -195,15 +235,28 @@ the profile's own.
 `docpipe.inference.config` and does not redefine one: two copies of a value
 like `LLM_BASE_URL` are how a deployment ends up talking to the wrong endpoint.
 
+The model requests of a turn carry the reasoning fields the other stages send,
+`LLM_ENABLE_THINKING` and `LLM_REASONING_EFFORT`, and always send their reply
+schema as the grammar of the request. `LLM_MAX_RETRIES` is the number of
+attempts one request gets after a reply that could not be read or a failed call,
+and `LLM_SCHEMA` decides only whether a JSON answer in the user's own shape is
+asked for (see [Asking the corpus](inference.md)). `docpipe doctor --stage chat`
+asks the server whether it takes these fields (see [the
+command](command.md)).
+
 ## Data the app keeps
 
 Chat history lives in `st.session_state["chat_history"]`, a list of
 role and content dicts. An assistant entry carries what the turn produced:
-`citations`, `phrase`, `values`, `compute`, or `rows` for a comparison.
-`turns_by_doc` maps a document id (the whole corpus under `None`) to its last
-five turns, kept apart per document so that a "check again" in one plan never
-excludes another's sources, and a failed turn is kept because that follow-up
-is asked precisely after one.
+`citations`, `phrase`, `values`, `compute`, the counts (`made`, `dropped`) and
+the faults the caption and the warning under the answer are drawn from, or
+`rows` for a comparison. `turns_by_doc` maps a document id (the whole corpus
+under `None`) to its last five turns, kept apart per document so that a "check
+again" in one plan never excludes another's sources, and a failed turn is kept
+because that follow-up is asked precisely after one. What a turn keeps for a
+follow-up is its question, its anchor, the sources it examined and its answer as
+`answer_text`, the statements that stood without list marks and numbers, so a
+statement that was removed is in no later request.
 
 `QUERY_CACHE_PATH` holds one table, `query_cache` (a key, the vector as a
 float32 blob, a timestamp). The key is over the embedding model and the
@@ -214,7 +267,8 @@ a key without them match nothing and are embedded again; a benchmark
 recording made earlier whose query vectors live in its own query cache no
 longer replays without a model and has to be recorded again. `REQUEST_LOG_PATH` holds one table, `requests`
 (plan, query text, mode, scopes, timestamp, latency, hit and citation counts,
-a truncated hash of the answer, error, `cache_hit`). No answer is cached: a
+the counts of statements made and removed, a truncated hash of the answer,
+error, `cache_hit`). No answer is cached: a
 follow-up depends on the conversation, and a cache keyed on the question text
 would reuse an answer written for another one. The logged `cache_hit` is
 always `False`; whether the query vector came from the cache is reported in
@@ -228,6 +282,12 @@ the turn's own result.
 - A selection of more documents than `COMPARE_MAX_DOCUMENTS` cannot be made
   in the sidebar; `compare_documents` names what it leaves out as a second
   check for any other caller.
+- A model whose replies cannot be read does not stop a turn. A reply that is
+  not the one JSON object is asked again with its cause named, a reply that was
+  cut off is split or given more room, and nothing is repaired; what still
+  cannot be read is shown as such, with its cause, and written to the request
+  log (`Reply unreadable`, `n request(s) unreadable`), never as "nothing
+  found".
 - `sandbox_service.py` refuses to start without `KWP_SANDBOX_TOKEN` and
   answers a wrong bearer token with 401. A container or backend error comes
   back as a structured error, so an outage costs a turn its calculation and

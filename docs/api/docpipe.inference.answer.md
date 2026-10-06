@@ -76,8 +76,23 @@ whole corpus: every source then names its document. Returns a dict with:
 answer (str|None), answer_text (str|None), citations (list[dict]),
 n_findings (int), cache_hit (bool), n_hits (int), phrase (str|None),
 as_json (bool), n_batches (int), compute (list), examined, recheck,
-n_excluded.
+n_excluded, requested (block ids), statements (list[dict]),
+statements_made / statements_shown / statements_dropped (int, counting
+statements), faults (list of {"request", "cause"}).
 
-answer is None when nothing was retrieved or nothing could be grounded.
+The answer is made of the statements the model wrote whose evidence
+stood in the source they cite (`statements.back`); the rest are counted
+in `statements_dropped`, never shown. Each batch is told the statements
+already checked and writes only new ones, so what was checked is carried
+forward as it was and the model cannot rewrite it. `answer_text` is the
+same statements without list marks and citation numbers, which is what a
+follow-up and a comparison read.
+
+answer is None when nothing was retrieved or no statement was backed.
+`faults` says which requests of the turn stayed unreadable: with no
+statement made and a fault on the answer, the sources were not read, and
+that is not "nothing found in them". `as_json` is True only when the
+answer was reshaped as JSON; where that did not happen the answer is the
+prose and `faults` says why.
 
 [Back to the index](../README.md)

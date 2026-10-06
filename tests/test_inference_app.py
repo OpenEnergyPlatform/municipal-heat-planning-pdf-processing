@@ -881,13 +881,16 @@ def test_answer_from_sources_runs_react_compute_loop(monkeypatch):
     llm = pytest.importorskip("docpipe.inference.llm_client")
     monkeypatch.setattr(llm, "LLM_STUB_MODE", False)
     calls = {"n": 0}
+    seen = []
 
     def fake_chat_json(messages, temperature):
         calls["n"] += 1
+        seen.append(messages[0]["content"])
         if calls["n"] == 1:                      # first: request a computation
             return {"action": "python", "code": "print(50)"}
-        return {"found": True, "complete": True, "answer": "Die Summe ist 50",
-                "supports": [{"index": 0, "quote": "x"}]}
+        return {"statements": [{"statement": "Die Summe ist 50",
+                                "basis": "computed", "index": 0, "quote": "x",
+                                "run": 1}], "complete": True}
 
     monkeypatch.setattr(llm, "_chat_json", fake_chat_json)
     ran = {}
@@ -900,49 +903,18 @@ def test_answer_from_sources_runs_react_compute_loop(monkeypatch):
                                   code_runner=runner, code_context={"tables": []}, max_compute=2)
     assert calls["n"] == 2                        # one action call + one final-answer call
     assert ran["code"] == "print(50)"
-    assert out["answer"] == "Die Summe ist 50"
+    assert [s["statement"] for s in out["statements"]] == ["Die Summe ist 50"]
+    assert out["complete"] is True and out["fault"] is None
     assert len(out["compute"]) == 1
     assert out["compute"][0]["output"]["stdout"] == "50\n"
+    # the run is numbered in what the model is shown, so a statement can name it
+    assert f"{llm._w()['code_heading']} 1:\nprint(50)" in seen[1]
+    assert "print(50)" not in seen[0]
 
 
 _TASK_WITH_SCHEMA = ('Welche Firma hat den Plan erstellt? Bitte Antwort als JSON im Format: '
                      '{"Firmname": str, "Postleitzahl": int}')
-_HIJACKED = {"Firmname": "Energieservice Westfalen Weser GmbH", "Postleitzahl": 32278}
 _ITEMS = [{"index": 0, "source": "s", "text": "Auftragnehmer: Energieservice Westfalen Weser GmbH"}]
-
-
-def test_answer_from_sources_retries_when_the_task_schema_hijacks_the_envelope(monkeypatch):
-    llm = pytest.importorskip("docpipe.inference.llm_client")
-    monkeypatch.setattr(llm, "LLM_STUB_MODE", False)
-    seen = []
-
-    def fake_chat_json(messages, temperature):
-        seen.append(messages[0]["content"])
-        if len(seen) == 1:               # model answers in the task's schema instead
-            return dict(_HIJACKED)
-        return {"found": True, "complete": True, "answer": "Energieservice Westfalen Weser GmbH",
-                "supports": [{"index": 0, "quote": "Auftragnehmer: Energieservice"}]}
-
-    monkeypatch.setattr(llm, "_chat_json", fake_chat_json)
-    out = llm.answer_from_sources(_TASK_WITH_SCHEMA, _ITEMS)
-
-    # A reply in the task's own schema parses fine but has no "found", so without
-    # the retry it reads as "the document does not say" and the answer is lost.
-    assert len(seen) == 2
-    assert llm._ENVELOPE_CORRECTION in seen[1]
-    assert out["found"] and out["supports"]
-
-
-def test_answer_from_sources_flags_a_persistent_envelope_violation(monkeypatch):
-    llm = pytest.importorskip("docpipe.inference.llm_client")
-    monkeypatch.setattr(llm, "LLM_STUB_MODE", False)
-    monkeypatch.setattr(llm, "_chat_json", lambda messages, temperature: dict(_HIJACKED))
-
-    out = llm.answer_from_sources(_TASK_WITH_SCHEMA, _ITEMS)
-
-    # Must stay distinguishable from an honest miss, or the next diagnosis starts
-    # from scratch again.
-    assert out["found"] is False and out["off_envelope"] is True
 
 
 def test_answer_from_sources_treats_an_honest_miss_as_a_miss(monkeypatch):
@@ -952,14 +924,16 @@ def test_answer_from_sources_treats_an_honest_miss_as_a_miss(monkeypatch):
 
     def fake_chat_json(messages, temperature):
         calls["n"] += 1
-        return {"found": False}
+        return {"statements": [], "complete": False}
 
     monkeypatch.setattr(llm, "_chat_json", fake_chat_json)
     out = llm.answer_from_sources(_TASK_WITH_SCHEMA, _ITEMS)
 
-    # {"found": false} carries the key, so it must not trigger a retry.
+    # An empty list is the model saying the excerpts hold nothing: one call, no
+    # retry, and no fault, which is what tells it from a reply that was lost.
     assert calls["n"] == 1
-    assert out["found"] is False and not out.get("off_envelope")
+    assert out["statements"] == [] and out["fault"] is None
+    assert "found" not in out
 
 
 def test_make_search_phrase_flags_a_recheck(monkeypatch):
@@ -1041,9 +1015,10 @@ def test_answer_from_sources_attaches_labelled_crops(monkeypatch):
 
     def fake_chat_json(messages, temperature):
         sent["content"] = messages[0]["content"]
-        return {"found": True, "complete": True, "answer": "ca. 650 GWh (abgelesen)",
-                "supports": [{"index": 1, "image": True,
-                              "reading": "Erdgas-Balken 2035: ca. 650 GWh/a"}]}
+        return {"statements": [{
+            "statement": "ca. 650 GWh (abgelesen)", "basis": "image",
+            "index": 1, "reading": "Erdgas-Balken 2035: ca. 650 GWh/a"}],
+            "complete": True}
 
     monkeypatch.setattr(llm, "_chat_json", fake_chat_json)
     items = [{"index": 0, "source": "s0", "text": "t0"},
@@ -1053,7 +1028,7 @@ def test_answer_from_sources_attaches_labelled_crops(monkeypatch):
 
     content = sent["content"]
     # Multimodal content array: text first, then per crop a label + the image,
-    # in index order — the label is what lets a "image" support cite its index.
+    # in index order: the label is what lets an "image" statement cite its index.
     assert isinstance(content, list) and content[0]["type"] == "text"
     assert [p.get("text") for p in content if p["type"] == "text"][1:] == \
            ["Bild zum Auszug index=0:", "Bild zum Auszug index=1:"]
@@ -1067,13 +1042,24 @@ def test_answer_from_sources_attaches_labelled_crops(monkeypatch):
 
 def test_visual_reading_requires_an_actually_attached_image():
     llm = pytest.importorskip("docpipe.inference.llm_client")
-    s = {"index": 1, "image": True, "reading": "Erdgas-Balken 2035: ca. 650 GWh/a"}
+    s = {"statement": "ca. 650", "basis": "image", "index": 1,
+         "reading": "Erdgas-Balken 2035: ca. 650 GWh/a"}
     assert llm.visual_reading(s, {1}) == "Erdgas-Balken 2035: ca. 650 GWh/a"
-    # A "image" support for a crop that was never sent could launder parametric
-    # knowledge past the grounding gate — must die here.
+    # An "image" statement for a crop that was never sent could launder
+    # parametric knowledge past the grounding gate must die here.
     assert llm.visual_reading(s, {0, 2}) is None
-    assert llm.visual_reading({"index": 1, "image": True, "reading": "650"}, {1}) is None
-    assert llm.visual_reading({"index": 1, "quote": "text"}, {1}) is None
+    assert llm.visual_reading({**s, "reading": "650"}, {1}) is None
+    assert llm.visual_reading({**s, "basis": "text"}, {1}) is None
+    # a crop the model asked for stands in by its block, and only if it arrived
+    asked = {"statement": "ca. 7", "basis": "image", "block": "[p17_img1]",
+             "reading": "Segment 2035: ca. 7 GWh/a"}
+    assert llm.visual_reading(asked, set(), frozenset({"p17_img1"})) \
+        == "Segment 2035: ca. 7 GWh/a"
+    assert llm.visual_reading(asked, {1}, frozenset({"p99_img9"})) is None
+    assert llm.visual_reading(asked, {1}) is None
+    # an index that is not a number is no index
+    assert llm.visual_reading({**s, "index": "1"}, {1}) is None
+    assert llm.visual_reading({**s, "index": True}, {1}) is None
 
 
 def test_read_off_image_returns_parsed_reading(monkeypatch):
@@ -1116,41 +1102,19 @@ def test_read_off_image_splices_the_value_into_an_echoed_reading(monkeypatch):
     assert llm.read_off_image("Gas 2035?", "chart.png", "x") is None
 
 
-def test_read_off_image_retries_when_task_schema_hijacks(monkeypatch):
+def test_a_blank_reading_is_no_reading_and_leaves_a_fault(monkeypatch):
+    """The model answered inside the schema and said nothing: the inline
+    reading stays, and the turn's record says that the focused call gave none."""
     llm = pytest.importorskip("docpipe.inference.llm_client")
     monkeypatch.setattr(llm, "LLM_STUB_MODE", False)
     monkeypatch.setattr(llm, "_image_part",
                         lambda path, max_side=None, png=False: {"type": "image_url",
                                                                 "image_url": {"url": "d"}})
-    calls = []
-
-    def fake_chat_json(messages, temperature):
-        calls.append(messages[0]["content"][0]["text"])
-        if len(calls) == 1:                # the task's own format spec wins
-            return {"amount": 1000.0, "unit": "GWh/a"}
-        return {"reading": "Erdgas 2035: ca. 600 GWh/a", "value": 600.0,
-                "unit": "GWh/a", "confidence": "hoch"}
-
-    monkeypatch.setattr(llm, "_chat_json", fake_chat_json)
-    ro = llm.read_off_image('Gas 2035? Als JSON {"amount":float}', "c.png", "Erdgas-Balken")
-    # Without the retry the hijacked reply reads as "no reading" and the wrong
-    # inline value survives — the exact bug seen live.
-    assert len(calls) == 2 and llm._READOFF_CORRECTION in calls[1]
-    assert ro["value"] == 600.0
-
-
-def test_revise_with_readings_falls_back_to_the_original(monkeypatch):
-    llm = pytest.importorskip("docpipe.inference.llm_client")
-    monkeypatch.setattr(llm, "LLM_STUB_MODE", False)
     monkeypatch.setattr(llm, "_chat_json",
-                        lambda m, temperature: {"answer": "korrigiert: 600 GWh/a"})
-    assert llm.revise_with_readings("t", "alt: 1200", ["Abb 85: 600 GWh/a"]) \
-        == "korrigiert: 600 GWh/a"
-    # A failed revision must never eat the answer that already exists.
-    monkeypatch.setattr(llm, "_chat_json",
-                        lambda m, temperature: (_ for _ in ()).throw(RuntimeError("down")))
-    assert llm.revise_with_readings("t", "alt: 1200", ["r"]) == "alt: 1200"
-    assert llm.revise_with_readings("t", "alt", []) == "alt"
+                        lambda m, temperature: {"reading": "  ", "value": 600.0})
+    with llm.collecting() as faults:
+        assert llm.read_off_image("Gas 2035?", "c.png", "Erdgas-Balken") is None
+    assert faults == [{"request": "readoff_reply", "cause": "wrong_shape"}]
 
 
 def test_readoff_prompt_forbids_total_for_segment():
@@ -1160,21 +1124,21 @@ def test_readoff_prompt_forbids_total_for_segment():
     assert "Gesamthöhe" in llm.READOFF_PROMPT and "Differenz" in llm.READOFF_PROMPT
 
 
-def test_answer_prompt_defines_the_image_support_contract():
+def test_answer_prompt_defines_the_image_statement_contract():
     llm = pytest.importorskip("docpipe.inference.llm_client")
     tail = llm._ANSWER_PROMPT_TAIL
-    assert '"image"' in tail and '"reading"' in tail
-    # Read-off values must carry the literal marker phrase in the answer; the
+    assert '"basis": "image"' in tail and '"reading"' in tail
+    # Read-off values must carry the literal marker phrase in the statement; the
     # app additionally appends a deterministic note when the model forgets.
     assert "aus der Abbildung abgelesen" in tail and "Schätzwert" in tail
 
 
-def test_answer_prompt_scopes_task_format_specs_to_the_answer_field():
+def test_answer_prompt_scopes_task_format_specs_to_the_statements():
     llm = pytest.importorskip("docpipe.inference.llm_client")
     tail = llm._ANSWER_PROMPT_TAIL.lower()
     # Measured on the live model: without this the envelope is lost 4/4 times for
     # a task carrying its own JSON schema, with it 4/4 times correct.
-    assert "formatvorgaben" in tail and '"answer"' in llm._ANSWER_PROMPT_TAIL
+    assert "formatvorgaben" in tail and '"statements"' in llm._ANSWER_PROMPT_TAIL
 
 
 def test_history_context_includes_recent_turns_but_frames_as_non_source():
@@ -1198,11 +1162,13 @@ def test_answer_from_sources_no_action_no_compute(monkeypatch):
     llm = pytest.importorskip("docpipe.inference.llm_client")
     monkeypatch.setattr(llm, "LLM_STUB_MODE", False)
     monkeypatch.setattr(llm, "_chat_json",
-                        lambda messages, temperature: {"found": True, "complete": True,
-                                                       "answer": "direkt", "supports": []})
+                        lambda messages, temperature: {
+                            "statements": [{"statement": "direkt", "basis": "text",
+                                            "index": 0, "quote": "t"}],
+                            "complete": True})
     # no code_runner → the compute hint is never added and compute stays empty
     out = llm.answer_from_sources("x", [{"index": 0, "source": "s", "text": "t"}])
-    assert out["answer"] == "direkt"
+    assert out["statements"][0]["statement"] == "direkt"
     assert out["compute"] == []
 
 

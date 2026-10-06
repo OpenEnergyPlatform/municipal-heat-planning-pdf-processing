@@ -6,20 +6,16 @@ vision.py: Vision model interaction layer over an OpenAI compatible
 API.
 
 Creates the client, checks model availability, and makes the chat
-completions call that sends a base64 encoded image and parses the
-JSON response.
+completions call that sends a base64 encoded image and reads the one
+JSON object that comes back. The reply schema is the grammar of the
+request; the reply is read as exactly one object (see
+docpipe/reading.py): nothing is stripped, cut out, closed or salvaged,
+and no second, unconstrained request fills in for a reply that could
+not be read.
 
 Author: Felix Vossel
 
 ## Functions
-
-### looks_runaway
-
-```python
-def looks_runaway(text: str) -> bool
-```
-
-True if *text* carries the empty-cell run that precedes a truncated answer.
 
 ### create_client
 
@@ -49,50 +45,44 @@ def call_vision(
     user_prompt: str,
     image_path: Path,
     *,
+    reply: tuple,
     model: str = VLM_MODEL,
     max_retries: int = MAX_RETRIES,
     temperature: float = VLM_TEMPERATURE,
     max_tokens: int = VLM_MAX_TOKENS,
     repetition_penalty: float | None = None,
-    reply: tuple | None = None,
-) -> dict | None
+    budget: int | None = None,
+) -> dict | Hole
 ```
 
-Sends an image + prompt to the vision model and parses the JSON response.
+Sends an image + prompt to the vision model and reads the one JSON object
+it answers with.
 
 The wall-clock bound per request is the client timeout set by
 create_client(), not *max_retries*. *reply* is the (name, schema) of the
-object asked for (see `replies`), for an API that generates inside one.
+object asked for (see `replies`): the grammar of every request, and its
+one required key (the item's `markdown`, `description`) has to be in the
+reply as text.
+
+A reply that is not that object is asked again with its cause named, the
+answer echoed back. A reply that was cut off at its token limit is not
+asked again as it stands: an image has no halves, so it is asked once more
+from the original prompt with more room and the next repetition penalty (a
+runaway grid is what ends at the limit), without a word about the cut. The
+room is twice *max_tokens* or as much as the served window leaves,
+whichever is smaller (`llm_preflight.further_room`); where it leaves none
+the item is a hole at once and nothing more is sent. If the further
+attempt is cut off too, the item is a hole.
+
+*budget* is the largest request, in tokens, of the stage this call belongs
+to: the prompt, the largest input and ONE reply of *max_tokens*, which its
+preflight checked the window against. Without it the room is twice.
 
 Returns:
-    Parsed JSON dict, or None once the retries are exhausted or the server
-    rejects the request itself (a 4xx, which no retry would change).
-
-### call_vision_plain
-
-```python
-def call_vision_plain(
-    client: openai.OpenAI,
-    system_prompt: str,
-    user_prompt: str,
-    image_path: Path,
-    *,
-    model: str = VLM_MODEL,
-    temperature: float = VLM_TEMPERATURE,
-    max_tokens: int = VLM_MAX_TOKENS,
-    key: str = "markdown",
-) -> str | None
-```
-
-One unconstrained call: the answer as plain text, no JSON envelope.
-
-The last resort after call_vision has given up. Of 112 parse failures in the
-August 2026 run, 111 read "No JSON object found in response" on a 200 OK
-that came back within the same second — the model answers, it just will not
-wear the envelope. Discarding that answer loses information the model
-already produced.
-
-Returns the response text (``<think>`` stripped), or None if the call fails
-or comes back empty.
+    The parsed JSON dict, or a Hole that names why there is none:
+    "refused" for a request the server rejected itself (a 4xx, which no
+    retry would change), "not_served" when the last attempt got no answer,
+    "error" for a failure of our own after the reply arrived, or the cause
+    the reply was unreadable for (see `reading`).
 
 [Back to the index](../README.md)

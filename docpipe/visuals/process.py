@@ -4,9 +4,10 @@ process.py: Core processing logic for table and figure enrichment.
 Sends one table or figure image to the vision model, together with
 its section context, and returns a copy of the item carrying the
 model's markdown or description. A table's transcription passes a
-quality gate and gets one retry with a stronger prompt on failure; a
-call that never returns valid JSON falls back to a plain text
-request before the item is marked failed.
+quality gate and gets one retry with a stronger prompt on failure. An
+image the model could not be read an object for (see vision.call_vision)
+has no content: the item carries no markdown or description, says why in
+`vlm_why`, and is counted by cause. No plain-text request fills in for it.
 
 Author: Felix Vossel
 """
@@ -19,8 +20,11 @@ from pathlib import Path
 
 import openai
 
+from docpipe.reading import Hole
+
 from . import qa, replies
 from .config import (
+    max_request_tokens,
     table_system_prompt,
     table_user_prompt,
     TABLE_VLM_TEMPERATURE,
@@ -36,7 +40,7 @@ from .config import (
     caption_generate_figure_instruction,
 )
 from .models import ProcessingStats
-from .vision import call_vision, call_vision_plain
+from .vision import call_vision
 
 log = logging.getLogger(__name__)
 
@@ -60,26 +64,6 @@ def _assess_table(markdown: str, source_text: str) -> tuple[bool, dict]:
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
-
-_PLAIN_HINT = (
-    "\n\nYour previous answers could not be parsed as JSON. Drop the JSON "
-    "entirely: reply with the content itself as plain text — no JSON, no code "
-    "fences, no commentary before or after it."
-)
-
-
-def _rescue_plain(client, system_prompt: str, user_prompt: str,
-                  image_path: Path, kwargs: dict, key: str) -> str | None:
-    """
-    Last resort once call_vision has exhausted its retries: ask for the content
-    as plain text. A table's Markdown and a figure's description are both text —
-    only the envelope was ever the problem, so both take the same route.
-
-    *key* is the field to unwrap should the model answer in JSON anyway.
-    """
-    return call_vision_plain(client, system_prompt, user_prompt + _PLAIN_HINT,
-                             image_path, key=key, **kwargs)
-
 
 def _truncate(text: str, max_len: int = 800) -> str:
     """Truncates text with an ellipsis if it exceeds max_len."""
@@ -118,9 +102,10 @@ def process_table(
     A QA gate checks coverage against *source_text* and row duplication; on
     failure the table is still returned (best effort) but carries a
     ``qa_warning`` field. The result of the check is kept for every table the
-    model answered in JSON, as ``qa`` (the metrics of the kept attempt and
-    whether it passed). A table rescued as plain text or not read at all has
-    none: it was not checked, which is not the same as passed.
+    model transcribed, as ``qa`` (the metrics of the kept attempt and whether
+    it passed). A table the model gave no object for has none: it was not
+    checked, which is not the same as passed. It has no ``markdown`` either,
+    and says why in ``vlm_why``.
 
     *lock* guards the shared ProcessingStats: without it this is not safe to
     call from several threads at once.
@@ -151,26 +136,19 @@ def process_table(
     kwargs = {"model": model} if model else {}
     response = call_vision(
         client, table_system_prompt(), user_prompt, image_path,
-        temperature=TABLE_VLM_TEMPERATURE, reply=replies.TABLE, **kwargs
+        temperature=TABLE_VLM_TEMPERATURE, reply=replies.TABLE,
+        budget=max_request_tokens(), **kwargs
     )
 
-    if not response:
-        rescued = _rescue_plain(client, table_system_prompt(), user_prompt,
-                                image_path, kwargs, "markdown")
+    if isinstance(response, Hole):
         with guard:
-            if rescued:
-                stats.rescued_tables += 1
-            else:
-                stats.failed_tables += 1
-        if rescued:
-            result["markdown"] = rescued
-            result["vlm_status"] = "plain_text"
-            log.warning("  ~ Table %s rescued as plain text", table["id"])
-        else:
-            log.error("  ✗ Table %s failed", table["id"])
+            stats.hole("table", response.cause)
+        result["vlm_why"] = response.cause
+        log.error("  ✗ Table %s has no content (%s)", table["id"],
+                  response.cause)
         return result
 
-    raw_md = response.get("markdown", "")
+    raw_md = response["markdown"]
     passed, metrics = _assess_table(raw_md, source_text)
 
     if not passed:
@@ -178,10 +156,11 @@ def process_table(
             client, table_system_prompt(), user_prompt + _QA_RETRY_HINT, image_path,
             temperature=TABLE_QA_RETRY_TEMPERATURE,
             repetition_penalty=TABLE_QA_RETRY_PENALTY,
-            reply=replies.TABLE, **kwargs,
+            reply=replies.TABLE, budget=max_request_tokens(), **kwargs,
         )
-        if retry:
-            retry_md = retry.get("markdown", "")
+        # A retry that is a hole keeps the first attempt, which was read.
+        if not isinstance(retry, Hole):
+            retry_md = retry["markdown"]
             passed2, metrics2 = _assess_table(retry_md, source_text)
             # Keep the better attempt: prefer one that passes, else higher
             # coverage. An unassessable coverage is not "better" - there is
@@ -266,33 +245,26 @@ def process_figure(
     kwargs = {"model": model} if model else {}
     response = call_vision(
         client, figure_system_prompt(), user_prompt, image_path,
-        reply=replies.FIGURE, **kwargs
+        reply=replies.FIGURE, budget=max_request_tokens(), **kwargs
     )
 
-    if response:
-        result["description"] = response.get("description", "")
-        new_caption = response.get("caption", "")
-        generated = bool(not existing_caption and new_caption)
+    if isinstance(response, Hole):
+        with guard:
+            stats.hole("figure", response.cause)
+        result["vlm_why"] = response.cause
+        log.error("  ✗ Figure %s has no content (%s)", figure["id"],
+                  response.cause)
+        return result
+
+    result["description"] = response["description"]
+    new_caption = response.get("caption", "")
+    generated = bool(not existing_caption and new_caption)
+    if generated:
+        result["caption"] = new_caption
+    with guard:
         if generated:
-            result["caption"] = new_caption
-        with guard:
-            if generated:
-                stats.captions_generated += 1
-            stats.processed_figures += 1
-        log.info("  ✓ Figure %s", figure["id"])
-    else:
-        rescued = _rescue_plain(client, figure_system_prompt(), user_prompt,
-                                image_path, kwargs, "description")
-        with guard:
-            if rescued:
-                stats.rescued_figures += 1
-            else:
-                stats.failed_figures += 1
-        if rescued:
-            result["description"] = rescued
-            result["vlm_status"] = "plain_text"
-            log.warning("  ~ Figure %s rescued as plain text", figure["id"])
-        else:
-            log.error("  ✗ Figure %s failed", figure["id"])
+            stats.captions_generated += 1
+        stats.processed_figures += 1
+    log.info("  ✓ Figure %s", figure["id"])
 
     return result

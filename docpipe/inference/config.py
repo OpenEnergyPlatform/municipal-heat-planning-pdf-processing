@@ -25,7 +25,8 @@ LLM_MAX_TOKENS  = int(os.environ.get("LLM_MAX_TOKENS", "2048"))
 # HF tokenizer id used only for token-budget accounting. May differ from the
 # served model name; falls back to a char/4 heuristic if it cannot be loaded.
 LLM_TOKENIZER_ID = os.environ.get("LLM_TOKENIZER_ID", LLM_MODEL)
-# Retry budget for malformed-JSON / transport errors on a SINGLE LLM call.
+# Attempts of a SINGLE LLM call: a reply that cannot be read is asked again
+# with its cause named, a transport error after a pause.
 # Distinct from MAX_CHUNK_ATTEMPTS below.
 LLM_MAX_RETRIES = int(os.environ.get("LLM_MAX_RETRIES", "4"))
 # When truthy, llm_client returns canned answers instead of calling the endpoint.

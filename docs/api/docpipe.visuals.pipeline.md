@@ -35,6 +35,7 @@ def run_single(
     force_stale: bool = False,
     base_url: Optional[str] = None,
     model: Optional[str] = None,
+    holes: Optional[list] = None,
 ) -> Optional[dict]
 ```
 
@@ -43,10 +44,27 @@ model and writes the enriched output.
 
 Caching is item-level: tables that already have a "markdown" key and figures
 that already have a "description" key are reused from a previous enriched
-output unless *force* is set. *input_json* is relative to *output_dir*.
+output unless *force* is set. An item the model gave no object for has
+none, says why in "vlm_why", and is asked again by the next run. An item
+an older run stored as a plain-text answer is treated like one described
+under older prompts: said once, with its number, and asked again only with
+*force_stale*. *input_json* is relative to *output_dir*.
+
+*holes*, when given, gets one entry (`_hole_entry`) for a document with
+items that ended without content.
 
 Returns:
     Enriched data dict, or None on failure.
+
+### summarise
+
+```python
+def summarise(holes: list) -> str
+```
+
+One sentence for the items a run left without content, in tables,
+figures and documents. *holes* are the entries `run_single` adds, one per
+document.
 
 ### run_batch
 

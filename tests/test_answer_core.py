@@ -34,31 +34,47 @@ def test_no_hits_returns_an_empty_answer(monkeypatch, corpus):
     assert out["answer"] is None and out["n_hits"] == 0 and out["phrase"] == "p"
 
 
+def _said(*statements, complete=True):
+    """What the model wrote for one batch, in the shape the answer call
+    returns it."""
+    return {"statements": list(statements), "complete": complete,
+            "compute": [], "attached_images": [], "requested": [],
+            "fault": None}
+
+
+def _text(statement, index, quote):
+    return {"statement": statement, "basis": "text", "index": index,
+            "quote": quote}
+
+
 def test_grounded_answer_carries_its_citation(monkeypatch, corpus):
+    # The real check: nothing here stands in for `grounded_quote`.
     monkeypatch.setattr(answer.llm_client, "make_search_phrase", lambda *a, **k: ("p", False))
     monkeypatch.setattr(answer.hybrid.faiss_store, "retrieve", lambda *a, **k: [_hit(0)])
-    monkeypatch.setattr(answer.llm_client, "answer_from_sources", lambda *a, **k: {
-        "found": True, "complete": True, "answer": "100 GWh.",
-        "supports": [{"index": 0, "quote": "Der Wärmebedarf betrug 100 GWh."}]})
-    monkeypatch.setattr(answer.llm_client, "grounded_quote", lambda q, it: q)
+    monkeypatch.setattr(answer.llm_client, "answer_from_sources", lambda *a, **k: _said(
+        _text("100 GWh.", 0, "Der Wärmebedarf betrug 100 GWh.")))
 
     out = answer.answer_question("Wärmebedarf?", corpus, 1, [config.SCOPE_TEXT])
-    assert out["answer"] == "100 GWh."
+    assert out["answer"] == "100 GWh. [1]"          # one statement: a sentence
+    assert out["answer_text"] == "100 GWh."
     assert out["n_findings"] == 1
     assert out["citations"][0]["quote"].startswith("Der Wärmebedarf")
+    assert out["citations"][0]["n"] == 1
+    assert (out["statements_made"], out["statements_shown"],
+            out["statements_dropped"]) == (1, 1, 0)
 
 
 def test_an_ungrounded_answer_is_refused(monkeypatch, corpus):
     """Sources were found, but nothing could be quoted → no answer at all."""
     monkeypatch.setattr(answer.llm_client, "make_search_phrase", lambda *a, **k: ("p", False))
     monkeypatch.setattr(answer.hybrid.faiss_store, "retrieve", lambda *a, **k: [_hit(0)])
-    monkeypatch.setattr(answer.llm_client, "answer_from_sources", lambda *a, **k: {
-        "found": True, "complete": True, "answer": "Frei erfunden.",
-        "supports": [{"index": 0, "quote": "steht so nirgends"}]})
-    monkeypatch.setattr(answer.llm_client, "grounded_quote", lambda q, it: None)
+    monkeypatch.setattr(answer.llm_client, "answer_from_sources", lambda *a, **k: _said(
+        _text("Frei erfunden.", 0, "steht so nirgends")))
 
     out = answer.answer_question("Frage?", corpus, 1, [config.SCOPE_TEXT])
     assert out["answer"] is None and out["citations"] == []
+    assert (out["statements_made"], out["statements_shown"],
+            out["statements_dropped"]) == (1, 0, 1)
 
 
 def test_recheck_excludes_what_earlier_turns_read(monkeypatch, corpus):
@@ -120,8 +136,6 @@ def _turns(monkeypatch, said):
     where = {}
     monkeypatch.setattr(answer.llm_client, "make_search_phrase",
                         lambda *a, **k: ("p", False))
-    monkeypatch.setattr(answer.llm_client, "grounded_quote",
-                        lambda q, it: q)
 
     def _retrieve(conn, index, pos, doc, types, vec, k, exclude=None):
         where["doc"] = doc
@@ -131,9 +145,8 @@ def _turns(monkeypatch, said):
     def _from_sources(task, items, **kw):
         answer_text = said.get(where["doc"])
         if not answer_text:
-            return {"found": False, "complete": True}
-        return {"found": True, "complete": True, "answer": answer_text,
-                "supports": [{"index": 0, "quote": SECRET}]}
+            return _said()
+        return _said(_text(answer_text, 0, SECRET))
     monkeypatch.setattr(answer.llm_client, "answer_from_sources",
                         _from_sources)
     return where
@@ -371,8 +384,7 @@ def test_the_turn_hands_the_tables_of_its_sources_to_the_code_runner(
 
     def answer_from_sources(task, items, **kw):
         handed.append((kw.get("code_runner"), kw.get("code_context")))
-        return {"found": False, "complete": True, "answer": "",
-                "supports": []}
+        return _said()
 
     monkeypatch.setattr(answer.llm_client, "answer_from_sources",
                         answer_from_sources)

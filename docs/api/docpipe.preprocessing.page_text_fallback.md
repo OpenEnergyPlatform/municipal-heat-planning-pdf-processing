@@ -90,27 +90,32 @@ is the exact failure this module exists to end.
 def fill_missing_page_text(
     pages: list[PageData],
     render: Callable[[int], object],
-    transcribe: Callable[[object, int], Optional[str]],
+    transcribe: Callable[[object, int], "str | Hole"],
     *,
     min_chars: int = MIN_PAGE_CHARS,
     max_pages: Optional[int] = None,
     workers: int = 1,
     render_workers: int = PAGE_RENDER_WORKERS,
+    before_first: Optional[Callable[[], None]] = None,
 ) -> dict
 ```
 
 Transcribe every page whose text layer is missing. Mutates *pages*.
 
+*before_first* is called once there is a page to send and before any is
+sent: the place for a caller to ask whether the server is there. A
+document none of whose pages lacks its text never calls it.
+
 `render(page_number)` returns whatever the transcriber takes (a PIL image
 in the live wiring), `transcribe(image, page_number)` returns the page as
-markdown, an empty string if the page carries no prose, or None if the call
-failed. A page that yielded nothing keeps its empty text layer rather than
-an invented one.
+markdown, an empty string if the page carries no prose, or a Hole that says
+why the call gave nothing. A page that yielded nothing keeps its empty text
+layer rather than an invented one.
 
 Returns a report: how many pages needed text, how many got it, how many had
-nothing to give, how many broke, and how many blocks were synthesized. The
-counts are the honest answer to "how much of this document is model-read
-rather than PDF-read".
+nothing to give, how many broke, which of those and why (`failed_pages`),
+and how many blocks were synthesized. The counts are the honest answer to
+"how much of this document is model-read rather than PDF-read".
 
 `pages_empty` and `pages_failed` are counted apart on purpose. A heat plan
 is full of pages that are one large map, and the prompt tells the model to
@@ -133,17 +138,35 @@ time, so the transcription is what is worth keeping, not the picture.
 
 $TMPDIR is respected.
 
+### page_request_tokens
+
+```python
+def page_request_tokens(profile) -> int
+```
+
+Worst case for one page request: the page prompt + one page image + the
+reply we ask for, once. A reply cut off at its limit is asked once more
+with more room (see vision.call_vision), bounded by what the served window
+leaves beyond this number, so no second reply is counted. What the vision
+server has to be started for when it is asked to transcribe pages; the page
+is as large as a table crop at its largest, so the image is counted as
+there.
+
 ### make_transcriber
 
 ```python
 def make_transcriber(profile, *, client=None, model=None)
 ```
 
-transcribe(image_path, page_number) -> markdown, or None on failure.
+transcribe(image_path, page_number) -> markdown, or a Hole.
 
 ONE job: read the page. No cleaning, no summarising, no restructuring —
 refinement does that afterwards, in its own calls, on its own terms. The
 prompt lives in the profile because what a page holds and in which language
 is project knowledge, while "a page with no text layer needs reading" is not.
+
+The reply is the one object with a `markdown` that is text, and the empty
+string is an answer (a page that is one large map holds no prose). A reply
+that is not that object is a Hole with its cause, as it is for a table.
 
 [Back to the index](../README.md)

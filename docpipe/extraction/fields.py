@@ -81,10 +81,11 @@ DERIVED = "derived"
 # this module was written to prevent.
 OUT_OF_SLICE = "out_of_slice"
 
-# The key a coordinate carries when a top-up re-read it: `<axis>_producer`,
-# the position of the entry of the stamp's `producers` list that did. The
-# harvest writes none, so a coordinate without it was read by the harvest, and
-# one that no later pass touched must keep reading that way.
+# The key a coordinate carries when a pass after the harvest read it, a top-up
+# that re-read it or a pass that appended its row: `<axis>_producer`, the
+# position of the entry of the stamp's `producers` list that did. The harvest
+# writes none, so a coordinate without it was read by the harvest, and one
+# that no later pass touched must keep reading that way.
 PRODUCER = "_producer"
 BY_HARVEST, BY_PASS, BY_UNKNOWN = "harvest", "pass", "unknown"
 

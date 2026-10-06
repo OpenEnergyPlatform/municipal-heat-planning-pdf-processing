@@ -25,6 +25,8 @@ def run_single(
     column_layout: str = "auto",
     transcribe_missing_text: bool = False,
     profile=None,
+    holes: Optional[list] = None,
+    page_server: Optional[Callable[[], None]] = None,
 ) -> Optional[dict]
 ```
 
@@ -35,7 +37,13 @@ reused unless *force_reextract*.
 *transcribe_missing_text* sends pages whose text layer is missing to the
 vision model and uses the reply as their text blocks. Off by default: it is
 the only part of preprocessing that needs a model server, and a run that
-does not ask for it must not depend on one.
+does not ask for it must not depend on one. A page the model gave no
+readable reply for keeps no text and is named, with the cause, in the
+page transcription report; the next run with the flag asks again for the
+pages that still have none. *holes*, when given, gets one entry for a
+document that has any. *page_server*, when given, is called before the
+first page of this document goes to the model (`main` asks the server
+there, once per run).
 
 ### run_folder
 
@@ -48,6 +56,8 @@ def run_folder(
     column_layout: str = "auto",
     transcribe_missing_text: bool = False,
     profile=None,
+    holes: Optional[list] = None,
+    page_server: Optional[Callable[[], None]] = None,
 ) -> dict[str, Optional[dict]]
 ```
 
@@ -77,6 +87,15 @@ Report how many pages the column detector would read as two columns, per
 doc, from the cached pages. Changes nothing — this is what a corpus is
 asked before its profile switches to column_layout: auto.
 
+### summarise
+
+```python
+def summarise(holes: list) -> str
+```
+
+One sentence for the pages a run could not read, in pages and
+documents. *holes* are the entries `_fill_missing_page_text` adds.
+
 ### run
 
 ```python
@@ -90,6 +109,8 @@ def run(
     column_layout: str = "auto",
     transcribe_missing_text: bool = False,
     profile=None,
+    holes: Optional[list] = None,
+    page_server: Optional[Callable[[], None]] = None,
 ) -> Optional[dict] | dict[str, Optional[dict]]
 ```
 

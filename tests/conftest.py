@@ -254,6 +254,15 @@ def _no_real_sleep(monkeypatch):
     monkeypatch.setattr(vis.time, "sleep", lambda *a, **k: None)
 
 
+@pytest.fixture(autouse=True)
+def _no_served_window_from_another_test(monkeypatch):
+    """The window a preflight reported belongs to the test that ran it. A
+    stage sizes the room of a cut-off unit from it, so one that outlived its
+    test would change the request another test counts."""
+    import docpipe.llm_preflight as preflight
+    monkeypatch.setattr(preflight, "_WINDOWS", {})
+
+
 # ---------------------------------------------------------------------------
 # Chunking / DB fixture
 # ---------------------------------------------------------------------------

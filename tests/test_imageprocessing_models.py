@@ -20,3 +20,4 @@ def test_processing_stats_summary():
     s = ProcessingStats(total_tables=2, processed_tables=1, failed_tables=1)
     out = s.summary()
     assert "1/2" in out and "1 failed" in out
+    assert "Rescued" not in out, "nothing is rescued as plain text any more"

@@ -368,14 +368,24 @@ def _every_shape():
         ("chunk", chat_replies.CHUNK[1], {"found": False}),
         ("readoff", chat_replies.READOFF[1], {"reading": "etwa 40",
                                               "value": None, "unit": None}),
-        ("revise", chat_replies.REVISE[1], {"answer": "x"}),
         ("compare", chat_replies.COMPARE[1], {"comparison": "x"}),
         ("answer", chat_replies.answer()[1], {
-            "found": True, "complete": False, "answer": "42",
-            "supports": [{"index": 0, "quote": "zweiundvierzig"},
-                         {"index": 1, "image": True, "reading": "42 GWh"}]}),
+            "statements": [
+                {"statement": "Es sind 42.", "basis": "text", "index": 0,
+                 "quote": "zweiundvierzig"},
+                {"statement": "Etwa 42 GWh.", "basis": "image", "index": 1,
+                 "reading": "42 GWh"},
+                {"statement": "Etwa 7 GWh.", "basis": "image",
+                 "block": "p17_img1", "reading": "7 GWh"},
+                {"statement": "Zusammen 49.", "basis": "computed",
+                 "index": 0, "quote": "42 und 7", "run": 1}],
+            "complete": False}),
         ("answer action", chat_replies.answer()[1],
          {"action": "python", "code": "print(1)"}),
+        ("answer image action", chat_replies.answer()[1],
+         {"action": "image", "id": "p17_img1"}),
+        ("answer, last call", chat_replies.answer(actions=False)[1],
+         {"statements": [], "complete": False}),
     ]
     for profile in PROFILES:
         spec = _spec(profile)
@@ -436,6 +446,56 @@ def test_a_rows_schema_without_a_sandbox_has_no_action():
     assert "action" not in chat_replies.answer(actions=False)[1]["properties"]
 
 
+def test_the_answer_schema_is_the_statement_shape():
+    """The answer is a list of statements, each with its own evidence, and no
+    prose beside them. The last call of a turn has to hold statements; a call
+    that may ask for an action holds statements or an action. A reply in the
+    shape the chat used to ask for is no reply of this one."""
+    jsonschema = pytest.importorskip("jsonschema")
+    name, last = chat_replies.answer(actions=False)
+    _name, open_ = chat_replies.answer()
+    assert name == _name == chat_replies.ANSWER
+    assert last["required"] == ["statements"]
+    assert set(open_["properties"]) == {"statements", "complete", "action",
+                                        "code", "id"}
+    assert set(last["properties"]) == {"statements", "complete"}
+    statement = open_["properties"]["statements"]["items"]
+    assert set(statement["properties"]) == {
+        "statement", "basis", "index", "quote", "reading", "block", "run"}
+    assert statement["required"] == ["statement", "basis"]
+    assert statement["properties"]["basis"]["enum"] == list(chat_replies.BASES)
+    old_shape = {"found": True, "complete": False, "answer": "42",
+                 "supports": [{"index": 0, "quote": "zweiundvierzig"}]}
+    for natural in (last, open_):
+        with pytest.raises(jsonschema.ValidationError):
+            jsonschema.validate(old_shape, natural)
+        with pytest.raises(jsonschema.ValidationError):     # no basis
+            jsonschema.validate({"statements": [{"statement": "x"}]}, natural)
+        with pytest.raises(jsonschema.ValidationError):     # no such basis
+            jsonschema.validate({"statements": [
+                {"statement": "x", "basis": "memory"}]}, natural)
+        with pytest.raises(jsonschema.ValidationError):     # no prose answer
+            jsonschema.validate({"statements": [], "answer": "x"}, natural)
+    with pytest.raises(jsonschema.ValidationError):         # the last call
+        jsonschema.validate({"complete": True}, last)       # has to answer
+
+
+def test_what_the_reader_needs_of_a_reply_is_read_from_its_schema():
+    """`needs` is the one place that says which key a reply has to carry:
+    the schema's own required key, with the kind of thing under it."""
+    assert chat_replies.needs(chat_replies.PHRASE) == ("phrase", str, "")
+    assert chat_replies.needs(chat_replies.COMPARE) == ("comparison", str, "")
+    assert chat_replies.needs(chat_replies.READOFF) == ("reading", str, "")
+    assert chat_replies.needs(chat_replies.CHOOSE) == ("answer", object, "")
+    assert chat_replies.needs(chat_replies.answer(actions=False)) == (
+        "statements", list, "")
+    # while an action may stand in its place
+    assert chat_replies.needs(chat_replies.answer()) == (
+        "statements", list, "action")
+    # no shape: one object and nothing more
+    assert chat_replies.needs(None) == ("", object, "")
+
+
 # -- which client a role gets -------------------------------------------------
 
 def test_a_server_of_ones_own_is_asked_exactly_as_before(monkeypatch):
@@ -462,6 +522,46 @@ def test_llm_schema_all_sends_the_schema_to_ones_own_server(monkeypatch):
     assert providers.reply_format("llm", "n", shape, {"type": "json_object"}) \
         == {"type": "json_schema", "json_schema": {"name": "n",
                                                    "schema": shape}}
+
+
+def test_grammar_is_the_schema_on_every_provider(monkeypatch):
+    """The promise: the schema is the grammar of the request on a server of
+    one's own as on a hosted API, whatever LLM_SCHEMA says, in the one shape
+    the harvest's field request builds and the hosted adapters read."""
+    shape = {"type": "object", "properties": {"a": {"type": "string"}},
+             "required": ["a"]}
+    inside = {"type": "json_schema",
+              "json_schema": {"name": "n", "schema": shape}}
+    for provider in ("openai-compatible", "openai", "anthropic", "gemini"):
+        monkeypatch.setenv("LLM_PROVIDER", provider)
+        for schema_setting in ("auto", "all", ""):
+            monkeypatch.setenv("LLM_SCHEMA", schema_setting)
+            assert providers.grammar("n", shape) == inside, (
+                provider, schema_setting)
+    # the shape of the harvest's own field request, and what an adapter reads
+    slot = _year()
+    field = runner.field_response_format(slot)
+    assert providers.grammar("field_reply",
+                             field["json_schema"]["schema"]) == field
+    assert base.wanted_schema(providers.grammar("n", shape)) == ("n", shape)
+    # reply_format builds with it exactly where it enforces, and only there
+    monkeypatch.setenv("LLM_PROVIDER", "openai-compatible")
+    monkeypatch.setenv("LLM_SCHEMA", "all")
+    assert providers.reply_format("llm", "n", shape) == providers.grammar(
+        "n", shape)
+
+
+def test_grammar_does_not_ask_the_installation_whether_to_send_the_schema(
+        monkeypatch):
+    """The case built to break it: what reply_format leaves out for a server
+    of one's own (the default), grammar still sends."""
+    monkeypatch.delenv("LLM_SCHEMA", raising=False)
+    monkeypatch.setenv("LLM_PROVIDER", "openai-compatible")
+    shape = {"type": "object"}
+    assert providers.reply_format("llm", "n", shape,
+                                  {"type": "json_object"}) == {
+        "type": "json_object"}
+    assert providers.grammar("n", shape)["type"] == "json_schema"
 
 
 def test_a_provider_nobody_knows_is_named(monkeypatch):
@@ -1255,10 +1355,10 @@ def test_a_model_that_does_not_answer_inside_a_schema_is_refused_at_once(
 
 # -- every request names its reply --------------------------------------------
 
-# The requests that ask for no JSON: a plain-text rescue and the one-token
-# probe of a server of one's own.
-PLAIN = {("docpipe/visuals/vision.py", "call_vision_plain"),
-         ("docpipe/llm_preflight.py", "assert_request_extras")}
+# The requests that ask for no JSON: the one-token probe of a server of one's
+# own. (The plain-text rescue of the visuals stage is gone, and with it the
+# one request that asked for a reply in no schema.)
+PLAIN = {("docpipe/llm_preflight.py", "assert_request_extras")}
 # The layer itself, which passes a stage's request on.
 PASSING_ON = ("docpipe/providers/", "docpipe/extraction/throttle.py")
 
@@ -1347,14 +1447,25 @@ def test_no_extraction_request_gains_a_reply_format_on_its_own_server():
             'providers.formatted("llm", "'), splat
 
 
-def test_the_chat_asks_its_own_server_for_a_json_object_as_before():
+def test_the_chat_names_its_reply_as_the_grammar_on_every_provider(
+        monkeypatch):
+    """The shape of a reply is the grammar of the request, on a server of
+    one's own as on a hosted API and whatever LLM_SCHEMA says: LLM_SCHEMA has
+    no value that turns it off. The one reply with no shape, the answer
+    reshaped into the user's own JSON, is asked as a JSON object."""
     from docpipe.inference import llm_client
     assert llm_client._reply_format() == {"type": "json_object"}
-    token = llm_client._SHAPE.set(chat_replies.COMPARE)
-    try:
-        assert llm_client._reply_format() == {"type": "json_object"}
-    finally:
-        llm_client._SHAPE.reset(token)
+    for provider in ("openai-compatible", "openai", "anthropic", "gemini"):
+        monkeypatch.setenv("LLM_PROVIDER", provider)
+        for schema_setting in ("auto", "all", ""):
+            monkeypatch.setenv("LLM_SCHEMA", schema_setting)
+            token = llm_client._SHAPE.set(chat_replies.COMPARE)
+            try:
+                assert llm_client._reply_format() == providers.grammar(
+                    *chat_replies.COMPARE), (provider, schema_setting)
+                assert llm_client._reply_format()["type"] == "json_schema"
+            finally:
+                llm_client._SHAPE.reset(token)
 
 
 # -- the gate, through the clients that carry it --------------------------------

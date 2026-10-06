@@ -89,12 +89,23 @@ class ProcessingStats:
     skipped_missing: int = 0
     captions_generated: int = 0
     qa_failed_tables: int = 0  # extracted but flagged low-quality by the QA gate
-    # Answered on the plain-text attempt after the JSON path gave up.
-    rescued_tables: int = 0
-    rescued_figures: int = 0
+    # Why the items that ended without content have none, counted in items:
+    # {cause: tables and figures}. The causes are those of `reading.Hole`.
+    hole_causes: dict = field(default_factory=dict)
+
+    def hole(self, kind: str, cause: str) -> None:
+        """Count one item that ended without content, by *kind* ("table" or
+        "figure") and by cause. The caller holds the lock of the shared stats."""
+        if kind == "table":
+            self.failed_tables += 1
+        else:
+            self.failed_figures += 1
+        self.hole_causes[cause] = self.hole_causes.get(cause, 0) + 1
 
     def summary(self) -> str:
         sep = "=" * 60
+        causes = ", ".join(f"{cause} {n}" for cause, n
+                           in sorted(self.hole_causes.items()))
         return (
             f"\n{sep}\n"
             f"Image Processing – Results\n"
@@ -103,8 +114,9 @@ class ProcessingStats:
             f" ({self.failed_tables} failed, {self.qa_failed_tables} low-QA)\n"
             f"Figures: {self.processed_figures}/{self.total_figures} succeeded"
             f" ({self.failed_figures} failed)\n"
-            f"Rescued as plain text: {self.rescued_tables} tables,"
-            f" {self.rescued_figures} figures\n"
+            f"Items without content: {self.failed_tables} table(s), "
+            f"{self.failed_figures} figure(s)"
+            f"{f' ({causes})' if causes else ''}\n"
             f"Missing image files: {self.skipped_missing}\n"
             f"Captions generated:  {self.captions_generated}\n"
             f"{sep}"

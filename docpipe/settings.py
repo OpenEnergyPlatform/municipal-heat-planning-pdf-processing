@@ -463,10 +463,10 @@ SETTINGS = (
     S("LLM_ENABLE_THINKING", "llm.enable_thinking", "flag", "0",
       "Allow a thinking phase before each reply; off keeps replies short "
       "and complete.",
-      stages=("preprocess", "refine", "visuals", "extract")),
+      stages=("preprocess", "refine", "visuals", "extract", "chat")),
     S("LLM_MAX_RETRIES", "llm.max_retries", "int", "4",
-      "Chat only: retries of one model call after a malformed reply or a "
-      "transport error.",
+      "Chat only: attempts per request after an unreadable reply (asked "
+      "again with its cause) or a transport error.",
       stages=("chat",)),
     S("LLM_MAX_TOKENS", "llm.max_tokens", "int", None,
       "Reply token limit. chat: 2048; refinement: from the prompt, else "
@@ -485,15 +485,15 @@ SETTINGS = (
     S("LLM_REASONING_EFFORT", "llm.reasoning_effort", "str", "low",
       "Reasoning effort sent with every request; empty, off or none sends "
       "none.",
-      stages=("preprocess", "refine", "visuals", "extract")),
+      stages=("preprocess", "refine", "visuals", "extract", "chat")),
     S("LLM_REQUEST_OPTIONS", "llm.request_options", "str", None,
       "JSON object laid over every request body of a hosted text model: "
       "what only that API takes.",
       stages=("refine", "extract", "chat")),
     S("LLM_SCHEMA", "llm.schema", "str", "auto",
-      "auto: one's own server gets a reply schema where it always did; all: "
-      "with every JSON request.",
-      stages=("preprocess", "refine", "visuals", "extract", "chat")),
+      "auto: own server gets a schema where it did; all: every JSON "
+      "request. Refine, visuals, pages, chat: always.",
+      stages=("extract", "chat")),
     S("LLM_STUB_MODE", "llm.stub_mode", "flag", None,
       "Chat answers with canned replies and never calls the model, for "
       "testing.",
@@ -626,10 +626,6 @@ SETTINGS = (
       "JSON object laid over every request body of a hosted vision model: "
       "what only that API takes.",
       stages=("preprocess", "visuals")),
-    S("VLM_RUNAWAY_CELL_RUN", "vlm.runaway_cell_run", "int", "25",
-      "Empty table cells in a row that mark a runaway transcription to "
-      "retry.",
-      stages=("visuals",)),
     S("VLM_TIMEOUT", "vlm.timeout", "float", "180",
       "Seconds before one vision request is given up.",
       stages=("preprocess", "visuals")),

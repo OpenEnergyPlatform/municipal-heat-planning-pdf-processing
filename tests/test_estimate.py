@@ -129,7 +129,7 @@ def _server(monkeypatch, lose=()):
     Returns the titles of the windows asked for."""
     asked: list = []
 
-    def call(window, client=None, prev_ctx=None):
+    def call(window, client=None, prev_ctx=None, again=False):
         asked.append(window[0]["title"])
         if window[0]["title"] in lose:      # a list a test may empty again
             return R.NOT_SERVED
@@ -138,7 +138,7 @@ def _server(monkeypatch, lose=()):
     monkeypatch.setattr(R, "_call_llm", call)
     monkeypatch.setattr(R, "_make_splitter", lambda client: None)
     monkeypatch.setattr(R, "split_oversized",
-                        lambda sections, ask=None: sections)
+                        lambda sections, ask=None, holes=None: sections)
     return asked
 
 

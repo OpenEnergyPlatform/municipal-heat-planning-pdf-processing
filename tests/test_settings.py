@@ -134,6 +134,19 @@ def test_a_name_read_through_a_constant_is_seen_as_read():
         assert through_a_constant in found, through_a_constant
 
 
+def test_the_stages_that_always_send_their_schema_are_not_asked_about_it():
+    """Refinement, the visuals stage and page transcription send their reply
+    schema as the grammar of every request, so LLM_SCHEMA decides nothing for
+    them: the list says which commands it does decide for, and only the
+    provider layer (the harvest's and the chat's requests) reads it."""
+    setting = settings.BY_ENV["LLM_SCHEMA"]
+    assert tuple(setting.stages) == ("extract", "chat")
+    assert "always" in setting.help
+    sites = _names_read()["LLM_SCHEMA"]
+    assert {site.split(":")[0] for site in sites} == {
+        "docpipe/providers/__init__.py"}, sites
+
+
 def test_every_declared_setting_is_named_by_the_code():
     """Some names are read through a constant or a helper, which the scan
     above cannot follow. Every one is at least written out somewhere."""

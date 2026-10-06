@@ -5,8 +5,8 @@ Generated from `docpipe/artifacts.py` by `scripts/build_docs.py`: the names belo
 ## The per-document results directory
 
 Preprocessing, refinement, visuals and chunking each run as their own
-command-line invocation (`docpipe/preprocessing/pipeline.py:548`,
-`docpipe/refinement/pipeline.py:260`, `docpipe/visuals/pipeline.py:539`,
+command-line invocation (`docpipe/preprocessing/pipeline.py:659`,
+`docpipe/refinement/pipeline.py:312`, `docpipe/visuals/pipeline.py:611`,
 `docpipe/chunking/pipeline.py:424`, each its own `__main__` entry point).
 Nothing survives between invocations except what a stage writes to disk,
 so the files below let a later run resume or reuse an earlier one's work.
@@ -15,7 +15,7 @@ Every PDF preprocessing takes in gets one directory under a profile's
 `processed_dir` (`<data root>/<profile>/pdf/processed`,
 `Profile.processed_dir`, `docpipe/profile.py:308-310`), named after the
 PDF's filename stem and kept relative to the input folder
-(`docpipe/preprocessing/pipeline.py:240-242`). Inside it sit two
+(`docpipe/preprocessing/pipeline.py:263-265`). Inside it sit two
 subdirectories, named once by `docpipe/artifacts.py` rather than spelled
 out again per stage: `results/` (`DIR_RESULTS`) for the JSON files a
 stage reads and writes, and `images/` (`DIR_IMAGES`) for the cropped
@@ -33,7 +33,7 @@ and a document is known by its directory's name. Two directories of one name
 under different subfolders are refused with both places named
 (`DuplicateDocumentName`, a `ValueError`), and preprocessing refuses two such
 PDFs before the layout model has run over either
-(`docpipe/preprocessing/pipeline.py:210`). Extraction and the chat still look
+(`docpipe/preprocessing/pipeline.py:233`). Extraction and the chat still look
 for a document's crops at `<processed root>/<name>/images/`, so a document
 below a subfolder reaches stages 4 to 6 but shows and attaches no crops there.
 
@@ -49,13 +49,17 @@ detection) have both completed with no failed page; it caches their
 combined result, Stage 1's text blocks together with Stage 2's table and
 image blocks, and doubles as a resume cache so a `--rebuild-stage3` run
 or a later re-run can skip both stages
-(`docpipe/preprocessing/pipeline.py:79-80, 101-126`). Separately, only
+(`docpipe/preprocessing/pipeline.py:83-84, 111-136`). Separately, only
 with `transcribe_missing_text=True` (`--transcribe-missing-text`, off by
 default, the only part of preprocessing needing a model server),
 preprocessing writes `page_transcription_report.json`, recording how many
-pages needed transcription from a rendered image, a count that can be
-zero (`docpipe/preprocessing/pipeline.py:75, 134-135, 376-379, 476-480`;
-see [preprocessing](stages/preprocessing.md)). Stage 3 reads only the
+pages needed transcription from a rendered image (a count that can be
+zero), how many got text, how many held no prose, and how many failed, with
+the cause of each failed page under `failed_pages`
+(`docpipe/preprocessing/pipeline.py:77, 144-148, 413-418, 573-577`;
+see [preprocessing](stages/preprocessing.md)). A run that transcribed a page
+deletes the `sections.json` built before it, so that stage 3 is built again
+from the pages that now have text. Stage 3 reads only the
 in-memory pages object, whatever text it holds by then, and writes
 `sections.json` (`docpipe/preprocessing/stage3_structure.py:291`); it
 never opens `page_transcription_report.json` itself. That file is read
@@ -65,15 +69,19 @@ later by chunking's `enrich_page_source`, backfilling a
 
 [Text refinement](stages/refinement.md) reads `sections.json` as its
 only accepted input and writes `sections_refined.json` plus
-`refinement_report.json`, recording what it could not refine. A pass in
+`refinement_report.json`, recording what it could not refine: the windows
+that kept their original text, each with the cause of its hole, and the
+sections it had to cut mechanically. A window the model could not read keeps its
+original text in `sections_refined.json`, and `sections_refined.partial.json`
+stays beside it until the next run has read that window. A pass in
 which the model server did not serve a window writes
 `sections_refined.partial.json` instead of `sections_refined.json`; the
 partial file names the missing windows, and the report is left as it was
-(`docpipe/refinement/refine.py:1123-1223`). A pass whose cut of an oversized
+(`docpipe/refinement/refine.py:1316-1450`). A pass whose cut of an oversized
 section was not served writes neither. [Reading the pictures](stages/visuals.md) reads
 the crops left in `images/` together with whichever section text is
 available, preferring `sections_refined.json` over `sections.json`, and
-writes `visuals.json` (`docpipe/visuals/pipeline.py:61-70`).
+writes `visuals.json` (`docpipe/visuals/pipeline.py:62-71`).
 [Chunking](stages/chunking.md)'s merge step folds `sections_refined.json`
 and `visuals.json` into `document.json`, which a separate load step reads
 into the database (`docpipe/chunking/merge.py:71-147`).
@@ -99,9 +107,12 @@ section's `content` is its text segments, and one `[id]` placeholder where a tab
 or figure stands, joined by single spaces. A `bbox` is a list of `[x0, y0, x1,
 y1]` rectangles in PDF points, origin top left. An empty `path` does not read as
 no crop: stage 5 joins it to the document's directory, fails on reading that as an
-image, logs the table as crashed and leaves it without a markdown. Stage 5 keeps
-the result of its table check for every table the model transcribed as JSON (see
-[reading the pictures](stages/visuals.md)).
+image, logs the table as crashed, counts it as an item without content (`vlm_why` is
+`error`) and leaves it without a markdown. Stage 5 keeps
+the result of its table check for every table the model transcribed, and an item
+the model gave no object for has neither `markdown` nor `description` and says
+why in `vlm_why`, one of twelve causes (see [reading the
+pictures](stages/visuals.md)).
 
 ## How a later stage finds them
 
@@ -111,7 +122,7 @@ is present, so a document's own directory is the only record of how far
 it has progressed. That check is safe because every write is atomic,
 each stage's `dump_json_atomic` writing a temp file and swapping it in
 with `os.replace` (`docpipe/preprocessing/config.py:287-302`,
-`docpipe/refinement/config.py:171-191`, `docpipe/visuals/
+`docpipe/refinement/config.py:190-210`, `docpipe/visuals/
 config.py:16-31`, `docpipe/chunking/merge.py:136-146`), so a killed job
 leaves the old file or none, never a partial one.
 
@@ -119,7 +130,7 @@ A missing upstream file is tolerated two different ways. Within a single
 run, visuals reads whichever of `sections_refined.json` or
 `sections.json` exists, and merge treats `visuals.json` as optional but
 requires `sections_refined.json`, returning `None` if that is missing
-(`docpipe/visuals/pipeline.py:61-70`,
+(`docpipe/visuals/pipeline.py:62-71`,
 `docpipe/chunking/merge.py:89-106`). Across a batch, refinement's,
 visuals' and merge's batch entry points list the document directories
 under the root, at any depth, that already carry the needed file, so a
@@ -128,18 +139,18 @@ left out of the run rather than counted as a failure; refinement and
 visuals warn only when the filter leaves no candidates at all, not once per
 excluded document, while merge also warns once, naming up to twenty
 directories that carry `sections.json` and no `sections_refined.json`
-(`docpipe/refinement/pipeline.py:83-98`,
-`docpipe/visuals/pipeline.py:331-349`,
+(`docpipe/refinement/pipeline.py:86-102`,
+`docpipe/visuals/pipeline.py:389-407`,
 `docpipe/chunking/merge.py:160-181`). A missing and a corrupted file are
 not alike: `_load_pages_cache` treats an unreadable
 `pages.json` as absent and re-extracts, but the readers of
 `sections.json`, `sections_refined.json` and `visuals.json` call
 `json.load` unguarded and raise on a truncated file
-(`docpipe/preprocessing/pipeline.py:50-61`,
-`docpipe/refinement/refine.py:1152-1153, 1154-1155`,
+(`docpipe/preprocessing/pipeline.py:52-63`,
+`docpipe/refinement/refine.py:1357-1358, 1366-1367`,
 `docpipe/chunking/merge.py:96-102`). The one reader that guards is
 `_read_partial`, which treats an unreadable `sections_refined.partial.json`
-as absent (`docpipe/refinement/refine.py:1237-1249`).
+as absent (`docpipe/refinement/refine.py:1464-1476`).
 
 Merge decides whether its cached `document.json` is reusable by
 comparing modification times, not existence, since visuals rewrites
@@ -154,8 +165,8 @@ Every check here can be bypassed, though not by the same knobs.
 Refinement and visuals each take a `force` argument, redoing the stage
 unconditionally, and a `force_stale` argument, redoing it only when the
 prompt has changed, surfaced as `--force`/`--force-stale`
-(`docpipe/refinement/pipeline.py:48-49, 62-69`,
-`docpipe/visuals/pipeline.py:120-121, 140-148`); a forced refinement
+(`docpipe/refinement/pipeline.py:48-50, 65-74`,
+`docpipe/visuals/pipeline.py:128-129, 156-164`); a forced refinement
 resumes an unfinished pass that agrees with its input, prompts and window
 size, instead of discarding it. Merge takes only its own
 `force`, surfaced as `--force` (`docpipe/chunking/merge.py:71, 84`); it
@@ -164,7 +175,7 @@ has no staleness check to bypass.
 Separately, `_index.json` at the processed root records, after every PDF
 in a folder run, which output directory holds its results and how many
 sections it produced, so an interrupted run leaves a readable record of
-what finished (`docpipe/preprocessing/pipeline.py:262, 273-287`).
+what finished (`docpipe/preprocessing/pipeline.py:291, 303-318`).
 
 ## What `docpipe/artifacts.py` says
 

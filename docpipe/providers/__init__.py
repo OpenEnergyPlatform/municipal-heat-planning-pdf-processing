@@ -17,7 +17,9 @@ a local one.
 
 A hosted model is asked for JSON only inside a reply schema, which the API
 enforces while it generates (`reply_format`). A server of one's own gets the
-schema where it always got one, and everywhere with LLM_SCHEMA=all.
+schema where it always got one, and everywhere with LLM_SCHEMA=all. The
+requests of refinement, of the visuals stage and of page transcription send
+theirs as the grammar of the reply on every provider (`grammar`).
 
 Author: Felix Vossel
 """
@@ -70,6 +72,18 @@ def enforces_schema(role: str) -> bool:
     return os.environ.get("LLM_SCHEMA", "auto").strip().lower() == "all"
 
 
+def grammar(name: str, schema: dict) -> dict:
+    """The `response_format` that makes *schema* the grammar of a reply.
+
+    For a request that always sends its schema, whatever the server is: the
+    server of one's own and the hosted API get the same dict, and the hosted
+    adapter makes it strict itself (see `base.enforced`). `reply_format` is
+    this, for a request that sends it only where the installation says so.
+    """
+    return {"type": "json_schema",
+            "json_schema": {"name": name, "schema": schema}}
+
+
 def reply_format(role: str, name: str, schema: dict, otherwise=None):
     """The `response_format` of a request whose reply is *schema*.
 
@@ -78,8 +92,7 @@ def reply_format(role: str, name: str, schema: dict, otherwise=None):
     getting that unless LLM_SCHEMA=all.
     """
     if enforces_schema(role):
-        return {"type": "json_schema",
-                "json_schema": {"name": name, "schema": schema}}
+        return grammar(name, schema)
     return otherwise
 
 
@@ -194,5 +207,6 @@ def timed_out(exc: BaseException) -> bool:
 
 __all__ = ["HOSTED", "OPENAI_COMPATIBLE", "PROVIDERS", "ROLES", "Endpoint",
            "ProviderError", "ProviderTimeout", "client", "endpoint",
-           "enforces_schema", "formatted", "gate", "hosted", "provider",
-           "replaying", "reply_format", "request_options", "timed_out"]
+           "enforces_schema", "formatted", "gate", "grammar", "hosted",
+           "provider", "replaying", "reply_format", "request_options",
+           "timed_out"]

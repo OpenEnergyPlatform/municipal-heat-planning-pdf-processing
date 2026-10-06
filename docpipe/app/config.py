@@ -109,7 +109,8 @@ LEXICAL = os.environ.get("INFERENCE_LEXICAL", "1") != "0"
 # "Models" are preconfigured agents; list them with GET {LLM_BASE_URL}/models.
 # HF tokenizer id used only for token-budget accounting. May differ from the
 # served model name; falls back to a char/4 heuristic if it cannot be loaded.
-# Retry budget for malformed-JSON / transport errors on a SINGLE LLM call.
+# Attempts of a SINGLE LLM call: a reply that cannot be read is asked again
+# with its cause named, a transport error after a pause.
 # Distinct from MAX_CHUNK_ATTEMPTS below.
 # When truthy, llm_client returns canned answers instead of calling the endpoint.
 

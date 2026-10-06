@@ -16,6 +16,16 @@ A hosted API is asked a third: does the model answer inside a reply schema?
 That is the only way a hosted model is asked for JSON (see `providers`), so
 a model that cannot is refused here and not after the first document.
 
+A stage that sends its reply schema as the grammar of every request
+(refinement, the visuals stage, page transcription) has each of its schemas
+put to the server once, as that stage will send it (`assert_reply_schemas`): a
+server that refuses one refuses every request of the run.
+
+What the preflight learns about the window stays with the run: a unit whose
+reply was cut off and that cannot be split is asked once more with as much
+room as the window leaves (`further_room`), and the stage that asks has the
+number from here and not from a second request to the server.
+
 And one thing every stage agrees with the server about before it asks
 anything: `request_extras`, the reasoning settings. They live here because
 they are the same for every stage and because getting them wrong fails the
@@ -41,6 +51,48 @@ class PreflightError(RuntimeError):
 
 # The flag a self-hosted server is started with to set its context size.
 CONTEXT_FLAG = "--max-model-len"
+
+# The window each role's server reported at its preflight, in tokens, None
+# where it reported none. Written by `assert_serving` and by nothing else;
+# read where a unit whose reply was cut off is given more room. A stage that
+# was never preflighted has no entry, which reads as not known.
+_WINDOWS: dict = {}
+
+
+def _keep_window(role: str, window: Optional[int]) -> Optional[int]:
+    _WINDOWS[role] = window
+    return window
+
+
+def served_window(role: str = "llm") -> Optional[int]:
+    """The window, in tokens, that the server of *role* reported at this run's
+    preflight. None where it reported none (a hosted model whose window is its
+    own) and where nothing was asked (a caller that ran no preflight)."""
+    return _WINDOWS.get(role)
+
+
+def further_room(asked: int, *, reply: int, budget: Optional[int],
+                 role: str = "llm") -> Optional[int]:
+    """The token limit of the one further attempt of a unit whose reply was cut
+    off at *asked* tokens and that cannot be split: twice what it asked, or as
+    much as the served window leaves, whichever is smaller. None when the
+    window leaves no more room than the request had; nothing is sent then.
+
+    *budget* is the stage's largest request in tokens (the prompt, the largest
+    input and ONE largest reply, *reply* tokens), which the preflight checked
+    the window against. What the window holds beyond it is free for every
+    request of the run, so a request may have the reply the budget counts plus
+    that slack, and never more than twice what it asked:
+    min(2 * asked, reply + window - budget). A request that asked for less than
+    *reply* is doubled out of the reply alone.
+
+    Where the window is not known, or the caller has no budget, the room is
+    twice."""
+    window = served_window(role)
+    if window is None or budget is None:
+        return 2 * asked
+    more = min(2 * asked, reply + window - budget)
+    return more if more > asked else None
 
 
 # What every chat request of this pipeline carries. Thinking off, and where
@@ -200,23 +252,82 @@ def assert_reply_schema(base_url: str, api_key: str, model: str, *,
     return None
 
 
+def assert_reply_schemas(base_url: str, api_key: str, model: str,
+                         shapes: dict, *, what: str = "this stage",
+                         role: str = "llm") -> Optional[str]:
+    """Raise PreflightError unless the server takes every reply schema in
+    *shapes* ({name: schema}) as the grammar of a request.
+
+    A stage that sends its schema with every request has no other way to ask
+    for JSON, so a server that refuses the schema refuses every request of
+    the run. One request of 32 tokens per shape, with the stage's own schema
+    and the reasoning settings every request carries; that the capped reply
+    is cut short is no matter, it is not read. Only a 4xx that is not a 429
+    is a refusal: a server that is busy or down gives no verdict, and the run
+    asks anyway.
+
+    None when every shape was taken; else why one could not be asked.
+    """
+    client = providers.client(role, base_url=base_url, api_key=api_key,
+                              timeout=60.0, max_retries=0)
+    unasked = []
+    for name, schema in shapes.items():
+        try:
+            client.chat.completions.create(
+                model=model, max_tokens=32, temperature=0,
+                messages=[{"role": "user",
+                           "content": "Answer with a JSON object."}],
+                response_format=providers.grammar(name, schema),
+                extra_body=request_extras())
+        except Exception as exc:
+            status = status_of(exc)
+            if not (isinstance(status, int) and 400 <= status < 500
+                    and status != 429):
+                log.warning("%s: could not probe the reply schema %s (%s); "
+                            "asking anyway", base_url, name, exc)
+                unasked.append(f"{name}: {exc}")
+                continue
+            raise PreflightError(
+                f"{base_url} refuses the reply schema {name!r} that {what} "
+                f"sends to {model} (HTTP {status}).\n  {exc}\n"
+                f"  the server has to take a JSON schema as the "
+                f"response_format of a request: {what} asks for JSON in no "
+                f"other way, so every one of its requests would be refused") \
+                from exc
+    if unasked:
+        return "the probe was not answered: " + "; ".join(unasked)
+    log.info("Preflight ok: %s takes the %d reply schema(s) %s sends: %s",
+             model, len(shapes), what, ", ".join(shapes))
+    return None
+
+
 def assert_serving(base_url: str, api_key: str, model: str,
                    required_tokens: int, *, what: str = "this stage",
                    flag: str = CONTEXT_FLAG,
-                   role: str = "llm") -> Optional[int]:
+                   role: str = "llm",
+                   shapes: Optional[dict] = None) -> Optional[int]:
     """Raise PreflightError unless *base_url* serves *model* with room for
     *required_tokens*. Logs both numbers on success, so they end up in the
     job's output file where the next person can read them. Returns the
     server's window, or None when it does not report one; such a server is
-    asked the request fields all the same."""
+    asked the request fields all the same. The window is kept for the run
+    (`served_window`).
+
+    *shapes* ({name: schema}) are the reply schemas the stage is about to send
+    as the grammar of its requests: the server is asked each one before the
+    first document (`assert_reply_schemas`)."""
     if providers.replaying():
         # No server: the window is the one the recorded run was planned
         # for, and the run is planned for it again.
         from docpipe.providers import cassette
-        return cassette.player().window(model)
+        return _keep_window(role, cassette.player().window(model))
     if providers.hosted(role):
-        return _hosted_serving(base_url, api_key, model, required_tokens,
-                               what=what, role=role)
+        window = _hosted_serving(base_url, api_key, model, required_tokens,
+                                 what=what, role=role)
+        if shapes:
+            assert_reply_schemas(base_url, api_key, model, shapes, what=what,
+                                 role=role)
+        return _keep_window(role, window)
     served, max_len = serving_limits(base_url, api_key, role=role)
 
     if model not in served:
@@ -244,9 +355,12 @@ def assert_serving(base_url: str, api_key: str, model: str,
     # size too: it is the likeliest to refuse them (a gateway, a local
     # runner).
     assert_request_extras(base_url, api_key, model, what=what, role=role)
+    if shapes:
+        assert_reply_schemas(base_url, api_key, model, shapes, what=what,
+                             role=role)
     from docpipe.providers import cassette
     cassette.note_limits(model, max_len)
-    return max_len
+    return _keep_window(role, max_len)
 
 
 def assert_request_extras(base_url: str, api_key: str, model: str, *,

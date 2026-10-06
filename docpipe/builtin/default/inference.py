@@ -20,9 +20,6 @@ PHRASES = {
     "history_phrase": "Search anchor",
     "history_answer": "Answer",
 
-    "empty_reply": "Your reply was empty. Reply with valid JSON.",
-    "parse_error": "Parse error: {error}. Reply with NOTHING BUT a valid JSON object.",
-
     "code_heading": "Code executed",
     "exec_stdout": "Execution result (stdout)",
     "exec_empty": "(no output)",
@@ -106,6 +103,18 @@ UI = {
     "nothing_backed": ("The examined sources hold nothing that backs an "
                        "answer to this question."),
     "no_answer_context": "(no backed answer found)",
+    "statements_dropped": ("⚠️ {dropped} of {made} statement(s) removed: "
+                           "their quote does not stand in the source they "
+                           "cite."),
+    "replies_unreadable": ("⚠️ {n} request(s) to the model could not be read "
+                           "({causes}). What they would have said is missing "
+                           "from this answer."),
+    "answer_unreadable": ("The model's replies could not be read ({causes}). "
+                          "Nothing can be said about what the sources "
+                          "contain."),
+    "computed_from": ("🧮 Calculated: code and output of run {n} under "
+                      "“Show calculation”."),
+    "run_label": "Run {n}",
     "compare_dropped": "Not asked (limit {limit}): {names}",
     "compare_note": ("⚖️ Comparison of the answers, without sources of its "
                      "own — the evidence stands with each answer."),

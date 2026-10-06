@@ -142,10 +142,7 @@ def test_a_profile_that_extends_nothing_gets_nothing(tmp_path, clean):
 # the built-in profile that is neither on a profile's list nor a file of it
 # fails below, so none is answered for, silently, by the English one.
 INHERITED = {
-    "scenarios": ("inference/answer_spec_json", "inference/answer_spec_text",
-                  "inference/envelope_correction", "inference/json_format",
-                  "inference/readoff_correction", "inference/revise",
-                  "visuals/caption_keep"),
+    "scenarios": ("inference/json_format", "visuals/caption_keep"),
     "kwp": ("visuals/caption_keep",),
 }
 
@@ -219,7 +216,7 @@ def _folder_of_copies(tmp_path):
 
 
 def test_the_guard_of_the_prompts_fails_where_the_promise_is_broken(tmp_path):
-    inherited = ("inference/revise", "visuals/caption_keep")
+    inherited = ("inference/json_format", "visuals/caption_keep")
     home = _folder_of_copies(tmp_path)
     # a profile that holds every prompt and lists none passes: it can pass
     assert _prompt_faults(home, ()) == []
@@ -234,39 +231,29 @@ def test_the_guard_of_the_prompts_fails_where_the_promise_is_broken(tmp_path):
     assert _prompt_faults(home, inherited) == faults
     # a listed one that reappears with other bytes is named, and so is one
     # that reappears as it was: then it is not inherited any more
-    changed = home / "prompts" / "inference" / "revise.md"
+    changed = home / "prompts" / "inference" / "json_format.md"
     changed.write_bytes((DEFAULT / "prompts" / "inference"
-                         / "revise.md").read_bytes() + b"\nand more")
+                         / "json_format.md").read_bytes() + b"\nand more")
     again = home / "prompts" / "visuals" / "caption_keep.md"
     shutil.copyfile(DEFAULT / "prompts" / "visuals" / "caption_keep.md", again)
     got = _prompt_faults(home, inherited)
     assert [fault.split(":")[0] for fault in got] == [
-        "inference/revise", "refinement/split", "visuals/caption_keep"]
+        "inference/json_format", "refinement/split", "visuals/caption_keep"]
     assert "other bytes" in got[0] and "the built-in bytes" in got[2]
     # a name on the list that no built-in prompt has is a misspelling
     assert _prompt_faults(home, inherited + ("visuals/caption_kept",))[-1] \
         .startswith("visuals/caption_kept:")
 
 
-# The eight prompts the copies were taken out for, as the file the copy was:
+# The prompts the copies were taken out for, as the file the copy was:
 # its sha256 is what a stage records, and no front matter lies before the
 # text, so it is also the text a model reads. Taken from the files before
 # they were deleted, and equal to the built-in ones then too. A built-in
 # prompt that is changed on purpose changes what these profiles ask, and
 # that is where a change of it has to be entered.
 BEFORE = {
-    ("scenarios", "inference/answer_spec_json"):
-        "1f64ff917cecd7553f7d9d81e84f71f51c40c7cb063f1c8179593097c9023444",
-    ("scenarios", "inference/answer_spec_text"):
-        "cee0a6c66804c5db914fab17043ff7a0b2c336f12220aba2d808166e46c79b83",
-    ("scenarios", "inference/envelope_correction"):
-        "a182a5054a1fc0f69e78783a39d32f6ca47611f0ff75b84362811aa7ffb22580",
     ("scenarios", "inference/json_format"):
         "b65239b69d87e432452c88d8c339fad4ea359d19974274d2d571ed139ec5e139",
-    ("scenarios", "inference/readoff_correction"):
-        "4eee73db9d2b2f2f7a44813d754647d5a63ac55acd9f19a5f7d22513fef578f5",
-    ("scenarios", "inference/revise"):
-        "a5f80a14bb2821872aab281af7f6b0808668e1f98127bcad3bdbc5c90da3cd2f",
     ("scenarios", "visuals/caption_keep"):
         "78b24d39d4af63c1f2acde81cdc7e4d411f85a8ab0fe6005e19f442ad540811f",
     ("kwp", "visuals/caption_keep"):

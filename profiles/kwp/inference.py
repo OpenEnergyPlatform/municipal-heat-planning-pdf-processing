@@ -40,9 +40,6 @@ PHRASES = {
     "history_phrase": "Suchanker",
     "history_answer": "Antwort",
 
-    "empty_reply": "Deine Antwort war leer. Antworte mit gültigem JSON.",
-    "parse_error": "Parse-Fehler: {error}. Antworte mit NUR einem gültigen JSON-Objekt.",
-
     "code_heading": "Ausgeführter Code",
     "exec_stdout": "Ausführungsergebnis (stdout)",
     "exec_empty": "(keine Ausgabe)",
@@ -127,6 +124,18 @@ UI = {
     "nothing_backed": ("In den geprüften Quellen wurde keine belegbare "
                        "Information zum Auftrag gefunden."),
     "no_answer_context": "(keine belegte Antwort gefunden)",
+    "statements_dropped": ("⚠️ {dropped} von {made} Aussage(n) entfernt: "
+                           "Ihr Zitat steht nicht in der Quelle, die sie "
+                           "angeben."),
+    "replies_unreadable": ("⚠️ {n} Anfrage(n) an das Modell waren nicht "
+                           "lesbar ({causes}). Was sie geliefert hätten, "
+                           "fehlt in dieser Antwort."),
+    "answer_unreadable": ("Die Antworten des Modells waren nicht lesbar "
+                          "({causes}). Über den Inhalt der Quellen lässt "
+                          "sich damit nichts sagen."),
+    "computed_from": ("🧮 Berechnet: Code und Ausgabe von Lauf {n} unter "
+                      "„Berechnung anzeigen“."),
+    "run_label": "Lauf {n}",
     "compare_dropped": "Nicht abgefragt (Obergrenze {limit}): {names}",
     "compare_note": ("⚖️ Vergleich der Antworten, ohne eigene Quellen — die "
                      "Belege stehen bei den einzelnen Antworten."),

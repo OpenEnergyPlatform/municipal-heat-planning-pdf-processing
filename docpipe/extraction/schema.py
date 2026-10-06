@@ -282,7 +282,9 @@ def _slot_properties(name: str, slot, doc: str) -> dict:
             "description": f"Who re-read '{name}': the position of its entry "
                            f"in the `producers` list of the stamp beside the "
                            f"harvest. Written by a top-up for each coordinate "
-                           f"it re-read, never by the harvest, so a missing "
+                           f"it re-read, and by a pass that appended a "
+                           f"parameter for each coordinate of the rows it "
+                           f"wrote, never by the harvest, so a missing "
                            f"key means the harvest read it. A position the "
                            f"stamp has no entry for (the stamps were "
                            f"deleted) means nobody can say. Recorded and "
@@ -527,7 +529,13 @@ def harvest_schema(spec) -> dict:
                                "serializer and a second reading is a later "
                                "pass, so neither is counted here. The "
                                "levels are a floor, and the graph side "
-                               "recomputes them.",
+                               "recomputes them. A pass that appended a "
+                               "parameter built this line again over every "
+                               "tuple and refusal the file holds; the "
+                               "refusals of the first pass are counted as "
+                               "they were stored and are not revisited, so "
+                               "a value refused then for want of that "
+                               "parameter stays in the count.",
                 "properties": {
                     "kind": {"const": "summary"},
                     "document_id": {"type": "integer"},
@@ -659,7 +667,8 @@ def stamp_schema() -> dict:
                 "type": "array",
                 "description": "Every pass that wrote into this harvest, in "
                                "order: the harvest, then each top-up that "
-                               "rewrote the file, each remap that carried a "
+                               "rewrote the file, each pass that appended a "
+                               "new parameter, each remap that carried a "
                                "key forward and each review that changed a "
                                "row. Entries are only ever added, so a "
                                "position is stable: a coordinate a top-up "
@@ -674,7 +683,18 @@ def stamp_schema() -> dict:
                         "provider": {"type": "string"},
                         "prompts": {"type": "object"},
                         "docpipe": {"type": "string"},
-                        "utc": {"type": "string"}},
+                        "utc": {"type": "string"},
+                        "parameters": {
+                            "type": "array", "items": {"type": "string"},
+                            "description": "A pass that appended parameters "
+                                           "to a stored harvest: their "
+                                           "URIs."},
+                        "frame": {
+                            "type": "string",
+                            "description": "A pass that appended parameters "
+                                           "to a stored harvest: where the "
+                                           "frame's pairs of the document "
+                                           "came from."}},
                     "required": ["pass"], "additionalProperties": False}},
             "page_text_transcribed": {
                 "type": ["integer", "null"],

@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "docpipe visuals.json (what stage 5 hands on)",
-  "description": "results/visuals.json of one document: the tables and figures of its sections, each with what the vision model read off its crop. Stage 5 writes it and reads it back as its cache; the merge in chunking replaces each table and figure of sections_refined.json by the item of the same id found here, and the database stores the result. Only the tables and figures of the sections are read from this file; the other keys of a section are carried over from the input stage 5 was given, and the merge takes its sections from sections_refined.json. A table or figure is done when it has a markdown or a description, and an item without one is asked again by the next run. Keys not listed here are carried or ignored, none is read. No stage checks a file against this schema.",
+  "description": "results/visuals.json of one document: the tables and figures of its sections, each with what the vision model read off its crop. Stage 5 writes it and reads it back as its cache; the merge in chunking replaces each table and figure of sections_refined.json by the item of the same id found here, and the database stores the result. Only the tables and figures of the sections are read from this file; the other keys of a section are carried over from the input stage 5 was given, and the merge takes its sections from sections_refined.json. A table or figure is done when it has a markdown or a description, and an item without one (which says why in vlm_why) is asked again by the next run. Keys not listed here are carried or ignored, none is read. No stage checks a file against this schema.",
   "type": "object",
   "properties": {
     "version": {
@@ -41,6 +41,14 @@
       "minItems": 1,
       "description": "A list of rects, as in sections.json. Carried over from the input and stored in Tables.bbox and Images.bbox."
     },
+    "vlm_why": {
+      "enum": ["cut_off", "reasoning_only", "empty", "no_object", "syntax", "outside_text", "not_an_object", "missing_key", "wrong_shape", "refused", "not_served", "error"],
+      "description": "Why the item has no markdown or description: the model's reply was not the one JSON object that was asked for (no_object, syntax, outside_text, not_an_object, missing_key, empty, reasoning_only), it was cut off at its token limit and again at the larger limit it was then asked with, or the window the server reported left no larger limit to ask with (cut_off), the server refused the request (refused) or did not answer it (not_served), or the stage failed on the reply (error). Written only on an item without content, which the next run asks again."
+    },
+    "vlm_status": {
+      "const": "plain_text",
+      "description": "Written by older runs only, never by this version: the model never answered in JSON and the content is its plain-text answer, possibly the first half of a table that was cut off. This version does not take such an answer as read; a run asks such an item again only with --force-stale."
+    },
     "qa_metrics": {
       "type": "object",
       "description": "What the check of a table transcription measured: the share of the salient tokens of the PDF text in the table's frame that the transcription holds, and the share of its data rows that are repeats.",
@@ -76,7 +84,7 @@
     },
     "qa": {
       "type": "object",
-      "description": "The result of the check, passing or failing: the metrics of the attempt that was kept, measured on what the model wrote (a table that failed the check then has its repeated neighbouring rows collapsed, which the metrics do not see), and whether it passed the thresholds of the stage. Written for every table the model transcribed as JSON; a table rescued as plain text, a table the model never answered and a table of an older file have none, which says not checked and not that it passed. Stored as Tables.qa.",
+      "description": "The result of the check, passing or failing: the metrics of the attempt that was kept, measured on what the model wrote (a table that failed the check then has its repeated neighbouring rows collapsed, which the metrics do not see), and whether it passed the thresholds of the stage. Written for every table the model transcribed; a table the model gave no object for (it has a vlm_why) and a table of an older file have none, which says not checked and not that it passed. Stored as Tables.qa.",
       "allOf": [
         {"$ref": "#/$defs/qa_metrics"},
         {
@@ -103,10 +111,8 @@
           "type": "string",
           "description": "The table as a Markdown table. Present and not empty: the table is done. Absent: it was not read, and the next run asks again."
         },
-        "vlm_status": {
-          "const": "plain_text",
-          "description": "The model never answered in JSON and the content is its plain-text answer."
-        },
+        "vlm_why": {"$ref": "#/$defs/vlm_why"},
+        "vlm_status": {"$ref": "#/$defs/vlm_status"},
         "qa": {"$ref": "#/$defs/qa"},
         "qa_warning": {
           "$ref": "#/$defs/qa_metrics",
@@ -127,7 +133,8 @@
           "type": "string",
           "description": "What the figure shows. Present and not empty: the figure is done."
         },
-        "vlm_status": {"const": "plain_text"}
+        "vlm_why": {"$ref": "#/$defs/vlm_why"},
+        "vlm_status": {"$ref": "#/$defs/vlm_status"}
       },
       "required": ["id"]
     },

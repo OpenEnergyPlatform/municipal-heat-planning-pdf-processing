@@ -293,6 +293,10 @@ def _corpus(monkeypatch, tmp_path, harvester_stubbed):
     monkeypatch.setattr(runner, "watch_server", lambda *a, **k: None)
     monkeypatch.setattr(runner, "install_stop_handler", lambda: None)
     monkeypatch.setattr(runner, "prime_probe_cache", lambda *a, **k: 0)
+    # The search sentence is a request to the model like any other. Left in,
+    # the run asked whatever server the environment names and ended as that
+    # server answered: once in two full runs a 5xx left the document unstamped.
+    monkeypatch.setattr(runner, "document_anchor", lambda *a, **k: {})
     monkeypatch.setattr(runner, "make_more_sources",
                         lambda *a, **k: (lambda *x: []))
     monkeypatch.setattr(runner, "make_rest_of_document", lambda *a, **k: None)

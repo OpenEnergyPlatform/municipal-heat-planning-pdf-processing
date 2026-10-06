@@ -265,6 +265,9 @@ VISUALS_BREAKS = [
     ("a status nobody writes",
      _set("sections", 0, "tables", 0, "vlm_status", value="ok"),
      "sections/0/tables/0/vlm_status"),
+    ("a cause nobody gives",
+     _set("sections", 0, "tables", 0, "vlm_why", value="no usable reply"),
+     "sections/0/tables/0/vlm_why"),
     ("a figure description that is not text",
      _set("sections", 0, "figures", 0, "description", value=7),
      "sections/0/figures/0/description"),
@@ -328,20 +331,36 @@ def test_the_file_stage_5_writes_for_frames_without_text_fits(document,
     assert _errors("visuals", written) == []
 
 
-def test_the_file_stage_5_writes_for_tables_rescued_as_plain_text_fits(
+def test_the_file_stage_5_writes_for_tables_that_are_holes_fits(
         document, monkeypatch):
-    """A table the model never answered in JSON has no check at all, and the
-    file still fits: the schema does not ask for what was not measured."""
+    """A table the model gave no object for has no content and no check, says
+    why, and the file still fits: the schema does not ask for what was not
+    measured."""
+    from docpipe.reading import Hole
     from docpipe.visuals import process as P
     _client(monkeypatch)
-    monkeypatch.setattr(P, "call_vision", lambda *a, **k: None)
-    monkeypatch.setattr(P, "call_vision_plain", lambda *a, **k: FULL)
+    monkeypatch.setattr(P, "call_vision", lambda *a, **k: Hole("cut_off"))
     written = IP.run_single(document)
     tables = [t for s in written["sections"] for t in s["tables"]]
     assert len(tables) == 2
-    assert all(t["vlm_status"] == "plain_text" and "qa" not in t
+    assert all(t["vlm_why"] == "cut_off" and "qa" not in t
+               and "markdown" not in t and "vlm_status" not in t
                for t in tables)
     assert _errors("visuals", written) == []
+
+
+def test_the_causes_the_schema_lists_are_the_causes_a_hole_can_have():
+    from docpipe import reading
+    schema = json.loads((Path(SCHEMA_DIR) / "visuals.schema.json")
+                        .read_text(encoding="utf-8"))
+    assert schema["$defs"]["vlm_why"]["enum"] == list(reading.HOLE_CAUSES)
+
+
+def test_a_file_an_older_run_wrote_with_a_plain_text_status_still_fits(visuals):
+    """The key is read for the files that carry it and written by nobody."""
+    data = copy.deepcopy(visuals)
+    data["sections"][0]["tables"][0]["vlm_status"] = "plain_text"
+    assert _errors("visuals", data) == []
 
 
 def test_a_table_with_an_empty_path_is_left_without_a_markdown_as_said(

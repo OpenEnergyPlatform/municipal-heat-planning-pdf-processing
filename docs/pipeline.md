@@ -83,7 +83,10 @@ cropped from the rendered page and saved as PNGs under the document's
 `images/` directory. A page with no PDF text layer can optionally be
 transcribed by a vision model instead, off unless the flag
 `--transcribe-missing-text` is set, since nothing else in preprocessing
-calls a model. The result, one entry per page, is written to `pages.json`. Resume
+calls a model. The vision server is asked once, before the first page that
+lacks its text, and a run in which every page has its text asks no server; a
+page the model gave no readable reply for keeps no text and is named, with the
+cause, in `page_transcription_report.json`. The result, one entry per page, is written to `pages.json`. Resume
 works at the level of the whole document: the cache is invalidated by
 `--force-reextract`, by a `pages.json` that will not parse, or by a prior
 run that recorded a failed page.
@@ -103,7 +106,9 @@ and footers are stripped, directory and index-listing sections are
 dropped, and a caption is resolved by the same rule the read side uses
 later (`docpipe/captions.py`). The output is `sections.json`. A narrower
 `--rebuild-stage3` reruns only this step from an existing `pages.json`,
-touching neither the PDF nor the layout model.
+touching neither the PDF nor the layout model. A run that transcribed pages
+drops the `sections.json` built before it, so that this step runs again over
+the pages that now have text.
 
 ### 4. Refinement
 
@@ -121,22 +126,43 @@ embedding stage that follows; the model only proposes where to cut, the cut
 itself always happens at a segment boundary (`docpipe/refinement/
 split.py:11` to `12`). The output, `sections_refined.json`, is written
 atomically, so a run killed mid-document leaves the previous refinement
-rather than nothing (`docpipe/refinement/refine.py:1133` to `1137`). Resume
-skips a document once
-that file exists; `--force-stale` redoes only documents whose recorded
-prompt hash no longer matches the profile's current prompts. A window the
-model server did not serve (no connection, a timeout, a 429, a 5xx) is not
-a window that needed no change, so the document is not written as refined:
-the sections as cut and the usable replies go to
+rather than nothing (`docpipe/refinement/refine.py:1327` to `1331`). Resume
+skips a document once that file exists and no `sections_refined.partial.json`
+sits beside it; `--force-stale` redoes only documents whose recorded
+prompt hash no longer matches the profile's current prompts.
+
+Every request sends its reply schema as the grammar, and the reply is read as
+exactly one JSON object (`docpipe/reading.py`): nothing is stripped, cut out or
+closed, and nothing is salvaged from a reply that was cut off. A reply that is
+not that object is asked again with its cause named. A reply cut off at its
+token limit is asked in halves, by sections, and a section on its own, which has
+no halves, is asked once more with more room: the smaller of twice what it asked
+and the largest reply the budget counts plus what the window the server reported
+holds beyond the budget, in tokens (a hole `cut_off` at once where the window
+leaves no more room, twice where the window is not known). A window that is
+still unread after that is a
+hole with its cause (`cut_off`, `syntax`, `refused` and the others listed in
+the stage's page): it keeps its original text, `sections_refined.json` is
+written all the same, `refinement_report.json` lists the window under
+`failed_windows` with the cause, and the sections the model's cut did not
+place under `mechanical_cuts`, and `sections_refined.partial.json` stays
+beside the output. The next plain run asks exactly the windows the report
+lists. A hole changes no exit code.
+
+A window the model server did not serve (no connection, a timeout, a 429, a
+5xx) is not a window that needed no change, so the document is not written as
+refined: the sections as cut and the usable replies go to
 `sections_refined.partial.json`, which also lists the missing windows as
 `unserved_windows`, `refinement_report.json` is left as it was, and the
 stage exits non-zero. The next run asks only for those windows, provided the
 sections, the prompts, the window size and the model are the same
-(`docpipe/refinement/refine.py:1167` to `1186`). The cut of an oversized
+(`docpipe/refinement/refine.py:1372` to `1391`). The cut of an oversized
 section is asked again while the server does not answer; if it stays
 unanswered nothing at all is written, because a section cut mechanically
 for the want of an answer would keep those cuts, and the next run starts
-with the cut (`refine.py:915` to `919`, `1187` to `1191`).
+with the cut (`refine.py:1043` to `1048`, `1405` to `1409`). The context budget
+the stage prints is the prompt, a full window of maximum-size sections and one
+largest reply, in tokens.
 
 ### 5. Visuals
 
@@ -156,7 +182,16 @@ table text the QA gate needs, since refinement drops that field. The
 output is `visuals.json`. Resume is per item, not per document: an item
 already carrying a `markdown` or `description` key is not sent again, so a
 run interrupted partway through a large plan continues from exactly what
-is still missing.
+is still missing. A reply is read as exactly one JSON object, as in stage 4,
+and no plain-text request fills in for one that could not be read: an item the
+model gave no object for has neither key, says why in `vlm_why`, is written with
+the document and is asked again by the next run, without a change of the exit
+code. An image has no halves, so a reply cut off at its token limit is asked
+once more, once, with more room: the smaller of twice `max_tokens` and
+`max_tokens` plus what the window the server reported holds beyond the budget,
+in tokens (a hole `cut_off` at once where the window leaves no more room, twice
+where the window is not known). The context budget the stage prints is the
+longer system prompt, one page image and one reply, in tokens.
 
 ### 6. Chunking, embedding, database
 
@@ -196,13 +231,15 @@ answer which of the active profile's spec questions, groups them into
 model requests, and checks every claim's quote against its source before
 a claim becomes an accepted tuple; a claim that fails is a refusal, not a
 row (`docpipe/extraction/verify.py`). The output is one JSONL harvest file
-per document (tuples, refusals, one summary line) and one stamp file
-recording what produced it. Five further passes act on an already-written
-harvest without repeating the whole document: `--recheck` reapplies the
-answer-in-quote rule with no model, `--remap` re-resolves a coordinate's wording
-against a changed vocabulary with no model, `--top-up` resweeps only the
-coordinates a stamp says moved, `--review` reads the lowest trust level
-values a second time, and `--serialize` hands accepted tuples to stage 8.
+per document (tuples, refusals, one state line per parameter, one summary line)
+and one stamp file recording what produced it. Six further passes act on an
+already-written harvest without repeating the whole document: `--recheck`
+reapplies the answer-in-quote rule with no model, `--remap` re-resolves a
+coordinate's wording against a changed vocabulary with no model, `--top-up`
+resweeps only the coordinates a stamp says moved, `--top-up-parameters`
+appends the rows of a parameter the spec has gained since the harvest,
+`--review` reads the lowest trust level values a second time, and
+`--serialize` hands accepted tuples to stage 8.
 Resume answers per question rather than per document; see
 [The extraction stamp](#the-extraction-stamp) below.
 
@@ -283,7 +320,7 @@ in `docpipe/artifacts.py`, so no stage hard-codes a filename of its own. A
 document's own output directory holds a `results/` folder (`pages.json`,
 `sections.json`, `sections_refined.json`, `visuals.json`, `document.json`,
 each written by the stage that owns it, plus `sections_refined.partial.json`
-while a refinement pass is unfinished) and an `images/` folder holding the
+while a refinement pass is unfinished or a window of its output is a hole) and an `images/` folder holding the
 cropped table and figure PNGs stage 2 produces. Stage 1 writes three
 further worklists at the top of the data directory, each removed before a
 clean run leaves nothing stale on it: `rejected_pdfs.txt` names a garbled
@@ -295,10 +332,10 @@ are written for an operator to read, in the log and on disk; none is read
 back by any stage. Stage 2's `--transcribe-missing-text` pass instead
 decides, per page and per document, at run time, which pages carry no
 usable text, through `needs_transcription`
-(`docpipe/preprocessing/page_text_fallback.py:76`), called from
+(`docpipe/preprocessing/page_text_fallback.py:78`), called from
 `fill_missing_page_text`
-(`docpipe/preprocessing/page_text_fallback.py:161` to `189`), itself
-called from `docpipe/preprocessing/pipeline.py:354` to `388`.
+(`docpipe/preprocessing/page_text_fallback.py:163` to `196`), itself
+called from `docpipe/preprocessing/pipeline.py:383` to `432`.
 
 **The per-document results directory.** Chunking's db step is the last
 one to open anything under `results/`. Extraction, the graph and the app
@@ -307,7 +344,8 @@ or `document.json` again. Refinement (stage 4) reads `sections.json`
 alone. Visuals (stage 5) reads whichever of `sections_refined.json` and
 `sections.json` is already on disk, preferring the refined file, and
 separately rereads `sections.json` on its own for the native table text
-its QA gate needs (`docpipe/visuals/pipeline.py:58` to `70`). This is what
+its QA gate needs (`docpipe/visuals/pipeline.py:59` to `71` and `74` to
+`96`). This is what
 lets the two stages run against two separate model servers at the same
 time in the common case, visuals starting on a document before refinement
 has finished it; visuals does read refinement's file once it exists, so
@@ -336,7 +374,7 @@ until it is pushed back through chunking's db step; no later stage rereads
 | 6, merge | `document.json` is newer than both its inputs | `--force` |
 | 6, db | the document's rows are already in `Sections` | `--force` |
 | 6, embed | the database already has a matching `Embeddings` row; an input whose batch failed has none, so the next run embeds exactly those | `--force`, which also evicts the item's old FAISS ids first |
-| 7 extraction | the document's stamp matches what today's run would produce | `--force`, `--force-stale`, or repair one key with `--top-up` |
+| 7 extraction | the document's stamp matches what today's run would produce | `--force`, `--force-stale`, repair one key with `--top-up`, or append a parameter the spec has gained with `--top-up-parameters` |
 | 8 the graph | never; a `--serialize` call always rewalks the harvest | nothing to force |
 | inference and the app | nothing to resume; one question is one turn | nothing to force |
 
@@ -354,15 +392,17 @@ per document, so this section documents its stamp on its own.
 written only once `finish_document` decides a harvest actually happened;
 a document is left unstamped, so the next run redoes it, when more than
 half its planned sources came back unreachable (`UNREACHABLE_LIMIT = 0.5`,
-`docpipe/extraction/runner.py:4497`, `:4559` to `4563`), when nothing
-answered at all (`:4564` to `4567`), or when any one of its requests ended
-on a 429 or a 5xx, which is no answer (`:4568` to `4573`).
+`docpipe/extraction/runner.py:4552`, `:4574` to `4575`), when nothing
+answered at all (`:4576` to `4577`), or when any one of its requests ended
+on a 429 or a 5xx, which is no answer (`:4578` to `4581`); `not_happened`
+(`:4555` to `4582`) tells the three apart, and the pass that appends a
+parameter asks it too.
 `finish_document` removes an earlier stamp before it writes the file, so a
 withheld stamp is not replaced by one that vouched for the file it
-overwrote (`:4553` to `4554`), and it returns whether the document is
+overwrote (`:4638` to `4639`), and it returns whether the document is
 stamped. A document written but left unstamped is a failure of the run:
 `harvest_document` returns it as not finished and `main` exits 1
-(`:5668` to `5669`, `5705`). Inside it:
+(`:5870` to `5871`, `5927`). Inside it:
 
 | Key | What it records | Compared on a redo |
 |---|---|---|
@@ -378,11 +418,11 @@ stamped. A document written but left unstamped is a failure of the run:
 | `question_text/<key>` | the sentence this document was actually searched with | never |
 | `review/*` | what a second reading of a value came to | never |
 | `document` | the sha256 and size of the PDF the harvest was read from, as the database holds them | the sha256, where the stamp and the database both carry one; a stamp without the key is not compared |
-| `docpipe` / `producers` | the version, and every pass that wrote into the harvest in order (a top-up marks the coordinates it re-read with `<axis>_producer`, a position in this list) | never |
+| `docpipe` / `producers` | the version, and every pass that wrote into the harvest in order (a top-up marks the coordinates it re-read, and the pass that appends a parameter marks every coordinate of the rows it wrote, with `<axis>_producer`, a position in this list; the second also names the `parameters` and the `frame` it used) | never |
 
 The owner decided on 2026-09-10 that a stamp rests on the KG/ontology
 parameters alone (`parameter/`, `value/`, `axis/`, `slot/`,
-`docpipe/extraction/runner.py:4341`). The model, the anchors and every
+`docpipe/extraction/runner.py:4385`). The model, the anchors and every
 prompt id are still written into the stamp, so a reader can place a
 harvest, but a reworded prompt or another model no longer makes a
 document stale. The fine keys come from
@@ -390,14 +430,19 @@ document stale. The fine keys come from
 their presence is what licenses ignoring the coarse `spec` key. An earlier
 design hashed the whole spec file as one number, so one new label anywhere
 in it made a whole corpus stale together, about 93 GPU hours to reread
-1,082 documents over one added word (`docpipe/extraction/runner.py:4204`
-to `4337`); the ontology behind the spec is revised repeatedly, so the
+1,082 documents over one added word (`docpipe/extraction/runner.py:4248`
+to `4381`); the ontology behind the spec is revised repeatedly, so the
 same cost would recur each time it is. With one key per parameter, per value list
 and per axis, `stale()` names exactly which question changed and leaves
 the rest of the corpus alone; it checks both directions, so a question
 dropped from the spec counts as changed too, the one case the old
 whole-file hash used to catch that a purely additive scheme would
-otherwise miss (`docpipe/extraction/runner.py:4414` to `4415`). The PDF is
+otherwise miss (`docpipe/extraction/runner.py:4458` to `4459`). A parameter
+added to the spec is the one change with no stored key to compare: the stamp has
+never seen `parameter/<uri>`, so every stored document reads stale in it, and a
+harvest would read each from its first passage for the sake of one parameter.
+`--top-up-parameters` appends that parameter instead, and a run that skips such
+a document names the parameters and the flag in a second warning. The PDF is
 the one addition to the ontology's keys: where the stamp and the database both
 name its sha256 and the two differ, the document is reported stale, named in a
 warning, skipped, and read again only under `--force-stale`. The database's
@@ -413,9 +458,10 @@ The review prompt (`extraction/review`) is deliberately left out of
 `PROMPT_IDS` itself, not merely out of the comparison: a review leaves a
 value unchanged, only its `flags` grow, so folding the review prompt's sha
 into every stamp would report the whole corpus stale the day that one
-prompt is edited (`docpipe/extraction/runner.py:299` to `301`).
+prompt is edited (`docpipe/extraction/runner.py:300` to `302`).
 
-Three passes act on a moved key without opening the document again.
+Four passes act on a moved or missing key without harvesting the document
+again.
 
 - `--remap`, no model, no index: maps a coordinate's recorded wording onto
   the vocabulary as the spec reads today, a pure function of the harvest
@@ -430,14 +476,31 @@ Three passes act on a moved key without opening the document again.
   document's lists, and for such a profile the pass opens the corpus
   database read-only; a document whose lists cannot be closed is left
   alone, stamp included.
-- `--top-up`, the only one of the three that needs the model and the
-  index: rereads only the coordinates a document's stamp says moved, over
-  the harvest's own sweep logic, instead of harvesting the document again
-  from its first passage; `--top-up-key axis/<uri>/<name>` narrows it to
-  one named key. It skips a document whole rather than half repairing it
-  whenever the stamp names something other than a coordinate, since a
-  changed frame axis, model or prompt decides which rows exist at all,
-  and that is not something one coordinate's resweep can safely settle.
+- `--top-up`, one of the two that need the model and the index: rereads
+  only the coordinates a document's stamp says moved, over the harvest's own
+  sweep logic, instead of harvesting the document again from its first
+  passage; `--top-up-key axis/<uri>/<name>` narrows it to one named key. It
+  skips a document whole rather than half repairing it whenever the stamp
+  names something other than a coordinate, since a changed frame axis, model
+  or prompt decides which rows exist at all, and that is not something one
+  coordinate's resweep can safely settle. The keys that only a parameter the
+  spec gained moved are not such a thing: it leaves them, counts the document
+  as left to `--top-up-parameters`, and writes none of them.
+- `--top-up-parameters`, the other, and not to be given beside `--top-up`
+  (exit 2): for a parameter added to the spec since a document was harvested
+  it searches the document for that parameter alone, asks the frame with the
+  stored pairs as its start and appends the new rows, refusals and one state
+  line after the stored lines, which stay as the same bytes, with the summary
+  built again last. It carries forward only the stamp keys of the addition
+  and enters itself into `producers`; its rows carry `<axis>_producer`. A
+  document whose stamp moved in anything else (a reworded, renamed or removed
+  parameter, a list, the PDF, no stamp, a stored row that the new parameter
+  would derive to another parameter) stays stale as a whole. A document it did
+  not read completely, one with a request that ended on a 429 or a 5xx for
+  instance, is left as it was with no file and no stamp written, and the run
+  returns 1. The state line of a new parameter is what tells a second run
+  that the parameter was read, so a crash between file and stamp is completed
+  by the next run without a request. Its traces go to `trace-topup/`.
 
 ## Running it end to end
 

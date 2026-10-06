@@ -25,6 +25,11 @@ and the document is skipped whole rather than half repaired. The frame is
 refused for the same reason one level up, because it decides how many passes a
 document gets.
 
+A parameter the spec has gained is not a coordinate. Its keys are taken out
+of the list before anything is asked (`topup_parameter.explained_keys`), so
+they neither block the document nor are written by this pass, and the pass
+that appends the parameter answers for them.
+
 The old reading is restored whenever the re-sweep fails to improve on it. No
 coordinate is required in either profile, so an emptied one would otherwise
 pass verification in silence, with the reading gone and nothing recording the
@@ -39,6 +44,7 @@ from __future__ import annotations
 import json
 import logging
 from collections import Counter
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, Optional
 
@@ -200,19 +206,17 @@ def owners_of(row: dict, slots: list) -> list:
     return out
 
 
-def base_years_of(tuples: list, frame_axes, base_state) -> tuple:
-    """The document's base years, rebuilt from the frame's own readings.
+def pairs_of(tuples: list, frame_axes) -> dict:
+    """{index: pair} the frame wrote onto these stored rows.
 
     The harvest wrote each pair onto its rows with the window ["frame", i],
     so the pairs are recoverable from the file: one per index, from the first
-    row that carries it, with the quote and source the year was read by.
-    Without them a re-swept year that says "Basisjahr" and prints no number
-    cannot be read (`pipeline.base_year_named`): the main harvest could and
-    this pass could not, which would cost the full run this pass exists to
-    spare.
+    row that carries it, with the wording, quote and source the pair was read
+    by. The indices have gaps where a pair no row carries, and the pairs come
+    back under the index they were stored with, never renumbered.
     """
-    if not frame_axes or not base_state:
-        return ()
+    if not frame_axes:
+        return {}
     names = [slot.name for slot in frame_axes]
     pairs: dict = {}
     for row in tuples:
@@ -228,6 +232,20 @@ def base_years_of(tuples: list, frame_axes, base_state) -> tuple:
             for suffix in ("", "_raw", "_quote", "_source"):
                 pair[f"{name}{suffix}"] = row.get(f"{name}{suffix}")
         pairs[index] = pair
+    return pairs
+
+
+def base_years_of(tuples: list, frame_axes, base_state) -> tuple:
+    """The document's base years, rebuilt from the frame's own readings.
+
+    Without them a re-swept year that says "Basisjahr" and prints no number
+    cannot be read (`pipeline.base_year_named`): the main harvest could and
+    this pass could not, which would cost the full run this pass exists to
+    spare.
+    """
+    if not frame_axes or not base_state:
+        return ()
+    pairs = pairs_of(tuples, frame_axes)
     if not pairs:
         return ()
     ordered = [pairs.get(i) for i in range(max(pairs) + 1)]
@@ -342,6 +360,62 @@ def reopened_by_gate(tuples: list, spec: Spec, gate: dict,
     return out
 
 
+@dataclass
+class Stored:
+    """A harvest file as it lies on disk, read once.
+
+    `entries` holds every line but the summary, in order, as (the line as it
+    stands in the file, the record it parses to or None). A pass that
+    rewrites a line puts its own record in the line's place and a pass that
+    does not writes the line back byte for byte; the summary is always built
+    again, so the old one is left out.
+    """
+    entries: list = field(default_factory=list)
+    tuples: list = field(default_factory=list)
+    refusals: list = field(default_factory=list)
+    states: list = field(default_factory=list)
+    document_id: Optional[int] = None
+    unreadable: int = 0
+
+    @property
+    def lines(self) -> list:
+        return [raw for raw, _row in self.entries]
+
+
+def read_harvest(path) -> Stored:
+    """The lines of one harvest file, sorted by what they are.
+
+    The file is read as bytes and split at the line feed alone, so a line is
+    what it was down to a carriage return (`jsonl.lines`). A line that is not
+    JSON, or is JSON and no record, is kept as it stands and counted. An empty
+    line is not a record and is not kept.
+    """
+    stored = Stored()
+    for line in jsonl.lines(Path(path).read_bytes().decode("utf-8")):
+        if not line.strip():
+            continue
+        try:
+            row = json.loads(line)
+        except json.JSONDecodeError:
+            row = None
+        if not isinstance(row, dict):
+            stored.unreadable += 1
+            stored.entries.append((line, None))
+            continue
+        kind = row.get("kind")
+        if kind == "summary":
+            stored.document_id = row.get("document_id")
+            continue
+        stored.entries.append((line, row))
+        if kind == "tuple":
+            stored.tuples.append(row)
+        elif kind == "refusal":
+            stored.refusals.append(row)
+        elif kind == "parameter_state":
+            stored.states.append(row)
+    return stored
+
+
 def top_up_file(path: Path, spec: Spec, current: dict, deps: dict, *,
                 only=None) -> Counter:
     """Re-sweep one harvest file's moved coordinates, then carry its stamp."""
@@ -352,28 +426,29 @@ def top_up_file(path: Path, spec: Spec, current: dict, deps: dict, *,
     if not changed:
         stats["already current"] += 1
         return stats
+    # What only a parameter the spec gained moved is for the pass that
+    # appends it (`topup_parameter`), and this pass writes none of it. Taken
+    # out here, a new parameter beside one moved coordinate does not block
+    # that coordinate: the keys stay stale and the stamp says so.
+    from .topup_parameter import explained_keys
+    explained = explained_keys(stamp_path, current, spec)
+    changed = [k for k in changed if k not in explained]
+    if not changed:
+        stats["left to --top-up-parameters"] += 1
+        return stats
 
-    lines: list = []
-    tuples, refusals, document_id = [], [], None
-    for line in jsonl.read(path):
-        if not line.strip():
-            continue
-        try:
-            row = json.loads(line)
-        except json.JSONDecodeError:
-            stats["unreadable line kept"] += 1
-            lines.append(line)
-            continue
-        if row.get("kind") == "summary":
-            document_id = row.get("document_id")
-            continue
-        if row.get("kind") != "tuple":
-            if row.get("kind") == "refusal":
-                refusals.append(row)
-            lines.append(line)
-            continue
-        tuples.append(row)
-        lines.append(row)
+    stored = read_harvest(path)
+    stats["unreadable line kept"] += stored.unreadable
+    # The tuples stand in the file as the dicts this pass rewrites in place;
+    # every other line goes back as it was, but for a carriage return: this
+    # pass has always read a file with its line endings folded (`jsonl.read`)
+    # and writes the line feed alone, and a line that kept its own would end
+    # in two.
+    lines: list = [row if row is not None and row.get("kind") == "tuple"
+                   else (raw[:-1] if raw.endswith("\r") else raw)
+                   for raw, row in stored.entries]
+    tuples, refusals = stored.tuples, stored.refusals
+    document_id = stored.document_id
 
     doc_spec = deps["document_spec"](document_id) if document_id else spec
     if doc_spec is None:

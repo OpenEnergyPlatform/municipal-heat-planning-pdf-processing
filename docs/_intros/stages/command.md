@@ -116,7 +116,7 @@ for it:
 |---|---|
 | ingest | a `Documents` row exists for the file, as ingest looks it up |
 | preprocess | `pages.json` and `sections.json` exist |
-| refine | `sections_refined.json` exists and no unfinished pass sits beside it |
+| refine | `sections_refined.json` exists and no partial file (`sections_refined.partial.json`) sits beside it: one stays beside a finished output too, while a window ended as a hole |
 | visuals | `visuals.json` exists and every table and figure of its input has the markdown or description the stage looks for |
 | chunk | `document.json` is not older than its inputs and an embedding is recorded for a section, table or figure of the document |
 | lexical | the word index is current and holds a passage of the document |
@@ -137,7 +137,9 @@ the pending work by that stage's own rule, then the requests, the tokens in,
 out and embedded, and a price. It calls no model and writes nothing. The
 pending work is what the stage itself would find to do: preprocess, the PDFs
 with no `sections.json`; refine, the documents with no refined result and, of
-a pass left unfinished, only the windows the server did not serve; visuals,
+a pass left unfinished (a partial file beside the output), only the windows it
+holds no reply for, whether the server did not serve them or the model's reply
+could not be read; visuals,
 the tables and figures with no markdown or description; chunk, the inputs with
 no embedding in the database; extract, the documents the harvest has no
 current stamp for. Ingest asks no model, so it has no request to count.
@@ -173,7 +175,7 @@ be counted and "not counted" for a model the table does not name. The
 estimate does not follow `--force`, `--force-stale` or chunk's `--step`, nor
 the vectors the index has lost, which only the stage's own run reads. The
 figure for the harvest leaves out the retries of replies that could not be
-read, the review and top-up passes, and the requests that write each
+read, the review, top-up and top-up-parameters passes, and the requests that write each
 document's search sentences.
 
 ## Starting and checking a project
@@ -243,7 +245,11 @@ where the stages themselves say what they ask:
   request fields (the reasoning settings, or the reply schema of a hosted
   API). A refusal fails. A server that could not be asked, or that answered
   429 or a 5xx, gives a warning, "no verdict", and the exit stays 0. The chat
-  sends no such fields, so a chat-only check does not send the request.
+  sends these fields as well (`LLM_ENABLE_THINKING`, `LLM_REASONING_EFFORT`), so
+  a chat-only check sends the request too, and a server that refuses
+  `chat_template_kwargs` or `reasoning_effort` fails it. With `--stage`, the
+  request is sent for `refine`, `extract`, `visuals` and `chat`
+  (`doctor.SENDS_FIELDS`) and for no other command.
 - `prompts`: one line per stage that loads prompts, read the way the stage
   reads them, so a prompt that is missing and one that is there but cannot be
   read (front matter that is no mapping) are told apart.

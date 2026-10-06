@@ -38,6 +38,8 @@ import threading
 from concurrent.futures import ThreadPoolExecutor
 from typing import Callable, Optional
 
+from docpipe.reading import Hole
+
 from .models import Block, PageData
 
 log = logging.getLogger(__name__)
@@ -161,25 +163,30 @@ def synthesize_blocks(page: PageData, markdown: str,
 def fill_missing_page_text(
     pages: list[PageData],
     render: Callable[[int], object],
-    transcribe: Callable[[object, int], Optional[str]],
+    transcribe: Callable[[object, int], "str | Hole"],
     *,
     min_chars: int = MIN_PAGE_CHARS,
     max_pages: Optional[int] = None,
     workers: int = 1,
     render_workers: int = PAGE_RENDER_WORKERS,
+    before_first: Optional[Callable[[], None]] = None,
 ) -> dict:
     """Transcribe every page whose text layer is missing. Mutates *pages*.
 
+    *before_first* is called once there is a page to send and before any is
+    sent: the place for a caller to ask whether the server is there. A
+    document none of whose pages lacks its text never calls it.
+
     `render(page_number)` returns whatever the transcriber takes (a PIL image
     in the live wiring), `transcribe(image, page_number)` returns the page as
-    markdown, an empty string if the page carries no prose, or None if the call
-    failed. A page that yielded nothing keeps its empty text layer rather than
-    an invented one.
+    markdown, an empty string if the page carries no prose, or a Hole that says
+    why the call gave nothing. A page that yielded nothing keeps its empty text
+    layer rather than an invented one.
 
     Returns a report: how many pages needed text, how many got it, how many had
-    nothing to give, how many broke, and how many blocks were synthesized. The
-    counts are the honest answer to "how much of this document is model-read
-    rather than PDF-read".
+    nothing to give, how many broke, which of those and why (`failed_pages`),
+    and how many blocks were synthesized. The counts are the honest answer to
+    "how much of this document is model-read rather than PDF-read".
 
     `pages_empty` and `pages_failed` are counted apart on purpose. A heat plan
     is full of pages that are one large map, and the prompt tells the model to
@@ -189,9 +196,11 @@ def fill_missing_page_text(
     candidates = [p for p in pages if needs_transcription(p, min_chars)]
     report = {"pages_total": len(pages), "pages_missing_text": len(candidates),
               "pages_transcribed": 0, "pages_empty": 0, "pages_failed": 0,
-              "blocks_added": 0}
+              "failed_pages": [], "blocks_added": 0}
     if not candidates:
         return report
+    if before_first is not None:
+        before_first()
 
     if max_pages is not None and len(candidates) > max_pages:
         # A document where EVERY page needs the model is the expected case
@@ -208,16 +217,22 @@ def fill_missing_page_text(
     # semaphore bounds the first without bounding the second.
     render_slots = threading.Semaphore(max(render_workers, 1))
 
-    def read(page) -> Optional[str]:
+    def read(page) -> "str | Hole":
         image = None
         try:
             with render_slots:
                 image = render(page.page_number)
-            return transcribe(image, page.page_number) if image is not None else None
+            if image is None:
+                return Hole("error", "the page could not be rendered")
+            got = transcribe(image, page.page_number)
+            if not isinstance(got, (str, Hole)):
+                # A transcriber that answers neither text nor why it has none.
+                return Hole("error", f"the transcriber returned {got!r}")
+            return got
         except Exception as e:                       # one page must not end the run
             log.error("page transcription: page %d failed: %s",
                       page.page_number, e)
-            return None
+            return Hole("error", f"{type(e).__name__}: {e}")
         finally:
             # A megabyte per page, and a document that needs this needs it for
             # every page. Held only as long as the call takes.
@@ -236,10 +251,13 @@ def fill_missing_page_text(
     # Applied in page order regardless of the order they came back in: the
     # result of a run must not depend on which page the server finished first.
     for page, markdown in zip(candidates, replies):
-        # None is the only failure: the call raised, or the reply had no usable
-        # field. An answer of "" is an ANSWER — the page holds no prose.
-        if markdown is None:
+        # A Hole is the only failure: the call raised, or the reply was not the
+        # one object with its text. An answer of "" is an ANSWER: the page
+        # holds no prose.
+        if isinstance(markdown, Hole):
             report["pages_failed"] += 1
+            report["failed_pages"].append({"page": page.page_number,
+                                           "why": markdown.cause})
             continue
         blocks = synthesize_blocks(page, markdown)
         if not blocks:
@@ -260,8 +278,12 @@ def fill_missing_page_text(
     if report["pages_failed"]:
         # Rare enough to be worth a line of its own: an empty page is expected,
         # a broken call is not.
-        log.warning("page transcription: %d page(s) could not be read at all",
-                    report["pages_failed"])
+        causes: dict = {}
+        for entry in report["failed_pages"]:
+            causes[entry["why"]] = causes.get(entry["why"], 0) + 1
+        log.warning("page transcription: %d page(s) could not be read at all; "
+                    "page(s) by cause: %s", report["pages_failed"],
+                    ", ".join(f"{c} {n}" for c, n in sorted(causes.items())))
     return report
 
 
@@ -324,13 +346,38 @@ def make_page_renderer(pdf_path, scratch_dir=None):
     return render
 
 
+# What a page request is allowed to answer with, when the prompt says nothing.
+PAGE_TEMPERATURE = 0.1
+PAGE_MAX_TOKENS = 4096
+
+
+def page_request_tokens(profile) -> int:
+    """Worst case for one page request: the page prompt + one page image + the
+    reply we ask for, once. A reply cut off at its limit is asked once more
+    with more room (see vision.call_vision), bounded by what the served window
+    leaves beyond this number, so no second reply is counted. What the vision
+    server has to be started for when it is asked to transcribe pages; the page
+    is as large as a table crop at its largest, so the image is counted as
+    there."""
+    from docpipe import prompts
+    from docpipe.visuals.config import IMAGE_TOKENS, TOKENS_PER_WORD
+
+    prompt = prompts.load(PAGE_TRANSCRIBE_PROMPT_ID, profile)
+    room = int((prompt.meta or {}).get("max_tokens", PAGE_MAX_TOKENS))
+    return int(len(prompt.text.split()) * TOKENS_PER_WORD + IMAGE_TOKENS + room)
+
+
 def make_transcriber(profile, *, client=None, model=None):
-    """transcribe(image_path, page_number) -> markdown, or None on failure.
+    """transcribe(image_path, page_number) -> markdown, or a Hole.
 
     ONE job: read the page. No cleaning, no summarising, no restructuring —
     refinement does that afterwards, in its own calls, on its own terms. The
     prompt lives in the profile because what a page holds and in which language
     is project knowledge, while "a page with no text layer needs reading" is not.
+
+    The reply is the one object with a `markdown` that is text, and the empty
+    string is an answer (a page that is one large map holds no prose). A reply
+    that is not that object is a Hole with its cause, as it is for a table.
     """
     from docpipe import prompts
     from docpipe.visuals import replies, vision
@@ -345,19 +392,19 @@ def make_transcriber(profile, *, client=None, model=None):
     client = client or vision.create_client()
     model = model or vision.VLM_MODEL
     meta = prompt.meta or {}
+    # The page request's own budget: the room a cut page is given once more is
+    # what the served window leaves beyond it, not beyond the visuals stage's.
+    budget = page_request_tokens(profile)
 
     def transcribe(image_path, page_number: int):
         reply = vision.call_vision(
             client, prompt.text,
             request.format(page=page_number),
             image_path, model=model,
-            temperature=float(meta.get("temperature", 0.1)),
-            max_tokens=int(meta.get("max_tokens", 4096)),
-            reply=replies.PAGE,
+            temperature=float(meta.get("temperature", PAGE_TEMPERATURE)),
+            max_tokens=int(meta.get("max_tokens", PAGE_MAX_TOKENS)),
+            reply=replies.PAGE, budget=budget,
         )
-        if not isinstance(reply, dict):
-            return None
-        text = reply.get("markdown") or reply.get("text")
-        return text if isinstance(text, str) else None
+        return reply if isinstance(reply, Hole) else reply["markdown"]
 
     return transcribe

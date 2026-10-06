@@ -108,7 +108,8 @@ pointer into a list it never joined would read as unknown.
 
 ```python
 def stamp_forward(stamp_path: Path, current: dict, settled: set,
-                  producer: Optional[dict] = None) -> bool
+                  producer: Optional[dict] = None,
+                  record: Optional[dict] = None) -> bool
 ```
 
 Write the stamp keys this pass earned; keep the rest. True if it wrote.
@@ -120,6 +121,11 @@ run that comes later still sees which question it has to redo.
 stamp's list when the pass wrote, so a harvest that two models wrote
 into names both. A stamp from before the list starts it with what it
 does say: the model of its harvest.
+
+*record* is what this pass says about itself and is never compared, the
+sentences it searched with for instance. It goes into the same write as
+the keys, so a stamp never holds the keys without the record of the pass
+that earned them. Callers that record nothing pass none.
 
 ### stamp_path_of
 

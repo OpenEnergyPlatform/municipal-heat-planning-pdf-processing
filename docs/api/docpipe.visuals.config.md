@@ -24,7 +24,10 @@ def max_request_tokens() -> int
 ```
 
 Worst case for one vision request: the longer of the two system
-prompts + one page image + the reply we ask for.
+prompts + one page image + the reply we ask for, once. A reply cut off at
+its limit is asked once more with more room, but the room is bounded by
+what the served window leaves beyond this number (vision.call_vision), so
+no second reply is counted.
 
 ### table_system_prompt
 

@@ -169,3 +169,111 @@ def test_a_profile_provides_every_component_the_core_requires(home):
                      if profile.component(mod, attr) is None)
 
     assert not missing, f"{home.name} is missing {missing}"
+
+
+# ---------------------------------------------------------------------------
+# No stage repairs a model's JSON.
+#
+# Promised: refinement, the visuals stage and the page transcription read a
+# reply through `docpipe.reading` and nowhere else AND none of them closes,
+# strips, cuts out or salvages anything from it. A reply that is not the one
+# object is asked again with its cause, and a cut one is split or given room.
+# ---------------------------------------------------------------------------
+
+STAGES = [*sorted((CORE / "refinement").glob("*.py")),
+          *sorted((CORE / "visuals").glob("*.py")),
+          CORE / "preprocessing" / "page_text_fallback.py"]
+
+# A name that does what the old code did: it is a repair by its own account.
+_SOFTENER_NAME = re.compile(
+    r"repair|salvage|rescue|lenient|fix_?json|extract_?json|strip_?(fence|think)"
+    r"|close_?(brackets|json)|balance", re.I)
+# A cut of an object out of the text around it.
+_CUTTERS = {"find", "rfind", "index", "rindex"}
+_BRACKETS = {"{", "}", "[", "]"}
+_RAW_READERS = {"loads", "raw_decode", "JSONDecoder"}
+
+
+def _softeners(source: str) -> list:
+    """(line, what) for each place the source softens a reply."""
+    found = []
+    tree = ast.parse(source)
+    for node in ast.walk(tree):
+        line = getattr(node, "lineno", 0)
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            if _SOFTENER_NAME.search(node.name):
+                found.append((line, f"def {node.name}"))
+        elif isinstance(node, (ast.Import, ast.ImportFrom)):
+            names = ([a.name for a in node.names] if isinstance(node, ast.Import)
+                     else [node.module or ""])
+            for name in names:
+                if re.search(r"json_?repair|demjson|dirtyjson|json5", name):
+                    found.append((line, f"imports {name}"))
+        elif isinstance(node, ast.Call):
+            func = node.func
+            name = (func.attr if isinstance(func, ast.Attribute)
+                    else getattr(func, "id", ""))
+            if _SOFTENER_NAME.search(name):
+                found.append((line, f"calls {name}"))
+            elif name in _RAW_READERS:
+                found.append((line, f"reads text itself with {name}"))
+            elif name in _CUTTERS and any(
+                    isinstance(a, ast.Constant) and a.value in _BRACKETS
+                    for a in node.args):
+                found.append((line, f"cuts at a bracket with {name}"))
+        elif isinstance(node, ast.Constant) and isinstance(node.value, str):
+            text = node.value
+            if "```" in text or "<think>" in text or "</think>" in text:
+                found.append((line, "names a fence or a think block"))
+            elif "\\{" in text and "\\}" in text:
+                found.append((line, "a pattern that cuts an object out"))
+    return found
+
+
+def test_the_stages_scanned_are_the_ones_that_read_a_reply():
+    names = {p.name for p in STAGES}
+    assert {"refine.py", "split.py", "vision.py", "process.py",
+            "page_text_fallback.py"} <= names, names
+
+
+@pytest.mark.parametrize("path", STAGES, ids=lambda p: p.name)
+def test_no_stage_repairs_a_reply(path):
+    found = _softeners(path.read_text(encoding="utf-8"))
+    assert not found, (
+        f"{path.relative_to(CORE.parent)} softens a reply: "
+        + "; ".join(f"line {n}: {what}" for n, what in found)
+        + ". Read it through docpipe.reading and ask again, split or "
+          "give room; nothing is closed, stripped or cut out")
+
+
+@pytest.mark.parametrize("snippet, what", [
+    ("def _repair_json(raw):\n    return raw + '}'\n", "def _repair_json"),
+    ("def close_json(raw):\n    return raw\n", "def close_json"),
+    ("def _salvage_tuples(raw):\n    return []\n", "def _salvage_tuples"),
+    ("raw = raw.strip().strip('```json')\n", "names a fence or a think block"),
+    ("raw = re.sub(r'<think>.*?</think>', '', raw)\n",
+     "names a fence or a think block"),
+    ("data = raw[raw.find('{'):raw.rfind('}') + 1]\n", "cuts at a bracket"),
+    ("data = json.loads(raw)\n", "reads text itself with loads"),
+    ("obj, end = decoder.raw_decode(raw, 3)\n",
+     "reads text itself with raw_decode"),
+    ("import json_repair\n", "imports json_repair"),
+    ("m = re.search(r'\\{.*\\}', raw, re.S)\n", "a pattern that cuts an object out"),
+])
+def test_the_guard_sees_the_bug_it_is_there_for(snippet, what):
+    """Each softener the stages had, written out again: the scan has to name
+    it. A guard that finds nothing in the code as it is, and finds nothing in
+    the code as it was, is a decoration."""
+    found = _softeners(snippet)
+    assert found and any(w.startswith(what) for _n, w in found), (snippet, found)
+
+
+def test_a_stage_that_reads_through_the_reader_and_asks_again_is_not_reported():
+    clean = (
+        "from docpipe import reading\n"
+        "def ask(client, messages):\n"
+        "    data, cause, fault = reading.read(choice, 'markdown', str)\n"
+        "    if cause:\n"
+        "        messages.append({'role': 'user', 'content': fault})\n"
+        "    return data\n")
+    assert _softeners(clean) == []

@@ -158,9 +158,9 @@ a model transcribed is level B at best.
 What the replay shows is what a change to the code does to a harvest whose
 answers are held still: how a reply is read, what is accepted, how rows are
 settled. A change that makes the run ask something else is not answered from
-the cassette; the replay says so and fails. The harvest, `--review` and
-`--top-up` all end with 1 when a replay was asked something the cassette does
-not hold (`unheld_requests`). A request is filed under its messages, and an
+the cassette; the replay says so and fails. The harvest, `--review`,
+`--top-up` and `--top-up-parameters` all end with 1 when a replay was asked
+something the cassette does not hold (`unheld_requests`). A request is filed under its messages, and an
 image in it under its pixels (`_picture`) and not under the bytes of its
 encoding, so another build of the encoder still finds the answer. A text to
 embed is filed under the text; an item with an image that the replay embedder

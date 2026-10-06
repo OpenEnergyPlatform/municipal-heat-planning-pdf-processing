@@ -4,8 +4,10 @@
 
 replies.py: The reply each refinement request asks for, as a JSON schema.
 
-For an API that generates inside a schema (see `docpipe.providers`). The
-prompts state the same shapes in words; nothing here is a check.
+The grammar of every request of this stage, on every provider (see
+`docpipe.providers.grammar`). The prompts state the same shapes in words;
+nothing here is a check beyond the one key the reader needs (`sections`,
+`cuts`).
 
 The corrections reply is small and fixed. The full reply hands every section
 back, with the keys the request carried, so its schema is built from the

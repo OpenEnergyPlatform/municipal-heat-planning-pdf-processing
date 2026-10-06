@@ -115,8 +115,9 @@ def test_the_section_text_arrives_with_captions_filled_in(conn):
 # ---------------------------------------------------------------------------
 
 def _final(**kw):
-    return {"found": True, "complete": True, "answer": "19.499 Einwohner",
-            "supports": [{"index": 0, "quote": "x"}], **kw}
+    return {"statements": [{"statement": "19.499 Einwohner", "basis": "text",
+                            "index": 0, "quote": "x"}],
+            "complete": True, **kw}
 
 
 def test_the_model_can_ask_for_a_crop_and_gets_it(monkeypatch, tmp_path):
@@ -149,7 +150,7 @@ def test_the_model_can_ask_for_a_crop_and_gets_it(monkeypatch, tmp_path):
 
     assert asked == ["p17_img1"]
     assert calls["n"] == 2, "one request round, then the answer"
-    assert out["answer"] == "19.499 Einwohner"
+    assert out["statements"][0]["statement"] == "19.499 Einwohner"
     assert out["requested"] == [{"block_id": "p17_img1", "title": "Abbildung 2-3",
                                  "delivered": True, "owner_kind": "figure", "owner_id": 100}]
 
@@ -191,13 +192,13 @@ def test_an_unavailable_crop_still_lets_the_model_answer(monkeypatch):
                                   image_requester=lambda b: None, max_image_requests=2)
 
     assert out["requested"][0]["delivered"] is False
-    assert out["found"] is True
+    assert out["statements"] and out["fault"] is None
 
 
 def test_asking_twice_for_the_same_crop_stops_the_loop(monkeypatch):
     """It did not help the first time; a second copy of the same picture only
     burns the budget the model needs to answer with. The loop drops out, and the
-    existing envelope correction then insists on a real answer."""
+    last call, which cannot ask for an action, insists on a real answer."""
     llm = pytest.importorskip("docpipe.inference.llm_client")
     monkeypatch.setattr(llm, "LLM_STUB_MODE", False)
     monkeypatch.setattr(llm, "_image_part", lambda p, **kw: {"type": "image_url", "url": p})
@@ -219,7 +220,7 @@ def test_asking_twice_for_the_same_crop_stops_the_loop(monkeypatch):
 
     assert asked == ["p17_img1"], "the repeat request is never resolved a second time"
     assert calls["n"] == 3, "asked, asked again, then forced to answer"
-    assert out["answer"] == "19.499 Einwohner"
+    assert out["statements"][0]["statement"] == "19.499 Einwohner"
     assert len(out["requested"]) == 1
 
 

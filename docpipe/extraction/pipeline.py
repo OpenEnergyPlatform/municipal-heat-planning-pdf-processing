@@ -604,8 +604,12 @@ def pair_of_source(source, pairs: tuple, slots: list,
     """
     if not slots:
         return None
+    # A pair of the document that no row carries stands as None under its
+    # index (`plan_batches` of a stored harvest). It prints nothing, and
+    # `names_pair` would say it prints everything.
     found = [(pair, index) for index, pair in enumerate(pairs)
-             if pair is not taken and names_pair(source, pair, slots)]
+             if isinstance(pair, dict) and pair is not taken
+             and names_pair(source, pair, slots)]
     return found[0] if len(found) == 1 else None
 
 
@@ -1585,6 +1589,13 @@ def fold_batch(batch: Batch, reply: Optional[dict], report: DocumentReport, *,
         report.owners_harvested += len(batch.items)
 
 
+def repeat_key(row: dict) -> str:
+    """What makes one row another row written twice: everything but its
+    provenance, which is about the writing and not about the reading."""
+    return json.dumps({k: v for k, v in row.items() if k != "provenance"},
+                      sort_keys=True, ensure_ascii=False, default=str)
+
+
 def drop_repeats(report: DocumentReport) -> int:
     """Remove rows that are another row of this document, written twice.
 
@@ -1594,15 +1605,14 @@ def drop_repeats(report: DocumentReport) -> int:
     corpus_m5, which had no such pass: 1,152 of 62,290 tuples, up to 77 in one
     plan, and one office name eleven times.
 
-    `provenance` is left out of the comparison because it is about the writing
-    and not about the reading. The first of a repeated pair is the one kept,
-    so the file stays in the order the harvest produced.
+    `provenance` is left out of the comparison (`repeat_key`). The first of a
+    repeated pair is the one kept, so the file stays in the order the harvest
+    produced.
     """
     seen: set = set()
     kept: list = []
     for row in report.tuples:
-        key = json.dumps({k: v for k, v in row.items() if k != "provenance"},
-                         sort_keys=True, ensure_ascii=False, default=str)
+        key = repeat_key(row)
         if key in seen:
             continue
         seen.add(key)

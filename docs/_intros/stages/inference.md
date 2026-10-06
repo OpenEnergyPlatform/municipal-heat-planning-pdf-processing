@@ -6,7 +6,8 @@ offline, mostly on a GPU; this package answers a question against that
 finished corpus, one turn at a time, with no GPU work. Its
 entry point is `answer_question()` in `answer.py`: a caller hands it a
 task, a document id, a set of scopes and a `Corpus` (see Data model),
-and receives an answer, its citations, and follow-up bookkeeping.
+and receives an answer, the citations it stands on, how many statements the
+model made and how many of them stood, and follow-up bookkeeping.
 `answer_question` is called directly from two places: the Streamlit app
 documented on [the chat over the corpus](./app.md), and
 `compare.compare_documents`, once per document, itself reached only from the
@@ -16,8 +17,9 @@ UI toolkit.
 A question answered here is not the same finding as a value the
 extraction stage (see [Extraction](./extraction.md)) writes to its
 harvest: extraction reads a document once, exhaustively, against a closed
-spec and stamps what it verified, while this package grounds one
-free-text answer in a citation resolved at ask time. A second answer
+spec and stamps what it verified, while this package grounds each
+statement of one free-text answer in a quote checked against its passage at ask
+time. A second answer
 path exists once the extraction stage's `--serialize` step has written a
 plan's numbers as a graph (see [The knowledge graph](./graph.md)):
 `kg_route.answer_from_graph` reads that graph directly, with no
@@ -48,8 +50,9 @@ flowchart LR
     anchor --> embed[Query embedding]
     embed --> retrieve[Retrieval: FAISS sub-index for the document]
     retrieve --> batch[Token-budgeted batches]
-    batch --> answer[Grounded answer: quote or image reading]
-    answer --> citation[Citation]
+    batch --> statements[Statements, each with its own quote or reading]
+    statements --> check[Check of each statement against its passage]
+    check --> answer[Answer: the statements that stood, each with its citation]
 ```
 
 ## Method
@@ -59,17 +62,18 @@ flowchart LR
 `answer_question` (`answer.py:154`) picks one of three modes: `image_only`
 searches on an uploaded image alone, an image with text adds a
 caption-style anchor, and text alone anchors on the plain task
-(`answer.py:179-196`). The anchor, `llm_client.make_search_phrase`, is a
+(`answer.py:207-224`). The anchor, `llm_client.make_search_phrase`, is a
 HyDE-style construction: a short hypothetical passage written as it
 would appear in the corpus, not a question. Whatever non-empty phrase the
 model writes is used as the anchor; the function falls back to the raw
-task text only on a transport or parse error, or an empty reply, and it
-never raises (`llm_client.py:336-372`). The same call sets `recheck`, true
-only when the model marks the task a repetition and history is
-non-empty (`llm_client.py:369`); when true, `answer_question` walks
+task text only where its request stayed unreadable (see Reading a model's
+reply) or the phrase came back empty, and it never raises
+(`llm_client.py:472-509`). Either way the turn's faults say so. The same call
+sets `recheck`, true only when the model marks the task a repetition and
+history is non-empty (`llm_client.py:506`); when true, `answer_question` walks
 history backward, folding every `(owner_kind, owner_id)` pair each turn
 examined into one exclude set, stopping at the first non-recheck turn
-(`answer.py:205-211`).
+(`answer.py:233-239`).
 
 ### Retrieval narrowed to one document
 
@@ -131,13 +135,21 @@ into batches under `ANSWER_CONTEXT_TOKENS` tokens each
 instead of truncation. Token counts come from the tokenizer
 named by `LLM_TOKENIZER_ID`; a char/4 heuristic serves as an offline
 fallback only, since German prose runs 3.0 to 3.5 characters per token,
-denser than a flat divide by 4 assumes (`answer.py:237-240`).
+denser than a flat divide by 4 assumes (`answer.py:265-268`).
 
 ### Answering across batches, with computation and image requests
 
-For each batch, `llm_client.answer_from_sources` extends a running
-answer with crops of up to `ANSWER_MAX_IMAGES` items, so a chart value
-can be read. `code_exec.py` runs the calculation feature: when
+For each batch, `llm_client.answer_from_sources` asks the model for statements
+(`replies.answer`; see Reading a model's reply). A statement is one claim with
+its own basis and its own evidence, and the reply says whether the task is
+completely answered by what was said already and these excerpts. The batch is
+told what stood its check in the batches before it, as `prior`: the text of
+those statements and nothing else. It writes only new statements. What was
+checked is carried forward as it was and the model never rewrites it; a
+statement that was dropped is not in `prior` (`answer.py:292-293`,
+`statements.texts`). Crops of up to `ANSWER_MAX_IMAGES` items go with the call,
+so a chart value can be read, and `attached_images` says which of them made it
+into the request. `code_exec.py` runs the calculation feature: when
 `CODE_EXEC_URL` is set, `run_code` posts the model's Python plus the
 context `answer._code_context` builds, `{"tables": [{"caption",
 "markdown"}, ...]}`, one entry per table among the batch's sources
@@ -145,53 +157,213 @@ context `answer._code_context` builds, `{"tables": [{"caption",
 the code it runs (`docpipe/app/sandbox_service.py`), so the
 `tables` the compute prompt names exists there, an empty list when the batch
 has no table. It parses back `{"ok", "stdout", "stderr", "exit_code", "error"}`
-(`code_exec.py:22-54`), never raising (see Failure modes). An image
-requester may separately return a crop the section text only points at,
-through `db.request_item`. Both draw one shared round budget,
-`CODE_EXEC_MAX_ROUNDS` plus `REQUEST_IMAGE_MAX` (`llm_client.py:640`); a
-repeated crop id stops the loop and forces an answer
-(`llm_client.py:663-670`). The loop stops once a batch reports complete
-with a citation accepted (`answer.py:311-312`).
+(`code_exec.py:27-62`), never raising (see Failure modes). The runs of one call
+are numbered from 1 in the text that is fed back to the model, so that a
+statement about a calculated number can name the run that printed it
+(`llm_client.py:568-584`). An image requester may separately return a crop the
+section text only points at, through `db.request_item`. Both draw one shared
+round budget, `CODE_EXEC_MAX_ROUNDS` plus `REQUEST_IMAGE_MAX`
+(`llm_client.py:809`); a repeated crop id stops the loop and forces an answer
+(`llm_client.py:839-843`), and the last call of the budget has to answer: its
+schema requires `statements` and offers no action. The scan of batches ends when
+a batch reports complete and at least one statement has stood in the turn so
+far (`answer.py:343-344`); a batch that says complete before anything stood does
+not stop it (`test_complete_with_nothing_shown_yet_does_not_stop_the_scan`).
 
-### Grounding, image refinement and finishing the turn
+### What backs a statement, and what is shown
 
-Every claim must point at a batch index and either a verbatim quote or,
-for an attached image, a reading. A text quote is accepted only through
-`llm_client.grounded_quote`, a match of at least 12 characters against
-the excerpt shown (`_quote_is_grounded`, `llm_client.py:184-195`). An
-image-based support, `visual_reading` (`llm_client.py:562-579`), is
-accepted only when its index was among the crops attached to the call
-and the reading is at least 8 characters, so background knowledge alone
-cannot count as grounded evidence. Citations are deduplicated by
-`(owner_kind, owner_id)` (`answer.py:303-306`); an answer with no
-accepted citation is refused outright, and the log distinguishes "No
-grounded citations" from "Answer ignored the response envelope"
-(`answer.py:363-370`).
+Each statement is checked on its own against the passage it cites, after its
+batch was answered (`statements.back`, called at `answer.py:331-335`). Nothing is
+checked beyond these rules:
+
+| basis | the statement carries | it is shown only if |
+|---|---|---|
+| `text` | an `index` (the excerpt) and a `quote` | the quote stands, whole, in the excerpt of that index and is at least 12 characters (`llm_client.grounded_quote`, `_quote_is_grounded`, `llm_client.py:244-255`) |
+| `image` | an `index` of an attached crop, or the `block` of a crop the model asked for, and a `reading` | the crop was attached to this call, or is one the model asked for and got, and the reading is at least 8 characters, so background knowledge alone cannot count as evidence (`llm_client.visual_reading`, `llm_client.py:693-716`) |
+| `computed` | an `index`, a `quote` of the inputs, and the `run` that printed the number | the quote stands in that excerpt, as for `text`, AND the run is one of this call that ended without an error; it is shown under its number in the turn (`statements.py:121-134`) |
+
+A quote is matched without regard to case and white space, after one layer of
+wrapping quotation marks is taken off, and against the excerpt it names only: a
+quote that stands in another excerpt of the batch does not back this statement
+(`test_a_quote_that_stands_in_another_shown_passage_does_not_back_this_statement`).
+Whether a statement says what its quote says is reading, not a check. A crop
+named by its block id is found with or without the brackets it was shown in.
+
+A statement that does not stand is dropped, with one of five causes
+(`statements.WHY`): `blank` (no text, a basis that is none of the three, or not
+an object), `no_source` (the `index` is no integer, a digit written as text is
+none, or it names an excerpt that is not in this batch), `quote`, `image` and
+`run`. Every statement the model wrote is exactly one of shown and dropped, so
+`statements_made` is `statements_shown` plus `statements_dropped`, and all three
+count statements, not batches and not citations
+(`test_every_drop_reason_is_reached_and_every_statement_is_one_or_the_other`).
+
+What the reader is told is the count and nothing finer. The app puts one
+sentence directly under the answer, "n of m statement(s) removed" in the
+profile's words (`UI["statements_dropped"]`), also where every statement was
+removed. The cause per dropped statement goes to the process log at info level
+(`answer.py:339-341`) and nowhere else; the request log keeps the two counts
+(see Data model). A dropped statement is in no text a model or a reader is given
+afterwards: it is not in `prior`, not in `answer_text`, and so not in the
+history of a follow-up and not in what a comparison reads.
+
+### The citations, the focused read-off and the answer
+
+The citations are made of the shown statements (`statements.citations_of`): one
+per distinct source, quote and run, numbered from 1, and each statement is given
+the number of its citation. The quote is part of the key, so two statements from
+one table with two quotes are two citations, and a reader checking the first is
+not sent to the second. A calculated statement is a citation of its own for each
+run it names. A crop the model asked for is a citation only where a statement
+stands on it; `requested` lists every crop that was delivered all the same.
 
 Every visual citation is then re-read in a focused, single-image call,
-`llm_client.read_off_image`, up to `READOFF_MAX_CALLS` per turn: a first
-pass often misreads a chart (`llm_client.py:499-504`). Readings fold
-back through `revise_with_readings`, unchanged on failure
-(`llm_client.py:544-559`).
-A JSON answer then goes through `llm_client.format_as_json`
-(`llm_client.py:722-737`), the only call here with no failure handling
-of its own (see Failure modes); every turn is logged through
-`request_log.log_request` (`answer.py:389-394`).
+`llm_client.read_off_image`, for up to `READOFF_MAX_CALLS` citations per turn: a
+first pass often misreads a chart (`llm_client.py:641-683`,
+`answer.py:357-369`). The sentence of the focused call is the statement: it
+replaces the text and the quote of every statement that stands on the citation,
+and the model's first wording of it is not shown
+(`test_the_focused_reread_is_the_statement_and_the_citation`). A read-off that
+cannot be made, because the crop cannot be read, its reply stayed unreadable or
+its reading came back blank, leaves the reading the batch gave, and an
+unreadable or blank reply is left in the faults.
+
+`statements.assemble` writes the answer. One shown statement is a sentence
+followed by its `[n]`; two or more are a list, one `- statement [n]` line each,
+in the order they were made. A statement read off a picture has to say so: where
+a visual statement does not carry the profile's `READOFF_MARKER` (compared
+without regard to case), the profile's `READOFF_NOTE` is added once, under the
+answer and under `answer_text`
+(`test_the_readoff_note_is_added_once_when_a_visual_statement_lacks_the_marker`).
+`answer_text` is the same statements without list marks and numbers: what the
+history of a follow-up and a comparison are given.
+
+A JSON answer is one more call, `llm_client.format_as_json`, over `answer_text`
+(`llm_client.py:892-913`, `answer.py:410-426`). The shape the user's task
+describes in prose is written by that call, which can add or leave out, and
+nothing checks what it wrote statement by statement. The citations stand under
+it without numbers: the JSON has no marks to refer to, so each citation loses its
+`n`. Where the call cannot be made, because the provider takes schemas only and
+the user's shape exists only as prose (`providers.enforces_schema`: a hosted
+provider, or `LLM_SCHEMA=all`), `format_as_json` returns `None` and notes the
+fault `json_format: not_asked`; where its reply stays unreadable it raises
+`ReplyError`, which the turn catches, with the request `json_reply` in the
+faults. In both cases the answer stays the checked prose, `as_json` is `False`
+and the citations keep their numbers
+(`test_where_the_json_cannot_be_made_the_prose_stays_and_says_why`). Every turn
+is logged through `request_log.log_request` (`answer.py:447-452`).
+
+### Reading a model's reply
+
+Every request of the chat names the reply it asks for as a JSON schema
+(`replies.py`: the search phrase, a closed question, the answer, the focused
+read-off, the comparison) and sends it as the grammar of the request, its
+`response_format`, on every provider (`providers.grammar`,
+`llm_client._reply_format`, `llm_client.py:308-321`). `LLM_SCHEMA` has no say in
+that. The one request with no schema, the JSON answer above, asks for a JSON
+object and nothing more. Every request also carries `request_extras()`, the
+reasoning fields every stage sends: `chat_template_kwargs` with `enable_thinking`
+(`LLM_ENABLE_THINKING`, off by default) and `reasoning_effort`
+(`LLM_REASONING_EFFORT`, `low` by default)
+(`test_the_request_goes_out_with_its_grammar_and_the_extras_of_every_stage`).
+
+The reply is read by `docpipe.reading` (`reading.read`), and read strictly: it
+is exactly one JSON object and nothing else. No code fence and no `<think>`
+block is stripped, no object is cut out of surrounding text, no bracket is
+closed, and nothing is rescued from a reply that was cut off
+(`test_nothing_is_repaired`). The key the request needs has to be in the object
+and of the kind its schema gives it (`replies.needs` says which: `statements`, a
+list, for the answer, or `action` where the model may ask for a calculation or a
+crop instead; `answer` of a closed question; `phrase`; `reading`; `comparison`).
+It has to be there also where its kind is any, as for the `answer` of a closed
+question, so a reply without it is not read as "no answer" but asked again, and
+ends as `ReplyError` with the cause `missing_key` where it stays missing
+(`test_a_closed_question_answered_with_no_answer_is_asked_again_not_read_as_none`).
+A reply that cannot be read is classified by its cause: `cut_off`,
+`reasoning_only`, `empty`, `no_object`, `syntax`, `outside_text`,
+`not_an_object` or `missing_key` (`reading.CAUSES`, the harvest's own causes in
+its order, held against each other by
+`test_the_chat_and_the_harvest_agree_on_the_cause`).
+
+A reply that is not the object is asked again at once with its cause named
+(`llm_client._chat_json`, `llm_client.py:355-403`): the same single user turn
+with the profile's sentence for the cause appended, as one more text part where
+the turn carries images, and no assistant turn echoed
+(`test_the_correction_rides_along_with_the_images_of_the_request`). There is no
+pause for this. A failure of the call itself, a server that does not answer or
+refuses the request, starts over from the original turn after a pause of two
+seconds times the attempt number, at most ten, and none after the last attempt.
+`LLM_MAX_RETRIES` is the number of attempts one request gets, whichever of the
+two costs one. When they are used up the request ends with a `ReplyError`, a
+`RuntimeError` that carries the last cause, the name of the reply asked for and
+the attempts (`llm_client.py:156-173`). The sentences said back are the
+profile's `reading.PHRASES` (see The profile's wording contract), spoken through
+the profile the chat answers in, and in English in all three shipped profiles,
+`kwp` among them.
+
+A reply cut off at its token limit, and not the object, is not asked again as it
+stands: `_chat_json` stops at once and `llm_client._ask` decides
+(`llm_client.py:269-305`). Where the request can be made smaller, which is the
+batch of excerpts of `answer_from_sources`, it is halved and what the halves say
+is joined, the second half's run numbers shifted past the first's, up to
+`SPLIT_DEPTH` (3) times. A single excerpt, a batch already halved that often and
+every request that is no batch are asked again once with twice the tokens
+(`LLM_MAX_TOKENS` doubled). If that is cut off too, the request ends as a hole
+with the cause `cut_off`. A cut that was answered, by the halves or by the room,
+leaves nothing in the faults; one that was not leaves one fault for its request
+(`test_a_cut_that_is_answered_leaves_no_fault_and_one_that_is_not_leaves_one`).
+
+A request that stayed unreadable is a hole and never "nothing found":
+`answer_from_sources` then returns no statements, `complete` false and the cause
+as `fault`, and the turn does not count that batch's sources as examined (see
+Data model). The turn keeps a record of every request that ended without a reply
+it could read, `llm_client.collecting()` (`answer_question` opens one, and
+`compare_documents` one for its comparison call): a list of `{"request",
+"cause"}`, the request being the name of its reply (`answer_reply`,
+`search_phrase_reply`, `choice_reply`, `readoff_reply`, `comparison_reply`,
+`json_reply`) or `json_format`. So a caller that swallows the error of a request
+still leaves a record: the search phrase falls back to the raw task, the
+read-off keeps the reading the batch gave, the comparison comes back `None`. The
+causes are `reading.HOLE_CAUSES` plus `not_asked` (`llm_client.FAULT_CAUSES`) and
+`note_fault` refuses any other. A request that was read but came back blank is
+noted `wrong_shape`: an empty search phrase, a read-off with a blank reading, a
+blank comparison. A server that refuses a request is not told from one that does
+not answer; both are `not_served`, so the chat never notes `refused` or `error`.
 
 ### The profile's wording contract
 
 Every phrase and label the loop wraps around the model comes from the
 active profile through `wording.py`. `phrases()` checks a profile's
-`PHRASES` dict against `REQUIRED`, a frozenset of 32 keys
+`PHRASES` dict against `REQUIRED`, a frozenset of 30 keys
 (`wording.py:33-44`). `llm_client.py` calls `phrases()` on first use
-(`llm_client.py:96-98`), so this package imports with no active profile.
-A lookup with none no longer fails: `wording.chat_profile` is the one place
+(`llm_client.py:106-108`), so this package imports with no active profile.
+A lookup with none does not fail: `wording.chat_profile` is the one place
 that falls back, to the built-in `default` profile, for the phrases, the
 read-off pieces and, through `llm_client._prompt`, every prompt, and it logs one
 warning per process that names the profile. A profile that is named is never
 replaced. `prompts.load` and `require_profile` are untouched, so the stages
 that write a corpus still stop without a profile and only the chat answers on
 the built-in one.
+
+The loop loads ten prompts, `llm_client.PROMPT_IDS` (`llm_client.py:66-79`), all
+under `inference/`: `phrase`, `chunk_qa`, `image_phrase`, `answer_head`,
+`answer_tail`, `json_format`, `compare`, `compute_hint`, `image_hint` and
+`readoff`. The answer prompt is `answer_head` and `answer_tail`, with
+`compute_hint` added where a sandbox is configured and `image_hint` where crop
+requests are on. The prompts themselves state the shape of the reply: no
+separate prompt splices an answer format into them, none corrects a reply, and
+none revises an answer. The sentences that tell a model what was wrong with a
+reply that was not the one object are not in `inference.PHRASES` either. They are
+the profile's `reading.PHRASES`, the table of
+`docpipe/reading.py` that refinement, the visuals stage and page transcription
+use as well. `reading.REQUIRED` names its ten sentences (`shape_rule`,
+`reasoning_only`, `empty`, `no_object`, `syntax`, `outside_text`,
+`not_an_object`, `key_missing`, `key_not_a_list`, `key_not_text`), and a profile
+lays its table over the one of the profile it extends, entry by entry
+(`reading.phrases`, `profile.layers`). The three stages check the table before
+their first request. The chat does not: it reads the table when a reply was not
+the object it asked for, and a profile that lacks a sentence fails there with a
+`LookupError` naming it.
 
 ### The knowledge-graph route
 
@@ -203,8 +375,8 @@ and trust/reason wording, returning `None` where `kg.VALUE_QUERY` is
 absent, so `scenarios` gets no route at all (`kg_route.py:95-122`).
 `to_coordinates` asks one closed
 question per axis over the spec's own vocabulary, through
-`llm_client.choose` in the app (`llm_client.py:265-289`,
-`app.py:251-254`); an answer outside the vocabulary leaves the axis
+`llm_client.choose` in the app (`llm_client.py:406-430`,
+`docpipe/app/app.py:269-272`); an answer outside the vocabulary leaves the axis
 unbound (`kg_route.py:174-216`), and the route proceeds only once a
 coordinate lands on one of the `DECIDING_AXES`, quantity, scenario or
 year (`kg_route.py:61`). It runs the profile's SPARQL and reads a
@@ -235,14 +407,20 @@ trust level and count.
 ### Comparing several documents
 
 `compare.compare_documents` asks the same question of up to
-`COMPARE_MAX_DOCUMENTS` documents (`config.py:56`); documents beyond the
-cap are named in `dropped`, not silently left out (`compare.py:93-97`).
-Each document keeps its own retrieval. Once at least two produced a
-grounded answer, `llm_client.compare_answers` compares the finished
-prose, given only each label and its `answer_text`, never a source
-passage (`compare.py:64-75`, `compare.py:108-113`). A document that
-answered nothing keeps its row (see [What a coordinate's state
-means](../contract/states.md)).
+`COMPARE_MAX_DOCUMENTS` documents (`config.py:57`); documents beyond the
+cap are named in `dropped`, not silently left out (`compare.py:96-100`).
+Each document keeps its own retrieval, its own statements and its own counts and
+faults: a row is one `answer_question` result with its `document_id` and `label`.
+Once at least two produced an answer, that is, kept at least one statement that
+stood its check, `llm_client.compare_answers` compares the finished prose, given
+only each label and its `answer_text`, so that a dropped statement cannot reach
+it, and never a source passage (`compare.py:64-75`, `compare.py:110-117`). The
+comparison call is not told why a row has no answer: it gets `None` for a row
+whose replies could not be read as it does for one whose statements all failed.
+The result's own `faults` holds the requests of that call that stayed unreadable.
+A document that answered nothing keeps its row (see [What a coordinate's state
+means](../contract/states.md)); the app says on that row whether its replies
+could not be read or nothing stood (see [the app](./app.md)).
 
 ### Measuring the chat's search against a harvest
 
@@ -274,7 +452,7 @@ configured now.
 
 ## Data model
 
-`Corpus` (`answer.py:37-47`) is the bundle every turn works on, a
+`Corpus` (`answer.py:37-54`) is the bundle every turn works on, a
 dataclass this package never builds:
 
 | field | holds |
@@ -284,20 +462,25 @@ dataclass this package never builds:
 | `embed` | a callable, a query item to `(vector, came_from_cache)` |
 | `resolve_image` | a callable, a stored image path to a readable path or `None` |
 | `log_conn` | an optional connection to the request-log database |
+| `lexical` | the connection to the word index beside the vectors, or `None`: the search is then by meaning alone |
+| `document_label` | a callable, a document id to what a reader calls the document; asked only when the whole corpus is searched, where `_whose` falls back to the file's name |
 
-`answer_question()` returns one dict per turn, most keys fixed in the
-function's own docstring (`answer.py:159-168`); `requested` is not among
-them (`answer.py:172`, populated `answer.py:333`):
+`answer_question()` returns one dict per turn, every key fixed in the
+function's own docstring (`answer.py:159-183`, the dict built at
+`answer.py:195-200`):
 
 | key | holds |
 |---|---|
-| `answer`, `answer_text` | the final answer (JSON or prose) and the prose kept for follow-up; both `None` when nothing was grounded |
-| `citations` | the accepted, deduplicated citation list, below |
-| `n_findings` | the number of accepted citations, `len(citations)` |
-| `as_json` | whether the caller asked for a JSON-formatted answer |
+| `answer`, `answer_text` | the final answer and the prose kept for follow-up; both `None` when no statement stood. `answer` is one statement as a sentence, two or more as a list with `[n]` marks, or the JSON where the JSON step ran; `answer_text` is the same statements without list marks and numbers |
+| `statements` | the statements that were shown, as dicts: `text`, `basis`, `index` (`None` for a crop the model asked for), `block`, `owner_kind`, `owner_id`, `quote`, `visual`, `computed`, `run` and `citation`, the number of its citation; empty where none stood |
+| `statements_made`, `statements_shown`, `statements_dropped` | what the model wrote, what stood its check and what did not, counted in statements; made is shown plus dropped |
+| `citations` | the accepted citation list, below |
+| `n_findings` | the number of accepted citations, `len(citations)`: distinct sources, quotes and runs, not statements |
+| `faults` | the requests of the turn that stayed unreadable, `[{"request", "cause"}]` (see Reading a model's reply); with no statement made and a fault on `answer_reply`, the sources were not read, which is not that nothing stood in them |
+| `as_json` | the caller's request for a JSON answer, set back to `False` where the JSON step did not happen: the answer is then the prose, and `faults` holds the cause |
 | `phrase`, `recheck`, `n_excluded` | the search anchor, whether this is a recheck, and how many prior sources it excluded |
-| `n_hits`, `n_batches`, `examined` | retrieval and batching bookkeeping; `examined` feeds a later recheck's exclude set |
-| `compute`, `requested` | the sandbox runs made, and the block ids of delivered crop requests |
+| `n_hits`, `n_batches`, `examined` | retrieval and batching bookkeeping; `examined` feeds a later recheck's exclude set and holds only the sources of batches whose reply was read (and of crops the model asked for and got), so a re-check after an unreadable reply reads them again |
+| `compute`, `requested` | the sandbox runs made (`{"code", "output"}`, numbered from 1 in the turn), and the block ids of delivered crop requests |
 | `cache_hit` | whether the query embedding came from `query_cache` |
 
 One citation carries `db.fetch_owner_content`'s fields (`db.py:207-287`)
@@ -309,7 +492,9 @@ plus what `answer.py` adds:
 | `title`, `text` | the resolved title and body; a section's placeholders are annotated with their caption, a table's or figure's body is unchanged |
 | `page_number`, `image_path`, `section_number`, `section_title`, `document_id` | citation/scoping fields; `image_path` relative to `IMAGE_ROOT`, `None` for a section |
 | `caption_stored`, `section_id`, `block_id` | table/figure owners only: the stored caption before title resolution, the section's id, and the block id (`db.py:273, 277-278`) |
-| `quote`, `visual`, `requested` | the accepted quote or reading, whether from an image or crop request, added in `answer.py` |
+| `quote`, `visual` | the accepted quote or reading, and whether it was read off an image or a crop the model asked for; added by `statements.citations_of` |
+| `computed`, `run` | whether it backs a calculated value, and the number in the turn, from 1, of the run that printed it (else `None`) |
+| `n` | the number the `[n]` marks of the answer refer to, from 1; a JSON answer has no marks and its citations have no `n` |
 
 `kg_route.answer_from_graph` returns `{route, reason, values,
 coordinates}` (`kg_route.py:272-305`): `route` is `"kg"` or `"rag"`,
@@ -317,9 +502,10 @@ coordinates}` (`kg_route.py:272-305`): `route` is `"kg"` or `"rag"`,
 with its `evidence` and `trust`.
 
 Two more SQLite files stay apart from the corpus: `request_log.py`'s
-`requests` (`request_log.py:26-41`, one row per turn: `plan_id`,
+`requests` (`request_log.py:33-50`, one row per turn: `plan_id`,
 `query_text`, `mode`, `scopes`, `latency_ms`, `n_hits`, `n_citations`,
-`answer_hash`, `error_message`, `cache_hit`), and `query_cache.py`'s
+`n_statements`, `n_dropped`, `answer_hash`, `error_message`, `cache_hit`), and
+`query_cache.py`'s
 `query_cache` (`query_cache.py:24-30`: `query_key`, a sha256 of the embedding
 model, the vector size, the query mode, text and image bytes, `vector`,
 `created_at`; the model and the size default to the configured ones, read at
@@ -329,10 +515,19 @@ again). `plan_id` is
 the document the question asked and is empty for a question to the whole
 corpus. A log made when every question named a document refuses such a row, so
 opening it brings it forward: the table is made again and every row is carried
-over under its own id.
+over under its own id (`request_log.py:65-82`). `n_statements` is what the model
+made in the turn and `n_dropped` how many of those did not stand their check,
+both counted in statements. A row that did not count them, a turn that found no
+hits and every row written before the columns existed, holds `NULL`, which says
+"not counted" and not "none". A log made before the columns existed gets them
+when it is opened (`request_log.py:85-92`, `ALTER TABLE ... ADD COLUMN`) and
+keeps its rows; the oldest table gets both migrations in one open
+(`test_the_oldest_table_gets_both_migrations_in_one_open`,
+`test_a_log_made_before_the_statement_columns_gains_them_and_keeps_its_rows`).
+What `error_message` holds is under Failure modes.
 
 The logged `cache_hit` column is not the turn's own value: `_log` always
-calls `request_log.log_request` with `cache_hit=False` (`answer.py:394`),
+calls `request_log.log_request` with `cache_hit=False` (`answer.py:447-452`),
 so a persisted row never reflects the returned dict's `cache_hit` key.
 
 ## Configuration
@@ -349,29 +544,49 @@ chat` lists them all.
 |---|---|---|---|---|
 | `LLM_BASE_URL`, `LLM_MODEL` | env vars | `http://localhost:8000/v1`; `Qwen/Qwen3.5-122B-A10B-FP8` | the endpoint every call reaches; the model name per completion | `config.py:19-20` |
 | `LLM_API_KEY`, `LLM_TIMEOUT` | env vars | `EMPTY`, `180` s | bearer key and client HTTP timeout | `config.py:21-22` |
-| `LLM_TEMPERATURE`, `LLM_MAX_TOKENS` | env vars | `0.1`, `2048` | sampling temperature and `max_tokens` per completion | `config.py:23-24` |
+| `LLM_TEMPERATURE`, `LLM_MAX_TOKENS` | env vars | `0.1`, `2048` | sampling temperature and `max_tokens` per completion; a request that cannot be split and was cut off at the limit is asked once more with twice the tokens | `config.py:23-24` |
 | `LLM_TOKENIZER_ID` | env var | equal to `LLM_MODEL` | tokenizer for token-budget accounting | `config.py:27` |
-| `LLM_MAX_RETRIES`, `LLM_STUB_MODE` | env vars | `4`, off | retries of one failed call; canned replies with no endpoint call | `config.py:30, 32` |
-| `SCOPE_*` (6), `SCOPE_TO_EMBEDDING_TYPES`, `ALL_SCOPES`, `VISUAL_SCOPES` | module constants | 6 fixed strings, e.g. `"Body text"` | the `scopes` vocabulary, its embedding-type map, and the visual-only subset `scopes_are_visual` (`answer.py:68-70`) checks | `config.py:73-99` |
-| `TOP_K`, `MAX_CHUNK_ATTEMPTS` | env vars | `50`, `10` | candidates kept per retrieval; sources examined per turn | `config.py:37, 39` |
-| `ANSWER_CONTEXT_TOKENS`, `ANSWER_MAX_IMAGES` | env vars | `10000`, `4` | token budget per answer batch; crops attached to one answer call | `config.py:42, 45` |
-| `ANSWER_IMAGE_MAX_SIDE`, `READOFF_IMAGE_MAX_SIDE` | env vars | `1280`, `1600` | crop downscale side, answer call and read-off | `config.py:46, 59` |
-| `REQUEST_IMAGE_MAX`, `READOFF_MAX_CALLS` | env vars | `2` (`0` off), `3` | crop requests per batch; focused re-reads of an image value | `config.py:52, 58` |
-| `COMPARE_MAX_DOCUMENTS` | env var | `5` | documents one comparison may ask | `config.py:56` |
-| `CODE_EXEC_URL` | env var | empty | sandbox address; empty means off | `config.py:64` |
-| `CODE_EXEC_TOKEN`, `CODE_EXEC_TIMEOUT` | env vars | empty (or `KWP_SANDBOX_TOKEN`), `45` s | bearer token and HTTP timeout for the sandbox | `config.py:65-66` |
-| `CODE_EXEC_MAX_ROUNDS` | env var | `2` | sandbox runs per batch, shared with `REQUEST_IMAGE_MAX` | `config.py:68` |
+| `LLM_MAX_RETRIES`, `LLM_STUB_MODE` | env vars | `4`, off | attempts per request after an unreadable reply (asked again with its cause) or a transport error; canned replies with no endpoint call | `config.py:31, 33` |
+| `LLM_ENABLE_THINKING`, `LLM_REASONING_EFFORT` | env vars | off, `low` | the reasoning fields every request carries as `extra_body`, as in every stage; read at the call | `llm_preflight.py:105-123` |
+| `LLM_SCHEMA` | env var | `auto` | no say over the grammar of the chat's requests, which is always sent; with `all`, as with a hosted provider, the user's own JSON shape is not asked for | `providers/__init__.py:68-72` |
+| `SPLIT_DEPTH` | module constant | `3` | how often a batch of excerpts whose reply was cut off is halved | `llm_client.py:55` |
+| `SCOPE_*` (6), `SCOPE_TO_EMBEDDING_TYPES`, `ALL_SCOPES`, `VISUAL_SCOPES` | module constants | 6 fixed strings, e.g. `"Body text"` | the `scopes` vocabulary, its embedding-type map, and the visual-only subset `scopes_are_visual` (`answer.py:68-70`) checks | `config.py:74-100` |
+| `TOP_K`, `MAX_CHUNK_ATTEMPTS` | env vars | `50`, `10` | candidates kept per retrieval; sources examined per turn | `config.py:38, 40` |
+| `ANSWER_CONTEXT_TOKENS`, `ANSWER_MAX_IMAGES` | env vars | `10000`, `4` | token budget per answer batch; crops attached to one answer call | `config.py:43, 46` |
+| `ANSWER_IMAGE_MAX_SIDE`, `READOFF_IMAGE_MAX_SIDE` | env vars | `1280`, `1600` | crop downscale side, answer call and read-off | `config.py:47, 60` |
+| `REQUEST_IMAGE_MAX`, `READOFF_MAX_CALLS` | env vars | `2` (`0` off), `3` | crop requests per batch; focused re-reads of an image value | `config.py:53, 59` |
+| `COMPARE_MAX_DOCUMENTS` | env var | `5` | documents one comparison may ask | `config.py:57` |
+| `CODE_EXEC_URL` | env var | empty | sandbox address; empty means off | `config.py:65` |
+| `CODE_EXEC_TOKEN`, `CODE_EXEC_TIMEOUT` | env vars | empty (or `KWP_SANDBOX_TOKEN`), `45` s | bearer token and HTTP timeout for the sandbox | `config.py:66-67` |
+| `CODE_EXEC_MAX_ROUNDS` | env var | `2` | sandbox runs per batch, shared with `REQUEST_IMAGE_MAX` | `config.py:69` |
 | `COORDINATE_PROMPT_ID`, `DECIDING_AXES` | module constants | `"kg/coordinate"`, (quantity, scenario, year) | the axis-question prompt id and the axes that gate the graph route | `kg_route.py:45, 61` |
 | `MIN_SCORE`, `MAX_LINES` | module constants | `55.0`, `10` | fuzzy-match floor and highlight-rectangle cap for a located quote | `pdf_locate.py:27-28` |
 
 ## Failure modes
 
 An empty hit list is logged as "No hits" and `answer` returns `None`
-before any LLM call runs (`answer.py:229-232`); where hits exist but
-nothing could be grounded, `answer` comes back `None` (see Method;
-`answer.py:363-370`). An unknown or missing crop id comes back
-`None` and is logged (`answer.py:98-126`); a repeated id stops the loop
-and forces an answer (`llm_client.py:663-670`).
+before the answer is asked for (`answer.py:257-260`). Where hits exist and no
+statement stood, `answer` comes back `None` too, and three different things end
+a turn there, told apart in the request log's `error_message` and to the reader
+(`answer.py:382-403`):
+
+- `No statement backed (n of m statements dropped)`: statements were made and
+  none stood its check. The app says that nothing backs an answer.
+- `Reply unreadable: n request(s): request: cause`: no statement was made and an
+  answer request stayed unreadable, so the sources were not looked at. The app
+  says that the model's replies could not be read, with the causes, and does not
+  say that nothing is in the sources.
+- `No statement made`: the model's replies were read and held no statement. That
+  is an honest miss and no fault; the app says that nothing backs an answer.
+
+The requests that stayed unreadable besides, and all of them where an answer
+exists, follow as `; n request(s) unreadable: request: cause, ...`, a kind
+counted with `xN` where it happened `N` times. An unreadable batch beside
+dropped statements stays in that line
+(`test_an_unread_batch_beside_dropped_statements_stays_in_the_log`,
+`test_unreadable_answer_is_not_nothing_found`). An unknown or missing crop id
+comes back `None` and is logged (`answer.py:98-126`); a repeated id stops the
+loop and forces an answer (`llm_client.py:839-843`).
 
 `pdf_locate._have_deps()` checks once for PyMuPDF and rapidfuzz and logs
 an error (`log.error`) if either is missing; when it fails, quote
@@ -382,16 +597,24 @@ page. Every call into PyMuPDF (`page_words` and the app's own draw and
 phrase lookups) holds `pdf_locate.MUPDF_LOCK`, because the chat runs each
 session on its own thread and the library is not thread-safe.
 
-Inside `llm_client._chat_json`, a malformed reply or transport error is
-retried up to `LLM_MAX_RETRIES` with backoff capped at 10 seconds before
-raising `RuntimeError` (`llm_client.py:158-262`); callers above it
-degrade instead: `make_search_phrase` falls back to the raw task, and
-`answer_from_sources` comes back `{"found": False}`. `format_as_json`
-has no such wrapper and can raise past this package
-(`llm_client.py:722-737`; `answer.py:372-378`). `code_exec.run_code`
+Inside `llm_client._chat_json`, a reply that is not the one JSON object and a
+failed call are each tried again, up to `LLM_MAX_RETRIES` attempts in all: the
+first at once with its cause named, the second after a pause of at most 10
+seconds, before it raises `ReplyError` with the cause (`llm_client.py:355-403`;
+see Reading a model's reply). Callers above it degrade instead:
+`make_search_phrase` falls back to the raw task, `read_off_image` keeps the
+reading the batch gave, `compare_answers` comes back `None`, and
+`answer_from_sources` comes back with no statements and the cause as `fault`; the
+request is left in the turn's `faults`, which the app shows under the answer.
+`format_as_json` raises `ReplyError` past its own function and
+`answer.py` catches it, so the answer stays the prose (`llm_client.py:892-913`,
+`answer.py:410-426`). `choose`, the closed question of the values and graph
+routes, has no wrapper and lets `ReplyError` through to its caller
+(`llm_client.py:406-430`). A cut-off reply is not one of these: it is split or
+given room first (see Reading a model's reply). `code_exec.run_code`
 degrades without raising: any transport or JSON failure comes back
 `{"ok": False, "error": ...}`, read as no calculation, not a failed turn
-(`code_exec.py:36-62`).
+(`code_exec.py:27-62`).
 
 `kg_route` fails closed on missing trust, withholding the whole answer
 with reason `no_trust` (`kg_route.py:298-303`). A profile that leaves a
@@ -401,15 +624,18 @@ when the route is built (`kg_route.py:80-92`); a Turtle fragment with no
 
 The wording contract fails the same way: a profile whose `PHRASES` dict
 is missing a required key raises `LookupError` at the first check
-(`wording.py:139-141`). No active profile is not one of its failures:
-`wording._component` (`wording.py:117-118`) asks `chat_profile`, which falls
+(`wording.py:141-143`). No active profile is not one of its failures:
+`wording._component` (`wording.py:119-120`) asks `chat_profile`, which falls
 back to the built-in profile and says so in the log. `llm_client.py` resolves
-its own phrases on first use (`llm_client.py:96-98`), so a profile that lacks a
-phrase surfaces at the first lookup of a turn and not as an import error.
+its own phrases on first use (`llm_client.py:106-108`), so a profile that lacks a
+phrase surfaces at the first lookup of a turn and not as an import error. The
+profile's `reading.PHRASES` is looked up only when a reply was not the object
+asked for: a profile that lacks one of its ten sentences raises `LookupError`
+naming it there (`docpipe/reading.py:87-105`).
 
 Answers are deliberately not cached: a follow-up is context-dependent,
 and a cache keyed on the question text alone would misfit a later
-conversation (`request_log.py:8-10`). The only cache in the path is the
+conversation (`request_log.py:9-11`). The only cache in the path is the
 query embedding, reported in `cache_hit` but never used to skip
 retrieval or the LLM call.
 
@@ -421,8 +647,8 @@ about 470 candidate vectors, and the batched call measured 0.421 to
 0.277 seconds over 50 repetitions, 8.4 milliseconds per document instead
 of 5.5 (`faiss_store.py:76-81`).
 
-The grounding gate's floor of 12 characters (`llm_client.py:184-195`) and
-the image-reading floor of 8 characters (`llm_client.py:562-579`) are
+The grounding gate's floor of 12 characters (`llm_client.py:244-255`) and
+the image-reading floor of 8 characters (`llm_client.py:693-716`) are
 sized the same way, long enough to reject a short stray word standing
 in for evidence; the code names "GmbH" as the concrete case the
 12-character floor rejects.
@@ -486,9 +712,44 @@ The word index and the merged search: `test_two_rankings_are_merged_by_reciproca
 (`tests/test_values_route.py`).
 
 The wording contract: `test_a_profile_that_answers_provides_all_of_it`
-(`tests/test_wording.py`). The search anchor is the sentence the model
+(`tests/test_wording.py`); the reading table of every profile:
+`test_every_profile_says_every_sentence_with_the_same_names`
+(`tests/test_reading_wording.py`). The search anchor is the sentence the model
 wrote: `test_the_search_phrase_is_the_sentence_the_model_wrote`
 (`tests/test_inference_app.py`).
+
+The statements and what backs them (`tests/test_chat_statements.py`):
+`test_one_fabricated_quote_removes_exactly_its_statement`,
+`test_a_short_real_substring_is_no_quote`,
+`test_a_read_off_is_backed_only_by_a_crop_that_was_attached`,
+`test_a_crop_that_was_asked_for_and_never_arrived_backs_no_statement`,
+`test_a_computed_statement_needs_a_run_that_ran_and_a_quote_of_its_inputs`.
+Each is a case that breaks the promise by construction: a fabricated quote, a
+substring too short to be a place, a crop that was never attached, a crop that
+never arrived, a run that ended in an error. Beside them:
+`test_a_computed_statement_is_shown_under_the_run_of_the_turn`,
+`test_a_later_batch_gets_only_the_checked_statements_as_prior`,
+`test_a_batch_whose_reply_could_not_be_read_was_not_examined`,
+`test_citations_are_numbered_in_order_and_one_per_source_quote_and_run`,
+`test_json_answer_is_shaped_from_checked_text_only`,
+`test_a_provider_that_takes_schemas_only_is_not_asked_for_the_users_json`,
+`test_compare_sees_only_checked_answers`,
+`test_a_cut_off_batch_is_halved_and_what_the_halves_say_is_joined` and
+`test_a_single_excerpt_gets_more_room_once_and_then_is_a_hole`.
+
+The reading of a reply and the faults (`tests/test_chat_reply.py`):
+`test_a_reply_that_is_not_the_object_is_asked_again_naming_the_cause`,
+`test_nothing_is_repaired`,
+`test_a_request_that_stays_unreadable_raises_with_its_cause_and_counts_attempts`,
+`test_a_server_that_does_not_answer_is_retried_after_a_pause`,
+`test_a_cut_off_reply_is_not_asked_again_as_it_stands`,
+`test_a_unit_that_cannot_be_split_gets_twice_the_room_once`,
+`test_unreadable_answer_is_not_nothing_found` and
+`test_an_honest_miss_is_not_a_fault`.
+
+The request log: `test_a_turn_logs_how_many_statements_it_made_and_how_many_were_dropped`,
+`test_a_new_log_has_the_columns_from_the_start`
+(`tests/test_request_log.py`).
 
 The graph route:
 `test_the_query_names_only_predicates_the_serializer_writes`,
@@ -531,10 +792,20 @@ app also calls `citation_label` directly.
 
 `llm_client.py` holds every call to the LLM endpoint: `make_search_phrase`,
 `answer_from_sources`, the grounding checks `grounded_quote` and
-`visual_reading`, `read_off_image`, `revise_with_readings`,
-`format_as_json`, `compare_answers`, and `choose`. `answer.py` calls all
-but the last two; `compare.py` calls `compare_answers`, and the app
-calls `choose` directly (see Method).
+`visual_reading`, `read_off_image`, `format_as_json`, `compare_answers`, and
+`choose`. It holds the way a reply is asked for and read as well: `_chat_json`
+and `_ask`, `ReplyError`, and the record of unreadable requests, `collecting`,
+`note_fault` and `describe_faults` (see Method). `answer.py` calls all of it
+except `compare_answers` and `choose`; `compare.py` calls `compare_answers` and
+opens its own `collecting`, and the app calls `choose` and `describe_faults`
+directly.
+
+`statements.py` holds what a model's statements go through between the model and
+the reader: `back`, the check of each statement against its passage, `texts`,
+the checked statements as `prior` for the next batch, `blocks_named`,
+`citations_of` and `assemble`, which make the citations and the answer from the
+statements that stood, and `WHY`, the five causes of a drop. It asks no model and
+reads no file. Called by `answer.py` only.
 
 `faiss_store.py` holds `load_global_index`, `retrieve` and
 `build_subindex`, the only code touching the global FAISS index. The app
@@ -551,8 +822,9 @@ records another embedding model than the one that embeds the queries, else
 the extraction stage's `runner.py` (as `inference_db`).
 
 `wording.py` holds `REQUIRED`, `phrases` and `readoff`, the profile's
-phrase contract described in Method and Failure modes. Called by
-`answer.py`, `chunker.py` and, on first use, `llm_client.py`.
+phrase contract described in Method and Failure modes, and `chat_profile`, `ui`
+and `UI_REQUIRED` for the profile the chat answers in and the words of its pages.
+Called by `answer.py`, `chunker.py` and, on first use, `llm_client.py`.
 
 `code_exec.py` holds `is_enabled` and `run_code`, the sandbox client.
 Called by `answer.py` and, for the same feature, `runner.py`.
@@ -568,11 +840,13 @@ described in Method. Called only by the app.
 and the search by word, over one document or all; `answer.py` calls it.
 `lexical.py` builds and asks the word index (`docpipe lexical`), called by
 `hybrid.py` and the app. `values_route.py` answers a question for a number
-from the harvest, called only by the app. `replies.py` holds the reply
-schemas of the chat's requests, for an API that generates inside one.
+from the harvest, called only by the app. `replies.py` holds the reply schema of
+every chat request, which is sent as the grammar of that request, and `needs`,
+which says from the schema which key the reader requires of a reply.
 
-`request_log.py` holds the `requests` table and `log_request`. Called by
-`answer.py`'s `_log` helper and directly by the app.
+`request_log.py` holds the `requests` table, its two migrations and
+`log_request`. `log_request` is called by `answer.py`'s `_log` helper; the app
+opens the log with `connect`.
 
 `query_cache.py` holds the `query_cache` table, `get`, `put` and
 `make_key`, whose keyword-only `model` and `dim` default to the configured

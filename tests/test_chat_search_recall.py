@@ -453,7 +453,7 @@ def test_the_script_stops_after_the_search(monkeypatch):
         raise AssertionError("the answer loop went on after the search")
 
     for name in ("answer_from_sources", "ask_chunk", "read_off_image",
-                 "revise_with_readings", "format_as_json", "grounded_quote",
+                 "format_as_json", "grounded_quote", "visual_reading",
                  "choose", "compare_answers"):
         if hasattr(llm_client, name):
             monkeypatch.setattr(llm_client, name, touched)

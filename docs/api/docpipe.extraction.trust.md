@@ -143,6 +143,12 @@ arguments for exactly that reason, and the graph side recomputes the
 levels with them. The levels here are the floor: a value that is a C
 already will not become an A later.
 
+A pass that appends a parameter to a file builds the line again over every
+tuple and refusal the file now holds. The refusals of the first pass are
+counted as they were stored and are not revisited: a value refused then
+for want of the parameter stays in the count, so the number says what the
+harvest refused and not how many of those a later pass could read.
+
 ### parameter_states
 
 ```python

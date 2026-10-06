@@ -22,26 +22,40 @@ Author: Felix Vossel
 
 ```python
 def run_single(doc_dir: Path, *, force: bool = False,
-               force_stale: bool = False) -> Optional[dict]
+               force_stale: bool = False,
+               holes: Optional[list] = None) -> Optional[dict]
 ```
 
 Refines one document directory. With ``force`` the cached
 ``sections_refined.json`` is ignored and the LLM re-refines; the old file
 stays until the new one atomically replaces it. ``force_stale`` does the
 same, but only when the prompt has changed since the cached output was
-written.
+written. *holes*, when given, gets one entry for the document if it has
+windows that kept their original text or sections that were cut
+mechanically (see `run_refine`).
 Returns the refined dict, or None on failure.
 
 ### run_batch
 
 ```python
 def run_batch(root_dir: Path, *, force: bool = False,
-              force_stale: bool = False) -> dict[str, bool]
+              force_stale: bool = False,
+              holes: Optional[list] = None) -> dict[str, bool]
 ```
 
 Refines every document directory under *root_dir*, at any depth, that has
 a Stage-3 structured output. Returns a dict mapping directory name →
 success boolean.
+
+### summarise
+
+```python
+def summarise(holes: list) -> str
+```
+
+One sentence for what a run could not read, in the units each number
+counts: windows, sections and documents. *holes* are the entries
+`run_refine` adds, one per document.
 
 ### run
 

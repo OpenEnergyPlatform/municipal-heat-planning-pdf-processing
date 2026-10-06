@@ -15,6 +15,7 @@ import types
 import pytest
 
 from docpipe.chunking import merge as M
+from docpipe.reading import Hole
 from docpipe.refinement import config as C
 from docpipe.refinement import pipeline as RP
 from docpipe.refinement import refine as R
@@ -39,8 +40,9 @@ def doc(tmp_path, monkeypatch):
     monkeypatch.setattr(R, "WINDOW_SIZE", 1)
     monkeypatch.setattr(R, "_make_splitter", lambda client: None)
     CUTS.clear()
-    monkeypatch.setattr(R, "split_oversized",
-                        lambda sections, ask=None: CUTS.append(1) or sections)
+    monkeypatch.setattr(
+        R, "split_oversized",
+        lambda sections, ask=None, holes=None: CUTS.append(1) or sections)
     return directory
 
 
@@ -70,15 +72,15 @@ def _report_path(directory):
 
 
 def _server(monkeypatch, outcome=None):
-    """Stub the request. `outcome(title)` is R.NOT_SERVED, None or missing
+    """Stub the request. `outcome(title)` is R.NOT_SERVED, a Hole or missing
     (the window is refined). Returns the titles asked for, in order."""
     asked: list = []
 
-    def call(window, client=None, prev_ctx=None):
+    def call(window, client=None, prev_ctx=None, again=False):
         title = window[0]["title"]
         asked.append(title)
         result = outcome(title) if outcome else "refine"
-        if result is R.NOT_SERVED or result is None:
+        if result is R.NOT_SERVED or isinstance(result, Hole):
             return result
         return [dict(section, content=section["content"].upper(),
                      _action="keep") for section in window]
@@ -112,25 +114,31 @@ def test_a_window_nobody_answered_is_not_served(make_client, seq_responder,
 
 def test_the_last_attempt_decides(make_client, seq_responder):
     """A 503 and then replies nobody can read: the server did serve it, and
-    the model gave nothing usable. That window keeps its text."""
+    the model gave nothing usable. That window is a hole, with its cause, and
+    keeps its text."""
     client = make_client(seq_responder([Status(503), "garbage"]))
-    assert R._call_llm([{"t": 1}], client) is None
+    assert R._call_llm([{"t": 1}], client) == Hole("no_object")
     client = make_client(seq_responder(["garbage", Status(503)]))
     assert R._call_llm([{"t": 1}], client) is R.NOT_SERVED
 
 
-def test_a_reply_that_breaks_on_reading_was_served(make_client):
-    """An error raised after the reply arrived is the reply's. Counted as
-    the server's, a model that answers with no choice at all would keep its
-    document unfinished for ever."""
+def test_a_reply_without_a_choice_was_served_and_is_an_empty_reply(
+        make_client):
+    """A response that carries no choice at all is a reply, the model's: it
+    is asked again as an empty one and ends as a hole. Counted as the
+    server's, a model that answers so would keep its document unfinished for
+    ever."""
+    record: list = []
     client = make_client(
-        lambda kwargs: types.SimpleNamespace(choices=[], usage=None))
-    assert R._call_llm([{"t": 1}], client) is None
+        lambda kwargs: types.SimpleNamespace(choices=[], usage=None),
+        recorder=record)
+    assert R._call_llm([{"t": 1}], client) == Hole("empty")
+    assert len(record) == R.MAX_RETRIES
 
 
 def test_a_refused_window_is_the_requests_fault(make_client, seq_responder):
     client = make_client(seq_responder([Status(400)]))
-    assert R._call_llm([{"t": 1}], client) is None
+    assert R._call_llm([{"t": 1}], client) == Hole("refused", "HTTP 400")
 
 
 @pytest.mark.parametrize("name,value", [("LLM_TEMPERATURE", "0,1"),
@@ -185,48 +193,78 @@ def test_a_cut_nobody_answered_is_asked_again_and_then_not_served(
 
     ask = R._make_splitter(make_client(seq_responder(
         [RuntimeError("down"), '{"cuts": [2]}'])))
-    assert ask("system", "user") == '{"cuts": [2]}'
+    assert ask("system", "user") == {"cuts": [2]}
 
 
-def test_a_refused_cut_is_not_asked_twice(make_client, seq_responder):
+def test_a_refused_cut_is_not_asked_twice_and_is_a_hole(make_client,
+                                                        seq_responder):
     record: list = []
     ask = R._make_splitter(make_client(seq_responder([Status(400)]),
                                        recorder=record))
-    with pytest.raises(Status):
-        ask("system", "user")
+    assert ask("system", "user") == Hole("refused", "HTTP 400")
     assert len(record) == 1
 
 
 def test_the_cut_is_asked_with_the_split_prompts_sampling(make_client,
                                                           seq_responder):
     record: list = []
-    R._make_splitter(make_client(seq_responder(["{}"]), recorder=record))(
-        "system", "user")
+    R._make_splitter(make_client(seq_responder(['{"cuts": []}']),
+                                 recorder=record))("system", "user")
     prompt = split.split_prompt()
     assert prompt.id == "refinement/split"
     assert record[0]["temperature"] == float(prompt.meta["temperature"])
     assert record[0]["max_tokens"] == int(prompt.meta["max_tokens"])
 
 
-def test_only_a_cut_the_model_could_not_place_is_made_mechanically():
-    section = {"title": "T", "content": "x"}
+def test_only_a_cut_the_model_could_not_place_is_made_mechanically(
+        make_client, seq_responder):
+    """The one that was not served raises, and is asked again another time.
+    An unreadable one is a hole with its cause, after the model was told what
+    was wrong with it four times."""
+    section = {"title": "T", "content": "x", "segments": [
+        {"kind": "text", "text": "x", "page": 1}]}
 
-    def not_served(system, user):
+    def not_served(system, user, again=False):
         raise split.NotServed("down")
-
-    def unusable(system, user):
-        raise RuntimeError("no JSON")
 
     with pytest.raises(split.NotServed):
         split._ask_cuts(section, not_served)
-    assert split._ask_cuts(section, unusable) is None
+
+    record: list = []
+    ask = R._make_splitter(make_client(seq_responder(["not json at all"]),
+                                       recorder=record))
+    assert split._ask_cuts(section, ask) == Hole("no_object")
+    assert len(record) == R.MAX_RETRIES
+    assert "no JSON object" in record[1]["messages"][3]["content"]
+
+
+def test_a_cut_that_is_cut_off_is_asked_in_halves_not_again(make_client):
+    """Through the real request: the whole outline once, never again as it
+    stands, then its two halves with the numbers they have in the section."""
+    section = {"title": "T", "content": "x", "segments": [
+        {"kind": "text", "text": f"w{i}", "page": 1} for i in range(4)]}
+    answers = iter([types.SimpleNamespace(choices=[types.SimpleNamespace(
+        finish_reason="length", message=types.SimpleNamespace(
+            content='{"cuts": [{"at": 1, "ti', reasoning_content=None))],
+        usage=None)] + [types.SimpleNamespace(choices=[types.SimpleNamespace(
+            finish_reason="stop", message=types.SimpleNamespace(
+                content='{"first_title": null, "cuts": []}',
+                reasoning_content=None))], usage=None)] * 2)
+    record: list = []
+    ask = R._make_splitter(make_client(lambda kwargs: next(answers),
+                                       recorder=record))
+    assert split._ask_cuts(section, ask) == {
+        "first_title": None, "cuts": [{"at": 2, "title": None}]}
+    users = [r["messages"][1]["content"] for r in record]
+    assert [u.count("[1 words]") for u in users] == [4, 2, 2]
+    assert "   2 [1 words]" in users[2] and "   0 [1 words]" not in users[2]
 
 
 def test_a_document_whose_cut_was_not_served_is_not_refined(doc, monkeypatch,
                                                             caplog):
     """Cut mechanically because the server was down and resumed from there,
     it would keep cuts and titles the model never chose."""
-    def down(sections, ask=None):
+    def down(sections, ask=None, holes=None):
         raise split.NotServed("down")
 
     monkeypatch.setattr(R, "split_oversized", down)
@@ -276,7 +314,7 @@ def test_the_next_run_asks_only_for_what_was_not_served(doc, monkeypatch):
     assert _contents(doc) == ["TEXT OF A", "TEXT OF B", "TEXT OF C"]
     assert not _partial(doc).exists(), "finished, so nothing is left to resume"
     assert json.loads(_report_path(doc).read_text(encoding="utf-8")) == {
-        "total_windows": 3, "failed_windows": []}
+        "total_windows": 3, "failed_windows": [], "mechanical_cuts": []}
 
     third = _server(monkeypatch)
     assert R.run_refine(doc)["sections"] == out["sections"]
@@ -316,7 +354,7 @@ def test_the_windows_of_a_resume_are_cut_from_the_sections_as_split(
     """The cut makes two sections of B. What is kept belongs to the windows
     of THAT list: resumed over the three sections of the input, the reply
     kept for the second half of B would be laid over C."""
-    def cut(sections, ask=None):
+    def cut(sections, ask=None, holes=None):
         CUTS.append(1)
         out = []
         for section in sections:
@@ -352,17 +390,20 @@ def test_sections_handed_in_again_are_resumed_too(doc, monkeypatch):
 def test_a_window_the_model_could_not_do_is_asked_again_on_a_resume(
         doc, monkeypatch):
     """It has no reply to keep, and the run is asking anyway."""
-    _server(monkeypatch, lambda title: {"A": None, "B": R.NOT_SERVED}.get(
+    cut_off = Hole("cut_off", "8192 tokens")
+    _server(monkeypatch, lambda title: {"A": cut_off, "B": R.NOT_SERVED}.get(
         title, "refine"))
     assert R.run_refine(doc) is None
-    second = _server(monkeypatch, lambda title: None if title == "A"
+    second = _server(monkeypatch, lambda title: cut_off if title == "A"
                      else "refine")
     R.run_refine(doc)
-    assert sorted(second) == ["A", "B"]
+    assert sorted(second) == ["A", "A", "B"], (
+        "A twice: as it was, and once more with more room")
     assert _contents(doc) == ["text of a", "TEXT OF B", "TEXT OF C"]
     report = json.loads(_report_path(doc).read_text(encoding="utf-8"))
-    assert [f["window"] for f in report["failed_windows"]] == [1], (
-        "a window the model could not do keeps its text, as it always did")
+    assert [(f["window"], f["reason"]) for f in report["failed_windows"]] == [
+        (1, "cut_off")], (
+        "a window the model could not do keeps its text, and says why")
 
 
 def test_a_forced_pass_that_is_not_served_keeps_the_old_output(doc,

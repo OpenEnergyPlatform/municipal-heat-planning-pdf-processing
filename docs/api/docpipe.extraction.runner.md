@@ -41,8 +41,8 @@ the same alignment the app highlights with. Resume stamps (`_stamp_current`,
 `stale`) record a fingerprint per question a spec asks (`spec.fingerprints`),
 so an ontology edit restales only the documents asked through the coordinate it
 touched, not the whole corpus. `main` is the CLI: a normal harvest, and the
-`--recheck`, `--remap`, `--serialize`, `--review` and `--top-up` maintenance
-passes over a harvest already written.
+`--recheck`, `--remap`, `--serialize`, `--review`, `--top-up` and
+`--top-up-parameters` maintenance passes over a harvest already written.
 
 Author: Felix Vossel
 
@@ -112,6 +112,25 @@ def hit(self) -> bool
 ```python
 def clear(self) -> None
 ```
+
+### PlannedDocument
+
+```python
+@dataclass
+class PlannedDocument
+```
+
+One document planned, as `plan_batches` hands it to the harvest.
+
+Fields:
+
+- `name: str`: the file stem
+- `report: object`: the plan's DocumentReport, still empty
+- `batches: list`: every batch of the document, framed or not
+- `doc_spec: Spec`: this document's spec, its lists closed
+- `pairs: list`: the frame's pairs, in the order of `indices`
+- `indices: list`: the index each pair stands under in the file
+- `failed: int = 0`: frame and pair plans that raised
 
 ## Functions
 
@@ -431,6 +450,22 @@ answers were built from the run's spec, where a dynamic list is empty.
 So the model was offered nothing to choose from on exactly the fields
 whose point is the choice, and wrote a wording instead.
 
+### narrow_spec
+
+```python
+def narrow_spec(spec: Spec, only) -> Spec
+```
+
+A copy of *spec* that asks these parameters (by uri) and no other.
+
+The spec itself when `only` is empty, so a harvest that names no
+parameter reads what it always read. Every request is built from the spec
+its batch carries (`spec_of`): the quantities the rows request offers,
+the units, the parameter question and the grammar of the reply. A batch
+that carries the narrowed copy therefore offers the model the named
+parameters and their units alone, which is how a pass for a new parameter
+keeps every row of a stored parameter from arising.
+
 ### make_document_spec
 
 ```python
@@ -444,6 +479,19 @@ be closed.
 For the passes that read a harvest already on disk. Asked against an
 empty list a dynamic axis degrades to a wording, which is a demotion
 nothing would report, so such a document is left alone and counted.
+
+### document_spec_per_call
+
+```python
+def document_spec_per_call(db_path, spec: Spec,
+                           document_axes: Optional[Callable]) -> Callable
+```
+
+`make_document_spec` for a caller that runs one document per thread.
+
+A SQLite connection belongs to the thread that opened it, so each call
+opens its own, reads the document's lists and closes it again. Nothing
+is open between two calls.
 
 ### document_specs
 
@@ -667,7 +715,8 @@ covers were then stamped with a year printed on another table.
 ```python
 def find_frame(sources: list, slots: list, document_id: int, ask: Callable,
                more_sources: Optional[Callable] = None,
-               probes: Optional[list] = None) -> tuple
+               probes: Optional[list] = None,
+               start: Optional[list] = None) -> tuple
 ```
 
 (pairs, status, missed) - which scenarios and years this document has.
@@ -681,6 +730,11 @@ a number belongs to, it is asked what the number for THIS year is.
 passages that no pair names. It is a finding for the second pass, never an
 addition to the frame, and the second pass shows the window that CARRIES
 the missed year instead of the first window again.
+
+`start` is the pairs a harvest already read for this document. They stand
+first and in their order, the model is shown them as known, and a pair it
+names again is not added a second time (`take`), so what comes back is
+the stored pairs and then the ones these passages print in addition.
 
 ### load_anchors
 
@@ -1168,7 +1222,9 @@ Which of these documents this run has work for.
 A top-up is the exception and it is not a small one: this filter drops
 exactly the documents whose stamp moved, which is the entire population a
 top-up exists to re-read. Filtered, the flag is a no-op that logs
-"nothing to harvest" unless --force-stale is also given.
+"nothing to harvest" unless --force-stale is also given. The pass that
+appends a parameter (`--top-up-parameters`) asks for the same, for the
+same reason.
 
 ### run_document
 
@@ -1189,6 +1245,25 @@ def already_done(name: str, out_dir: Path, spec_sha: str, *,
 
 True when this document needs no work: harvested under the current
 ontology keys — or stale with nobody asking for the redo.
+
+### not_happened
+
+```python
+def not_happened(report, *, answered: Optional[int] = None,
+                 lost: int = 0) -> Optional[tuple]
+```
+
+(cause, requests, of) when the reading of this document did not happen.
+
+The three ways a document comes back with a file and no reading, counted
+in the unit the message needs: "unreachable" is the sources that never
+reached the server, of the sources the plan held; "no_reply" is the
+sources planned, when not one batch came back (`answered` is how many did;
+None means the caller does not track it and the count is not checked);
+"unserved" is the requests that ended on a 429 or a 5xx, `lost` of them
+noted beside the report and the rest in its sentinels. None when the
+reading happened. `finish_document` withholds the stamp on any of them
+and the pass for a new parameter writes nothing.
 
 ### finish_document
 
@@ -1352,6 +1427,55 @@ section the passage stands in, which is where a plan writes it. A pair
 chosen for it from outside would be a coordinate with a quote from
 somewhere else, and the owner's rule is that every value says in the plan
 what it refers to.
+
+### plan_batches
+
+```python
+def plan_batches(document_id: int, filename: str, *, plan: Callable,
+                 plan_pool, ask_frame: Optional[Callable], frame_axes: list,
+                 more_sources: Optional[Callable], base_state,
+                 anchor_texts: dict, only=(),
+                 stored_pairs: Optional[dict] = None) -> PlannedDocument
+```
+
+One document from its first search to its batches: the plan, the frame,
+one plan per pair and the batches that read them.
+
+The planning half of the harvest of a document, shared by the run and by
+the pass that appends a parameter to a stored harvest. *only* names the
+parameters (by uri) the document is searched for and the batches ask for;
+empty is every parameter, which is the harvest. *stored_pairs* is
+{index: pair} of a harvest already on disk: the frame is asked over this
+plan's passages with those pairs seeded, they keep their index and the
+pairs the passages print in addition are numbered after them. Without it
+the pairs stand under 0, 1, 2 as the frame found them.
+
+### accepted_rows
+
+```python
+def accepted_rows(batch, reply, spec) -> list
+```
+
+What of one reply survives checking: the next batch's `prior`.
+
+The same verify_tuple the fold runs, against the same source text, so
+the two cannot drift apart. It skips only `locate`, which turns a
+quote into highlight rectangles and has never decided whether a
+claim is accepted.
+
+### fold_answers
+
+```python
+def fold_answers(answered: list, report, *, locate: Optional[Callable],
+                 spec: Spec) -> None
+```
+
+Every answered batch of a document folded into its report, and the
+rows and refusals that came of it traced.
+
+The harvest and the pass for a new parameter fold the same way: the same
+`fold_batch` against the spec the batch carries, so the checks a row
+meets are the harvest's own whichever of them read it.
 
 ### run_spec_path
 

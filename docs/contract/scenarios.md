@@ -15,20 +15,21 @@ fills every key below as a publication is read.
 `parameter_state`, `refusal` and `summary` are the three record kinds
 every profile's contract shares. `parameter_state` closes one
 parameter with its state and tuple and refusal counts
-(`docpipe/extraction/schema.py:563` to `587`); `refusal` records a
+(`docpipe/extraction/schema.py:571` to `595`); `refusal` records a
 claim the run did not accept: why it failed, the claim as returned,
-and its source (`:490` to `521`); `summary`, the file's last line, counts a
-document's tuples and refusals by trust level and reason (`:522` to
-`562`). The remaining `##` sections are `tuple` shapes, one per
+and its source (`:492` to `523`); `summary`, the file's last line, counts a
+document's tuples and refusals by trust level and reason (`:524` to
+`570`). The remaining `##` sections are `tuple` shapes, one per
 parameter.
 
 Such a section opens with how its row becomes a node or an edge of the
 OEKG, where the parameter mints one at all. The `parameter` coordinate
 and every axis expand into eleven `###` headings: the value, plus
 ten keys that make it checkable without the run that produced it, one of
-them `_producer`, the position in the stamp's `producers` list of the
-top-up that read the coordinate again (a missing key means the harvest
-read it; `docpipe/extraction/schema.py:212` to `290`). Four parameters carry
+them `_producer`, the position in the stamp's `producers` list of the pass
+that wrote the coordinate after the harvest, a top-up that read it again or
+the pass that appended its row (`--top-up-parameters`); a missing key means
+the harvest read it (`docpipe/extraction/schema.py:212` to `292`). Four parameters carry
 the same `scenario` axis, `scenario_type`, `scenario_abstract`,
 `scenario_region` and `scenario_year`, each stating which of the
 publication's AR6 scenarios the row belongs to
@@ -38,7 +39,7 @@ test_a_document_field_carries_no_axes_and_a_scenario_field_carries_one`).
 A tuple's `provenance` names where its `quote` sits: `document_id`,
 `owner_kind` and `owner_id` always present, the rest, page and
 section location among them, filled in as the source allows
-(`docpipe/extraction/schema.py:441` to `489`); a coordinate's
+(`docpipe/extraction/schema.py:443` to `491`); a coordinate's
 `<name>_source` and a refusal's `owner` use the shorter
 `[owner_kind, owner_id]` pair instead (`:147` to `151`).
 
@@ -49,7 +50,7 @@ coordinate answers from a closed list, `x-options` names every entry
 with its ontology uri and definition, and its corpus spellings where
 any are recorded. A tuple section closes with the `allOf` rule: a
 coordinate is `null` unless its own `<name>_state` says `read` or
-`derived` (`docpipe/extraction/schema.py:293` to `307`).
+`derived` (`docpipe/extraction/schema.py:295` to `309`).
 
 ## The lists this page cannot publish
 
@@ -76,8 +77,8 @@ the same four parameters takes a different path: the spec marks it
 `dynamic`, not `vocabulary_dynamic`, and `axis_slots` types it as
 plain text through a path that never calls `_value_uri` at all; that
 call runs earlier in the same function, for the parameter's own
-`value` key (`docpipe/extraction/fields.py:432` to `457`;
-`docpipe/extraction/schema.py:377`, `:397` to `409`).
+`value` key (`docpipe/extraction/fields.py:433` to `458`;
+`docpipe/extraction/schema.py:382`, `:401` to `412`).
 
 What the list holds is decided once, before harvest starts, by
 `document_axes` in `profiles/scenarios/extraction.py:172`. It reads
@@ -103,10 +104,10 @@ Two sections close the page: `## The stamp`, the schema of
 `anchors`, `page_text_transcribed` and the three that place the harvest,
 `docpipe`, `document` (the sha256 and size of the PDF) and `producers`,
 plus per-question patterns,
-`docpipe/extraction/schema.py:594` to `745`), and `## The trace`, the
+`docpipe/extraction/schema.py:602` to `763`), and `## The trace`, the
 schema of `<publication>.trace.jsonl`, one `oneOf` branch per event
 kind: eleven, fixed by the schema for every profile rather than drawn
-from this one's spec (`docpipe/extraction/schema.py:746` to `880`). A
+from this one's spec (`docpipe/extraction/schema.py:766` to `898`). A
 `parameter/`, `value/`, `axis/` or `slot/` key differing from today's
 run, or another sha256 of the PDF in `document` than the database now
 names, makes the document eligible for a full re-harvest under
@@ -119,10 +120,13 @@ in those keys once: `--remap`, which needs no model, settles them, and
 `--force-stale` first would read the documents again for nothing. A
 document with a wording that no list holds stays stale after the remap,
 and is what `--force-stale` is left for (`stale`,
-`docpipe/extraction/runner.py:4373` to `4418`; `already_done`, `:4461`
-to `4481`). `top_up_file` redoes
+`docpipe/extraction/runner.py:4417` to `4462`; `already_done`, `:4507`
+to `4546`). `top_up_file` redoes
 only the changed question
-(`docpipe/extraction/topup.py:345` to `462`). The trace is read by
+(`docpipe/extraction/topup.py:419` to `537`), and `append_document` reads a
+parameter the spec has gained without reading the document again
+(`docpipe/extraction/topup_parameter.py:336` to `462`); `already_done` names
+it in a second warning for such a document. The trace is read by
 `scripts/trace_report.py` and, for cost, by `trace_costs`
 (`scripts/harvest_compare.py:135` to `155`), never by a resume.
 
@@ -168,7 +172,7 @@ Why the claim was refused; one of the reason families of verify.py and pipeline.
 
 ## `summary`
 
-The last line of the file: how this document's own values are distributed. A contested identity is decided by the serializer and a second reading is a later pass, so neither is counted here. The levels are a floor, and the graph side recomputes them.
+The last line of the file: how this document's own values are distributed. A contested identity is decided by the serializer and a second reading is a later pass, so neither is counted here. The levels are a floor, and the graph side recomputes them. A pass that appended a parameter built this line again over every tuple and refusal the file holds; the refusals of the first pass are counted as they were stored and are not revisited, so a value refused then for want of that parameter stays in the count.
 
 ### `document_id`
 
@@ -235,7 +239,7 @@ Which source 'parameter_link_quote' was found in.
 
 ### `parameter_producer`
 
-Who re-read 'parameter': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
+Who re-read 'parameter': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
 
 ### `parameter_quote`
 
@@ -342,7 +346,7 @@ Which source 'parameter_link_quote' was found in.
 
 ### `parameter_producer`
 
-Who re-read 'parameter': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
+Who re-read 'parameter': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
 
 ### `parameter_quote`
 
@@ -447,7 +451,7 @@ Which source 'parameter_link_quote' was found in.
 
 ### `parameter_producer`
 
-Who re-read 'parameter': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
+Who re-read 'parameter': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
 
 ### `parameter_quote`
 
@@ -546,7 +550,7 @@ Which source 'parameter_link_quote' was found in.
 
 ### `parameter_producer`
 
-Who re-read 'parameter': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
+Who re-read 'parameter': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
 
 ### `parameter_quote`
 
@@ -652,7 +656,7 @@ Which source 'parameter_link_quote' was found in.
 
 ### `parameter_producer`
 
-Who re-read 'parameter': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
+Who re-read 'parameter': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
 
 ### `parameter_quote`
 
@@ -751,7 +755,7 @@ Which source 'parameter_link_quote' was found in.
 
 ### `parameter_producer`
 
-Who re-read 'parameter': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
+Who re-read 'parameter': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
 
 ### `parameter_quote`
 
@@ -816,7 +820,7 @@ Which source 'scenario_link_quote' was found in.
 
 ### `scenario_producer`
 
-Who re-read 'scenario': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
+Who re-read 'scenario': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
 
 ### `scenario_quote`
 
@@ -919,7 +923,7 @@ Which source 'parameter_link_quote' was found in.
 
 ### `parameter_producer`
 
-Who re-read 'parameter': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
+Who re-read 'parameter': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
 
 ### `parameter_quote`
 
@@ -1024,7 +1028,7 @@ Which source 'parameter_link_quote' was found in.
 
 ### `parameter_producer`
 
-Who re-read 'parameter': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
+Who re-read 'parameter': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
 
 ### `parameter_quote`
 
@@ -1089,7 +1093,7 @@ Which source 'scenario_link_quote' was found in.
 
 ### `scenario_producer`
 
-Who re-read 'scenario': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
+Who re-read 'scenario': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
 
 ### `scenario_quote`
 
@@ -1190,7 +1194,7 @@ Which source 'parameter_link_quote' was found in.
 
 ### `parameter_producer`
 
-Who re-read 'parameter': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
+Who re-read 'parameter': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
 
 ### `parameter_quote`
 
@@ -1255,7 +1259,7 @@ Which source 'scenario_link_quote' was found in.
 
 ### `scenario_producer`
 
-Who re-read 'scenario': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
+Who re-read 'scenario': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
 
 ### `scenario_quote`
 
@@ -1393,7 +1397,7 @@ Which source 'parameter_link_quote' was found in.
 
 ### `parameter_producer`
 
-Who re-read 'parameter': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
+Who re-read 'parameter': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
 
 ### `parameter_quote`
 
@@ -1458,7 +1462,7 @@ Which source 'scenario_link_quote' was found in.
 
 ### `scenario_producer`
 
-Who re-read 'scenario': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
+Who re-read 'scenario': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
 
 ### `scenario_quote`
 
@@ -1553,7 +1557,7 @@ Which source 'parameter_link_quote' was found in.
 
 ### `parameter_producer`
 
-Who re-read 'parameter': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
+Who re-read 'parameter': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
 
 ### `parameter_quote`
 
@@ -1658,7 +1662,7 @@ Which source 'parameter_link_quote' was found in.
 
 ### `parameter_producer`
 
-Who re-read 'parameter': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
+Who re-read 'parameter': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
 
 ### `parameter_quote`
 
@@ -1816,7 +1820,7 @@ Which source 'parameter_link_quote' was found in.
 
 ### `parameter_producer`
 
-Who re-read 'parameter': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
+Who re-read 'parameter': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
 
 ### `parameter_quote`
 
@@ -1917,7 +1921,7 @@ Which source 'parameter_link_quote' was found in.
 
 ### `parameter_producer`
 
-Who re-read 'parameter': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
+Who re-read 'parameter': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
 
 ### `parameter_quote`
 
@@ -2023,7 +2027,7 @@ Which source 'parameter_link_quote' was found in.
 
 ### `parameter_producer`
 
-Who re-read 'parameter': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
+Who re-read 'parameter': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
 
 ### `parameter_quote`
 
@@ -2128,7 +2132,7 @@ Which source 'parameter_link_quote' was found in.
 
 ### `parameter_producer`
 
-Who re-read 'parameter': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
+Who re-read 'parameter': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
 
 ### `parameter_quote`
 
@@ -2556,7 +2560,7 @@ Which source 'parameter_link_quote' was found in.
 
 ### `parameter_producer`
 
-Who re-read 'parameter': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
+Who re-read 'parameter': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
 
 ### `parameter_quote`
 
@@ -2692,7 +2696,7 @@ Which source 'parameter_link_quote' was found in.
 
 ### `parameter_producer`
 
-Who re-read 'parameter': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
+Who re-read 'parameter': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
 
 ### `parameter_quote`
 
@@ -2821,7 +2825,7 @@ The parameter/, value/, axis/ and slot/ keys, and the sha256 in `document`, make
 | `document` | Which bytes were read: the sha256 and the size of the file as the database recorded them. Absent for a database that records none. Another sha256 than this one makes the document stale, as a changed ontology key does. The size is recorded and never compared, and a stamp without this key is not compared at all. |
 | `model` | the serving model |
 | `page_text_transcribed` | How many pages of this document a model read rather than the PDF. A harvest from a transcribed document is a reading of a reading. |
-| `producers` | Every pass that wrote into this harvest, in order: the harvest, then each top-up that rewrote the file, each remap that carried a key forward and each review that changed a row. Entries are only ever added, so a position is stable: a coordinate a top-up re-read points at its entry with `<axis>_producer`. `model` above names the first only. Recorded and never compared. |
+| `producers` | Every pass that wrote into this harvest, in order: the harvest, then each top-up that rewrote the file, each pass that appended a new parameter, each remap that carried a key forward and each review that changed a row. Entries are only ever added, so a position is stable: a coordinate a top-up re-read points at its entry with `<axis>_producer`. `model` above names the first only. Recorded and never compared. |
 | `spec` | sha256 of extraction_spec.json. A record, not a verdict: it moves on a comment, an indent or a graph annotation, none of which any question is asked through. Compared, it would outvote every key below it. |
 | `^axis/[^/]+/[^/]+$` | What this coordinate asks and what it may answer: the question and the offered list with its spellings and its definitions. Everything the model sees for this axis, and nothing else. |
 | `^extraction/(harvest\|queries\|anchors\|rows\|field\|phrase\|frame)$` | sha256 of the prompt file |

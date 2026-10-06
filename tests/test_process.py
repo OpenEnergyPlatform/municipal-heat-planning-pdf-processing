@@ -147,6 +147,8 @@ def test_a_table_and_a_figure_are_each_asked_with_their_own_prompt(
 def test_the_budget_counts_the_longer_of_the_two_system_prompts():
     longer = max(len(C.table_system_prompt().split()),
                  len(C.figure_system_prompt().split()))
+    # and ONE reply: the room a cut-off image is given once more comes out of
+    # what the served window leaves beyond the budget
     assert C.max_request_tokens() == int(
         longer * C.TOKENS_PER_WORD + C.IMAGE_TOKENS + C.VLM_MAX_TOKENS)
 

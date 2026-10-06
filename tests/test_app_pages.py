@@ -32,7 +32,14 @@ What is promised, sentence by sentence:
   * a link into an external viewer is shown only where a prefix is
     configured, and a fresh install configures none;
   * a chat with no profile says so in one line, naming that it runs on the
-    built-in profile AND how to give another.
+    built-in profile AND how to give another;
+  * the chat says how many of the statements the model made were removed,
+    directly under the answer, in the live turn AND when the history is drawn
+    again AND where every one was, and says nothing where none was;
+  * a model whose replies could not be read is said so in the profile's words
+    and not as "nothing backs an answer", AND an answer that lost a small
+    request says how many, AND a follow-up is never given a statement that
+    was dropped.
 """
 import importlib.util
 import json
@@ -1068,3 +1075,304 @@ def test_a_chat_with_a_profile_does_not_say_it(app, page, monkeypatch):
     monkeypatch.setattr(app.config, "PROFILE", load_profile("default"))
     app.main()
     assert page.texts("warning") == []
+
+
+# ------------------------------------------------------ statements, drops, faults
+
+def answered(**more):
+    """What a turn returns that shows an answer, with the new keys."""
+    return {"answer": "- Bedarf. [1]\n- Heizwerke. [2]",
+            "answer_text": "Bedarf.\nHeizwerke.",
+            "citations": [], "n_hits": 3, "as_json": False, "phrase": "p",
+            "examined": [], "statements_made": 2, "statements_dropped": 0,
+            "faults": [], **more}
+
+
+def test_the_app_says_how_many_statements_were_removed(app, page, chat,
+                                                       monkeypatch):
+    monkeypatch.setattr(app, "run_turn", lambda *a, **k: answered(
+        statements_made=3, statements_dropped=1))
+    page.question = "How much gas?"
+    app.chat_page()
+    note = app.T["statements_dropped"].format(dropped=1, made=3)
+    assert note in page.texts("caption")
+    # directly under the answer, and after the harvest's values
+    order = [text for how, text in page.said
+             if how in ("markdown", "caption")]
+    values = order.index(f"**{app.T['values_heading']}**")
+    shown = order.index("- Bedarf. [1]\n- Heizwerke. [2]")
+    assert values < shown and order[shown + 1] == note
+    # drawn again with the next question: the history carries the count
+    page.said.clear()
+    monkeypatch.setattr(app, "run_turn", lambda *a, **k: answered())
+    page.question = "And coal?"
+    app.chat_page()
+    assert page.texts("caption").count(note) == 1       # the old message's
+    # a turn with nothing removed says nothing of it
+    assert not [t for t in page.texts("caption")
+                if t.startswith("⚠️") and t != note]
+
+
+def test_a_turn_where_every_statement_was_removed_shows_the_count_and_says_nothing_is_backed(
+        app, page, chat, monkeypatch):
+    monkeypatch.setattr(app, "run_turn", lambda *a, **k: {
+        "answer": None, "citations": [], "n_hits": 3, "as_json": False,
+        "phrase": "p", "statements_made": 2, "statements_dropped": 2,
+        "faults": []})
+    page.question = "Anything?"
+    app.chat_page()
+    assert app.T["nothing_backed"] in page.texts("markdown")
+    assert app.T["statements_dropped"].format(dropped=2, made=2) \
+        in page.texts("caption")
+    # the harvest's values stay as they were, and first
+    assert f"**{app.T['values_heading']}**" in page.texts("markdown")
+
+
+def test_a_message_from_before_the_counts_still_draws(app, page, chat):
+    """A session that was open when the app was updated holds messages
+    without the new keys."""
+    page.session_state["doc_ids"] = [1]
+    page.session_state["chat_history"] = [
+        {"role": "assistant", "content": "Old answer.", "citations": []}]
+    app.chat_page()
+    assert "Old answer." in page.texts("markdown")
+    assert not [t for t in page.texts() if t.startswith("⚠️")]
+
+
+def test_unreadable_answer_is_not_nothing_found(app, page, chat, monkeypatch):
+    """Every reply to the answer request was unreadable. The page says that
+    the replies could not be read, with the causes, and does not say that the
+    sources hold nothing that backs an answer."""
+    unread = [{"request": "answer_reply", "cause": "cut_off"}] * 2
+    monkeypatch.setattr(app, "run_turn", lambda *a, **k: {
+        "answer": None, "citations": [], "n_hits": 3, "as_json": False,
+        "phrase": "p", "statements_made": 0, "statements_dropped": 0,
+        "faults": unread})
+    page.question = "Anything?"
+    app.chat_page()
+    markdown = page.texts("markdown")
+    assert app.T["answer_unreadable"].format(
+        causes="answer_reply: cut_off x2") in markdown
+    assert app.T["nothing_backed"] not in markdown
+    # the same fault is not said twice: the reply has it
+    assert not page.texts("warning")
+    # the next question is drawn with the history, and it is still said so
+    monkeypatch.setattr(app, "run_turn", lambda *a, **k: answered())
+    page.question = "Again?"
+    app.chat_page()
+    assert app.T["answer_unreadable"].format(
+        causes="answer_reply: cut_off x2") in page.texts("markdown")
+    # what the follow-up is given is that nothing was backed
+    turns = page.session_state["turns_by_doc"][1]
+    assert turns[0]["answer"] == app.T["no_answer_context"]
+
+
+def test_replies_that_were_fine_but_all_dropped_still_say_nothing_is_backed(
+        app, page, chat, monkeypatch):
+    monkeypatch.setattr(app, "run_turn", lambda *a, **k: {
+        "answer": None, "citations": [], "n_hits": 3, "as_json": False,
+        "phrase": "p", "statements_made": 1, "statements_dropped": 1,
+        "faults": [{"request": "search_phrase_reply", "cause": "no_object"}]})
+    page.question = "Anything?"
+    app.chat_page()
+    assert app.T["nothing_backed"] in page.texts("markdown")
+    # and the small request that was lost is said, apart from the reply
+    assert app.T["replies_unreadable"].format(
+        n=1, causes="search_phrase_reply: no_object") in page.texts("warning")
+
+
+def test_an_answer_that_lost_a_small_request_says_how_many_in_the_profiles_words(
+        app, page, chat, monkeypatch):
+    lost = [{"request": "search_phrase_reply", "cause": "no_object"},
+            {"request": "readoff_reply", "cause": "syntax"},
+            {"request": "readoff_reply", "cause": "syntax"}]
+    monkeypatch.setattr(app, "run_turn", lambda *a, **k: answered(faults=lost))
+    page.question = "How much gas?"
+    app.chat_page()
+    warning = app.T["replies_unreadable"].format(
+        n=3, causes="search_phrase_reply: no_object, "
+                    "readoff_reply: syntax x2")
+    assert warning in page.texts("warning")
+    # still drawn when the history is
+    page.said.clear()
+    monkeypatch.setattr(app, "run_turn", lambda *a, **k: answered())
+    page.question = "And coal?"
+    app.chat_page()
+    assert page.texts("warning").count(warning) == 1
+
+
+def test_the_new_words_are_the_profiles_in_each_language():
+    from docpipe.inference import wording
+    for key in ("statements_dropped", "replies_unreadable",
+                "answer_unreadable", "computed_from", "run_label"):
+        assert key in wording.UI_REQUIRED
+    kwp = load_profile("kwp")._own("inference", "UI")
+    default = load_profile("default")._own("inference", "UI")
+    assert "entfernt" in kwp["statements_dropped"]
+    assert "removed" in default["statements_dropped"]
+    assert "Lauf" in kwp["run_label"] and "Run" in default["run_label"]
+
+
+def test_a_comparison_says_per_document_how_many_were_removed_and_what_was_lost(
+        app, page):
+    lost = [{"request": "comparison_reply", "cause": "wrong_shape"}]
+    app._render_comparison({
+        "task": "Rate?", "comparison": None, "answered": 2, "as_json": False,
+        "dropped": [], "faults": lost,
+        "rows": [
+            {"label": "Kassel", "answer": "Eins. [1]",
+             "answer_text": "Eins.", "n_findings": 1, "n_hits": 3,
+             "citations": [], "statements_made": 3, "statements_dropped": 1,
+             "faults": []},
+            {"label": "Leipzig", "answer": "Zwei. [1]",
+             "answer_text": "Zwei.", "n_findings": 1, "n_hits": 3,
+             "citations": [], "statements_made": 1, "statements_dropped": 0,
+             "faults": [{"request": "readoff_reply", "cause": "syntax"}]}]})
+    captions = page.texts("caption")
+    assert app.T["statements_dropped"].format(dropped=1, made=3) in captions
+    assert app.T["statements_dropped"].format(dropped=0, made=1) \
+        not in captions
+    warnings = page.texts("warning")
+    assert app.T["replies_unreadable"].format(
+        n=1, causes="comparison_reply: wrong_shape") in warnings
+    assert app.T["replies_unreadable"].format(
+        n=1, causes="readoff_reply: syntax") in warnings
+    assert app.T["compare_failed"] in page.texts("markdown")
+
+
+def test_a_comparison_row_whose_replies_could_not_be_read_is_not_a_document_with_nothing(
+        app, page):
+    """The chat page says that the replies could not be read where they could
+    not; a row of a comparison says the same, and does not say that the
+    document holds nothing. Rows that did read their sources (every statement
+    dropped; the model found nothing) keep the sentence they had."""
+    def row(label, answer=None, **more):
+        return {"label": label, "answer": answer, "answer_text": answer,
+                "n_findings": 0, "n_hits": 3, "citations": [],
+                "statements_made": 0, "statements_dropped": 0, "faults": [],
+                **more}
+
+    cut = [{"request": "answer_reply", "cause": "cut_off"}] * 2
+    app._render_comparison({
+        "task": "Rate?", "comparison": None, "answered": 1, "as_json": False,
+        "dropped": [], "faults": [],
+        "rows": [row("Kassel", "Eins. [1]", statements_made=1),
+                 row("Leipzig", faults=cut),
+                 row("Jena", statements_made=2, statements_dropped=2),
+                 row("Halle"),
+                 row("Gera", n_hits=0)]})
+    markdown = page.texts("markdown")
+    assert app.T["answer_unreadable"].format(
+        causes="answer_reply: cut_off x2") in markdown
+    assert markdown.count(app.T["document_nothing"]) == 2    # Jena, Halle
+    assert markdown.count(app.T["no_hits"]) == 1             # Gera
+    # the cause is said once, in the row, and not again as a warning
+    assert not page.texts("warning")
+    # a row that has statements and lost one answer request in another batch
+    # says it under its answer, as the chat page does
+    page.said.clear()
+    app._render_comparison({
+        "task": "Rate?", "comparison": None, "answered": 1, "as_json": False,
+        "dropped": [], "faults": [],
+        "rows": [row("Kassel", "Eins. [1]", statements_made=1, faults=cut)]})
+    assert app.T["replies_unreadable"].format(
+        n=2, causes="answer_reply: cut_off x2") in page.texts("warning")
+    assert app.T["answer_unreadable"].format(
+        causes="answer_reply: cut_off x2") not in page.texts("markdown")
+
+
+def test_a_row_whose_json_could_not_be_made_is_prose_and_not_a_code_block(
+        app, page):
+    """The JSON of one document failed and its answer is the prose: it is
+    drawn as prose, whatever the other rows are."""
+    app._render_comparison({
+        "task": "Rate?", "comparison": "V", "answered": 2, "as_json": True,
+        "dropped": [], "faults": [],
+        "rows": [
+            {"label": "Kassel", "answer": "Eins. [1]", "as_json": False,
+             "answer_text": "Eins.", "n_findings": 1, "n_hits": 3,
+             "citations": []},
+            {"label": "Leipzig", "answer": '{"rate": 2}', "as_json": True,
+             "answer_text": "Zwei.", "n_findings": 1, "n_hits": 3,
+             "citations": []}]})
+    assert "Eins. [1]" in page.texts("markdown")
+    assert not page.texts("code")
+
+
+def test_a_citation_shows_its_number_and_a_calculated_one_says_which_run(
+        app, page, cited):
+    app._render_citation(citation(n=2, computed=True, run=3))
+    assert "[2] 📄 Kassel, p. 12" in page.texts("caption")
+    assert app.T["computed_from"].format(n=3) in page.texts("caption")
+    page.said.clear()
+    app._render_citation(citation(n=1))
+    assert "[1] 📄 Kassel, p. 12" in page.texts("caption")
+    assert app.T["computed_from"].format(n=1) not in page.texts("caption")
+    page.said.clear()
+    app._render_citation(citation())            # JSON mode: no number
+    assert "📄 Kassel, p. 12" in page.texts("caption")
+    assert not [c for c in page.texts("caption") if c.startswith("[")]
+    # a read-off keeps its own line
+    page.said.clear()
+    app._render_citation(citation(n=1, visual=True))
+    assert app.T["read_off"] in page.texts("caption")
+
+
+def test_every_run_of_the_calculation_is_headed_with_its_number(app, page):
+    ok = {"ok": True, "stdout": "1"}
+    app._render_compute([{"code": "print(1)", "output": ok},
+                         {"code": "boom", "output": {"ok": False,
+                                                     "error": "NameError"}}])
+    inside = page.inside[app.T["show_compute"].format(n=2)]
+    assert [t for how, t in inside if how == "caption"] == [
+        app.T["run_label"].format(n=1), app.T["run_label"].format(n=2)]
+    assert ("text", app.T["compute_error"].format(error="NameError")) in inside
+
+
+def test_follow_up_history_never_carries_a_dropped_statement(
+        app, page, chat, monkeypatch):
+    """The whole way: a model statement with a fabricated quote through the
+    real answer turn, into what a follow-up is given. `answer_text` is what
+    is remembered, and it holds neither the dropped statement nor the marks
+    of the shown answer."""
+    quote = "Der Wärmebedarf betrug 100 GWh."
+    hit = {"owner_kind": "section", "owner_id": 1, "content": quote,
+           "text": quote, "title": "T", "document_id": 1, "page_number": 1,
+           "image_path": None}
+    monkeypatch.setattr(app.answer.hybrid.faiss_store, "retrieve",
+                        lambda *a, **k: [hit])
+    monkeypatch.setattr(app.answer.llm_client, "make_search_phrase",
+                        lambda *a, **k: ("Bedarf", False))
+    monkeypatch.setattr(app.answer.chunker, "get_tokenizer", lambda *a: None)
+    wrote = [{"statement": "Der Bedarf war 100 GWh.", "basis": "text",
+              "index": 0, "quote": quote},
+             {"statement": "Kryptonit deckt den Bedarf.", "basis": "text",
+              "index": 0, "quote": "Kryptonit deckt den gesamten Bedarf."}]
+    monkeypatch.setattr(app.answer.llm_client, "answer_from_sources",
+                        lambda task, items, **kw: {
+                            "statements": wrote, "complete": True,
+                            "compute": [], "attached_images": [],
+                            "requested": [], "fault": None})
+
+    def turn(task, image_bytes, image_only, document_id, scopes,
+             as_json=False, history=None):
+        corpus = app.answer.Corpus(conn=None, index=None, id_to_pos={},
+                                   embed=lambda item: ([0.0] * 4, False))
+        return app.answer.answer_question(task, corpus, document_id, scopes,
+                                          history=history)
+
+    monkeypatch.setattr(app, "run_turn", turn)
+    page.question = "Wie hoch ist der Bedarf?"
+    app.chat_page()
+    assert "Der Bedarf war 100 GWh. [1]" in page.texts("markdown")
+    assert "Kryptonit" not in " ".join(page.texts("markdown"))
+    (kept,) = page.session_state["turns_by_doc"][1]
+    assert kept["answer"] == "Der Bedarf war 100 GWh."
+    assert "Kryptonit" not in kept["answer"] and "[1]" not in kept["answer"]
+    context = app.llm_client._history_context(
+        page.session_state["turns_by_doc"][1])
+    assert "Der Bedarf war 100 GWh." in context
+    assert "Kryptonit" not in context
+    # the note that one was removed is on the page, not in the memory
+    assert app.T["statements_dropped"].format(dropped=1, made=2) \
+        in page.texts("caption")

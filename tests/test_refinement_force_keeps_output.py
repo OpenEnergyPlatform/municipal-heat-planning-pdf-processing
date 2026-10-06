@@ -9,6 +9,7 @@ import json
 
 import pytest
 
+from docpipe.reading import Hole
 from docpipe.refinement import pipeline as RP
 from docpipe.refinement import refine as R
 
@@ -29,7 +30,7 @@ def _final(doc):
 
 def test_a_forced_run_that_dies_leaves_the_previous_refinement(doc, monkeypatch):
     """The whole point: killed part-way, the old output is still there."""
-    def die(sections, report=None):
+    def die(sections, report=None, done=None, left=None):
         assert _final(doc).exists(), "the old output was deleted before the LLM ran"
         raise KeyboardInterrupt("timeout 30m")
 
@@ -44,7 +45,8 @@ def test_a_forced_run_that_dies_leaves_the_previous_refinement(doc, monkeypatch)
 
 def test_a_forced_run_that_finishes_replaces_the_output(doc, monkeypatch):
     monkeypatch.setattr(R, "refine_sections",
-                        lambda sections, report=None: [{"title": "new", "content": "new"}])
+                        lambda sections, report=None, done=None, left=None:
+                        [{"title": "new", "content": "new"}])
 
     out = R.run_refine(doc, force=True)
 
@@ -55,7 +57,8 @@ def test_a_forced_run_that_finishes_replaces_the_output(doc, monkeypatch):
 
 def test_without_force_the_cache_still_short_circuits(doc, monkeypatch):
     monkeypatch.setattr(R, "refine_sections",
-                        lambda sections, report=None: pytest.fail("the LLM must not run"))
+                        lambda sections, report=None, done=None, left=None:
+                        pytest.fail("the LLM must not run"))
 
     out = R.run_refine(doc)
 
@@ -65,7 +68,8 @@ def test_without_force_the_cache_still_short_circuits(doc, monkeypatch):
 def test_run_single_passes_force_through_instead_of_unlinking(doc, monkeypatch):
     seen = {}
     monkeypatch.setattr(RP, "run_refine",
-                        lambda d, force=False: seen.setdefault("force", force) or {"sections": []})
+                        lambda d, force=False, holes=None:
+                        seen.setdefault("force", force) or {"sections": []})
     monkeypatch.setattr(RP.prompts, "check", lambda *a, **k: [])
     monkeypatch.setattr(RP.prompts, "record", lambda *a, **k: None)
 
@@ -84,11 +88,13 @@ def test_the_stage_records_which_windows_kept_their_originals(doc, monkeypatch):
         {"title": "A", "content": "a"}, {"title": "B", "content": "b"}]}),
         encoding="utf-8")
     monkeypatch.setattr(R, "_call_llm",
-                        lambda window, client=None, prev_ctx=None:
-                        None if window[0]["title"] == "B" else list(window))
+                        lambda window, client=None, prev_ctx=None, again=False:
+                        Hole("empty") if window[0]["title"] == "B"
+                        else list(window))
     monkeypatch.setattr(R, "OpenAI", None, raising=False)
     monkeypatch.setattr(R, "_make_splitter", lambda client: None)
-    monkeypatch.setattr(R, "split_oversized", lambda sections, ask=None: sections)
+    monkeypatch.setattr(R, "split_oversized",
+                        lambda sections, ask=None, holes=None: sections)
 
     R.run_refine(doc, force=True)
 
@@ -98,20 +104,23 @@ def test_the_stage_records_which_windows_kept_their_originals(doc, monkeypatch):
     assert [f["window"] for f in report["failed_windows"]] == [2]
     assert report["failed_windows"][0]["titles"] == ["B"]
     assert report["failed_windows"][0]["sections"] == [1]
+    assert report["failed_windows"][0]["reason"] == "empty"
 
 
 def test_a_clean_run_records_an_empty_list_not_a_missing_file(doc, monkeypatch):
     """Empty list means 'checked, nothing failed'; a missing file means nobody
     looked. The old detector could not tell those apart."""
     monkeypatch.setattr(R, "refine_sections",
-                        lambda sections, report=None: report.update(
-                            {"total_windows": 1, "failed_windows": []}) or sections)
+                        lambda sections, report=None, done=None, left=None:
+                        report.update({"total_windows": 1,
+                                       "failed_windows": []}) or sections)
 
     R.run_refine(doc, force=True)
 
     report = json.loads(
         (doc / "results" / "refinement_report.json").read_text(encoding="utf-8"))
-    assert report == {"total_windows": 1, "failed_windows": []}
+    assert report == {"total_windows": 1, "failed_windows": []}, (
+        "what the pass puts in the report is what is written")
 
 
 # ---------------------------------------------------------------------------

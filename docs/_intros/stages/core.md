@@ -1,8 +1,9 @@
 ## Purpose
 
 `docpipe/artifacts.py`, `docpipe/profile.py`, `docpipe/prompts.py`,
-`docpipe/llm_preflight.py`, `docpipe/captions.py`, `docpipe/usage.py` and
-`docpipe/jsonl.py` are the seven modules this page documents together (the
+`docpipe/llm_preflight.py`, `docpipe/reading.py`, `docpipe/captions.py`,
+`docpipe/usage.py` and `docpipe/jsonl.py` are the eight modules this page
+documents together (the
 `SOURCES` manifest of `scripts/build_docs.py` groups them under this page).
 Each is imported by a different subset of
 preprocessing, refinement, visuals, chunking, extraction and inference;
@@ -15,13 +16,15 @@ supplies (`profile.py`), which file carries a stage's prompt and
 whether a result on disk still matches it (`prompts.py`), what a
 file a stage writes is called so the next stage can find it
 (`artifacts.py`), whether the model server a stage is about to call can
-do what is asked (`llm_preflight.py`), once a caption-linking rule
+do what is asked (`llm_preflight.py`), what a model's reply is when it was
+asked to be one JSON object and why it is none when it is not (`reading.py`),
+once a caption-linking rule
 elsewhere attaches the wrong sentence to a table, where the real title
 sits (`captions.py`), how many tokens a run spent, summed across
 processes that come and go (`usage.py`), and where one line of a JSON
 Lines file ends (`jsonl.py`).
 
-The seven files share a property none of the numbered stages needs: a
+The eight files share a property none of the numbered stages needs: a
 profile never appears inside them by name. `docpipe/profile.py` states
 the rule in its own docstring, "The core never imports a profile; it
 receives one" (`docpipe/profile.py:6`), and
@@ -43,7 +46,7 @@ receiving side.
 
 ## Position in the pipeline
 
-None of these seven modules sits between an upstream and downstream step;
+None of these eight modules sits between an upstream and downstream step;
 each is imported by whichever stage is running, none writes its own
 `results/` file, and none runs from the command line by itself. In
 place of an In/Out table, what each module supplies and who reaches for
@@ -54,16 +57,18 @@ it is:
 | `profile.py` | the active `Profile`: paths, prompts directory, `component()`/`require()` | every stage's pipeline or CLI module, plus preprocessing's and refinement's `config.py`; inference only via `wording.py`, no CLI |
 | `prompts.py` | a prompt's text and sha256, plus a staleness check against `.prompt_versions.json` | preprocessing, refinement, visuals, extraction, inference load; refinement and visuals record/check |
 | `artifacts.py` | the filename of every per-document result file, spelled out once, and the one listing of the document directories that hold them (`document_dirs`) | preprocessing, refinement, visuals, chunking |
-| `llm_preflight.py` | a check, before a stage's first document, that its server can do what is asked | refinement, visuals, extraction |
+| `llm_preflight.py` | a check, before a stage's first document, that its server can do what is asked, reply schemas included; the window the server reported, and the room a cut-off unit is asked once more with | refinement, visuals, page transcription (preprocessing), extraction |
+| `reading.py` | the one JSON object a reply was asked to be, or the cause it is not one; the profile's sentences that name the cause (`reading.PHRASES`) | refinement, visuals, page transcription, and the chat (`inference/llm_client.py`) |
 | `captions.py` | the rule for where a table's or figure's real title sits, with the patterns that open a caption read from the profile in force | preprocessing (write time); chunking, inference (read time) |
 | `usage.py` | token/request counting, on once a process calls `begin(stage)` | refinement, visuals, chunking and extraction call `begin()`; every reply or embedding call in those four books through `add()`/`reply()` |
 | `jsonl.py` | the lines of a JSON Lines text or file, split at the line feed and nowhere else | extraction (the harvest reader, the decisions file, review, remap, top-up, recheck, identity) and the cassette of [the provider layer](providers.md) |
 
-The closest thing any of the seven holds to a resume rule is
+The closest thing any of the eight holds to a resume rule is
 `prompts.py`'s staleness check (Method). `profile.py` also memoizes
 `profile_value()` in memory for one process, not a resume rule;
 `artifacts.py`, `llm_preflight.py` and `jsonl.py` keep no state of their own,
-and `captions.py` keeps only the patterns it compiled once per profile;
+and `captions.py` and `reading.py` keep only what they compiled or checked once
+per profile (the patterns, the table of sentences);
 `usage.py` keeps counts in memory and periodically flushes
 them, not a resume rule either since a flush always overwrites the same
 row.
@@ -127,15 +132,17 @@ module is first imported; `bind_command_line()` sets it for a
 
 ### Checking the server before the first document
 
-`assert_serving()` (`docpipe/llm_preflight.py:203`) calls `serving_limits()`, one `GET {base_url}/models`
+`assert_serving()` (`docpipe/llm_preflight.py:304`) calls `serving_limits()`, one `GET {base_url}/models`
 request, 30 seconds and one retry by default
-(`docpipe/llm_preflight.py:84,89`), and compares served model ids and
+(`docpipe/llm_preflight.py:136,141`), and compares served model ids and
 the smallest `max_model_len` reported against the tokens the stage
-needs. It runs once per run, before any document, from four call
-sites: refinement's `run()` (`docpipe/refinement/pipeline.py:160`) and
-`main()` (`:244`); visuals (`docpipe/visuals/pipeline.py:524`, skipped
-under `--dry-run`); and extraction's review pass and harvest
-(`docpipe/extraction/runner.py:5134` and `:5220`). A hosted API is asked the
+needs. It runs once per run, before any document, from these call sites:
+refinement's `run()` (`docpipe/refinement/pipeline.py:200`) and
+`main()` (`:290`); visuals (`docpipe/visuals/pipeline.py:590`, skipped
+under `--dry-run`); page transcription (`docpipe/preprocessing/pipeline.py:478`),
+asked before the first page that lacks its text and not before the first
+document; and extraction's review pass and harvest
+(`docpipe/extraction/runner.py:5426` and `:5512`). A hosted API is asked the
 same through `_hosted_serving`, and besides whether the model answers inside
 a reply schema; a replay of a recorded run has no server to ask and takes the
 window the recording was planned for. A server that reports no
@@ -144,6 +151,92 @@ warning, and the one-token request that probes the request fields is sent all
 the same, because a gateway or a local runner is the likeliest to refuse them.
 A window one token short of the budget is refused before any request is sent,
 and one exactly as large is enough.
+
+A stage that sends its reply schema as the grammar of every request (refinement,
+the visuals stage, page transcription) passes `shapes` too, `{name: schema}`:
+refinement `refined_sections` and `section_cuts`, the visuals stage `table_reply`
+and `figure_reply`, page transcription `page_reply`. After the window and the
+request fields, `assert_reply_schemas` puts each schema to the server once, as
+the stage will send it: one request of 32 tokens per schema, with the
+reasoning settings every request carries; that the capped reply is cut short is
+no matter, it is not read. These stages ask for JSON in no other way, so a
+server that refuses one schema refuses every request of the run. Only a 4xx other than 429 is a
+refusal, and it raises `PreflightError` naming the schema, the model and the
+status. A server that is busy or down (a 429, a 5xx, no answer) gives no verdict:
+it is logged, `assert_reply_schemas` returns a sentence, and the run asks anyway.
+Extraction and the chat pass no shapes.
+
+The window the server reports at the preflight is kept for the run, by role
+(`served_window(role)`; none for a server or a hosted API that reports none, and
+for a caller that ran no preflight). The refinement, visuals and
+page-transcription stages use it for one thing: the room of the one further
+attempt at a unit whose reply was cut off and that cannot be split (a lone
+section, an outline of one segment, an image, a page). `further_room(asked,
+reply=, budget=, role=)` gives it in tokens as `min(2 x asked, reply + window -
+budget)`. *budget* is the stage's largest request, the prompt, the largest input
+and one largest reply of *reply* tokens, which the preflight checked the window
+against, so what the window holds beyond it is free for every request of the run.
+The result is None where it is no more than *asked*: the unit is a hole `cut_off`
+then and nothing is sent. Where the window is not known, or the caller states no
+budget, the room is twice *asked*. Each stage's budget is one largest reply
+(`refinement.config.max_request_tokens`, `visuals.config.max_request_tokens`,
+`page_text_fallback.page_request_tokens`).
+
+### Reading a model's reply as one JSON object
+
+Refinement, the visuals stage, page transcription and the chat ask a model for
+one JSON object, inside a reply schema, and read what comes back through
+`docpipe/reading.py` and nowhere else. `reading.read(choice, key, of)` takes the
+first choice of a response (`first`; a response without one is an empty reply)
+and returns `(object, "", "")` for a reply that is exactly one JSON object with
+`key` in it as an instance of `of` (a list for a window's sections, text for a
+table's markdown, `object` for a key of any kind, which still has to be there).
+Otherwise it returns `(None, cause, sentence)`. Whitespace around the object is
+no text; anything else around it is. Nothing is stripped (a code fence, a
+`<think>` block), nothing is cut out of surrounding text, no bracket is closed,
+and nothing is salvaged from a reply that was cut off: each of those turned a
+defective answer into content that then stood in a file as if it had been read.
+
+The cause says why the reply is not the object. In the order the checks run:
+`missing_key` (an object, but the key is absent or of another type),
+`reasoning_only` (no text, the answer went into the reasoning), `cut_off` (no
+readable object, and the reply ended at its token limit; an empty reply with no
+reasoning that did is a cut-off too), `empty`, `no_object` (text with no `{`), `syntax` (a `{` from
+which no complete object can be read, with the position of the break),
+`outside_text` (one complete object with text beside it) and `not_an_object`
+(well-formed JSON that is a list, a string or a number). `wrong_shape` is the
+label a stage gives an object that was read well and is no use to it (a window
+whose list holds no section); `read` never gives it. The names and their order
+are the harvest's (`extraction.runner._reply_fault`), which keeps its own reader
+and its own sentences; a test holds the two against each other. The sentence
+is empty for `cut_off`: that reply is never asked again as it stands, the stage
+splits the request or gives the unit more room.
+
+A `Hole(cause, detail)` is a unit (a window, a cut request, an item, a page) that ended without a result and the reason it has none. The
+causes are those above plus `refused` (the server rejected the request itself,
+a 4xx other than 429), `not_served` (the server did not answer) and `error` (a
+failure of the stage's own after the reply arrived); they are
+`reading.HOLE_CAUSES`, and a hole with another cause raises `ValueError`.
+`detail` is for the log and decides nothing.
+
+The sentences the model hears are the profile's. `profiles/<name>/reading.py`
+carries a table `PHRASES`, in the language of the profile's prompts for these
+stages; `reading.phrases()` lays it over the tables of the profiles it extends,
+entry by entry (`profile.layers`), and checks the result against
+`reading.REQUIRED`, ten names: `shape_rule` (what is said back whatever went
+wrong: the shape that was asked for, appended to every cause), `reasoning_only`,
+`empty`, `no_object`, `syntax`, `outside_text`, `not_an_object`, and
+`key_missing`, `key_not_a_list`, `key_not_text`, the three the key check says.
+A profile that lacks one raises `LookupError` naming it, and the three stages
+call `reading.phrases()` in their `main` before the first request, so the gap is
+found there and not in the middle of the first document. The built-in
+`default`, `kwp` and `scenarios` profiles each provide all ten, in English,
+because the prompts of these stages are English in all three (the scenarios
+profile's extraction prompts are German, and `extraction.PHRASES` is a
+different table: the harvest's own). `reading.say(name, **values)` fills in a
+sentence of the profile in force, and `reading.speaking(profile)` makes the
+sentences a given profile's inside a block, which the chat uses when it answers
+on the built-in profile because none is in force.
 
 ### Rendering a prompt for one request
 
@@ -158,12 +251,12 @@ of shipping a literal `{{foo}}` to the model.
 After refinement or visuals writes its output, `prompts.record()` writes
 each prompt's sha256 into `.prompt_versions.json`
 (`docpipe/prompts.py:132-138`, called from
-`docpipe/refinement/pipeline.py:75` and
-`docpipe/visuals/pipeline.py:283`). The next run's `prompts.check()`
+`docpipe/refinement/pipeline.py:78` and
+`docpipe/visuals/pipeline.py:317`). The next run's `prompts.check()`
 compares that file against today's prompts and returns the ids changed
 (`docpipe/prompts.py:141-151`, called from
-`docpipe/refinement/pipeline.py:62` and
-`docpipe/visuals/pipeline.py:140`); a non-empty result decides whether
+`docpipe/refinement/pipeline.py:65` and
+`docpipe/visuals/pipeline.py:156`); a non-empty result decides whether
 `--force-stale` is warranted.
 
 ### Counting tokens across a run
@@ -240,7 +333,8 @@ file) and `path`, which `path_for()` resolves to `<prompts_dir>/<stage>/<name>.m
 of the profile, else of the nearest profile it extends (`:64-75`). That is
 how a profile that extends the built-in one writes every prompt itself except
 those that are the built-in file byte for byte: `kwp` inherits one
-(`visuals/caption_keep`) and `scenarios` seven (that one and six of the chat's),
+(`visuals/caption_keep`) and `scenarios` two (that one and the chat's
+`inference/json_format`),
 so the text read and its sha256 are the ones its own copy had, and
 `tests/test_default_profile.py` holds the list (see [profiles](../profiles.md));
 `placeholders` extracts the
@@ -255,7 +349,7 @@ here are the properties a stage reads once resolved:
 `package_dir`, `prompts_dir`, `schema_sql`, and, under `root`
 (`<repo>/data/<name>` unless overridden), `pdf_dir`, `processed_dir`
 (`root/pdf/processed`, refinement's default input,
-`docpipe/refinement/pipeline.py:241`), `db_path` (`<name>.db`) and
+`docpipe/refinement/pipeline.py:286`), `db_path` (`<name>.db`) and
 `index_path` (`faiss_index.bin`) (`docpipe/profile.py:267-318`). `Facet`
 (`docpipe/profile.py:161-166`) is `field`, `label`, `widget`.
 
@@ -297,9 +391,11 @@ no `CAPTION_START` at all is a `LookupError`.
 | `DOCPIPE_ENV_FILE` / `INFERENCE_ENV_FILE` | environment variables | unset; falls back to a bare `.env` | names a `.env` file to load before config reads `os.environ`; only the first readable one is loaded | `docpipe/dotenv.py:76-80` |
 | `Profile.column_layout` | dataclass field | `"auto"` | must be `auto`, `single` or `double`, or `Profile()` raises | `docpipe/profile.py:172,191-192` |
 | `Profile.data_root` / `Profile.home` | dataclass fields | `None` / `None` | override where a profile's data and package files live | `docpipe/profile.py:173-175` |
-| `timeout` (`serving_limits`) | function parameter | 30.0 seconds | timeout for the preflight `GET /models` call | `docpipe/llm_preflight.py:84-85` |
-| `max_retries` (OpenAI client) | hardcoded constant | 1 | preflight retried once before a connection failure is reported | `docpipe/llm_preflight.py:89` |
-| `what` / `flag` (`assert_serving`) | function parameters | `"this stage"` / `CONTEXT_FLAG` (`"--max-model-len"`) | substituted into the error and success log; each call site names itself | `docpipe/llm_preflight.py:204-205`, `:42-43` |
+| `timeout` (`serving_limits`) | function parameter | 30.0 seconds | timeout for the preflight `GET /models` call | `docpipe/llm_preflight.py:136-137` |
+| `max_retries` (OpenAI client) | hardcoded constant | 1 | preflight retried once before a connection failure is reported | `docpipe/llm_preflight.py:141` |
+| `what` / `flag` (`assert_serving`) | function parameters | `"this stage"` / `CONTEXT_FLAG` (`"--max-model-len"`) | substituted into the error and success log; each call site names itself | `docpipe/llm_preflight.py:305-306`, `:47-48` |
+| `shapes` (`assert_serving`) | function parameter | none | `{name: schema}`, the reply schemas a stage sends as the grammar of every request; each is put to the server once before the first document | `docpipe/llm_preflight.py:308` |
+| `reading.PHRASES` | profile component (`reading.py`) | none; required, ten names (`reading.REQUIRED`) | the sentences a stage says to the model when its reply was not the one JSON object; checked before the first request | `docpipe/reading.py:60-64`, `:87-105` |
 | `preprocessing.CAPTION_START` | profile component | none; each profile lists its own | the non-empty list of regular expressions, each carrying its own anchor, that open a caption | `docpipe/captions.py:40-71` |
 | `_CAPTION_LIMIT` | module constant | 300 characters | caps the length of a title `resolve_title()` returns | `docpipe/captions.py:31` |
 | `DOCPIPE_USAGE_DB` | environment variable | `data/usage.db` | SQLite file the token counts are written to | `docpipe/usage.py:91-92` |
@@ -335,22 +431,34 @@ profile is given (`:475-478`). `profile_value()` raises the same
 attribute and the environment variable to set (`:395-396`).
 
 `llm_preflight.py`: a missing `openai` package raises `ImportError` with
-an install hint (`docpipe/llm_preflight.py:87-94`). An unreachable
+an install hint (`docpipe/llm_preflight.py:139-146`). An unreachable
 server, or one erroring on `GET /models`, raises `PreflightError`
-wrapping the exception (`:95-99`); one serving zero models likewise
-(`:100-101`). A requested model absent from what the server serves raises
-`PreflightError` listing what it serves (`:222-227`). When no served
+wrapping the exception (`:147-151`); one serving zero models likewise
+(`:152-153`). A requested model absent from what the server serves raises
+`PreflightError` listing what it serves (`:333-338`). When no served
 model card reports a usable `max_model_len`, the check warns and does not
-compare, not fatally, and still asks the request fields (`:229-231`, `:246`);
+compare, not fatally, and still asks the request fields (`:340-342`, `:357`);
 when the reported limit is smaller than required, `assert_serving()` names
-both numbers and the flag to raise (`:232-239`). The two probes of the request
+both numbers and the flag to raise (`:343-350`). The two probes of the request
 fields, `assert_request_extras` and `assert_reply_schema`, return `None` when
 the server accepted them and a sentence when it could not be asked (down,
 busy, a 5xx); that is no verdict and the settings go out anyway. A 429 counts
 as no verdict as well and not as a refusal, for every caller of
 `assert_serving`. `assert_request_accepted` picks the probe by role, the
 reply schema for a hosted API and the reasoning settings otherwise; the
-doctor uses it.
+doctor uses it. `assert_reply_schemas`, the probe of a stage's own schemas,
+raises `PreflightError` only for a 4xx other than 429 on one of them, and
+otherwise returns `None` or a sentence naming the schemas it could not ask.
+
+`reading.py`: `phrases()` with no profile passed and none in force raises
+`LookupError` naming the variable to set; a profile that provides no
+`reading.PHRASES` raises it through `profile.require`, and one whose table
+lacks a name of `REQUIRED` raises `LookupError` listing the names missing
+(`docpipe/reading.py:87-105`). A `Hole` with a cause outside `HOLE_CAUSES`
+raises `ValueError` (`:52-55`). `read()` raises nothing for a reply it cannot
+read: it returns the cause. Every sentence is checked when `phrases()` is first
+called for a profile, which the three stages do at the start of the run, so a
+missing one is found there and not when `read()` first needs it.
 
 `captions.py`: `resolve_title()` never raises; Data model, above, lists
 what leaves `caption` unchanged.
@@ -427,6 +535,41 @@ mid-run rejection: `test_preflight_rejects_a_server_with_too_little_context`,
 `test_preflight_reports_an_unreachable_server_as_such`
 (`tests/test_context_budget.py`).
 
+The reader takes exactly one object and nothing else, names the cause the way
+the harvest does, and has no sentence for a cut-off reply:
+`test_only_the_one_object_is_read`, `test_it_reads_what_the_harvest_reads`,
+`test_a_reply_is_not_made_right_by_what_surrounds_it`,
+`test_a_reply_is_classified_like_the_harvests`,
+`test_the_guard_against_drift_sees_a_cause_that_changed`,
+`test_a_response_without_a_choice_is_an_empty_reply`,
+`test_the_key_has_to_be_of_the_type_asked_for`,
+`test_a_key_of_any_kind_still_has_to_be_there`,
+`test_a_cut_reply_has_no_sentence_for_the_retry`,
+`test_the_retry_names_the_cause`, `test_a_hole_names_only_known_causes`,
+`test_a_hole_is_a_value_that_cannot_be_changed`,
+`test_a_caller_with_a_profile_of_its_own_speaks_through_it`,
+`test_a_profile_in_force_speaks_unless_a_block_names_another`
+(`tests/test_reading.py`). Every profile carries every sentence, and none of the
+stages that read a reply softens one: `test_no_stage_repairs_a_reply`
+(`tests/test_architecture.py`, one case per module of refinement, the visuals
+stage and page transcription, with
+`test_the_stages_scanned_are_the_ones_that_read_a_reply` holding the list). The
+preflight puts each reply schema to the server, and only a 4xx other than 429
+refuses one: `test_a_server_that_refuses_the_cut_schema_ends_refinement_before_any_document`,
+`test_a_server_that_takes_every_schema_lets_refinement_go_on`
+(`tests/test_stage_preflight.py`) and the cases of `tests/test_llm_preflight.py`. The window the preflight
+found is kept for the role that asked, a later preflight that finds none replaces
+it, a replay keeps the window of the recorded run, and the room of a cut-off
+unit follows from it: `test_the_window_a_server_reports_is_kept_for_the_role_that_asked`,
+`test_each_role_keeps_the_window_of_its_own_server`,
+`test_a_later_preflight_that_finds_no_window_replaces_the_one_found_before`,
+`test_a_server_that_was_refused_leaves_no_window`,
+`test_a_hosted_api_that_reports_a_window_has_it_kept`,
+`test_a_replay_keeps_the_window_of_the_recorded_run`,
+`test_the_room_is_the_smaller_of_twice_and_the_reply_plus_what_is_left`,
+`test_a_hosted_model_that_reports_its_window_is_held_to_it`
+(`tests/test_room.py`).
+
 A title resolves to the sentence that names it, not a linked footnote, a
 neighbour's caption, or past its own end:
 `test_each_table_of_a_run_gets_its_own_caption`,
@@ -488,10 +631,22 @@ request time by `preprocessing/page_text_fallback.py`,
 serves and how large its context window is, raising `PreflightError`
 before the first document if the model or the window is unsuitable. A hosted
 model that cannot answer inside a reply schema is refused there too (see
-[the provider layer](providers.md)).
-Called once per run from refinement, extraction (review and harvest)
-and visuals (skipped under `--dry-run`); the doctor sends its request-field
+[the provider layer](providers.md)), and a server that refuses a reply schema a
+stage sends as its grammar is refused there too (`assert_reply_schemas`). It keeps
+the window the server reported (`served_window`) and gives the room of the one
+further attempt at a unit whose reply was cut off and that cannot be split
+(`further_room`). Called once per run from refinement, extraction (review and harvest),
+visuals (skipped under `--dry-run`) and page transcription, which asks before
+the first page that lacks its text; the doctor sends its request-field
 probe on its own.
+
+`reading.py` reads a model's reply as exactly one JSON object or says why it is
+none (`read`, `loads_object`, `first`), names the causes (`CAUSES`,
+`HOLE_CAUSES`, `Hole`), and holds the profile's sentences that say the cause back
+to the model (`phrases`, `say`, `speaking`, `REQUIRED`). Called by the
+refinement, visuals and page-transcription stages and by the chat's reader
+(`inference/llm_client.py`); the harvest does not call it. Each profile's table
+is its own `reading.py`.
 
 `captions.py` decides whether a stored caption already looks like one
 (`looks_like_a_caption`) and, if not, resolves the real title from the

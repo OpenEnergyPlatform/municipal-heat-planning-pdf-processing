@@ -8,9 +8,8 @@ is inserted, AND a table with no check reads as not checked and never as
 passed.
 
 Each AND has its own tests below, and each has a case built to break it: a
-retry that fixed the table, a frame with no text layer, a table the model only
-answered in plain text, a table of an older run, a database without the
-column.
+retry that fixed the table, a frame with no text layer, a table the model gave
+no object for, a table of an older run, a database without the column.
 """
 import json
 import sqlite3
@@ -21,6 +20,7 @@ from docpipe.artifacts import SECTIONS_REFINED_JSON, VISUALS_JSON
 from docpipe.chunking import database as DB
 from docpipe.chunking import merge as MG
 from docpipe.inference import db as inference_db
+from docpipe.reading import Hole
 from docpipe.visuals import config as C
 from docpipe.visuals import pipeline as IP
 from docpipe.visuals import process as P
@@ -113,24 +113,26 @@ def test_a_frame_without_a_text_layer_is_kept_as_unknown_not_as_perfect(
     assert out["qa"]["passed"] is True        # nothing could fail it
 
 
-def test_a_table_the_model_only_answered_in_plain_text_has_no_check(
+def test_a_table_the_model_gave_no_object_for_has_no_check_and_no_content(
         monkeypatch, tmp_path):
+    """Plain text is no longer an answer: the model's markdown without the
+    envelope is a hole (`no_object`), and the table has nothing that could
+    pass or fail a check."""
     (tmp_path / "images").mkdir()
     (tmp_path / "images" / "t.png").write_bytes(b"x")
-    monkeypatch.setattr(P, "call_vision", lambda *a, **k: None)
-    monkeypatch.setattr(P, "call_vision_plain", lambda *a, **k: FULL)
+    monkeypatch.setattr(P, "call_vision", lambda *a, **k: Hole("no_object"))
     out = P.process_table({"id": "p1_tbl0", "path": "images/t.png"},
                           {"title": "S"}, tmp_path, None, ProcessingStats(),
                           source_text=SOURCE)
-    assert out["markdown"] == FULL and out["vlm_status"] == "plain_text"
+    assert "markdown" not in out, "not read, not rescued"
+    assert out["vlm_why"] == "no_object"
     assert "qa" not in out, "not checked is not the same as passed"
 
 
 def test_a_table_the_model_never_answered_has_no_check(monkeypatch, tmp_path):
     (tmp_path / "images").mkdir()
     (tmp_path / "images" / "t.png").write_bytes(b"x")
-    monkeypatch.setattr(P, "call_vision", lambda *a, **k: None)
-    monkeypatch.setattr(P, "call_vision_plain", lambda *a, **k: None)
+    monkeypatch.setattr(P, "call_vision", lambda *a, **k: Hole("not_served"))
     out = P.process_table({"id": "p1_tbl0", "path": "images/t.png"},
                           {"title": "S"}, tmp_path, None, ProcessingStats(),
                           source_text=SOURCE)

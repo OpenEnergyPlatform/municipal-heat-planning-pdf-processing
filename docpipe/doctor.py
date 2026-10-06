@@ -441,9 +441,9 @@ def _accepts(server: Asked) -> list:
                      if providers.hosted(server.role) else ""))]
 
 
-# The commands whose requests carry `request_extras`. The chat's do not, so a
-# server a chat-only setup talks to is not asked about fields it never gets.
-SENDS_FIELDS = ("refine", "extract", "visuals")
+# The commands whose requests carry `request_extras`: the chat's too, so a
+# server a chat-only setup talks to is asked about the fields it gets.
+SENDS_FIELDS = ("refine", "extract", "visuals", "chat")
 
 
 def check_request(stage: Optional[str], asked: list,

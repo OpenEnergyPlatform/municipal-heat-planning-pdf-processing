@@ -252,8 +252,9 @@ def preprocess(where: Where) -> Estimate:
 def refine(where: Where) -> Estimate:
     """Stage 4. Its own rule (refine.run_refine): a document with a stage-3
     result and no refined result is still to do, and so is one with an
-    unfinished pass of the same input, of which only the windows the server
-    did not serve are asked."""
+    unfinished pass of the same input (windows the server did not serve, or
+    that ended as a hole), of which only the windows without a reply are
+    asked."""
     from docpipe.refinement import config, refine as stage, split
 
     # the stage's own bindings: they are what its window loop and its
@@ -306,8 +307,9 @@ def refine(where: Where) -> Estimate:
                  (cuts, "cuts of an oversized section")]
     if resumed:
         est.notes.append(f"{resumed:,} of the documents resume an unfinished "
-                         f"pass: only its windows the server did not serve "
-                         f"are counted")
+                         f"pass: only the windows it holds no reply for (the "
+                         f"server did not serve them, or the model could not "
+                         f"read them) are counted")
     if unreadable:
         est.notes.append(f"{unreadable:,} document(s) have a "
                          f"{SECTIONS_JSON} that cannot be read and are not "

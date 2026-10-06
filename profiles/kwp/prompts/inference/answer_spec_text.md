@@ -1,1 +1,0 @@
-"<die Antwort auf Deutsch, knapp und vollständig, als Fließtext>"

@@ -531,7 +531,7 @@ def test_a_corpus_wide_source_is_named_by_its_file_where_nobody_names_it(
 
     def from_sources(task, items, **more):
         seen["sources"] = [item["source"] for item in items]
-        return {"found": False, "answer": None, "supports": []}
+        return {"statements": [], "complete": False}
 
     monkeypatch.setattr(answer.hybrid, "retrieve",
                         lambda *a, **more: [hit(10, 1), hit(20, 2)])
@@ -566,7 +566,7 @@ def _turn(monkeypatch, document_id, hits):
     def from_sources(task, items, **more):
         seen["sources"] = [item["source"] for item in items]
         seen["requester"] = more["image_requester"]
-        return {"found": False, "answer": None, "supports": []}
+        return {"statements": [], "complete": False}
 
     monkeypatch.setattr(answer.hybrid, "retrieve", retrieve)
     monkeypatch.setattr(answer.llm_client, "make_search_phrase",

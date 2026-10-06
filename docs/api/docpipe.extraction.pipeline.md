@@ -830,6 +830,15 @@ A claim the harvester already refused keeps the reason it was refused
 for. Verified a second time, 631 of Kassel's claims came out as "claim
 names no parameter of the spec" instead of saying why.
 
+### repeat_key
+
+```python
+def repeat_key(row: dict) -> str
+```
+
+What makes one row another row written twice: everything but its
+provenance, which is about the writing and not about the reading.
+
 ### drop_repeats
 
 ```python
@@ -844,9 +853,9 @@ row, and writing it twice says nothing the first one did not. Measured on
 corpus_m5, which had no such pass: 1,152 of 62,290 tuples, up to 77 in one
 plan, and one office name eleven times.
 
-`provenance` is left out of the comparison because it is about the writing
-and not about the reading. The first of a repeated pair is the one kept,
-so the file stays in the order the harvest produced.
+`provenance` is left out of the comparison (`repeat_key`). The first of a
+repeated pair is the one kept, so the file stays in the order the harvest
+produced.
 
 ### write_report
 
