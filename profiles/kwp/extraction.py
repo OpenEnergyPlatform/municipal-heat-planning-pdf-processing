@@ -100,6 +100,12 @@ DECIMAL_MARK = ","
 # snapshot keeps for this profile, the words its spec is held against.
 ALT_LABEL_LANGUAGE = "de"
 
+# The language of the core's contract text in this profile's prompts: the
+# parts files of its own that name a template (`template: rows`) are put
+# together with the template of this language. Not inherited by a profile that
+# extends this one with parts files of its own.
+CONTRACT_LANGUAGE = "de"
+
 
 # What the preflight (`docpipe preflight`) holds this profile's prompts to,
 # beyond the keys the stage reads by name: a wording the run depends on. The

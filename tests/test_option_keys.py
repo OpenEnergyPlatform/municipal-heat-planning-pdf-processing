@@ -437,7 +437,13 @@ def test_a_harvest_stamped_with_the_german_keys_is_current_with_the_english(
         old.setitem(worded(name), "option_means", "bedeutet")
         old.setitem(worded(name), "option_spellings", "Schreibweisen")
         then = runner._stamp_current("spec-sha", "anchors-sha", spec)
-    assert then == now, "the stamp does not carry the wording of a request"
+    # A prompt that names the two keys by fact is another text under the other
+    # table, and the stamp records its hash: that is recorded, never compared,
+    # so what has to be equal is everything the comparison reads.
+    kept = lambda stamp: {k: v for k, v in stamp.items()
+                          if k not in runner.PROMPT_IDS}
+    assert kept(then) == kept(now), (
+        "the stamp does not carry the wording of a request")
     assert fingerprints(spec) and fingerprints(spec).items() <= now.items()
     # What was recorded about the prompts is recorded and never compared: the
     # prompt of kwp's rule 7 is another text since this change.

@@ -77,6 +77,15 @@ contract
   per profile at [kwp](contract/kwp.md) and
   [scenarios](contract/scenarios.md).
 
+contract template
+: The core's half of an extraction prompt: a Markdown file
+  `docpipe/extraction/contract/<language>/<name>.md`, in German and in English
+  for each of `rows`, `field`, `frame`, `review` and `example`. It says what that
+  request says of every corpus, and its front matter lists the parts, blocks and
+  rules a profile's parts file may use. Read by `docpipe/extraction/contract.py`
+  and put together with a profile's parts by `docpipe/prompts.py`. Not the
+  harvest contract above; see [extraction](stages/extraction.md).
+
 convoy
 : Several municipalities that share one heat-plan PDF, identified in the
   KWW register by rows resolving to one plan filename.
@@ -265,6 +274,15 @@ parameter
   Defined as the `Parameter` dataclass in `docpipe/extraction/spec.py`;
   see [extraction](stages/extraction.md).
 
+parts file
+: A prompt of the extraction stage whose front matter names a template
+  (`template: rows`) and whose body is sections that each start with a line
+  `<!-- part: name -->`. `docpipe/prompts.py` puts it together with the contract
+  template of the profile's language when the prompt is loaded. A part with the
+  name of one of the template's blocks words that block itself, and
+  `without: [name]` in the front matter leaves out a block the template lists as
+  omittable. See [profiles](profiles.md) and [core](stages/core.md).
+
 passage
 : The stretch of source text a coordinate's or a value's quote is checked
   against, cut at sentence boundaries when a quote has to be rebuilt
@@ -291,10 +309,13 @@ profile
 prompt
 : A Markdown file under `profiles/<profile>/prompts/<stage>/<name>.md`,
   with optional YAML front matter carrying model parameters, loaded as a
-  `Prompt` with an id, text and sha256 by `docpipe/prompts.py`. The core has
-  no default prompt of its own, so a profile without a matching file fails
-  to import, unless it extends a profile that has one (`default` has them
-  all). See [core](stages/core.md).
+  `Prompt` with an id, text and sha256 by `docpipe/prompts.py`. For the rows,
+  field, frame, review and example prompts of the extraction stage the file is
+  a parts file, and the text is composed from the core's contract template and
+  the profile's parts. The core has no default prompt of its own beyond those
+  templates, so a profile without a matching file fails to import, unless it
+  extends a profile that has one (`default` has them all). See
+  [core](stages/core.md).
 
 provenance
 : The block on an accepted tuple recording where its evidence came from:
@@ -455,6 +476,12 @@ sweep
   shared bookkeeping across a document's batches is
   `docpipe.extraction.pipeline.Sweep`. See
   [extraction](stages/extraction.md).
+
+template block
+: A stretch of a contract template between `<!-- block: name -->` and
+  `<!-- /block -->`. A profile's parts file words it itself with a part of the
+  same name or, where the template lists it as omittable, leaves it out with
+  `without`. Not a PDF block (see block above). See [profiles](profiles.md).
 
 tier
 : Which kind of evidence backs an accepted tuple: `text_located`, the

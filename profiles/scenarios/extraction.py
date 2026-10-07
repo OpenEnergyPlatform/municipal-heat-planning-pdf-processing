@@ -197,6 +197,10 @@ DECIMAL_MARK = "."
 # is what the committed snapshot was built with.
 ALT_LABEL_LANGUAGE = "de"
 
+# The language of the core's contract text in this profile's prompts (see the
+# same constant of the kwp profile).
+CONTRACT_LANGUAGE = "de"
+
 
 # What the preflight (`docpipe preflight`) holds this profile's prompts to,
 # beyond the keys the stage reads by name: a wording the run depends on. The

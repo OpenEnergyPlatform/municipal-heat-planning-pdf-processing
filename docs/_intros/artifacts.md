@@ -9,7 +9,7 @@ so the files below let a later run resume or reuse an earlier one's work.
 
 Every PDF preprocessing takes in gets one directory under a profile's
 `processed_dir` (`<data root>/<profile>/pdf/processed`,
-`Profile.processed_dir`, `docpipe/profile.py:308-310`), named after the
+`Profile.processed_dir`, `docpipe/profile.py:314-316`), named after the
 PDF's filename stem and kept relative to the input folder
 (`docpipe/preprocessing/pipeline.py:263-265`). Inside it sit two
 subdirectories, named once by `docpipe/artifacts.py` rather than spelled

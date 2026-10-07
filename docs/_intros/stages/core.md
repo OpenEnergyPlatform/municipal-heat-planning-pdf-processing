@@ -12,8 +12,9 @@ None turns a PDF
 into text or a section into a database row; each answers one question a
 stage would otherwise answer for itself, risking a different one each
 time: where a profile's data is stored and what it
-supplies (`profile.py`), which file carries a stage's prompt and
-whether a result on disk still matches it (`prompts.py`), what a
+supplies (`profile.py`), which file carries a stage's prompt, what text
+a prompt written in two halves makes, and whether a result on disk still
+matches it (`prompts.py`), what a
 file a stage writes is called so the next stage can find it
 (`artifacts.py`), whether the model server a stage is about to call can
 do what is asked (`llm_preflight.py`), what a model's reply is when it was
@@ -55,7 +56,7 @@ it is:
 | Module | Supplies | Reached from |
 |---|---|---|
 | `profile.py` | the active `Profile`: paths, prompts directory, `component()`/`require()` | every stage's pipeline or CLI module, plus preprocessing's and refinement's `config.py`; inference only via `wording.py`, no CLI |
-| `prompts.py` | a prompt's text and sha256, plus a staleness check against `.prompt_versions.json` | preprocessing, refinement, visuals, extraction, inference load; refinement and visuals record/check |
+| `prompts.py` | a prompt's text and sha256, composed from the core's template and the profile's parts where a profile's file names a template, plus a staleness check against `.prompt_versions.json` | preprocessing, refinement, visuals, extraction, inference load; refinement and visuals record/check |
 | `artifacts.py` | the filename of every per-document result file, spelled out once, and the one listing of the document directories that hold them (`document_dirs`) | preprocessing, refinement, visuals, chunking |
 | `llm_preflight.py` | a check, before a stage's first document, that its server can do what is asked, reply schemas included; the window the server reported, and the room a cut-off unit is asked once more with | refinement, visuals, page transcription (preprocessing), extraction |
 | `reading.py` | the one JSON object a reply was asked to be, or the cause it is not one; the profile's sentences that name the cause (`reading.PHRASES`) | refinement, visuals, page transcription, and the chat (`inference/llm_client.py`) |
@@ -89,7 +90,7 @@ or an unset `LLM_API_KEY` is captured empty.
 
 A stage's `__main__` first calls `bind_command_line()`, which copies a
 `--profile` given on the command line into `os.environ[DOCPIPE_PROFILE]`
-before the stage is imported (`docpipe/profile.py:415-432`). It reads the
+before the stage is imported (`docpipe/profile.py:421-438`). It reads the
 flag with a small argparse parser and `parse_known_args`, as the stage's own
 parser does, so an abbreviation of `--profile` that the stage accepts, with a
 space or an equals sign before the name, is bound too; the parser raises where argparse would print
@@ -98,14 +99,14 @@ the stage's own parser (the `except ValueError` in `bind_command_line`). The CLI
 point then calls `resolve_profile(args)`, which reads `--profile` or
 `DOCPIPE_PROFILE`, imports `profiles/<name>/profile.py` through
 `load_profile()`, and writes the resolved name back into
-`os.environ[DOCPIPE_PROFILE]` (`docpipe/profile.py:446-469`);
+`os.environ[DOCPIPE_PROFILE]` (`docpipe/profile.py:452-475`);
 `require_profile(args)` is the same call for a stage that has nothing to
 run without a profile, and refuses in one line naming the available
-profiles when none is given (`docpipe/profile.py:472-479`); the chat does not go
+profiles when none is given (`docpipe/profile.py:478-485`); the chat does not go
 through it, its answer loop falls back to the built-in profile
 (`docpipe/inference/wording.py`, `chat_profile`). Code with
 no command line calls `active_profile()` instead, reading only the
-ambient variable (`docpipe/profile.py:376-380`). A third function,
+ambient variable (`docpipe/profile.py:382-386`). A third function,
 `profile_value(module, attr)`, resolves through `active_profile()` too,
 then caches its result in a module-level dict keyed by profile name,
 module and attribute, so a value is looked up once per process and
@@ -118,7 +119,7 @@ Full mechanics (`component()`/`require()`, a profile's layout, why
 A stage's config module does not call `prompts.load()` when Python
 imports it. It wraps the read in a function decorated with
 `prompts.per_profile`, which runs it on first use and once per ambient
-profile (`docpipe/prompts.py:100-117`), so a stage can be imported, and
+profile (`docpipe/prompts.py:208-225`), so a stage can be imported, and
 print its usage, before anybody has named a profile. Refinement reads
 `refine_prompt()` this way (`docpipe/refinement/config.py:77-83`), and
 `system_prompt()`, `llm_temperature()` and `llm_max_tokens()` take the
@@ -129,6 +130,58 @@ module binds on import is the refinement `WINDOW_SIZE`
 when the module loads, so `DOCPIPE_PROFILE` must be set before that
 module is first imported; `bind_command_line()` sets it for a
 `python -m` run.
+
+### Composing a prompt from a template and a profile's parts
+
+`load()` finds the file the profile has for the prompt, its own or that of the
+nearest profile it extends (`_find`, `docpipe/prompts.py:157-167`), and splits
+the front matter off. A file without a `template` key is returned as it is
+written: its text is the body and its sha256 is that of the file. A file with
+the key is a parts file, which `load()` hands to `_composed`
+(`docpipe/prompts.py:202-203`, `685-792`). That asks the module of the stage
+for its templates (`TEMPLATE_MODULES`, `docpipe/prompts.py:85`; only the
+extraction stage has them, in `docpipe/extraction/contract.py`, see [the
+extraction stage](extraction.md)), takes the language from the profile that
+holds the file, reads the template (`read_template`,
+`docpipe/prompts.py:345-482`) and the file's sections (`read_parts`,
+`docpipe/prompts.py:486-509`), and puts the two together (`_compose`,
+`docpipe/prompts.py:571-668`).
+
+The marks of a template are listed in the module docstring
+(`docpipe/prompts.py:15-51`): `{{name}}` where a part or a fact goes,
+`<!-- block: name -->` and `<!-- /block -->` around a stretch of contract text
+that a profile may word itself or leave out, `<!-- rule: name -->` for a numbered
+rule and `{{rule:name}}` for a reference to it. A parts file is a front matter
+and sections that start with a line `<!-- part: name -->`. Composition puts
+each part in the slot of its name. A part with the name of a block replaces the
+block, and keeps the whitespace the block ended with. A block named under
+`without` in the front matter is dropped, and is refused if the template does
+not list it as omittable. The rules that are left are numbered from 1 without a
+gap, and the references follow the numbers. The facts are filled in last. A
+block mark or a slot that stands alone on its line takes the line with it, so
+an absent optional part or a dropped block leaves no blank line, and a part is
+trimmed of the blank lines around it and nothing else.
+
+What does not fit fails at load with `PromptPartsError`
+(`docpipe/prompts.py:103-123`), which names the prompt, the part or block, the
+profile and the parts file and template file. The causes are a part that is
+missing, empty, repeated or not known to the template (with the nearest name
+offered), text before the first part, a part whose place is gone, a `without`
+entry that is no block, not an omittable one, or also worded by a part, a
+reference to a rule that is not in the prompt, a `{{` or `<!--` left in a part
+or in the text, a profile that declares no `CONTRACT_LANGUAGE` or one the core
+has no templates for, a template the core lacks in that language, and a
+`template` key on a stage that has no templates. Nothing is filled in for what
+is missing.
+
+The sha256 of a composed prompt is that of the file a person would have written
+by hand: the front matter without the two loader keys (`LOADER_KEYS`,
+`docpipe/prompts.py:83`), then the composed text. `Prompt.meta` leaves the two
+keys out as well, so what a stage reads from it, `temperature` and
+`max_tokens`, is what it read from a plain file; the loader refuses a front
+matter that cannot be written without them line by line, since the sha256
+would not be a hand-written file's. `Prompt.composition` says how a text was
+made (see Data model).
 
 ### Checking the server before the first document
 
@@ -242,7 +295,7 @@ on the built-in profile because none is in force.
 
 `Prompt.render(**values)` substitutes each `{{name}}` placeholder in a
 prompt's body and raises `KeyError` naming any placeholder left unfilled
-or any keyword not asked for (`docpipe/prompts.py:50-61`), so a
+or any keyword not asked for (`docpipe/prompts.py:143-154`), so a
 placeholder renamed in the Markdown file fails at the call site instead
 of shipping a literal `{{foo}}` to the model.
 
@@ -250,11 +303,11 @@ of shipping a literal `{{foo}}` to the model.
 
 After refinement or visuals writes its output, `prompts.record()` writes
 each prompt's sha256 into `.prompt_versions.json`
-(`docpipe/prompts.py:132-138`, called from
+(`docpipe/prompts.py:240-246`, called from
 `docpipe/refinement/pipeline.py:78` and
 `docpipe/visuals/pipeline.py:317`). The next run's `prompts.check()`
 compares that file against today's prompts and returns the ids changed
-(`docpipe/prompts.py:141-151`, called from
+(`docpipe/prompts.py:249-259`, called from
 `docpipe/refinement/pipeline.py:65` and
 `docpipe/visuals/pipeline.py:156`); a non-empty result decides whether
 `--force-stale` is warranted.
@@ -324,13 +377,21 @@ skipped (`docpipe/chunking/database.py:237-240,251,268`).
 
 ## Data model
 
-`Prompt` (`docpipe/prompts.py:38-44`) is a frozen dataclass: `id`
+`Prompt` (`docpipe/prompts.py:126-137`) is a frozen dataclass: `id`
 (`"<stage>/<name>"`), `text` (the body after any front matter, byte for
-byte), `meta` (the parsed front matter, or `{}`; a stage's config reads
+byte; for a parts file the text composed from the template and the parts),
+`meta` (the parsed front matter, or `{}`; a stage's config reads
 `temperature`/`max_tokens` off it, as refinement's does,
 `docpipe/refinement/config.py:90-98`), `sha256` (over the whole raw
-file) and `path`, which `path_for()` resolves to `<prompts_dir>/<stage>/<name>.md`
-of the profile, else of the nearest profile it extends (`:64-75`). That is
+file; for a parts file over the file a person would have written by hand, see
+Composing a prompt), `path`, which `path_for()` resolves to `<prompts_dir>/<stage>/<name>.md`
+of the profile, else of the nearest profile it extends (`:157-174`), and
+`composition`, `None` for a plain file and for a parts file a mapping with the
+`template` (its name), the `language`, the `overrides` (the blocks the profile
+words itself), the `omitted` blocks and `what_if`, the text with one omitted
+block put back for each of them, made the first time it is read
+(`:795-814`). `owner_of()` gives the profile whose file the prompt is
+(`:177-180`). That is
 how a profile that extends the built-in one writes every prompt itself except
 those that are the built-in file byte for byte: `kwp` inherits one
 (`visuals/caption_keep`) and `scenarios` two (that one and the chat's
@@ -338,7 +399,7 @@ those that are the built-in file byte for byte: `kwp` inherits one
 so the text read and its sha256 are the ones its own copy had, and
 `tests/test_default_profile.py` holds the list (see [profiles](../profiles.md));
 `placeholders` extracts the
-`{{name}}` tokens in `text` by regex (`:46-48`). `.prompt_versions.json`
+`{{name}}` tokens in `text` by regex (`:139-141`). `.prompt_versions.json`
 is a JSON object mapping each prompt id to its current sha256, written
 by `record()` next to a stage's output and read back by
 `check()`/`stale()`.
@@ -350,7 +411,7 @@ here are the properties a stage reads once resolved:
 (`<repo>/data/<name>` unless overridden), `pdf_dir`, `processed_dir`
 (`root/pdf/processed`, refinement's default input,
 `docpipe/refinement/pipeline.py:286`), `db_path` (`<name>.db`) and
-`index_path` (`faiss_index.bin`) (`docpipe/profile.py:267-318`). `Facet`
+`index_path` (`faiss_index.bin`) (`docpipe/profile.py:273-324`). `Facet`
 (`docpipe/profile.py:161-166`) is `field`, `label`, `widget`.
 
 `artifacts.py` names eight plain string constants for files under a
@@ -385,9 +446,9 @@ no `CAPTION_START` at all is a `LookupError`.
 
 | Name | Kind | Default | Effect | Where read |
 |---|---|---|---|---|
-| `DOCPIPE_PROFILE` | environment variable | unset | names the active profile; `resolve_profile()` writes it back | `docpipe/profile.py:45,350-373,446-469` |
-| `--profile` | CLI flag | ambient `DOCPIPE_PROFILE` or none | copied into `DOCPIPE_PROFILE` by `bind_command_line()` before a stage is imported; passed through `resolve_profile()`, or `require_profile()` where a profile is needed; refused when named after a stage was imported under another profile and the named one ships prompts | `docpipe/profile.py:409-479` |
-| `DOCPIPE_DATA_ROOT` | environment variable | unset, falls back to `data/` beside the project file, else `<repo>/data` | base directory for `Profile.root`, unless `Profile.data_root` is set | `docpipe/profile.py:298-302`, `323-337` |
+| `DOCPIPE_PROFILE` | environment variable | unset | names the active profile; `resolve_profile()` writes it back | `docpipe/profile.py:45,356-379,452-475` |
+| `--profile` | CLI flag | ambient `DOCPIPE_PROFILE` or none | copied into `DOCPIPE_PROFILE` by `bind_command_line()` before a stage is imported; passed through `resolve_profile()`, or `require_profile()` where a profile is needed; refused when named after a stage was imported under another profile and the named one ships prompts | `docpipe/profile.py:415-485` |
+| `DOCPIPE_DATA_ROOT` | environment variable | unset, falls back to `data/` beside the project file, else `<repo>/data` | base directory for `Profile.root`, unless `Profile.data_root` is set | `docpipe/profile.py:304-308`, `327-341` |
 | `DOCPIPE_ENV_FILE` / `INFERENCE_ENV_FILE` | environment variables | unset; falls back to a bare `.env` | names a `.env` file to load before config reads `os.environ`; only the first readable one is loaded | `docpipe/dotenv.py:76-80` |
 | `Profile.column_layout` | dataclass field | `"auto"` | must be `auto`, `single` or `double`, or `Profile()` raises | `docpipe/profile.py:172,191-192` |
 | `Profile.data_root` / `Profile.home` | dataclass fields | `None` / `None` | override where a profile's data and package files live | `docpipe/profile.py:173-175` |
@@ -405,30 +466,33 @@ no `CAPTION_START` at all is a `LookupError`.
 
 `prompts.py`: `load()` with no profile passed and none ambient raises
 `LookupError` naming the prompt id and the variable to set
-(`docpipe/prompts.py:83-85`); for a prompt id that neither the profile nor
+(`docpipe/prompts.py:189-191`); for a prompt id that neither the profile nor
 a profile it extends ships a file for, `FileNotFoundError` naming the
-profile, the id and the path (`:88-92`). `Prompt.render()` raises `KeyError`
-listing a missing placeholder, an unexpected keyword, or both (`:54-60`).
+profile, the id and the path (`:194-198`). `Prompt.render()` raises `KeyError`
+listing a missing placeholder, an unexpected keyword, or both (`:147-153`).
 `check()` finding `.prompt_versions.json` missing, unreadable or invalid
 treats the stored map as absent, so every current prompt id is reported
-stale (`:144-151` and `stale()`, `:160-161`).
+stale (`:252-259` and `stale()`, `:268-269`). A parts file that cannot be
+composed raises `PromptPartsError` (`:103-123`), a `ValueError` that names the
+prompt, the part or the block, the profile and both files (see Composing a
+prompt, above).
 
 `profile.py`: `Profile(name=...)` with an empty name, a slash, an
 unrecognised `column_layout` or an `extends` that names the profile itself
 raises `ValueError` (`docpipe/profile.py:188-194`). `load_profile()` with no
-name resolvable raises `LookupError` (`:352-355`), listing available profiles
-when the name given is unknown (`:364-366`); a module exporting no proper
+name resolvable raises `LookupError` (`:358-361`), listing available profiles
+when the name given is unknown (`:370-372`); a module exporting no proper
 `PROFILE`, or one whose name disagrees with its own directory, raises
-`TypeError` or `ValueError` (`:368-372`). `component()` re-raises
+`TypeError` or `ValueError` (`:374-378`). `component()` re-raises
 `ModuleNotFoundError` for an existing profile module that fails to import, not
-absence (`_own`, `:246-252`); `require()` raises `LookupError` for genuine
-absence (`:255-264`). `resolve_profile()` raises
+absence (`_own`, `:252-258`); `require()` raises `LookupError` for genuine
+absence (`:261-270`). `resolve_profile()` raises
 `SystemExit` when it is given a profile other than the one a stage was
-imported under and that profile ships prompts (`:460-467`);
+imported under and that profile ships prompts (`:466-473`);
 `require_profile()` raises it, naming the available profiles, when no
-profile is given (`:475-478`). `profile_value()` raises the same
+profile is given (`:481-484`). `profile_value()` raises the same
 `LookupError` when no profile is ambient, naming the module, the
-attribute and the environment variable to set (`:395-396`).
+attribute and the environment variable to set (`:401-402`).
 
 `llm_preflight.py`: a missing `openai` package raises `ImportError` with
 an install hint (`docpipe/llm_preflight.py:139-146`). An unreachable
@@ -527,6 +591,24 @@ is caught: `test_a_profile_ships_the_prompts_its_stages_load`,
 `test_record_then_check_is_clean`, `test_check_flags_a_changed_prompt`,
 `test_check_flags_results_without_a_version_file`,
 `test_unusable_prompt_id` (`tests/test_prompts.py`).
+
+A prompt written in parts is composed as described, and one that does not fit
+its template is refused, in `tests/test_prompt_parts.py`, against templates made
+up in a temporary folder, each promise with a case built to break it:
+`test_the_prompt_is_the_template_with_the_parts_put_in_and_nothing_else`,
+`test_a_part_with_an_open_placeholder_is_refused`,
+`test_a_missing_required_part_names_the_prompt_the_part_the_profile_and_both_files`,
+`test_a_part_with_the_name_of_a_block_replaces_the_block`,
+`test_a_rule_that_is_left_out_moves_the_rules_after_it_and_what_points_at_them`,
+`test_a_part_whose_place_was_left_out_is_refused`,
+`test_the_fingerprint_is_the_sha_of_the_monolithic_file_with_the_same_text` and
+`test_a_stamp_from_before_the_prompts_were_composed_is_current`. The templates
+of the core are held to one shape in both languages by
+`tests/test_contract_templates.py`
+(`test_every_template_there_is_has_both_languages_and_the_same_shape`,
+`test_no_template_of_the_core_types_a_fact`), and the five composed prompts of
+each shipped profile by `tests/test_prompts_composed.py`
+(`test_the_five_prompts_of_a_profile_are_composed_in_its_language`).
 
 The preflight stops a run before the first document, not after a
 mid-run rejection: `test_preflight_rejects_a_server_with_too_little_context`,

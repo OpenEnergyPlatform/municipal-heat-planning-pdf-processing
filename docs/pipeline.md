@@ -409,7 +409,7 @@ stamped. A document written but left unstamped is a failure of the run:
 | `spec` | sha256 of the whole `extraction_spec.json` file | only while no finer key is present |
 | `model` | the model served at harvest time (`LLM_MODEL`) | never |
 | `anchors` | sha of the retrieval anchors the plan searched with | never |
-| one entry per `PROMPT_IDS` id | sha256 of that prompt file | never |
+| one entry per `PROMPT_IDS` id | sha256 of that prompt file; of a parts file, the sha256 of the file a person would have written by hand: its front matter without `template` and `without`, then the composed text a request sends | never |
 | `parameter/<uri>` | fingerprint of one parameter's own question | yes |
 | `value/<uri>` | fingerprint of a value's own closed list: its classes and their spellings, not their definitions | yes |
 | `axis/<uri>/<name>` | fingerprint of one axis's question and vocabulary | yes |
@@ -639,6 +639,16 @@ list of reasons behind the lowest one. The harvest contract per profile,
 generated from `profiles/<name>/extraction_schema.json`, itself generated
 from the spec that profile names (`extraction.SPEC_PATH`) by `docpipe/extraction/
 schema.py`, never hand-written.
+
+**The prompts.** The rows, field, frame, review and example prompts of the
+extraction stage are put together when they are loaded, from the core's template
+of the profile's language and the parts the profile's own file holds, and a file
+that does not fit its template is refused then (`PromptPartsError` in
+`docpipe/prompts.py`). [The extraction stage](stages/extraction.md) says what
+the templates hold, [profiles](profiles.md) how a profile writes its parts, and
+`tests/test_prompts_composed.py` holds the five prompts of each shipped
+profile. `docpipe doctor` reports a prompt that cannot be composed, and
+`docpipe preflight` the rows and the field prompt.
 
 **The tests.** `tests/test_docs_build.py::test_the_checked_in_docs_are_the_generated_ones`
 requires every generated page under `docs/` to equal a fresh render, made

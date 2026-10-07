@@ -85,6 +85,16 @@ def component(self, module: str, attr: str)
 
 Its own, else that of the nearest profile it extends.
 
+#### Profile.own
+
+```python
+def own(self, module: str, attr: str)
+```
+
+What this profile declares itself in `<module>.py: <attr>`, or None:
+not what it takes from the profile it extends. For a fact that is
+about the files a profile owns, such as the language they are in.
+
 #### Profile.layers
 
 ```python

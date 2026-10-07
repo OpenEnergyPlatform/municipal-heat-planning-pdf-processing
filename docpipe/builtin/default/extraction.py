@@ -19,6 +19,13 @@ DECIMAL_MARK = "."
 # the tag here.
 ALT_LABEL_LANGUAGE = "en"
 
+# The language of the core's contract text in this profile's prompts: the
+# parts files beside this file that name a template (`template: rows`) are put
+# together with the template of this language. A profile that extends this one
+# and keeps those files gets it with them; one that writes parts files of its
+# own declares the language they are in.
+CONTRACT_LANGUAGE = "en"
+
 
 # What the preflight (`docpipe preflight`) holds this profile's prompts to,
 # beyond the keys the stage reads by name: a wording the run depends on. The

@@ -46,7 +46,7 @@ as they do on [core](core.md), without it appearing as a numbered link.
 
 `core_sql()` reads `docpipe/store/schema.sql` verbatim (`CORE_SCHEMA`,
 `schema.py:41` to `42`); `profile_sql(profile)` does the same for
-`Profile.schema_sql` (`docpipe/profile.py:279` to `288`: the profile's own
+`Profile.schema_sql` (`docpipe/profile.py:285` to `294`: the profile's own
 `schema.sql`, else that of the nearest profile it extends), returning an
 empty string if the file or profile is absent (`schema.py:45` to `48`).
 `apply()` turns `PRAGMA foreign_keys = ON` (see Configuration), runs `BEGIN;
@@ -371,7 +371,7 @@ Reading the tables back out is not this package's job.
 
 | name | kind | default | effect | where |
 |---|---|---|---|---|
-| `DOCPIPE_PROFILE` / `--profile` | environment variable / CLI flag | unset / none | selects which profile's `schema.sql` `apply()` layers on the core schema | `docpipe/profile.py:350` to `373` (env var, `load_profile`), `410` to `413` (`--profile`, `add_profile_argument`) and `447` to `470` (`resolve_profile`) |
+| `DOCPIPE_PROFILE` / `--profile` | environment variable / CLI flag | unset / none | selects which profile's `schema.sql` `apply()` layers on the core schema | `docpipe/profile.py:356` to `379` (env var, `load_profile`), `415` to `418` (`--profile`, `add_profile_argument`) and `452` to `475` (`resolve_profile`) |
 | `PRAGMA foreign_keys` | fixed connection pragma | `ON` | enables foreign-key enforcement, off by default in SQLite, so `ON DELETE CASCADE`/`SET NULL` fire | `docpipe/store/schema.py:53`; re-set independently by `docpipe/chunking/database.py:101` |
 | `PRAGMA busy_timeout` | fixed pragma, chunking's own `connect()` only | 30000 ms | a reader waits for a write lock instead of failing, needed once embedding began preparing documents while writing batches | `docpipe/chunking/database.py:98` to `108` |
 | `CORE_TABLES` | module constant | the 9 core table names, as a tuple | names which tables belong to the core, not a profile; used by tests | `docpipe/store/schema.py:27` to `28` |

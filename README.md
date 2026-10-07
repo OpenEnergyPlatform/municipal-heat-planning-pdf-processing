@@ -61,7 +61,9 @@ the one the package brings itself, any folder of English documents with prompts
 for every stage. A project's profile extends it (`extends="default"`) and
 writes only what it knows better.
 
-The prompts still belong to a profile: the core has no prompt of its own. A
+The prompts still belong to a profile: the core has no prompt of its own. What
+it holds is the half of the extraction prompts that says what a reply looks
+like, as templates a profile's own parts are put into. A
 prompt names the corpus it was written for and the language it answers in, and
 neither is something `docpipe/` could guess; a fallback could only be some
 other project's prompt. A profile that stands alone and has no prompt for a

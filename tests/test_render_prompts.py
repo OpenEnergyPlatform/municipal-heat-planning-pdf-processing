@@ -1436,7 +1436,8 @@ def test_the_real_profiles_are_identical_to_themselves_and_the_numbers_are_the_c
 
 
 def test_an_edited_sentence_of_a_real_prompt_is_that_prompt_alone(real, out):
-    path = real / "profiles/kwp/prompts/extraction/rows.md"
+    # a prompt that is one plain file, which no template composes
+    path = real / "profiles/kwp/prompts/extraction/phrase.md"
     old = path.read_text(encoding="utf-8")
     first = old.split("---\n", 2)[2].split("\n", 1)[0]
     added = " A new sentence stands here."
@@ -1447,14 +1448,124 @@ def test_an_edited_sentence_of_a_real_prompt_is_that_prompt_alone(real, out):
     text = summary(out)
     changed = [line.split("|")[1].strip() for line in text.splitlines()
                if line.startswith("| `") and "| changed |" in line]
-    assert changed == ["`extraction/rows`"]
-    diff = lines_of(out / "kwp/extraction/rows.sentences.diff")
+    assert changed == ["`extraction/phrase`"]
+    diff = lines_of(out / "kwp/extraction/phrase.sentences.diff")
     assert changed_lines(diff) == ["+A new sentence stands here."]
-    after = (out / "kwp/extraction/rows.after.txt").read_text(encoding="utf-8")
+    after = (out / "kwp/extraction/phrase.after.txt").read_text(
+        encoding="utf-8")
     assert after == old.split("---\n", 2)[2].replace(first, first + added, 1)
     # the budget of that prompt grew by what the sentence adds, the others not
     mine = section(text, "kwp")
-    rows = budget_row(mine, "extraction/rows")
-    assert int(rows[2]) > int(rows[1])
-    assert budget_row(mine, "extraction/field")[1] \
-        == budget_row(mine, "extraction/field")[2]
+    phrase = budget_row(mine, "extraction/phrase")
+    assert int(phrase[2]) > int(phrase[1])
+    for other in ("extraction/rows", "extraction/field"):
+        assert budget_row(mine, other)[1] == budget_row(mine, other)[2]
+
+
+# ---------------------------------------------------------------------------
+# AND a prompt the loader composes from a template is shown with what the
+# profile worded and what it left out
+# ---------------------------------------------------------------------------
+
+SYNTH = "profiles/synth"
+REWORDED = "Every entry is read twice."
+
+
+def _composed_profile(real: Path) -> str:
+    """The real loader with a profile of its own: its rows prompt is first one
+    file as a person wrote it, committed, and then the parts of a made-up
+    template that make the same text. What the working tree shows is the
+    second, as it will be after a prompt of a profile has been cut into parts.
+    Returns the text of the prompt."""
+    from tests.test_prompt_parts import (EXPECTED_WITHOUT, FRONT, TEMPLATE_XX,
+                                         parts_with, without)
+    text = EXPECTED_WITHOUT.replace(
+        "Every entry is checked against the source.", REWORDED)
+    write(real / SYNTH / "__init__.py", "")
+    write(real / SYNTH / "profile.py",
+          "from docpipe.profile import Profile\n"
+          "PROFILE = Profile(name='synth', extends='default')\n")
+    write(real / SYNTH / "extraction.py", "CONTRACT_LANGUAGE = 'xx'\n")
+    write(real / SYNTH / "prompts/extraction/rows.md", FRONT + text)
+    commit(real, "a profile that wrote its rows prompt as one file")
+    write(real / "docpipe/extraction/contract/xx/rows.md", TEMPLATE_XX)
+    write(real / SYNTH / "prompts/extraction/rows.md", parts_with(
+        ("row_note", REWORDED), front=without("sandbox", "images")))
+    return text
+
+
+def test_the_summary_lists_the_overrides_and_the_omissions_of_a_composed_prompt(
+        real, out, bytecode_allowed):
+    text = _composed_profile(real)
+
+    assert render(real, out, profiles=("synth",)) == 0, summary(out)
+
+    mine = section(summary(out), "synth")
+    assert all_rows(mine, "`extraction/rows`")[-1] == [
+        "`extraction/rows`", "rows", "row_note", "images, sandbox"]
+    row = prompt_row(mine, "extraction/rows")
+    # the same text, the same parameters and so the same sha256 as the file
+    # the profile wrote by hand: nothing moved, and the summary says so
+    assert row[2] == "identical" and row[-1] == "rows"
+    assert (out / "synth/extraction/rows.after.txt").read_text(
+        encoding="utf-8") == text
+    assert not list(out.rglob("*.what-if.*"))
+
+
+def test_a_prompt_that_is_not_composed_has_nothing_listed_beside_it(
+        real, out, bytecode_allowed):
+    _composed_profile(real)
+
+    assert render(real, out, profiles=("synth",)) == 0
+
+    mine = section(summary(out), "synth")
+    assert prompt_row(mine, "extraction/phrase")[-1] == "-"
+    listed = [row[0] for row in all_rows(mine, "`extraction/phrase`")]
+    assert listed == ["`extraction/phrase`"]      # the prompt table alone
+
+
+def test_what_if_renders_an_omitted_block_of_a_composed_prompt_back_in(
+        real, out, bytecode_allowed):
+    from tests.test_prompt_parts import EXPECTED
+    text = _composed_profile(real)
+
+    assert render(real, out, "--what-if", profiles=("synth",)) == 0, summary(out)
+
+    base = out / "synth/extraction"
+    images = (base / "rows.what-if.images.txt").read_text(encoding="utf-8")
+    sandbox = (base / "rows.what-if.sandbox.txt").read_text(encoding="utf-8")
+    assert images == text.replace(
+        "You get sources.", "You get sources. Images follow the JSON.")
+    assert sandbox == EXPECTED.replace(
+        "You get sources. Images follow the JSON.", "You get sources.").replace(
+        "Every entry is checked against the source.", REWORDED)
+    # built to fail: a what-if that gave back the prompt as it is says nothing
+    assert images != text and sandbox != text and images != sandbox
+    assert changed_lines(lines_of(
+        base / "rows.what-if.images.sentences.diff")) == [
+            "+Images follow the JSON."]
+    added = changed_lines(lines_of(
+        base / "rows.what-if.sandbox.sentences.diff"))
+    assert "+3. Calculate with the sandbox." in added
+    assert "+   If it must be calculated, see rule 3." in added
+    mine = section(summary(out), "synth")
+    assert "`extraction/rows`, block `images`" in mine
+    assert "`extraction/rows`, block `sandbox`" in mine
+
+
+def test_a_composed_prompt_that_changed_is_a_changed_prompt_with_its_sentences(
+        real, out, bytecode_allowed):
+    """Built to fail: the case above is `identical` because the two sides were
+    made to say the same. Put one sentence into a part and the tool says which
+    prompt moved and which sentence."""
+    _composed_profile(real)
+    path = real / SYNTH / "prompts/extraction/rows.md"
+    write(path, path.read_text(encoding="utf-8").replace(
+        "You read plans.", "You read plans and tables."))
+
+    assert render(real, out, profiles=("synth",)) == 0
+
+    mine = section(summary(out), "synth")
+    assert prompt_row(mine, "extraction/rows")[2] == "changed"
+    assert changed_lines(lines_of(out / "synth/extraction/rows.sentences.diff")) \
+        == ["-You read plans.", "+You read plans and tables."]

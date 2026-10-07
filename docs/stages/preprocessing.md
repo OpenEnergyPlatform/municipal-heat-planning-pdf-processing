@@ -53,7 +53,7 @@ reading `sections.json` and writing `sections_refined.json`
 
 ### Resolving the profile and choosing a mode
 
-`resolve_profile(args)` (`docpipe/profile.py:446-469`) loads the `Profile`
+`resolve_profile(args)` (`docpipe/profile.py:452-475`) loads the `Profile`
 named by `--profile` or `$DOCPIPE_PROFILE`; `__main__.py` copies the flag
 into the environment before the stage is imported, and a profile named
 after the stage was imported under another one raises `SystemExit` instead
@@ -333,7 +333,7 @@ A selection of the module constants that tune detection and assembly:
 | `LayoutDetectionFailed` reaches `run_folder`'s per-document handler | the document is marked `status="error"` in `_index.json` and the run continues; called directly, the exception propagates unhandled (`pipeline.py:267-292,632-656`) |
 | A page fails to render for Stage 2, its post-detection processing raises, or a crop fails to encode or write | logged and skipped; the page keeps its Stage-1-only data, and a written `Block` can still reference a failed crop (`stage2_layout.py:509-570,1023,1064`) |
 | `pages.json` or `sections.json` is unreadable, or a Stage 3 cache was built while `n_failed` was set, or the input path is neither a `.pdf` file nor a directory | treated as absent and rebuilt, deleted before the cache-hit check runs, or `run()` raises `ValueError` and `main()` exits with status 1 (`pipeline.py:60-62,170-189,536,654-656`) |
-| No profile is active but a profile-gated function is called, or a profile is named after the stage was imported under another one | a `LookupError` propagates uncaught, or `resolve_profile` raises `SystemExit` (`stage1_extract.py:41-43`; `profile.py:255-265,386-400,446-469`) |
+| No profile is active but a profile-gated function is called, or a profile is named after the stage was imported under another one | a `LookupError` propagates uncaught, or `resolve_profile` raises `SystemExit` (`stage1_extract.py:41-43`; `profile.py:261-271,392-406,452-475`) |
 | A page's transcription ends in a hole (a reply that stayed unreadable, one cut off twice, a request refused or not answered, a page that could not be rendered, an error of the stage's own), returns an empty markdown string, or more candidates need transcription than `max_pages` | a hole is counted in `pages_failed` and listed in `failed_pages` with its cause, an empty string in `pages_empty`, and the exit code does not change; a run with candidates over `max_pages` is truncated with `pages_missing_text` still reporting the true total (`page_text_fallback.py:205-213`); unreachable through the CLI or `run()`, since `_fill_missing_page_text()` never passes `max_pages` (`pipeline.py:406-412`) |
 | The vision server a page needs is not there, does not serve the model, has too small a window or refuses the page reply schema | the check `_assert_page_server` raises `PreflightError` before the first page that lacks its text; `run_folder` lets it through and `main` exits with status 1 (`pipeline.py:280-283,461-480,654-656`); a run in which no page lacks its text never asks |
 | The profile lacks a sentence of `reading.PHRASES`, with `--transcribe-missing-text` | `LookupError` from `reading.phrases()` before the first document, with a traceback and a non-zero exit (`pipeline.py:631-634`) |

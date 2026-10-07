@@ -166,15 +166,17 @@ list per coordinate. Its frame prompt names no key ("the list the request
 gives for `scenario`"), and its `frame_not_an_option` phrase is handed the key
 that was sent, as `{options}`, so a profile that extends it and words only
 `frame_options` differently has moved the request, the correction and the
-prompt together. The frame prompts of `kwp` and `scenarios` and their
-`frame_not_an_option` phrase name `"scenarios"` in their own words.
+prompt together. The German frame template names the key through the fact
+`frame_options`, so the frame prompts of `kwp` and `scenarios` say `"scenarios"`
+as the profile's phrase does, and their `frame_not_an_option` phrase names
+`"scenarios"` in its own words.
 `pipeline.apply_frame` projects each pair onto its rows, state `read`,
 before any field job is queued; a row that already answered better keeps
 its own reading. A passage that prints several pairs, a table with a
 column per year, is read under each of them, and each request takes its
 own pair's column
 (`test_a_passage_of_several_pairs_is_read_under_each_of_them`,
-`tests/test_extraction_frame.py:650`). A passage that prints none of a
+`tests/test_extraction_frame.py:651`). A passage that prints none of a
 request's pair used to give no row at all: its claims were refused as
 `passage is not of this pair` (`rows_from_reply`, `pipeline.py:616`). Two
 helpers get a look at the claim first now: `pair_of_claim`
@@ -883,9 +885,82 @@ reading, the frame request (under `frame_options`) and the chat's coordinate
 question all take the list from the same place (`Slot.answerable`), so all four
 carry the two keys. Nothing else in a request of kwp or scenarios changed, the
 stamp does not carry the keys, and so a changed word is neither a `--remap` nor
-a re-harvest. The field prompt of kwp names the two keys in its rule 7, in
-German prose; the scenarios field prompt names none. Whether the model reads the
-options the same under the English keys shows in the next run's summary line.
+a re-harvest. The field prompt of kwp names the two keys in the rule that
+decides by meaning, which is rule 7 of its composed text, in German prose; the
+scenarios field prompt leaves that rule out and names none (see The prompts).
+Whether the model reads the options the same under the English keys shows in
+the next run's summary line.
+
+### The prompts: the core's contract text and a profile's parts
+
+Five prompts of the stage, `rows`, `field`, `frame`, `review` and `example` (the
+last is read by `docpipe compile examples`), are written in two halves.
+`docpipe/extraction/contract.py` is the core's half. Its templates lie in
+`docpipe/extraction/contract/<language>/<name>.md`, one for each of the five
+prompts in German and in English, and each says what that request has to say of
+every corpus: the shape of the reply, that the quote stands in a shown passage,
+that the answer stands in the quote, what "not stated" is, what to do with a
+closed list. `languages()` and `template_names()` list what is there, `read()`
+reads one template and checks it as a template, and `language_of()` gives the
+language a profile's parts files are in, from `extraction.CONTRACT_LANGUAGE` of
+the profile that holds them (`Profile.own`, so it is not inherited). `facts()`
+gives the values a template names and does not type: the least length of a quote
+(`verify.MIN_QUOTE_CHARS`), the word for "not stated" (`fields.UNSTATED`) and,
+from the profile's `extraction.PHRASES`, the two keys of an option, the gloss and
+the spelling of the closed list's entry for "not stated" and the key the frame's
+list goes under. Only the facts a prompt names are read, so a profile whose
+phrases are incomplete is told so by the prompt that needs them and by no other.
+A phrase that is worded differently changes the sha256 of the prompt that names
+it, which the stamp records and never compares.
+
+A profile's half is its parts file: the role of the model for this corpus, its
+examples, the sentences about its own tables, and, for a sentence of the
+template that fits it less well, a part of its own in place of that block. A
+profile leaves out the blocks of a template it never had with `without` in the
+front matter, and only blocks the template lists as omittable. What a parts file
+holds and what the loader refuses is on [profiles](../profiles.md) (The
+extraction prompts) and the mechanism is on [the core's modules](core.md)
+(Composing a prompt). The loader composes a prompt when it is loaded, so each
+request builder sends the composed text, and a prompt that cannot be composed
+stops the run before the first request.
+
+What each shipped profile words itself and what it leaves out is in its parts
+files and is listed by `scripts/render_prompts.py` (see [Running the
+pipeline](../running.md)). The built-in profile, in English, takes the
+template's sentences for every block of the five prompts except three it leaves
+out of the field prompt (`no_guessing`, `closed_out` and `found_next`). Scenarios
+words `invent_figures` and `source_kinds` of the rows prompt, `rows_carry` and
+`unstated_when` of the field prompt, and `row_note` and `field_unit` of the
+review prompt, and leaves out the blocks of rows, field and review that it never
+had. Kwp words `value_text` of the rows prompt and `closed_out_text` of the
+field prompt, and leaves out the blocks of rows, field and review that it never
+had. The frame and the example prompt are the template and the profile's own
+parts in all three, with no block left out or worded. The two German profiles
+keep their own noun in what is about their corpus (the role, the examples), and
+the contract sentences of the German templates call a document "Dokument". See
+[kwp](../profiles/kwp.md) and [scenarios](../profiles/scenarios.md).
+
+The rules of a template are numbered when the prompt is loaded, without a gap,
+so a number is a position in the prompt of one profile. The rows template has the
+rules `value`, `unit_raw`, `source`, `quote`, `per_value`, `citations`,
+`choice`, `status`, `sandbox` and `invent`, and "source" and "quote" are two
+numbered rules in every profile. The field template has `value`,
+`value_raw`, `quote`, `domain_1`, `domain_2`, `every_row`, `closed_out`,
+`by_meaning`, `need_more` and `corrections`; in kwp and scenarios `value`,
+`value_raw` and `quote` are rules 1, 2 and 3, and the rule that decides by
+meaning is rule 7 in kwp and absent in scenarios. A comment in the code that
+names "rule 2" or "rule 3" of the field prompt means the number in the composed
+text of those two profiles. The German and the English template of a name list
+the same parts, blocks and rules, apart from the blocks only the English
+template has (`images` and `quantities_number` of the rows template,
+`options_explained` of the field template); `tests/test_contract_templates.py`
+lists those in `EN_ONLY` and holds the list in both directions.
+
+Two places of the field template say that what is found comes as the next
+request: the end of `by_similarity` and the block `found_next`. A profile keeps
+the place where it says the sentence and leaves the other out, so each profile
+says it once. The front matter of the German and the English field template says
+so in a comment.
 
 ### The check before a run
 
@@ -901,7 +976,9 @@ the profile names (`extraction.SPEC_PATH`, and no other: a profile that names
 none fails on `spec present`, as the built-in profile does, also when an
 `extraction_spec.json` lies beside it, and the line says so), the extraction
 prompts (one that cannot be loaded fails its own line and every line about
-what it has to hold), the writer of the graph (the profile's own
+what it has to hold; a parts file that cannot be composed with its template is
+such a prompt, and its line carries the error that names the part, the profile
+and both files), the writer of the graph (the profile's own
 `kg.make_serializer`, else the generic writer, built as the run builds it by
 `graph.make_serializer` from the `graph` block of the spec; a block it refuses,
 such as the placeholder base that `docpipe compile spec` drafts, fails
@@ -1070,7 +1147,8 @@ request, is what `--print-context-budget` prints, what the doctor's extract
 line shows and what the check of the served window before the first
 document holds the server to: it is what the model server's
 `--max-model-len` has to cover. For kwp it is 28,511 tokens per request,
-set by the field prompt; for scenarios 37,387, set by the rows prompt. A
+set by the field prompt; for scenarios 37,426 tokens per request, set by the
+rows prompt. Both numbers are those of the composed prompts. A
 profile with several long lists, as scenarios has, can therefore need a
 window above the 32768 that `EXTRACT_MAX_MODEL_LEN` falls back to.
 `tests/test_extraction_runner.py` states the ceiling a profile may ask
@@ -1319,6 +1397,26 @@ list: `test_a_profile_that_names_the_coordinate_keeps_two_lists_apart`,
 `test_the_german_frame_prompts_read_the_list_where_the_request_puts_it`,
 `test_the_built_in_frame_prompt_names_no_key_that_could_go_stale` and
 `test_a_project_words_the_key_of_the_list_itself`.
+The five prompts that are written in parts have a test file each, which states
+the promise of its prompt as one sentence in its docstring and tests every AND
+of it with a case built to break it: `tests/test_rows_prompt.py`,
+`tests/test_field_prompt.py`, `tests/test_frame_prompt.py`,
+`tests/test_review_prompt.py` and `tests/test_example_prompt.py`. Among them
+stand, for the sentences a profile words itself,
+`test_a_profile_without_numbers_keeps_what_it_said_of_figure_descriptions` and
+`test_scenarios_names_the_kinds_of_its_sources_in_its_own_words` (rows) and
+`test_scenarios_says_its_own_sentence_and_kwp_the_templates` (field).
+`tests/test_prompts_composed.py` holds the five prompts of each shipped profile
+together: composed in the profile's language, no mark of a template left in a
+text, no German in an English prompt, the passages the preflight asks for in the
+composed text, and a stamp written before the prompts were composed that makes
+no document stale (`test_no_document_of_a_stamp_from_before_is_stale`, over
+`tests/fixtures/prompt_shas_before_composition.json`) next to one whose
+question moved that still does
+(`test_a_stamp_from_before_whose_question_moved_is_still_stale`).
+`tests/test_contract_templates.py` holds the templates of the core in both
+languages, and `tests/test_prompt_parts.py` the loader (see [the core's
+modules](core.md)).
 
 For the five maintenance passes, `tests/test_extraction_recheck.py` pins
 `test_a_coordinate_its_quote_carries_survives`,
@@ -1383,8 +1481,9 @@ under its index (`test_a_stored_pair_keeps_its_index_and_a_new_pair_takes_the_ne
 and `runner.not_happened` names the three ways a reading does not happen
 (`test_not_happened_names_the_three_ways_a_reading_does_not_happen`).
 `tests/test_extraction_request_bytes.py` holds the rows request of a normal
-harvest, its prompt and its reply grammar to the bytes captured before that
-code was shared, for kwp and scenarios (`tests/golden/`;
+harvest and its reply grammar to the bytes captured before that code was
+shared, and its prompt to the sha256 of the composed rows prompt that was last
+decided on, for kwp and scenarios (`tests/golden/`;
 `test_a_normal_harvest_request_is_byte_for_byte_what_it_was`), and shows that
 the comparison can fail (`test_the_golden_file_can_fail`).
 `tests/test_extraction_requests.py` builds each of the six kinds of request a
@@ -1471,6 +1570,12 @@ one's own lives and why its harvest stays there: the names of the folder's
 files and `folder_problem`, the one rule that keeps a run with `--spec` out of
 a profile's harvest (see A column of one's own); `docpipe/column.py` is the
 command that writes the column's draft.
+
+`contract.py` is the core's half of the five prompts that a profile writes as
+parts files: where the templates lie, the languages they come in, the language a
+profile's parts files are in and the facts the code fills into them (see The
+prompts); `docpipe/prompts.py` puts a template and the parts together. The
+templates themselves are the files under `docpipe/extraction/contract/`.
 
 `identity.py` names a harvested row from what it says and finds its passage
 again after a rebuild; `wording.py` is where the stage's own sentences come

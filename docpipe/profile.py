@@ -226,6 +226,12 @@ class Profile:
                 return value
         return None
 
+    def own(self, module: str, attr: str):
+        """What this profile declares itself in `<module>.py: <attr>`, or None:
+        not what it takes from the profile it extends. For a fact that is
+        about the files a profile owns, such as the language they are in."""
+        return self._own(module, attr)
+
     def layers(self, module: str, attr: str) -> list:
         """Every value along the line of profiles, nearest first: for a
         table a profile lays over the one it extends, entry by entry."""

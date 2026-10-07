@@ -1442,12 +1442,13 @@ def test_the_row_prompt_example_names_no_place_this_corpus_contains(profile):
     named after the city onto the city's own title page. The names in it come
     from a plan that is not the one being read, and the prompt says so."""
     name, _spec = profile
-    text = (PROFILES / name / "prompts" / "extraction" / "rows.md").read_text(
-        encoding="utf-8")
+    from docpipe import prompts
+    from docpipe.profile import load_profile
+    text = prompts.load("extraction/rows", load_profile(name)).text
     assert "Kassel Wärme" not in text
     if name == "kwp":
         assert "MASCHINELL" in text, "the check is promised where it applies"
-        assert "anderen Plan" in text
+        assert "aus einem anderen Dokument" in text
 
 
 def test_the_field_prompt_states_the_two_checks_and_no_other(profile):
@@ -1456,8 +1457,7 @@ def test_the_field_prompt_states_the_two_checks_and_no_other(profile):
     promises a third, which source a quote may come from, has the model
     refuse readings no check refuses."""
     name, _spec = profile
-    text = (PROFILES / name / "prompts" / "extraction" / "field.md").read_text(
-        encoding="utf-8")
+    text = runner.prompts.load(runner.FIELD_PROMPT_ID).text
     assert "EINER der gezeigten Quellen" in text
     for gone in ("AUS WELCHER Quelle", "Nachbarseite", "erlaubten Quellen",
                  '"holds"', '"section"'):

@@ -58,9 +58,30 @@ table gives this profile's own answer.
 | Preprocessing, refinement, visuals | `prompts/preprocessing`, `prompts/refinement`, `prompts/visuals` | 1, 3 and 6 prompt ids of its own | page transcription, English artefact repair, table and figure captioning; `visuals/caption_keep` is the built-in profile's, inherited byte for byte |
 | Refinement, visuals, page transcription, the answer app | `reading.py` | `PHRASES` | the ten sentences these stages and the chat say to the model when its reply was not the one JSON object (`reading.REQUIRED`), in English, the language of the prompts of the first three; the extraction prompts are German and `extraction.PHRASES` is another table, the harvest's own |
 | The picker (app) | `catalog.py`, `profile.py` | `CATALOG`, `facets` | publication labels and three filters |
-| Extraction | `extraction.py`, `prompts/extraction/*.md` | `SPEC_PATH`, `document_axes`, `PHRASES`, `PROMPT_CHECKS`, `NOT_EXTRACTED`, `shapes_files`, `ALT_LABEL_LANGUAGE`, seven prompt ids | the spec (18 parameters, four of them the bundle's tags), the per-document scenario and region lists, the sentences the stage writes to the model and the passages the preflight holds its prompts to, and the harvest's own questions |
+| Extraction | `extraction.py`, `prompts/extraction/*.md` | `SPEC_PATH`, `document_axes`, `PHRASES`, `PROMPT_CHECKS`, `NOT_EXTRACTED`, `shapes_files`, `ALT_LABEL_LANGUAGE`, `CONTRACT_LANGUAGE`, eight prompt ids | the spec (18 parameters, four of them the bundle's tags), the per-document scenario and region lists, the sentences the stage writes to the model and the passages the preflight holds its prompts to, the language (`"de"`) of the core's templates its parts files are put together with, and the harvest's own questions |
 | The graph | `kg.py`, `oekg_api.py` | `make_serializer`, `make_study_reader`, `dry_run` | OEKG Turtle, the trust wording, and a dry run of the platform's scenario-bundle API (below) |
 | The answer app | `inference.py`, `prompts/inference/*.md` | `PHRASES`, `READOFF_MARKER`, `READOFF_NOTE`, 9 prompt ids of its own | the English chat wording and the answer loop's own prompts; the tenth, `json_format`, is the built-in profile's, inherited byte for byte, so the text, its hash and the request are what the copy gave |
+
+Five of the eight extraction prompts, `rows`, `field`, `frame`, `review` and
+`example`, are parts files (see [profiles](../profiles.md), The extraction
+prompts): each names its template of the core in its front matter, and
+`CONTRACT_LANGUAGE = "de"` in `profiles/scenarios/extraction.py` says that the
+templates are the German ones. What scenarios writes itself is its role
+(scientific publications on climate and energy scenarios), its examples and
+the sentences about its own sources. It words six blocks itself, where the
+template's sentence fits it less well. In the rows prompt `invent_figures` says
+that what a figure description does not state does not exist, and
+`source_kinds` names the kinds of sources, with figure descriptions. In the
+field prompt `rows_carry` says what a row carries, an identifier, its source
+and its passage and no unit, and `unstated_when` says when the answer is "not
+stated": when the passages name no scenario at all. In the review prompt
+`row_note` and `field_unit` are its own note on the first reading and its unit
+bullet. It leaves out the blocks of the templates it never had a sentence for:
+13 blocks of the rows prompt, 6 of the field prompt (`base_years`,
+`year_value`, `no_guessing`, `closed_out`, `by_meaning` and `found_next`) and
+`field_raw` of the review prompt. The frame and the example prompt leave out and
+word nothing. `python scripts/render_prompts.py --what-if` shows each block it
+leaves out put back (see [Running the pipeline](../running.md)).
 
 Extraction's `rows` and `field` prompts hold a value's quote to the
 piece that carries it, a clause, a list entry, one table cell, not the
@@ -228,7 +249,7 @@ on one document, the wording matched the list's only entry exactly and
 the model still answered `out:not_documented` (`kg.py`, lines 320 to 323,
 `resolve_wording`'s own docstring; the sentinel is named by
 `test_the_list_settles_what_the_model_gave_up_on`,
-`tests/test_scenarios_extraction.py`, lines 1167 to 1170). Those readings
+`tests/test_scenarios_extraction.py`, lines 1228 to 1243). Those readings
 are not lost: `resolve_wording()` rescues a link the document's own list
 settles unambiguously even where the model gave up, logged on its own
 line, separate from the sentinel tally (`kg.py`, lines 716 to 727).

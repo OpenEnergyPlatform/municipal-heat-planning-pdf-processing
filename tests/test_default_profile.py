@@ -11,6 +11,7 @@ command runs in.
 """
 import ast
 import hashlib
+import importlib
 import json
 import os
 import re
@@ -74,6 +75,10 @@ def _child(folder, name="mine", extends="default", **files):
         path = home / relative
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(text, encoding="utf-8")
+    # The finder keeps a listing of the folder by its modification time. A
+    # profile made in the same tick of the file system's clock as the one
+    # before it is not in that listing, and loads as "unknown profile".
+    importlib.invalidate_caches()
     return home
 
 
@@ -401,16 +406,13 @@ def test_the_built_in_profile_names_no_subject():
     assert not hits, hits
 
 
-def _prompt_shape(path):
-    """(front matter keys, {{placeholders}}) of one prompt file."""
-    import re
-    text = path.read_text(encoding="utf-8")
-    head = re.match(r"^---\r?\n(.*?)\r?\n---\r?\n", text, re.S)
-    keys = sorted(line.split(":")[0].strip()
-                  for line in (head.group(1) if head else "").splitlines()
-                  if ":" in line and not line.startswith(" "))
-    body = text[head.end():] if head else text
-    return keys, sorted(set(re.findall(r"\{\{\s*(\w+)\s*\}\}", body)))
+def _prompt_shape(prompt):
+    """(setting keys, {{placeholders}}) of one prompt as the loader makes it:
+    the settings of the model request and the placeholders a caller has to
+    fill. A parts file is read as the prompt it composes to, so the keys of
+    the loader (`template`, `without`) are no setting of the request and the
+    marks of a template are no placeholder."""
+    return sorted(prompt.meta), sorted(prompt.placeholders)
 
 
 @pytest.mark.parametrize("name", ["kwp", "scenarios"])
@@ -421,18 +423,41 @@ def test_a_built_in_prompt_is_filled_and_set_like_the_profiles_own(name):
     only for a project that has no prompt of its own there."""
     own = ROOT / "profiles" / name / "prompts"
     built_in = DEFAULT / "prompts"
+    theirs, ours = load_profile("default"), load_profile(name)
     compared = 0
     files = sorted(built_in.rglob("*.md"))
     for path in files:
-        other = own / path.relative_to(built_in)
-        if not other.is_file():
+        relative = path.relative_to(built_in)
+        if not (own / relative).is_file():
             continue
         compared += 1
-        assert _prompt_shape(path) == _prompt_shape(other), \
-            path.relative_to(built_in).as_posix()
+        prompt_id = f"{relative.parent.as_posix()}/{relative.stem}"
+        assert _prompt_shape(prompts.load(prompt_id, theirs)) == \
+            _prompt_shape(prompts.load(prompt_id, ours)), prompt_id
     # an inherited prompt is the built-in file itself: nothing to compare
     assert len(files) >= 30
     assert compared == len(files) - len(INHERITED[name])
+
+
+def test_the_shape_of_a_prompt_is_what_a_request_gets_of_it():
+    """Built to fail: another setting and another placeholder make another
+    shape, and the keys of the loader are no setting."""
+    def made(meta, text):
+        return prompts.Prompt(id="x/y", text=text, meta=meta, sha256="",
+                              path=Path("y.md"))
+    plain = made({"temperature": 0, "max_tokens": 10}, "Say {{what}}.")
+    assert _prompt_shape(plain) == (["max_tokens", "temperature"], ["what"])
+    assert _prompt_shape(made({"temperature": 0, "max_tokens": 10,
+                               "top_p": 1}, "Say {{what}}.")) != \
+        _prompt_shape(plain)
+    assert _prompt_shape(made({"temperature": 0, "max_tokens": 10},
+                              "Say {{how}}.")) != _prompt_shape(plain)
+    # a parts file of each profile is the same prompt as far as a request is
+    # concerned, whatever the profile leaves out of it
+    for name in ("kwp", "scenarios", "default"):
+        shape = _prompt_shape(prompts.load("extraction/example",
+                                           load_profile(name)))
+        assert shape == (["max_tokens", "temperature"], [])
 
 
 def test_the_built_in_profile_has_every_prompt_a_stage_asks_for():

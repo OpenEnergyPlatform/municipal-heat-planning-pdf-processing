@@ -245,10 +245,10 @@ faiss_id)` tuples per document (`database.py:850`).
 | `EMBED_PREPARE_AHEAD` | code constant | `32` | documents' prepared input allowed to sit unconsumed | `chunking/config.py:45`; `pipeline.py:105` |
 | `EMBED_FLUSH_ITEMS` | code constant | `4096` | pending-item threshold for one `create_embeddings` call; checked only after a document's inputs are appended, so a flush can exceed it | `chunking/config.py:50`; `pipeline.py:292` |
 | `EMBED_SAVE_VECTORS` | code constant | `50000` | vectors added since the last save before the index file rewrites mid-run; the run's end saves once more | `chunking/config.py:57`; `pipeline.py:300`, `331` |
-| `FAISS_INDEX_FILE` | code constant | `faiss_index.bin` | declared but unread elsewhere; the real filename comes from the CLI argument or `Profile.index_path`, hardcoding the same literal separately | `chunking/config.py:59`; `docpipe/profile.py:318` |
+| `FAISS_INDEX_FILE` | code constant | `faiss_index.bin` | declared but unread elsewhere; the real filename comes from the CLI argument or `Profile.index_path`, hardcoding the same literal separately | `chunking/config.py:59`; `docpipe/profile.py:324` |
 | `--step` | CLI flag | none (merge, db, embed) | restrict the run to one of `merge`, `db`, `embed`, `enrich-bbox`, `enrich-page-source`, `enrich-caption` | `pipeline.py:358-369` |
 | `--force` | CLI flag | off | merge: ignore the cache. db: delete and reinsert. embed: evict old vectors instead of skipping. enrich-*: re-derive already-answered rows. | `pipeline.py:371`; used throughout |
-| `--profile` / `DOCPIPE_PROFILE` | CLI flag / env var | none / unset | supplies default `data_dir`, `db_path`, `index_path` when a positional argument is omitted | `profile.py:308-318`, `411`; `pipeline.py:370`, `393-395` |
+| `--profile` / `DOCPIPE_PROFILE` | CLI flag / env var | none / unset | supplies default `data_dir`, `db_path`, `index_path` when a positional argument is omitted | `profile.py:314-324`, `417`; `pipeline.py:370`, `393-395` |
 | `--log-level` | CLI flag | `INFO` | logging level for the run | `pipeline.py:372-375`, `384` |
 | `data_dir`, `db_path`, `index_path` | positional args | none (fall back to the profile's paths) | processed root, database path, index path | `pipeline.py:351-357`, `393-395` |
 

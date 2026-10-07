@@ -446,8 +446,9 @@ def test_a_profile_that_names_the_coordinate_keeps_two_lists_apart(
 
 
 def _frame_prompt(name) -> str:
-    return (load_profile(name).prompts_dir / "extraction"
-            / "frame.md").read_text(encoding="utf-8")
+    """The prompt as the request carries it: the profile's parts put into the
+    core's frame template, not the profile's file."""
+    return prompts.load("extraction/frame", load_profile(name)).text
 
 
 def _refused_choice(slot) -> str:

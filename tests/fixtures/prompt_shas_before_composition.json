@@ -1,0 +1,20 @@
+{
+  "kwp": {
+    "extraction/anchors": "62c88f1471cd18cfe7c9012e489830ca721452956204694689a29cb17d700485",
+    "extraction/field": "ed280f83036db5675f046c2c0d5db78973045453eeae349321d4d8589d8ff9c0",
+    "extraction/frame": "cab072c0d4b0fca9daf479a0cf444446c6e7b58a91040d2892e420feab068337",
+    "extraction/phrase": "e240376bb4fbbe30c20511330ab1650c3f43f196723ae599a0eecb7788813e7f",
+    "extraction/queries": "5017ef0af9ede65d1680e5a5f923799b858ee82f87a62fcb8e4c47113793ccac",
+    "extraction/review": "0ce5d97c928579eb188a25c66be32a4d68f186dc3c23e3909ced130574254d0f",
+    "extraction/rows": "73f90d958b4b58b98a311b33991d3528bb12766bc62833ab9d561f422ad96884"
+  },
+  "scenarios": {
+    "extraction/anchors": "45149d01744ddfacc05cf612fd9b51d5c4e0d5c8662461562c4f968bd3a71c69",
+    "extraction/field": "f3787e516af95ae1234d16f1206c7a2d3413e2866e4f4097ee5a3ea725ccb3fb",
+    "extraction/frame": "ad1803e34f93b6b05ad7f6285e6563109563631c55d04dc012c70e99283a02a1",
+    "extraction/phrase": "d305b31da98d042fe09076c8b01b3a7cee4e085c38c7c6689efe9e04044aeb5a",
+    "extraction/queries": "bff3e4c7aea1e4e21598d68039efa29451754f4bae5a3a926b23ca6bff7c656e",
+    "extraction/review": "eb192233451815b20a110705a6125ba13f03cff3e653ec985be1cc275aa881fa",
+    "extraction/rows": "dad4e8e0f4618e30140282cd83ce426546ee13c745ea3908d357b624ba0f3ea9"
+  }
+}

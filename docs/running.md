@@ -732,12 +732,22 @@ budget of each prompt, in tokens per request, each by the rule of its own
 side. The numbers are taken at the settings' defaults: the caller's
 `EXTRACT_*` variables, a project file and a `.env` are not read. `--out` names
 the output folder, a new or an empty one (by default a folder named by the
-time in the system's temporary folder); `--what-if` also renders each block a
-composed prompt leaves out back in (a loader that does not compose prompts has
-nothing to show, and the summary says so); `--check-domain FILE` holds a
-rewrite to "the domain stays word for word" against a JSON file of old line
-ranges per profile and prompt, whose shape the script's module docstring
-gives; `--repo DIR` names another checkout for the working-tree side. The tool
+time in the system's temporary folder). The rows, field, frame, review and
+example prompts of `kwp`, `scenarios` and the built-in profile are parts files,
+which the loader reads as the text the core's template and the profile's parts
+make together, and `summary.md` lists for each of them the template, the blocks
+the profile words itself (`overrides`) and the blocks it leaves out
+(`omitted`); a plain file lists nothing. `--what-if` also renders each block a
+composed prompt leaves out back in, as `<name>.what-if.<block>.txt` and the
+sentences it adds as `<name>.what-if.<block>.sentences.diff`, beside the other
+files of that prompt; a loader that does not compose prompts has nothing to
+show, and the summary says so. `--check-domain FILE` holds a rewrite to "the
+domain stays word for word" against a JSON file of old line ranges per profile
+and prompt, listing the lines that are the core's contract wording and the ones
+that are mixed, whose shape the script's module docstring gives: every other
+non-blank line of the old file has to stand in the new text, and a line that
+does not is named and ends the run with exit 1; `--repo DIR` names another
+checkout for the working-tree side. The tool
 reads files and imports the two trees; it asks no model, reads no `data/` and
 writes nothing into the repository, and it refuses an output folder inside the
 repository or one that already holds files, with exit 2. It exits 1 when a
@@ -760,7 +770,7 @@ python scripts/build_docs.py --check
 
 renders every generated page fresh and fails, writing nothing, if a
 checked-in page has drifted from its source (`scripts/build_docs.py`
-lines 1394 to 1423).
+lines 1440 to 1469).
 
 ## Documentation build
 
@@ -774,7 +784,7 @@ the checked-in extraction schemas, and named constants
 python scripts/build_docs.py --out docs
 ```
 
-(`scripts/build_docs.py` lines 1485 to 1487).
+(`scripts/build_docs.py` lines 1486 to 1488).
 
 Sphinx then builds the HTML site, warnings promoted to errors:
 `.github/workflows/docs.yml` runs `-W --keep-going -b html docs

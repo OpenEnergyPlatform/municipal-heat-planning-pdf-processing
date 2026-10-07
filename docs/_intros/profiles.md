@@ -23,7 +23,7 @@ A profile is not a subclass to write against. It is a directory,
 `profiles/<name>/`, holding exactly one thing the core reads directly: a
 `profile.py` exporting a module-level `PROFILE` whose own `name` field
 matches the directory it lives in, checked by `load_profile()`
-(`docpipe/profile.py:350-373`); a mismatch raises `ValueError` rather than
+(`docpipe/profile.py:356-379`); a mismatch raises `ValueError` rather than
 running a profile under the wrong identity. Everything else the directory
 holds, source code, prompts, a spec, an ontology snapshot, is read only by
 that profile's own modules or by the specific piece of `docpipe/` that asks
@@ -59,7 +59,7 @@ schema inside `apply()`'s one transaction
 (`docpipe/store/schema.py:45-48,43`), and
 `root`, `pdf_dir`, `processed_dir`, `db_path` and `index_path` all sit
 under `data/<name>/` (or `$DOCPIPE_DATA_ROOT/<name>` or `data_root`) if set
-(`docpipe/profile.py:267-318`). Two profiles run from the same checkout
+(`docpipe/profile.py:273-324`). Two profiles run from the same checkout
 therefore never share a file by accident.
 
 ## How the core finds and asks a profile
@@ -74,7 +74,7 @@ directory itself. `docpipe profiles` lists what is found and where.
 `load_profile(name)` resolves the profile: `name`, or failing that
 `$DOCPIPE_PROFILE`, names a directory whose `profiles.<name>.profile`
 module it imports; an unknown name raises `LookupError` listing the
-profile directories that exist (`docpipe/profile.py:350-366`). Nothing
+profile directories that exist (`docpipe/profile.py:356-372`). Nothing
 under `docpipe/` imports a profile itself: its own docstring states the
 rule in one line, "the core never imports a profile; it receives one"
 (`docpipe/profile.py:6`), and `tests/test_architecture.py` holds it
@@ -94,22 +94,22 @@ profiles when none is given (the chat is the one entry point that does not stop:
 `wording.chat_profile` gives it the built-in `default` profile, see [the
 chat](stages/app.md)) (`docpipe/refinement/pipeline.py:268`,
 `docpipe/visuals/pipeline.py:555`, `docpipe/extraction/runner.py:5322`,
-`docpipe/profile.py:472-479`). Each adds the `--profile` flag through
-`add_profile_argument(parser)` (`docpipe/profile.py:409-412`).
+`docpipe/profile.py:478-485`). Each adds the `--profile` flag through
+`add_profile_argument(parser)` (`docpipe/profile.py:415-418`).
 `resolve_profile` reads `args.profile` or, failing that, `$DOCPIPE_PROFILE`,
 loads the named profile, and writes the resolved name back into
-`$DOCPIPE_PROFILE` (`docpipe/profile.py:446-469`).
+`$DOCPIPE_PROFILE` (`docpipe/profile.py:452-475`).
 
 The flag reaches the environment before the stage is imported. Each of the
 five `docpipe/*/__main__.py` calls `bind_command_line()` first, which reads
 the flag off `sys.argv` with a small argparse parser (`parse_known_args`), the way
 the stage's own parser reads it, so an abbreviation of `--profile` that the stage
 accepts, with a space or an equals sign before the name, is bound too, and sets `$DOCPIPE_PROFILE`
-(`docpipe/profile.py:415-432`). A line it cannot read is left to the stage's own
-parser to report (`:429-430`). So `--profile` alone
+(`docpipe/profile.py:421-438`). A line it cannot read is left to the stage's own
+parser to report (`:435-436`). So `--profile` alone
 is enough, and a stage's usage text needs no profile: refinement and visuals
 read their prompts on first use, once per ambient profile
-(`prompts.per_profile`, `docpipe/prompts.py:100-117`), not when the module is
+(`prompts.per_profile`, `docpipe/prompts.py:208-225`), not when the module is
 imported. What a stage binds on import is the refinement
 `WINDOW_SIZE` (`docpipe/refinement/config.py:39-41`); the answer chat's
 prompts are read on first use too, once per profile
@@ -117,27 +117,35 @@ prompts are read on first use too, once per profile
 refuses one case rather than running it on a mix of two profiles: a caller
 that imported a stage under one profile, or none, and then names another
 that ships prompts is refused with `SystemExit` naming the fix
-(`docpipe/profile.py:460-467`). Code with no command line calls
+(`docpipe/profile.py:466-473`). Code with no command line calls
 `active_profile()` instead, reading only `$DOCPIPE_PROFILE` and returning
-`None` when the variable is unset (`docpipe/profile.py:376-380`).
+`None` when the variable is unset (`docpipe/profile.py:382-386`).
 
 | Name | Kind | Default | Effect | Where read |
 |---|---|---|---|---|
-| `--profile` | CLI flag | ambient `$DOCPIPE_PROFILE` or none | names the profile `resolve_profile` loads for this run; `bind_command_line()` copies it into `$DOCPIPE_PROFILE` before a stage is imported | `docpipe/profile.py:409-412`, `417-434` |
+| `--profile` | CLI flag | ambient `$DOCPIPE_PROFILE` or none | names the profile `resolve_profile` loads for this run; `bind_command_line()` copies it into `$DOCPIPE_PROFILE` before a stage is imported | `docpipe/profile.py:415-418`, `421-438` |
 | `$DOCPIPE_PROFILE` | environment variable | unset | read by `load_profile`, `active_profile`, and `resolve_profile`; the last writes it back once a name is resolved | `docpipe/profile.py:45` |
-| `$DOCPIPE_DATA_ROOT` | environment variable | unset, falls back to `data/` beside the project file, else `<repo>/data` | base directory for every profile's `root` (and therefore `pdf_dir`, `db_path`, `index_path`), unless `Profile.data_root` overrides it | `docpipe/profile.py:298-302`, `323-337` |
+| `$DOCPIPE_DATA_ROOT` | environment variable | unset, falls back to `data/` beside the project file, else `<repo>/data` | base directory for every profile's `root` (and therefore `pdf_dir`, `db_path`, `index_path`), unless `Profile.data_root` overrides it | `docpipe/profile.py:304-308`, `327-341` |
 
-Once a `Profile` object exists, the core asks it through exactly two
-lookups. `Profile.component(module, attr)` imports
+Once a `Profile` object exists, the core asks it through two lookups, and
+through a third, narrower one for a single fact. `Profile.component(module,
+attr)` imports
 `profiles.<name>.<module>` and returns `getattr(loaded, attr, None)`; a
 module the profile lacks is an absence, returning `None`, but one that
 exists and fails to import is the profile's own bug and re-raises rather
-than being swallowed as absence (`docpipe/profile.py:218-253`).
+than being swallowed as absence (`docpipe/profile.py:218-259`).
 `Profile.require(module, attr)` is the same lookup with `LookupError` in
 place of `None`, for a part the pipeline cannot run without
-(`docpipe/profile.py:255-265`); `profile_value(module, attr)` is `require()`
+(`docpipe/profile.py:261-271`); `profile_value(module, attr)` is `require()`
 against the ambient profile, cached once per `(profile.name, module,
-attr)` for the process's life (`docpipe/profile.py:386-400`).
+attr)` for the process's life (`docpipe/profile.py:392-406`).
+
+The third lookup is `Profile.own(module, attr)`: what the profile itself
+declares in `profiles/<name>/<module>.py`, and nothing from the profiles it
+extends (`docpipe/profile.py:229-233`). It is for a fact about the files a
+profile owns and not about what it contributes: the language its extraction
+prompts are written in, `extraction.CONTRACT_LANGUAGE` (see The extraction
+prompts, below).
 
 Which of the two a caller uses is a choice, not a fixed rule.
 `docpipe/inference/kg_route.py`'s `hooks()` reads `kg.VALUE_QUERY` through
@@ -205,7 +213,10 @@ on it nor a file of the profile fails, and so does a listed one that returns as 
 file of the profile. A later change to one of the two built-in prompts on the
 list therefore reaches the profiles that inherit it, and its sha256 is entered
 in `BEFORE` there; for `visuals/caption_keep` a changed hash also makes stage 3
-say "described with older prompts" for stored documents.
+say "described with older prompts" for stored documents. A prompt of the
+extraction stage that is a parts file is inherited with its parts, and is read
+in the language of the profile that holds the file (see The extraction prompts,
+below).
 `extraction.PROMPT_CHECKS` is not laid over entry by entry: a profile that declares it holds the whole
 list, and one that declares none keeps the list of the profile it extends.
 Nothing is taken from a
@@ -236,6 +247,7 @@ shipped profile provides.
 | The answer app | `inference.PHRASES`, `READOFF_MARKER`, `READOFF_NOTE` | required at first use (`profile.require`, variable `attr`, `docpipe/inference/wording.py:120`) | German phrasing, 30 keys checked against `wording.REQUIRED` | English phrasing, same 30 keys |
 | Reading the values out | `extraction.PHRASES` | required, laid over the extended profile's (`profile.layers`, `docpipe/extraction/wording.py`) | German sentences the stage writes to the model | German sentences, the language of its extraction prompts |
 | Reading the values out | `extraction.PROMPT_CHECKS` | optional, read by `docpipe preflight` (`component`); a profile that declares none has the extended profile's | two entries: the field prompt says `GENAU EIN Feld`, the rows prompt no longer fixes one parameter | the same two entries |
+| Reading the values out | `extraction.CONTRACT_LANGUAGE` | required of a profile that holds a parts file: the language of the core's template the file is put together with, read from the profile that owns the file (`Profile.own`, `docpipe/extraction/contract.py:85-88`) and not inherited | `"de"` | `"de"` for scenarios, `"en"` for the built-in profile |
 | Reading the values out | `extraction.ALT_LABEL_LANGUAGE` | required by the profile's own `vocabulary` module (`profile.require`), not by the core: the language tag of the alternative labels a vocabulary snapshot keeps (`ontology.index` and `ontology.build` take it as `language`, with no default) | `"de"` | `"de"` for scenarios, `"en"` for the built-in profile |
 | Reading the values out | `extraction.NOT_EXTRACTED` | optional (`component`), read by `docpipe preflight`: a mapping `(shape, property)` to one sentence, the properties of the profile's shapes it leaves out on purpose | not provided | 21 entries, each with its reason |
 | Reading the values out | `extraction.shapes_files` | optional (`component`), read by `docpipe preflight`: a callable returning the SHACL files the graph is held against | not provided; the shapes line says "skipped" | the shapes file of the last refresh of the OEKG sources |
@@ -253,9 +265,11 @@ entries of a closed frame coordinate under the key
 `say("frame_options", slot=<coordinate name>)`, and `frame_options` is one of
 the phrases a profile has to have. `kwp` and `scenarios` say `"scenarios"`, one
 list for every closed frame coordinate, and the built-in profile says
-`"{slot}_options"`, one list per coordinate. The frame prompts of `kwp` and
-`scenarios` and their `frame_not_an_option` phrase name `"scenarios"` in their
-own words, and a test holds the three together. The built-in frame prompt names
+`"{slot}_options"`, one list per coordinate. The German frame template names the
+key through the fact `frame_options`, so the frame prompts of `kwp` and
+`scenarios` say `"scenarios"` as the profile's phrase does, and their
+`frame_not_an_option` phrase names `"scenarios"` in its own words; a test holds
+the three together. The built-in frame prompt names
 no key ("the list the request gives for `scenario`"), and its
 `frame_not_an_option` phrase is handed the key that was sent, as `{options}`. A
 profile that extends the built-in one and words only `frame_options`
@@ -264,7 +278,8 @@ together.
 
 `extraction.PROMPT_CHECKS` is a tuple of entries `(what is checked, prompt id,
 passage, has to be there)`: a passage the profile's prompts have to hold
-(`True`) or must not hold (`False`), in the language of those prompts. The
+(`True`) or must not hold (`False`), in the language of those prompts and in the
+text a request sends, which for a parts file is the composed one. The
 built-in profile declares one, that its field prompt says `EXACTLY ONE field`.
 The shapes of a profile's graph are its own as well: `extraction.shapes_files`
 says where they are and `extraction.NOT_EXTRACTED` which of their properties it
@@ -276,6 +291,107 @@ Two more phrases of `extraction.PHRASES` are keys and not sentences:
 to the model under. They are `means` and `spellings` in the built-in profile,
 `kwp` and `scenarios` alike; kwp and scenarios said them in German before, and
 a profile that extends one of them has no reason to word them differently.
+
+## The extraction prompts: the core's template and a profile's parts
+
+Five prompts of the extraction stage, `rows`, `field`, `frame`, `review` and
+`example`, are written in two halves. The core holds the contract text of each,
+in German and in English, as a template under
+`docpipe/extraction/contract/<language>/<name>.md`: what the reply looks like,
+that the quote stands in a shown passage, that the answer stands in the quote,
+what "not stated" is, what to do with a closed list. A profile's own file holds
+what is about its corpus: the role, the examples, the sentences about its own
+tables. A file that names a template in its front matter, `template: rows`, is
+a parts file, and `docpipe/prompts.py` puts it together with the template of
+the profile's language when the prompt is loaded. A request, a stamp and
+`scripts/render_prompts.py` see the composed prompt and never the two halves.
+The other extraction prompts (`phrase`, `anchors`, `queries`) and every prompt
+of the other stages are plain files, read as they are written.
+
+A parts file is a front matter and sections that each start with a line
+`<!-- part: name -->`. This is the whole of kwp's review prompt:
+
+```markdown
+---
+template: review
+without: [corpus_language]
+temperature: 0
+max_tokens: 1024
+---
+<!-- part: role -->
+Du liest deutsche kommunale Wärmepläne ("Kommunale Wärmeplanung").
+
+<!-- part: example_reply -->
+{"value": 241.0, "unit": "MWh/a", "unit_raw": "MWh p.a.", "value_quote": "| Erdgas | 241 | MWh p.a. |", "carrier": "Erdgas", "carrier_raw": "Gas H", "carrier_quote": "| Gas H | 241 |"}
+```
+
+`template` names the template and `without` lists the blocks of it that this
+profile leaves out. The loader keeps both out of the prompt's settings, so
+`temperature` and `max_tokens` are what a stage reads from the prompt. What a
+template asks of a profile it says in its own front matter: its `required` and
+`optional` parts, its `blocks` (a stretch of contract text, between
+`<!-- block: name -->` and `<!-- /block -->`) and which of the blocks are
+`omittable`. A profile does three things with that:
+
+- It gives every required part, here the `role` of the model for this corpus
+  and the `example_reply` the prompt ends on, and each optional part it has a
+  sentence for.
+- It leaves out a block it never had, with `without: [name]`, and only a block
+  the template lists as omittable. The review template has a block
+  `corpus_language`, a sentence about the language of the corpus' texts, which
+  kwp has none of. A rule that is left out takes its number with it: the rules
+  of a template (`<!-- rule: name -->`) are numbered when the prompt is loaded,
+  without a gap, and a reference to a rule (`{{rule:name}}`) follows the
+  numbers.
+- It words a block itself, where the template's sentence fits it less well, by
+  giving a part with the name of the block. Scenarios does it for
+  `invent_figures` and `source_kinds` of the rows prompt, `rows_carry` and
+  `unstated_when` of the field prompt and `row_note` and `field_unit` of the
+  review prompt; kwp for `value_text` of the rows prompt and `closed_out_text`
+  of the field prompt. A block with no part of its name says what the template
+  says.
+
+A part is put in as it is written, apart from the blank lines around it, so a
+part that continues a sentence starts with a space, as `quote_why` of the frame
+template does. A part may name a fact and a rule, and no other double brace or
+comment mark. A fact is a value the code decides and a prompt only repeats: the
+least length of a quote (`verify.MIN_QUOTE_CHARS`), the word for "not stated"
+(`fields.UNSTATED`), and the keys and words the closed list is shown in and the
+key of the frame's list, which are sentences of the profile's
+`extraction.PHRASES`. No template types one of them, so the prompt and the
+request cannot disagree on it.
+
+The language is a declaration of the profile that holds the parts file,
+`extraction.CONTRACT_LANGUAGE` in its `extraction.py`: `"de"` in kwp and
+scenarios, `"en"` in the built-in profile. It is read with `Profile.own`, so it
+is not inherited. A profile that extends another and keeps its parts files gets
+the language they are in, and one that writes parts files of its own declares
+the language of those. A profile with no declaration, or one the core has no
+templates for, does not load its prompt, and the error names the languages the
+core has.
+
+A parts file that does not fit its template is refused when the prompt is
+loaded, with `PromptPartsError` (`docpipe/prompts.py:103-123`). It names the
+prompt, the part or the block, the profile and the two files. Refused are a
+required part that is missing, a part the template does not know (the nearest
+name is offered), a part whose place is gone because `without` removed its
+block, a `without` entry that is no block or not an omittable one, a reference
+to a rule that is not in the prompt, and a double brace or comment mark left in
+a part or in the text. Nothing is filled in for what is missing. `docpipe
+doctor` shows the error as a failed `prompts` line with a hint on what a parts
+file holds, and `docpipe preflight` as a failed `prompt extraction/rows` or
+`prompt extraction/field` line (see [the command and its
+settings](stages/command.md) and [the extraction stage](stages/extraction.md)).
+
+A composed prompt has the sha256 of the file a person would have written by
+hand: its front matter without `template` and `without`, then the text a request
+sends. The stamp records it under `extraction/<name>` as it records a plain
+file's, and compares none, so no stored document turns stale because a prompt
+was put together from parts. `scripts/render_prompts.py` lists, for each composed
+prompt, its template, the blocks the profile words itself and the blocks it
+leaves out; `--what-if` renders each left out block back in, and
+`--check-domain` holds a rewrite to "the profile's own sentences stand word for
+word" (see [Running the pipeline](running.md)).
 
 ## The two profiles in comparison
 
@@ -357,7 +473,11 @@ a profile that extends one of them has no reason to word them differently.
 6. **Add extraction, if this corpus should feed a knowledge graph.** Write
    `extraction_spec.json` by hand, add `extraction.py` with `SPEC_PATH` at
    least, `kg.py` with `make_serializer` (or a `graph` block in the spec,
-   which the generic writer reads instead), and `prompts/extraction/*.md`.
+   which the generic writer reads instead), and `prompts/extraction/*.md`. Five
+   of those prompts, `rows`, `field`, `frame`, `review` and `example`, are parts
+   files that name a template of the core, and `extraction.py` then declares
+   `CONTRACT_LANGUAGE` for the language they are in (see The extraction
+   prompts).
    Name the passages the prompts have to hold in `extraction.PROMPT_CHECKS`.
    `docpipe preflight <name>` then exercises, without a GPU, a model, or a
    database, what a run rests on: the spec the profile names
@@ -389,20 +509,20 @@ raises `ValueError` on an unusable `name` or unknown `column_layout`
 (`docpipe/profile.py:188-192`), pinned by `tests/test_profile.py`'s
 `test_rejects_unusable_names` and `test_rejects_unknown_column_layout`.
 `load_profile` raises `LookupError` for a name given nowhere
-(`docpipe/profile.py:353-355`) or unknown on disk
-(`docpipe/profile.py:364-366`), pinned by
+(`docpipe/profile.py:359-361`) or unknown on disk
+(`docpipe/profile.py:370-372`), pinned by
 `test_no_profile_is_an_explicit_error` and
 `test_unknown_profile_lists_the_available_ones`; it also raises
 `ValueError`, unpinned by any test, when `PROFILE.name` does not match its
-directory (`docpipe/profile.py:371`). `Profile.require` and
+directory (`docpipe/profile.py:377-378`). `Profile.require` and
 `profile_value` raise `LookupError` for a missing attribute or an unset
-`$DOCPIPE_PROFILE` (`docpipe/profile.py:255-265,395-396`), the case
+`$DOCPIPE_PROFILE` (`docpipe/profile.py:261-271,401-402`), the case
 `kg_route.hooks()` turns into its own `LookupError` for a partial
 `kg.VALUE_QUERY` route (above). `resolve_profile` raises `SystemExit` for a
 profile named after a stage was imported under another one, when the named
-profile ships prompts (`docpipe/profile.py:460-467`), pinned by
+profile ships prompts (`docpipe/profile.py:466-473`), pinned by
 `test_late_profile_is_refused_when_it_overrides_prompts`; `require_profile`
-raises it for no profile at all (`docpipe/profile.py:475-478`), pinned by
+raises it for no profile at all (`docpipe/profile.py:481-484`), pinned by
 `test_a_stage_that_cannot_run_without_a_profile_says_which_there_are`
 (`tests/test_entry_points.py`). Two entry points
 add their own `SystemExit`, via `parser.error()` for extraction:
@@ -410,3 +530,11 @@ add their own `SystemExit`, via `parser.error()` for extraction:
 `backfill_meta`, and
 `docpipe/extraction/runner.py:5379-5383,5433-5436` for a missing
 `SPEC_PATH` (under `--serialize`, only when `make_serializer` is missing too).
+
+A parts file that cannot be composed fails when its prompt is loaded and not
+when a request is sent: `PromptPartsError`, pinned case by case in
+`tests/test_prompt_parts.py`, among them
+`test_a_missing_required_part_names_the_prompt_the_part_the_profile_and_both_files`
+and `test_a_part_the_template_does_not_know_is_refused_and_the_near_one_named`.
+That a profile declares its own language and inherits none is held by
+`test_a_profile_declares_for_itself_and_inherits_nothing_of_it`.

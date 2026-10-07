@@ -335,6 +335,7 @@ SOURCES = (
            "docpipe/extraction/throttle.py",
            "docpipe/extraction/identity.py",
            "docpipe/extraction/wording.py",
+           "docpipe/extraction/contract.py",
            "docpipe/extraction/preflight.py",
            "docpipe/extraction/replies.py"),
     _stage("stages/evaluation.md", "Measuring a harvest",

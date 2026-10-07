@@ -626,8 +626,9 @@ def test_the_prompt_bounds_completeness_by_the_frame():
     every passage, and told it in the input description to return only the
     ones of this pair. It followed the loud rule, and 174 of 234 checked
     tuples carried a foreign year."""
-    text = (PROFILES / "kwp" / "prompts" / "extraction"
-            / "rows.md").read_text(encoding="utf-8")
+    from docpipe import prompts
+    from docpipe.profile import load_profile
+    text = prompts.load("extraction/rows", load_profile("kwp")).text
     rule = [line for line in text.splitlines()
             if "vollst" in line.lower() and "Eintrag" in line]
     assert len(rule) == 1, rule

@@ -513,13 +513,14 @@ def _prompts_of(stage: str, profile) -> list:
     # Read the way the stage reads them: one that is there and cannot be
     # read (front matter that is no mapping) stops the stage as one that is
     # not there.
-    missing, unreadable = [], []
+    missing, unreadable, composed = [], [], False
     for prompt_id in ids:
         try:
             prompts.load(prompt_id, profile)
         except FileNotFoundError:
             missing.append(prompt_id)
         except Exception as exc:    # what the loader raises for a bad file
+            composed = composed or isinstance(exc, prompts.PromptPartsError)
             unreadable.append(f"{prompt_id} ({type(exc).__name__}: {exc})")
     if missing or unreadable:
         said, hints = [], []
@@ -533,6 +534,13 @@ def _prompts_of(stage: str, profile) -> list:
                         f"be read: {'; '.join(unreadable)}")
             hints.append("the front matter between the two --- lines of a "
                          "prompt is a mapping of settings")
+        if composed:
+            hints.append("a prompt that names a template (`template:` in its "
+                         "front matter) holds the parts that template asks "
+                         "for, each under a `<!-- part: name -->` line, and "
+                         "no others; the front matter of the template, "
+                         "docpipe/extraction/contract/<language>/<name>.md, "
+                         "lists them")
         return [Check("prompts", stage, FAIL, "; ".join(said),
                       "; ".join(hints))]
     return [Check("prompts", stage, OK, f"{len(ids)} prompt(s) found")]

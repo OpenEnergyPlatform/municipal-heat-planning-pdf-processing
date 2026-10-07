@@ -511,10 +511,13 @@ def _alone(tmp_path, prompts_kept, extraction=""):
              (theirs / f"{name}.md").read_text(encoding="utf-8")
              for name in prompts_kept}
     files["extraction_spec.json"] = json.dumps(_spec())
+    # The copies are the built-in parts files, in the language those are in:
+    # a profile that owns a parts file declares the language of it itself.
     files["extraction.py"] = (
         "from pathlib import Path\n"
         "from docpipe.builtin.default.extraction import PHRASES\n"
         "SPEC_PATH = Path(__file__).with_name('extraction_spec.json')\n"
+        "CONTRACT_LANGUAGE = 'en'\n"
         + extraction)
     return _child(tmp_path, "alone", extends=None, **files)
 

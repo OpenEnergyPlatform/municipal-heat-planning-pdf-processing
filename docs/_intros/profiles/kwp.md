@@ -72,8 +72,8 @@ table gives kwp's own answer.
 | Visuals | `prompts/visuals/*.md` | six prompt ids of its own | table transcription, figure description and captions, in German; `visuals/caption_keep` is the built-in profile's, inherited byte for byte |
 | Refinement, visuals, page transcription, the answer app | `reading.py` | `PHRASES` | the ten sentences these stages and the chat say to the model when its reply was not the one JSON object, in English like the prompts of the first three (`reading.REQUIRED`), laid over the built-in profile's |
 | The picker (app) | `catalog.py`, `profile.py` | `CATALOG`, `facets` | plan-centric labels, convoy membership, three filters |
-| Extraction | `extraction.py` | `SPEC_PATH`, `SLICE`, `FRAME`, `document_context`, `PHRASES`, `PROMPT_CHECKS`, `ALT_LABEL_LANGUAGE` | the spec, the slice gate, the frame axes, the German sentences the stage writes to the model (the frame request's list of a closed coordinate stands under `"scenarios"`) and the passages the preflight holds its prompts to |
-| Extraction | `prompts/extraction/*.md` | seven prompt ids | phrase, frame, rows, field, anchors, queries, review |
+| Extraction | `extraction.py` | `SPEC_PATH`, `SLICE`, `FRAME`, `document_context`, `PHRASES`, `PROMPT_CHECKS`, `ALT_LABEL_LANGUAGE`, `CONTRACT_LANGUAGE` | the spec, the slice gate, the frame axes, the German sentences the stage writes to the model (the frame request's list of a closed coordinate stands under `"scenarios"`), the passages the preflight holds its prompts to, and the language (`"de"`) of the core's templates its parts files are put together with |
+| Extraction | `prompts/extraction/*.md` | eight prompt ids | phrase, anchors and queries as plain files; frame, rows, field, review and example as parts files that name a template of the core (see The prompts) |
 | The graph | `kg.py` | `make_serializer` and seven more names | MHPKG Turtle, the coordinate query, the trust wording |
 | The answer app | `inference.py` | `PHRASES`, `READOFF_MARKER`, `READOFF_NOTE`, `ROUTE_NOTES` | the German chat wording and the graph route's refusal sentences |
 | The answer app | `prompts/inference/*.md`, `prompts/kg/coordinate.md` | 10 plus 1 prompt ids | the answer loop's own prompts and the graph route's closed question |
@@ -211,7 +211,7 @@ that same file.
 
 ## The prompts
 
-Eight prompt ids belong to extraction and the graph route, kwp's own
+Nine prompt ids belong to extraction and the graph route, kwp's own
 wording of each spec question:
 
 | id | loaded | asks for |
@@ -223,7 +223,26 @@ wording of each spec question:
 | `extraction/rows` | per retrieved window | which values a passage states, without their coordinates |
 | `extraction/field` | once per row per coordinate | one axis's own answer, from its closed list or its type |
 | `extraction/review` | only under `--review`; excluded from the extraction stamp | a second reading of one value, over a window narrowed to its own passage and the section it stands in |
+| `extraction/example` | only under `docpipe compile examples` | which values of one parameter a passage states, to propose the example a spec parameter still lacks |
 | `kg/coordinate` | once per chat turn the graph route tries | one closed answer to one coordinate axis, for the SPARQL query |
+
+Five of these ids, `extraction/rows`, `field`, `frame`, `review` and `example`,
+are parts files (see [profiles](../profiles.md), The extraction prompts). Each
+names its template of the core in its front matter, and
+`CONTRACT_LANGUAGE = "de"` in `profiles/kwp/extraction.py` says that the
+templates are the German ones. What kwp writes itself is its role (German
+municipal heat plans), its examples and the sentences about its own tables. It
+words two blocks itself, where the template's sentence fits it less well:
+`value_text` of the rows prompt (for a text field, the designation as the plan
+writes it, without its legal form) and `closed_out_text` of the field prompt
+(the entries of a closed list that are expressly the opposite of a class, with
+kwp's own examples: a sum row, a remainder, an expressly unknown value, a
+percentage share, a potential). It leaves out the blocks of the templates it
+never had a sentence for: 14 blocks of the rows prompt, `rows_source`,
+`same_forms`, `by_similarity` and `domain_slot_2` of the field prompt, and
+`corpus_language` of the review prompt. The frame and the example prompt leave
+out and word nothing. `python scripts/render_prompts.py --what-if` shows each
+block it leaves out put back (see [Running the pipeline](../running.md)).
 
 `extraction/rows` and `extraction/field` are the pair every value is
 read with: one call finds which values a passage states, a second asks

@@ -16,7 +16,14 @@ from docpipe.extraction.graphkit import NOT_IN_GRAPH
 from docpipe.extraction.spec import load
 
 SPEC_PATH = Path("profiles/scenarios/extraction_spec.json")
-ROWS_PROMPT = Path("profiles/scenarios/prompts/extraction/rows.md")
+
+
+def _rows_prompt() -> str:
+    """What the rows request carries: the core's contract with this profile's
+    parts put in, as the loader makes it, not the parts file."""
+    from docpipe import prompts
+    from docpipe.profile import load_profile
+    return prompts.load("extraction/rows", load_profile("scenarios")).text
 
 
 @pytest.fixture(scope="module")
@@ -153,7 +160,7 @@ def test_every_example_in_the_rows_prompt_holds_its_own_quote():
     page and named everything on it except the title."""
     from docpipe.extraction.verify import flat
 
-    text = ROWS_PROMPT.read_text(encoding="utf-8")
+    text = _rows_prompt()
     claims = [claim for line in text.splitlines()
               if line.strip().startswith('{"tuples"')
               for claim in json.loads(line.strip())["tuples"]]
@@ -171,7 +178,7 @@ def test_the_rows_prompt_calls_the_front_page_what_it_is():
     the title stayed unnamed: the heading is quotable at all, the front page
     is exempt from "an empty list is the normal case", and it is not one of
     the citations rule 4 forbids."""
-    text = ROWS_PROMPT.read_text(encoding="utf-8")
+    text = _rows_prompt()
     for satz in ("steht am Anfang ihres \"text\" und ist zitierbar",
                  "Eine Quelle ist davon ausgenommen: die Vorderseite",
                  "Die Vorderseite ist keine solche Stelle"):
@@ -831,7 +838,13 @@ def test_the_out_entries_are_short_enough_to_be_retyped_without_a_slip():
             assert len(labels) > 1, f"{key} has no explanation to fall back on"
 
 
-FIELD_PROMPT = Path("profiles/scenarios/prompts/extraction/field.md")
+def _field_prompt() -> str:
+    """The field prompt as the request carries it: the core's template of the
+    profile's language with the profile's parts in."""
+    from docpipe import prompts
+    from docpipe.profile import load_profile
+
+    return prompts.load("extraction/field", load_profile("scenarios")).text
 
 
 def _named(prompt: str, vocabulary: dict) -> list:
@@ -863,7 +876,7 @@ def test_the_rows_prompt_quotes_the_region_entries_exactly_as_the_list_spells_th
     scenario entries are the field request's."""
     from profiles.scenarios import extraction
 
-    prompt = ROWS_PROMPT.read_text(encoding="utf-8")
+    prompt = _rows_prompt()
     assert _named(prompt, extraction.REGION_OUT) == []
     paragraph = [line for line in prompt.splitlines()
                  if "KEINE Klasse sind" in line]
@@ -877,7 +890,7 @@ def test_the_field_prompt_quotes_the_scenario_entries_exactly_as_the_list_spells
     quotes after the word is an entry of the list."""
     from profiles.scenarios import extraction
 
-    prompt = FIELD_PROMPT.read_text(encoding="utf-8")
+    prompt = _field_prompt()
     assert _named(prompt, extraction.SCENARIO_OUT) == []
     offered = re.findall(r'Eintrag "([^"]+)"', prompt)
     assert len(offered) >= len(extraction.SCENARIO_OUT), offered
