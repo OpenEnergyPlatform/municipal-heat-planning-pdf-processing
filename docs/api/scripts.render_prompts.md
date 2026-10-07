@@ -277,14 +277,25 @@ def write_profile(out: Path, name: str, rows: list, files: list,
 
 The files of one profile. A text is written as the loader gave it.
 
-### render
+### read_sides
 
 ```python
-def render(args, profiles: list, ranges: Optional[dict], root: Path,
-           sha: str, scratch: Path) -> tuple
+def read_sides(root: Path, sha: str, profiles: list, scratch: Path) -> tuple
 ```
 
-(summary lines, the files to write per profile, number of problems).
+(HEAD, whether the working tree differs from it, {(side, profile): what
+that side's own loader says}). All the reading is here: the commit is
+unpacked and each side is probed in a process of its own.
+
+### report
+
+```python
+def report(args, profiles: list, ranges: Optional[dict], sha: str, head: str,
+           dirty: bool, sides: dict) -> tuple
+```
+
+(summary lines, the files to write per profile, number of problems) of
+what the two sides say. Reads nothing and writes nothing.
 
 ### run
 

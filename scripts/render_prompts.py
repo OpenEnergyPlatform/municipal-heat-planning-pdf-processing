@@ -916,9 +916,10 @@ def _head_lines(args, sha: str, head: str, dirty: bool, profiles: list,
             "its `@@` lines count sentences, not lines of the file.", ""]
 
 
-def render(args, profiles: list, ranges: Optional[dict], root: Path,
-           sha: str, scratch: Path) -> tuple:
-    """(summary lines, the files to write per profile, number of problems)."""
+def read_sides(root: Path, sha: str, profiles: list, scratch: Path) -> tuple:
+    """(HEAD, whether the working tree differs from it, {(side, profile): what
+    that side's own loader says}). All the reading is here: the commit is
+    unpacked and each side is probed in a process of its own."""
     before_tree = scratch / "before"
     extract_tree(root, sha, before_tree)
     head, dirty = head_state(root)
@@ -927,8 +928,14 @@ def render(args, profiles: list, ranges: Optional[dict], root: Path,
     with ThreadPoolExecutor(max_workers=min(len(jobs), 4)) as pool:
         probed = list(pool.map(
             lambda job: run_probe(job[1], job[2], scratch), jobs))
-    sides = {(job[0], job[2]): result for job, result in zip(jobs, probed)}
+    return head, dirty, {(job[0], job[2]): result
+                         for job, result in zip(jobs, probed)}
 
+
+def report(args, profiles: list, ranges: Optional[dict], sha: str, head: str,
+           dirty: bool, sides: dict) -> tuple:
+    """(summary lines, the files to write per profile, number of problems) of
+    what the two sides say. Reads nothing and writes nothing."""
     stamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     lines = _head_lines(args, sha, head, dirty, profiles, stamp)
     body: list = []
@@ -1044,8 +1051,9 @@ def run(args) -> int:
     out = choose_out(args.out, root)
     sha = resolve_ref(root, args.before)
     with tempfile.TemporaryDirectory(prefix="docpipe-render-") as scratch:
-        lines, written, problems = render(args, profiles, ranges, root, sha,
-                                          Path(scratch))
+        head, dirty, sides = read_sides(root, sha, profiles, Path(scratch))
+    lines, written, problems = report(args, profiles, ranges, sha, head,
+                                      dirty, sides)
     for name, rows, files, labels in written:
         write_profile(out, name, rows, files, labels)
     _write(out / "summary.md", "\n".join(lines) + "\n")

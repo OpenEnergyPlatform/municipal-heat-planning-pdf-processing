@@ -266,7 +266,7 @@ is for and what it hands to what; this is the reference.
 - [scripts.harvest_report](scripts.harvest_report.md): The numbers a curator pulls by hand after every run. (8 functions)
 - [scripts.inference_app_smoketest](scripts.inference_app_smoketest.md): Check that the configured embedding backend produces usable vectors. (1 function)
 - [scripts.preflight_profiles](scripts.preflight_profiles.md): Both profiles of this repository, everything a corpus run rests on. (1 function)
-- [scripts.render_prompts](scripts.render_prompts.md): What a change does to the prompts of a profile, read before anything runs. (1 class, 24 functions)
+- [scripts.render_prompts](scripts.render_prompts.md): What a change does to the prompts of a profile, read before anything runs. (1 class, 25 functions)
 - [scripts.table_numbers_in_pdf](scripts.table_numbers_in_pdf.md): How much of a stored table the PDF itself prints. (1 class, 11 functions)
 - [scripts.trace_report](scripts.trace_report.md): The four questions a run must be able to answer afterwards. (4 functions)
 
