@@ -31,7 +31,10 @@ at the token ceiling is asked again over half the passages (`_split_harvest`)
 rather than half-read. `make_sweeper` drives the field-wise
 sweep: a coordinate the value's own passage does not answer is asked for again
 over short overlapping windows of the rest of the document (`window_sources`),
-bounded per axis. `find_frame` and `make_frame_asker` read a document's frame,
+bounded per axis. A document's batches ask their own passages in their turn
+(`Turn`), and what is still open after them is searched once per document and
+coordinate with the open rows of all the batches together (`DocumentSearch`).
+`find_frame` and `make_frame_asker` read a document's frame,
 its scenario and year pairs, once before any value, so a value request states
 the pair rather than deciding it. `harvest_batches` runs every batch of a whole
 run in flight at once, not as ordered per-document chains.
@@ -84,6 +87,541 @@ def of(self, document_id) -> int
 ```python
 def clear(self) -> None
 ```
+
+### SweepStopped
+
+```python
+class SweepStopped(Exception)
+```
+
+The run was stopped (a signal, a dead server) while a document's search
+was still asking. The document is left unwritten, like a batch that was
+never harvested.
+
+### Scope
+
+```python
+class Scope
+```
+
+The rows one sweep asks for, and the batches they came from.
+
+A batch's rows keep the labels the rows request gave them. Rows of several
+batches would meet on "R1" and an answer for one would land on the other,
+so then every row stands in the scope as a view with a label of its own.
+The view shares the claim of the row it stands for: what a window reads is
+written into the batch's row, and `Row.label` and `Row.item_index`, which
+the fold reads, do not move.
+
+*groups* is [(batch, its views)]. A row is checked against the passages of
+its own batch (`merge_field`) and never against the union of the
+document's: the union is a pool the row's answer was not shown.
+
+#### Scope.\_\_init\_\_
+
+```python
+def __init__(self, entries: list)
+```
+
+### Sweeping
+
+```python
+class Sweeping
+```
+
+One coordinate asked over a scope of rows, window after window.
+
+The stages are the sweep's own: the passages the values came from (own),
+then the passages the question ranks (retrieval), then the rest of the
+document in its order. Whether they run one after another for the rows of
+one batch (`Sweeper.__call__`) or the last two once for the rows of all the
+batches of a document (`Sweeper.search`) is the sweeper's business. The
+attempt loop, the check and the trace are these methods, once.
+
+One coordinate per sweep and per request: the harvester runs the sweeps of
+a row's coordinates side by side, so a coordinate that is read in the
+value's own passage stops there and does not wait on one that has to look
+further out.
+
+The value's own passages first, because a carrier usually is in the table
+row it labels. What is still open after that is looked for further out, one
+short window at a time with an overlap, because the year of a table is in
+its caption and the scenario is in the section heading, neither of which
+the value's passage contains.
+
+Short windows and many requests, not one wide one. A window that holds the
+answer holds it whether or not ninety other passages ride along, and the
+ninety cost the attention that would have found it.
+
+One window saying "not in here" ends nothing. It is a statement about two
+passages, and the next window shows two others: a row stays open through
+out:unstated and closes only on a reading. What ends the sweep is running
+out of document, retrieval first and then the sections in their own order,
+or running out of budget, and those two are written down differently,
+because "the plan does not say" and "we stopped looking" are the pair this
+whole stage exists to keep apart.
+
+#### Sweeping.\_\_init\_\_
+
+```python
+def __init__(self, sweeper, scope: Scope, slots, anchor_id: str, *,
+             seen: set, held: dict, kind: str, stop=None)
+```
+
+#### Sweeping.requests_of
+
+```python
+def requests_of(self, rows: list) -> int
+```
+
+The requests one window costs for these rows: the asker cuts the
+rows of a window into requests of FIELD_ROWS, per coordinate.
+
+#### Sweeping.still_open
+
+```python
+def still_open(self, pool: list) -> list
+```
+
+Rows with at least one of these fields still unread.
+
+#### Sweeping.re_entry
+
+```python
+def re_entry(self, todo: list, already: set) -> list
+```
+
+The passages these rows were last read in, to ride along.
+
+The sweep asks five coordinates of the same row and moves on after
+each window. Where the sector was read, the aggregation is a
+column further right, so the search starts again where it last
+found something instead of striking that passage off for good.
+
+Three places, in this order, and only the ones the window does not
+already show:
+
+- the passage a coordinate of this row was READ in, by this sweep
+  or by the sweep of another coordinate running beside it. It is
+  the one of the three that `seen` makes unreachable forever, and
+  it is the one that has already proved it carries this row's
+  answers.
+- the section the row's own passage stands in. It is also the only
+  one of the three that is in no checked pool from the second
+  window on, so an answer quoting the caption of its own table
+  came back unbacked: its quote stood in no passage the check was
+  given.
+- the row's own passage last, because `merge_field` checks against
+  the row's batch's passages in every window anyway and the row
+  carries its own quote in the request, so it is the one that is
+  not lost when the budget cuts the list off.
+
+#### Sweeping.run
+
+```python
+def run(self, windows) -> bool
+```
+
+Ask over these windows. False when the budget ran out.
+
+A window is asked again when its answers came back unbackable, and
+the retry carries what was wrong with each row. A model told "R7:
+your quote is in none of the sources" can fix R7; a model told
+nothing gives the same answer again, which is why three attempts
+without the reason are one attempt three times. Every attempt
+counts against the window budget, so a stubborn coordinate cannot
+eat the document.
+
+#### Sweeping.own
+
+```python
+def own(self) -> bool
+```
+
+The value's own passages AND the sections they stand in. A table
+carries its numbers and its row labels; the year, the scenario and
+the caption live one level up, and the own window never showed it.
+One batch's stage: its rows are the scope.
+
+#### Sweeping.search
+
+```python
+def search(self, combed: bool = True, heard=()) -> bool
+```
+
+Retrieval, then the rest of the document, over every open row of
+the scope. *combed* is what the stage before it ended on. *heard* is
+what the model said it still needed in answers this sweep did not see
+itself, the own stages of the batches the rows come from.
+
+True when the document was read to its end: with no budget cut the
+coordinate that is still open is a statement about the plan.
+
+#### Sweeping.close
+
+```python
+def close(self, combed: bool = True) -> dict
+```
+
+What the sweep came to, in the trace and as a dict. A sweep that
+ended on its budget marks every row still open `exhausted`; an own
+stage ends nothing, the search after it does.
+
+### Sweeper
+
+```python
+class Sweeper
+```
+
+sweep_field(batch, rows, slots, anchor_id) -> what the sweep came to,
+and the two halves it is made of.
+
+Called, it walks the three stages for one batch's rows, which is what a
+pass over a stored harvest wants. `own` is the first stage alone, a
+batch's turn; `search` is the other two, once for the rows of several
+batches (a document's), under an allowance that grows with the batches
+that still have an open row. Built by `make_sweeper`.
+
+#### Sweeper.\_\_init\_\_
+
+```python
+def __init__(self, ask: Callable, *, more_sources: Optional[Callable],
+             rest_of_document: Optional[Callable],
+             parents: Optional[Callable], anchors: dict,
+             budget_of: Callable)
+```
+
+#### Sweeper.own
+
+```python
+def own(self, batch, rows: list, slots, anchor_id: str = "",
+        heard: Optional[list] = None, stop=None) -> dict
+```
+
+The value's own passages and nothing further. What the model said
+it still needed goes into *heard*, for the search that follows.
+
+#### Sweeper.search
+
+```python
+def search(self, entries: list, slots, anchor_id: str = "",
+           heard=(), stop=None) -> dict
+```
+
+Retrieval, then the rest of the document, once for these rows of
+several batches: [(batch, its rows)].
+
+With several batches nothing is left out of the retrieval pool. A
+batch's own passages were asked for ITS rows only, so none of them is
+already seen for all the rows of the search, and a pool that left them
+out would leave out the place another batch's row was read in. With one
+batch the search is that batch's own sweep and looks where it looked:
+its passages and their sections were asked in its own stage.
+
+### Turn
+
+```python
+class Turn
+```
+
+One batch's rows on their way through the coordinates that decide them:
+the unit, which settles the parameter, the parameter, which decides the
+axes a row has, the gate axes, one after another, and then the other
+axes, side by side.
+
+Two ways to walk it. Whole (`deferred` False) every coordinate is swept
+through all three stages before the next one is asked, which is what a
+pass over a stored harvest wants. Deferred, the turn asks each coordinate's
+own stage only, and a row whose deciding coordinate is still open WAITS
+there: nothing behind it is asked. The document step (`DocumentSearch`)
+then searches what is open once for all the batches of the document and
+lets the rows that waited go on. Both walk this one body.
+
+#### Turn.\_\_init\_\_
+
+```python
+def __init__(self, batch, rows: list, *, doc_spec, sweeper: Sweeper,
+             frame_axes: Optional[list] = None,
+             slice_gate: Optional[dict] = None, pool=None,
+             deferred: bool = False)
+```
+
+#### Turn.stage
+
+```python
+def stage(self, rows: list, slots: list, anchor: str) -> tuple
+```
+
+(what the sweep came to, the rows still open on these slots).
+
+Whole, nothing is left open for anyone: the sweep ended. Deferred,
+only the own stage ran and what it left open is for the search.
+
+#### Turn.record
+
+```python
+def record(self, slots: list, totals: dict) -> None
+```
+
+#### Turn.hold
+
+```python
+def hold(self, key: tuple, slots: list, anchor: str, still: list,
+         deciding: bool) -> list
+```
+
+What an own stage left open is registered for the search. The rows
+come back for the caller to keep from going on, if *deciding*.
+
+#### Turn.ask
+
+```python
+def ask(self, rows: list, slots, anchor: str, key: tuple,
+        deciding: bool = False) -> list
+```
+
+One coordinate over these rows, as far as this turn takes it.
+Returns the rows that now wait on the search (deferred, deciding).
+
+#### Turn.run_jobs
+
+```python
+def run_jobs(self, parallel: bool) -> None
+```
+
+The axes that decide nothing, side by side. Beside each other where
+the turn has the field pool to itself; one after the other inside the
+document step, whose own tasks are already what runs side by side.
+
+#### Turn.project
+
+```python
+def project(self, group: list, axes: list) -> None
+```
+
+The pair onto these rows, as far as their parameter has its axes.
+
+Before anything is asked. The sweep only offers a coordinate that
+is still open, so projecting here is what makes the year sweeper
+fall away rather than run and find nothing: measured on M3, the
+year axis produced 1,849 refusals against 0 readings, because
+every later window excluded the row's own source and only that one
+could carry the year.
+
+Only the frame coordinates the row's parameter has. The pair spans
+the document, but the planning organisation has no scenario and no
+year, and 11 of its rows on corpus_m5 carried both, which the
+schema refuses.
+
+#### Turn.normalise
+
+```python
+def normalise(self, rows: list) -> None
+```
+
+The unit as the list spells it. The answer names an option by any
+spelling the list folds alike, and the lookups below are exact.
+
+#### Turn.begin
+
+```python
+def begin(self) -> None
+```
+
+The turn: the unit first, and as a coordinate: one entry of a
+closed list, read with its own passage, never looked up from a
+spelling. The value request writes the unit as the passage prints it,
+and which entry that means is a reading: "450 kWh über das Jahr" is
+kWh/a, a storage capacity of 200 kWh is kWh, "kWh/m²a" and "kWp" are
+in no list. A spelling table made that reading until now, and on 641
+plans of corpus_m5 it let 3,324 tuples carry an entry their wording
+contradicts. Before the parameter, because the entry chosen is what
+settles the parameter. The value request's own entry is dropped
+first: it was a choice made beside the number, not a reading of its
+own, and left in place it would stand where the question's answer
+belongs.
+
+The unit decides only where the parameter is open; with the batch's
+parameter fixed a row whose unit is open goes on to its axes, and the
+unit is searched on its own.
+
+#### Turn.go_on
+
+```python
+def go_on(self, rows: list) -> None
+```
+
+Rows whose unit is settled: to the parameter, or to the axes of the
+parameter the batch was planned for.
+
+#### Turn.settle_parameter
+
+```python
+def settle_parameter(self, rows: list) -> None
+```
+
+Which quantity each value is comes first, because it decides which
+coordinates the row even has. One request, one quote, and a row it
+cannot answer for gets no axes rather than the axes of a guess.
+
+Asked only where the unit leaves it open. The spec says it itself,
+"the unit separates the two parameters", and over the kwp spec the
+nine energy units and the forty-two emission units share not one
+spelling. Asking anyway cost 322 of 1,043 field windows on Kassel,
+30.9 percent, for a coordinate not one of 559 accepted tuples
+contradicted.
+
+#### Turn.enter
+
+```python
+def enter(self, rows: list) -> None
+```
+
+Rows whose parameter is settled: their axes, the gate first.
+
+#### Turn.keep
+
+```python
+def keep(self, rows: list, axis, axes: list) -> list
+```
+
+The rows this gate answer keeps; the others are closed. A closed
+row is never asked, and said so: an empty cell here would be
+indistinguishable from a coordinate the model dropped.
+
+#### Turn.walk
+
+```python
+def walk(self, uri: str, rows: list, position: int) -> None
+```
+
+The gate axes from *position* on, one after another and first.
+Each of them can close a row, and a closed row must not pay for the
+axes behind it: measured on 20 plans, 4,064 of 6,763 harvested tuples
+were dropped by the serializer for exactly these two coordinates,
+after the run had paid for all seven axes of every one of them. A row
+whose gate coordinate is still open waits there; the others go on.
+
+#### Turn.release
+
+```python
+def release(self, keys: list) -> None
+```
+
+The search of these coordinates is over: the rows that waited at
+them go on, from the coordinate behind. What a search left open it
+read to its end or ran out on, and either way it is settled.
+
+#### Turn.tally
+
+```python
+def tally(self) -> dict
+```
+
+#### Turn.finish
+
+```python
+def finish(self) -> None
+```
+
+Every coordinate no field reply mentioned, named as such.
+
+#### Turn.reply
+
+```python
+def reply(self, rows_reply: dict, orphans: list) -> dict
+```
+
+What goes back to the run. The label goes on so the fold routes
+each claim to the source the value request already settled on, instead
+of deciding a second time from the quote alone.
+
+A deferred turn is not finished, and the document step needs its rows
+and where each waits. They travel with the reply under a private key
+because `harvest_batches` hands back (batch, reply) and nothing else;
+`search_document` takes it out before the reply is folded or written.
+
+### DocumentSearch
+
+```python
+class DocumentSearch
+```
+
+What the batches of one document left open, searched once per
+coordinate with the open rows of all of them together.
+
+In the order the batches' own turns could not keep: the unit, then the
+parameter, then each gate axis, then the other axes. After each search the
+rows that waited on it go on, and a batch's own stage asks the coordinates
+they reach only now. Rows that wait nowhere are not held up by it.
+
+Every task here is a leaf: a search is one coordinate's windows in order, a
+continuation is one batch's own stages in order, and the pool they run on
+is the field pool the batches' turns use. Nothing here waits on the pool
+from inside it.
+
+#### DocumentSearch.\_\_init\_\_
+
+```python
+def __init__(self, sweeper: Sweeper, pool, slice_gate: Optional[dict],
+             stop=None)
+```
+
+#### DocumentSearch.phase
+
+```python
+def phase(self, key: tuple) -> int
+```
+
+Where a coordinate stands in the order: the unit, the parameter,
+the gate axes in the gate's order, and the rest.
+
+#### DocumentSearch.fan_out
+
+```python
+def fan_out(self, tasks: dict) -> None
+```
+
+These tasks, {label: (callable, whether rows wait on it)}, side by
+side on the field pool. All of them are waited for before what one of
+them raised is raised, a stop first: none is left writing into rows
+the document step has given up.
+
+#### DocumentSearch.run
+
+```python
+def run(self, turns: list) -> None
+```
+
+#### DocumentSearch.cut
+
+```python
+def cut(self) -> None
+```
+
+A stop is seen between two requests. One that came with the last
+request of a search, or of the own stages after it, has none behind it
+to be seen by, and that request may be the one the server did not
+answer: the step is cut all the same.
+
+#### DocumentSearch.search
+
+```python
+def search(self, turns: list, keys: list) -> None
+```
+
+One search per coordinate, over the rows of every batch that has
+some open on it.
+
+#### DocumentSearch.carry_on
+
+```python
+def carry_on(self, turns: list, keys: list) -> None
+```
+
+The rows that waited on these coordinates go on, batch by batch.
+What a batch asks here are the own stages of coordinates its rows
+wait on, as in its turn.
 
 ### DeadStreak
 
@@ -947,7 +1485,7 @@ def make_sweeper(ask: Callable, *,
                  rest_of_document: Optional[Callable] = None,
                  parents: Optional[Callable] = None,
                  anchors: Optional[dict] = None,
-                 search_share: Optional[dict] = None) -> Callable
+                 search_share: Optional[dict] = None) -> Sweeper
 ```
 
 sweep_field(batch, rows, slots, anchor_id) -> what the sweep came to.
@@ -983,7 +1521,14 @@ A harvest(batch, prior) that asks the rows once and then every
 coordinate of them, one field to a request.
 
 The batch is the unit in flight, and the sweep over the fields happens
-inside one batch's turn.
+inside one batch's turn. That is `harvest` itself, which a pass over a
+stored harvest uses: every coordinate through all its stages, per batch.
+
+The harvest of a document does it in two halves, both on the callable:
+`harvest.turn(batch, prior)` is the turn with the passages of the batch's
+own values only, and `harvest.search_document(answered)` is what is still
+open after them, searched once per document and coordinate with the rows
+of all the batches together.
 
 ### split_long_sources
 

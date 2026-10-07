@@ -6748,6 +6748,9 @@
      "attempt": {
       "type": "integer"
      },
+     "batches": {
+      "type": "integer"
+     },
      "completion_tokens": {
       "type": [
        "integer",
@@ -6877,6 +6880,9 @@
      "asked": {
       "type": "integer"
      },
+     "batches": {
+      "type": "integer"
+     },
      "combed": {
       "type": "boolean"
      },
@@ -6900,6 +6906,13 @@
      },
      "rows": {
       "type": "integer"
+     },
+     "scope": {
+      "enum": [
+       "own",
+       "document",
+       "batch"
+      ]
      },
      "slot": {
       "type": "string"
@@ -6944,6 +6957,9 @@
     "additionalProperties": false,
     "properties": {
      "attempt": {
+      "type": "integer"
+     },
+     "batches": {
       "type": "integer"
      },
      "doc": {

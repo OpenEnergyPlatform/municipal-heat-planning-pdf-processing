@@ -143,9 +143,10 @@ embedding_type
   `docpipe/chunking/database.py`; see [chunking](stages/chunking.md).
 
 exhausted
-: The state of a coordinate still open when the field sweep's window
-  budget ran out with the document unread to the end, a finding about the
-  run rather than about the document or the model. Defined in
+: The state of a coordinate still open when the allowance of the document's
+  search for it (in windows or in requests) ran out with the document unread to
+  the end, a finding about the run rather than about the document or the
+  model. Defined in
   `docpipe/extraction/fields.py`; see [states](contract/states.md).
 
 facet
@@ -472,9 +473,12 @@ statement
 
 sweep
 : The repeated, windowed ask-and-fold loop that reads one coordinate of
-  one or more rows until it is answered or the window budget runs out. The
-  shared bookkeeping across a document's batches is
-  `docpipe.extraction.pipeline.Sweep`. See
+  one or more rows until it is answered or the allowance runs out. A batch's
+  turn walks its own stage; what is still open is searched once per document
+  and coordinate over the open rows of all the batches
+  (`docpipe.extraction.runner.DocumentSearch`), and a pass over a stored
+  harvest walks every stage for one batch. The shared bookkeeping across a
+  document's batches is `docpipe.extraction.pipeline.Sweep`. See
   [extraction](stages/extraction.md).
 
 template block

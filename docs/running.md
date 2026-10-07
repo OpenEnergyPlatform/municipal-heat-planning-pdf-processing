@@ -462,10 +462,13 @@ there counts towards the dead-server streak. A document with such a
 request is written but not stamped, so the next run harvests it again, and
 `--top-up` leaves that file's stamp as it was. A stamp from an earlier run is
 removed before the file is written. A document left unstamped counts as a
-failed document, and the run returns 1 for it (lines 5893 to 5894, 5950). If
-the run's own anchor requests end there, the stage returns 1 before it
-harvests anything, and the next start asks only for the anchors still missing
-(`docpipe/extraction/runner.py` lines 5630 to 5641).
+failed document, and the run returns 1 for it. So does a document whose search
+over its open coordinates raised where rows wait on the task: it is not
+written, and the next run harvests it again. A document that a stop or the
+dead-server cut ended inside that search is not written either, and adds no
+failure of its own (see [the extraction stage](stages/extraction.md)). If the
+run's own anchor requests end there, the stage returns 1 before it harvests
+anything, and the next start asks only for the anchors still missing.
 
 A parameter added to the spec leaves every stored document without that
 parameter's key in its stamp. A run that skips such a document warns twice:

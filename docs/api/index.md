@@ -109,7 +109,7 @@ is for and what it hands to what; this is the reference.
 - [docpipe.extraction.remap](docpipe.extraction.remap.md): Re-resolves a moved or grown vocabulary against a harvest already on disk. (10 functions)
 - [docpipe.extraction.replies](docpipe.extraction.replies.md): The reply each extraction request asks for, as a JSON schema. (5 functions)
 - [docpipe.extraction.review](docpipe.extraction.review.md): Reads again, under a narrower window, the values at the lowest trust level. (8 functions)
-- [docpipe.extraction.runner](docpipe.extraction.runner.md): Wires the pure harvest loop of `pipeline.py` to the live stack. (3 classes, 84 functions)
+- [docpipe.extraction.runner](docpipe.extraction.runner.md): Wires the pure harvest loop of `pipeline.py` to the live stack. (9 classes, 84 functions)
 - [docpipe.extraction.schema](docpipe.extraction.schema.md): Builds a JSON Schema for the harvest, the stamp and the trace. (7 functions)
 - [docpipe.extraction.scratch](docpipe.extraction.scratch.md): Where a column of one's own lives, and why its harvest stays there. (1 function)
 - [docpipe.extraction.serialize](docpipe.extraction.serialize.md): Turns a document harvest into the profile's target graph. (5 functions)

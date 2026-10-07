@@ -46,7 +46,8 @@ One document, from its anchor to its summary row:
 flowchart TD
     anchor[Anchor: one HyDE sentence per parameter] --> retrieve[Retrieval: one fused ranked source list]
     retrieve --> rows[Row request: which values exist, per pair]
-    rows --> sweep[Field sweep: one coordinate at a time]
+    rows --> turn[Turn of each batch: the passages its values came from, one coordinate at a time]
+    turn --> sweep[Document search: what is still open, once per coordinate for all batches]
     sweep --> verify{Verification: quote in passage, answer in quote}
     verify -->|passes| tuple[Accepted tuple, graded A, B or C]
     verify -->|fails| refusal[Refusal, with a closed reason]
@@ -142,9 +143,9 @@ corpus-wide mechanism: one set per question the field sweep asks, each
 axis question and the parameter choice, written once per run and cached
 per question. The value itself has no set: the plan searches with the
 one short sentence `document_anchor` writes (`anchor_targets`,
-`runner.py:1091`). This set backs the field sweep once a
-coordinate is not in the value's own passage, and is fingerprinted as
-one `anchors` stamp key.
+`runner.py:1091`). This set backs the search for a coordinate once it is
+not in the value's own passage (the retrieval stage of the field sweep),
+and is fingerprinted as one `anchors` stamp key.
 
 ### The frame
 
@@ -186,7 +187,7 @@ helpers get a look at the claim first now: `pair_of_claim`
 (`pipeline.py:591`) asks the whole passage whether exactly one OTHER pair
 of the document is named there; if so the claim becomes a row carrying
 that pair in its own `pair` and `pair_index` fields (`Row`,
-`pipeline.py:452`), for `project` (`runner.py:3607`) to stamp instead of
+`pipeline.py:452`), for `Turn.project` to stamp instead of
 the request's own, drawn from `Batch.pairs` (`pipeline.py:135`), set by
 `pair_batches` (`runner.py:4921`). Exactly one, or the claim still stays
 refused. Measured on corpus_m5: of 120,442 claims refused this way, 52.8%
@@ -197,7 +198,7 @@ t CO2eq/a (3,836), from tables (14,227), figures (11,869) and prose
 (9,311). The gain from the frame itself was measured directly: before it
 existed, the year axis alone produced 1,849 refusals against 0 readings,
 since every window after the first excluded the row's own source
-(`runner.py:3613`).
+(`Turn.project`).
 
 ### Base years
 
@@ -224,7 +225,7 @@ the most common (`profiles/kwp/extraction.py:80-82`). The year field's
 own request is shown the plan's base years alongside the question,
 `"base_years"` (`runner.py:2768-2771`), and the trace's `field` event
 counts how many of a window's answers came this way, `via_base`
-(`runner.py:3427-3444`).
+(`Sweeping.run`).
 
 ### The row request
 
@@ -270,43 +271,183 @@ handed to the next batch and `fold_batch` read it, not only the plan's
 search. Stamps, fingerprints and the context budget stay on the run's own
 spec.
 
-### The field sweep: three window stages and a budget
+### The field sweep: two halves, three window stages and a budget
 
-Every coordinate a row still needs is asked for on its own by
-`sweep_field` (`runner.make_sweeper`). Asking per field is why a
-request cannot quietly drop an unsure coordinate: on a 204-document
-run, one request for every coordinate at once left the year missing on
-63.5% of values (`fields.py:15`). The sweep walks three stages, each with its own
-allowance rather than a shared pool. **Own** reads
-the value's own sources and the section its table stands in, for up to
-`FIELD_ATTEMPTS` (3) attempts, each retry naming the reason. **Retrieval**
-follows, searching further out with the per-question anchors in short,
-non-overlapping windows (`FIELD_WINDOW` 2) for up to `FIELD_ROUNDS` (4)
-rounds, asking the search for at most as many passages as the windows
-still left can show rather than the whole ranked document, since handed
-over whole it marked every passage seen after one round and left the
-rest stage nothing to read. **Rest** is the floor, its own windows still
-overlapping by `FIELD_OVERLAP` (1): once retrieval has nothing new,
-`rest_of_document` reads the document's own remaining sections in
-order, each followed by its own tables and figures in page order, not
-sections alone, rotated to start near the open rows, until the
-coordinate closes or the document runs out (`runner.py:3518`). A
-coordinate the search or the rest stage cannot close before its budget
-runs out is `exhausted`, never `unstated`: the first is a finding about
-the run, the second about the document. The budget sums to
-`FIELD_MAX_WINDOWS` (24) plus `REST_MAX_WINDOWS` (12) per coordinate; a
-profile's `SEARCH_SHARE` can scale a named coordinate's retrieval and
-rest allowance by a fraction, at least one window staying either way
-(kwp halves `sector` and `aggregation`,
-`profiles/kwp/extraction.py:93`). Every request now
-asks one coordinate, not several at once: five coordinates for every
-row of a batch in one request wanted up to 27,311 prompt tokens and
-came back refused or cut off (`runner.py:2898`). Its rows are chunked
-to at most `FIELD_ROWS` (32, env `EXTRACT_FIELD_ROWS`), about 2,600
-answer tokens at the measured p90, sized against the server's own
+Every coordinate a row still needs is asked for on its own. Asking per field
+is why a request cannot quietly drop an unsure coordinate: on a 204-document
+run, one request for every coordinate at once left the year missing on 63.5%
+of values (`fields.py`). Every request asks one coordinate, not several at
+once: five coordinates for every row of a batch in one request wanted up to
+27,311 prompt tokens and came back refused or cut off (`make_field_asker`).
+Its rows are chunked to at most `FIELD_ROWS` (32, env `EXTRACT_FIELD_ROWS`),
+about 2,600 answer tokens at the measured p90, sized against the server's own
 window before the request is sent rather than shrunk after a refusal,
-`answer_room` (`runner.py:1376`); a chunk still too large for its room
-is halved before it is sent (`runner.py:2941-2951`).
+`answer_room`; a chunk still too large for its room is halved before it is
+sent.
+
+A `Sweeper` (what `make_sweeper` returns) holds what a sweep needs and starts
+one `Sweeping` for a coordinate over a `Scope`, the rows asked and the batches
+they came from. A coordinate's sweep walks three stages, each with its own
+allowance rather than a shared pool. **Own** reads the value's own sources
+and the section its table stands in, for up to `FIELD_ATTEMPTS` (3) attempts,
+each retry naming the reason. **Retrieval** follows, searching further out with
+the per-question anchors in short, non-overlapping windows (`FIELD_WINDOW` 2)
+for up to `FIELD_ROUNDS` (4) rounds, asking the search for at most as many
+passages as the windows still left can show rather than the whole ranked
+document, since handed over whole it marked every passage seen after one round
+and left the rest stage nothing to read. What the model said it still needed
+in the answers of the own stages goes to the retrieval as further probes.
+**Rest** is the floor, its own windows still overlapping by `FIELD_OVERLAP`
+(1): once retrieval has nothing new, `rest_of_document` reads the document's
+own remaining sections in order, each followed by its own tables and figures
+in page order, not sections alone, rotated to start near the open rows, until
+the coordinate closes or the document runs out.
+
+A document is harvested in two halves, both on the callable
+`make_fieldwise_harvester` returns. The coordinates of a row have an order,
+because some decide the others: the unit, which settles the parameter where the
+batch was planned without one; the parameter, which decides which axes the row
+has; the gate axes of the profile's `SLICE`, one after another and first, since
+a row they close is never asked the rest; and then the other axes.
+
+The first half is a batch's turn (`harvest.turn`, class `Turn`). Each batch
+asks only the own stage of its coordinates, in that order. A row whose
+deciding coordinate is still open after it (the unit where the parameter is
+open, the parameter, a gate axis) waits there, and nothing behind it is asked.
+The axes that decide nothing are asked side by side. The unit decides only
+where the parameter is open, a batch planned without one; for a batch planned
+with its parameter fixed, its rows go on to their axes in the turn and the
+unit is searched on its own.
+
+The second half is the document's search (`harvest.search_document`, class
+`DocumentSearch`). What the turns left open is searched once per document and
+coordinate, with the open rows of all the batches together, in the order unit,
+parameter, each gate axis, other axes. Searches that stand at one place in that
+order run side by side: the gate searches of different parameters in one gate
+position, and all the other axes together. When a search is over, whatever it
+came to, the rows that waited at it go on from the coordinate behind it. Each
+batch asks the own stages of the coordinates its rows reach only now one after
+another, and the batches do so side by side. What those leave open is searched
+in its turn, a coordinate once.
+
+The allowance is counted per document and coordinate, not per batch. Retrieval
+is allowed once for the coordinate: `FIELD_MAX_WINDOWS` (24) less the
+`FIELD_ATTEMPTS` (3) of the own stage, so 21 windows by default, in at most
+`FIELD_ROUNDS` rounds. The rest stage is allowed `REST_MAX_WINDOWS` (12)
+windows for every batch that still has an open row of the coordinate when the
+stage begins, and it is bounded in requests as well as in windows. A window of
+the search is shown to every open row of all the batches, and the asker cuts
+those rows into requests of `FIELD_ROWS`, so counted in windows alone a
+document with many open rows would send more requests than its batches' own
+sweeps did. The request bound is, for each of those batches, its windows times
+the requests one of its windows takes. The stage ends on whichever bound is
+reached first, or where the document ends, so in total a search costs at most
+what its batches' own sweeps would have cost. For the rows of one batch the request
+bound is never reached before the window bound, so a pass over a stored
+harvest asks what it asked. A batch whose rows retrieval has read by then has
+no open row, so it adds nothing to the rest allowance, as its own sweep would
+have had no rest stage. A profile's `SEARCH_SHARE` scales a named coordinate's
+retrieval and rest allowance by a fraction, at least one window staying either
+way (kwp halves `sector` and `aggregation`, in `profiles/kwp/extraction.py`).
+The run's first log line about the sweep states the allowance of one
+coordinate in windows (own, retrieval and rest, 36 by default) and how a
+document's search counts it.
+
+How a search ends decides the state of what it leaves open. A search that
+reads the document to its end leaves its open rows as they stand, `unstated`
+where the model answered that the passages do not state it: a finding about
+the plan. A search its allowance cut off writes every row still open
+`exhausted`, never `unstated`: a finding about the run. A batch's own stage
+ends nothing, it leaves rows open for the search. So `unstated` is reachable
+again after combing the document, and there is one verdict per document and
+coordinate where there used to be one per batch.
+
+The rows of a search keep the labels the rows request gave them. Where the
+labels of rows from several batches would meet (two rows both called `R3`),
+every row of the search is numbered `R1` to `Rn` over the search instead,
+because an answer for the `R3` of one batch would otherwise land on the `R3` of
+another; a search over the rows of one batch asks under the labels its rows
+already have. A row is checked against the passages shown to it and the
+passages of its own batch (`merge_field`), never against the union of the
+document's, which is a pool its answer was not shown. Turns are searched in the
+order of the plan (frame index, then the owner keys of the batch's items), not
+in the order the replies came back, so the labels of a search do not depend on
+which batch finished first. Rows under another base year or another spec are
+searched in groups of their own; a real run has one group, because both belong
+to the document. A search over one batch leaves out of its retrieval and rest
+the passages its own stage asked and the sections they stand in, as the
+batch's own sweep did. A search over several batches leaves nothing out: a
+batch's passages were asked for its rows only, so none of them is already seen
+for the rows of the others.
+
+A stop (a signal) or the dead-server cut is seen between two requests, and
+once more after the last request of a search or of the own stages behind it,
+which has no request after it to be seen by. It ends the step, and the
+document is left unwritten, like one with a batch never harvested, so a resume
+harvests it again; it adds no failure of its own (`SweepStopped` is what ends
+the step inside). What else a task of the step raises depends on whether rows
+wait on it. Where they do (the search of the unit, of the parameter or of a
+gate axis, and a batch going on behind one of them), the exception is raised: the document is not written and counts as a
+failed document in the exit code, so a resume harvests it again. For an axis
+nothing waits on it is a warning in the log, and the coordinate comes out
+`unanswered`, as for a field job of a batch's turn. The tasks that run side by
+side are all waited for before the first exception is raised, a stop first, so
+none is left writing into rows the step has given up.
+
+Passes over a stored harvest keep the three stages per batch. `--top-up` calls
+the sweeper (what `make_sweeper` returns; `Sweeper` also has the two halves,
+`own` and `search`) for each rebuilt batch, and the pass for a new parameter
+calls `harvest_all`, whose harvester is the whole `harvest`, so every batch
+walks all three stages of a coordinate in its own turn. `run_document`
+and `pipeline.harvest_document`, the serial path the tests use, do the same.
+Only the harvest of `runner.main` uses the two halves, and it uses them for
+the batches of one document at a time.
+
+The trace tells the halves apart. `field` and `drop` events carry the optional
+key `batches`, how many batches the rows of the request came from: one for a
+batch's own stage, the document's for its search, and a label in a `drop`
+event of a search over several batches names no batch. `sweep` events carry
+`batches` and `scope`: `own` for a batch's own stage alone, `document` for the
+search of a document's open rows, `batch` for every stage walked for one batch,
+which is what a pass over a stored harvest does. A trace written without the
+keys is still valid, and the report reads it as it always did. The index in `<axis>_window`,
+`[stage, index]`, of a coordinate read in retrieval or rest counts the windows
+of the document's search from 1, not the windows since the batch's own stage;
+nothing reads the index but the frame pair, and the schema's remark that a
+coordinate read in window 1 and one in window 22 cost different amounts means
+the search. `scripts/trace_report.py` keeps the distributions apart. In a trace
+that has `batches`, the windows in which a coordinate closed are keyed
+`<slot> (search)` for a read in retrieval or rest. The windows per sweep are
+keyed by `scope`, `<slot> (own)` or `<slot> (document)`, and a sweep of scope
+`batch` or without a scope prints under `<slot>` as before.
+
+The log says what a search came to: when it begins, its rows, the batches they
+come from and the retrieval windows allowed; when its rest stage begins, the
+windows and the requests allowed and the number of batches they are counted
+for; when it ends, the windows asked, how many of its rows were read, how many
+are left open, and whether the document was read to its end or the allowance
+was spent. A batch's turn closes with an `own stages:` line that counts only
+its own stages, where a whole harvest keeps its `fields:` line. That per-batch
+tally adds up per coordinate; it used to overwrite for a gate axis that two
+parameters of one batch shared.
+
+Counted on a stub, the document step sends fewer field requests than the
+batches' own sweeps did, and the same where there is one batch. The stub has a
+long document of 60 ranked and 60 further passages, reads the unit in the own
+stage, answers "not stated" for each axis (carrier and year), and runs under
+the default allowances. The numbers are field requests per stubbed
+document, before the change to after it:
+
+| Open rows per batch | 1 batch | 5 batches | 17 batches |
+|---|---|---|---|
+| 1 | 69 to 69 | 345 to 177 | 1,173 to 247 |
+| 10 | 69 to 69 | 345 to 219 | 1,173 to 711 |
+| 40 | 138 to 138 | 690 to 562 | 2,346 to 1,818 |
+
+With 17 batches of one open row each, the document is read to its end after the
+change, and 34 coordinates come out `unstated` where they had been
+`exhausted`. These are worst cases of a stub in which no row is ever read, not
+a forecast of a run, and nothing was run against a model.
 
 ### The reply grammar
 
@@ -590,7 +731,8 @@ what `--force-stale` is left for.
 
 `--top-up` (`topup.py`) is the one pass that is not free: it costs a
 model call, but only for the coordinate a stamp says moved, over the
-harvest's own sweep. `actionable` blocks the whole document the
+harvest's own sweep, all three stages of it for each rebuilt batch, as the
+sweeper walks them (see The field sweep). `actionable` blocks the whole document the
 moment a changed key names anything other than one sweepable
 coordinate: a key naming no coordinate the spec still asks blocks
 outright, and so does one naming a frame axis, since the frame decides
@@ -636,9 +778,13 @@ coordinate of a stored row or for a refusal of the first pass. Like
 `--top-up` it needs the model, the index, the embedder and the database.
 It runs in the harvest's own loop and not beside it: `main` binds
 `plan_batches` once as `plan_for` and `harvest_batches` once as
-`harvest_all` (`runner.py:5864-5871`), the harvest's `harvest_document` and
-the pass's `DocumentPass` both call them, and so the pools, the stop, the
-dead-server cut and the exit code are the harvest's. It is refused
+`harvest_all`, the harvest's `harvest_document` and the pass's `DocumentPass`
+both call them, and so the pools, the stop, the dead-server cut and the exit
+code are the harvest's. What differs is the harvester each hands to
+`harvest_all`: the harvest hands the batch's turn (`harvest.turn`) and follows
+it with the document's search, the pass leaves the default, the whole `harvest`,
+so each of its batches walks all three stages of its coordinates in its own
+turn and no document step follows (see The field sweep). It is refused
 together with `--top-up` (the parser ends with exit 2 and nothing runs);
 `--top-up-key` belongs to `--top-up` and this pass does not read it.
 `--document` restricts it as it restricts the harvest, `--force` and
@@ -646,7 +792,7 @@ together with `--top-up` (the parser ends with exit 2 and nothing runs);
 in `--out` is left to the harvest, the log saying how many
 (`topup_parameter.with_harvest`). Its traces go to `trace-topup/` and
 never into the harvest's `trace/`, which the run does not open
-(`TOPUP_TRACE_DIR`, `runner.py:4378`, `:5780`).
+(`TOPUP_TRACE_DIR`).
 
 Whether a document may be taken is decided by its stamp alone
 (`topup_parameter.addition`, `classify`). A parameter is new when its
@@ -1062,9 +1208,9 @@ different kind of finding.
 |---|---|
 | `read` | Answered; the cited passage carries the answer |
 | `derived` | Not asked: the spec decided it from the row itself |
-| `unstated` | Answered: the shown passages do not state it |
+| `unstated` | Answered: the shown passages do not state it. Final once the document's search for the coordinate read the document to its end |
 | `unanswered` | The field reply never mentioned it |
-| `exhausted` | Still open when the window budget ran out, document unread to the end |
+| `exhausted` | Still open when the allowance of the document's search for the coordinate ran out, in windows or in requests, document unread to the end |
 | `unbacked` | Answered, but no shown passage carried it, it was another row's, or (a closed list) it named none of the list's entries |
 | `out_of_slice` | Never asked: a gate coordinate put the row outside what this run serializes, or no parameter of the spec could hold it |
 
@@ -1089,7 +1235,10 @@ line, `{"t": kind, "doc": document_id, ...}`, of one of eleven kinds
 (`schema.py`'s `trace_schema`): `plan`, `anchor`, `frame`, `rows`,
 `field`, `sweep`, `drop` and `error` from the harvest loop, `coord` and
 `refusal` per folded tuple or refusal, and `invalid` from the schema
-self-check described under Method. `review.csv` carries one line per
+self-check described under Method. `field`, `sweep` and `drop` carry the
+optional key `batches`, and `sweep` the optional key `scope`, which tell a
+batch's own stage from a document's search (see The field sweep).
+`review.csv` carries one line per
 field a review asked about, named by `review.COLUMNS`.
 
 A harvest directory (`out`) holds, per document,
@@ -1102,17 +1251,17 @@ run, `anchors.json` and `query_cache.db`; and, only after `--top-up` or
 
 | Name | Kind | Default | Effect | Where read |
 |---|---|---|---|---|
-| `EXTRACT_FIELD_WINDOW` / `EXTRACT_FIELD_OVERLAP` | env var | `2` / `1` | `WINDOW`: sources per retrieval- or rest-stage window. `OVERLAP`: how many of a rest-stage window repeat in the next one; a retrieval-stage window never repeats one | `runner.main`, `runner.make_sweeper` |
+| `EXTRACT_FIELD_WINDOW` / `EXTRACT_FIELD_OVERLAP` | env var | `2` / `1` | `WINDOW`: sources per retrieval- or rest-stage window. `OVERLAP`: how many of a rest-stage window repeat in the next one; a retrieval-stage window never repeats one | `runner.main`, `runner.Sweeping` |
 | `EXTRACT_MAX_RETRIES` / `EXTRACT_RETRY_TIMEOUT` | env var | `3` / `600` | `MAX_RETRIES`: attempts every retry loop of this stage gets per request. `RETRY_TIMEOUT`: client timeout (seconds) a row- or field-request retry gets after a request timed out; one refused at once keeps the client's own timeout instead | `runner.py`, `runner.make_harvester`, `runner.make_field_asker` |
 | `EXTRACT_RETRY_WAIT` / `_MAX` / `EXTRACT_TRANSPORT_WAIT` / `_MAX` | env var | `2` / `6` / `15` / `120` | Seconds before the next attempt. The short curve, `RETRY_WAIT` times the attempt up to `RETRY_WAIT_MAX`, follows the model's own mistake. The long curve, `TRANSPORT_WAIT` doubling per attempt up to `TRANSPORT_WAIT_MAX`, follows a request that never arrived or ended on a 429 or a 5xx | `runner.retry_wait` |
-| `EXTRACT_FIELD_ROWS` | env var | `32` | Rows one field request answers at once; a coordinate's open rows are chunked to this many per request, halved again if the chunk still leaves too little room for its answer | `runner.make_field_asker` |
-| `EXTRACT_FIELD_ROUNDS` / `EXTRACT_FIELD_ATTEMPTS` | env var | `4` / `3` | Retrieval rounds before falling to the rest stage; retries of the own-stage window when unbackable | `runner.make_sweeper` |
-| `EXTRACT_FIELD_MAX_WINDOWS` / `EXTRACT_REST_MAX_WINDOWS` | env var | `24` / `12` | Own plus retrieval windows, and the rest stage's separate allowance, before a coordinate is exhausted | `runner.make_sweeper` |
+| `EXTRACT_FIELD_ROWS` | env var | `32` | Rows one field request answers at once; a coordinate's open rows are chunked to this many per request, halved again if the chunk still leaves too little room for its answer. It is also the unit the rest stage of a document's search counts its requests in | `runner.make_field_asker`, `runner.Sweeping.requests_of` |
+| `EXTRACT_FIELD_ROUNDS` / `EXTRACT_FIELD_ATTEMPTS` | env var | `4` / `3` | Retrieval rounds before falling to the rest stage; retries of the own-stage window when unbackable | `runner.Sweeping` |
+| `EXTRACT_FIELD_MAX_WINDOWS` / `EXTRACT_REST_MAX_WINDOWS` | env var | `24` / `12` | `MAX_WINDOWS`: the own and retrieval windows of a coordinate; a document's search has them once per document and coordinate. `REST_MAX_WINDOWS`: the rest stage's separate allowance, per coordinate for one batch's sweep and, for a document's search, for every batch that still has an open row of the coordinate when the stage begins, with the requests of those windows bounded as well. A coordinate whose allowance ends before the document does is `exhausted` | `runner.window_budget`, `runner.Sweeping` |
 | `EXTRACT_PLAN_TOP` / `EXTRACT_PROSE_TOP` | env var | `100` / `200` | `PLAN_TOP`: the fused top-N cut replacing the older structural-floor plan; raised from 50 once that cut was measured holding only 40% of a document's tables and 15% of its figures. `PROSE_TOP`: ceiling on prose sections drawn from, always overriding `plan_document`'s own default of `50` | `runner.main` |
 | `EXTRACT_VISUAL_SHARE` | env var | `0.5` | Share of the `PLAN_TOP` cut held for figures and tables before prose fills what is left, so the cap does not fall entirely to whichever ranks higher | `pipeline.with_visual_share` |
 | `EXTRACT_FRAME_ROUNDS` / `_SOURCES` / `EXTRACT_FRAME_YEAR_MIN` / `_MAX` | env var | `3` / `12` / `1990` / `2100` | Rounds and passages per round the frame request may spend; bounds of a calendar year for `years_in_sources`, its deterministic cross-check | `runner.find_frame`, `runner.years_in_sources` |
-| `EXTRACT_CODE_ROUNDS` / `EXTRACT_FIELD_RE_ENTRY` | env var | `2` / `3` | Sandbox rounds the row request may spend on a self-checked value; already-shown passages carried into a coordinate's next field window | `runner.make_harvester`, `runner.make_sweeper` |
-| `EXTRACT_LLM_PARALLEL` / `EXTRACT_PLAN_PARALLEL` / `EXTRACT_FIELD_PARALLEL` | env var | `128` / `8` / `192` | Concurrency ceilings the adaptive request limit cannot rise past (see The adaptive request limit): LLM requests for the whole run, planning threads (retrieval, SQL and the document's phrase requests, which run in parallel per parameter), and field-sweep threads beneath row-request batches | `runner.harvest_batches`, `runner.main`, `runner.make_fieldwise_harvester` |
+| `EXTRACT_CODE_ROUNDS` / `EXTRACT_FIELD_RE_ENTRY` | env var | `2` / `3` | Sandbox rounds the row request may spend on a self-checked value; already-shown passages carried into a coordinate's next field window | `runner.make_harvester`, `runner.Sweeping.re_entry` |
+| `EXTRACT_LLM_PARALLEL` / `EXTRACT_PLAN_PARALLEL` / `EXTRACT_FIELD_PARALLEL` | env var | `128` / `8` / `192` | Concurrency ceilings the adaptive request limit cannot rise past (see The adaptive request limit): LLM requests for the whole run, planning threads (retrieval, SQL and the document's phrase requests, which run in parallel per parameter), and field-sweep threads beneath row-request batches, which a document's search runs on as well | `runner.harvest_batches`, `runner.main`, `runner.make_fieldwise_harvester` |
 | `EXTRACT_ATTACH_IMAGES` / `EXTRACT_LOCATE` | env var | `1` / `1` | Off, respectively: no crop attaches to a row, field, frame or review request (no `images/` dir needed), or `make_locate` returns `None`, no quote placed on the page | `runner.py` askers, `runner.make_locate` |
 | `EXTRACT_LOCATE_CACHE_PAGES` | env var | `512` | Pages of words `make_locate` keeps across documents; a cache hit is a dict lookup and takes no lock, only a miss enters MuPDF under one | `runner.make_locate` |
 | `EXTRACT_BATCH_DOCS` | env var | `64` | Documents kept in flight at once under rolling admission, largest first by section count, filename breaking a tie; a finished one is written at once and the next starts, so no document waits on a group | `runner.main`, `runner.harvest_documents`, `runner._documents` |
@@ -1129,7 +1278,7 @@ run, `anchors.json` and `query_cache.db`; and, only after `--top-up` or
 | `--profile NAME` | CLI flag | `$DOCPIPE_PROFILE` | names the profile whose spec, prompts and hooks the run reads; the stage refuses to run without one, in a line naming the available profiles, and `__main__.py` binds the flag before `runner` is imported | `runner.main`, `docpipe/profile.py` |
 | `--serialize TTL` / `--print-context-budget` | CLI flag | none / off | `--serialize`: no harvest, hands `--out` to `serialize.run`, which calls the profile's `kg.make_serializer`. `--print-context-budget`: prints the tokens, per request, that the largest request of a harvest needs, then exits | `serialize.run`, `runner.main` |
 | `SLICE` / `FRAME` | profile hook | none / none (every coordinate per row) | `SLICE`: gate coordinate(s) asked first, a row that fails them never asked its others. `FRAME`: document-level coordinates found once and projected onto every row | `runner.main`, `topup.actionable` |
-| `SEARCH_SHARE` | profile hook | none (every coordinate gets the whole budget) | Fraction of the retrieval and rest allowance a named coordinate gets; kwp halves `sector` and `aggregation`. At least one window stays per stage | `runner.make_sweeper` |
+| `SEARCH_SHARE` | profile hook | none (every coordinate gets the whole budget) | Fraction of the retrieval and rest allowance a named coordinate gets, in a batch's sweep and in a document's search alike; kwp halves `sector` and `aggregation`. At least one window stays per stage | `runner.make_sweeper` |
 | `PROMPT_CHECKS` | profile hook | the extended profile's, else none | Entries `(what is checked, prompt id, passage, has to be there)`: passages the profile's prompts have to hold or must not. Read by `docpipe preflight` and by nothing in a run | `preflight.audit`, `preflight.prompt_checks` |
 | `NOT_EXTRACTED` | profile hook | none | A mapping `(shape, property)` to one sentence of reason: the properties of the profile's shapes it leaves out on purpose, so that `docpipe preflight` does not warn about them. Scenarios declares 21 | `preflight.not_extracted`, `preflight.shapes_verdict` |
 | `shapes_files` | profile hook | none (the check is skipped) | A callable that returns the SHACL files the profile's graph is held against, those of its last refresh. Scenarios finds its own there; kwp names none | `preflight.shapes_verdict` |
@@ -1183,73 +1332,72 @@ most needs.
 
 Inside the field sweep, an unbacked or unquoted answer does not end a
 row's chance of being read: it stays open (`unbacked`, never final)
-until a later window, stage or round closes it, or budget runs out
-with the document unread, turning it `exhausted`. A reply that does not
-parse, is empty, or arrives as a non-dict is coerced to an empty one at
-every fold point, so a bad batch yields zero claims and the loop moves
-on.
+until a later window, stage or round closes it, or the allowance of the
+document's search runs out with the document unread, turning it `exhausted`.
+A reply that does not parse, is empty, or arrives as a non-dict is coerced to
+an empty one at every fold point, so a bad batch yields zero claims and the
+loop moves on.
 
 At the document level, `finish_document` writes the JSONL file every time
 and withholds the stamp entirely, forcing a full redo on the next run, in
-three cases, which `not_happened` (`runner.py:4542-4569`) tells apart and the
-pass that appends a parameter asks as well: more than half a document's
-planned sources came back from a server it could not reach
-(`UNREACHABLE_LIMIT`, `0.5`, `runner.py:4539`, `:4561-4562`), not one batch
-answered at all (`runner.py:4563-4564`), or any one of its requests ended on
-a 429 or a 5xx (`runner.py:4565-4568`). The last
+three cases, which `not_happened` tells apart and the pass that appends a
+parameter asks as well: more than half a document's planned sources came back
+from a server it could not reach (`UNREACHABLE_LIMIT`, `0.5`), not one batch
+answered at all, or any one of its requests ended on a 429 or a 5xx. The last
 count adds the `unserved` sentinels to the document's entry in `UNSERVED`,
-which the callers pass as `lost` (`runner.py:4490`, `5792-5795`); one is
-enough, because such a request was never answered and nothing says it cannot
-be.
+which the callers pass as `lost`; one is enough, because such a request was
+never answered and nothing says it cannot be.
 Only a resume, not a byte count, tells these cases apart from a genuinely
 finished document. In all three cases an earlier stamp is removed before the
-file is written (`runner.py:4625-4626`): it vouched for the file this one
-replaces, and left in place it would have a resume skip a document whose
-stamp was just withheld.
+file is written: it vouched for the file this one replaces, and left in place
+it would have a resume skip a document whose stamp was just withheld.
 
 `finish_document` returns whether the document is stamped, and a document
-written but left unstamped is a failed document. `verify` hands the
-value on (`runner.py:5792-5797`), `harvest_document` returns
-`(stamped, failures)` with one failure added when the document is not stamped
-(`runner.py:5893-5894`), `harvest_documents` adds the failures up
-(`runner.py:3934-3935`), and `main` returns 1 when there are any
-(`runner.py:5950`). The exit code is 1 for a document written and left
-unstamped as it is for a server that stopped answering
-(`runner.py:5927-5932`). The run's own anchor requests are the other case:
-if any ended on a 429 or a 5xx, `main` returns 1 before anything is
-harvested, and the anchors already written stay in `anchors.json`, so the
-next start asks only for the rest (`runner.py:5630-5641`). A document left
-with batches never harvested is not written at all and adds no failure of
-its own (`runner.py:5887-5890`); the dead server or the SIGTERM that left it
-decides the exit code. `run_document`, the one-document path for a caller
-outside the run's own loop, withholds the stamp the same way and returns
-what `finish_document` returned (`runner.py:4473-4491`). The pass that
-appends a parameter takes the place of `harvest_document` in this loop
-(`parameter_pass`, `runner.py:5896-5912`) and returns `(written, failures)`
-the same way, so `harvest_documents` and `main` count it by these rules.
+written but left unstamped is a failed document. `verify`, the step in `main`
+that folds a document's answers and calls `finish_document`, hands the value
+on, `harvest_document` returns `(stamped, failures)` with one failure added
+when the document is not stamped, `harvest_documents` adds the failures up,
+and `main` returns 1 when there are any. The exit code is 1 for a document
+written and left unstamped as it is for a server that stopped answering. The
+run's own anchor requests are the other case: if any ended on a 429 or a 5xx,
+`main` returns 1 before anything is harvested, and the anchors already written
+stay in `anchors.json`, so the next start asks only for the rest.
 
-A time limit ends a run the same careful way. `install_stop_handler`
-(`runner.py:126`) puts a SIGTERM handler in place, so that a time-limit
-trap or a manual kill sets `STOP` (`runner.py:114`)
-instead of letting the interpreter die where it stood. Documents run
-under rolling admission, `harvest_documents` (`runner.py:3890`), at
-most `EXTRACT_BATCH_DOCS` in flight at once, their batches sharing one
-`batch_pool` and one `DeadStreak` (`runner.py:3870`) across every
-document in flight and across the field sweep's own requests too,
-rather than a separate dead-server count per document or per pool: the
-run gives up once `max(64, EXTRACT_LLM_PARALLEL)` requests in a row
-were not served by the server (not reached, or a 429 or a 5xx). The rows
-pool and the field pool log it as "requests in a row the server did not
-serve" (`runner.py:4073`, `3024`). Once
-`STOP` or a dead server sets `Halted` (`runner.py:5807-5812`), no new
-document starts, and a document already in flight leaves its own
-`harvest_batches` call at once instead of waiting out its open
-requests; such a document lands in `unfinished` and is not written, so
-a resume harvests it whole instead of the run stamping it as though
-every batch had come back. Once `STOP` is set the run logs, closes the
-trace and exits hard with `STOPPED_EXIT` (`143`, `runner.py:122`,
-`:5943`) rather than waiting on the field-sweep threads still open,
-which are not daemons and could hold the process for minutes.
+`harvest_document` harvests a document in two steps, the turns of its batches
+(`harvest_all` with `harvest.turn`) and then the document's search
+(`harvest.search_document`). A document left with batches never harvested is
+not written at all and adds no failure of its own; the dead server or the
+SIGTERM that left it decides the exit code. A document whose search was ended
+by a stop or the dead-server cut is left the same way, a stop that comes with
+the last request of the search included. A document whose search raised where
+rows wait on the task is a failed document: the exception ends
+`harvest_document`, `harvest_documents` counts the failure and logs it, nothing
+is written, and a resume harvests the document again (see The field sweep).
+`run_document`, the one-document path for a caller outside the run's own loop,
+withholds the stamp the same way and returns what `finish_document` returned;
+it walks each batch with the whole `harvest` and has no document step. The
+pass that appends a parameter takes the place of `harvest_document` in this
+loop (`parameter_pass`) and returns `(written, failures)` the same way, so
+`harvest_documents` and `main` count it by these rules.
+
+A time limit ends a run the same careful way. `install_stop_handler` puts a
+SIGTERM handler in place, so that a time-limit trap or a manual kill sets
+`STOP` instead of letting the interpreter die where it stood. Documents run
+under rolling admission, `harvest_documents`, at most `EXTRACT_BATCH_DOCS` in
+flight at once, their batches sharing one `batch_pool` and one `DeadStreak`
+across every document in flight and across the field sweep's own requests too,
+rather than a separate dead-server count per document or per pool: the run
+gives up once `max(64, EXTRACT_LLM_PARALLEL)` requests in a row were not
+served by the server (not reached, or a 429 or a 5xx). The rows pool and the
+field pool log it as "requests in a row the server did not serve". Once `STOP`
+or a dead server sets `Halted`, no new document starts, a document already in
+flight leaves its own `harvest_batches` call at once instead of waiting out its
+open requests, and a document in its search is cut at its next request. Such a
+document is not written, so a resume harvests it whole instead of the run
+stamping it as though every batch had come back. Once `STOP` is set the run
+logs, closes the trace and exits hard with `STOPPED_EXIT` (`143`) rather than
+waiting on the field-sweep threads still open, which are not daemons and could
+hold the process for minutes.
 
 Among the five maintenance passes, `--recheck` and `--remap` never call a
 model, so their only failure mode is a coordinate they cannot settle,
@@ -1281,7 +1429,7 @@ never sends leaves no trace, so the row is offered again later.
   (`fields.py:337-364`).
 - Letting the passage a coordinate was last read in drop out of the
   window after one use, rather than remaining in the window, cost one
-  batch 520 dropped readings against 31 kept (`runner.py:3382`).
+  batch 520 dropped readings against 31 kept (`Sweeping.run`).
 - On the 20-plan draft where the slice gate was measured, of 6,763
   harvested tuples the serializer dropped 1,554 for a quantity the graph
   does not hold and, while the scenario axis still gated a row, 2,510
@@ -1309,6 +1457,32 @@ closes and the year of a spec that measures nothing,
 `test_a_documents_own_list_is_what_the_field_request_offers`,
 `test_a_year_is_a_wording_where_nothing_is_measured` and
 `test_a_follow_up_batch_reads_against_the_same_document`.
+`tests/test_extraction_document_search.py`, 33 tests, pins the document's search
+over a stubbed asker. A batch's own stage asks what it asked before
+(`test_a_batchs_own_stage_asks_what_it_asked_before`), and what the batches left
+open is searched once with their rows together
+(`test_what_the_batches_left_open_is_searched_once_with_their_rows_together`). A
+row waits at the unit, the parameter or a gate coordinate that is still open
+(`test_a_row_whose_unit_is_open_waits_for_the_unit_search`,
+`test_a_row_whose_parameter_is_open_waits_for_the_parameter_search`,
+`test_a_row_waits_at_a_gate_coordinate_that_is_still_open`). The rest stage has
+its allowance in windows and in requests
+(`test_the_rest_stage_gets_its_allowance_once_for_every_batch_with_an_open_row`,
+`test_the_rest_stage_never_sends_more_requests_than_the_batches_own_windows`),
+and a document read to its end gives `unstated` where a cut one gives
+`exhausted`
+(`test_a_document_read_to_its_end_is_unstated_and_a_cut_one_exhausted`). The
+passes over a stored harvest keep the three stages per batch
+(`test_the_sweeper_of_a_stored_harvest_walks_every_stage_for_its_batch`,
+`test_the_pass_for_a_new_parameter_asks_each_rebuilt_batch_in_whole`). A stop,
+one that comes with the last request of the step, and a raise where rows wait
+are each pinned
+(`test_a_stop_during_the_document_step_ends_it_and_says_so`,
+`test_a_stop_that_comes_with_the_last_request_of_the_step_is_a_stop`,
+`test_a_search_that_rows_wait_on_fails_the_document_when_it_raises`), and so is
+that a document whose step did not finish is not written
+(`test_a_document_whose_step_did_not_finish_is_not_written`). The file pins
+what the step decides and never the wording of a log line.
 `tests/test_extraction_frame.py` pins the frame's two quotes per pair and
 its projection onto rows: `test_every_half_of_a_pair_quotes_for_itself`,
 `test_a_frame_reading_may_quote_a_heading_anywhere_in_the_plan`,
@@ -1550,9 +1724,11 @@ refuses to write when no document produced anything, so an empty or
 unreadable directory cannot overwrite a valid graph from an earlier
 run. Called only by `runner.py`'s `--serialize` branch.
 
-`runner.py` is the harvest CLI, 5,950 lines against the next-largest
+`runner.py` is the harvest CLI, 6,602 lines against the next-largest
 module's 1,675 (`pipeline.py`): the retrieval, anchor and frame
-machinery described above, the field sweep, the resume-stamp
+machinery described above, the field sweep (`Sweeper`, `Sweeping` and
+`Scope`), a batch's turn (`Turn`) and the document's search
+(`DocumentSearch`), the resume-stamp
 comparison, and the argparse branches dispatching `--recheck`,
 `--remap`, `--top-up`, `--review` and `--serialize` to their own
 modules. `--top-up-parameters` is no branch of its own: it runs the
@@ -1591,8 +1767,9 @@ layer](providers.md)). `gold.py`, `evaluate.py` and `benchmark.py` are
 `scripts/curation_list.py`, `scripts/harvest_compare.py` and
 `scripts/trace_report.py` are read-only reporting tools over a harvest
 directory: a sorted list of untrustworthy values, a profile's own
-acceptance numbers, and a trace's event distributions, called only by
-a person from the shell.
+acceptance numbers, and a trace's event distributions, with the windows of a
+batch's own stage and of a document's search counted apart (see The field
+sweep), called only by a person from the shell.
 
 See [the harvest contract for kwp](../contract/kwp.md) and [the harvest
 contract for scenarios](../contract/scenarios.md) for what a profile's
@@ -1690,7 +1867,10 @@ at the token ceiling is asked again over half the passages (`_split_harvest`)
 rather than half-read. `make_sweeper` drives the field-wise
 sweep: a coordinate the value's own passage does not answer is asked for again
 over short overlapping windows of the rest of the document (`window_sources`),
-bounded per axis. `find_frame` and `make_frame_asker` read a document's frame,
+bounded per axis. A document's batches ask their own passages in their turn
+(`Turn`), and what is still open after them is searched once per document and
+coordinate with the open rows of all the batches together (`DocumentSearch`).
+`find_frame` and `make_frame_asker` read a document's frame,
 its scenario and year pairs, once before any value, so a value request states
 the pair rather than deciding it. `harvest_batches` runs every batch of a whole
 run in flight at once, not as ordered per-document chains.

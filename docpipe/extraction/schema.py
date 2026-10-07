@@ -815,6 +815,9 @@ def trace_schema() -> dict:
                                      "frame"]},
                   "attempt": {"type": "integer"},
                   "parameter": {"type": ["string", "null"]},
+                  # How many batches the rows of the request came from: one
+                  # for a batch's own stage, the document's for its search.
+                  "batches": {"type": "integer"},
                   "open": {"type": "integer"}, "reply": {"type": "boolean"},
                   "shown": {"type": "array", "items": owner},
                   "filled_by": by_field, "unbacked_by": by_field,
@@ -825,11 +828,20 @@ def trace_schema() -> dict:
                   "windows": {"type": "integer"}, "rows": {"type": "integer"},
                   "combed": {"type": "boolean"},
                   "retried": {"type": "integer"}, "asked": {"type": "integer"},
-                  "exhausted": {"type": "integer"}, **counts},
+                  "exhausted": {"type": "integer"},
+                  # What the sweep covered: a batch's own stage alone (`own`),
+                  # the search of a document's open rows after the own
+                  # stages (`document`), or every stage for one batch
+                  # (`batch`), which is what a pass over a stored harvest
+                  # walks. `batches` is how many batches its rows came from.
+                  "scope": {"enum": ["own", "document", "batch"]},
+                  "batches": {"type": "integer"}, **counts},
         "drop": {"slot": {"type": "string"},
                  "field": {"type": ["string", "null"]},
                  "window": {"type": "integer"},
                  "attempt": {"type": "integer"},
+                 # A label of a search over several batches names no batch.
+                 "batches": {"type": "integer"},
                  "row": {"type": "string", "pattern": "^R[0-9]+$"},
                  "why": {"enum": DROP_REASONS},
                  # What was answered: the model's value and wording as they
@@ -882,7 +894,8 @@ def trace_schema() -> dict:
     loose = {"detail", "status", "finish", "why", "sources", "ms", "slot",
              "prompt_tokens", "completion_tokens", "filled_by", "unbacked_by",
              "field", "raw_missing", "raw_foreign", "cause", "owner",
-             "rejected", "given", "raw", "quote", "via_base"}
+             "rejected", "given", "raw", "quote", "via_base", "scope",
+             "batches"}
     return {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "$id": f"{BASE_ID}/trace-record",

@@ -96,7 +96,13 @@ def main(argv=None) -> int:
             latency["field"].append(rec.get("ms") or 0)
             stage_hits[rec.get("stage")] += rec.get("filled") or 0
             if rec.get("filled"):
-                window_of_read[rec.get("slot")].append(rec.get("window") or 0)
+                # A search over a document's open rows counts its windows from
+                # one, and a batch's own stage did before it: they are not one
+                # distribution. `batches` is only in a trace that has them.
+                searched = "batches" in rec and rec.get("stage") != "own"
+                window_of_read[f"{rec.get('slot')} (search)" if searched
+                               else rec.get("slot")].append(
+                    rec.get("window") or 0)
             # The field requests are the bulk of a document. Their cost was
             # measured only in the run's total, so no ceiling could be set
             # from the distribution.
@@ -110,7 +116,13 @@ def main(argv=None) -> int:
             for key in ("raw_missing", "raw_foreign"):
                 wording[key] += rec.get(key) or 0
         elif kind == "sweep":
-            windows[rec.get("slot")].append(rec.get("windows") or 0)
+            # A batch's own stage and a document's search are sweeps of their
+            # own, so their windows are counted apart. A sweep without `scope`
+            # is every stage of one batch, as the trace has always had it.
+            scope = rec.get("scope")
+            windows[f"{rec.get('slot')} ({scope})" if scope in ("own",
+                                                               "document")
+                    else rec.get("slot")].append(rec.get("windows") or 0)
         elif kind == "drop":
             drops[rec.get("why")] += 1
             drops_by_field[(rec.get("field") or rec.get("slot"),

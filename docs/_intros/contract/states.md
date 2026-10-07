@@ -32,9 +32,10 @@ decides, such as kwp's `aggregation` coordinate on `energy_consumption` and
 `emission` parameters, derived to `integral`, the only `derive` rules in
 either profile (`profiles/kwp/extraction_spec.json:173,920`). Which
 parameter a row belongs to is a separate decision, `derive_parameter`
-(`fields.py:337-364`), written directly in `runner.py:3707-3728`, not
-through `apply_derived`. `out_of_slice` is written the same way: a gate
-coordinate the profile's `SLICE` names has put the row outside what this
+(`fields.py:337-364`), written directly by `Turn.settle_parameter` in
+`docpipe/extraction/runner.py`, not through `apply_derived`. `out_of_slice` is
+written the same way: a gate coordinate the profile's `SLICE` names has put
+the row outside what this
 run serializes, or no parameter of the spec could hold it (a number with
 no unit, or with one no parameter accepts), so none of its coordinates
 are asked about. Where a spec has no numeric parameter nothing is
@@ -57,16 +58,27 @@ keeps its first reading (`tests/test_extraction_fieldwise.py:1171`).
 reply has mentioned, as open, so the sweep keeps asking through
 retrieval and then the rest of the document
 (`test_one_window_saying_nothing_here_does_not_end_the_sweep`,
-`tests/test_extraction_fieldwise.py:337`). `unstated` becomes permanent
-only once the sweep has nothing left to read; if the window budget ends
+`tests/test_extraction_fieldwise.py:337`).
+
+The sweep of a coordinate is no longer one per batch. A batch's turn asks only
+the own stage, and what is still open after it is searched once per document
+and coordinate, with the open rows of all the batches together; the verdict
+below is that search's. `unstated` becomes permanent only once the search has
+nothing left to read, the document read to its end; if its allowance ends
 first, every coordinate `open_rows` still counts, `unstated` included, is
 instead written `exhausted`, and what no reply mentioned across every
-round the sweep did run becomes `unanswered`, written once at the end by
+round that did run becomes `unanswered`, written once at the end by
 `mark_unanswered`
 (`test_every_coordinate_ends_with_a_state_even_when_nothing_answered`,
-`tests/test_extraction_fieldwise.py:317`). See
-[extraction](../stages/extraction.md) for the windows and rounds this
-walks.
+`tests/test_extraction_fieldwise.py:317`;
+`test_a_document_read_to_its_end_is_unstated_and_a_cut_one_exhausted`,
+`tests/test_extraction_document_search.py`). The allowance of the rest stage is
+counted in windows and in requests, for every batch that still has an open row
+when the stage begins. A pass over a stored
+harvest (`--top-up`, `--top-up-parameters`) still walks the three stages for
+one batch, and the verdict is that sweep's. See
+[extraction](../stages/extraction.md) for the windows, rounds and allowance
+this walks.
 
 ## Why seven, not fewer
 
@@ -80,8 +92,8 @@ same conflation about a whole run, and the reason the sweep reads past
 retrieval first: before that stage existed, a harvest meant to mark plans
 read to the end wrote 789 `exhausted` against 0 `unstated` on the M3 run,
 because nothing after retrieval read a document the rest of the way
-(`docpipe/extraction/runner.py:3530`). The two the sweep skips are kept
-apart from `unstated` for the same reason it exists: asking the parameter
+(`Sweeping.search` in `docpipe/extraction/runner.py`). The two the sweep skips
+are kept apart from `unstated` for the same reason it exists: asking the parameter
 question anyway on the Kassel run would have cost 322 of 1,043 field
 windows, 30.9 percent (`docpipe/extraction/fields.py:346`); asking the
 coordinates of a row no parameter could hold, on the M3 acceptance run,
@@ -89,8 +101,8 @@ cost 178 of 853 field requests, 20.9 percent
 (`docpipe/extraction/fields.py:379`); and before the slice gate ran first,
 4,064 of 6,763 tuples harvested across 20 plans had all seven axes
 filled in before being dropped for the two gate coordinates
-(`docpipe/extraction/runner.py:3760`). The same split holds past the
-coordinate: `docpipe/extraction/trust.py`'s `reasons` counts
+(`Turn.walk` in `docpipe/extraction/runner.py`). The same split holds past
+the coordinate: `docpipe/extraction/trust.py`'s `reasons` counts
 `exhausted`, `unbacked` and `unanswered` as doubt about a reading, and
 treats every other state, `derived`, `unstated` and `out_of_slice`, as a
 fact about the document or the run's scope, not about the value itself.

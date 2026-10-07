@@ -28,7 +28,10 @@ at the token ceiling is asked again over half the passages (`_split_harvest`)
 rather than half-read. `make_sweeper` drives the field-wise
 sweep: a coordinate the value's own passage does not answer is asked for again
 over short overlapping windows of the rest of the document (`window_sources`),
-bounded per axis. `find_frame` and `make_frame_asker` read a document's frame,
+bounded per axis. A document's batches ask their own passages in their turn
+(`Turn`), and what is still open after them is searched once per document and
+coordinate with the open rows of all the batches together (`DocumentSearch`).
+`find_frame` and `make_frame_asker` read a document's frame,
 its scenario and year pairs, once before any value, so a value request states
 the pair rather than deciding it. `harvest_batches` runs every batch of a whole
 run in flight at once, not as ordered per-document chains.
@@ -81,7 +84,7 @@ from .pipeline import (Source, WorkItem, apply_frame, base_years, batch_uri,
                        harvest_document, merge_field, mark_unanswered,
                        open_rows, plan_document,
                        names_pair, refused_upstream, route_claims,
-                       option_named, rows_from_reply, sweep_key,
+                       option_named, row_label, rows_from_reply, sweep_key,
                        window_sources,
                        write_report)
 from .fields import EXHAUSTED
@@ -3190,12 +3193,602 @@ def make_review_asker(image_root: Optional[Path] = None) -> Callable:
     return ask
 
 
+class SweepStopped(Exception):
+    """The run was stopped (a signal, a dead server) while a document's search
+    was still asking. The document is left unwritten, like a batch that was
+    never harvested."""
+
+
+class Scope:
+    """The rows one sweep asks for, and the batches they came from.
+
+    A batch's rows keep the labels the rows request gave them. Rows of several
+    batches would meet on "R1" and an answer for one would land on the other,
+    so then every row stands in the scope as a view with a label of its own.
+    The view shares the claim of the row it stands for: what a window reads is
+    written into the batch's row, and `Row.label` and `Row.item_index`, which
+    the fold reads, do not move.
+
+    *groups* is [(batch, its views)]. A row is checked against the passages of
+    its own batch (`merge_field`) and never against the union of the
+    document's: the union is a pool the row's answer was not shown.
+    """
+
+    def __init__(self, entries: list):
+        taken = [row for _batch, rows in entries for row in rows]
+        relabel = len({row.label for row in taken}) < len(taken)
+        self.batches = [batch for batch, _rows in entries]
+        self.groups: list = []
+        self.rows: list = []
+        # Which source each row came from: the request names it for the row,
+        # and a later window shows it and its section again (`re_entry`).
+        self.owner_of: dict = {}
+        for batch, rows in entries:
+            views = []
+            for row in rows:
+                view = (replace(row, label=row_label(len(self.rows)))
+                        if relabel else row)
+                views.append(view)
+                self.rows.append(view)
+                if 0 <= row.item_index < len(batch.items):
+                    self.owner_of[view.label] = \
+                        batch.items[row.item_index].source
+            self.groups.append((batch, views))
+
+
+class Sweeping:
+    """One coordinate asked over a scope of rows, window after window.
+
+    The stages are the sweep's own: the passages the values came from (own),
+    then the passages the question ranks (retrieval), then the rest of the
+    document in its order. Whether they run one after another for the rows of
+    one batch (`Sweeper.__call__`) or the last two once for the rows of all the
+    batches of a document (`Sweeper.search`) is the sweeper's business. The
+    attempt loop, the check and the trace are these methods, once.
+
+    One coordinate per sweep and per request: the harvester runs the sweeps of
+    a row's coordinates side by side, so a coordinate that is read in the
+    value's own passage stops there and does not wait on one that has to look
+    further out.
+
+    The value's own passages first, because a carrier usually is in the table
+    row it labels. What is still open after that is looked for further out, one
+    short window at a time with an overlap, because the year of a table is in
+    its caption and the scenario is in the section heading, neither of which
+    the value's passage contains.
+
+    Short windows and many requests, not one wide one. A window that holds the
+    answer holds it whether or not ninety other passages ride along, and the
+    ninety cost the attention that would have found it.
+
+    One window saying "not in here" ends nothing. It is a statement about two
+    passages, and the next window shows two others: a row stays open through
+    out:unstated and closes only on a reading. What ends the sweep is running
+    out of document, retrieval first and then the sections in their own order,
+    or running out of budget, and those two are written down differently,
+    because "the plan does not say" and "we stopped looking" are the pair this
+    whole stage exists to keep apart.
+    """
+
+    def __init__(self, sweeper, scope: Scope, slots, anchor_id: str, *,
+                 seen: set, held: dict, kind: str, stop=None):
+        self.sweeper = sweeper
+        self.scope = scope
+        self.rows = scope.rows
+        self.batches = scope.batches
+        self.owner_of = scope.owner_of
+        self.slots = list(slots) if isinstance(slots, (list, tuple)) \
+            else [slots]
+        self.name = "+".join(slot.name for slot in self.slots)
+        self.anchor_id = anchor_id
+        self.kind = kind
+        self.stop = stop
+        first = self.batches[0]
+        self.document_id = first.document_id
+        # The document's, on every batch of it: `plan_batches` writes one tuple
+        # on all of them and a follow-up copies its parent's.
+        self.bases = list(first.bases)
+        parameters = {batch.parameter.uri if batch.parameter else None
+                      for batch in self.batches}
+        self.parameter = parameters.pop() if len(parameters) == 1 else None
+        self.totals = {"filled": 0, "unquoted": 0, "unbacked": 0,
+                       "unstated": 0, "raw_missing": 0, "raw_foreign": 0,
+                       "via_base": 0, "retried": 0}
+        # What must not be FETCHED again, and every passage this sweep has
+        # already materialised, by key. `seen` answers the first question;
+        # `held` answers what may be SHOWN again, which is the opposite
+        # question and needs the passage itself rather than its key.
+        self.seen = seen
+        self.held = held
+        # One allowance per stage, not one for the sweep. Own, retrieval
+        # and rest are three different searches, and a stage that ran out must
+        # not be the reason the next one never ran. Two ways it was:
+        #
+        #   * own's retries were charged to retrieval. Measured on a stubbed
+        #     sweep: retrieval got 21 windows when own retried three times and
+        #     23 when it answered once, for the same document.
+        #   * rest took its allowance by ASSIGNING the shared counter,
+        #     `max(0, FIELD_MAX_WINDOWS - REST_MAX_WINDOWS)`, which is
+        #     REST_MAX_WINDOWS only while that number is the smaller one. Set
+        #     the rest allowance above the field one and it becomes 0, and the
+        #     stage silently gets the whole budget.
+        #
+        self.budget = sweeper.budget_of(self.slots)
+        self.spent = {stage: 0 for stage in self.budget}
+        # The rest stage is bounded in requests as well: what it may send,
+        # set when the stage begins (`search`), and what it has sent.
+        self.rest_requests: Optional[int] = None
+        self.rest_asked = 0
+        self.state = {"answer": None, "stage": "own"}
+
+    def requests_of(self, rows: list) -> int:
+        """The requests one window costs for these rows: the asker cuts the
+        rows of a window into requests of FIELD_ROWS, per coordinate."""
+        return len(self.slots) * -(-len(rows) // max(1, FIELD_ROWS))
+
+    def still_open(self, pool: list) -> list:
+        """Rows with at least one of these fields still unread."""
+        wanted = {row.label for slot in self.slots
+                  for row in open_rows(pool, slot)}
+        return [row for row in pool if row.label in wanted]
+
+    def re_entry(self, todo: list, already: set) -> list:
+        """The passages these rows were last read in, to ride along.
+
+        The sweep asks five coordinates of the same row and moves on after
+        each window. Where the sector was read, the aggregation is a
+        column further right, so the search starts again where it last
+        found something instead of striking that passage off for good.
+
+        Three places, in this order, and only the ones the window does not
+        already show:
+
+        - the passage a coordinate of this row was READ in, by this sweep
+          or by the sweep of another coordinate running beside it. It is
+          the one of the three that `seen` makes unreachable forever, and
+          it is the one that has already proved it carries this row's
+          answers.
+        - the section the row's own passage stands in. It is also the only
+          one of the three that is in no checked pool from the second
+          window on, so an answer quoting the caption of its own table
+          came back unbacked: its quote stood in no passage the check was
+          given.
+        - the row's own passage last, because `merge_field` checks against
+          the row's batch's passages in every window anyway and the row
+          carries its own quote in the request, so it is the one that is
+          not lost when the budget cuts the list off.
+        """
+        found, sections, owns = [], [], []
+        picked = set()
+
+        def take(bucket, key):
+            source = self.held.get(key)
+            if source is None or key in picked or key in already:
+                return
+            picked.add(key)
+            bucket.append(source)
+
+        for row in todo:
+            # A copy: the other coordinates' sweeps write into the claim
+            # while this one reads it.
+            for key, where in list(row.claim.items()):
+                if (key.endswith("_source")
+                        and isinstance(where, (list, tuple))
+                        and len(where) == 2):
+                    take(found, (where[0], where[1]))
+        for row in todo:
+            own = self.owner_of.get(row.label)
+            parent = (own.provenance or {}).get("parent_section") \
+                if own is not None else None
+            if parent is not None:
+                take(sections, ("section", parent))
+        for row in todo:
+            own = self.owner_of.get(row.label)
+            if own is not None:
+                take(owns, (own.owner_kind, own.owner_id))
+        return (found + sections + owns)[:FIELD_RE_ENTRY]
+
+    def run(self, windows) -> bool:
+        """Ask over these windows. False when the budget ran out.
+
+        A window is asked again when its answers came back unbackable, and
+        the retry carries what was wrong with each row. A model told "R7:
+        your quote is in none of the sources" can fix R7; a model told
+        nothing gives the same answer again, which is why three attempts
+        without the reason are one attempt three times. Every attempt
+        counts against the window budget, so a stubborn coordinate cannot
+        eat the document.
+        """
+        state = self.state
+        for window in windows:
+            todo = self.still_open(self.rows)
+            if not todo:
+                return True
+            # The re-entry rides in FRONT of the window and is not part
+            # of it: the window generator is untouched, so the frontier
+            # still advances by exactly one window per request and a
+            # re-shown passage can never stand in for a fresh one.
+            shown = self.re_entry(todo, {(s.owner_kind, s.owner_id)
+                                         for s in window}) + list(window)
+            corrections = None
+            # Only where a retry pays. Measured on the M3 run: a retry of
+            # the OWN window fills 4.88 rows, a third of what a fresh own
+            # window fills; a retry further out fills 0.10, a seventh of
+            # the fresh window it displaces. 145 of 149 third attempts
+            # filled nothing at all, and 263 of 334 retries came back with
+            # exactly the same failures as the attempt before them.
+            attempts = FIELD_ATTEMPTS if state["stage"] == "own" else 1
+            for attempt in range(attempts):
+                if self.stop is not None and self.stop.is_set():
+                    raise SweepStopped()
+                stage = state["stage"]
+                if self.spent[stage] >= self.budget[stage]:
+                    return False
+                if stage == "rest" and self.rest_requests is not None:
+                    cost = self.requests_of(todo)
+                    if self.rest_asked + cost > self.rest_requests:
+                        return False
+                    self.rest_asked += cost
+                self.spent[stage] += 1
+                started = time.time()
+                usage: dict = {}
+                state["answer"] = self.sweeper.ask(
+                    shown, todo, self.slots, corrections, self.document_id,
+                    usage, self.owner_of, bases=list(self.bases))
+                # Checked against the window AND the passages the rows
+                # carry. A row's own quote is shown to the model in the
+                # rows list, so citing it is legitimate, and from the
+                # second window on it is no longer among `shown`, which
+                # threw away correct readings by the hundred: one batch
+                # logged 520 dropped against 31 read. The passages a row
+                # carries are those of ITS batch.
+                # One reply, folded field by field. A field that is
+                # missing from it is simply not folded, which leaves its
+                # rows open for the next window, the same outcome as an
+                # empty answer, and the same as before.
+                answered = (state["answer"] or {}).get("fields")
+                if not isinstance(answered, dict):
+                    answered = {}
+                counts = {"filled": 0, "unquoted": 0, "unbacked": 0,
+                          "unstated": 0, "raw_missing": 0,
+                          "raw_foreign": 0, "via_base": 0, "failed": []}
+                # Which FIELD filled and which failed, not only how many.
+                # Five fields answer in one reply, and a run that logs
+                # "aggregation+carrier+sector+year+spatial_scope: 3 of 5"
+                # cannot say which two were dropped: 7,738 unbacked and
+                # 3,110 unquoted answers of one corpus group were not
+                # attributable to a coordinate.
+                filled_by: dict = {}
+                unbacked_by: dict = {}
+                for slot in self.slots:
+                    for batch, members in self.scope.groups:
+                        got = merge_field(
+                            members, list(shown) + batch.sources, slot,
+                            answered.get(slot.name),
+                            window=(stage, sum(self.spent.values())),
+                            bases=list(self.bases))
+                        for key in ("filled", "unquoted", "unbacked",
+                                    "unstated", "raw_missing",
+                                    "raw_foreign", "via_base"):
+                            counts[key] += got[key]
+                        if got["filled"]:
+                            filled_by[slot.name] = (
+                                filled_by.get(slot.name, 0) + got["filled"])
+                        if got["unquoted"] or got["unbacked"]:
+                            unbacked_by[slot.name] = (
+                                unbacked_by.get(slot.name, 0)
+                                + got["unquoted"] + got["unbacked"])
+                        for bad in got["failed"]:
+                            counts["failed"].append(dict(bad,
+                                                         field=slot.name))
+                for key in ("filled", "unquoted", "unbacked", "unstated",
+                            "raw_missing", "raw_foreign", "via_base"):
+                    self.totals[key] += counts[key]
+                self.totals["retried"] += 1 if attempt else 0
+                # The window this coordinate was asked in, what was shown,
+                # and what came back. Every knob this stage has cuts
+                # through this distribution, and none of them could be set
+                # from a log line that only counted the failures. `batches`
+                # is how many batches the rows of the request came from:
+                # one for a batch's own stage, the document's for its search.
+                trace.event("field", self.document_id, slot=self.name,
+                            anchor=self.anchor_id,
+                            window=sum(self.spent.values()),
+                            stage=stage, attempt=attempt,
+                            parameter=self.parameter,
+                            batches=len(self.batches),
+                            open=len(todo),
+                            reply=state["answer"] is not None,
+                            shown=[[x.owner_kind, x.owner_id]
+                                   for x in shown],
+                            ms=int((time.time() - started) * 1000),
+                            filled_by=filled_by, unbacked_by=unbacked_by,
+                            prompt_tokens=usage.get("prompt_tokens"),
+                            completion_tokens=usage.get(
+                                "completion_tokens"),
+                            **{k: counts[k] for k in
+                               ("filled", "unquoted", "unbacked",
+                                "unstated", "raw_missing",
+                                "raw_foreign", "via_base")})
+                for bad in counts["failed"]:
+                    # What was answered, not only that it failed: the
+                    # corpus_m5 trace counted 284,643 quantity answers
+                    # whose quote did not carry them and could not say
+                    # whether the wording, the quote or the pairing of
+                    # the two was wrong.
+                    quote = bad.get("quote")
+                    trace.event("drop", self.document_id, slot=self.name,
+                                field=bad.get("field"),
+                                window=sum(self.spent.values()),
+                                attempt=attempt,
+                                batches=len(self.batches),
+                                row=bad.get("row"),
+                                why=bad.get("why") or "unbacked",
+                                given=bad.get("given"),
+                                raw=bad.get("raw"),
+                                quote=(quote[:300] if isinstance(quote, str)
+                                       else None))
+                corrections = counts["failed"]
+                if not corrections:
+                    break
+                named = {c["row"] for c in corrections}
+                todo = [r for r in self.still_open(self.rows)
+                        if r.label in named]
+                if not todo:
+                    break
+        return True
+
+    def own(self) -> bool:
+        """The value's own passages AND the sections they stand in. A table
+        carries its numbers and its row labels; the year, the scenario and
+        the caption live one level up, and the own window never showed it.
+        One batch's stage: its rows are the scope."""
+        batch = self.batches[0]
+        own = list(batch.sources)
+        for parent in (self.sweeper.parents(batch.sources)
+                       if self.sweeper.parents else ()):
+            own.append(parent)
+            self.seen.add((parent.owner_kind, parent.owner_id))
+            self.held[(parent.owner_kind, parent.owner_id)] = parent
+        self.state["stage"] = "own"
+        return self.run([own])
+
+    def search(self, combed: bool = True, heard=()) -> bool:
+        """Retrieval, then the rest of the document, over every open row of
+        the scope. *combed* is what the stage before it ended on. *heard* is
+        what the model said it still needed in answers this sweep did not see
+        itself, the own stages of the batches the rows come from.
+
+        True when the document was read to its end: with no budget cut the
+        coordinate that is still open is a statement about the plan.
+        """
+        sweeper = self.sweeper
+        self.state["stage"] = "retrieval"
+        document = self.kind == "document"
+        if document:
+            log.info("   search %s: %d row(s) of %d batch(es), %d retrieval "
+                     "window(s) allowed", self.name, len(self.rows),
+                     len(self.batches), self.budget["retrieval"])
+        first = True
+        for _ in range(FIELD_ROUNDS):
+            if (not combed or not self.still_open(self.rows)
+                    or sweeper.more_sources is None):
+                break
+            # Still open, so look further out. The probes are the anchors
+            # written for THIS question: sentences as a plan would print the
+            # answer. The question itself was what this searched with before,
+            # and a question is the one sentence that never stands in a
+            # document.
+            probes = list(sweeper.anchors.get(self.anchor_id) or ())
+            if not probes:
+                probes = [slot.question for slot in self.slots
+                          if slot.question]
+            need = list(heard) if first else []
+            need += (self.state["answer"] or {}).get("need_more") or []
+            first = False
+            probes += [q for q in need if isinstance(q, str) and len(q) > 20]
+            # As many passages as the windows left can show, and no more.
+            # The ranking covers the whole plan, and handed over whole it
+            # marked every passage as seen after one round: the rest stage
+            # then found nothing to read and a sweep the budget had cut off
+            # ended "unstated". No budget left is not a combed document.
+            left = self.budget["retrieval"] - self.spent["retrieval"]
+            if left <= 0:
+                combed = False
+                break
+            fresh = sweeper.more_sources(self.document_id, probes,
+                                         set(self.seen),
+                                         FIELD_WINDOW * left) or []
+            if not fresh:
+                break
+            for source in fresh:
+                self.seen.add((source.owner_kind, source.owner_id))
+                self.held[(source.owner_kind, source.owner_id)] = source
+            # No overlap: the pool is ranked by relevance, so neighbours in
+            # it are not neighbours in the plan, and a passage shown twice
+            # was a request spent twice: half of corpus_m5's 1,235,462
+            # search requests. The overlap is the rest stage's, whose pool
+            # is in document order and whose seam a caption sits on.
+            combed = self.run(window_sources(fresh, FIELD_WINDOW, 0))
+
+        open_now = self.still_open(self.rows)
+        if open_now and sweeper.rest_of_document is not None:
+            # Retrieval has nothing left to offer and the coordinate is still
+            # open. Read the rest of the plan rather than call it unstated on
+            # the strength of what a ranking happened to surface.
+            #
+            # Not `combed and ...`: `run` returns False exactly when the
+            # budget ran out, and a sweep with budget left has no open rows.
+            # So the old condition was never both true at once: 0 of the 70
+            # sweeps of the M3 run entered this stage, and 32 of the 33 that
+            # hit the cap had had exactly one retrieval round out of four.
+            # The stage that exists to keep "we stopped looking" apart from
+            # "the plan does not say it" was unreachable, and the harvest
+            # shows it: 789 exhausted and 0 unstated.
+            #
+            # Its own allowance, and its own counter rather than a number
+            # written into the shared one. Bounded, because 33 sweeps of
+            # that run hit the cap and an unbounded second pass would put the
+            # requests per document over the 1161 the acceptance allows.
+            #
+            # Once for every batch that still has an open row of this
+            # coordinate: the search is one pass over the document in its
+            # order where the batches' own sweeps were each one over the same
+            # sections, so it costs what they cost and no more, and it stops
+            # where the document does.
+            #
+            # In windows and in requests. A window is shown to every open row
+            # and the asker cuts the rows into requests of FIELD_ROWS, so the
+            # rows of many batches in one window are more requests than one
+            # batch's window was. On a stubbed document, 17 batches of 40 open
+            # rows each sent 2,346 requests through their own sweeps and 4,414
+            # through one search counted in windows alone. The bound is what
+            # the batches' own sweeps could send at most: for each batch its
+            # windows times the requests one of its windows took. For the rows
+            # of one batch that is never reached before the windows are.
+            open_labels = {row.label for row in open_now}
+            asking = [rows for rows in (
+                [row for row in members if row.label in open_labels]
+                for _batch, members in self.scope.groups) if rows]
+            each = self.budget["rest"]
+            self.budget["rest"] = each * len(asking)
+            self.rest_requests = each * sum(self.requests_of(rows)
+                                            for rows in asking)
+            if document:
+                log.info("   search %s: the rest of the document, %d "
+                         "window(s) and %d request(s) allowed for %d "
+                         "batch(es) with an open row", self.name,
+                         self.budget["rest"], self.rest_requests,
+                         len(asking))
+            rest = sweeper.rest_of_document(
+                self.document_id, set(self.seen),
+                own_section_number([self.owner_of[row.label]
+                                    for row in open_now
+                                    if row.label in self.owner_of])) or []
+            for source in rest:
+                self.held[(source.owner_kind, source.owner_id)] = source
+            self.state["stage"] = "rest"
+            # Nothing left means every passage of the plan was shown, and
+            # that is what "combed" says. An empty run said it too, once,
+            # about a plan the budget had cut off after two passages.
+            combed = (self.run(window_sources(rest, FIELD_WINDOW,
+                                              FIELD_OVERLAP))
+                      if rest else True)
+        return combed
+
+    def close(self, combed: bool = True) -> dict:
+        """What the sweep came to, in the trace and as a dict. A sweep that
+        ended on its budget marks every row still open `exhausted`; an own
+        stage ends nothing, the search after it does."""
+        stranded = 0
+        # Before the rows are marked: `exhausted` is no longer open.
+        left = (len(self.still_open(self.rows))
+                if self.kind == "document" else 0)
+        if not combed and self.kind != "own":
+            for slot in self.slots:
+                for row in open_rows(self.rows, slot):
+                    # Still open with the document unread to the end. Not the
+                    # same finding as a document that does not say it, and not
+                    # recorded as one.
+                    row.claim[f"{slot.name}_state"] = EXHAUSTED
+                    stranded += 1
+        self.totals["asked"] = sum(self.spent.values())
+        self.totals["exhausted"] = stranded
+        if self.kind == "document":
+            log.info("   search %s: %d window(s) asked, %d of %d row(s) "
+                     "read, %d row(s) left open, %s", self.name,
+                     self.totals["asked"], self.totals["filled"],
+                     len(self.rows), left,
+                     "the document read to its end" if combed
+                     else "the allowance spent")
+        trace.event("sweep", self.document_id, slot=self.name,
+                    anchor=self.anchor_id, windows=sum(self.spent.values()),
+                    rows=len(self.rows), combed=combed,
+                    batches=len(self.batches), scope=self.kind,
+                    **self.totals)
+        return self.totals
+
+
+class Sweeper:
+    """sweep_field(batch, rows, slots, anchor_id) -> what the sweep came to,
+    and the two halves it is made of.
+
+    Called, it walks the three stages for one batch's rows, which is what a
+    pass over a stored harvest wants. `own` is the first stage alone, a
+    batch's turn; `search` is the other two, once for the rows of several
+    batches (a document's), under an allowance that grows with the batches
+    that still have an open row. Built by `make_sweeper`.
+    """
+
+    def __init__(self, ask: Callable, *, more_sources: Optional[Callable],
+                 rest_of_document: Optional[Callable],
+                 parents: Optional[Callable], anchors: dict,
+                 budget_of: Callable):
+        self.ask = ask
+        self.more_sources = more_sources
+        self.rest_of_document = rest_of_document
+        self.parents = parents
+        self.anchors = anchors
+        self.budget_of = budget_of
+
+    @staticmethod
+    def _kept(batches: list) -> tuple:
+        """(keys, passages by key) of every passage these batches carry."""
+        held = {(item.source.owner_kind, item.source.owner_id): item.source
+                for batch in batches for item in batch.items}
+        return set(held), held
+
+    def __call__(self, batch, rows: list, slots, anchor_id: str = "") -> dict:
+        seen, held = self._kept([batch])
+        sweeping = Sweeping(self, Scope([(batch, rows)]), slots, anchor_id,
+                            seen=seen, held=held, kind="batch")
+        return sweeping.close(sweeping.search(sweeping.own()))
+
+    def own(self, batch, rows: list, slots, anchor_id: str = "",
+            heard: Optional[list] = None, stop=None) -> dict:
+        """The value's own passages and nothing further. What the model said
+        it still needed goes into *heard*, for the search that follows."""
+        seen, held = self._kept([batch])
+        sweeping = Sweeping(self, Scope([(batch, rows)]), slots, anchor_id,
+                            seen=seen, held=held, kind="own", stop=stop)
+        combed = sweeping.own()
+        if heard is not None:
+            for question in (sweeping.state["answer"] or {}).get(
+                    "need_more") or []:
+                if isinstance(question, str) and question not in heard:
+                    heard.append(question)
+        return sweeping.close(combed)
+
+    def search(self, entries: list, slots, anchor_id: str = "",
+               heard=(), stop=None) -> dict:
+        """Retrieval, then the rest of the document, once for these rows of
+        several batches: [(batch, its rows)].
+
+        With several batches nothing is left out of the retrieval pool. A
+        batch's own passages were asked for ITS rows only, so none of them is
+        already seen for all the rows of the search, and a pool that left them
+        out would leave out the place another batch's row was read in. With one
+        batch the search is that batch's own sweep and looks where it looked:
+        its passages and their sections were asked in its own stage.
+        """
+        batches = [batch for batch, _rows in entries]
+        _seen, held = self._kept(batches)
+        for batch in batches:
+            for parent in (self.parents(batch.sources)
+                           if self.parents else ()):
+                held[(parent.owner_kind, parent.owner_id)] = parent
+        sweeping = Sweeping(self, Scope(entries), slots, anchor_id,
+                            seen=set(held) if len(batches) == 1 else set(),
+                            held=held, kind="document", stop=stop)
+        return sweeping.close(sweeping.search(True, heard))
+
+
 def make_sweeper(ask: Callable, *,
                  more_sources: Optional[Callable] = None,
                  rest_of_document: Optional[Callable] = None,
                  parents: Optional[Callable] = None,
                  anchors: Optional[dict] = None,
-                 search_share: Optional[dict] = None) -> Callable:
+                 search_share: Optional[dict] = None) -> Sweeper:
     """sweep_field(batch, rows, slots, anchor_id) -> what the sweep came to.
 
     Lifted out of the harvester so a pass that re-reads ONE coordinate of an
@@ -3212,357 +3805,561 @@ def make_sweeper(ask: Callable, *,
     anchors = anchors or {}
     search_share = search_share or {}
 
-    def sweep_field(batch, rows: list, slots, anchor_id: str = "") -> dict:
-        """Short windows over the document until this coordinate is read.
-
-        One coordinate per sweep and per request: the harvester runs the
-        sweeps of a row's coordinates side by side, so a coordinate that is
-        read in the value's own passage stops there and does not wait on one
-        that has to look further out.
-
-        The value's own passages first, because a carrier usually is in the
-        table row it labels. What is still open after that is looked for
-        further out, one short window at a time with an overlap, because the
-        year of a table is in its caption and the scenario is in the section
-        heading — neither of which the value's passage contains.
-
-        Short windows and many requests, not one wide one. A window that holds
-        the answer holds it whether or not ninety other passages ride along,
-        and the ninety cost the attention that would have found it.
-
-        One window saying "not in here" ends nothing. It is a statement about
-        two passages, and the next window shows two others: a row stays open
-        through out:unstated and closes only on a reading. What ends the sweep
-        is running out of document — retrieval first, then the sections in
-        their own order — or running out of budget, and those two are written
-        down differently, because "the plan does not say" and "we stopped
-        looking" are the pair this whole stage exists to keep apart.
-        """
-        slots = list(slots) if isinstance(slots, (list, tuple)) else [slots]
-        name = "+".join(slot.name for slot in slots)
-        # Which source each row came from: the request names it for the
-        # row, and a later window shows it and its section again
-        # (`re_entry`).
-        owner_of = {row.label: batch.items[row.item_index].source
-                    for row in rows
-                    if 0 <= row.item_index < len(batch.items)}
-        totals = {"filled": 0, "unquoted": 0, "unbacked": 0, "unstated": 0,
-                  "raw_missing": 0, "raw_foreign": 0, "via_base": 0,
-                  "retried": 0}
-        seen = {(i.source.owner_kind, i.source.owner_id) for i in batch.items}
-        # Every passage this sweep has already materialised, by key. `seen`
-        # answers what must not be FETCHED again; this answers what may be
-        # SHOWN again, which is the opposite question and needs the passage
-        # itself rather than its key.
-        held = {(i.source.owner_kind, i.source.owner_id): i.source
-                for i in batch.items}
-        # One allowance per stage, not one for the sweep. Own, retrieval
-        # and rest are three different searches, and a stage that ran out must
-        # not be the reason the next one never ran. Two ways it was:
-        #
-        #   * own's retries were charged to retrieval. Measured on a stubbed
-        #     sweep: retrieval got 21 windows when own retried three times and
-        #     23 when it answered once, for the same document.
-        #   * rest took its allowance by ASSIGNING the shared counter,
-        #     `max(0, FIELD_MAX_WINDOWS - REST_MAX_WINDOWS)`, which is
-        #     REST_MAX_WINDOWS only while that number is the smaller one. Set
-        #     the rest allowance above the field one and it becomes 0, and the
-        #     stage silently gets the whole budget.
-        #
+    def budget_of(slots: list) -> dict:
+        """The allowance of one coordinate's sweep, per stage."""
         budget = window_budget(min(search_share.get(slot.name, 1.0)
                                    for slot in slots))
-        spent = {stage: 0 for stage in budget}
-        state = {"answer": None, "stage": "own"}
+        return budget
 
-        def still_open(pool: list) -> list:
-            """Rows with at least one of these fields still unread."""
-            wanted = {row.label for slot in slots
-                      for row in open_rows(pool, slot)}
-            return [row for row in pool if row.label in wanted]
+    return Sweeper(ask, more_sources=more_sources,
+                   rest_of_document=rest_of_document, parents=parents,
+                   anchors=anchors, budget_of=budget_of)
 
-        def re_entry(todo: list, already: set) -> list:
-            """The passages these rows were last read in, to ride along.
 
-            The sweep asks five coordinates of the same row and moves on after
-            each window. Where the sector was read, the aggregation is a
-            column further right — so the search starts again where it last
-            found something instead of striking that passage off for good.
+# The keys of the coordinates a batch's rows can be held at, for the search
+# that settles them: the unit, the parameter, and (parameter, axis) for the
+# gate axes and for the others.
+UNIT_KEY = ("unit",)
+PARAMETER_KEY = ("parameter",)
 
-            Three places, in this order, and only the ones the window does not
-            already show:
 
-            - the passage a coordinate of this row was READ in, by this sweep
-              or by the sweep of another coordinate running beside it. It is
-              the one of the three that `seen` makes unreachable forever, and
-              it is the one that has already proved it carries this row's
-              answers.
-            - the section the row's own passage stands in. It is also the only
-              one of the three that is in no checked pool from the second
-              window on, so an answer quoting the caption of its own table
-              came back unbacked: its quote stood in no passage the check was
-              given.
-            - the row's own passage last, because `merge_field` checks against
-              `batch.sources` in every window anyway and the row carries its
-              own quote in the request, so it is the one that is not lost when
-              the budget cuts the list off.
-            """
-            found, sections, owns = [], [], []
-            picked = set()
+class Turn:
+    """One batch's rows on their way through the coordinates that decide them:
+    the unit, which settles the parameter, the parameter, which decides the
+    axes a row has, the gate axes, one after another, and then the other
+    axes, side by side.
 
-            def take(bucket, key):
-                source = held.get(key)
-                if source is None or key in picked or key in already:
-                    return
-                picked.add(key)
-                bucket.append(source)
+    Two ways to walk it. Whole (`deferred` False) every coordinate is swept
+    through all three stages before the next one is asked, which is what a
+    pass over a stored harvest wants. Deferred, the turn asks each coordinate's
+    own stage only, and a row whose deciding coordinate is still open WAITS
+    there: nothing behind it is asked. The document step (`DocumentSearch`)
+    then searches what is open once for all the batches of the document and
+    lets the rows that waited go on. Both walk this one body.
+    """
 
-            for row in todo:
-                # A copy: the other coordinates' sweeps write into the claim
-                # while this one reads it.
-                for key, where in list(row.claim.items()):
-                    if (key.endswith("_source")
-                            and isinstance(where, (list, tuple))
-                            and len(where) == 2):
-                        take(found, (where[0], where[1]))
-            for row in todo:
-                own = owner_of.get(row.label)
-                parent = (own.provenance or {}).get("parent_section") \
-                    if own is not None else None
-                if parent is not None:
-                    take(sections, ("section", parent))
-            for row in todo:
-                own = owner_of.get(row.label)
-                if own is not None:
-                    take(owns, (own.owner_kind, own.owner_id))
-            return (found + sections + owns)[:FIELD_RE_ENTRY]
+    def __init__(self, batch, rows: list, *, doc_spec, sweeper: Sweeper,
+                 frame_axes: Optional[list] = None,
+                 slice_gate: Optional[dict] = None, pool=None,
+                 deferred: bool = False):
+        self.batch = batch
+        self.rows = rows
+        self.doc_spec = doc_spec
+        self.sweeper = sweeper
+        self.frame_axes = frame_axes
+        self.slice_gate = slice_gate
+        self.pool = pool
+        self.deferred = deferred
+        self.stop = None
+        self.counts: dict = {}       # coordinate -> what its sweeps came to
+        self.slots_of: dict = {}     # row label -> the slots that apply to it
+        self.plan: dict = {}         # parameter uri -> (axes, gate, gated)
+        self.jobs: list = []         # (rows, slots, anchor id, key)
+        self.open: dict = {}         # key -> rows left open by an own stage
+        self.deciding: set = set()   # the keys whose rows wait for the search
+        self.asked: dict = {}        # key -> (slots, anchor id)
+        self.heard: dict = {}        # anchor id -> what the model still needs
+        self.unit_slot = fields.unit_slot(doc_spec)
+        self.with_unit = ([row for row in rows
+                           if fields.has_number(row.claim)]
+                          if self.unit_slot is not None else [])
+        self.parameter_slot = (fields.parameter_slot(doc_spec)
+                               if batch.parameter is None else None)
+        self.blank = 0
 
-        def run(windows) -> bool:
-            """Ask over these windows. False when the budget ran out.
+    # Asking.
 
-            A window is asked again when its answers came back unbackable, and
-            the retry carries what was wrong with each row. A model told "R7:
-            your quote is in none of the sources" can fix R7; a model told
-            nothing gives the same answer again, which is why three attempts
-            without the reason are one attempt three times. Every attempt
-            counts against the window budget, so a stubborn coordinate cannot
-            eat the document.
-            """
-            for window in windows:
-                todo = still_open(rows)
-                if not todo:
-                    return True
-                # The re-entry rides in FRONT of the window and is not part
-                # of it: the window generator is untouched, so the frontier
-                # still advances by exactly one window per request and a
-                # re-shown passage can never stand in for a fresh one.
-                shown = re_entry(todo, {(s.owner_kind, s.owner_id)
-                                        for s in window}) + list(window)
-                corrections = None
-                # Only where a retry pays. Measured on the M3 run: a retry of
-                # the OWN window fills 4.88 rows, a third of what a fresh own
-                # window fills; a retry further out fills 0.10, a seventh of
-                # the fresh window it displaces. 145 of 149 third attempts
-                # filled nothing at all, and 263 of 334 retries came back with
-                # exactly the same failures as the attempt before them.
-                attempts = FIELD_ATTEMPTS if state["stage"] == "own" else 1
-                for attempt in range(attempts):
-                    if spent[state["stage"]] >= budget[state["stage"]]:
-                        return False
-                    spent[state["stage"]] += 1
-                    started = time.time()
-                    usage: dict = {}
-                    state["answer"] = ask(shown, todo, slots, corrections,
-                                          batch.document_id, usage, owner_of,
-                                          bases=list(batch.bases))
-                    # Checked against the window AND the passages the rows
-                    # carry. A row's own quote is shown to the model in the
-                    # rows list, so citing it is legitimate — and from the
-                    # second window on it is no longer among `shown`, which
-                    # threw away correct readings by the hundred: one batch
-                    # logged 520 dropped against 31 read.
-                    # One reply, folded field by field. A field that is
-                    # missing from it is simply not folded, which leaves its
-                    # rows open for the next window — the same outcome as an
-                    # empty answer, and the same as before.
-                    answered = (state["answer"] or {}).get("fields")
-                    if not isinstance(answered, dict):
-                        answered = {}
-                    counts = {"filled": 0, "unquoted": 0, "unbacked": 0,
-                              "unstated": 0, "raw_missing": 0,
-                              "raw_foreign": 0, "via_base": 0, "failed": []}
-                    # Which FIELD filled and which failed, not only how many.
-                    # Five fields answer in one reply, and a run that logs
-                    # "aggregation+carrier+sector+year+spatial_scope: 3 of 5"
-                    # cannot say which two were dropped: 7,738 unbacked and
-                    # 3,110 unquoted answers of one corpus group were not
-                    # attributable to a coordinate.
-                    filled_by: dict = {}
-                    unbacked_by: dict = {}
-                    for slot in slots:
-                        got = merge_field(rows, list(shown) + batch.sources,
-                                          slot, answered.get(slot.name),
-                                          window=(state["stage"],
-                                                  sum(spent.values())),
-                                          bases=list(batch.bases))
-                        for key in ("filled", "unquoted", "unbacked",
-                                    "unstated", "raw_missing",
-                                    "raw_foreign", "via_base"):
-                            counts[key] += got[key]
-                        if got["filled"]:
-                            filled_by[slot.name] = got["filled"]
-                        if got["unquoted"] or got["unbacked"]:
-                            unbacked_by[slot.name] = (got["unquoted"]
-                                                      + got["unbacked"])
-                        for bad in got["failed"]:
-                            counts["failed"].append(dict(bad,
-                                                         field=slot.name))
-                    for key in ("filled", "unquoted", "unbacked", "unstated",
-                                "raw_missing", "raw_foreign", "via_base"):
-                        totals[key] += counts[key]
-                    totals["retried"] += 1 if attempt else 0
-                    # The window this coordinate was asked in, what was shown,
-                    # and what came back. Every knob this stage has cuts
-                    # through this distribution, and none of them could be set
-                    # from a log line that only counted the failures.
-                    trace.event("field", batch.document_id, slot=name,
-                                anchor=anchor_id,
-                                window=sum(spent.values()),
-                                stage=state["stage"], attempt=attempt,
-                                parameter=(batch.parameter.uri
-                                           if batch.parameter else None),
-                                open=len(todo), reply=state["answer"] is not None,
-                                shown=[[x.owner_kind, x.owner_id]
-                                       for x in shown],
-                                ms=int((time.time() - started) * 1000),
-                                filled_by=filled_by, unbacked_by=unbacked_by,
-                                prompt_tokens=usage.get("prompt_tokens"),
-                                completion_tokens=usage.get(
-                                    "completion_tokens"),
-                                **{k: counts[k] for k in
-                                   ("filled", "unquoted", "unbacked",
-                                    "unstated", "raw_missing",
-                                    "raw_foreign", "via_base")})
-                    for bad in counts["failed"]:
-                        # What was answered, not only that it failed: the
-                        # corpus_m5 trace counted 284,643 quantity answers
-                        # whose quote did not carry them and could not say
-                        # whether the wording, the quote or the pairing of
-                        # the two was wrong.
-                        quote = bad.get("quote")
-                        trace.event("drop", batch.document_id, slot=name,
-                                    field=bad.get("field"),
-                                    window=sum(spent.values()),
-                                    attempt=attempt,
-                                    row=bad.get("row"),
-                                    why=bad.get("why") or "unbacked",
-                                    given=bad.get("given"),
-                                    raw=bad.get("raw"),
-                                    quote=(quote[:300] if isinstance(quote, str)
-                                           else None))
-                    corrections = counts["failed"]
-                    if not corrections:
-                        break
-                    named = {c["row"] for c in corrections}
-                    todo = [r for r in still_open(rows) if r.label in named]
-                    if not todo:
-                        break
-            return True
+    def stage(self, rows: list, slots: list, anchor: str) -> tuple:
+        """(what the sweep came to, the rows still open on these slots).
 
-        # The value's own passages AND the sections they stand in. A table
-        # carries its numbers and its row labels; the year, the scenario and
-        # the caption live one level up, and the own window never showed it.
-        own = list(batch.sources)
-        for parent in (parents(batch.sources) if parents else ()):
-            own.append(parent)
-            seen.add((parent.owner_kind, parent.owner_id))
-            held[(parent.owner_kind, parent.owner_id)] = parent
-        combed = run([own])
-        state["stage"] = "retrieval"
-        for _ in range(FIELD_ROUNDS):
-            if not combed or not still_open(rows) or more_sources is None:
+        Whole, nothing is left open for anyone: the sweep ended. Deferred,
+        only the own stage ran and what it left open is for the search.
+        """
+        if not self.deferred:
+            return self.sweeper(self.batch, rows, slots, anchor), []
+        totals = self.sweeper.own(
+            self.batch, rows, slots, anchor,
+            heard=self.heard.setdefault(anchor, []), stop=self.stop)
+        wanted = {row.label for slot in slots
+                  for row in open_rows(rows, slot)}
+        return totals, [row for row in rows if row.label in wanted]
+
+    def record(self, slots: list, totals: dict) -> None:
+        into = self.counts.setdefault("+".join(s.name for s in slots), {})
+        for key, value in totals.items():
+            into[key] = into.get(key, 0) + value
+
+    def hold(self, key: tuple, slots: list, anchor: str, still: list,
+             deciding: bool) -> list:
+        """What an own stage left open is registered for the search. The rows
+        come back for the caller to keep from going on, if *deciding*."""
+        if not still:
+            return []
+        self.open.setdefault(key, []).extend(still)
+        self.asked[key] = (slots, anchor)
+        if deciding:
+            self.deciding.add(key)
+        return still
+
+    def ask(self, rows: list, slots, anchor: str, key: tuple,
+            deciding: bool = False) -> list:
+        """One coordinate over these rows, as far as this turn takes it.
+        Returns the rows that now wait on the search (deferred, deciding)."""
+        slots = list(slots) if isinstance(slots, (list, tuple)) else [slots]
+        totals, still = self.stage(rows, slots, anchor)
+        self.record(slots, totals)
+        held = self.hold(key, slots, anchor, still, deciding)
+        return held if deciding else []
+
+    def run_jobs(self, parallel: bool) -> None:
+        """The axes that decide nothing, side by side. Beside each other where
+        the turn has the field pool to itself; one after the other inside the
+        document step, whose own tasks are already what runs side by side."""
+        jobs, self.jobs = self.jobs, []
+        if not jobs:
+            return
+        if parallel and self.pool is not None:
+            futures = {self.pool.submit(self.stage, rows, slots, anchor):
+                       (rows, slots, anchor, key)
+                       for rows, slots, anchor, key in jobs}
+            for future in as_completed(futures):
+                _rows, slots, anchor, key = futures[future]
+                try:
+                    totals, still = future.result()
+                except Exception as exc:        # pragma: no cover - defensive
+                    log.warning("   field %s raised: %s",
+                                "+".join(s.name for s in slots), exc)
+                    continue
+                self.record(slots, totals)
+                self.hold(key, slots, anchor, still, False)
+            return
+        for rows, slots, anchor, key in jobs:
+            totals, still = self.stage(rows, slots, anchor)
+            self.record(slots, totals)
+            self.hold(key, slots, anchor, still, False)
+
+    # The walk.
+
+    def project(self, group: list, axes: list) -> None:
+        """The pair onto these rows, as far as their parameter has its axes.
+
+        Before anything is asked. The sweep only offers a coordinate that
+        is still open, so projecting here is what makes the year sweeper
+        fall away rather than run and find nothing: measured on M3, the
+        year axis produced 1,849 refusals against 0 readings, because
+        every later window excluded the row's own source and only that one
+        could carry the year.
+
+        Only the frame coordinates the row's parameter has. The pair spans
+        the document, but the planning organisation has no scenario and no
+        year, and 11 of its rows on corpus_m5 carried both, which the
+        schema refuses.
+        """
+        batch = self.batch
+        own = {axis.name: axis for axis in axes}
+        slots = [own[slot.name] for slot in self.frame_axes or ()
+                 if slot.name in own]
+        if not group or not slots:
+            return
+        # A row whose own quote named another pair of the document keeps
+        # that pair. It is written first and separately, so the request's
+        # own pair below never reaches it.
+        rerouted: dict = {}
+        for row in group:
+            if row.pair:
+                rerouted.setdefault(row.pair_index, []).append(row)
+        for pair_index, rows_of in rerouted.items():
+            written = apply_frame(rows_of, rows_of[0].pair, pair_index,
+                                  slots, batch.sources)
+            if written:
+                log.debug("   other pair %s: %d coordinate(s) on %d "
+                          "row(s)", batch.document_id, written,
+                          len(rows_of))
+        group = [row for row in group if not row.pair]
+        if not group:
+            return
+        if batch.frame:
+            written = apply_frame(group, batch.frame, batch.frame_index,
+                                  slots, batch.sources)
+            if written:
+                log.debug("   frame %s: %d coordinate(s) on %d row(s)",
+                          batch.document_id, written, len(group))
+
+    def normalise(self, rows: list) -> None:
+        """The unit as the list spells it. The answer names an option by any
+        spelling the list folds alike, and the lookups below are exact."""
+        for row in rows:
+            option = option_named(self.unit_slot, row.claim.get("unit"))
+            if option is not None:
+                row.claim["unit"] = option.label
+
+    def begin(self) -> None:
+        """The turn: the unit first, and as a coordinate: one entry of a
+        closed list, read with its own passage, never looked up from a
+        spelling. The value request writes the unit as the passage prints it,
+        and which entry that means is a reading: "450 kWh über das Jahr" is
+        kWh/a, a storage capacity of 200 kWh is kWh, "kWh/m²a" and "kWp" are
+        in no list. A spelling table made that reading until now, and on 641
+        plans of corpus_m5 it let 3,324 tuples carry an entry their wording
+        contradicts. Before the parameter, because the entry chosen is what
+        settles the parameter. The value request's own entry is dropped
+        first: it was a choice made beside the number, not a reading of its
+        own, and left in place it would stand where the question's answer
+        belongs.
+
+        The unit decides only where the parameter is open; with the batch's
+        parameter fixed a row whose unit is open goes on to its axes, and the
+        unit is searched on its own.
+        """
+        for row in self.with_unit:
+            row.claim.pop("unit", None)
+        go = self.rows
+        if self.with_unit:
+            deciding = self.batch.parameter is None
+            waiting = self.ask(self.with_unit, self.unit_slot, UNIT_ANCHOR,
+                               UNIT_KEY, deciding)
+            self.normalise(self.with_unit)
+            if waiting:
+                held = {row.label for row in waiting}
+                go = [row for row in self.rows if row.label not in held]
+        self.go_on(go)
+        self.run_jobs(parallel=True)
+
+    def go_on(self, rows: list) -> None:
+        """Rows whose unit is settled: to the parameter, or to the axes of the
+        parameter the batch was planned for."""
+        if self.batch.parameter is None:
+            self.settle_parameter(rows)
+            return
+        parameter = self.batch.parameter
+        axes = fields.axis_slots(parameter)
+        for row in rows:
+            self.slots_of[row.label] = axes
+        self.project(rows, axes)
+        for axis in axes:
+            fields.apply_derived(rows, axis)
+        for axis in axes:
+            if not axis.derive:
+                self.jobs.append((rows, [axis],
+                                  anchor_key(parameter.uri, axis.name),
+                                  (parameter.uri, axis.name)))
+
+    def settle_parameter(self, rows: list) -> None:
+        """Which quantity each value is comes first, because it decides which
+        coordinates the row even has. One request, one quote, and a row it
+        cannot answer for gets no axes rather than the axes of a guess.
+
+        Asked only where the unit leaves it open. The spec says it itself,
+        "the unit separates the two parameters", and over the kwp spec the
+        nine energy units and the forty-two emission units share not one
+        spelling. Asking anyway cost 322 of 1,043 field windows on Kassel,
+        30.9 percent, for a coordinate not one of 559 accepted tuples
+        contradicted.
+        """
+        slot = self.parameter_slot
+        undecided = []
+        for row in rows:
+            parameter = fields.derive_parameter(self.doc_spec, row.claim)
+            if parameter is None:
+                if fields.parameter_undecidable(self.doc_spec, row.claim):
+                    # No parameter of the spec can hold this row, so the
+                    # sweep has no answer to find: whatever it returned,
+                    # `verify` refuses it on the same unit lookup. The row
+                    # still goes on to be refused with the unit as the
+                    # reason; it is just not asked about first.
+                    row.claim["parameter_state"] = fields.OUT_OF_SLICE
+                    continue
+                undecided.append(row)
+                continue
+            row.claim["parameter"] = parameter.label
+            row.claim["parameter_state"] = fields.DERIVED
+            wording = row.claim.get("unit_raw") or row.claim.get("unit")
+            if wording:
+                row.claim["parameter_raw"] = wording
+            # The passage the unit was read in: that is where the
+            # wording the parameter follows from stands.
+            quote = row.claim.get("unit_quote") or row.claim.get("quote")
+            if quote:
+                row.claim["parameter_quote"] = quote
+        held = set()
+        if undecided:
+            held = {row.label for row in self.ask(
+                undecided, slot, PARAMETER_ANCHOR, PARAMETER_KEY, True)}
+        self.enter([row for row in rows if row.label not in held])
+
+    def enter(self, rows: list) -> None:
+        """Rows whose parameter is settled: their axes, the gate first."""
+        slot = self.parameter_slot
+        uri_of = {opt.label: opt.uri for opt in slot.options}
+        grouped: dict = {}
+        for row in rows:
+            uri = uri_of.get(str(row.claim.get("parameter") or "").strip())
+            if uri is None:
+                self.slots_of[row.label] = [slot]
+                continue
+            row.claim["parameter"] = uri
+            grouped.setdefault(uri, []).append(row)
+        for uri, group in grouped.items():
+            axes = fields.axis_slots(self.doc_spec.by_uri[uri])
+            for row in group:
+                self.slots_of[row.label] = [slot] + axes
+            self.project(group, axes)
+            # What the spec decides is written before anything is asked,
+            # and before the gate: a row that leaves at the gate still
+            # carries the coordinates that never needed a request, so
+            # `out_of_slice` says "never asked" about the axes that
+            # really were not asked and about no others.
+            for axis in axes:
+                fields.apply_derived(group, axis)
+            axes = [axis for axis in axes if not axis.derive]
+            by_name = {axis.name: axis for axis in axes}
+            gate = [by_name[name] for name in (self.slice_gate or {})
+                    if name in by_name]
+            self.plan[uri] = (axes, gate, {axis.name for axis in gate})
+            self.walk(uri, group, 0)
+
+    def keep(self, rows: list, axis, axes: list) -> list:
+        """The rows this gate answer keeps; the others are closed. A closed
+        row is never asked, and said so: an empty cell here would be
+        indistinguishable from a coordinate the model dropped."""
+        allowed = (self.slice_gate or {}).get(axis.name)
+        kept = [row for row in rows
+                if keeps_row(axis, row.claim.get(axis.name), allowed)]
+        staying = {row.label for row in kept}
+        for row in rows:
+            if row.label in staying:
+                continue
+            for other in axes:
+                row.claim.setdefault(f"{other.name}_state",
+                                     fields.OUT_OF_SLICE)
+        return kept
+
+    def walk(self, uri: str, rows: list, position: int) -> None:
+        """The gate axes from *position* on, one after another and first.
+        Each of them can close a row, and a closed row must not pay for the
+        axes behind it: measured on 20 plans, 4,064 of 6,763 harvested tuples
+        were dropped by the serializer for exactly these two coordinates,
+        after the run had paid for all seven axes of every one of them. A row
+        whose gate coordinate is still open waits there; the others go on."""
+        axes, gate, gated = self.plan[uri]
+        inside = rows
+        while inside and position < len(gate):
+            axis = gate[position]
+            held = {row.label for row in self.ask(
+                inside, [axis], anchor_key(uri, axis.name),
+                (uri, axis.name), True)}
+            inside = self.keep([row for row in inside
+                                if row.label not in held], axis, axes)
+            position += 1
+        for axis in axes:
+            if inside and axis.name not in gated:
+                self.jobs.append((inside, [axis], anchor_key(uri, axis.name),
+                                  (uri, axis.name)))
+
+    def release(self, keys: list) -> None:
+        """The search of these coordinates is over: the rows that waited at
+        them go on, from the coordinate behind. What a search left open it
+        read to its end or ran out on, and either way it is settled."""
+        # All of them out of `open` first: a continuation that raises must
+        # not leave its coordinates behind for the document step to ask again.
+        freed = [(key, self.open.pop(key)) for key in keys
+                 if key in self.open]
+        for key, rows in freed:
+            waited = key in self.deciding
+            self.deciding.discard(key)
+            if key == UNIT_KEY:
+                self.normalise(rows)
+                if waited:
+                    self.settle_parameter(rows)
+            elif key == PARAMETER_KEY:
+                self.enter(rows)
+            elif waited:
+                uri, name = key
+                axes, gate, _gated = self.plan[uri]
+                position = [axis.name for axis in gate].index(name)
+                self.walk(uri, self.keep(rows, gate[position], axes),
+                          position + 1)
+        self.run_jobs(parallel=False)
+
+    # The end.
+
+    def tally(self) -> dict:
+        return {k: sum(c.get(k, 0) for c in self.counts.values())
+                for k in ("filled", "unstated", "unquoted", "unbacked",
+                          "asked", "retried")}
+
+    def finish(self) -> None:
+        """Every coordinate no field reply mentioned, named as such."""
+        in_unit = {row.label for row in self.with_unit}
+        for row in self.rows:
+            # In front of the parameter and the axes, in the order asked, so
+            # a row that never answered is marked on this coordinate too.
+            slots = list(self.slots_of.get(row.label, []))
+            if row.label in in_unit:
+                slots = [self.unit_slot] + slots
+            self.blank += mark_unanswered([row], slots)
+        tally = self.tally()
+        if tally["unquoted"] or tally["unbacked"] or self.blank:
+            if self.deferred:
+                # What the batch's own stages came to. The document's search
+                # of what they left open says its own numbers
+                # (`Sweeping.close`), and only the last count is the end's.
+                log.info("   own stages: %d coordinate(s) read, %d not "
+                         "stated, dropped %d (quote not in source) + %d "
+                         "(answer not in quote); %d coordinate(s) unanswered "
+                         "at the end",
+                         tally["filled"], tally["unstated"],
+                         tally["unquoted"], tally["unbacked"], self.blank)
+            else:
+                log.info("   fields: %d read, %d not stated, %d unanswered, "
+                         "dropped %d (quote not in source) + %d (answer not "
+                         "in quote)", tally["filled"], tally["unstated"],
+                         self.blank, tally["unquoted"], tally["unbacked"])
+
+    def reply(self, rows_reply: dict, orphans: list) -> dict:
+        """What goes back to the run. The label goes on so the fold routes
+        each claim to the source the value request already settled on, instead
+        of deciding a second time from the quote alone.
+
+        A deferred turn is not finished, and the document step needs its rows
+        and where each waits. They travel with the reply under a private key
+        because `harvest_batches` hands back (batch, reply) and nothing else;
+        `search_document` takes it out before the reply is folded or written.
+        """
+        for row in self.rows:
+            row.claim["source"] = self.batch.label(row.item_index)
+        out = {"tuples": [row.claim for row in self.rows] + orphans,
+               "status": rows_reply.get("status", "complete"),
+               "need_more": rows_reply.get("need_more") or [],
+               "_fieldwise": self.tally()}
+        if self.deferred:
+            out["_turn"] = self
+        return out
+
+
+def _attempt(label: str, task: Callable, waited_on: bool) -> None:
+    """Run one task of a document's search.
+
+    What it raises, a stop apart, is raised where rows wait on the task (the
+    unit, the parameter, a gate axis, a batch going on behind one of them):
+    in a batch's own sweep those raised into its turn and the batch counted
+    as not read, so here the document is not written. For an axis that
+    decides nothing it is a warning and the coordinates come out
+    `unanswered`, as when a field job of a batch's turn raises.
+    """
+    try:
+        task()
+    except SweepStopped:
+        raise
+    except Exception as exc:
+        if waited_on:
+            raise
+        log.warning("   %s raised: %s", label, exc)
+
+
+class DocumentSearch:
+    """What the batches of one document left open, searched once per
+    coordinate with the open rows of all of them together.
+
+    In the order the batches' own turns could not keep: the unit, then the
+    parameter, then each gate axis, then the other axes. After each search the
+    rows that waited on it go on, and a batch's own stage asks the coordinates
+    they reach only now. Rows that wait nowhere are not held up by it.
+
+    Every task here is a leaf: a search is one coordinate's windows in order, a
+    continuation is one batch's own stages in order, and the pool they run on
+    is the field pool the batches' turns use. Nothing here waits on the pool
+    from inside it.
+    """
+
+    def __init__(self, sweeper: Sweeper, pool, slice_gate: Optional[dict],
+                 stop=None):
+        self.sweeper = sweeper
+        self.pool = pool
+        self.order = list(slice_gate or {})
+        self.stop = stop
+
+    def phase(self, key: tuple) -> int:
+        """Where a coordinate stands in the order: the unit, the parameter,
+        the gate axes in the gate's order, and the rest."""
+        if key == UNIT_KEY:
+            return 0
+        if key == PARAMETER_KEY:
+            return 1
+        return 2 + (self.order.index(key[1]) if key[1] in self.order
+                    else len(self.order))
+
+    def fan_out(self, tasks: dict) -> None:
+        """These tasks, {label: (callable, whether rows wait on it)}, side by
+        side on the field pool. All of them are waited for before what one of
+        them raised is raised, a stop first: none is left writing into rows
+        the document step has given up."""
+        if self.pool is None:
+            for label, (task, waited_on) in tasks.items():
+                _attempt(label, task, waited_on)
+            return
+        futures = [self.pool.submit(_attempt, label, task, waited_on)
+                   for label, (task, waited_on) in tasks.items()]
+        raised = [error for error in (future.exception() for future in futures)
+                  if error is not None]
+        stops = [error for error in raised if isinstance(error, SweepStopped)]
+        if raised:
+            raise (stops or raised)[0]
+
+    def run(self, turns: list) -> None:
+        for turn in turns:
+            turn.stop = self.stop
+        while True:
+            keys = sorted({key for turn in turns for key in turn.open},
+                          key=lambda key: (self.phase(key), key))
+            if not keys:
                 break
-            # Still open, so look further out. The probes are the anchors
-            # written for THIS question: sentences as a plan would print the
-            # answer. The question itself was what this searched with before,
-            # and a question is the one sentence that never stands in a
-            # document.
-            probes = list(anchors.get(anchor_id) or ())
-            if not probes:
-                probes = [slot.question for slot in slots if slot.question]
-            probes += [q for q in (state["answer"] or {}).get("need_more") or []
-                       if isinstance(q, str) and len(q) > 20]
-            # As many passages as the windows left can show, and no more.
-            # The ranking covers the whole plan, and handed over whole it
-            # marked every passage as seen after one round: the rest stage
-            # then found nothing to read and a sweep the budget had cut off
-            # ended "unstated". No budget left is not a combed document.
-            left = budget["retrieval"] - spent["retrieval"]
-            if left <= 0:
-                combed = False
-                break
-            fresh = more_sources(batch.document_id, probes, set(seen),
-                                 FIELD_WINDOW * left) or []
-            if not fresh:
-                break
-            for source in fresh:
-                seen.add((source.owner_kind, source.owner_id))
-                held[(source.owner_kind, source.owner_id)] = source
-            # No overlap: the pool is ranked by relevance, so neighbours in
-            # it are not neighbours in the plan, and a passage shown twice
-            # was a request spent twice -- half of corpus_m5's 1,235,462
-            # search requests. The overlap is the rest stage's, whose pool
-            # is in document order and whose seam a caption sits on.
-            combed = run(window_sources(fresh, FIELD_WINDOW, 0))
+            now = [key for key in keys
+                   if self.phase(key) == self.phase(keys[0])]
+            self.search(turns, now)
+            self.cut()
+            # A coordinate is asked once, whatever its search came to: the
+            # search of an axis nothing waits on that raised leaves its rows
+            # open and unanswered (`Turn.release` takes them out of `open`).
+            self.carry_on(turns, now)
+            self.cut()
+        for turn in turns:
+            turn.finish()
 
-        open_now = still_open(rows)
-        if open_now and rest_of_document is not None:
-            # Retrieval has nothing left to offer and the coordinate is still
-            # open. Read the rest of the plan rather than call it unstated on
-            # the strength of what a ranking happened to surface.
-            #
-            # Not `combed and ...`: `run` returns False exactly when the
-            # budget ran out, and a sweep with budget left has no open rows.
-            # So the old condition was never both true at once -- 0 of the 70
-            # sweeps of the M3 run entered this stage, and 32 of the 33 that
-            # hit the cap had had exactly one retrieval round out of four.
-            # The stage that exists to keep "we stopped looking" apart from
-            # "the plan does not say it" was unreachable, and the harvest
-            # shows it: 789 exhausted and 0 unstated.
-            #
-            # Its own allowance, and now its own counter rather than a
-            # number written into the shared one. Bounded, because 33 sweeps of
-            # that run hit the cap and an unbounded second pass would put the
-            # requests per document over the 1161 the acceptance allows.
-            rest = rest_of_document(
-                batch.document_id, set(seen),
-                own_section_number([owner_of[row.label] for row in open_now
-                                    if row.label in owner_of])) or []
-            for source in rest:
-                held[(source.owner_kind, source.owner_id)] = source
-            state["stage"] = "rest"
-            # Nothing left means every passage of the plan was shown, and
-            # that is what "combed" says. An empty run said it too, once,
-            # about a plan the budget had cut off after two passages.
-            combed = (run(window_sources(rest, FIELD_WINDOW, FIELD_OVERLAP))
-                      if rest else True)
+    def cut(self) -> None:
+        """A stop is seen between two requests. One that came with the last
+        request of a search, or of the own stages after it, has none behind it
+        to be seen by, and that request may be the one the server did not
+        answer: the step is cut all the same."""
+        if self.stop is not None and self.stop.is_set():
+            raise SweepStopped()
 
-        stranded = 0
-        if not combed:
-            for slot in slots:
-                for row in open_rows(rows, slot):
-                    # Still open with the document unread to the end. Not the
-                    # same finding as a document that does not say it, and not
-                    # recorded as one.
-                    row.claim[f"{slot.name}_state"] = EXHAUSTED
-                    stranded += 1
-        totals["asked"] = sum(spent.values())
-        totals["exhausted"] = stranded
-        trace.event("sweep", batch.document_id, slot=name,
-                    anchor=anchor_id, windows=sum(spent.values()),
-                    rows=len(rows), combed=combed, **totals)
-        return totals
+    def search(self, turns: list, keys: list) -> None:
+        """One search per coordinate, over the rows of every batch that has
+        some open on it."""
+        tasks = {}
+        for key in keys:
+            members = [turn for turn in turns if key in turn.open]
+            slots, anchor = members[0].asked[key]
+            heard = []
+            for turn in members:
+                for question in turn.heard.get(anchor, ()):
+                    if question not in heard:
+                        heard.append(question)
+            entries = [(turn.batch, list(turn.open[key])) for turn in members]
+            tasks["search " + "/".join(key)] = (functools.partial(
+                self.sweeper.search, entries, slots, anchor, heard,
+                self.stop), any(key in turn.deciding for turn in members))
+        self.fan_out(tasks)
 
-    return sweep_field
+    def carry_on(self, turns: list, keys: list) -> None:
+        """The rows that waited on these coordinates go on, batch by batch.
+        What a batch asks here are the own stages of coordinates its rows
+        wait on, as in its turn."""
+        tasks = {f"batch {n}": (functools.partial(turn.release, keys), True)
+                 for n, turn in enumerate(turns)
+                 if any(key in turn.open for key in keys)}
+        self.fan_out(tasks)
 
 
 def make_fieldwise_harvester(image_root: Optional[Path] = None,
@@ -3580,9 +4377,16 @@ def make_fieldwise_harvester(image_root: Optional[Path] = None,
     coordinate of them, one field to a request.
 
     The batch is the unit in flight, and the sweep over the fields happens
-    inside one batch's turn.
+    inside one batch's turn. That is `harvest` itself, which a pass over a
+    stored harvest uses: every coordinate through all its stages, per batch.
+
+    The harvest of a document does it in two halves, both on the callable:
+    `harvest.turn(batch, prior)` is the turn with the passages of the batch's
+    own values only, and `harvest.search_document(answered)` is what is still
+    open after them, searched once per document and coordinate with the rows
+    of all the batches together.
     """
-    from concurrent.futures import ThreadPoolExecutor, as_completed
+    from concurrent.futures import ThreadPoolExecutor
 
     find_rows = make_harvester(image_root, spec=spec)
     # Only what was given: a stub asker without the streak still fits.
@@ -3598,56 +4402,11 @@ def make_fieldwise_harvester(image_root: Optional[Path] = None,
                                parents=parents, anchors=anchors,
                                search_share=search_share)
 
-    def harvest(batch, prior: Optional[list] = None) -> dict:
+    def turn_of(batch, prior: Optional[list], deferred: bool) -> dict:
         reply = find_rows(batch, prior)
         # This document's lists, on every slot built below.
         doc_spec = spec_of(batch, spec)
         rows, orphans = rows_from_reply(batch, reply, frame_axes, doc_spec)
-
-        def project(group: list, axes: list) -> None:
-            """The pair onto these rows, as far as their parameter has its axes.
-
-            Before anything is asked. The sweep only offers a coordinate that
-            is still open, so projecting here is what makes the year sweeper
-            fall away rather than run and find nothing: measured on M3, the
-            year axis produced 1,849 refusals against 0 readings, because
-            every later window excluded the row's own source and only that one
-            could carry the year.
-
-            Only the frame coordinates the row's parameter has. The pair spans
-            the document, but the planning organisation has no scenario and no
-            year, and 11 of its rows on corpus_m5 carried both, which the
-            schema refuses.
-            """
-            own = {axis.name: axis for axis in axes}
-            slots = [own[slot.name] for slot in frame_axes or ()
-                     if slot.name in own]
-            if not group or not slots:
-                return
-            # A row whose own quote named another pair of the document keeps
-            # that pair. It is written first and separately, so the request's
-            # own pair below never reaches it.
-            rerouted: dict = {}
-            for row in group:
-                if row.pair:
-                    rerouted.setdefault(row.pair_index, []).append(row)
-            for pair_index, rows_of in rerouted.items():
-                written = apply_frame(rows_of, rows_of[0].pair, pair_index,
-                                      slots, batch.sources)
-                if written:
-                    log.debug("   other pair %s: %d coordinate(s) on %d "
-                              "row(s)", batch.document_id, written,
-                              len(rows_of))
-            group = [row for row in group if not row.pair]
-            if not group:
-                return
-            if batch.frame:
-                written = apply_frame(group, batch.frame, batch.frame_index,
-                                      slots, batch.sources)
-                if written:
-                    log.debug("   frame %s: %d coordinate(s) on %d row(s)",
-                              batch.document_id, written, len(group))
-
         if not rows:
             # Nothing to sweep: no value in these passages, a value request
             # that died, or every claim refused above. What goes back is what
@@ -3657,183 +4416,59 @@ def make_fieldwise_harvester(image_root: Optional[Path] = None,
             # spec": 598 of Kassel's refusals.
             return {**(reply if isinstance(reply, dict) else {}),
                     "tuples": orphans}
-        counts: dict = {}
-        jobs: list = []          # (rows, slot, anchor id)
-        slots_of: dict = {}      # row label -> the slots that apply to it
+        walking = Turn(batch, rows, doc_spec=doc_spec, sweeper=sweep_field,
+                       frame_axes=frame_axes, slice_gate=slice_gate,
+                       pool=pool, deferred=deferred)
+        walking.begin()
+        if not deferred:
+            walking.finish()
+        return walking.reply(reply, orphans)
 
-        # The unit first, and as a coordinate: one entry of a closed list,
-        # read with its own passage, never looked up from a spelling. The
-        # value request writes the unit as the passage prints it, and which
-        # entry that means is a reading -- "450 kWh über das Jahr" is kWh/a,
-        # a storage capacity of 200 kWh is kWh, "kWh/m²a" and "kWp" are in
-        # no list. A spelling table made that reading until now, and on 641
-        # plans of corpus_m5 it let 3,324 tuples carry an entry their wording
-        # contradicts. Before the parameter, because the entry chosen is what
-        # settles the parameter below. The value request's own entry is
-        # dropped first: it was a choice made beside the number, not a
-        # reading of its own, and left in place it would stand where the
-        # question's answer belongs.
-        unit_slot = fields.unit_slot(doc_spec)
-        with_unit = ([row for row in rows if fields.has_number(row.claim)]
-                     if unit_slot is not None else [])
-        for row in with_unit:
-            row.claim.pop("unit", None)
-        if with_unit:
-            counts[unit_slot.name] = sweep_field(batch, with_unit, unit_slot,
-                                                 UNIT_ANCHOR)
-            for row in with_unit:
-                # As the list spells it. The answer names an option by any
-                # spelling the list folds alike, and the lookups below are
-                # exact.
-                option = option_named(unit_slot, row.claim.get("unit"))
-                if option is not None:
-                    row.claim["unit"] = option.label
+    def harvest(batch, prior: Optional[list] = None) -> dict:
+        return turn_of(batch, prior, False)
 
-        if batch.parameter is None:
-            # Which quantity each value is comes first, because it decides
-            # which coordinates the row even has. One request, one quote, and
-            # a row it cannot answer for gets no axes rather than the axes of
-            # a guess.
-            #
-            # Asked only where the unit leaves it open. The spec says it
-            # itself — "the unit separates the two parameters" — and over the
-            # kwp spec the nine energy units and the forty-two emission units
-            # share not one spelling. Asking anyway cost 322 of 1,043 field
-            # windows on Kassel, 30.9 percent, for a coordinate not one of
-            # 559 accepted tuples contradicted.
-            slot = fields.parameter_slot(doc_spec)
-            undecided = []
-            for row in rows:
-                parameter = fields.derive_parameter(doc_spec, row.claim)
-                if parameter is None:
-                    if fields.parameter_undecidable(doc_spec, row.claim):
-                        # No parameter of the spec can hold this row, so the
-                        # sweep has no answer to find: whatever it returned,
-                        # `verify` refuses it on the same unit lookup. The row
-                        # still goes on to be refused with the unit as the
-                        # reason -- it is just not asked about first.
-                        row.claim["parameter_state"] = fields.OUT_OF_SLICE
-                        continue
-                    undecided.append(row)
-                    continue
-                row.claim["parameter"] = parameter.label
-                row.claim["parameter_state"] = fields.DERIVED
-                wording = row.claim.get("unit_raw") or row.claim.get("unit")
-                if wording:
-                    row.claim["parameter_raw"] = wording
-                # The passage the unit was read in: that is where the
-                # wording the parameter follows from stands.
-                quote = row.claim.get("unit_quote") or row.claim.get("quote")
-                if quote:
-                    row.claim["parameter_quote"] = quote
-            if undecided:
-                counts[slot.name] = sweep_field(batch, undecided, slot,
-                                                PARAMETER_ANCHOR)
-            uri_of = {opt.label: opt.uri for opt in slot.options}
-            grouped: dict = {}
-            for row in rows:
-                uri = uri_of.get(str(row.claim.get("parameter") or "").strip())
-                if uri is None:
-                    slots_of[row.label] = [slot]
-                    continue
-                row.claim["parameter"] = uri
-                grouped.setdefault(uri, []).append(row)
-            for uri, group in grouped.items():
-                axes = fields.axis_slots(doc_spec.by_uri[uri])
-                for row in group:
-                    slots_of[row.label] = [slot] + axes
-                project(group, axes)
-                # What the spec decides is written before anything is asked,
-                # and before the gate: a row that leaves at the gate still
-                # carries the coordinates that never needed a request, so
-                # `out_of_slice` says "never asked" about the axes that
-                # really were not asked and about no others.
-                for axis in axes:
-                    fields.apply_derived(group, axis)
-                axes = [axis for axis in axes if not axis.derive]
-                by_name = {axis.name: axis for axis in axes}
-                gate = [by_name[name] for name in (slice_gate or {})
-                        if name in by_name]
-                gated = {axis.name for axis in gate}
-                # Sequential and first. Each of these can close a row, and a
-                # closed row must not pay for the axes behind it: measured on
-                # 20 plans, 4,064 of 6,763 harvested tuples were dropped by
-                # the serializer for exactly these two coordinates, after the
-                # run had paid for all seven axes of every one of them.
-                inside = group
-                for axis in gate:
-                    if not inside:
-                        break
-                    counts[axis.name] = sweep_field(
-                        batch, inside, [axis], anchor_key(uri, axis.name))
-                    allowed = (slice_gate or {}).get(axis.name)
-                    inside = [row for row in inside
-                              if keeps_row(axis, row.claim.get(axis.name),
-                                           allowed)]
-                staying = {row.label for row in inside}
-                for row in group:
-                    if row.label in staying:
-                        continue
-                    # Never asked, and said so. An empty cell here would be
-                    # indistinguishable from a coordinate the model dropped.
-                    for axis in axes:
-                        row.claim.setdefault(f"{axis.name}_state",
-                                             fields.OUT_OF_SLICE)
-                for axis in axes:
-                    if inside and axis.name not in gated:
-                        jobs.append((inside, [axis],
-                                     anchor_key(uri, axis.name)))
-        else:
-            axes = fields.axis_slots(batch.parameter)
-            for row in rows:
-                slots_of[row.label] = axes
-            project(rows, axes)
-            for axis in axes:
-                fields.apply_derived(rows, axis)
-            for axis in axes:
-                if not axis.derive:
-                    jobs.append((rows, [axis],
-                                 anchor_key(batch.parameter.uri, axis.name)))
-        for row in with_unit:
-            # In front of the parameter and the axes, in the order asked, so
-            # a row that never answered is marked on this coordinate too.
-            slots_of[row.label] = [unit_slot] + list(slots_of.get(row.label, []))
+    def harvest_turn(batch, prior: Optional[list] = None) -> dict:
+        return turn_of(batch, prior, True)
 
-        futures = {pool.submit(sweep_field, batch, group, group_slots, anchor):
-                   "+".join(a.name for a in group_slots)
-                   for group, group_slots, anchor in jobs}
-        for future in as_completed(futures):
-            label = futures[future]
-            try:
-                got = future.result()
-            except Exception as exc:            # pragma: no cover - defensive
-                log.warning("   field %s raised: %s", label, exc)
-                continue
-            into = counts.setdefault(label, dict(got))
-            if into is not got:
-                for key, value in got.items():
-                    into[key] = into.get(key, 0) + value
-        blank = 0
-        for row in rows:
-            blank += mark_unanswered([row], slots_of.get(row.label, []))
-        tally = {k: sum(c.get(k, 0) for c in counts.values())
-                 for k in ("filled", "unstated", "unquoted", "unbacked",
-                           "asked", "retried")}
-        if tally["unquoted"] or tally["unbacked"] or blank:
-            log.info("   fields: %d read, %d not stated, %d unanswered, "
-                     "dropped %d (quote not in source) + %d (answer not in quote)",
-                     tally["filled"], tally["unstated"], blank,
-                     tally["unquoted"], tally["unbacked"])
-        # The label goes back on so the fold routes each claim to the source
-        # the value request already settled on, instead of deciding a second
-        # time from the quote alone.
-        for row in rows:
-            row.claim["source"] = batch.label(row.item_index)
-        return {"tuples": [row.claim for row in rows] + orphans,
-                "status": reply.get("status", "complete"),
-                "need_more": reply.get("need_more") or [],
-                "_fieldwise": tally}
+    def search_document(answered: list, stop=None) -> bool:
+        """What the batches of one document left open, searched once per
+        coordinate over the rows of all of them, and every coordinate then
+        named. *answered* is what `harvest_batches` returned for `turn`.
 
+        False when *stop* (a signal, a dead server) ended it: the document is
+        then half read and must not be written, like a batch never harvested.
+        What a search that rows wait on raised is raised here, and the caller
+        counts the document as failed and does not write it either.
+        """
+        turns = [reply.pop("_turn") for _batch, reply in answered
+                 if isinstance(reply, dict) and "_turn" in reply]
+        # In the order of the plan and not of the replies, which come back as
+        # they finish: the labels of a search follow it.
+        turns.sort(key=lambda t: (
+            t.batch.frame_index,
+            [(item.source.owner_kind, item.source.owner_id)
+             for item in t.batch.items]))
+        # What the document says about itself is on every one of its batches,
+        # so there is one group in a run. Rows under another base year or
+        # another spec would be asked in requests of their own.
+        groups: list = []
+        for each in turns:
+            for bases, doc_spec, members in groups:
+                if each.batch.bases == bases and each.doc_spec is doc_spec:
+                    members.append(each)
+                    break
+            else:
+                groups.append((each.batch.bases, each.doc_spec, [each]))
+        searching = DocumentSearch(sweep_field, pool, slice_gate, stop)
+        try:
+            for _bases, _spec, members in groups:
+                searching.run(members)
+        except SweepStopped:
+            return False
+        return True
+
+    harvest.turn = harvest_turn
+    harvest.search_document = search_document
     return harvest
 
 
@@ -5573,7 +6208,9 @@ def main(argv: Optional[list] = None) -> int:
     log.info("extraction: one request per field, swept in windows of %d "
              "(overlap %d) until read; %d batch thread(s), %d field "
              "thread(s), at most %d own + %d retrieval + %d rest = %d "
-             "window(s) per coordinate",
+             "window(s) per coordinate (a document's search: retrieval "
+             "once, rest once for every batch that still has an open row "
+             "and never more requests than those batches' own windows)",
              FIELD_WINDOW, FIELD_OVERLAP, LLM_PARALLEL, FIELD_PARALLEL,
              budget["own"], budget["retrieval"], budget["rest"],
              sum(budget.values()))
@@ -5855,6 +6492,12 @@ def main(argv: Optional[list] = None) -> int:
                                        frame_axes=frame_axes,
                                        search_share=search_share,
                                        dead=dead, on_give_up=give_up)
+    # A document is harvested in two halves: each batch asks the passages its
+    # values came from (`turn`), and what is still open after them is searched
+    # once per coordinate for all the batches together (`search_document`). A
+    # harvester without the halves is its own whole turn.
+    own_turn = getattr(harvest, "turn", harvest)
+    search_document = getattr(harvest, "search_document", None)
 
     # The two halves of a document that the harvest and the pass over a stored
     # harvest have in common, each bound once: the plan with the run's frame,
@@ -5883,10 +6526,19 @@ def main(argv: Optional[list] = None) -> int:
             return False, failed
 
         unfinished: set = set()
-        answered = harvest_all(batches, unfinished=unfinished)
+        answered = harvest_all(batches, unfinished=unfinished,
+                               harvest=own_turn)
         if report.document_id in unfinished:
             log.error("extraction: %s left with batches never harvested — not "
                       "written, so a resume harvests it again", name)
+            return False, failed
+        # A stop or the dead-server cut during the search leaves the document
+        # half read, and unwritten like one with a batch never harvested.
+        if search_document is not None and not search_document(
+                answered, stop=Halted):
+            log.error("extraction: %s left with the search over its open "
+                      "coordinates unfinished, not written, so a resume "
+                      "harvests it again", name)
             return False, failed
         # Written and left for a resume is not a finished document: the
         # run says so in its exit code, as it does for a server that is gone.
