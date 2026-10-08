@@ -99,6 +99,20 @@ def needs_real(*names):
                     f"stand-in", allow_module_level=True)
 
 
+def pyproject_text(root=ROOT) -> str:
+    """The text of the tree's pyproject.toml, or the test is skipped.
+
+    A tree can be the code and its tests without the project file: the
+    container image holds exactly that. What a test says about the project
+    file has nothing to be held to there; everything else is held to as
+    before, which is why such a statement is a test of its own.
+    """
+    path = pathlib.Path(root) / "pyproject.toml"
+    if not path.is_file():
+        pytest.skip("this tree has no pyproject.toml")
+    return path.read_text(encoding="utf-8")
+
+
 def _ensure_stub(name, attrs=None, submodules=None):
     """Install a minimal stub module under *name* only if it cannot be imported."""
     try:
