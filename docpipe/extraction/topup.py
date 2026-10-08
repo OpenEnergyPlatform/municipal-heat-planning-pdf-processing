@@ -50,8 +50,8 @@ from typing import Callable, Optional
 
 from .. import jsonl
 from . import fields
-from .pipeline import (Row, WorkItem, base_years, group_items,
-                       mark_unanswered, row_label)
+from .pipeline import (Row, WorkItem, group_items, mark_unanswered,
+                       named_years, row_label)
 from .remap import (enter_producer, next_producer, stamp_forward,
                     stamp_path_of)
 from .spec import Spec
@@ -235,21 +235,22 @@ def pairs_of(tuples: list, frame_axes) -> dict:
     return pairs
 
 
-def base_years_of(tuples: list, frame_axes, base_state) -> tuple:
-    """The document's base years, rebuilt from the frame's own readings.
+def named_years_of(tuples: list, frame_axes, year_states) -> tuple:
+    """The document's base years and target years, rebuilt from the frame's
+    own readings.
 
-    Without them a re-swept year that says "Basisjahr" and prints no number
-    cannot be read (`pipeline.base_year_named`): the main harvest could and
-    this pass could not, which would cost the full run this pass exists to
-    spare.
+    Without them a re-swept year that says "Basisjahr" or "Zieljahr" and
+    prints no number cannot be read (`pipeline.named_year`): the main harvest
+    could and this pass could not, which would cost the full run this pass
+    exists to spare.
     """
-    if not frame_axes or not base_state:
+    if not frame_axes or not any((year_states or {}).values()):
         return ()
     pairs = pairs_of(tuples, frame_axes)
     if not pairs:
         return ()
     ordered = [pairs.get(i) for i in range(max(pairs) + 1)]
-    return tuple(base_years(ordered, frame_axes, base_state))
+    return tuple(named_years(ordered, frame_axes, year_states))
 
 
 def rebuild(rows: list, parameter, sources: dict, carry: list) -> tuple:
@@ -464,8 +465,8 @@ def top_up_file(path: Path, spec: Spec, current: dict, deps: dict, *,
 
     settled = set(keys)
     demoted: list = []
-    bases = base_years_of(tuples, deps.get("frame_axes"),
-                          deps.get("base_state"))
+    bases = named_years_of(tuples, deps.get("frame_axes"),
+                           deps.get("year_states"))
     # Where this pass will stand in the stamp's list. The coordinates it
     # re-reads point at that position, and the rows are written before the
     # list is, so it is asked for now.

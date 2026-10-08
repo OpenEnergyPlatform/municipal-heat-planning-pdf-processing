@@ -27,7 +27,7 @@ RAW = json.loads((PROFILES / "kwp" / "extraction_spec.json")
                  .read_text(encoding="utf-8"))
 SPEC = load_spec(RAW)
 FRAME = fields.frame_slots(SPEC, ("scenario", "year"))
-BASE = {"scenario": "status_quo"}
+BASE = {"base": {"scenario": "status_quo"}}
 
 
 def _source(owner, text):
@@ -82,7 +82,7 @@ def pool():
 
 
 def _plan(pool, planner, *, found=(), stored=None, only=(), ask=True,
-          anchor_texts=None, monkeypatch=None):
+          anchor_texts=None, monkeypatch=None, states=BASE):
     """`plan_batches` over the stub planner and a frame that finds `found`
     in addition to what it is seeded with."""
     seen = {}
@@ -97,7 +97,7 @@ def _plan(pool, planner, *, found=(), stored=None, only=(), ask=True,
     got = runner.plan_batches(
         7, "plan.pdf", plan=planner, plan_pool=pool,
         ask_frame=(lambda *a, **k: {}) if ask else None, frame_axes=FRAME,
-        more_sources=None, base_state=BASE,
+        more_sources=None, year_states=states,
         anchor_texts=anchor_texts if anchor_texts is not None else {},
         only=only, stored_pairs=stored)
     return got, seen
@@ -129,6 +129,25 @@ def test_the_harvests_call_plans_every_parameter_and_numbers_pairs_from_zero(
     assert got.failed == 0 and got.name == "plan"
 
 
+def test_every_batch_carries_the_years_of_the_states_the_profile_names(
+        pool, monkeypatch):
+    """The plan's own years and, where the profile names a target, the
+    target's: on every batch of the document, framed or not, each entry with
+    the state it dates."""
+    both = dict(BASE, target={"scenario": "target"})
+    got, _seen = _plan(pool, Planner(), found=[T2045, S2020],
+                       monkeypatch=monkeypatch, states=both)
+    assert got.batches
+    for batch in got.batches:
+        assert [(b["state"], b["year"], b["index"]) for b in batch.bases] == [
+            ("base", 2020, 1), ("target", 2045, 0)]
+    only_base, _seen = _plan(pool, Planner(), found=[T2045, S2020],
+                             monkeypatch=monkeypatch)
+    for batch in only_base.batches:
+        assert [(b["state"], b["year"]) for b in batch.bases] == [
+            ("base", 2020)], "a profile that names no target has none"
+
+
 def test_a_profile_without_a_frame_plans_once_and_has_no_pairs(pool,
                                                                 monkeypatch):
     planner = Planner()
@@ -148,7 +167,7 @@ def test_a_frame_that_raises_is_counted_and_leaves_no_pairs(pool,
     got = runner.plan_batches(
         7, "plan.pdf", plan=Planner(), plan_pool=pool,
         ask_frame=lambda *a, **k: {}, frame_axes=FRAME, more_sources=None,
-        base_state=BASE, anchor_texts={})
+        year_states=BASE, anchor_texts={})
     assert got.failed == 1 and got.pairs == []
 
 

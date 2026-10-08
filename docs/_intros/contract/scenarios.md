@@ -11,7 +11,7 @@ fills every key below as a publication is read.
 `parameter_state`, `refusal` and `summary` are the three record kinds
 every profile's contract shares. `parameter_state` closes one
 parameter with its state and tuple and refusal counts
-(`docpipe/extraction/schema.py:571` to `595`); `refusal` records a
+(`docpipe/extraction/schema.py:572` to `596`); `refusal` records a
 claim the run did not accept: why it failed, the claim as returned,
 and its source (`:492` to `523`); `summary`, the file's last line, counts a
 document's tuples and refusals by trust level and reason (`:524` to
@@ -25,7 +25,7 @@ ten keys that make it checkable without the run that produced it, one of
 them `_producer`, the position in the stamp's `producers` list of the pass
 that wrote the coordinate after the harvest, a top-up that read it again or
 the pass that appended its row (`--top-up-parameters`); a missing key means
-the harvest read it (`docpipe/extraction/schema.py:212` to `292`). Four parameters carry
+the harvest read it (`docpipe/extraction/schema.py:212` to `293`). Four parameters carry
 the same `scenario` axis, `scenario_type`, `scenario_abstract`,
 `scenario_region` and `scenario_year`, each stating which of the
 publication's AR6 scenarios the row belongs to
@@ -35,7 +35,7 @@ test_a_document_field_carries_no_axes_and_a_scenario_field_carries_one`).
 A tuple's `provenance` names where its `quote` sits: `document_id`,
 `owner_kind` and `owner_id` always present, the rest, page and
 section location among them, filled in as the source allows
-(`docpipe/extraction/schema.py:443` to `491`); a coordinate's
+(`docpipe/extraction/schema.py:444` to `492`); a coordinate's
 `<name>_source` and a refusal's `owner` use the shorter
 `[owner_kind, owner_id]` pair instead (`:147` to `151`).
 
@@ -46,7 +46,7 @@ coordinate answers from a closed list, `x-options` names every entry
 with its ontology uri and definition, and its corpus spellings where
 any are recorded. A tuple section closes with the `allOf` rule: a
 coordinate is `null` unless its own `<name>_state` says `read` or
-`derived` (`docpipe/extraction/schema.py:295` to `309`).
+`derived` (`docpipe/extraction/schema.py:296` to `310`).
 
 ## The lists this page cannot publish
 
@@ -74,7 +74,7 @@ the same four parameters takes a different path: the spec marks it
 plain text through a path that never calls `_value_uri` at all; that
 call runs earlier in the same function, for the parameter's own
 `value` key (`docpipe/extraction/fields.py:433` to `458`;
-`docpipe/extraction/schema.py:382`, `:401` to `412`).
+`docpipe/extraction/schema.py:383`, `:402` to `413`).
 
 What the list holds is decided once, before harvest starts, by
 `document_axes` in `profiles/scenarios/extraction.py:172`. It reads
@@ -100,10 +100,10 @@ Two sections close the page: `## The stamp`, the schema of
 `anchors`, `page_text_transcribed` and the three that place the harvest,
 `docpipe`, `document` (the sha256 and size of the PDF) and `producers`,
 plus per-question patterns,
-`docpipe/extraction/schema.py:602` to `764`), and `## The trace`, the
+`docpipe/extraction/schema.py:603` to `765`), and `## The trace`, the
 schema of `<publication>.trace.jsonl`, one `oneOf` branch per event
 kind: eleven, fixed by the schema for every profile rather than drawn
-from this one's spec (`docpipe/extraction/schema.py:767` to `899`). A
+from this one's spec (`docpipe/extraction/schema.py:768` to `902`). A
 `parameter/`, `value/`, `axis/` or `slot/` key differing from today's
 run, or another sha256 of the PDF in `document` than the database now
 names, makes the document eligible for a full re-harvest under
@@ -121,7 +121,7 @@ and is what `--force-stale` is left for (`stale`,
 `docpipe/extraction/runner.py:4404` to `4449`; `already_done`, `:4494`
 to `4533`). `top_up_file` redoes
 only the changed question
-(`docpipe/extraction/topup.py:419` to `537`), and `append_document` reads a
+(`docpipe/extraction/topup.py:420` to `538`), and `append_document` reads a
 parameter the spec has gained without reading the document again
 (`docpipe/extraction/topup_parameter.py:336` to `462`); `already_done` names
 it in a second warning for such a document. The trace is read by

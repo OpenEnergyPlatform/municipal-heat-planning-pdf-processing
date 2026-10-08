@@ -256,6 +256,7 @@ shipped profile provides.
 | Reading the values out | `extraction.SPEC_PATH` | required in practice; refused with `SystemExit` otherwise (`component`, `docpipe/extraction/runner.py:5433-5436`) | `extraction_spec.json` | `extraction_spec.json` |
 | Reading the values out | `extraction.SLICE` | optional (`component`, `docpipe/extraction/runner.py:5494`) | `{"quantity": None}`, gates a row on its quantity class alone | not provided; no gate |
 | Reading the values out | `extraction.FRAME` | optional (`component`, `docpipe/extraction/runner.py:5517-5518`) | `("scenario", "year")`, found once per document | not provided; nothing repeats that way |
+| Reading the values out | `extraction.BASE_YEAR`, `extraction.TARGET_YEAR` | optional (`component`, `docpipe/extraction/runner.py:5643-5649`): which frame pairs are the plan's own state and its target, so that a year answer naming only the plan's word for one of them ("Basisjahr", "Zieljahr") is read when its number is a year the frame found for those pairs | `{"scenario": "status_quo"}` and `{"scenario": "target"}` | not provided; no state has years |
 | Reading the values out | `extraction.document_axes` | optional (`component`, `docpipe/extraction/runner.py:5505`) | not provided | this publication's AR6 scenarios and the study regions it names, out of 249 (`profiles/scenarios/regions.json`) |
 | Reading the values out | `extraction.document_context` | optional (`component`, `docpipe/extraction/runner.py:5510`) | the plan's own municipality name | not provided |
 | The knowledge graph | `kg.make_serializer` | optional for `--serialize` (`component`, `docpipe/extraction/runner.py:5371`); without one the generic writer built from the spec's `graph` block is used, and a profile with neither is refused with `SystemExit` (`docpipe/extraction/runner.py:5379-5383`) | tuples to MHPKG Turtle | tuples to OEKG Turtle |
@@ -407,6 +408,7 @@ word" (see [Running the pipeline](running.md)).
 | `catalog.CATALOG` | `KwpCatalog` | `Ar6Catalog` |
 | `--backfill-meta` | provided, refreshes `MunicipalityMeta` from a re-read KWW sheet | not provided |
 | `SLICE` / `FRAME` | gates on quantity; frames on scenario and year | neither set |
+| `BASE_YEAR` / `TARGET_YEAR` | the frame pairs `{"scenario": "status_quo"}` and `{"scenario": "target"}` | neither set |
 | Per-document choice lists (`document_axes`) | not used | the AR6 scenarios and study regions a publication names, out of 1389 scenarios and 249 regions in `regions.json` (`profiles/scenarios/extraction.py:7-12`) |
 | Answer app's graph route (`kg_route`) | wired; a coordinate question can be answered straight from MHPKG | not wired; every answer comes from retrieval |
 

@@ -1463,11 +1463,13 @@ def test_the_field_prompt_states_the_two_checks_and_no_other(profile):
                  '"holds"', '"section"'):
         assert gone not in text, gone
     if name == "kwp":
-        # The row still says which source is its own, and the two captions
-        # the column rule turns on stay, verbatim from Kassel 349525/349566.
+        # The row still says which source is its own, and the rule about
+        # the title of the own table and the title of another one stays. Its
+        # two captions were verbatim from one plan and are descriptions now
+        # (owner, 2026-10-06): the model cited them for other plans.
         assert '"source"' in text and "EIGENEN Tabelle" in text
-        assert "Tabelle 17: Endenergieverbrauch der Gesamtstadt" in text
-        assert "Tabelle 28: Endenergieverbrauch der Gesamtstadt" in text
+        assert "[p85_tbl0:" in text and "[p91_tbl0:" in text
+        assert "Echter Satz, echtes Jahr, andere Tabelle." in text
         rules = text.split("4. Tabellen mit mehreren")[1]
         column = rules.split(chr(10) + chr(10))[0]
         assert "SEKTOR" in column and "JAHR" in column

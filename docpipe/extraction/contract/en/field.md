@@ -3,9 +3,9 @@
 # by_similarity and in found_next: a profile keeps the place where it
 # said it and leaves the other out.
 required: [subject, groups_note, value_raw_is, example_reply]
-optional: [rows_more, value_raw_more, quote_more, domain_rule_1, domain_rule_2, need_more_example, base_years_rule]
-blocks: [rows_carry, unstated_when, base_years, rows_source, options_explained, same_forms, year_value, domain_slot_1, domain_slot_2, no_guessing, closed_out, closed_out_text, by_meaning, by_similarity, found_next]
-omittable: [base_years, rows_source, options_explained, same_forms, year_value, domain_slot_1, domain_slot_2, no_guessing, closed_out, by_meaning, by_similarity, found_next]
+optional: [rows_more, value_raw_more, quote_more, domain_rule_1, domain_rule_2, need_more_example, base_years_rule, target_years_rule]
+blocks: [rows_carry, unstated_when, base_years, target_years, rows_source, options_explained, same_forms, year_value, domain_slot_1, domain_slot_2, no_guessing, closed_out, closed_out_text, by_meaning, by_similarity, found_next]
+omittable: [base_years, target_years, rows_source, options_explained, same_forms, year_value, domain_slot_1, domain_slot_2, no_guessing, closed_out, by_meaning, by_similarity, found_next]
 ---
 You determine ONE piece of information about {{subject}}.
 
@@ -22,6 +22,9 @@ If the row's own source is among those shown, "source" names its identifier.
 - "fields": the field asked for, as a list with exactly one entry: "name", the question ("question") and, if there is a closed list, the permitted entries ("options").<!-- block: options_explained --> Each entry is named by its key and carries "{{option_spellings}}", the other ways it is written, and, where the ontology defines it, "{{option_means}}", its definition; if no entry has a definition, an entry is just the list of its spellings. The entry "{{unstated}}" is always among them: it means that {{unstated_means}}.<!-- /block -->
 <!-- block: base_years -->
 - "base_years" (only when the question asks for the year, and only if the document names them): the years for which the document recorded or reported its own state, each with the quote that prints the year. Rule {{rule:need_more}} says how you use them.
+<!-- /block -->
+<!-- block: target_years -->
+- "target_years" (only when the question asks for the year, and only if the document names them): the years the document names for its target, each with the quote that prints the year. Rule {{rule:need_more}} says how you use them.
 <!-- /block -->
 
 Return only a JSON object in this form, on ONE line, without indentation:
@@ -72,6 +75,9 @@ What is found comes as the next request with the same rows.
 <!-- /block -->
 <!-- block: base_years -->
 {{base_years_rule}}
+<!-- /block -->
+<!-- block: target_years -->
+{{target_years_rule}}
 <!-- /block -->
 
 <!-- rule: corrections --> "corrections" (only on a retry): if this is in the input object, your previous answer could not be backed for the rows named there, and the reason is given with it. Read it and answer anew for EXACTLY those rows. Quote a different passage, or answer with "{{unstated}}" if the information really is not in the shown passages. Sending the same answer again does not help, it fails the same way.

@@ -3,9 +3,9 @@
 # by_similarity and in found_next: a profile keeps the place where it
 # said it and leaves the other out.
 required: [subject, groups_note, value_raw_is, example_reply]
-optional: [rows_more, value_raw_more, quote_more, domain_rule_1, domain_rule_2, need_more_example, base_years_rule]
-blocks: [rows_carry, unstated_when, base_years, rows_source, same_forms, year_value, domain_slot_1, domain_slot_2, no_guessing, closed_out, closed_out_text, by_meaning, by_similarity, found_next]
-omittable: [base_years, rows_source, same_forms, year_value, domain_slot_1, domain_slot_2, no_guessing, closed_out, by_meaning, by_similarity, found_next]
+optional: [rows_more, value_raw_more, quote_more, domain_rule_1, domain_rule_2, need_more_example, base_years_rule, target_years_rule]
+blocks: [rows_carry, unstated_when, base_years, target_years, rows_source, same_forms, year_value, domain_slot_1, domain_slot_2, no_guessing, closed_out, closed_out_text, by_meaning, by_similarity, found_next]
+omittable: [base_years, target_years, rows_source, same_forms, year_value, domain_slot_1, domain_slot_2, no_guessing, closed_out, by_meaning, by_similarity, found_next]
 ---
 Du bestimmst EINE Angabe zu {{subject}}. Die Werte stehen fest: du fügst keine hinzu und lässt keine weg. Gefragt ist GENAU EIN Feld, und du beantwortest und belegst es für jeden Wert.
 
@@ -20,6 +20,9 @@ Steht die eigene Quelle der Zeile unter den gezeigten, nennt "source" ihre Kennu
 - "fields": das gesuchte Feld, eine Liste mit genau einem Eintrag: "name", "question" und, bei einer geschlossenen Liste, "options" (je Eintrag ein Name und die Schreibweisen, unter denen er im Korpus schon vorkam).
 <!-- block: base_years -->
 - "base_years" (nur bei der Frage nach dem Jahr, und nur wenn das Dokument sie nennt): die Jahre, für die das Dokument seinen eigenen Stand erhoben oder bilanziert hat, je mit dem Zitat, das die Jahreszahl druckt. Regel {{rule:need_more}} sagt, wie du sie benutzt.
+<!-- /block -->
+<!-- block: target_years -->
+- "target_years" (nur bei der Frage nach dem Jahr, und nur wenn das Dokument sie nennt): die Jahre, die das Dokument für sein Ziel nennt, je mit dem Zitat, das die Jahreszahl druckt. Regel {{rule:need_more}} sagt, wie du sie benutzt.
 <!-- /block -->
 
 Gib ausschließlich ein JSON-Objekt in dieser Form zurück, in EINER Zeile, OHNE Einrückung:
@@ -63,6 +66,9 @@ Was gefunden wird, kommt als nächste Anfrage mit denselben Zeilen.
 <!-- /block -->
 <!-- block: base_years -->
 {{base_years_rule}}
+<!-- /block -->
+<!-- block: target_years -->
+{{target_years_rule}}
 <!-- /block -->
 
 <!-- rule: corrections --> "corrections" (nur bei einer Wiederholung): deine vorige Antwort für die genannten Zeilen war nicht belegbar, und der Grund steht dabei. Antworte für GENAU diese Zeilen neu: zitier eine andere Stelle, oder antworte "{{unstated}}", wenn die Angabe in den gezeigten Passagen wirklich nicht steht. Dieselbe Antwort noch einmal fällt genauso durch.

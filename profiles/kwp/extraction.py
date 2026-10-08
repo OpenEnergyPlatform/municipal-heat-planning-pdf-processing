@@ -82,6 +82,14 @@ FRAME = ("scenario", "year")
 # number did not, "Basisjahr" among the most common.
 BASE_YEAR = {"scenario": "status_quo"}
 
+# Which frame pairs are the plan's target. Their years are the plan's target
+# years, each with the frame's quote that prints it. A row whose table says
+# only "Zieljahr" answers one of them the same way (owner decision
+# 2026-10-06, the model chooses among them): the current harvest dropped
+# about 14,500 year answers whose quote carried the plan's word for its
+# target and not the number, "Zieljahr" 12,369 of them.
+TARGET_YEAR = {"scenario": "target"}
+
 
 # How far past its own passage a coordinate is looked for, as a share of the
 # search budget (FIELD_MAX_WINDOWS, REST_MAX_WINDOWS). Under one budget on

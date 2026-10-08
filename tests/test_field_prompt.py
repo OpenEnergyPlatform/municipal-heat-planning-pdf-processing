@@ -55,7 +55,7 @@ SETTINGS = {"kwp": {"temperature": 0, "max_tokens": 6144},
 OMITTED = {
     "kwp": ["by_similarity", "domain_slot_2", "rows_source", "same_forms"],
     "scenarios": ["base_years", "by_meaning", "closed_out", "found_next",
-                  "no_guessing", "year_value"],
+                  "no_guessing", "target_years", "year_value"],
     "default": ["closed_out", "found_next", "no_guessing"],
 }
 OVERRIDES = {"kwp": ["closed_out_text"],
@@ -78,6 +78,7 @@ WITNESS = {
         "by_meaning": "Entscheide nach der Bedeutung",
         "closed_out": "das Gegenteil einer Klasse",
         "base_years": '"base_years" (nur bei der Frage nach dem Jahr',
+        "target_years": '"target_years" (nur bei der Frage nach dem Jahr',
         "year_value": 'Ist "field.name" gleich "year"',
         "literal_copy": "dieselbe Beugung, dieselbe Reihenfolge",
         "no_guessing": "Rate nicht und ergänze nichts aus Weltwissen",
@@ -89,6 +90,7 @@ WITNESS = {
         "by_meaning": "Decide by meaning",
         "closed_out": "the opposite of a class",
         "base_years": '"base_years" (only when the question asks',
+        "target_years": '"target_years" (only when the question asks',
         "year_value": "If the question asks for a year",
         "no_guessing": "Do not guess and do not add anything from world",
         "rows_source": "If the row's own source",
@@ -98,21 +100,25 @@ WITNESS = {
     },
 }
 SAYS = {
-    "kwp": {"by_meaning", "closed_out", "base_years", "year_value",
-            "literal_copy", "no_guessing"},
+    "kwp": {"by_meaning", "closed_out", "base_years", "target_years",
+            "year_value", "literal_copy", "no_guessing"},
     "scenarios": {"rows_source", "same_forms", "by_similarity"},
-    "default": {"by_meaning", "base_years", "year_value", "rows_source",
-                "same_forms", "by_similarity", "options_explained"},
+    "default": {"by_meaning", "base_years", "target_years", "year_value",
+                "rows_source", "same_forms", "by_similarity",
+                "options_explained"},
 }
 # Sentences of each profile's own about its corpus, as they stood in its
-# prompt before it was cut into parts.
+# prompt before it was cut into parts. Two of kwp's are as the owner had them
+# rewritten on 2026-10-06: the passages inside its examples are descriptions
+# in << >> that no plan prints, because the model cited the example passages
+# as its quote (48,737 dropped answers of one harvest).
 DOMAIN = {
     "kwp": [
-        'Tabelle 17: Endenergieverbrauch der Gesamtstadt nach Sektor und '
-        'Energieträger im Zielszenario 2040',
-        '"| Energieträger | Industrie Endenergie in kWh/a | GHD/Kommune '
-        'Endenergie in kWh/a | Private Haushalte Endenergie in kWh/a |" '
-        'bestimmt den SEKTOR, und die zweite Zahl ist Industrie.',
+        'RICHTIG für das Jahr einer Zahl aus p85_tbl0: "<<Titel hinter '
+        '„[p85_tbl0:“, wörtlich, mit der Jahreszahl darin>>"',
+        '"| Energieträger | <<Sektor 1>> Endenergie in kWh/a | <<Sektor 2>> '
+        'Endenergie in kWh/a | <<Sektor 3>> Endenergie in kWh/a |" bestimmt '
+        'den SEKTOR, und die Zahl mit "column": 2 gehört zu <<Sektor 1>>.',
         'Enthält "options" Einträge, die ausdrücklich das Gegenteil einer '
         'Klasse sind (Summenzeile, Restposition, ausdrücklich unbekannter '
         'Wert, Prozentanteil, Potenzial), sind das richtige Antworten und '
@@ -262,7 +268,10 @@ SOURCE = Source("table", 1, "| Erdgas | 241 |",
 ROW = Row(label="R1", item_index=0,
           claim={"value": 241, "quote": "| Erdgas | 241 |", "unit": "MWh/a"})
 YEAR = fields.Slot(name="year", kind=fields.NUMBER, question="Welches Jahr?")
-BASES = [{"axis": "year", "year": 2020, "quote": "Das Basisjahr ist 2020."}]
+BASES = [{"state": "base", "axis": "year", "year": 2020,
+          "quote": "Das Basisjahr ist 2020."}]
+TARGETS = [{"state": "target", "axis": "year", "year": 2045,
+            "quote": "Das Zieljahr ist 2045."}]
 CORRECTIONS = [{"row": "R1", "reason": "x"}]
 
 
@@ -284,27 +293,38 @@ def test_the_payload_has_the_keys_the_prompt_names():
     read from it)."""
     assert payload_keys(BASES) == ["sources", "rows", "base_years", "fields",
                                    "corrections"]
+    assert payload_keys(BASES + TARGETS) == [
+        "sources", "rows", "base_years", "target_years", "fields",
+        "corrections"]
     assert payload_keys(None) == ["sources", "rows", "fields", "corrections"]
 
 
-def expected_keys(has_base_years: bool) -> list:
+def year_keys(name: str) -> list:
+    """The keys of the plan's named years that this profile's prompt says."""
+    said = says(name, text_of(name))
+    return [key for key in ("base_years", "target_years") if key in said]
+
+
+def expected_keys(years: list) -> list:
     """The order the prompts of kwp, scenarios and the built-in profile have
     their keys in once the rows and the fields stand as the request has them
-    (plan 2.5, item 2): the base years, where a profile has them, come last."""
-    return ["sources", "rows", "fields"] + (["base_years"] if has_base_years
-                                            else [])
+    (plan 2.5, item 2): the named years, where a profile has them, come
+    last."""
+    return ["sources", "rows", "fields"] + list(years)
 
 
 @pytest.mark.parametrize("name", sorted(LANGUAGE))
 def test_the_keys_are_named_as_the_request_has_them_in_kwps_order(name):
     named = bullet_keys(text_of(name))
-    has_base_years = "base_years" in says(name, text_of(name))
-    sent = [key for key in payload_keys(BASES if has_base_years else None)
+    years = year_keys(name)
+    offered = (BASES if "base_years" in years else []) + (
+        TARGETS if "target_years" in years else [])
+    sent = [key for key in payload_keys(offered or None)
             if key != "corrections"]
     # AND the same keys the request sends, none more and none fewer
     assert sorted(named) == sorted(sent)
-    # AND in the order kwp had: the base years do not move above the field
-    assert named == expected_keys(has_base_years)
+    # AND in the order kwp had: the named years do not move above the field
+    assert named == expected_keys(years)
     # the retry's key is the last thing the prompt describes
     last = numbered(text_of(name))[max(numbered(text_of(name)))]
     assert last.startswith('"corrections"')
@@ -330,8 +350,8 @@ def test_that_kwps_keys_are_not_moved_to_the_order_of_the_request(
     write(path, moved)
     monkeypatch.setattr(contract, "TEMPLATE_ROOT", folder)
     named = bullet_keys(text_of("kwp"))
-    assert named == ["sources", "rows", "base_years", "fields"]
-    assert named != expected_keys(True)
+    assert named == ["sources", "rows", "base_years", "fields", "target_years"]
+    assert named != expected_keys(year_keys("kwp"))
 
 
 # ---------------------------------------------------------------------------
@@ -364,8 +384,8 @@ def test_a_profile_that_does_not_leave_out_what_it_lacked_is_found(make):
     """Built to fail: scenarios without the line that leaves out its missing
     rule says the by-meaning rule, which it never had, and has a rule more."""
     own = file_of("scenarios")
-    assert "without: [base_years, year_value, no_guessing, closed_out, " \
-           "by_meaning, found_next]" in own
+    assert "without: [base_years, target_years, year_value, no_guessing, " \
+           "closed_out, by_meaning, found_next]" in own
     greedy = make(extends="scenarios", language="de", field=own.replace(
         "closed_out, by_meaning, found_next]", "closed_out, found_next]"))
     prompt = prompts.load(FIELD, greedy)
@@ -406,8 +426,8 @@ def pointers_wrong(text: str) -> list:
     return wrong
 
 
-@pytest.mark.parametrize("name, pointed", [("kwp", 2), ("scenarios", 0),
-                                           ("default", 2)])
+@pytest.mark.parametrize("name, pointed", [("kwp", 3), ("scenarios", 0),
+                                           ("default", 3)])
 def test_every_pointer_at_a_rule_points_at_the_rule_it_names(name, pointed):
     text = text_of(name)
     found = sum(len(re.findall(pattern, text)) for pattern, _ in POINTERS)
@@ -417,8 +437,9 @@ def test_every_pointer_at_a_rule_points_at_the_rule_it_names(name, pointed):
 
 def test_the_pointers_follow_when_a_rule_is_left_out(make):
     """Built to fail: the built-in prompt with the three rules it can lose
-    left out has its need_more rule as the seventh, and the two pointers at it
-    say seven. A text with the old number in it is found by the same check."""
+    left out has its need_more rule as the seventh, and the pointers at it
+    say seven. A text with the old number in one of them is found by the same
+    check."""
     own = file_of("default")
     thin = make(extends="default", language="en", field=own.replace(
         "without: [no_guessing, closed_out, found_next]",
@@ -428,7 +449,9 @@ def test_the_pointers_follow_when_a_rule_is_left_out(make):
     assert "Rule 7 says how you use them" in text
     assert "(except under rule 7)" in text
     assert pointers_wrong(text) == []
-    stale = text.replace("Rule 7 says", "Rule 8 says")
+    assert text.count("Rule 7 says how you use them") == 2, (
+        "the base years and the target years each point at it")
+    stale = text.replace("Rule 7 says", "Rule 8 says", 1)
     assert pointers_wrong(stale) == [(r"Rule (\d+) says how you use them", "8")]
 
 
@@ -459,7 +482,7 @@ def test_a_rule_number_with_no_text_behind_it_is_found(make):
 FOUND = {"de": "Was gefunden wird, kommt als nächste Anfrage mit denselben Zeilen.",
          "en": "What is found comes as the next request with the same rows."}
 # The first line of each profile's own example for the need_more rule.
-EXAMPLE_OF_NEED_MORE = {"kwp": 'RICHTIG: "Die Energiebilanz bezieht sich',
+EXAMPLE_OF_NEED_MORE = {"kwp": 'RICHTIG: ein ganzer Satz mit dem Wort',
                         "scenarios": 'RICHTIG: "The NDC scenario assumes',
                         "default": 'RIGHT: "The Forecast scenario assumes'}
 # Whether the sentence stands before the example lines, as the prompts were.
@@ -526,10 +549,9 @@ def test_a_sentence_of_the_profile_that_is_not_there_word_for_word_is_found(
     """Built to fail: kwp with one word of its rule about the columns written
     otherwise has that sentence no more."""
     own = file_of("kwp")
-    assert own.count("und die zweite Zahl ist Industrie.") == 1
+    assert own.count("gehört zu <<Sektor 1>>.") == 1
     changed = make(extends="kwp", language="de", field=own.replace(
-        "und die zweite Zahl ist Industrie.", "und die zweite Zahl ist Gewerbe.",
-        1))
+        "gehört zu <<Sektor 1>>.", "gehört zu <<Sektor 2>>.", 1))
     text = prompts.load(FIELD, changed).text
     assert domain_missing("kwp", text) == [DOMAIN["kwp"][1]]
     assert domain_missing("kwp", text_of("kwp")) == []

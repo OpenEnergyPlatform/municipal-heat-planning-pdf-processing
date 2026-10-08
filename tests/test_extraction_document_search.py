@@ -428,8 +428,9 @@ def test_batches_that_read_the_document_differently_are_asked_apart(
     in a run. Rows under other base years would be asked in requests of their
     own, because a request carries one list of them."""
     world = World(monkeypatch, batches=3, unstated=True)
-    base = {"axis": "year", "year": 2020, "quote": "Basisjahr 2020 im Plan",
-            "source": ["table", 0], "index": 0}
+    base = {"state": "base", "axis": "year", "year": 2020,
+            "quote": "Basisjahr 2020 im Plan", "source": ["table", 0],
+            "index": 0}
     planned = world.planned()
     planned[0].bases = (base,)
     harvest = world.harvester()

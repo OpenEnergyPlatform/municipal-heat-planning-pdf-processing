@@ -216,7 +216,7 @@ def _slot_properties(name: str, slot, doc: str) -> dict:
     value re-checkable without the run that produced it: which state it ended
     in, the document's own wording, the passage, the source that passage came
     from and the window it was found in, and for a year read as a base year
-    the row's own passage that names the state.
+    or a target year the row's own passage that names the state.
     """
     return {
         name: _slot_value(slot, doc),
@@ -249,7 +249,7 @@ def _slot_properties(name: str, slot, doc: str) -> dict:
         f"{name}_window": {
             "type": "array",
             "prefixItems": [{"enum": ["own", "retrieval", "rest", "frame",
-                                      "base_year"]},
+                                      "base_year", "target_year"]},
                             {"type": "integer"}],
             "minItems": 2, "maxItems": 2,
             "description": f"[stage, index] of the window '{name}' was read "
@@ -261,13 +261,14 @@ def _slot_properties(name: str, slot, doc: str) -> dict:
                            f"pairs it came from. `base_year`: the row's "
                            f"passage names the document's base state by "
                            f"word, and the index is the pair whose quote "
-                           f"prints the number."},
+                           f"prints the number. `target_year`: the same for "
+                           f"the document's target."},
         f"{name}_link_quote": {
             "type": "string", "minLength": MIN_QUOTE_CHARS,
-            "description": f"Only with window `base_year`: the passage where "
-                           f"the row names the base state ('{name}_raw'). "
-                           f"'{name}_quote' is then the frame's passage that "
-                           f"prints the number."},
+            "description": f"Only with window `base_year` or `target_year`: "
+                           f"the passage where the row names that state "
+                           f"('{name}_raw'). '{name}_quote' is then the "
+                           f"frame's passage that prints the number."},
         f"{name}_link_source": {
             **_owner(),
             "description": f"Which source '{name}_link_quote' was found in."},
@@ -768,10 +769,11 @@ def trace_schema() -> dict:
     """One line of <name>.trace.jsonl: one event, never an aggregate."""
     owner = _owner()
     # `via_base`: of `filled`, the years read as one of the plan's base years
-    # by the word the row's passage uses for its state.
+    # by the word the row's passage uses for its state. `via_target`: the
+    # same for the plan's target years.
     counts = {k: {"type": "integer"} for k in
               ("filled", "unquoted", "unbacked", "unstated", "raw_missing",
-               "raw_foreign", "via_base")}
+               "raw_foreign", "via_base", "via_target")}
     by_field = {"type": "object", "additionalProperties": {"type": "integer"}}
     kinds = {
         "plan": {"rank": {"type": ["integer", "null"]},
@@ -894,7 +896,8 @@ def trace_schema() -> dict:
     loose = {"detail", "status", "finish", "why", "sources", "ms", "slot",
              "prompt_tokens", "completion_tokens", "filled_by", "unbacked_by",
              "field", "raw_missing", "raw_foreign", "cause", "owner",
-             "rejected", "given", "raw", "quote", "via_base", "scope",
+             "rejected", "given", "raw", "quote", "via_base", "via_target",
+             "scope",
              "batches"}
     return {
         "$schema": "https://json-schema.org/draft/2020-12/schema",

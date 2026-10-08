@@ -53,7 +53,7 @@ def request_bodies(profile: str) -> dict:
                        "year_quote": "2045", "year_source": ["table", 5]}
         batch.frame_index = 1
         batch.pairs = (batch.frame,)
-        batch.bases = ({"axis": "year", "year": 2020,
+        batch.bases = ({"state": "base", "axis": "year", "year": 2020,
                         "quote": "Das Basisjahr ist 2020.",
                         "source": ["section", 9], "index": 0},)
     batch.anchors = ("Der Endenergiebedarf 2045 im Zielszenario.",)

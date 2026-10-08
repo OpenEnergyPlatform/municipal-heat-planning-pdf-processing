@@ -15,12 +15,12 @@ a document is read.
 `parameter_state`, `refusal` and `summary` are the three record kinds
 every profile's contract shares. `parameter_state` closes one parameter
 for one document: its `state` and how many `tuple` and `refusal` lines
-it produced (`docpipe/extraction/schema.py:571` to `595`). `refusal`
+it produced (`docpipe/extraction/schema.py:572` to `596`). `refusal`
 records a claim the run did not accept: why it failed, the claim as
-returned, and its source (`docpipe/extraction/schema.py:492` to `523`).
+returned, and its source (`docpipe/extraction/schema.py:493` to `524`).
 `summary`, the file's last line, counts a document's tuples and
 refusals by trust level and by reason
-(`docpipe/extraction/schema.py:524` to `570`). The remaining `##`
+(`docpipe/extraction/schema.py:525` to `571`). The remaining `##`
 sections, one per parameter, are the shapes a `tuple` line can take,
 named `tuple_<uri>` and shown here after the uri.
 
@@ -31,17 +31,17 @@ sorted alphabetically rather than grouped by coordinate
 coordinate and to every axis: the value, plus ten keys that make it
 checkable without the run that produced it: state, raw wording, a flag
 for a wording naming no class, a wording merely noticed and never
-chosen, quote, source and window, for a year read as a base year the
-row's own passage (`_link_quote`, `_link_source`), and `_producer`, the
+chosen, quote, source and window, for a year read as a base year or a target year
+the row's own passage (`_link_quote`, `_link_source`), and `_producer`, the
 position in the stamp's `producers` list of the pass that wrote the
 coordinate after the harvest: a top-up that read it again, or the pass that
 appended its row (`--top-up-parameters`); the harvest writes none, so a
 missing key means the harvest read it (`docpipe/extraction/schema.py:212` to
-`292`). The rest belong to the row itself: `kind`, `quote`,
+`293`). The rest belong to the row itself: `kind`, `quote`,
 `tier`, `flags`, `provenance`, `computed`, `compute`, `unit` and
 `unit_raw` (empty for a wording); only the value additionally carries
 `value_target` for a numeric parameter, or `value_raw` and `value_uri`
-for a wording (`docpipe/extraction/schema.py:312` to `383`).
+for a wording (`docpipe/extraction/schema.py:313` to `384`).
 
 Two keys on a coordinate say more than its plain description does.
 `x-question` is the sentence, in German, the model was actually asked
@@ -49,22 +49,22 @@ for that coordinate, so a reader can check the wording without opening
 the profile's prompt; it sits on every axis and on the `parameter`
 coordinate, never on the numeric `value` itself, since which number to
 read is settled by the row request, not a question of its own
-(`docpipe/extraction/schema.py:170`, `:400`). `x-options` appears only
+(`docpipe/extraction/schema.py:170`, `:401`). `x-options` appears only
 where a coordinate answers from a closed list: every class it may
 resolve to, with its ontology uri, its definition and the corpus
 spellings recorded for it, collapsed so a long list does not crowd the
 page, matching the spec both were built from
 (`tests/test_extraction_schema.py::test_every_coordinate_a_row_carries_is_described`).
 `x-kg` is the same spec `kg` block on two different objects: an axis
-that mints its own edge (`docpipe/extraction/schema.py:411`), or the
+that mints its own edge (`docpipe/extraction/schema.py:412`), or the
 row itself rather than the `parameter` coordinate
-(`docpipe/extraction/schema.py:24` to `27`, `:418`).
+(`docpipe/extraction/schema.py:24` to `27`, `:419`).
 
 A tuple's `provenance` names where its `quote` sits: `document_id`,
 `owner_kind` and `owner_id` are always present; `page`,
 `section_number`, `section_title`, `title`, `parent_section`,
 `block_id`, `image`, `rects` and `via` are filled in as the
-source allows (`docpipe/extraction/schema.py:443` to `491`). A
+source allows (`docpipe/extraction/schema.py:444` to `492`). A
 coordinate's `<name>_source` and a refusal's `owner` are the shorter
 `[owner_kind, owner_id]` pair instead
 (`docpipe/extraction/schema.py:147` to `151`).
@@ -72,7 +72,7 @@ coordinate's `<name>_source` and a refusal's `owner` are the shorter
 A tuple section closes with the `allOf` rule: a coordinate is `null`
 unless its own `<name>_state` says `read` or `derived`, one branch of
 the schema's `allOf` array per coordinate (`docpipe/extraction/
-schema.py:295` to `309`, `:419` to `420`). A coordinate never asked and one asked and
+schema.py:296` to `310`, `:420` to `421`). A coordinate never asked and one asked and
 answered `null` differ by type, not merely by convention.
 
 The stamp and the trace close the page, describing the run rather than
@@ -82,7 +82,7 @@ one row. The stamp is `<document>.stamp.json`: whole-run keys (`spec`,
 version), `document` (the sha256 and size of the PDF it was read from)
 and `producers` (who wrote into it)) beside the `parameter/`, `value/`,
 `axis/*/*`, `slot/parameter` and `question_text/` families, written one
-per question instead (`docpipe/extraction/schema.py:602` to `764`).
+per question instead (`docpipe/extraction/schema.py:603` to `765`).
 The owner decided on 2026-09-10 that a stamp rests on the KG/ontology
 parameters alone: `stale` compares the `parameter/`, `value/`,
 `axis/` and `slot/` families (`QUESTION_KEYS`,
@@ -107,12 +107,12 @@ makes a
 document eligible for `--force-stale`'s full re-harvest (`stale`,
 `docpipe/extraction/runner.py:4404` to `4449`, `already_done`, `:4494`
 to `4533`); redoing only the changed question is
-`top_up_file`'s job (`docpipe/extraction/topup.py:419` to `537`), and
+`top_up_file`'s job (`docpipe/extraction/topup.py:420` to `538`), and
 reading a parameter the spec has gained, without reading the document again,
 `append_document`'s (`docpipe/extraction/topup_parameter.py:336` to `462`),
 which `already_done` names in a second warning for such a document. The
 trace is `<document>.trace.jsonl`: eleven event kinds told apart by
 `t`, `plan` through `invalid` in source order
-(`docpipe/extraction/schema.py:776` to `878`), read by
+(`docpipe/extraction/schema.py:778` to `880`), read by
 `scripts/trace_report.py` and, for a cost report, by `trace_costs` in
 `scripts/harvest_compare.py:135` to `155`, never by a resume.

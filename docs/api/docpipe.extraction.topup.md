@@ -165,18 +165,19 @@ row that carries it, with the wording, quote and source the pair was read
 by. The indices have gaps where a pair no row carries, and the pairs come
 back under the index they were stored with, never renumbered.
 
-### base_years_of
+### named_years_of
 
 ```python
-def base_years_of(tuples: list, frame_axes, base_state) -> tuple
+def named_years_of(tuples: list, frame_axes, year_states) -> tuple
 ```
 
-The document's base years, rebuilt from the frame's own readings.
+The document's base years and target years, rebuilt from the frame's
+own readings.
 
-Without them a re-swept year that says "Basisjahr" and prints no number
-cannot be read (`pipeline.base_year_named`): the main harvest could and
-this pass could not, which would cost the full run this pass exists to
-spare.
+Without them a re-swept year that says "Basisjahr" or "Zieljahr" and
+prints no number cannot be read (`pipeline.named_year`): the main harvest
+could and this pass could not, which would cost the full run this pass
+exists to spare.
 
 ### rebuild
 

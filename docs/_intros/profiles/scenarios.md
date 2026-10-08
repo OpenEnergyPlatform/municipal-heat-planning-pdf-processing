@@ -75,8 +75,8 @@ and its passage and no unit, and `unstated_when` says when the answer is "not
 stated": when the passages name no scenario at all. In the review prompt
 `row_note` and `field_unit` are its own note on the first reading and its unit
 bullet. It leaves out the blocks of the templates it never had a sentence for:
-13 blocks of the rows prompt, 6 of the field prompt (`base_years`,
-`year_value`, `no_guessing`, `closed_out`, `by_meaning` and `found_next`) and
+13 blocks of the rows prompt, 7 of the field prompt (`base_years`,
+`target_years`, `year_value`, `no_guessing`, `closed_out`, `by_meaning` and `found_next`) and
 `field_raw` of the review prompt. The frame and the example prompt leave out and
 word nothing. `python scripts/render_prompts.py --what-if` shows each block it
 leaves out put back (see [Running the pipeline](../running.md)).

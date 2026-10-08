@@ -72,7 +72,7 @@ table gives kwp's own answer.
 | Visuals | `prompts/visuals/*.md` | six prompt ids of its own | table transcription, figure description and captions, in German; `visuals/caption_keep` is the built-in profile's, inherited byte for byte |
 | Refinement, visuals, page transcription, the answer app | `reading.py` | `PHRASES` | the ten sentences these stages and the chat say to the model when its reply was not the one JSON object, in English like the prompts of the first three (`reading.REQUIRED`), laid over the built-in profile's |
 | The picker (app) | `catalog.py`, `profile.py` | `CATALOG`, `facets` | plan-centric labels, convoy membership, three filters |
-| Extraction | `extraction.py` | `SPEC_PATH`, `SLICE`, `FRAME`, `document_context`, `PHRASES`, `PROMPT_CHECKS`, `ALT_LABEL_LANGUAGE`, `CONTRACT_LANGUAGE` | the spec, the slice gate, the frame axes, the German sentences the stage writes to the model (the frame request's list of a closed coordinate stands under `"scenarios"`), the passages the preflight holds its prompts to, and the language (`"de"`) of the core's templates its parts files are put together with |
+| Extraction | `extraction.py` | `SPEC_PATH`, `SLICE`, `FRAME`, `BASE_YEAR`, `TARGET_YEAR`, `document_context`, `PHRASES`, `PROMPT_CHECKS`, `ALT_LABEL_LANGUAGE`, `CONTRACT_LANGUAGE` | the spec, the slice gate, the frame axes, the frame pairs that are the plan's own state and its target, the German sentences the stage writes to the model (the frame request's list of a closed coordinate stands under `"scenarios"`), the passages the preflight holds its prompts to, and the language (`"de"`) of the core's templates its parts files are put together with |
 | Extraction | `prompts/extraction/*.md` | eight prompt ids | phrase, anchors and queries as plain files; frame, rows, field, review and example as parts files that name a template of the core (see The prompts) |
 | The graph | `kg.py` | `make_serializer` and seven more names | MHPKG Turtle, the coordinate query, the trust wording |
 | The answer app | `inference.py` | `PHRASES`, `READOFF_MARKER`, `READOFF_NOTE`, `ROUTE_NOTES` | the German chat wording and the graph route's refusal sentences |
@@ -243,6 +243,14 @@ never had a sentence for: 14 blocks of the rows prompt, `rows_source`,
 `corpus_language` of the review prompt. The frame and the example prompt leave
 out and word nothing. `python scripts/render_prompts.py --what-if` shows each
 block it leaves out put back (see [Running the pipeline](../running.md)).
+
+The passages inside the examples of the field prompt are not sentences a plan
+could print. Each is a description between `<<` and `>>`, for example
+`"quote": "<<Titel der eigenen Tabelle, wörtlich, mit „Ist-Zustand 2022“
+darin>>"`, and the prompt says once that such a string describes a place and
+is never copied (owner decision 2026-10-06). Measured on the current kwp
+harvest, 48,737 dropped answers cited an example sentence of the prompt word
+for word as their quote.
 
 `extraction/rows` and `extraction/field` are the pair every value is
 read with: one call finds which values a passage states, a second asks

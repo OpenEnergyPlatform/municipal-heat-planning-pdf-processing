@@ -2008,12 +2008,23 @@ chosen for it from outside would be a coordinate with a quote from
 somewhere else, and the owner's rule is that every value says in the plan
 what it refers to.
 
+### year_states_of
+
+```python
+def year_states_of(profile) -> dict
+```
+
+{state: which frame pairs are that state of the plan}, as the profile
+says it: their years date a row that names the state by word
+("Basisjahr", "Zieljahr") and prints no year. None for a state the
+profile does not name, which then has no years.
+
 ### plan_batches
 
 ```python
 def plan_batches(document_id: int, filename: str, *, plan: Callable,
                  plan_pool, ask_frame: Optional[Callable], frame_axes: list,
-                 more_sources: Optional[Callable], base_state,
+                 more_sources: Optional[Callable], year_states,
                  anchor_texts: dict, only=(),
                  stored_pairs: Optional[dict] = None) -> PlannedDocument
 ```

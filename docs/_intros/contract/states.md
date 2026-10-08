@@ -5,12 +5,12 @@ term, carries a `<name>_state` key beside its value, its raw wording, its
 quote, its source, the window it was read in, and, when `unstated` or a
 closed-list answer names none of its entries, a
 `<name>_seen` key for a wording the model noticed
-(`docpipe/extraction/schema.py:212-292`). The state is one of seven fixed
+(`docpipe/extraction/schema.py:212-293`). The state is one of seven fixed
 strings, defined in `docpipe/extraction/fields.py`. A coordinate with no
 value, and one never asked for, read the same on the row. The state
 distinguishes a coordinate the document never mentions from one a run
 ended before asking about. A coordinate's own value is `null` unless its
-state is `read` or `derived` (`schema.py:295-309`). It is a finding about
+state is `read` or `derived` (`schema.py:296-310`). It is a finding about
 the model, the document, the run, or the run's scope, never about more
 than one of those at once.
 
@@ -87,7 +87,7 @@ the run depends on. `unanswered` and `unstated` were the same empty cell
 before the state existed: on the 1079-document run they made up 16 to 34
 percent of every axis, one half a finding about the model and the other
 about the document, with no way after the fact to tell which was which
-(`docpipe/extraction/pipeline.py:1271`). `exhausted` and `unstated` are the
+(`docpipe/extraction/pipeline.py:1306`). `exhausted` and `unstated` are the
 same conflation about a whole run, and the reason the sweep reads past
 retrieval first: before that stage existed, a harvest meant to mark plans
 read to the end wrote 789 `exhausted` against 0 `unstated` on the M3 run,

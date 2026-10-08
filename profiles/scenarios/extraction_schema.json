@@ -369,7 +369,7 @@
       "x-question": "Um WELCHES Feld handelt es sich bei diesem Wert? Entscheide danach, was die Quelle über ihn sagt: die Beschriftung, die Einheit und die Überschrift des Abschnitts. Zitiere die Stelle, aus der das hervorgeht."
      },
      "parameter_link_quote": {
-      "description": "Only with window `base_year`: the passage where the row names the base state ('parameter_raw'). 'parameter_quote' is then the frame's passage that prints the number.",
+      "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('parameter_raw'). 'parameter_quote' is then the frame's passage that prints the number.",
       "minLength": 8,
       "type": "string"
      },
@@ -436,7 +436,7 @@
       "description": "How the coordinate 'parameter' ended. Always present: a missing key and a refused reading must not look alike."
      },
      "parameter_window": {
-      "description": "[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number.",
+      "description": "[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.",
       "maxItems": 2,
       "minItems": 2,
       "prefixItems": [
@@ -446,7 +446,8 @@
          "retrieval",
          "rest",
          "frame",
-         "base_year"
+         "base_year",
+         "target_year"
         ]
        },
        {
@@ -548,7 +549,7 @@
       "x-question": "Um WELCHES Feld handelt es sich bei diesem Wert? Entscheide danach, was die Quelle über ihn sagt: die Beschriftung, die Einheit und die Überschrift des Abschnitts. Zitiere die Stelle, aus der das hervorgeht."
      },
      "parameter_link_quote": {
-      "description": "Only with window `base_year`: the passage where the row names the base state ('parameter_raw'). 'parameter_quote' is then the frame's passage that prints the number.",
+      "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('parameter_raw'). 'parameter_quote' is then the frame's passage that prints the number.",
       "minLength": 8,
       "type": "string"
      },
@@ -615,7 +616,7 @@
       "description": "How the coordinate 'parameter' ended. Always present: a missing key and a refused reading must not look alike."
      },
      "parameter_window": {
-      "description": "[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number.",
+      "description": "[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.",
       "maxItems": 2,
       "minItems": 2,
       "prefixItems": [
@@ -625,7 +626,8 @@
          "retrieval",
          "rest",
          "frame",
-         "base_year"
+         "base_year",
+         "target_year"
         ]
        },
        {
@@ -735,7 +737,7 @@
       "x-question": "Um WELCHES Feld handelt es sich bei diesem Wert? Entscheide danach, was die Quelle über ihn sagt: die Beschriftung, die Einheit und die Überschrift des Abschnitts. Zitiere die Stelle, aus der das hervorgeht."
      },
      "parameter_link_quote": {
-      "description": "Only with window `base_year`: the passage where the row names the base state ('parameter_raw'). 'parameter_quote' is then the frame's passage that prints the number.",
+      "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('parameter_raw'). 'parameter_quote' is then the frame's passage that prints the number.",
       "minLength": 8,
       "type": "string"
      },
@@ -802,7 +804,7 @@
       "description": "How the coordinate 'parameter' ended. Always present: a missing key and a refused reading must not look alike."
      },
      "parameter_window": {
-      "description": "[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number.",
+      "description": "[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.",
       "maxItems": 2,
       "minItems": 2,
       "prefixItems": [
@@ -812,7 +814,8 @@
          "retrieval",
          "rest",
          "frame",
-         "base_year"
+         "base_year",
+         "target_year"
         ]
        },
        {
@@ -916,7 +919,7 @@
       "x-question": "Um WELCHES Feld handelt es sich bei diesem Wert? Entscheide danach, was die Quelle über ihn sagt: die Beschriftung, die Einheit und die Überschrift des Abschnitts. Zitiere die Stelle, aus der das hervorgeht."
      },
      "parameter_link_quote": {
-      "description": "Only with window `base_year`: the passage where the row names the base state ('parameter_raw'). 'parameter_quote' is then the frame's passage that prints the number.",
+      "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('parameter_raw'). 'parameter_quote' is then the frame's passage that prints the number.",
       "minLength": 8,
       "type": "string"
      },
@@ -983,7 +986,7 @@
       "description": "How the coordinate 'parameter' ended. Always present: a missing key and a refused reading must not look alike."
      },
      "parameter_window": {
-      "description": "[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number.",
+      "description": "[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.",
       "maxItems": 2,
       "minItems": 2,
       "prefixItems": [
@@ -993,7 +996,8 @@
          "retrieval",
          "rest",
          "frame",
-         "base_year"
+         "base_year",
+         "target_year"
         ]
        },
        {
@@ -1095,7 +1099,7 @@
       "x-question": "Um WELCHES Feld handelt es sich bei diesem Wert? Entscheide danach, was die Quelle über ihn sagt: die Beschriftung, die Einheit und die Überschrift des Abschnitts. Zitiere die Stelle, aus der das hervorgeht."
      },
      "parameter_link_quote": {
-      "description": "Only with window `base_year`: the passage where the row names the base state ('parameter_raw'). 'parameter_quote' is then the frame's passage that prints the number.",
+      "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('parameter_raw'). 'parameter_quote' is then the frame's passage that prints the number.",
       "minLength": 8,
       "type": "string"
      },
@@ -1162,7 +1166,7 @@
       "description": "How the coordinate 'parameter' ended. Always present: a missing key and a refused reading must not look alike."
      },
      "parameter_window": {
-      "description": "[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number.",
+      "description": "[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.",
       "maxItems": 2,
       "minItems": 2,
       "prefixItems": [
@@ -1172,7 +1176,8 @@
          "retrieval",
          "rest",
          "frame",
-         "base_year"
+         "base_year",
+         "target_year"
         ]
        },
        {
@@ -1310,7 +1315,7 @@
       "x-question": "Um WELCHES Feld handelt es sich bei diesem Wert? Entscheide danach, was die Quelle über ihn sagt: die Beschriftung, die Einheit und die Überschrift des Abschnitts. Zitiere die Stelle, aus der das hervorgeht."
      },
      "parameter_link_quote": {
-      "description": "Only with window `base_year`: the passage where the row names the base state ('parameter_raw'). 'parameter_quote' is then the frame's passage that prints the number.",
+      "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('parameter_raw'). 'parameter_quote' is then the frame's passage that prints the number.",
       "minLength": 8,
       "type": "string"
      },
@@ -1377,7 +1382,7 @@
       "description": "How the coordinate 'parameter' ended. Always present: a missing key and a refused reading must not look alike."
      },
      "parameter_window": {
-      "description": "[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number.",
+      "description": "[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.",
       "maxItems": 2,
       "minItems": 2,
       "prefixItems": [
@@ -1387,7 +1392,8 @@
          "retrieval",
          "rest",
          "frame",
-         "base_year"
+         "base_year",
+         "target_year"
         ]
        },
        {
@@ -1425,7 +1431,7 @@
       "x-question": "Auf welches Szenario dieser Publikation bezieht sich der Wert? Die Liste führt die Laufkennungen, die genau diese Publikation in der AR6-Datenbank dokumentiert. Im Text stehen sie fast nie, dort heißt dasselbe Szenario \"Current Policies\" oder \"the NDC scenario\". Nennt das Dokument nur die Familie, ist \"Szenario-Familie\" die richtige Antwort und keine Kennung."
      },
      "scenario_link_quote": {
-      "description": "Only with window `base_year`: the passage where the row names the base state ('scenario_raw'). 'scenario_quote' is then the frame's passage that prints the number.",
+      "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('scenario_raw'). 'scenario_quote' is then the frame's passage that prints the number.",
       "minLength": 8,
       "type": "string"
      },
@@ -1492,7 +1498,7 @@
       "description": "How the coordinate 'scenario' ended. Always present: a missing key and a refused reading must not look alike."
      },
      "scenario_window": {
-      "description": "[stage, index] of the window 'scenario' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number.",
+      "description": "[stage, index] of the window 'scenario' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.",
       "maxItems": 2,
       "minItems": 2,
       "prefixItems": [
@@ -1502,7 +1508,8 @@
          "retrieval",
          "rest",
          "frame",
-         "base_year"
+         "base_year",
+         "target_year"
         ]
        },
        {
@@ -1597,7 +1604,7 @@
       "x-question": "Um WELCHES Feld handelt es sich bei diesem Wert? Entscheide danach, was die Quelle über ihn sagt: die Beschriftung, die Einheit und die Überschrift des Abschnitts. Zitiere die Stelle, aus der das hervorgeht."
      },
      "parameter_link_quote": {
-      "description": "Only with window `base_year`: the passage where the row names the base state ('parameter_raw'). 'parameter_quote' is then the frame's passage that prints the number.",
+      "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('parameter_raw'). 'parameter_quote' is then the frame's passage that prints the number.",
       "minLength": 8,
       "type": "string"
      },
@@ -1664,7 +1671,7 @@
       "description": "How the coordinate 'parameter' ended. Always present: a missing key and a refused reading must not look alike."
      },
      "parameter_window": {
-      "description": "[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number.",
+      "description": "[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.",
       "maxItems": 2,
       "minItems": 2,
       "prefixItems": [
@@ -1674,7 +1681,8 @@
          "retrieval",
          "rest",
          "frame",
-         "base_year"
+         "base_year",
+         "target_year"
         ]
        },
        {
@@ -1816,7 +1824,7 @@
       "x-question": "Um WELCHES Feld handelt es sich bei diesem Wert? Entscheide danach, was die Quelle über ihn sagt: die Beschriftung, die Einheit und die Überschrift des Abschnitts. Zitiere die Stelle, aus der das hervorgeht."
      },
      "parameter_link_quote": {
-      "description": "Only with window `base_year`: the passage where the row names the base state ('parameter_raw'). 'parameter_quote' is then the frame's passage that prints the number.",
+      "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('parameter_raw'). 'parameter_quote' is then the frame's passage that prints the number.",
       "minLength": 8,
       "type": "string"
      },
@@ -1883,7 +1891,7 @@
       "description": "How the coordinate 'parameter' ended. Always present: a missing key and a refused reading must not look alike."
      },
      "parameter_window": {
-      "description": "[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number.",
+      "description": "[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.",
       "maxItems": 2,
       "minItems": 2,
       "prefixItems": [
@@ -1893,7 +1901,8 @@
          "retrieval",
          "rest",
          "frame",
-         "base_year"
+         "base_year",
+         "target_year"
         ]
        },
        {
@@ -1931,7 +1940,7 @@
       "x-question": "Auf welches Szenario dieser Publikation bezieht sich der Wert? Die Liste führt die Laufkennungen, die genau diese Publikation in der AR6-Datenbank dokumentiert. Im Text stehen sie fast nie, dort heißt dasselbe Szenario \"Current Policies\" oder \"the NDC scenario\". Nennt das Dokument nur die Familie, ist \"Szenario-Familie\" die richtige Antwort und keine Kennung."
      },
      "scenario_link_quote": {
-      "description": "Only with window `base_year`: the passage where the row names the base state ('scenario_raw'). 'scenario_quote' is then the frame's passage that prints the number.",
+      "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('scenario_raw'). 'scenario_quote' is then the frame's passage that prints the number.",
       "minLength": 8,
       "type": "string"
      },
@@ -1998,7 +2007,7 @@
       "description": "How the coordinate 'scenario' ended. Always present: a missing key and a refused reading must not look alike."
      },
      "scenario_window": {
-      "description": "[stage, index] of the window 'scenario' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number.",
+      "description": "[stage, index] of the window 'scenario' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.",
       "maxItems": 2,
       "minItems": 2,
       "prefixItems": [
@@ -2008,7 +2017,8 @@
          "retrieval",
          "rest",
          "frame",
-         "base_year"
+         "base_year",
+         "target_year"
         ]
        },
        {
@@ -2139,7 +2149,7 @@
       "x-question": "Um WELCHES Feld handelt es sich bei diesem Wert? Entscheide danach, was die Quelle über ihn sagt: die Beschriftung, die Einheit und die Überschrift des Abschnitts. Zitiere die Stelle, aus der das hervorgeht."
      },
      "parameter_link_quote": {
-      "description": "Only with window `base_year`: the passage where the row names the base state ('parameter_raw'). 'parameter_quote' is then the frame's passage that prints the number.",
+      "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('parameter_raw'). 'parameter_quote' is then the frame's passage that prints the number.",
       "minLength": 8,
       "type": "string"
      },
@@ -2206,7 +2216,7 @@
       "description": "How the coordinate 'parameter' ended. Always present: a missing key and a refused reading must not look alike."
      },
      "parameter_window": {
-      "description": "[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number.",
+      "description": "[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.",
       "maxItems": 2,
       "minItems": 2,
       "prefixItems": [
@@ -2216,7 +2226,8 @@
          "retrieval",
          "rest",
          "frame",
-         "base_year"
+         "base_year",
+         "target_year"
         ]
        },
        {
@@ -2254,7 +2265,7 @@
       "x-question": "Auf welches Szenario dieser Publikation bezieht sich der Wert? Die Liste führt die Laufkennungen, die genau diese Publikation in der AR6-Datenbank dokumentiert. Im Text stehen sie fast nie, dort heißt dasselbe Szenario \"Current Policies\" oder \"the NDC scenario\". Nennt das Dokument nur die Familie, ist \"Szenario-Familie\" die richtige Antwort und keine Kennung."
      },
      "scenario_link_quote": {
-      "description": "Only with window `base_year`: the passage where the row names the base state ('scenario_raw'). 'scenario_quote' is then the frame's passage that prints the number.",
+      "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('scenario_raw'). 'scenario_quote' is then the frame's passage that prints the number.",
       "minLength": 8,
       "type": "string"
      },
@@ -2321,7 +2332,7 @@
       "description": "How the coordinate 'scenario' ended. Always present: a missing key and a refused reading must not look alike."
      },
      "scenario_window": {
-      "description": "[stage, index] of the window 'scenario' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number.",
+      "description": "[stage, index] of the window 'scenario' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.",
       "maxItems": 2,
       "minItems": 2,
       "prefixItems": [
@@ -2331,7 +2342,8 @@
          "retrieval",
          "rest",
          "frame",
-         "base_year"
+         "base_year",
+         "target_year"
         ]
        },
        {
@@ -2612,7 +2624,7 @@
       "x-question": "Um WELCHES Feld handelt es sich bei diesem Wert? Entscheide danach, was die Quelle über ihn sagt: die Beschriftung, die Einheit und die Überschrift des Abschnitts. Zitiere die Stelle, aus der das hervorgeht."
      },
      "parameter_link_quote": {
-      "description": "Only with window `base_year`: the passage where the row names the base state ('parameter_raw'). 'parameter_quote' is then the frame's passage that prints the number.",
+      "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('parameter_raw'). 'parameter_quote' is then the frame's passage that prints the number.",
       "minLength": 8,
       "type": "string"
      },
@@ -2679,7 +2691,7 @@
       "description": "How the coordinate 'parameter' ended. Always present: a missing key and a refused reading must not look alike."
      },
      "parameter_window": {
-      "description": "[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number.",
+      "description": "[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.",
       "maxItems": 2,
       "minItems": 2,
       "prefixItems": [
@@ -2689,7 +2701,8 @@
          "retrieval",
          "rest",
          "frame",
-         "base_year"
+         "base_year",
+         "target_year"
         ]
        },
        {
@@ -2727,7 +2740,7 @@
       "x-question": "Auf welches Szenario dieser Publikation bezieht sich der Wert? Die Liste führt die Laufkennungen, die genau diese Publikation in der AR6-Datenbank dokumentiert. Im Text stehen sie fast nie, dort heißt dasselbe Szenario \"Current Policies\" oder \"the NDC scenario\". Nennt das Dokument nur die Familie, ist \"Szenario-Familie\" die richtige Antwort und keine Kennung."
      },
      "scenario_link_quote": {
-      "description": "Only with window `base_year`: the passage where the row names the base state ('scenario_raw'). 'scenario_quote' is then the frame's passage that prints the number.",
+      "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('scenario_raw'). 'scenario_quote' is then the frame's passage that prints the number.",
       "minLength": 8,
       "type": "string"
      },
@@ -2794,7 +2807,7 @@
       "description": "How the coordinate 'scenario' ended. Always present: a missing key and a refused reading must not look alike."
      },
      "scenario_window": {
-      "description": "[stage, index] of the window 'scenario' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number.",
+      "description": "[stage, index] of the window 'scenario' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.",
       "maxItems": 2,
       "minItems": 2,
       "prefixItems": [
@@ -2804,7 +2817,8 @@
          "retrieval",
          "rest",
          "frame",
-         "base_year"
+         "base_year",
+         "target_year"
         ]
        },
        {
@@ -2902,7 +2916,7 @@
       "x-question": "Um WELCHES Feld handelt es sich bei diesem Wert? Entscheide danach, was die Quelle über ihn sagt: die Beschriftung, die Einheit und die Überschrift des Abschnitts. Zitiere die Stelle, aus der das hervorgeht."
      },
      "parameter_link_quote": {
-      "description": "Only with window `base_year`: the passage where the row names the base state ('parameter_raw'). 'parameter_quote' is then the frame's passage that prints the number.",
+      "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('parameter_raw'). 'parameter_quote' is then the frame's passage that prints the number.",
       "minLength": 8,
       "type": "string"
      },
@@ -2969,7 +2983,7 @@
       "description": "How the coordinate 'parameter' ended. Always present: a missing key and a refused reading must not look alike."
      },
      "parameter_window": {
-      "description": "[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number.",
+      "description": "[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.",
       "maxItems": 2,
       "minItems": 2,
       "prefixItems": [
@@ -2979,7 +2993,8 @@
          "retrieval",
          "rest",
          "frame",
-         "base_year"
+         "base_year",
+         "target_year"
         ]
        },
        {
@@ -3080,7 +3095,7 @@
       "x-question": "Um WELCHES Feld handelt es sich bei diesem Wert? Entscheide danach, was die Quelle über ihn sagt: die Beschriftung, die Einheit und die Überschrift des Abschnitts. Zitiere die Stelle, aus der das hervorgeht."
      },
      "parameter_link_quote": {
-      "description": "Only with window `base_year`: the passage where the row names the base state ('parameter_raw'). 'parameter_quote' is then the frame's passage that prints the number.",
+      "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('parameter_raw'). 'parameter_quote' is then the frame's passage that prints the number.",
       "minLength": 8,
       "type": "string"
      },
@@ -3147,7 +3162,7 @@
       "description": "How the coordinate 'parameter' ended. Always present: a missing key and a refused reading must not look alike."
      },
      "parameter_window": {
-      "description": "[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number.",
+      "description": "[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.",
       "maxItems": 2,
       "minItems": 2,
       "prefixItems": [
@@ -3157,7 +3172,8 @@
          "retrieval",
          "rest",
          "frame",
-         "base_year"
+         "base_year",
+         "target_year"
         ]
        },
        {
@@ -3498,7 +3514,7 @@
       "x-question": "Um WELCHES Feld handelt es sich bei diesem Wert? Entscheide danach, was die Quelle über ihn sagt: die Beschriftung, die Einheit und die Überschrift des Abschnitts. Zitiere die Stelle, aus der das hervorgeht."
      },
      "parameter_link_quote": {
-      "description": "Only with window `base_year`: the passage where the row names the base state ('parameter_raw'). 'parameter_quote' is then the frame's passage that prints the number.",
+      "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('parameter_raw'). 'parameter_quote' is then the frame's passage that prints the number.",
       "minLength": 8,
       "type": "string"
      },
@@ -3565,7 +3581,7 @@
       "description": "How the coordinate 'parameter' ended. Always present: a missing key and a refused reading must not look alike."
      },
      "parameter_window": {
-      "description": "[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number.",
+      "description": "[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.",
       "maxItems": 2,
       "minItems": 2,
       "prefixItems": [
@@ -3575,7 +3591,8 @@
          "retrieval",
          "rest",
          "frame",
-         "base_year"
+         "base_year",
+         "target_year"
         ]
        },
        {
@@ -3684,7 +3701,7 @@
       "x-question": "Um WELCHES Feld handelt es sich bei diesem Wert? Entscheide danach, was die Quelle über ihn sagt: die Beschriftung, die Einheit und die Überschrift des Abschnitts. Zitiere die Stelle, aus der das hervorgeht."
      },
      "parameter_link_quote": {
-      "description": "Only with window `base_year`: the passage where the row names the base state ('parameter_raw'). 'parameter_quote' is then the frame's passage that prints the number.",
+      "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('parameter_raw'). 'parameter_quote' is then the frame's passage that prints the number.",
       "minLength": 8,
       "type": "string"
      },
@@ -3751,7 +3768,7 @@
       "description": "How the coordinate 'parameter' ended. Always present: a missing key and a refused reading must not look alike."
      },
      "parameter_window": {
-      "description": "[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number.",
+      "description": "[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.",
       "maxItems": 2,
       "minItems": 2,
       "prefixItems": [
@@ -3761,7 +3778,8 @@
          "retrieval",
          "rest",
          "frame",
-         "base_year"
+         "base_year",
+         "target_year"
         ]
        },
        {
@@ -3870,7 +3888,7 @@
       "x-question": "Um WELCHES Feld handelt es sich bei diesem Wert? Entscheide danach, was die Quelle über ihn sagt: die Beschriftung, die Einheit und die Überschrift des Abschnitts. Zitiere die Stelle, aus der das hervorgeht."
      },
      "parameter_link_quote": {
-      "description": "Only with window `base_year`: the passage where the row names the base state ('parameter_raw'). 'parameter_quote' is then the frame's passage that prints the number.",
+      "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('parameter_raw'). 'parameter_quote' is then the frame's passage that prints the number.",
       "minLength": 8,
       "type": "string"
      },
@@ -3937,7 +3955,7 @@
       "description": "How the coordinate 'parameter' ended. Always present: a missing key and a refused reading must not look alike."
      },
      "parameter_window": {
-      "description": "[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number.",
+      "description": "[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.",
       "maxItems": 2,
       "minItems": 2,
       "prefixItems": [
@@ -3947,7 +3965,8 @@
          "retrieval",
          "rest",
          "frame",
-         "base_year"
+         "base_year",
+         "target_year"
         ]
        },
        {
@@ -4051,7 +4070,7 @@
       "x-question": "Um WELCHES Feld handelt es sich bei diesem Wert? Entscheide danach, was die Quelle über ihn sagt: die Beschriftung, die Einheit und die Überschrift des Abschnitts. Zitiere die Stelle, aus der das hervorgeht."
      },
      "parameter_link_quote": {
-      "description": "Only with window `base_year`: the passage where the row names the base state ('parameter_raw'). 'parameter_quote' is then the frame's passage that prints the number.",
+      "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('parameter_raw'). 'parameter_quote' is then the frame's passage that prints the number.",
       "minLength": 8,
       "type": "string"
      },
@@ -4118,7 +4137,7 @@
       "description": "How the coordinate 'parameter' ended. Always present: a missing key and a refused reading must not look alike."
      },
      "parameter_window": {
-      "description": "[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number.",
+      "description": "[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.",
       "maxItems": 2,
       "minItems": 2,
       "prefixItems": [
@@ -4128,7 +4147,8 @@
          "retrieval",
          "rest",
          "frame",
-         "base_year"
+         "base_year",
+         "target_year"
         ]
        },
        {
@@ -5104,7 +5124,7 @@
       "x-question": "Um WELCHES Feld handelt es sich bei diesem Wert? Entscheide danach, was die Quelle über ihn sagt: die Beschriftung, die Einheit und die Überschrift des Abschnitts. Zitiere die Stelle, aus der das hervorgeht."
      },
      "parameter_link_quote": {
-      "description": "Only with window `base_year`: the passage where the row names the base state ('parameter_raw'). 'parameter_quote' is then the frame's passage that prints the number.",
+      "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('parameter_raw'). 'parameter_quote' is then the frame's passage that prints the number.",
       "minLength": 8,
       "type": "string"
      },
@@ -5171,7 +5191,7 @@
       "description": "How the coordinate 'parameter' ended. Always present: a missing key and a refused reading must not look alike."
      },
      "parameter_window": {
-      "description": "[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number.",
+      "description": "[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.",
       "maxItems": 2,
       "minItems": 2,
       "prefixItems": [
@@ -5181,7 +5201,8 @@
          "retrieval",
          "rest",
          "frame",
-         "base_year"
+         "base_year",
+         "target_year"
         ]
        },
        {
@@ -5391,7 +5412,7 @@
       "x-question": "Um WELCHES Feld handelt es sich bei diesem Wert? Entscheide danach, was die Quelle über ihn sagt: die Beschriftung, die Einheit und die Überschrift des Abschnitts. Zitiere die Stelle, aus der das hervorgeht."
      },
      "parameter_link_quote": {
-      "description": "Only with window `base_year`: the passage where the row names the base state ('parameter_raw'). 'parameter_quote' is then the frame's passage that prints the number.",
+      "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('parameter_raw'). 'parameter_quote' is then the frame's passage that prints the number.",
       "minLength": 8,
       "type": "string"
      },
@@ -5458,7 +5479,7 @@
       "description": "How the coordinate 'parameter' ended. Always present: a missing key and a refused reading must not look alike."
      },
      "parameter_window": {
-      "description": "[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number.",
+      "description": "[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.",
       "maxItems": 2,
       "minItems": 2,
       "prefixItems": [
@@ -5468,7 +5489,8 @@
          "retrieval",
          "rest",
          "frame",
-         "base_year"
+         "base_year",
+         "target_year"
         ]
        },
        {
@@ -6361,6 +6383,9 @@
      "via_base": {
       "type": "integer"
      },
+     "via_target": {
+      "type": "integer"
+     },
      "window": {
       "type": "integer"
      }
@@ -6442,6 +6467,9 @@
       "type": "integer"
      },
      "via_base": {
+      "type": "integer"
+     },
+     "via_target": {
       "type": "integer"
      },
      "windows": {

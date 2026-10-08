@@ -98,7 +98,7 @@ passage stands.
 since which quantity a number belongs to is asked as a coordinate later.
 Two rules used to feed it: every table and figure taken whole through the
 `structure` callable, since over 65 documents 12,094 of 15,082 values
-came from one of the two (`pipeline.py:236`); prose ranked and capped at
+came from one of the two (`pipeline.py:237`); prose ranked and capped at
 `prose_top` sections, the half a ranking retains. A newer
 single cut (`top`, `EXTRACT_PLAN_TOP`) replaces both with one fused
 ranking, keeping the structural floor only as a counter of what it would
@@ -110,7 +110,7 @@ list rather than concatenating a ranking per probe: over 65 documents and
 fusion at rank 26 (`runner.py:503`).
 
 That single cut is not a plain slice of the ranking either.
-`with_visual_share` (`pipeline.py:185`) holds a share of `top`'s room,
+`with_visual_share` (`pipeline.py:186`) holds a share of `top`'s room,
 `VISUAL_SHARE` (env `EXTRACT_VISUAL_SHARE`, default `0.5`,
 `pipeline.py:71`), for figures and tables before prose can fill it,
 pulling the best-ranked ones up into that room when the head of the
@@ -135,7 +135,7 @@ label, description, the document's name and an early caption; recorded,
 never compared, in the stamp as `question_text/<key>`.
 Dropping query templates for it was measured directly: with templates
 included alongside the anchor, a value's real source sat at median rank
-84; without them, rank 26 (`pipeline.py:246`). `plan_document` falls back to
+84; without them, rank 26 (`pipeline.py:247`). `plan_document` falls back to
 `queries.expand`'s templates only when no anchor exists. `make_anchors` (`runner.py:1810`) is the second,
 corpus-wide mechanism: one set per question the field sweep asks, each
 axis question and the parameter choice, written once per run and cached
@@ -179,13 +179,13 @@ own pair's column
 (`test_a_passage_of_several_pairs_is_read_under_each_of_them`,
 `tests/test_extraction_frame.py:651`). A passage that prints none of a
 request's pair used to give no row at all: its claims were refused as
-`passage is not of this pair` (`rows_from_reply`, `pipeline.py:616`). Two
+`passage is not of this pair` (`rows_from_reply`, `pipeline.py:617`). Two
 helpers get a look at the claim first now: `pair_of_claim`
-(`pipeline.py:564`) asks the claim's own quote and `pair_of_source`
-(`pipeline.py:591`) asks the whole passage whether exactly one OTHER pair
+(`pipeline.py:565`) asks the claim's own quote and `pair_of_source`
+(`pipeline.py:592`) asks the whole passage whether exactly one OTHER pair
 of the document is named there; if so the claim becomes a row carrying
 that pair in its own `pair` and `pair_index` fields (`Row`,
-`pipeline.py:452`), for `Turn.project` to stamp instead of
+`pipeline.py:453`), for `Turn.project` to stamp instead of
 the request's own, drawn from `Batch.pairs` (`pipeline.py:135`), set by
 `pair_batches` (`runner.py:4921`). Exactly one, or the claim still stays
 refused. Measured on corpus_m5: of 120,442 claims refused this way, 52.8%
@@ -204,26 +204,48 @@ A row's own table sometimes names no year at all, only the plan's word
 for its own state: "Basisjahr", "Ist-Zustand", "Bilanzjahr". Which frame
 pair is that state is named by the profile, kwp's `BASE_YEAR =
 {"scenario": "status_quo"}` (`profiles/kwp/extraction.py:83`).
-`base_years` (`pipeline.py:863`) reads the document's base year off that
+`state_years` (`pipeline.py:871`) reads the document's base year off that
 pair, one entry per year with the frame's own quote and source, and every
 batch of the document carries them as `Batch.bases`, framed or not, since
 a passage naming only "Basisjahr" is exactly the one that needs them
-(`plan_batches`, `runner.py:5105`, `:5111`).
+(`named_years`, `pipeline.py:921`, joins the base and the target years;
+`plan_batches`, `runner.py:5769`).
 
 A year answer whose quote carries this wording but not the number now
-reads (`base_year_named`, `pipeline.py:912`) when the number given is one
+reads (`named_year`, `pipeline.py:936`) when the number given is one
 of those base years (owner decision 2026-09-22): the model chooses among
 the plan's own base years rather than the run guessing which one
-"Basisjahr" means. `merge_field` (`pipeline.py:936`) then cites the
+"Basisjahr" means. `merge_field` (`pipeline.py:965`) then cites the
 frame's passage for the number, window `["base_year", <pair index>]`, and
 keeps the row's own passage as `<axis>_link_quote`/`<axis>_link_source`.
 Before this reading existed, corpus_m5 dropped 127,233 year answers whose
 wording stood in their quote and whose number did not, "Basisjahr" among
 the most common (`profiles/kwp/extraction.py:80-82`). The year field's
 own request is shown the plan's base years alongside the question,
-`"base_years"` (`runner.py:2768-2771`), and the trace's `field` event
+`"base_years"` (`runner.py:2769-2779`), and the trace's `field` event
 counts how many of a window's answers came this way, `via_base`
 (`Sweeping.run`).
+
+The plan's target works the same way (owner decision 2026-10-06, the same
+rule as the base year). A profile names the frame pairs that are the target
+with `TARGET_YEAR`, kwp's `{"scenario": "target"}`
+(`profiles/kwp/extraction.py:91`), and `named_years` reads their years off
+the frame as it does the base years. A year answer whose quote carries the
+plan's word for its target ("Zieljahr") and not the number reads when the
+number is one of those target years: the coordinate cites the frame's
+passage, window `["target_year", <pair index>]`, keeps the row's passage as
+`<axis>_link_quote`/`<axis>_link_source`, and the trace's `field` event
+counts it as `via_target`. The year field's request is shown them under
+`"target_years"` beside `"base_years"`, each list only in the request for
+the field it dates (`runner.py:2769-2779`). Which state the word means, and
+which of several target years, is the model's reading and is not checked:
+the number only has to be one of the years shown, and a year the frame found
+for both states is cited from the base state. The current kwp harvest
+dropped about 14,500 year answers whose quote carried the plan's word for
+its target and not the number, "Zieljahr" 12,369 of them
+(`profiles/kwp/extraction.py:85-90`). A profile that sets no `TARGET_YEAR`
+has no target years, and the scenarios field prompt leaves the
+`target_years` block out.
 
 ### The row request
 
@@ -238,9 +260,9 @@ whitespace-collapsed test verification uses, `quote_in`, not a literal
 substring test: a stricter test would refuse claims verification would
 have accepted, since a table row retyped without its padding is the
 normal case, not the exception, worth 276 of one pilot's refusals
-(`pipeline.py:429`). A
+(`pipeline.py:430`). A
 wording not in its own quote is caught here too, before it becomes a
-row (`pipeline.py:502`). Where a spec has no numeric parameter, as the
+row (`pipeline.py:503`). Where a spec has no numeric parameter, as the
 scenarios spec, every string is a wording and so is a bare year
 (`fields.is_wording`), which is dropped here when its own quote does not
 print it, with the reason `text value not in its quote`. A `Row` is
@@ -370,7 +392,7 @@ passages of its own batch (`merge_field`), never against the union of the
 document's, which is a pool its answer was not shown. Turns are searched in the
 order of the plan (frame index, then the owner keys of the batch's items), not
 in the order the replies came back, so the labels of a search do not depend on
-which batch finished first. Rows under another base year or another spec are
+which batch finished first. Rows under other base or target years or another spec are
 searched in groups of their own; a real run has one group, because both belong
 to the document. A search over one batch leaves out of its retrieval and rest
 the passages its own stage asked and the sections they stand in, as the
@@ -479,7 +501,7 @@ stop at once, and a passage ends as `no_answer`.
 What an unserved end means depends on the request. A passage's rows request
 writes one sentinel per source with `_why: "unserved"` (the harvest
 schema's `_why` has four values: `unreachable`, `unserved`, `no_answer`,
-`cut_off`; `docpipe/extraction/schema.py:517-518`), and such a sentinel
+`cut_off`; `docpipe/extraction/schema.py:518-519`), and such a sentinel
 counts towards the dead-server streak like an `unreachable` one
 (`runner.py:2673-2676`, `4070-4072`). A coordinate request, the frame
 request and a search-sentence request return nothing, as they do for any
@@ -511,31 +533,31 @@ pools alone deciding as before. `EXTRACT_LIMIT_ADAPTIVE=0` turns it off
 holding every answer to the two clauses the value's own quote is held to:
 its cited passage sits verbatim in a shown source, and it contains the
 answer, with a floor of `MIN_QUOTE_CHARS` so that a quote names a place.
-Those are the check for a quote (`pipeline.py:1069-1107`;
+Those are the check for a quote (`pipeline.py:1101-1139`;
 `test_a_coordinate_is_dropped_for_the_agreed_reasons_and_no_other`,
 `tests/test_extraction_reasons.py:115`). Without its own `value_raw`
 wording, a closed-list answer's quote is checked against every spelling the
 spec lists for the chosen option, not only its label: the real classes
 carry the ontology's English names, which stand in no German plan, and
 corpus_m5 had dropped 284,643 quantity answers on exactly that gap before
-this widened (`answer_in_quote`, `pipeline.py:690`, owner's decision
+this widened (`answer_in_quote`, `pipeline.py:691`, owner's decision
 2026-09-13); a wording that is given still has to stand in the quote
 itself. A year counts only where its own four digits stand in the quote
 in one run, so "2.022 MWh" no longer backs the year 2022 though a dated
 "31.12.2022" still does; and a spelling counts only where no longer
 entry of another option of the same list stands at that spot, so a bare
 "MWh" is not backed by a passage's "MWh/a", though the chosen option's
-own longer spelling still is (`stands_in`, `pipeline.py:736`, owner's
+own longer spelling still is (`stands_in`, `pipeline.py:737`, owner's
 decision 2026-09-23). A closed-list coordinate answers a third clause
 too: naming one of
 the list's own entries, by label, spelling or URI, or it is never marked
-read (`option_named`, `not_an_option`, `pipeline.py:780-794, 1037-1056`, the owner's
+read (`option_named`, `not_an_option`, `pipeline.py:781-795, 1069-1088`, the owner's
 rule of 2026-09-11). Which table the
 passage belongs to, how far from the row it stands and which column of a
 table it heads are the model's reading, not a rule. Failures are recorded
 separately, `unquoted` against `unbacked`, so a retry can name what to fix. A
 coordinate already read once is never overwritten by a later window
-(`pipeline.py:998`). A wording naming no token of the option
+(`pipeline.py:1030`). A wording naming no token of the option
 it claims is counted `raw_foreign` rather than trusted silently.
 
 ### Folding and verification
@@ -599,7 +621,7 @@ behind](../contract/trust.md) for the full list.
 ### The harvest file, the stamp and the trace
 
 Before any of that is computed, `runner.finish_document` calls
-`pipeline.drop_repeats` (`pipeline.py:1599`), which removes a row that
+`pipeline.drop_repeats` (`pipeline.py:1634`), which removes a row that
 agrees with an earlier row of the same document in every field but
 `provenance`: the same reading written twice by two different requests
 is one reading, not two, and counting it twice would throw off the
@@ -740,7 +762,7 @@ to a wording (`topup.py:82-119`). A parameter the spec has gained is not
 a coordinate and does not block: the keys that only the addition moved
 are taken out of the list before `actionable` sees it, so this pass
 neither blocks on them nor writes them
-(`topup_parameter.explained_keys`, `topup.py:429-438`). A document in
+(`topup_parameter.explained_keys`, `topup.py:430-439`). A document in
 which every moved key is of that kind is counted `left to
 --top-up-parameters` and left as it is; one with a moved coordinate
 besides is swept for that coordinate, and the keys of the addition stay
@@ -754,14 +776,15 @@ the sweep runs; `restore` puts the old block back unless the fresh
 sweep genuinely improves on it. A top-up whose own requests ended on a
 429 or a 5xx leaves the file's stamp as it was, so the next top-up asks
 again; the stat lines count it as `stamps left, a request ended on 429 or
-5xx` (`topup.py:457`, `530-534`). A row whose passage no longer carries
+5xx` (`topup.py:458`, `531-535`). A row whose passage no longer carries
 its stored quote is left untouched, and top-up traces land under their
 own `trace-topup/` directory, `open_trace` first closing any file an
-earlier directory left open. A re-swept `year` carries base years too:
-`base_years_of` (`topup.py:238`) rebuilds the document's base-year pairs
+earlier directory left open. A re-swept `year` carries base years and
+target years too: `named_years_of` (`topup.py:238`) rebuilds the document's
+base-year and target-year pairs
 from the frame's own readings already sitting in the harvest file and
 hands them to every batch, the same as the main harvest, so a re-swept
-year that names only "Basisjahr" still reads.
+year that names only "Basisjahr" or "Zieljahr" still reads.
 
 `--top-up-parameters` (`topup_parameter.py`) is the pass for a parameter
 added to the spec after documents were harvested. Such a parameter leaves
@@ -1060,7 +1083,9 @@ A phrase that is worded differently changes the sha256 of the prompt that names
 it, which the stamp records and never compares.
 
 A profile's half is its parts file: the role of the model for this corpus, its
-examples, the sentences about its own tables, and, for a sentence of the
+examples (those of kwp's field prompt describe a passage between `<<` and `>>`
+and never print one, see [kwp](../profiles/kwp.md)), the sentences about its
+own tables, and, for a sentence of the
 template that fits it less well, a part of its own in place of that block. A
 profile leaves out the blocks of a template it never had with `without` in the
 front matter, and only blocks the template lists as omittable. What a parts file

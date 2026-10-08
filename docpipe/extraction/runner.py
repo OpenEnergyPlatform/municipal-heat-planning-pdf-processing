@@ -78,10 +78,11 @@ from . import replies
 from . import scratch
 from . import trace
 from .wording import say
-from .pipeline import (Source, WorkItem, apply_frame, base_years, batch_uri,
+from .pipeline import (YEAR_STATES, Source, WorkItem, apply_frame, batch_uri,
                        build_sweeps, cell_index as pipeline_cell_index,
                        drop_repeats, fold_batch, follow_up, group_items,
                        harvest_document, merge_field, mark_unanswered,
+                       named_years,
                        open_rows, plan_document,
                        names_pair, refused_upstream, route_claims,
                        option_named, row_label, rows_from_reply, sweep_key,
@@ -2765,13 +2766,17 @@ def _field_payload(shown: list, rows: list, slots,
         asked.append(field)
         names.add(slot.name)
     out = {"sources": sources, "rows": listed}
-    # The plan's base years, where the field asked is the one they date: a
-    # row whose table says "Basisjahr" and prints no year answers one of these
-    # and cites the passage that names the state (`merge_field`).
-    dated = [{"year": b["year"], "quote": b["quote"]}
-             for b in bases or () if b.get("axis") in names]
-    if dated:
-        out["base_years"] = dated
+    # The plan's base years and its target years, where the field asked is the
+    # one they date: a row whose table says "Basisjahr" or "Zieljahr" and
+    # prints no year answers one of these and cites the passage that names
+    # the state (`merge_field`). Each state under its own key, so the prompt
+    # can say which word points at which list.
+    for state, key in YEAR_STATES.items():
+        dated = [{"year": b["year"], "quote": b["quote"]}
+                 for b in bases or ()
+                 if b.get("axis") in names and b["state"] == state]
+        if dated:
+            out[key] = dated
     out["fields"] = asked
     if corrections:
         # What was wrong with the last answer, per row. A verification failure
@@ -3293,7 +3298,7 @@ class Sweeping:
         self.parameter = parameters.pop() if len(parameters) == 1 else None
         self.totals = {"filled": 0, "unquoted": 0, "unbacked": 0,
                        "unstated": 0, "raw_missing": 0, "raw_foreign": 0,
-                       "via_base": 0, "retried": 0}
+                       "via_base": 0, "via_target": 0, "retried": 0}
         # What must not be FETCHED again, and every passage this sweep has
         # already materialised, by key. `seen` answers the first question;
         # `held` answers what may be SHOWN again, which is the opposite
@@ -3451,7 +3456,8 @@ class Sweeping:
                     answered = {}
                 counts = {"filled": 0, "unquoted": 0, "unbacked": 0,
                           "unstated": 0, "raw_missing": 0,
-                          "raw_foreign": 0, "via_base": 0, "failed": []}
+                          "raw_foreign": 0, "via_base": 0, "via_target": 0,
+                          "failed": []}
                 # Which FIELD filled and which failed, not only how many.
                 # Five fields answer in one reply, and a run that logs
                 # "aggregation+carrier+sector+year+spatial_scope: 3 of 5"
@@ -3469,7 +3475,7 @@ class Sweeping:
                             bases=list(self.bases))
                         for key in ("filled", "unquoted", "unbacked",
                                     "unstated", "raw_missing",
-                                    "raw_foreign", "via_base"):
+                                    "raw_foreign", "via_base", "via_target"):
                             counts[key] += got[key]
                         if got["filled"]:
                             filled_by[slot.name] = (
@@ -3482,7 +3488,8 @@ class Sweeping:
                             counts["failed"].append(dict(bad,
                                                          field=slot.name))
                 for key in ("filled", "unquoted", "unbacked", "unstated",
-                            "raw_missing", "raw_foreign", "via_base"):
+                            "raw_missing", "raw_foreign", "via_base",
+                            "via_target"):
                     self.totals[key] += counts[key]
                 self.totals["retried"] += 1 if attempt else 0
                 # The window this coordinate was asked in, what was shown,
@@ -3509,7 +3516,7 @@ class Sweeping:
                             **{k: counts[k] for k in
                                ("filled", "unquoted", "unbacked",
                                 "unstated", "raw_missing",
-                                "raw_foreign", "via_base")})
+                                "raw_foreign", "via_base", "via_target")})
                 for bad in counts["failed"]:
                     # What was answered, not only that it failed: the
                     # corpus_m5 trace counted 284,643 quantity answers
@@ -5628,9 +5635,23 @@ class PlannedDocument:
     failed: int = 0             # frame and pair plans that raised
 
 
+# The constant of a profile's extraction.py that says which frame pairs are
+# which state of the plan (`pipeline.YEAR_STATES`).
+YEAR_STATE_CONSTANTS = {"base": "BASE_YEAR", "target": "TARGET_YEAR"}
+
+
+def year_states_of(profile) -> dict:
+    """{state: which frame pairs are that state of the plan}, as the profile
+    says it: their years date a row that names the state by word
+    ("Basisjahr", "Zieljahr") and prints no year. None for a state the
+    profile does not name, which then has no years."""
+    return {state: profile.component("extraction", YEAR_STATE_CONSTANTS[state])
+            for state in YEAR_STATES}
+
+
 def plan_batches(document_id: int, filename: str, *, plan: Callable,
                  plan_pool, ask_frame: Optional[Callable], frame_axes: list,
-                 more_sources: Optional[Callable], base_state,
+                 more_sources: Optional[Callable], year_states,
                  anchor_texts: dict, only=(),
                  stored_pairs: Optional[dict] = None) -> PlannedDocument:
     """One document from its first search to its batches: the plan, the frame,
@@ -5737,10 +5758,12 @@ def plan_batches(document_id: int, filename: str, *, plan: Callable,
     for batch in framed:
         batch.frame_index = indices[batch.frame_index]
         batch.pairs = tuple(ordered)
-    bases = tuple(base_years(ordered, frame_axes, base_state))
-    if bases:
-        log.info("extract: %s: base year(s) %s", name,
-                 ", ".join(str(b["year"]) for b in bases))
+    bases = tuple(named_years(ordered, frame_axes, year_states))
+    for state in YEAR_STATES:
+        years = [str(b["year"]) for b in bases if b["state"] == state]
+        if years:
+            log.info("extract: %s: %s year(s) %s", name, state,
+                     ", ".join(years))
     asked = narrow_spec(doc_spec, only)
     for batch in batches:
         batch.bases = bases
@@ -6151,9 +6174,7 @@ def main(argv: Optional[list] = None) -> int:
     # supported on a frame axis.
     frame_axes = fields.frame_slots(spec, profile.component("extraction",
                                                             "FRAME") or ())
-    # Which frame pairs are the plan's own state, so their years date a row
-    # that names the state by word ("Basisjahr") and prints no year.
-    base_state = profile.component("extraction", "BASE_YEAR")
+    year_states = year_states_of(profile)
     search_share = profile.component("extraction", "SEARCH_SHARE") or {}
     if frame_axes:
         log.info("extraction: the frame is %s — found once per document, then "
@@ -6312,7 +6333,7 @@ def main(argv: Optional[list] = None) -> int:
                  "document_spec": document_spec,
                  "frame_names": frame_names,
                  "frame_axes": frame_axes,
-                 "base_state": base_state,
+                 "year_states": year_states,
                  "dynamic_ok": document_axes is not None,
                  "slice_gate": slice_gate,
                  "locate": locate},
@@ -6507,7 +6528,7 @@ def main(argv: Optional[list] = None) -> int:
     plan_for = functools.partial(
         plan_batches, plan=plan, plan_pool=plan_pool, ask_frame=ask_frame,
         frame_axes=frame_axes, more_sources=more_sources,
-        base_state=base_state, anchor_texts=anchor_texts)
+        year_states=year_states, anchor_texts=anchor_texts)
     harvest_all = functools.partial(
         harvest_batches, harvest=harvest, more_sources=more_sources,
         verify=prior_rows, workers=LLM_PARALLEL, on_give_up=give_up,

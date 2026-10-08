@@ -108,7 +108,7 @@ Fields:
 - `frame_index: int = 0`
 - `pairs: tuple = ()`: Every pair of the document, in index order. A claim whose own quote names a different one of them is filed under that pair instead of being refused, which is the only use this list has.
 - `anchors: tuple = ()`: The sentences this request's passages were searched with. They say, in the plan's own words, what the request asks for, so the pair reaches the model as a question and not only as a field.
-- `bases: tuple = ()`: The document's base years with the frame's quotes (`base_years`), on every batch of the document, framed or not: a passage that says "Basisjahr" prints no pair, and it is exactly the one that needs them.
+- `bases: tuple = ()`: The years of the document a row may name by a word, with the frame's quotes: its base years and its target years (`named_years`). On every batch of the document, framed or not: a passage that says "Basisjahr" or "Zieljahr" prints no pair, and it is exactly the one that needs them.
 - `spec: object = None`: The spec as this document sees it. A dynamic axis or value list is a closed list only once the document is known, so the corpus run puts the copy with the document's lists filled in on every batch of the document, like `bases`. None is the run's own spec: no list depends on the document, or the caller builds its slots from the document's spec itself, as the top-up does.
 
 #### Batch.sources
@@ -537,38 +537,57 @@ document's word belongs to a class the spec spells differently. What we
 have no measurement of is how often it decides wrongly, and that is
 exactly what this counter is for.
 
-### base_years
+### state_years
 
 ```python
-def base_years(pairs, frame_axes, where: Optional[dict]) -> list
+def state_years(pairs, frame_axes, where: Optional[dict], state: str) -> list
 ```
 
-The years the document's frame found for its base state, with proof.
+The years the document's frame found for one state of the plan, with
+proof.
 
-*where* is the profile's `BASE_YEAR`: which values of the other frame
-coordinates make a pair the plan's own state rather than a scenario of it.
-Every such pair was read with a quote that prints its year, so each entry
-here carries that quote and its source: {"axis", "year", "quote",
-"source", "index"}. One entry per year, the first pair that proved it.
-Empty when the profile names no base state or the frame has no number
-coordinate to date it with.
+*where* is what the profile says makes a pair that state: which values of
+the other frame coordinates (`BASE_YEAR` for the plan's own state,
+`TARGET_YEAR` for its target). Every such pair was read with a quote that
+prints its year, so each entry here carries that quote and its source:
+{"state", "axis", "year", "quote", "source", "index"}. One entry per
+year, the first pair that proved it. Empty when the profile does not name
+the state or the frame has no number coordinate to date it with.
 
-### base_year_named
+### named_years
 
 ```python
-def base_year_named(slot, given, wording: Optional[str], quote: str,
-                    bases) -> Optional[dict]
+def named_years(pairs, frame_axes, states: Optional[dict]) -> list
 ```
 
-The base year a year answer refers to by the plan's word for it.
+The years of the document a row may name by the plan's word for them:
+those of its own state, then those of its target (`YEAR_STATES`).
 
-A row whose table says "Basisjahr" or "Ist-Zustand" and prints no year
-states its year elsewhere in the plan, once: where the frame read the base
-state. The model is shown those years with their quotes and answers one of
-them, citing the passage that names the state. That answer is backed by
-two passages, each for its own half: the row's quote carries the wording,
-the frame's quote carries the number. Anything else is None, and the
-answer fails as any answer without its number in the quote does.
+*states* is {state: what the profile says makes a pair that state}; a
+state the profile does not name is absent or None and has no years. A
+year the frame found for both states stands once under each.
+
+### named_year
+
+```python
+def named_year(slot, given, wording: Optional[str], quote: str,
+               named) -> Optional[dict]
+```
+
+The year of the plan a year answer refers to by the plan's word for it.
+
+A row whose table says "Basisjahr" or "Zieljahr" and prints no year states
+its year elsewhere in the plan, once: where the frame read that state. The
+model is shown those years with their quotes (`named_years`) and answers
+one of them, citing the passage that names the state. That answer is
+backed by two passages, each for its own half: the row's quote carries the
+wording, the frame's quote carries the number. Anything else is None, and
+the answer fails as any answer without its number in the quote does.
+
+Which state the word means, and which of several years of that state, is
+the model's reading and not checked (owner decisions 2026-09-22 and
+2026-10-06): the number has to be one of the years shown. A number that
+dates both states is cited from the first, the plan's own.
 
 ### merge_field
 
@@ -606,11 +625,13 @@ model's reading, not a rule of this function. Every reason a reading is
 dropped for is listed in `schema.DROP_REASONS`, and a test holds this
 function to that list.
 
-*bases* are the document's base years (`base_years`). A year answer whose
-quote carries its wording but not its number is read when the number is
-one of them (owner decision 2026-09-22): the coordinate then cites the
-frame's passage for the year and keeps the row's passage as its link
-(`<axis>_link_quote`, `<axis>_link_source`).
+*bases* are the years of the document a row may name by a word: its base
+years and its target years (`named_years`). A year answer whose quote
+carries its wording but not its number is read when the number is one of
+them (owner decisions 2026-09-22 for the base year, 2026-10-06 for the
+target year): the coordinate then cites the frame's passage for the year
+and keeps the row's passage as its link (`<axis>_link_quote`,
+`<axis>_link_source`).
 
 ### line_naming
 

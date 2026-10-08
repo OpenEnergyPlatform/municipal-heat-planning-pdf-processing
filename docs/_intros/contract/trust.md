@@ -6,7 +6,7 @@ shown source (`verify.py:365-552`). The field sweep in
 `docpipe/extraction/pipeline.py` holds each coordinate to the same two
 clauses, its quote stands in a shown source and carries the answer, and
 writes the passage's owner onto the row (`merge_field`,
-`pipeline.py:936-1153`); a closed-list coordinate is held to a third, naming
+`pipeline.py:965-1188`); a closed-list coordinate is held to a third, naming
 one of the list's own entries, or it is never marked read (`not_an_option`).
 Where in the document that passage
 stands is no check and no grade

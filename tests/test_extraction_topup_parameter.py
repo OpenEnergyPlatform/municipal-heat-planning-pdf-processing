@@ -1579,7 +1579,7 @@ def test_an_appended_row_carries_the_index_its_pair_was_stored_under(
         planned = functools.partial(
             runner.plan_batches, plan=inner, plan_pool=pool,
             ask_frame=lambda *a, **k: {}, frame_axes=frame,
-            more_sources=None, base_state=None, anchor_texts={})
+            more_sources=None, year_states=None, anchor_texts={})
         assert world.run(plan=planned, harvest=real, frame_axes=frame,
                          frame_names=["scenario", "year"])[:2] == (True, 0)
     assert [p["year"] for p in seen["start"]] == [2045, 2020], (

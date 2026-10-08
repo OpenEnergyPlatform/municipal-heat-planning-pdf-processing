@@ -1,6 +1,6 @@
 ---
 template: field
-without: [base_years, year_value, no_guessing, closed_out, by_meaning, found_next]
+without: [base_years, target_years, year_value, no_guessing, closed_out, by_meaning, found_next]
 temperature: 0
 max_tokens: 5120
 ---

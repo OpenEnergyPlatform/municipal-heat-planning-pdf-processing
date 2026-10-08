@@ -19,12 +19,12 @@ a document is read.
 `parameter_state`, `refusal` and `summary` are the three record kinds
 every profile's contract shares. `parameter_state` closes one parameter
 for one document: its `state` and how many `tuple` and `refusal` lines
-it produced (`docpipe/extraction/schema.py:571` to `595`). `refusal`
+it produced (`docpipe/extraction/schema.py:572` to `596`). `refusal`
 records a claim the run did not accept: why it failed, the claim as
-returned, and its source (`docpipe/extraction/schema.py:492` to `523`).
+returned, and its source (`docpipe/extraction/schema.py:493` to `524`).
 `summary`, the file's last line, counts a document's tuples and
 refusals by trust level and by reason
-(`docpipe/extraction/schema.py:524` to `570`). The remaining `##`
+(`docpipe/extraction/schema.py:525` to `571`). The remaining `##`
 sections, one per parameter, are the shapes a `tuple` line can take,
 named `tuple_<uri>` and shown here after the uri.
 
@@ -35,17 +35,17 @@ sorted alphabetically rather than grouped by coordinate
 coordinate and to every axis: the value, plus ten keys that make it
 checkable without the run that produced it: state, raw wording, a flag
 for a wording naming no class, a wording merely noticed and never
-chosen, quote, source and window, for a year read as a base year the
-row's own passage (`_link_quote`, `_link_source`), and `_producer`, the
+chosen, quote, source and window, for a year read as a base year or a target year
+the row's own passage (`_link_quote`, `_link_source`), and `_producer`, the
 position in the stamp's `producers` list of the pass that wrote the
 coordinate after the harvest: a top-up that read it again, or the pass that
 appended its row (`--top-up-parameters`); the harvest writes none, so a
 missing key means the harvest read it (`docpipe/extraction/schema.py:212` to
-`292`). The rest belong to the row itself: `kind`, `quote`,
+`293`). The rest belong to the row itself: `kind`, `quote`,
 `tier`, `flags`, `provenance`, `computed`, `compute`, `unit` and
 `unit_raw` (empty for a wording); only the value additionally carries
 `value_target` for a numeric parameter, or `value_raw` and `value_uri`
-for a wording (`docpipe/extraction/schema.py:312` to `383`).
+for a wording (`docpipe/extraction/schema.py:313` to `384`).
 
 Two keys on a coordinate say more than its plain description does.
 `x-question` is the sentence, in German, the model was actually asked
@@ -53,22 +53,22 @@ for that coordinate, so a reader can check the wording without opening
 the profile's prompt; it sits on every axis and on the `parameter`
 coordinate, never on the numeric `value` itself, since which number to
 read is settled by the row request, not a question of its own
-(`docpipe/extraction/schema.py:170`, `:400`). `x-options` appears only
+(`docpipe/extraction/schema.py:170`, `:401`). `x-options` appears only
 where a coordinate answers from a closed list: every class it may
 resolve to, with its ontology uri, its definition and the corpus
 spellings recorded for it, collapsed so a long list does not crowd the
 page, matching the spec both were built from
 (`tests/test_extraction_schema.py::test_every_coordinate_a_row_carries_is_described`).
 `x-kg` is the same spec `kg` block on two different objects: an axis
-that mints its own edge (`docpipe/extraction/schema.py:411`), or the
+that mints its own edge (`docpipe/extraction/schema.py:412`), or the
 row itself rather than the `parameter` coordinate
-(`docpipe/extraction/schema.py:24` to `27`, `:418`).
+(`docpipe/extraction/schema.py:24` to `27`, `:419`).
 
 A tuple's `provenance` names where its `quote` sits: `document_id`,
 `owner_kind` and `owner_id` are always present; `page`,
 `section_number`, `section_title`, `title`, `parent_section`,
 `block_id`, `image`, `rects` and `via` are filled in as the
-source allows (`docpipe/extraction/schema.py:443` to `491`). A
+source allows (`docpipe/extraction/schema.py:444` to `492`). A
 coordinate's `<name>_source` and a refusal's `owner` are the shorter
 `[owner_kind, owner_id]` pair instead
 (`docpipe/extraction/schema.py:147` to `151`).
@@ -76,7 +76,7 @@ coordinate's `<name>_source` and a refusal's `owner` are the shorter
 A tuple section closes with the `allOf` rule: a coordinate is `null`
 unless its own `<name>_state` says `read` or `derived`, one branch of
 the schema's `allOf` array per coordinate (`docpipe/extraction/
-schema.py:295` to `309`, `:419` to `420`). A coordinate never asked and one asked and
+schema.py:296` to `310`, `:420` to `421`). A coordinate never asked and one asked and
 answered `null` differ by type, not merely by convention.
 
 The stamp and the trace close the page, describing the run rather than
@@ -86,7 +86,7 @@ one row. The stamp is `<document>.stamp.json`: whole-run keys (`spec`,
 version), `document` (the sha256 and size of the PDF it was read from)
 and `producers` (who wrote into it)) beside the `parameter/`, `value/`,
 `axis/*/*`, `slot/parameter` and `question_text/` families, written one
-per question instead (`docpipe/extraction/schema.py:602` to `764`).
+per question instead (`docpipe/extraction/schema.py:603` to `765`).
 The owner decided on 2026-09-10 that a stamp rests on the KG/ontology
 parameters alone: `stale` compares the `parameter/`, `value/`,
 `axis/` and `slot/` families (`QUESTION_KEYS`,
@@ -111,13 +111,13 @@ makes a
 document eligible for `--force-stale`'s full re-harvest (`stale`,
 `docpipe/extraction/runner.py:4404` to `4449`, `already_done`, `:4494`
 to `4533`); redoing only the changed question is
-`top_up_file`'s job (`docpipe/extraction/topup.py:419` to `537`), and
+`top_up_file`'s job (`docpipe/extraction/topup.py:420` to `538`), and
 reading a parameter the spec has gained, without reading the document again,
 `append_document`'s (`docpipe/extraction/topup_parameter.py:336` to `462`),
 which `already_done` names in a second warning for such a document. The
 trace is `<document>.trace.jsonl`: eleven event kinds told apart by
 `t`, `plan` through `invalid` in source order
-(`docpipe/extraction/schema.py:776` to `878`), read by
+(`docpipe/extraction/schema.py:778` to `880`), read by
 `scripts/trace_report.py` and, for a cost report, by `trace_costs` in
 `scripts/harvest_compare.py:135` to `155`, never by a resume.
 
@@ -230,7 +230,7 @@ Object is a named individual of OEO_00140068 aggregation type. Derived from the 
 
 ### `aggregation_link_quote`
 
-Only with window `base_year`: the passage where the row names the base state ('aggregation_raw'). 'aggregation_quote' is then the frame's passage that prints the number.
+Only with window `base_year` or `target_year`: the passage where the row names that state ('aggregation_raw'). 'aggregation_quote' is then the frame's passage that prints the number.
 
 ### `aggregation_link_source`
 
@@ -266,7 +266,7 @@ How the coordinate 'aggregation' ended. Always present: a missing key and a refu
 
 ### `aggregation_window`
 
-[stage, index] of the window 'aggregation' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number.
+[stage, index] of the window 'aggregation' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.
 
 ### `carrier`
 
@@ -347,7 +347,7 @@ Object is an OEO class (punning). `is about` (obo:IAO_0000136), whose domain is 
 
 ### `carrier_link_quote`
 
-Only with window `base_year`: the passage where the row names the base state ('carrier_raw'). 'carrier_quote' is then the frame's passage that prints the number.
+Only with window `base_year` or `target_year`: the passage where the row names that state ('carrier_raw'). 'carrier_quote' is then the frame's passage that prints the number.
 
 ### `carrier_link_source`
 
@@ -383,7 +383,7 @@ How the coordinate 'carrier' ended. Always present: a missing key and a refused 
 
 ### `carrier_window`
 
-[stage, index] of the window 'carrier' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number.
+[stage, index] of the window 'carrier' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.
 
 ### `compute`
 
@@ -409,7 +409,7 @@ The prompt's own wording:
 
 ### `parameter_link_quote`
 
-Only with window `base_year`: the passage where the row names the base state ('parameter_raw'). 'parameter_quote' is then the frame's passage that prints the number.
+Only with window `base_year` or `target_year`: the passage where the row names that state ('parameter_raw'). 'parameter_quote' is then the frame's passage that prints the number.
 
 ### `parameter_link_source`
 
@@ -445,7 +445,7 @@ How the coordinate 'parameter' ended. Always present: a missing key and a refuse
 
 ### `parameter_window`
 
-[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number.
+[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.
 
 ### `provenance`
 
@@ -488,7 +488,7 @@ The class of the value node itself (rdf:type). An out:* answer is a deliberate n
 
 ### `quantity_link_quote`
 
-Only with window `base_year`: the passage where the row names the base state ('quantity_raw'). 'quantity_quote' is then the frame's passage that prints the number.
+Only with window `base_year` or `target_year`: the passage where the row names that state ('quantity_raw'). 'quantity_quote' is then the frame's passage that prints the number.
 
 ### `quantity_link_source`
 
@@ -524,7 +524,7 @@ How the coordinate 'quantity' ended. Always present: a missing key and a refused
 
 ### `quantity_window`
 
-[stage, index] of the window 'quantity' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number.
+[stage, index] of the window 'quantity' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.
 
 ### `quote`
 
@@ -563,7 +563,7 @@ Which container node holds the value: the plan has the container by `linked_by`,
 
 ### `scenario_link_quote`
 
-Only with window `base_year`: the passage where the row names the base state ('scenario_raw'). 'scenario_quote' is then the frame's passage that prints the number.
+Only with window `base_year` or `target_year`: the passage where the row names that state ('scenario_raw'). 'scenario_quote' is then the frame's passage that prints the number.
 
 ### `scenario_link_source`
 
@@ -599,7 +599,7 @@ How the coordinate 'scenario' ended. Always present: a missing key and a refused
 
 ### `scenario_window`
 
-[stage, index] of the window 'scenario' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number.
+[stage, index] of the window 'scenario' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.
 
 ### `sector`
 
@@ -639,7 +639,7 @@ Object is an OEO sector class. `is about` (obo:IAO_0000136), whose domain is inf
 
 ### `sector_link_quote`
 
-Only with window `base_year`: the passage where the row names the base state ('sector_raw'). 'sector_quote' is then the frame's passage that prints the number.
+Only with window `base_year` or `target_year`: the passage where the row names that state ('sector_raw'). 'sector_quote' is then the frame's passage that prints the number.
 
 ### `sector_link_source`
 
@@ -675,7 +675,7 @@ How the coordinate 'sector' ended. Always present: a missing key and a refused r
 
 ### `sector_window`
 
-[stage, index] of the window 'sector' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number.
+[stage, index] of the window 'sector' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.
 
 ### `spatial_scope`
 
@@ -705,7 +705,7 @@ The schema has no relation from a value to its area, so a sub_area value is seri
 
 ### `spatial_scope_link_quote`
 
-Only with window `base_year`: the passage where the row names the base state ('spatial_scope_raw'). 'spatial_scope_quote' is then the frame's passage that prints the number.
+Only with window `base_year` or `target_year`: the passage where the row names that state ('spatial_scope_raw'). 'spatial_scope_quote' is then the frame's passage that prints the number.
 
 ### `spatial_scope_link_source`
 
@@ -741,7 +741,7 @@ How the coordinate 'spatial_scope' ended. Always present: a missing key and a re
 
 ### `spatial_scope_window`
 
-[stage, index] of the window 'spatial_scope' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number.
+[stage, index] of the window 'spatial_scope' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.
 
 ### `tier`
 
@@ -810,7 +810,7 @@ The prompt's own wording:
 
 ### `unit_link_quote`
 
-Only with window `base_year`: the passage where the row names the base state ('unit_raw'). 'unit_quote' is then the frame's passage that prints the number.
+Only with window `base_year` or `target_year`: the passage where the row names that state ('unit_raw'). 'unit_quote' is then the frame's passage that prints the number.
 
 ### `unit_link_source`
 
@@ -846,7 +846,7 @@ How the coordinate 'unit' ended. Always present: a missing key and a refused rea
 
 ### `unit_window`
 
-[stage, index] of the window 'unit' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number.
+[stage, index] of the window 'unit' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.
 
 ### `value`
 
@@ -878,7 +878,7 @@ The calendar year the aggregation is integrated over, as a node and no longer as
 
 ### `year_link_quote`
 
-Only with window `base_year`: the passage where the row names the base state ('year_raw'). 'year_quote' is then the frame's passage that prints the number.
+Only with window `base_year` or `target_year`: the passage where the row names that state ('year_raw'). 'year_quote' is then the frame's passage that prints the number.
 
 ### `year_link_source`
 
@@ -914,7 +914,7 @@ How the coordinate 'year' ended. Always present: a missing key and a refused rea
 
 ### `year_window`
 
-[stage, index] of the window 'year' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number.
+[stage, index] of the window 'year' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.
 
 A coordinate is `null` unless its `<axis>_state` says it was read or derived; that is what the `allOf` branches encode, one per coordinate.
 
@@ -963,7 +963,7 @@ Object is a named individual of OEO_00140068 aggregation type. Derived from the 
 
 ### `aggregation_link_quote`
 
-Only with window `base_year`: the passage where the row names the base state ('aggregation_raw'). 'aggregation_quote' is then the frame's passage that prints the number.
+Only with window `base_year` or `target_year`: the passage where the row names that state ('aggregation_raw'). 'aggregation_quote' is then the frame's passage that prints the number.
 
 ### `aggregation_link_source`
 
@@ -999,7 +999,7 @@ How the coordinate 'aggregation' ended. Always present: a missing key and a refu
 
 ### `aggregation_window`
 
-[stage, index] of the window 'aggregation' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number.
+[stage, index] of the window 'aggregation' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.
 
 ### `carrier`
 
@@ -1080,7 +1080,7 @@ Object is an OEO class (punning). `is about` (obo:IAO_0000136), whose domain is 
 
 ### `carrier_link_quote`
 
-Only with window `base_year`: the passage where the row names the base state ('carrier_raw'). 'carrier_quote' is then the frame's passage that prints the number.
+Only with window `base_year` or `target_year`: the passage where the row names that state ('carrier_raw'). 'carrier_quote' is then the frame's passage that prints the number.
 
 ### `carrier_link_source`
 
@@ -1116,7 +1116,7 @@ How the coordinate 'carrier' ended. Always present: a missing key and a refused 
 
 ### `carrier_window`
 
-[stage, index] of the window 'carrier' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number.
+[stage, index] of the window 'carrier' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.
 
 ### `compute`
 
@@ -1142,7 +1142,7 @@ The prompt's own wording:
 
 ### `parameter_link_quote`
 
-Only with window `base_year`: the passage where the row names the base state ('parameter_raw'). 'parameter_quote' is then the frame's passage that prints the number.
+Only with window `base_year` or `target_year`: the passage where the row names that state ('parameter_raw'). 'parameter_quote' is then the frame's passage that prints the number.
 
 ### `parameter_link_source`
 
@@ -1178,7 +1178,7 @@ How the coordinate 'parameter' ended. Always present: a missing key and a refuse
 
 ### `parameter_window`
 
-[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number.
+[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.
 
 ### `provenance`
 
@@ -1221,7 +1221,7 @@ The class of the value node itself (rdf:type). An out:* answer is a deliberate n
 
 ### `quantity_link_quote`
 
-Only with window `base_year`: the passage where the row names the base state ('quantity_raw'). 'quantity_quote' is then the frame's passage that prints the number.
+Only with window `base_year` or `target_year`: the passage where the row names that state ('quantity_raw'). 'quantity_quote' is then the frame's passage that prints the number.
 
 ### `quantity_link_source`
 
@@ -1257,7 +1257,7 @@ How the coordinate 'quantity' ended. Always present: a missing key and a refused
 
 ### `quantity_window`
 
-[stage, index] of the window 'quantity' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number.
+[stage, index] of the window 'quantity' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.
 
 ### `quote`
 
@@ -1296,7 +1296,7 @@ Which container node holds the value: the plan has the container by `linked_by`,
 
 ### `scenario_link_quote`
 
-Only with window `base_year`: the passage where the row names the base state ('scenario_raw'). 'scenario_quote' is then the frame's passage that prints the number.
+Only with window `base_year` or `target_year`: the passage where the row names that state ('scenario_raw'). 'scenario_quote' is then the frame's passage that prints the number.
 
 ### `scenario_link_source`
 
@@ -1332,7 +1332,7 @@ How the coordinate 'scenario' ended. Always present: a missing key and a refused
 
 ### `scenario_window`
 
-[stage, index] of the window 'scenario' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number.
+[stage, index] of the window 'scenario' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.
 
 ### `sector`
 
@@ -1372,7 +1372,7 @@ Object is an OEO sector class. `is about` (obo:IAO_0000136), whose domain is inf
 
 ### `sector_link_quote`
 
-Only with window `base_year`: the passage where the row names the base state ('sector_raw'). 'sector_quote' is then the frame's passage that prints the number.
+Only with window `base_year` or `target_year`: the passage where the row names that state ('sector_raw'). 'sector_quote' is then the frame's passage that prints the number.
 
 ### `sector_link_source`
 
@@ -1408,7 +1408,7 @@ How the coordinate 'sector' ended. Always present: a missing key and a refused r
 
 ### `sector_window`
 
-[stage, index] of the window 'sector' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number.
+[stage, index] of the window 'sector' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.
 
 ### `spatial_scope`
 
@@ -1438,7 +1438,7 @@ The schema has no relation from a value to its area, so a sub_area value is seri
 
 ### `spatial_scope_link_quote`
 
-Only with window `base_year`: the passage where the row names the base state ('spatial_scope_raw'). 'spatial_scope_quote' is then the frame's passage that prints the number.
+Only with window `base_year` or `target_year`: the passage where the row names that state ('spatial_scope_raw'). 'spatial_scope_quote' is then the frame's passage that prints the number.
 
 ### `spatial_scope_link_source`
 
@@ -1474,7 +1474,7 @@ How the coordinate 'spatial_scope' ended. Always present: a missing key and a re
 
 ### `spatial_scope_window`
 
-[stage, index] of the window 'spatial_scope' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number.
+[stage, index] of the window 'spatial_scope' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.
 
 ### `tier`
 
@@ -1507,7 +1507,7 @@ The prompt's own wording:
 
 ### `unit_link_quote`
 
-Only with window `base_year`: the passage where the row names the base state ('unit_raw'). 'unit_quote' is then the frame's passage that prints the number.
+Only with window `base_year` or `target_year`: the passage where the row names that state ('unit_raw'). 'unit_quote' is then the frame's passage that prints the number.
 
 ### `unit_link_source`
 
@@ -1543,7 +1543,7 @@ How the coordinate 'unit' ended. Always present: a missing key and a refused rea
 
 ### `unit_window`
 
-[stage, index] of the window 'unit' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number.
+[stage, index] of the window 'unit' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.
 
 ### `value`
 
@@ -1575,7 +1575,7 @@ The calendar year the aggregation is integrated over, as a node and no longer as
 
 ### `year_link_quote`
 
-Only with window `base_year`: the passage where the row names the base state ('year_raw'). 'year_quote' is then the frame's passage that prints the number.
+Only with window `base_year` or `target_year`: the passage where the row names that state ('year_raw'). 'year_quote' is then the frame's passage that prints the number.
 
 ### `year_link_source`
 
@@ -1611,7 +1611,7 @@ How the coordinate 'year' ended. Always present: a missing key and a refused rea
 
 ### `year_window`
 
-[stage, index] of the window 'year' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number.
+[stage, index] of the window 'year' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.
 
 A coordinate is `null` unless its `<axis>_state` says it was read or derived; that is what the `allOf` branches encode, one per coordinate.
 
@@ -1658,7 +1658,7 @@ Object is a named individual of OEO_00140068 aggregation type. ASKED here and de
 
 ### `aggregation_link_quote`
 
-Only with window `base_year`: the passage where the row names the base state ('aggregation_raw'). 'aggregation_quote' is then the frame's passage that prints the number.
+Only with window `base_year` or `target_year`: the passage where the row names that state ('aggregation_raw'). 'aggregation_quote' is then the frame's passage that prints the number.
 
 ### `aggregation_link_source`
 
@@ -1694,7 +1694,7 @@ How the coordinate 'aggregation' ended. Always present: a missing key and a refu
 
 ### `aggregation_window`
 
-[stage, index] of the window 'aggregation' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number.
+[stage, index] of the window 'aggregation' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.
 
 ### `carrier`
 
@@ -1775,7 +1775,7 @@ Object is an OEO class (punning). `is about` (obo:IAO_0000136), whose domain is 
 
 ### `carrier_link_quote`
 
-Only with window `base_year`: the passage where the row names the base state ('carrier_raw'). 'carrier_quote' is then the frame's passage that prints the number.
+Only with window `base_year` or `target_year`: the passage where the row names that state ('carrier_raw'). 'carrier_quote' is then the frame's passage that prints the number.
 
 ### `carrier_link_source`
 
@@ -1811,7 +1811,7 @@ How the coordinate 'carrier' ended. Always present: a missing key and a refused 
 
 ### `carrier_window`
 
-[stage, index] of the window 'carrier' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number.
+[stage, index] of the window 'carrier' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.
 
 ### `compute`
 
@@ -1837,7 +1837,7 @@ The prompt's own wording:
 
 ### `parameter_link_quote`
 
-Only with window `base_year`: the passage where the row names the base state ('parameter_raw'). 'parameter_quote' is then the frame's passage that prints the number.
+Only with window `base_year` or `target_year`: the passage where the row names that state ('parameter_raw'). 'parameter_quote' is then the frame's passage that prints the number.
 
 ### `parameter_link_source`
 
@@ -1873,7 +1873,7 @@ How the coordinate 'parameter' ended. Always present: a missing key and a refuse
 
 ### `parameter_window`
 
-[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number.
+[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.
 
 ### `provenance`
 
@@ -1910,7 +1910,7 @@ The class of the value node itself (rdf:type). OEO_00010157 is defined by its un
 
 ### `quantity_link_quote`
 
-Only with window `base_year`: the passage where the row names the base state ('quantity_raw'). 'quantity_quote' is then the frame's passage that prints the number.
+Only with window `base_year` or `target_year`: the passage where the row names that state ('quantity_raw'). 'quantity_quote' is then the frame's passage that prints the number.
 
 ### `quantity_link_source`
 
@@ -1946,7 +1946,7 @@ How the coordinate 'quantity' ended. Always present: a missing key and a refused
 
 ### `quantity_window`
 
-[stage, index] of the window 'quantity' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number.
+[stage, index] of the window 'quantity' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.
 
 ### `quote`
 
@@ -1985,7 +1985,7 @@ Which container node holds the value: the plan has the container by `linked_by`,
 
 ### `scenario_link_quote`
 
-Only with window `base_year`: the passage where the row names the base state ('scenario_raw'). 'scenario_quote' is then the frame's passage that prints the number.
+Only with window `base_year` or `target_year`: the passage where the row names that state ('scenario_raw'). 'scenario_quote' is then the frame's passage that prints the number.
 
 ### `scenario_link_source`
 
@@ -2021,7 +2021,7 @@ How the coordinate 'scenario' ended. Always present: a missing key and a refused
 
 ### `scenario_window`
 
-[stage, index] of the window 'scenario' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number.
+[stage, index] of the window 'scenario' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.
 
 ### `sector`
 
@@ -2061,7 +2061,7 @@ Object is an OEO sector class. `is about` (obo:IAO_0000136), whose domain is inf
 
 ### `sector_link_quote`
 
-Only with window `base_year`: the passage where the row names the base state ('sector_raw'). 'sector_quote' is then the frame's passage that prints the number.
+Only with window `base_year` or `target_year`: the passage where the row names that state ('sector_raw'). 'sector_quote' is then the frame's passage that prints the number.
 
 ### `sector_link_source`
 
@@ -2097,7 +2097,7 @@ How the coordinate 'sector' ended. Always present: a missing key and a refused r
 
 ### `sector_window`
 
-[stage, index] of the window 'sector' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number.
+[stage, index] of the window 'sector' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.
 
 ### `spatial_scope`
 
@@ -2127,7 +2127,7 @@ The schema has no relation from a value to its area, so a sub_area value is seri
 
 ### `spatial_scope_link_quote`
 
-Only with window `base_year`: the passage where the row names the base state ('spatial_scope_raw'). 'spatial_scope_quote' is then the frame's passage that prints the number.
+Only with window `base_year` or `target_year`: the passage where the row names that state ('spatial_scope_raw'). 'spatial_scope_quote' is then the frame's passage that prints the number.
 
 ### `spatial_scope_link_source`
 
@@ -2163,7 +2163,7 @@ How the coordinate 'spatial_scope' ended. Always present: a missing key and a re
 
 ### `spatial_scope_window`
 
-[stage, index] of the window 'spatial_scope' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number.
+[stage, index] of the window 'spatial_scope' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.
 
 ### `tier`
 
@@ -2189,7 +2189,7 @@ The prompt's own wording:
 
 ### `unit_link_quote`
 
-Only with window `base_year`: the passage where the row names the base state ('unit_raw'). 'unit_quote' is then the frame's passage that prints the number.
+Only with window `base_year` or `target_year`: the passage where the row names that state ('unit_raw'). 'unit_quote' is then the frame's passage that prints the number.
 
 ### `unit_link_source`
 
@@ -2225,7 +2225,7 @@ How the coordinate 'unit' ended. Always present: a missing key and a refused rea
 
 ### `unit_window`
 
-[stage, index] of the window 'unit' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number.
+[stage, index] of the window 'unit' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.
 
 ### `value`
 
@@ -2257,7 +2257,7 @@ The calendar year the power is stated for, as a node and no longer as a literal.
 
 ### `year_link_quote`
 
-Only with window `base_year`: the passage where the row names the base state ('year_raw'). 'year_quote' is then the frame's passage that prints the number.
+Only with window `base_year` or `target_year`: the passage where the row names that state ('year_raw'). 'year_quote' is then the frame's passage that prints the number.
 
 ### `year_link_source`
 
@@ -2293,7 +2293,7 @@ How the coordinate 'year' ended. Always present: a missing key and a refused rea
 
 ### `year_window`
 
-[stage, index] of the window 'year' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number.
+[stage, index] of the window 'year' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.
 
 A coordinate is `null` unless its `<axis>_state` says it was read or derived; that is what the `allOf` branches encode, one per coordinate.
 
@@ -2330,7 +2330,7 @@ The prompt's own wording:
 
 ### `parameter_link_quote`
 
-Only with window `base_year`: the passage where the row names the base state ('parameter_raw'). 'parameter_quote' is then the frame's passage that prints the number.
+Only with window `base_year` or `target_year`: the passage where the row names that state ('parameter_raw'). 'parameter_quote' is then the frame's passage that prints the number.
 
 ### `parameter_link_source`
 
@@ -2366,7 +2366,7 @@ How the coordinate 'parameter' ended. Always present: a missing key and a refuse
 
 ### `parameter_window`
 
-[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number.
+[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.
 
 ### `provenance`
 
@@ -2431,8 +2431,8 @@ One event per line; `t` names it and `doc` the document. Read by scripts/trace_r
 - `anchor`: `doc`, `parameter`, `text`
 - `frame`: `attempt`, `completion_tokens`, `doc`, `missed`, `ms`, `pairs`, `prompt_tokens`, `rejected`, `scenarios`, `sources`, `status`, `years`
 - `rows`: `attempt`, `completion_tokens`, `doc`, `ms`, `origins`, `prompt`, `prompt_tokens`, `ranks`, `rows`, `sources`, `status`
-- `field`: `anchor`, `attempt`, `batches`, `completion_tokens`, `doc`, `filled`, `filled_by`, `ms`, `open`, `parameter`, `prompt_tokens`, `raw_foreign`, `raw_missing`, `reply`, `shown`, `slot`, `stage`, `unbacked`, `unbacked_by`, `unquoted`, `unstated`, `via_base`, `window`
-- `sweep`: `anchor`, `asked`, `batches`, `combed`, `doc`, `exhausted`, `filled`, `raw_foreign`, `raw_missing`, `retried`, `rows`, `scope`, `slot`, `unbacked`, `unquoted`, `unstated`, `via_base`, `windows`
+- `field`: `anchor`, `attempt`, `batches`, `completion_tokens`, `doc`, `filled`, `filled_by`, `ms`, `open`, `parameter`, `prompt_tokens`, `raw_foreign`, `raw_missing`, `reply`, `shown`, `slot`, `stage`, `unbacked`, `unbacked_by`, `unquoted`, `unstated`, `via_base`, `via_target`, `window`
+- `sweep`: `anchor`, `asked`, `batches`, `combed`, `doc`, `exhausted`, `filled`, `raw_foreign`, `raw_missing`, `retried`, `rows`, `scope`, `slot`, `unbacked`, `unquoted`, `unstated`, `via_base`, `via_target`, `windows`
 - `drop`: `attempt`, `batches`, `doc`, `field`, `given`, `quote`, `raw`, `row`, `slot`, `why`, `window`
 - `error`: `attempt`, `cause`, `detail`, `doc`, `finish`, `kind`, `ms`, `owner`, `slot`, `sources`, `status`, `where`, `why`
 - `coord`: `doc`, `kind`, `owner`, `parameter`, `states`, `tier`, `unit`, `value`

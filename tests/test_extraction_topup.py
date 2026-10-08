@@ -936,11 +936,21 @@ def test_the_base_years_are_rebuilt_from_the_frames_own_readings():
              year=2019, year_quote="Stand 2019",
              year_source=["table", 1], year_window=["own", 1]),
     ]
-    got = topup.base_years_of(tuples, frame, {"scenario": "status_quo"})
-    assert [(b["year"], b["quote"], b["source"], b["index"]) for b in got] == [
-        (2022, "Bilanzjahr 2022", ["section", 5], 0)]
-    assert topup.base_years_of(tuples, frame, None) == ()
-    assert topup.base_years_of(tuples, None, {"scenario": "status_quo"}) == ()
+    base = {"base": {"scenario": "status_quo"}}
+    got = topup.named_years_of(tuples, frame, base)
+    assert [(b["state"], b["year"], b["quote"], b["source"], b["index"])
+            for b in got] == [
+        ("base", 2022, "Bilanzjahr 2022", ["section", 5], 0)]
+    assert topup.named_years_of(tuples, frame, None) == ()
+    assert topup.named_years_of(tuples, frame, {"base": None}) == ()
+    assert topup.named_years_of(tuples, None, base) == ()
+    # A profile that names a target gets the target's years as well, from
+    # the pair the frame read for it.
+    both = dict(base, target={"scenario": "target"})
+    assert [(b["state"], b["year"], b["quote"], b["index"])
+            for b in topup.named_years_of(tuples, frame, both)] == [
+        ("base", 2022, "Bilanzjahr 2022", 0),
+        ("target", 2040, "Zielszenario 2040", 1)]
 
 
 def test_a_re_sweep_hands_the_base_years_to_every_batch(tmp_path):
@@ -954,7 +964,7 @@ def test_a_re_sweep_hands_the_base_years_to_every_batch(tmp_path):
     topup.run(tmp_path, SPEC, _stamp(), _deps(
         sweep=_sweeper({"sector": {"value": "Haushalte", "raw": "Haushalte"}},
                        calls),
-        frame_axes=frame, base_state={"scenario": "status_quo"}))
+        frame_axes=frame, year_states={"base": {"scenario": "status_quo"}}))
     assert calls, "the coordinate was swept"
     assert [b["year"] for b in calls[0]["batch"].bases] == [2022]
     assert _rows(path)[0]["sector_raw"] == "Haushalte"
